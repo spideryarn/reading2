@@ -194,3 +194,25 @@ selection flow unchanged. That is option A in the question below.
 ## The question for Greg
 
 Sent through the Overseer; see the feedback note for the answer.
+
+## Stage 1 landed, 2026-10-03 (option A only, on the Overseer's instruction while Greg is asleep)
+
+The Overseer: build what every option shares (colours, and the box with colour dots), but no menu
+until Greg answers. On dev as 3e2d0b9a8 + 7bbc132d8:
+
+- `comments.colour` (migration `20261003050050_comments_colour`), POST + `PATCH …/:id/colour`,
+  `recolour` on the per-comment queue, public projection and rollback export.
+- The wash in the prose, the Highlight kind, no ✳ on a wordless highlight, colour rows in
+  `AnnotateDialog` and `CommentDialog` (shared `HighlightSwatches.tsx`), and a dot in the drawer.
+- **The overlap rule changed in review.** The build first put the newest *coloured* comment first;
+  Sol's code review (C1) showed that a newer uncoloured note over a highlight then opened the
+  highlight and lost its underline. It is now one total order, newest first (`createdAt`, `id`): the
+  newest comment is both what a click opens and, if coloured, the wash.
+- **The washes are dark-only**, because the app is (`styles/tokens.css` § DARK ONLY). If the
+  light/dark work in progress (fbnv5bzx) lands, `--hl-*` needs a light twin.
+- **Not yet browser-checked.** The shared local database refuses `db:migrate` until a peer's
+  unlanded `article_tags` migration is reconciled, so no dev server here has the column. The S6
+  cases (highlight over a search hit), the swatch rows and a narrow window wait for that.
+
+Sol code review: [261003e-span-highlights-code-review-sol.md](261003e-span-highlights-code-review-sol.md),
+"land after fixes (made)"; the Postgres tests it asked for pass (comment-colour, public-visibility-pg).

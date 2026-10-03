@@ -232,6 +232,7 @@ const comment = (): ReactNode => (
       onDiscuss: () => {},
       onEdit: () => {},
       onPlace: () => {},
+      onRecolour: () => {},
       error: null,
     }}
   />
@@ -559,6 +560,7 @@ describe("pair 8 — a Floating UI tooltip inside the comment dialog", () => {
             onDiscuss: () => {},
             onEdit: () => {},
             onPlace: () => {},
+            onRecolour: () => {},
             error: null,
           }}
         />

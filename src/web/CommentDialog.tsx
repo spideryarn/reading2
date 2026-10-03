@@ -20,7 +20,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
-import { passageOf } from "./comment-nav.js";
+import { MARK_KIND_LABEL, commentKind, passageOf } from "./comment-nav.js";
+import { HighlightSwatches } from "./HighlightSwatches.js";
+import type { HighlightColour } from "../types.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { type Mark, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { Tooltip } from "./Tooltip.js";
@@ -73,6 +75,12 @@ export type CommentAccess =
       placing: boolean;
       /** Change this comment's placement, or clear it with both fields `null`. */
       onPlace(next: Mark): void;
+      /**
+       * Recolour this highlight, or `null` to take its colour away. Offered on
+       * a selection-anchored comment only — a whole-block bookmark has no words
+       * to paint (plan 261003e, review S4).
+       */
+      onRecolour(next: HighlightColour | null): void;
       /** The comments transport's own error line, if there is one. */
       error: string | null;
     }
@@ -123,6 +131,10 @@ export function CommentDialog({
      half. A visitor reaches none of the verbs because there are none to
      reach. */
   const own = access.kind === "owner" ? access : null;
+  /* One label for the header and the dialog's name. A legacy explanation keeps
+     its own word; everything since 2026-08-28 is `commentKind`'s. */
+  const label =
+    comment.status === "none" ? MARK_KIND_LABEL[commentKind(comment)] : "Explanation";
   const [followUp, setFollowUp] = useState("");
   const followUpBox = useRef<HTMLInputElement>(null);
   /* The other box in this app with an article in scope, and therefore the other
@@ -337,12 +349,14 @@ export function CommentDialog({
          reader's own mark on the passage, and calling that "Explanation" to a
          screen reader would announce the model's voice over theirs. The three
          cases in one expression, because the visible label below must say the
-         same thing. */
-      aria-label={comment.status === "none" ? (comment.body ? "Comment" : "Bookmark") : "Explanation"}
+         same thing. Since 2026-10-03 the `none` case is `commentKind`'s label,
+         the drawer's and the margin's, so a wordless highlight is headed
+         "Highlight" here as it is there (plan 261003e, review S9). */
+      aria-label={label}
     >
       <header>
         <span className="cmt-dialog-label">
-          {comment.status === "none" ? (comment.body ? "Comment" : "Bookmark") : "Explanation"}
+          {label}
         </span>
         {/* Only worth the room once there is somewhere to go. */}
         {total > 1 && (
@@ -435,6 +449,15 @@ export function CommentDialog({
           }}
           onChange={own.onPlace}
         />
+      )}
+
+      {/* **The highlight's colour**, owner only and on a selection only — a
+          whole-block bookmark has no words to paint, and the server refuses a
+          colour on one (plan 261003e, review S4). Controlled by the stored
+          comment, as the placement above is and for its reason: `recolour`
+          writes nothing to the list until the server has answered. */}
+      {own && comment.quote !== undefined && (
+        <HighlightSwatches value={comment.colour ?? null} onChange={own.onRecolour} />
       )}
 
       {/* Said out loud rather than swallowed. Every write this dialog makes —

@@ -1214,6 +1214,38 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     }
   });
 
+  it("serves a highlight's colour to the visitor exactly as the owner sees it", async () => {
+    /* Plan 261003e, review S11: this read has its own SQL select and its own
+       row mapper, both of which list a comment's fields by hand, so the DTO
+       unit test cannot prove the colour crosses here. */
+    const id = "spya-cmt28z";
+    const db = getDb();
+    await db.insert(comments).values({
+      articleId: ARTICLE_ID,
+      id,
+      ownerId: OWNER,
+      blockId: BLOCK_ID,
+      quote: "The prose a visitor is here for.",
+      start: 0,
+      status: "none",
+      colour: "blue",
+    });
+    try {
+      const visitor = await call("GET", `/api/public/article/${SLUG}`);
+      const seen = (visitor.body as { comments: Record<string, unknown>[] }).comments.find(
+        (c) => c.id === id,
+      );
+      const owner = await call("GET", `/api/comments/${SLUG}?anchors=whole-block`, { as: OWNER });
+      const own = (owner.body as { comments?: Record<string, unknown>[] }).comments?.find(
+        (c) => c.id === id,
+      );
+      expect(own?.colour, `owner read: ${owner.status}`).toBe("blue");
+      expect(seen?.colour).toBe(own?.colour);
+    } finally {
+      await db.delete(comments).where(and(eq(comments.articleId, ARTICLE_ID), eq(comments.id, id)));
+    }
+  });
+
   /**
    * **The owner's saved searches, and the two run states that must not cross.**
    *

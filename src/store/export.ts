@@ -559,6 +559,9 @@ export async function exportArticle(
            hand-written list. */
         criterionId: row.criterionId,
         valence: row.valence,
+        /* A highlight's colour, added 2026-10-03 — and another hand-listed
+           field, so another line that had to be remembered here. */
+        colour: row.colour,
         status: row.status,
         answer: row.answer,
         citations: row.citations,

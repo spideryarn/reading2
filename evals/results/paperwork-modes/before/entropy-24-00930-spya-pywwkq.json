@@ -1,0 +1,3040 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "before",
+  "sourceSha256": {
+    "sketch.ts": "a39d3ee288abfdb67c17338659063009c71e0267380f4bb19ced7ce8aad2f516",
+    "illustrated.ts": "cf2d52f262ed7fce4674378b7f14b6d26dccfd050bc846d253de8bf3a6e6937f",
+    "faq.ts": "a0eda48d79eb6548010c050a2667b1c37b7f9f2da161ba0affb946fd6b18f552",
+    "quiz.ts": "509e161ec1f8268066d3903fe255d03d1eaf65744f249342a09f9ac212b1e89f",
+    "ideas.ts": "1c1bf2d4355c428dd32719356a7898d9e6434671878f064ae14a8d364a4e5d64",
+    "quotes.ts": "ac319763692f731d87c66d73cdf28a49380b360f92844cbe9354ee695213df15",
+    "glossary.ts": "79e98d5c7e062bea53faba7d32c49ae8f44ec833d6f192bab8c4d8e04ed6f8b7",
+    "timeline.ts": "875d6b2ea695b41091ebb72f3e87a72b256d0e28fdaa8c6365743cf3f39912dc",
+    "arc.ts": "d53bc0fe597ae160a0e90711787ac7d584e20a7877b721b1975ba33e841d7f57",
+    "paperwork.ts": "6cb0986a2c70eaab9fb28704c9084b8a198d8e875c3ecebcd860608fea900b22"
+  },
+  "outputs": {
+    "sketch": {
+      "sketch": {
+        "version": "sketch/4",
+        "title": "Funnel then chain",
+        "caption": "This is a funnel-into-chain: the piece narrows from a broad problem (how do neurons process information?) down to one precise tool (partial information decomposition), then follows that tool out through evidence, practical limits, and future extensions.",
+        "scenes": [
+          {
+            "id": "overview",
+            "title": "Overview",
+            "height": 1150,
+            "items": [
+              {
+                "kind": "node",
+                "id": "intro",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 40,
+                "w": 200,
+                "h": 70,
+                "text": "How do brains process information?",
+                "size": "md",
+                "block": "spya-yb735k"
+              },
+              {
+                "kind": "node",
+                "id": "limits",
+                "shape": "note",
+                "x": 280,
+                "y": 140,
+                "w": 200,
+                "h": 60,
+                "text": "Old limits: too little data, too few tools",
+                "size": "sm",
+                "block": "spya-s9kmxa"
+              },
+              {
+                "kind": "node",
+                "id": "track",
+                "shape": "box",
+                "x": 280,
+                "y": 230,
+                "w": 200,
+                "h": 60,
+                "text": "Mutual info & transfer entropy track flow",
+                "size": "sm",
+                "block": "spya-ygkzd8"
+              },
+              {
+                "kind": "node",
+                "id": "flowlimit",
+                "shape": "diamond",
+                "x": 280,
+                "y": 320,
+                "w": 200,
+                "h": 70,
+                "text": "But flow alone misses how inputs combine",
+                "size": "sm",
+                "block": "spya-dhy39x"
+              },
+              {
+                "kind": "region",
+                "x": 180,
+                "y": 420,
+                "w": 400,
+                "h": 180,
+                "style": "band",
+                "label": "PARTIAL INFORMATION DECOMPOSITION",
+                "opens": "inside-pid",
+                "tone": 1
+              },
+              {
+                "kind": "node",
+                "id": "pidcore",
+                "shape": "hex",
+                "x": 230,
+                "y": 460,
+                "w": 300,
+                "h": 90,
+                "text": "PID: redundant, unique, synergistic information",
+                "size": "md",
+                "tone": 1,
+                "block": "spya-u0wm5e"
+              },
+              {
+                "kind": "region",
+                "x": 140,
+                "y": 630,
+                "w": 480,
+                "h": 280,
+                "style": "band",
+                "label": "PID IN ACTION",
+                "opens": "inside-evidence",
+                "tone": 2
+              },
+              {
+                "kind": "node",
+                "id": "richclub",
+                "shape": "box",
+                "x": 180,
+                "y": 670,
+                "w": 190,
+                "h": 60,
+                "text": "Synergy concentrated in rich clubs",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-e3ghxj"
+              },
+              {
+                "kind": "node",
+                "id": "recurrent",
+                "shape": "box",
+                "x": 400,
+                "y": 670,
+                "w": 190,
+                "h": 60,
+                "text": "Recurrent connections boost synergy",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-p8by2y"
+              },
+              {
+                "kind": "node",
+                "id": "primate",
+                "shape": "box",
+                "x": 290,
+                "y": 760,
+                "w": 200,
+                "h": 70,
+                "text": "In behaving monkeys, synergy shifts to redundancy during movement",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-aqcngt"
+              },
+              {
+                "kind": "node",
+                "id": "caveats",
+                "shape": "note",
+                "x": 290,
+                "y": 850,
+                "w": 200,
+                "h": 50,
+                "text": "Caveats: bivariate estimates, cultures not live brains",
+                "size": "xs",
+                "tone": 2,
+                "block": "spya-vjzxxm"
+              },
+              {
+                "kind": "node",
+                "id": "practical",
+                "shape": "box",
+                "x": 280,
+                "y": 940,
+                "w": 200,
+                "h": 60,
+                "text": "Practical limits: data, tools, scalability",
+                "size": "sm",
+                "block": "spya-kmgwhs"
+              },
+              {
+                "kind": "node",
+                "id": "future",
+                "shape": "box",
+                "x": 280,
+                "y": 1020,
+                "w": 200,
+                "h": 60,
+                "text": "Future: time-resolved & multi-target PID",
+                "size": "sm",
+                "block": "spya-zz5xxs"
+              },
+              {
+                "kind": "node",
+                "id": "summary",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 1090,
+                "w": 200,
+                "h": 50,
+                "text": "Neurons compute on patterns, not just totals",
+                "size": "md",
+                "block": "spya-rc5z33"
+              },
+              {
+                "kind": "edge",
+                "from": "intro",
+                "to": "limits",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "limits",
+                "to": "track",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "track",
+                "to": "flowlimit",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "flowlimit",
+                "to": "pidcore",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pidcore",
+                "to": "richclub",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pidcore",
+                "to": "recurrent",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "richclub",
+                "to": "primate",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "recurrent",
+                "to": "primate",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "primate",
+                "to": "caveats",
+                "via": "straight",
+                "line": "dashed",
+                "arrow": "none"
+              },
+              {
+                "kind": "edge",
+                "from": "caveats",
+                "to": "practical",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "practical",
+                "to": "future",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "future",
+                "to": "summary",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "The article funnels from a broad open question down to one analytic tool, then chains that tool through evidence, practice, and future work."
+          },
+          {
+            "id": "inside-pid",
+            "title": "Building the PID framework",
+            "height": 760,
+            "items": [
+              {
+                "kind": "node",
+                "id": "joint",
+                "shape": "box",
+                "x": 260,
+                "y": 40,
+                "w": 260,
+                "h": 70,
+                "text": "Joint information need not equal sum of parts",
+                "size": "sm",
+                "block": "spya-u0wm5e"
+              },
+              {
+                "kind": "node",
+                "id": "synred",
+                "shape": "diamond",
+                "x": 260,
+                "y": 150,
+                "w": 260,
+                "h": 90,
+                "text": "Whole > parts = synergy; whole < parts = redundancy",
+                "size": "sm",
+                "block": "spya-e94ury"
+              },
+              {
+                "kind": "node",
+                "id": "twoparent",
+                "shape": "hex",
+                "x": 260,
+                "y": 280,
+                "w": 260,
+                "h": 80,
+                "text": "Two parents: split into redundant, unique, synergistic atoms",
+                "size": "sm",
+                "block": "spya-y7wdb7"
+              },
+              {
+                "kind": "node",
+                "id": "underdet",
+                "shape": "note",
+                "x": 260,
+                "y": 390,
+                "w": 260,
+                "h": 60,
+                "text": "Equations underdetermined without more assumptions",
+                "size": "sm",
+                "block": "spya-bgsd4n"
+              },
+              {
+                "kind": "node",
+                "id": "lattice",
+                "shape": "hex",
+                "x": 260,
+                "y": 480,
+                "w": 260,
+                "h": 80,
+                "text": "General case: a lattice of information-sharing atoms",
+                "size": "sm",
+                "block": "spya-k378fv"
+              },
+              {
+                "kind": "node",
+                "id": "mobius",
+                "shape": "box",
+                "x": 260,
+                "y": 590,
+                "w": 260,
+                "h": 60,
+                "text": "Mobius inversion computes each atom's unique value",
+                "size": "sm",
+                "block": "spya-aft2rx"
+              },
+              {
+                "kind": "node",
+                "id": "redmeasure",
+                "shape": "diamond",
+                "x": 260,
+                "y": 680,
+                "w": 260,
+                "h": 70,
+                "text": "No single agreed redundancy measure — must choose one",
+                "size": "sm",
+                "block": "spya-d2quz5"
+              },
+              {
+                "kind": "edge",
+                "from": "joint",
+                "to": "synred",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "synred",
+                "to": "twoparent",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "twoparent",
+                "to": "underdet",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "underdet",
+                "to": "lattice",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "lattice",
+                "to": "mobius",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "mobius",
+                "to": "redmeasure",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "A chain that builds intuition from a simple two-neuron case up to a general lattice, which still needs a choice of redundancy measure to actually compute."
+          },
+          {
+            "id": "inside-evidence",
+            "title": "PID in action: the empirical findings",
+            "height": 820,
+            "items": [
+              {
+                "kind": "node",
+                "id": "setup",
+                "shape": "ellipse",
+                "x": 280,
+                "y": 40,
+                "w": 220,
+                "h": 70,
+                "text": "Record hundreds of cortical neurons, run PID on triads",
+                "size": "md",
+                "block": "spya-cc282b"
+              },
+              {
+                "kind": "node",
+                "id": "ff",
+                "shape": "box",
+                "x": 60,
+                "y": 160,
+                "w": 190,
+                "h": 70,
+                "text": "Synergy tracks feedforward information flow strength",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-kqkb58"
+              },
+              {
+                "kind": "node",
+                "id": "rich",
+                "shape": "box",
+                "x": 290,
+                "y": 160,
+                "w": 190,
+                "h": 70,
+                "text": "Rich-club neurons account for ~88% of network synergy",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-fud8q3"
+              },
+              {
+                "kind": "node",
+                "id": "recur",
+                "shape": "box",
+                "x": 520,
+                "y": 160,
+                "w": 190,
+                "h": 70,
+                "text": "More recurrent connections, more synergy",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-sd9fzd"
+              },
+              {
+                "kind": "node",
+                "id": "corr",
+                "shape": "box",
+                "x": 290,
+                "y": 280,
+                "w": 220,
+                "h": 80,
+                "text": "Synergy peaks at moderate input correlation, then falls as it turns redundant",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-zfs2z7"
+              },
+              {
+                "kind": "node",
+                "id": "converge",
+                "shape": "diamond",
+                "x": 290,
+                "y": 400,
+                "w": 220,
+                "h": 70,
+                "text": "Together: computation concentrates in dense, correlated hubs",
+                "size": "sm"
+              },
+              {
+                "kind": "node",
+                "id": "caveat",
+                "shape": "note",
+                "x": 290,
+                "y": 500,
+                "w": 220,
+                "h": 60,
+                "text": "Caveats: bivariate TE bias, cultures not live circuits",
+                "size": "sm",
+                "block": "spya-j4cy9j"
+              },
+              {
+                "kind": "node",
+                "id": "primatezoom",
+                "shape": "box",
+                "x": 290,
+                "y": 600,
+                "w": 220,
+                "h": 70,
+                "text": "In behaving macaques, rich-club synergy pattern replicates",
+                "size": "sm",
+                "block": "spya-wr7f6y"
+              },
+              {
+                "kind": "node",
+                "id": "taskshift",
+                "shape": "box",
+                "x": 290,
+                "y": 700,
+                "w": 220,
+                "h": 80,
+                "text": "Redundancy rises during motor execution, for signal reliability",
+                "size": "sm",
+                "block": "spya-t8fayf"
+              },
+              {
+                "kind": "edge",
+                "from": "setup",
+                "to": "ff",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "setup",
+                "to": "rich",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "setup",
+                "to": "recur",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "ff",
+                "to": "converge",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "rich",
+                "to": "converge",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "recur",
+                "to": "converge",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "corr",
+                "to": "converge",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "converge",
+                "to": "caveat",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "caveat",
+                "to": "primatezoom",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "primatezoom",
+                "to": "taskshift",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "Several independent empirical findings from cultured and living brains converge on the same picture: synergy, genuine information processing, clusters where connections are dense and inputs are moderately correlated, and shifts with behavior."
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+        "profileHash": null
+      },
+      "raw": "{\"caption\":\"This is a funnel-into-chain: the piece narrows from a broad problem (how do neurons process information?) down to one precise tool (partial information decomposition), then follows that tool out through evidence, practical limits, and future extensions.\",\"title\":\"Funnel then chain\",\"scenes\":[{\"id\":\"overview\",\"title\":\"Overview\",\"caption\":\"The article funnels from a broad open question down to one analytic tool, then chains that tool through evidence, practice, and future work.\",\"height\":1150,\"items\":[{\"kind\":\"node\",\"id\":\"intro\",\"shape\":\"ellipse\",\"x\":280,\"y\":40,\"w\":200,\"h\":70,\"text\":\"How do brains process information?\",\"size\":\"md\",\"block\":\"spya-yb735k\"},{\"kind\":\"node\",\"id\":\"limits\",\"shape\":\"note\",\"x\":280,\"y\":140,\"w\":200,\"h\":60,\"text\":\"Old limits: too little data, too few tools\",\"size\":\"sm\",\"block\":\"spya-s9kmxa\"},{\"kind\":\"node\",\"id\":\"track\",\"shape\":\"box\",\"x\":280,\"y\":230,\"w\":200,\"h\":60,\"text\":\"Mutual info & transfer entropy track flow\",\"size\":\"sm\",\"block\":\"spya-ygkzd8\"},{\"kind\":\"node\",\"id\":\"flowlimit\",\"shape\":\"diamond\",\"x\":280,\"y\":320,\"w\":200,\"h\":70,\"text\":\"But flow alone misses how inputs combine\",\"size\":\"sm\",\"block\":\"spya-dhy39x\"},{\"kind\":\"region\",\"x\":180,\"y\":420,\"w\":400,\"h\":180,\"label\":\"PARTIAL INFORMATION DECOMPOSITION\",\"style\":\"band\",\"opens\":\"inside-pid\",\"tone\":1},{\"kind\":\"node\",\"id\":\"pidcore\",\"shape\":\"hex\",\"x\":230,\"y\":460,\"w\":300,\"h\":90,\"text\":\"PID: redundant, unique, synergistic information\",\"size\":\"md\",\"tone\":1,\"block\":\"spya-u0wm5e\"},{\"kind\":\"region\",\"x\":140,\"y\":630,\"w\":480,\"h\":280,\"label\":\"PID IN ACTION\",\"style\":\"band\",\"opens\":\"inside-evidence\",\"tone\":2},{\"kind\":\"node\",\"id\":\"richclub\",\"shape\":\"box\",\"x\":180,\"y\":670,\"w\":190,\"h\":60,\"text\":\"Synergy concentrated in rich clubs\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-e3ghxj\"},{\"kind\":\"node\",\"id\":\"recurrent\",\"shape\":\"box\",\"x\":400,\"y\":670,\"w\":190,\"h\":60,\"text\":\"Recurrent connections boost synergy\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-p8by2y\"},{\"kind\":\"node\",\"id\":\"primate\",\"shape\":\"box\",\"x\":290,\"y\":760,\"w\":200,\"h\":70,\"text\":\"In behaving monkeys, synergy shifts to redundancy during movement\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-aqcngt\"},{\"kind\":\"node\",\"id\":\"caveats\",\"shape\":\"note\",\"x\":290,\"y\":850,\"w\":200,\"h\":50,\"text\":\"Caveats: bivariate estimates, cultures not live brains\",\"size\":\"xs\",\"tone\":2,\"block\":\"spya-vjzxxm\"},{\"kind\":\"node\",\"id\":\"practical\",\"shape\":\"box\",\"x\":280,\"y\":940,\"w\":200,\"h\":60,\"text\":\"Practical limits: data, tools, scalability\",\"size\":\"sm\",\"block\":\"spya-kmgwhs\"},{\"kind\":\"node\",\"id\":\"future\",\"shape\":\"box\",\"x\":280,\"y\":1020,\"w\":200,\"h\":60,\"text\":\"Future: time-resolved & multi-target PID\",\"size\":\"sm\",\"block\":\"spya-zz5xxs\"},{\"kind\":\"node\",\"id\":\"summary\",\"shape\":\"ellipse\",\"x\":280,\"y\":1090,\"w\":200,\"h\":50,\"text\":\"Neurons compute on patterns, not just totals\",\"size\":\"md\",\"block\":\"spya-rc5z33\"},{\"kind\":\"edge\",\"from\":\"intro\",\"to\":\"limits\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"limits\",\"to\":\"track\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"track\",\"to\":\"flowlimit\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"flowlimit\",\"to\":\"pidcore\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pidcore\",\"to\":\"richclub\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pidcore\",\"to\":\"recurrent\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"richclub\",\"to\":\"primate\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"recurrent\",\"to\":\"primate\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"primate\",\"to\":\"caveats\",\"via\":\"straight\",\"line\":\"dashed\",\"arrow\":\"none\"},{\"kind\":\"edge\",\"from\":\"caveats\",\"to\":\"practical\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"practical\",\"to\":\"future\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"future\",\"to\":\"summary\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"inside-pid\",\"title\":\"Building the PID framework\",\"caption\":\"A chain that builds intuition from a simple two-neuron case up to a general lattice, which still needs a choice of redundancy measure to actually compute.\",\"height\":760,\"items\":[{\"kind\":\"node\",\"id\":\"joint\",\"shape\":\"box\",\"x\":260,\"y\":40,\"w\":260,\"h\":70,\"text\":\"Joint information need not equal sum of parts\",\"size\":\"sm\",\"block\":\"spya-u0wm5e\"},{\"kind\":\"node\",\"id\":\"synred\",\"shape\":\"diamond\",\"x\":260,\"y\":150,\"w\":260,\"h\":90,\"text\":\"Whole > parts = synergy; whole < parts = redundancy\",\"size\":\"sm\",\"block\":\"spya-e94ury\"},{\"kind\":\"node\",\"id\":\"twoparent\",\"shape\":\"hex\",\"x\":260,\"y\":280,\"w\":260,\"h\":80,\"text\":\"Two parents: split into redundant, unique, synergistic atoms\",\"size\":\"sm\",\"block\":\"spya-y7wdb7\"},{\"kind\":\"node\",\"id\":\"underdet\",\"shape\":\"note\",\"x\":260,\"y\":390,\"w\":260,\"h\":60,\"text\":\"Equations underdetermined without more assumptions\",\"size\":\"sm\",\"block\":\"spya-bgsd4n\"},{\"kind\":\"node\",\"id\":\"lattice\",\"shape\":\"hex\",\"x\":260,\"y\":480,\"w\":260,\"h\":80,\"text\":\"General case: a lattice of information-sharing atoms\",\"size\":\"sm\",\"block\":\"spya-k378fv\"},{\"kind\":\"node\",\"id\":\"mobius\",\"shape\":\"box\",\"x\":260,\"y\":590,\"w\":260,\"h\":60,\"text\":\"Mobius inversion computes each atom's unique value\",\"size\":\"sm\",\"block\":\"spya-aft2rx\"},{\"kind\":\"node\",\"id\":\"redmeasure\",\"shape\":\"diamond\",\"x\":260,\"y\":680,\"w\":260,\"h\":70,\"text\":\"No single agreed redundancy measure — must choose one\",\"size\":\"sm\",\"block\":\"spya-d2quz5\"},{\"kind\":\"edge\",\"from\":\"joint\",\"to\":\"synred\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"synred\",\"to\":\"twoparent\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"twoparent\",\"to\":\"underdet\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"underdet\",\"to\":\"lattice\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"lattice\",\"to\":\"mobius\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"mobius\",\"to\":\"redmeasure\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"inside-evidence\",\"title\":\"PID in action: the empirical findings\",\"caption\":\"Several independent empirical findings from cultured and living brains converge on the same picture: synergy, genuine information processing, clusters where connections are dense and inputs are moderately correlated, and shifts with behavior.\",\"height\":820,\"items\":[{\"kind\":\"node\",\"id\":\"setup\",\"shape\":\"ellipse\",\"x\":280,\"y\":40,\"w\":220,\"h\":70,\"text\":\"Record hundreds of cortical neurons, run PID on triads\",\"size\":\"md\",\"block\":\"spya-cc282b\"},{\"kind\":\"node\",\"id\":\"ff\",\"shape\":\"box\",\"x\":60,\"y\":160,\"w\":190,\"h\":70,\"text\":\"Synergy tracks feedforward information flow strength\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-kqkb58\"},{\"kind\":\"node\",\"id\":\"rich\",\"shape\":\"box\",\"x\":290,\"y\":160,\"w\":190,\"h\":70,\"text\":\"Rich-club neurons account for ~88% of network synergy\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-fud8q3\"},{\"kind\":\"node\",\"id\":\"recur\",\"shape\":\"box\",\"x\":520,\"y\":160,\"w\":190,\"h\":70,\"text\":\"More recurrent connections, more synergy\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-sd9fzd\"},{\"kind\":\"node\",\"id\":\"corr\",\"shape\":\"box\",\"x\":290,\"y\":280,\"w\":220,\"h\":80,\"text\":\"Synergy peaks at moderate input correlation, then falls as it turns redundant\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-zfs2z7\"},{\"kind\":\"node\",\"id\":\"converge\",\"shape\":\"diamond\",\"x\":290,\"y\":400,\"w\":220,\"h\":70,\"text\":\"Together: computation concentrates in dense, correlated hubs\",\"size\":\"sm\"},{\"kind\":\"node\",\"id\":\"caveat\",\"shape\":\"note\",\"x\":290,\"y\":500,\"w\":220,\"h\":60,\"text\":\"Caveats: bivariate TE bias, cultures not live circuits\",\"size\":\"sm\",\"block\":\"spya-j4cy9j\"},{\"kind\":\"node\",\"id\":\"primatezoom\",\"shape\":\"box\",\"x\":290,\"y\":600,\"w\":220,\"h\":70,\"text\":\"In behaving macaques, rich-club synergy pattern replicates\",\"size\":\"sm\",\"block\":\"spya-wr7f6y\"},{\"kind\":\"node\",\"id\":\"taskshift\",\"shape\":\"box\",\"x\":290,\"y\":700,\"w\":220,\"h\":80,\"text\":\"Redundancy rises during motor execution, for signal reliability\",\"size\":\"sm\",\"block\":\"spya-t8fayf\"},{\"kind\":\"edge\",\"from\":\"setup\",\"to\":\"ff\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"setup\",\"to\":\"rich\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"setup\",\"to\":\"recur\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"ff\",\"to\":\"converge\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"rich\",\"to\":\"converge\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"recur\",\"to\":\"converge\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"corr\",\"to\":\"converge\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"converge\",\"to\":\"caveat\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"caveat\",\"to\":\"primatezoom\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"primatezoom\",\"to\":\"taskshift\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"}]}]}",
+      "report": {
+        "faults": [],
+        "written": 58,
+        "kept": 58,
+        "inferred": 0
+      },
+      "score": {
+        "scenes": 3,
+        "unreachable": 0,
+        "inferred": 0,
+        "nodes": 28,
+        "linked": 27,
+        "reach": 0.1111111111111111,
+        "flow": 0.9618600860701233,
+        "overlap": 0,
+        "overflowing": 2,
+        "faults": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 29528,
+      "outputTokens": 4074,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 38660
+    },
+    "illustrated": {
+      "illustrated": {
+        "version": "illustrated/5",
+        "style": "An illuminated manuscript page in sepia ink and gold leaf on aged parchment, its small framed vignettes linked by a single winding vine-line of information, using the article's own red/blue/purple circle-and-overlap colouring for the information-sharing diagrams — fitting because the paper itself builds its argument as nested circles, lattices, and branching trees.",
+        "plates": [
+          {
+            "sceneId": "overview",
+            "title": "The Funnel and the Chain",
+            "prompt": "A tall illuminated manuscript page, sepia ink and faint gold leaf on aged, lightly stained parchment, read top to bottom like a scroll of connected roundels joined by a single winding vine-line that stands for the flow of information through the whole page. No lettering appears anywhere except the small capitalized titles beneath each scene. At the very top: SIGNALS FROM THE SURROUNDINGS, a cutaway brain receiving rays from a drawn landscape, a small figure acting below. The vine descends to ARRAY OF ELECTRODES, fine probes lowered into a dense field of dot-neurons. It continues to SOURCE AND TARGET, two small linked circles joined by one thread, then to STREAMS THAT INTERACT, two threads braiding and crossing above them. The vine then enters a modestly framed panel — a thin rectangular border drawn but unlettered — containing THE OVERLAPPING CIRCLES: a red circle and a blue circle overlapping inside a larger oval, the overlap tinted purple. From this framed panel the vine forks in two and both branches enter a second, larger enclosure gathering four scenes: THE DENSE RICH CLUB, a glowing tight knot of interlinked figures, beside THE LOOPING TRIAD, two source-figures connected by a looping line into a third target figure; both branches then converge downward into REACH AND GRASP, a monkey's arm reaching and gripping with its signal-line drawn doubled over; from there a single line leads to THE OVERESTIMATED EDGE, one connecting line shadowed by a faint crack, still within the large enclosure's lower edge. The vine exits the enclosure and descends to COMBINATIONS OF ONES AND ZEROS, a ledger-grid overflowing with 0 and 1 marks, then to THE INFORMATIONAL TIME SERIES, a ribbon strung with red, blue, and purple beads of changing size. At the foot of the page, PATTERNS, NOT TOTALS: a target-neuron figure facing an arrangement of differently shaped signal-marks, tilting toward the pattern. Palette: warm sepia line work throughout, with the red/blue/purple used only for the information-circle and bead imagery, as the article itself colours them. Generous parchment margins, scenes large and clear, no crowding, no marginal ornament beyond the single connecting vine.",
+            "vignettes": [
+              {
+                "block": "spya-rxcze4",
+                "quote": "brains take in sensory signals from the environment and use that information to generate adaptive behavior informed by their surroundings",
+                "depicts": "At the top of the page, a cutaway brain shape receives fine rays of signal-lines pouring in from a drawn landscape of hills and weather, with a small figure below moving in response to them.",
+                "title": "SIGNALS FROM THE SURROUNDINGS",
+                "node": "intro"
+              },
+              {
+                "block": "spya-s9kmxa",
+                "quote": "electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution",
+                "depicts": "A fan of fine electrode tips and a lensed probe lowered into a dense field of tiny dot-neurons, each dot catching a thread of light, showing many neurons recorded at once.",
+                "title": "ARRAY OF ELECTRODES",
+                "node": "limits"
+              },
+              {
+                "block": "spya-qjdbvj",
+                "quote": "one serving as an information source and another as a target receiving information from that source",
+                "depicts": "Two small linked circles, one marked by a sun-like ray (source) and one by an open hand (target), joined by a single drawn thread passing between them.",
+                "title": "SOURCE AND TARGET",
+                "node": "track"
+              },
+              {
+                "block": "spya-s0db2g",
+                "quote": "it is limited in its ability to reveal how different streams of information “interact”",
+                "depicts": "Two threads of information braid and cross over one another above the source-target pair, tangled in a way the single thread below cannot explain.",
+                "title": "STREAMS THAT INTERACT",
+                "node": "flowlimit"
+              },
+              {
+                "block": "spya-pjdgu6",
+                "quote": "The total information contained in the activity of two source neurons X1 and X2 about the activity of a target",
+                "depicts": "Enclosed in its own small framed panel: two overlapping circles, one red and one blue, inside a larger outer oval, with the overlap tinted purple — the circles-within-a-circle figure for the two source neurons and their target.",
+                "title": "THE OVERLAPPING CIRCLES",
+                "node": "pidcore"
+              },
+              {
+                "block": "spya-fud8q3",
+                "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy",
+                "depicts": "Within a larger enclosure gathering four scenes together, a tight knot of densely interlinked node-figures glows brighter than the sparser nodes around it.",
+                "title": "THE DENSE RICH CLUB",
+                "node": "richclub"
+              },
+              {
+                "block": "spya-sd9fzd",
+                "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+                "depicts": "Two source-neuron figures joined by a looping line back and forth between themselves, both also feeding forward into a third target figure.",
+                "title": "THE LOOPING TRIAD",
+                "node": "recurrent"
+              },
+              {
+                "block": "spya-t8fayf",
+                "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+                "depicts": "A monkey's arm reaching and closing its hand around an object, with the signal-line running to it drawn doubled and tripled over, as if copied many times for safety.",
+                "title": "REACH AND GRASP",
+                "node": "primate"
+              },
+              {
+                "block": "spya-j4cy9j",
+                "quote": "bivariate analyses overestimate the significance of bivariate edges",
+                "depicts": "A single drawn connecting line between two node-figures shown with a faint crack or shadow across it, marking it as less certain than it appears.",
+                "title": "THE OVERESTIMATED EDGE",
+                "node": "caveats"
+              },
+              {
+                "block": "spya-tz99zn",
+                "quote": "there are 2 k possible combinations of 0s and 1s",
+                "depicts": "Below the frame, a long ledger-like grid overflowing its border with rows of tiny 0 and 1 marks, too many to count.",
+                "title": "COMBINATIONS OF ONES AND ZEROS",
+                "node": "practical"
+              },
+              {
+                "block": "spya-mczhkp",
+                "quote": "a time-resolved, “informational time series”, where the particular redundant, synergistic, and unique modes of information sharing can be resolved",
+                "depicts": "A thin ribbon stretching left to right, strung with small red, blue, and purple beads that change size moment to moment along its length.",
+                "title": "THE INFORMATIONAL TIME SERIES",
+                "node": "future"
+              },
+              {
+                "block": "spya-sp50v3",
+                "quote": "neurons do not appear to blindly sum the number of inputs and fire in response to the total",
+                "depicts": "At the foot of the page, a single target-neuron figure faces an arrangement of differently shaped incoming signal-marks and tilts toward the pattern rather than toward a single growing pile.",
+                "title": "PATTERNS, NOT TOTALS",
+                "node": "summary"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "At the top of the page, a cutaway brain shape receives fine rays of signal-lines pouring in from a drawn landscape of hills and weather, with a small figure below moving in response to them.",
+                "title": "SIGNALS FROM THE SURROUNDINGS"
+              },
+              {
+                "where": "A fan of fine electrode tips and a lensed probe lowered into a dense field of tiny dot-neurons, each dot catching a thread of light, showing many neurons recorded at once.",
+                "title": "ARRAY OF ELECTRODES"
+              },
+              {
+                "where": "Two small linked circles, one marked by a sun-like ray (source) and one by an open hand (target), joined by a single drawn thread passing between them.",
+                "title": "SOURCE AND TARGET"
+              },
+              {
+                "where": "Two threads of information braid and cross over one another above the source-target pair, tangled in a way the single thread below cannot explain.",
+                "title": "STREAMS THAT INTERACT"
+              },
+              {
+                "where": "Enclosed in its own small framed panel: two overlapping circles, one red and one blue, inside a larger outer oval, with the overlap tinted purple — the circles-within-a-circle figure for the two sourc",
+                "title": "THE OVERLAPPING CIRCLES"
+              },
+              {
+                "where": "Within a larger enclosure gathering four scenes together, a tight knot of densely interlinked node-figures glows brighter than the sparser nodes around it.",
+                "title": "THE DENSE RICH CLUB"
+              },
+              {
+                "where": "Two source-neuron figures joined by a looping line back and forth between themselves, both also feeding forward into a third target figure.",
+                "title": "THE LOOPING TRIAD"
+              },
+              {
+                "where": "A monkey's arm reaching and closing its hand around an object, with the signal-line running to it drawn doubled and tripled over, as if copied many times for safety.",
+                "title": "REACH AND GRASP"
+              },
+              {
+                "where": "A single drawn connecting line between two node-figures shown with a faint crack or shadow across it, marking it as less certain than it appears.",
+                "title": "THE OVERESTIMATED EDGE"
+              },
+              {
+                "where": "Below the frame, a long ledger-like grid overflowing its border with rows of tiny 0 and 1 marks, too many to count.",
+                "title": "COMBINATIONS OF ONES AND ZEROS"
+              },
+              {
+                "where": "A thin ribbon stretching left to right, strung with small red, blue, and purple beads that change size moment to moment along its length.",
+                "title": "THE INFORMATIONAL TIME SERIES"
+              },
+              {
+                "where": "At the foot of the page, a single target-neuron figure faces an arrangement of differently shaped incoming signal-marks and tilts toward the pattern rather than toward a single growing pile.",
+                "title": "PATTERNS, NOT TOTALS"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-pid",
+            "title": "Building the Lattice",
+            "prompt": "A tall illuminated manuscript page in sepia ink on aged parchment, the same hand and palette as the overview page, read top to bottom as a single descending chain. No lettering anywhere except the eight small capitalized titles beneath each scene. At the top, framed in a thin unlettered border exactly as it appeared on the overview page, THE OVERLAPPING CIRCLES: a red circle and a blue circle overlapping within a larger oval, the overlap tinted purple, drawn as an archway opening onto the chain below. Through the archway, the vine-line descends to MANY PARENTS, ONE DECISION: many small parent-neuron figures sending converging lines into one larger neuron who gathers them with drawn hands. Below it, INTEGRATING COMPUTATION: the same gathering figure now actively knotting the threads into one braided cord. The line continues to TWO PARENTS, ONE TARGET: exactly two parent figures each sending a single line onto one target figure, a simpler, cleaner version of the scene above. Next, THREE KNOWN, FOUR UNKNOWN: a balance scale with three weights resting on one pan and four bare hooks dangling empty from the other. The vine-line then widens into THE FINITE SET OF ATOMS: a branching trellis of small distinct knots rising in tiers, assembled directly below the scale. From the trellis, WHAT LIES BELOW: a hand reaching upward through the tiers, touching each knot in turn, finding something at each level not present below it. At the foot of the page, A DOZEN COMPETING RULERS: a row of roughly a dozen different measuring rods and calipers laid side by side, with a scholarly hand selecting one. Palette: warm sepia linework throughout, with red, blue, and purple reserved only for the opening circles, matching the overview page. Keep the scenes large, evenly spaced down the page, bare parchment around them, no crowding and no marginal ornament beyond the single connecting vine-line.",
+            "vignettes": [
+              {
+                "block": "spya-pjdgu6",
+                "quote": "The total information contained in the activity of two source neurons X1 and X2 about the activity of a target",
+                "depicts": "As the plate's opening frame, repeating the overview's panel: a red circle and a blue circle overlapping inside a larger oval, the overlap tinted purple, drawn as an archway into the scenes below.",
+                "title": "THE OVERLAPPING CIRCLES",
+                "node": "pidcore"
+              },
+              {
+                "block": "spya-h5dz45",
+                "quote": "Individual neurons receive inputs from from many “parent” neurons, which are “integrated” into a single “decision” by the target neuron",
+                "depicts": "Many small parent-neuron figures send converging lines into one larger neuron figure, who gathers them with drawn hands into a single bundled decision.",
+                "title": "MANY PARENTS, ONE DECISION",
+                "node": "joint"
+              },
+              {
+                "block": "spya-e94ury",
+                "quote": "the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs",
+                "depicts": "The same target figure now shown actively knotting several threads together into one braided cord, an act of combining rather than merely collecting.",
+                "title": "INTEGRATING COMPUTATION",
+                "node": "synred"
+              },
+              {
+                "block": "spya-q2b0e5",
+                "quote": "two parent neurons (X₁, X₂) synapsing onto a single target neuron (Y)",
+                "depicts": "Exactly two parent figures, each sending one line, both landing on a single target figure, drawn plainly as the simplest version of the pattern above.",
+                "title": "TWO PARENTS, ONE TARGET",
+                "node": "twoparent"
+              },
+              {
+                "block": "spya-bgsd4n",
+                "quote": "an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values",
+                "depicts": "A balance scale with three marked weights resting on one pan and four empty hooks dangling unfilled from the other, showing more unknowns than knowns.",
+                "title": "THREE KNOWN, FOUR UNKNOWN",
+                "node": "underdet"
+              },
+              {
+                "block": "spya-t8mg0s",
+                "quote": "it is possible to decompose the total joint mutual information into a finite set of unique, partial information atoms",
+                "depicts": "A branching trellis of small linked knots rising in tiers, each knot distinct, assembled from the scale above into one finite structure.",
+                "title": "THE FINITE SET OF ATOMS",
+                "node": "lattice"
+              },
+              {
+                "block": "spya-aft2rx",
+                "quote": "that information that is not accessible in any simpler combination of sources lower down on the lattice",
+                "depicts": "A hand reaches up through the trellis from knot to knot, finding at each level something new that was not present in the knots beneath it.",
+                "title": "WHAT LIES BELOW",
+                "node": "mobius"
+              },
+              {
+                "block": "spya-rc76qn",
+                "quote": "There are, at present, close to a dozen competing redundancy functions",
+                "depicts": "A row of roughly a dozen different measuring rods and calipers laid side by side at the base of the trellis, with a scholarly hand choosing one among them.",
+                "title": "A DOZEN COMPETING RULERS",
+                "node": "redmeasure"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "As the plate's opening frame, repeating the overview's panel: a red circle and a blue circle overlapping inside a larger oval, the overlap tinted purple, drawn as an archway into the scenes below.",
+                "title": "THE OVERLAPPING CIRCLES"
+              },
+              {
+                "where": "Many small parent-neuron figures send converging lines into one larger neuron figure, who gathers them with drawn hands into a single bundled decision.",
+                "title": "MANY PARENTS, ONE DECISION"
+              },
+              {
+                "where": "The same target figure now shown actively knotting several threads together into one braided cord, an act of combining rather than merely collecting.",
+                "title": "INTEGRATING COMPUTATION"
+              },
+              {
+                "where": "Exactly two parent figures, each sending one line, both landing on a single target figure, drawn plainly as the simplest version of the pattern above.",
+                "title": "TWO PARENTS, ONE TARGET"
+              },
+              {
+                "where": "A balance scale with three marked weights resting on one pan and four empty hooks dangling unfilled from the other, showing more unknowns than knowns.",
+                "title": "THREE KNOWN, FOUR UNKNOWN"
+              },
+              {
+                "where": "A branching trellis of small linked knots rising in tiers, each knot distinct, assembled from the scale above into one finite structure.",
+                "title": "THE FINITE SET OF ATOMS"
+              },
+              {
+                "where": "A hand reaches up through the trellis from knot to knot, finding at each level something new that was not present in the knots beneath it.",
+                "title": "WHAT LIES BELOW"
+              },
+              {
+                "where": "A row of roughly a dozen different measuring rods and calipers laid side by side at the base of the trellis, with a scholarly hand choosing one among them.",
+                "title": "A DOZEN COMPETING RULERS"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-evidence",
+            "title": "The Evidence Converges",
+            "prompt": "A tall illuminated manuscript page in sepia ink on aged parchment, same hand and palette as the other plates, read top to bottom. No lettering anywhere except the nine small capitalized titles beneath each scene. At the top, ARRAYS OVER CULTURED NEURONS: a flat dish studded with a grid of fine electrode points over scattered cultured neuron-figures. The vine-line forks into three parallel branches set side by side across the width of the page: on the left A QUARTER OF THE FLOW, a three-figure triad with a quarter-filled glowing measure beside its feedforward line; in the middle THE DENSE RICH CLUB, a tightly knotted, brightly glowing cluster of figures; on the right THE LOOPING TRIAD, two source-figures joined by a looping line feeding a third target figure. Below these three, a fourth branch enters from the side: PEAK AT SEVEN PERCENT, two source-figures whose shared glow swells toward a small marked point on a dial before fading. All four branches are drawn gathered downward by a single hand into one bundled cord in GATHERING THE THREADS, descending toward a loose cluster of cortical rich-club figures. From this gathering point a single line continues down to THE OVERESTIMATED EDGE, one connecting line marked with a faint crack. The line then leads to THREE MACAQUES AT WORK, three seated macaque figures with fine signal-lines rising from their heads toward recording equipment. Finally, at the foot of the page, REACH AND GRASP: one macaque reaching out and closing its hand around an object, its signal-line to the hand drawn doubled and tripled over. Palette: warm sepia linework throughout, with the red/blue/purple circle-colouring reserved only for the glow effects in A QUARTER OF THE FLOW, THE DENSE RICH CLUB, THE LOOPING TRIAD and PEAK AT SEVEN PERCENT, matching the earlier plates. Keep every scene large and legible, using the full width of the page for the three-way fork, bare parchment around the scenes, no crowding, no marginal ornament beyond the connecting vine-lines.",
+            "vignettes": [
+              {
+                "block": "spya-sw5ukx",
+                "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures",
+                "depicts": "At the top of the plate, a flat dish studded with a grid of 512 fine electrode points, with tiny cultured neuron-figures scattered across its surface, each catching a line of light.",
+                "title": "ARRAYS OVER CULTURED NEURONS",
+                "node": "setup"
+              },
+              {
+                "block": "spya-kqkb58",
+                "quote": "the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy",
+                "depicts": "A triad of three linked figures with a flowing feedforward line between them, a quarter-filled glowing measure sitting beside the line to show the steady fraction.",
+                "title": "A QUARTER OF THE FLOW",
+                "node": "ff"
+              },
+              {
+                "block": "spya-fud8q3",
+                "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy",
+                "depicts": "The same tight, densely interlinked knot of figures seen earlier, glowing more brightly than the sparse surrounding triads beside it.",
+                "title": "THE DENSE RICH CLUB",
+                "node": "rich"
+              },
+              {
+                "block": "spya-sd9fzd",
+                "quote": "triads with two recurrent connections and no feedback connections had 50% more synergy",
+                "depicts": "Two source figures linked by a looping line back and forth between themselves, both also feeding into a third target figure, set beside the rich-club knot.",
+                "title": "THE LOOPING TRIAD",
+                "node": "recur"
+              },
+              {
+                "block": "spya-ybmve2",
+                "quote": "The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale.",
+                "depicts": "Two source-figures whose shared glow swells as their activity grows more alike, peaking at a small marked point on a dial before beginning to fade again past it.",
+                "title": "PEAK AT SEVEN PERCENT",
+                "node": "corr"
+              },
+              {
+                "block": "spya-akxt70",
+                "quote": "To understand better why cortical rich clubs are so dense in information processing, we examined other determinants of synergistic integration",
+                "depicts": "The four preceding scenes' threads are gathered by a single drawn hand into one bundled cord descending toward a labeled-free ledger of cortical rich-club figures.",
+                "title": "GATHERING THE THREADS",
+                "node": "converge"
+              },
+              {
+                "block": "spya-j4cy9j",
+                "quote": "bivariate analyses overestimate the significance of bivariate edges",
+                "depicts": "A single connecting line between two node-figures shown with a faint crack across it, marking the line as less certain than it looks.",
+                "title": "THE OVERESTIMATED EDGE",
+                "node": "caveat"
+              },
+              {
+                "block": "spya-wr7f6y",
+                "quote": "Varley et al. [5] analyzed spiking neural activity from the pre-motor and motor regions of three macaques",
+                "depicts": "Three macaque figures seated at a task table, fine signal-lines drawn rising from marked regions of their heads toward recording equipment above.",
+                "title": "THREE MACAQUES AT WORK",
+                "node": "primatezoom"
+              },
+              {
+                "block": "spya-t8fayf",
+                "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+                "depicts": "One of the macaque figures reaching out and closing its hand around an object, its signal-line to the hand drawn doubled and tripled over.",
+                "title": "REACH AND GRASP",
+                "node": "taskshift"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "At the top of the plate, a flat dish studded with a grid of 512 fine electrode points, with tiny cultured neuron-figures scattered across its surface, each catching a line of light.",
+                "title": "ARRAYS OVER CULTURED NEURONS"
+              },
+              {
+                "where": "A triad of three linked figures with a flowing feedforward line between them, a quarter-filled glowing measure sitting beside the line to show the steady fraction.",
+                "title": "A QUARTER OF THE FLOW"
+              },
+              {
+                "where": "The same tight, densely interlinked knot of figures seen earlier, glowing more brightly than the sparse surrounding triads beside it.",
+                "title": "THE DENSE RICH CLUB"
+              },
+              {
+                "where": "Two source figures linked by a looping line back and forth between themselves, both also feeding into a third target figure, set beside the rich-club knot.",
+                "title": "THE LOOPING TRIAD"
+              },
+              {
+                "where": "Two source-figures whose shared glow swells as their activity grows more alike, peaking at a small marked point on a dial before beginning to fade again past it.",
+                "title": "PEAK AT SEVEN PERCENT"
+              },
+              {
+                "where": "The four preceding scenes' threads are gathered by a single drawn hand into one bundled cord descending toward a labeled-free ledger of cortical rich-club figures.",
+                "title": "GATHERING THE THREADS"
+              },
+              {
+                "where": "A single connecting line between two node-figures shown with a faint crack across it, marking the line as less certain than it looks.",
+                "title": "THE OVERESTIMATED EDGE"
+              },
+              {
+                "where": "Three macaque figures seated at a task table, fine signal-lines drawn rising from marked regions of their heads toward recording equipment above.",
+                "title": "THREE MACAQUES AT WORK"
+              },
+              {
+                "where": "One of the macaque figures reaching out and closing its hand around an object, its signal-line to the hand drawn doubled and tripled over.",
+                "title": "REACH AND GRASP"
+              }
+            ]
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "illustrator": "google/gemini-3.1-flash-image",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "profileHash": null
+      },
+      "cancelled": false,
+      "raw": "{\"style\":\"An illuminated manuscript page in sepia ink and gold leaf on aged parchment, its small framed vignettes linked by a single winding vine-line of information, using the article's own red/blue/purple circle-and-overlap colouring for the information-sharing diagrams — fitting because the paper itself builds its argument as nested circles, lattices, and branching trees.\",\"plates\":[{\"sceneId\":\"overview\",\"title\":\"The Funnel and the Chain\",\"vignettes\":[{\"node\":\"intro\",\"block\":\"spya-rxcze4\",\"quote\":\"brains take in sensory signals from the environment and use that information to generate adaptive behavior informed by their surroundings\",\"depicts\":\"At the top of the page, a cutaway brain shape receives fine rays of signal-lines pouring in from a drawn landscape of hills and weather, with a small figure below moving in response to them.\",\"title\":\"SIGNALS FROM THE SURROUNDINGS\"},{\"node\":\"limits\",\"block\":\"spya-s9kmxa\",\"quote\":\"electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution\",\"depicts\":\"A fan of fine electrode tips and a lensed probe lowered into a dense field of tiny dot-neurons, each dot catching a thread of light, showing many neurons recorded at once.\",\"title\":\"ARRAY OF ELECTRODES\"},{\"node\":\"track\",\"block\":\"spya-qjdbvj\",\"quote\":\"one serving as an information source and another as a target receiving information from that source\",\"depicts\":\"Two small linked circles, one marked by a sun-like ray (source) and one by an open hand (target), joined by a single drawn thread passing between them.\",\"title\":\"SOURCE AND TARGET\"},{\"node\":\"flowlimit\",\"block\":\"spya-s0db2g\",\"quote\":\"it is limited in its ability to reveal how different streams of information “interact”\",\"depicts\":\"Two threads of information braid and cross over one another above the source-target pair, tangled in a way the single thread below cannot explain.\",\"title\":\"STREAMS THAT INTERACT\"},{\"node\":\"pidcore\",\"block\":\"spya-pjdgu6\",\"quote\":\"The total information contained in the activity of two source neurons X1 and X2 about the activity of a target\",\"depicts\":\"Enclosed in its own small framed panel: two overlapping circles, one red and one blue, inside a larger outer oval, with the overlap tinted purple — the circles-within-a-circle figure for the two source neurons and their target.\",\"title\":\"THE OVERLAPPING CIRCLES\"},{\"node\":\"richclub\",\"block\":\"spya-fud8q3\",\"quote\":\"the triads inside the rich clubs had 2.7 times the amount of synergy\",\"depicts\":\"Within a larger enclosure gathering four scenes together, a tight knot of densely interlinked node-figures glows brighter than the sparser nodes around it.\",\"title\":\"THE DENSE RICH CLUB\"},{\"node\":\"recurrent\",\"block\":\"spya-sd9fzd\",\"quote\":\"triads with two recurrent connections and no feedback connections had 50% more synergy\",\"depicts\":\"Two source-neuron figures joined by a looping line back and forth between themselves, both also feeding forward into a third target figure.\",\"title\":\"THE LOOPING TRIAD\"},{\"node\":\"primate\",\"block\":\"spya-t8fayf\",\"quote\":\"during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically\",\"depicts\":\"A monkey's arm reaching and closing its hand around an object, with the signal-line running to it drawn doubled and tripled over, as if copied many times for safety.\",\"title\":\"REACH AND GRASP\"},{\"node\":\"caveats\",\"block\":\"spya-j4cy9j\",\"quote\":\"bivariate analyses overestimate the significance of bivariate edges\",\"depicts\":\"A single drawn connecting line between two node-figures shown with a faint crack or shadow across it, marking it as less certain than it appears.\",\"title\":\"THE OVERESTIMATED EDGE\"},{\"node\":\"practical\",\"block\":\"spya-tz99zn\",\"quote\":\"there are 2 k possible combinations of 0s and 1s\",\"depicts\":\"Below the frame, a long ledger-like grid overflowing its border with rows of tiny 0 and 1 marks, too many to count.\",\"title\":\"COMBINATIONS OF ONES AND ZEROS\"},{\"node\":\"future\",\"block\":\"spya-mczhkp\",\"quote\":\"a time-resolved, “informational time series”, where the particular redundant, synergistic, and unique modes of information sharing can be resolved\",\"depicts\":\"A thin ribbon stretching left to right, strung with small red, blue, and purple beads that change size moment to moment along its length.\",\"title\":\"THE INFORMATIONAL TIME SERIES\"},{\"node\":\"summary\",\"block\":\"spya-sp50v3\",\"quote\":\"neurons do not appear to blindly sum the number of inputs and fire in response to the total\",\"depicts\":\"At the foot of the page, a single target-neuron figure faces an arrangement of differently shaped incoming signal-marks and tilts toward the pattern rather than toward a single growing pile.\",\"title\":\"PATTERNS, NOT TOTALS\"}],\"prompt\":\"A tall illuminated manuscript page, sepia ink and faint gold leaf on aged, lightly stained parchment, read top to bottom like a scroll of connected roundels joined by a single winding vine-line that stands for the flow of information through the whole page. No lettering appears anywhere except the small capitalized titles beneath each scene. At the very top: SIGNALS FROM THE SURROUNDINGS, a cutaway brain receiving rays from a drawn landscape, a small figure acting below. The vine descends to ARRAY OF ELECTRODES, fine probes lowered into a dense field of dot-neurons. It continues to SOURCE AND TARGET, two small linked circles joined by one thread, then to STREAMS THAT INTERACT, two threads braiding and crossing above them. The vine then enters a modestly framed panel — a thin rectangular border drawn but unlettered — containing THE OVERLAPPING CIRCLES: a red circle and a blue circle overlapping inside a larger oval, the overlap tinted purple. From this framed panel the vine forks in two and both branches enter a second, larger enclosure gathering four scenes: THE DENSE RICH CLUB, a glowing tight knot of interlinked figures, beside THE LOOPING TRIAD, two source-figures connected by a looping line into a third target figure; both branches then converge downward into REACH AND GRASP, a monkey's arm reaching and gripping with its signal-line drawn doubled over; from there a single line leads to THE OVERESTIMATED EDGE, one connecting line shadowed by a faint crack, still within the large enclosure's lower edge. The vine exits the enclosure and descends to COMBINATIONS OF ONES AND ZEROS, a ledger-grid overflowing with 0 and 1 marks, then to THE INFORMATIONAL TIME SERIES, a ribbon strung with red, blue, and purple beads of changing size. At the foot of the page, PATTERNS, NOT TOTALS: a target-neuron figure facing an arrangement of differently shaped signal-marks, tilting toward the pattern. Palette: warm sepia line work throughout, with the red/blue/purple used only for the information-circle and bead imagery, as the article itself colours them. Generous parchment margins, scenes large and clear, no crowding, no marginal ornament beyond the single connecting vine.\"},{\"sceneId\":\"inside-pid\",\"title\":\"Building the Lattice\",\"vignettes\":[{\"node\":\"pidcore\",\"block\":\"spya-pjdgu6\",\"quote\":\"The total information contained in the activity of two source neurons X1 and X2 about the activity of a target\",\"depicts\":\"As the plate's opening frame, repeating the overview's panel: a red circle and a blue circle overlapping inside a larger oval, the overlap tinted purple, drawn as an archway into the scenes below.\",\"title\":\"THE OVERLAPPING CIRCLES\"},{\"node\":\"joint\",\"block\":\"spya-h5dz45\",\"quote\":\"Individual neurons receive inputs from from many “parent” neurons, which are “integrated” into a single “decision” by the target neuron\",\"depicts\":\"Many small parent-neuron figures send converging lines into one larger neuron figure, who gathers them with drawn hands into a single bundled decision.\",\"title\":\"MANY PARENTS, ONE DECISION\"},{\"node\":\"synred\",\"block\":\"spya-e94ury\",\"quote\":\"the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs\",\"depicts\":\"The same target figure now shown actively knotting several threads together into one braided cord, an act of combining rather than merely collecting.\",\"title\":\"INTEGRATING COMPUTATION\"},{\"node\":\"twoparent\",\"block\":\"spya-q2b0e5\",\"quote\":\"two parent neurons (X₁, X₂) synapsing onto a single target neuron (Y)\",\"depicts\":\"Exactly two parent figures, each sending one line, both landing on a single target figure, drawn plainly as the simplest version of the pattern above.\",\"title\":\"TWO PARENTS, ONE TARGET\"},{\"node\":\"underdet\",\"block\":\"spya-bgsd4n\",\"quote\":\"an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values\",\"depicts\":\"A balance scale with three marked weights resting on one pan and four empty hooks dangling unfilled from the other, showing more unknowns than knowns.\",\"title\":\"THREE KNOWN, FOUR UNKNOWN\"},{\"node\":\"lattice\",\"block\":\"spya-t8mg0s\",\"quote\":\"it is possible to decompose the total joint mutual information into a finite set of unique, partial information atoms\",\"depicts\":\"A branching trellis of small linked knots rising in tiers, each knot distinct, assembled from the scale above into one finite structure.\",\"title\":\"THE FINITE SET OF ATOMS\"},{\"node\":\"mobius\",\"block\":\"spya-aft2rx\",\"quote\":\"that information that is not accessible in any simpler combination of sources lower down on the lattice\",\"depicts\":\"A hand reaches up through the trellis from knot to knot, finding at each level something new that was not present in the knots beneath it.\",\"title\":\"WHAT LIES BELOW\"},{\"node\":\"redmeasure\",\"block\":\"spya-rc76qn\",\"quote\":\"There are, at present, close to a dozen competing redundancy functions\",\"depicts\":\"A row of roughly a dozen different measuring rods and calipers laid side by side at the base of the trellis, with a scholarly hand choosing one among them.\",\"title\":\"A DOZEN COMPETING RULERS\"}],\"prompt\":\"A tall illuminated manuscript page in sepia ink on aged parchment, the same hand and palette as the overview page, read top to bottom as a single descending chain. No lettering anywhere except the eight small capitalized titles beneath each scene. At the top, framed in a thin unlettered border exactly as it appeared on the overview page, THE OVERLAPPING CIRCLES: a red circle and a blue circle overlapping within a larger oval, the overlap tinted purple, drawn as an archway opening onto the chain below. Through the archway, the vine-line descends to MANY PARENTS, ONE DECISION: many small parent-neuron figures sending converging lines into one larger neuron who gathers them with drawn hands. Below it, INTEGRATING COMPUTATION: the same gathering figure now actively knotting the threads into one braided cord. The line continues to TWO PARENTS, ONE TARGET: exactly two parent figures each sending a single line onto one target figure, a simpler, cleaner version of the scene above. Next, THREE KNOWN, FOUR UNKNOWN: a balance scale with three weights resting on one pan and four bare hooks dangling empty from the other. The vine-line then widens into THE FINITE SET OF ATOMS: a branching trellis of small distinct knots rising in tiers, assembled directly below the scale. From the trellis, WHAT LIES BELOW: a hand reaching upward through the tiers, touching each knot in turn, finding something at each level not present below it. At the foot of the page, A DOZEN COMPETING RULERS: a row of roughly a dozen different measuring rods and calipers laid side by side, with a scholarly hand selecting one. Palette: warm sepia linework throughout, with red, blue, and purple reserved only for the opening circles, matching the overview page. Keep the scenes large, evenly spaced down the page, bare parchment around them, no crowding and no marginal ornament beyond the single connecting vine-line.\"},{\"sceneId\":\"inside-evidence\",\"title\":\"The Evidence Converges\",\"vignettes\":[{\"node\":\"setup\",\"block\":\"spya-sw5ukx\",\"quote\":\"we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures\",\"depicts\":\"At the top of the plate, a flat dish studded with a grid of 512 fine electrode points, with tiny cultured neuron-figures scattered across its surface, each catching a line of light.\",\"title\":\"ARRAYS OVER CULTURED NEURONS\"},{\"node\":\"ff\",\"block\":\"spya-kqkb58\",\"quote\":\"the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy\",\"depicts\":\"A triad of three linked figures with a flowing feedforward line between them, a quarter-filled glowing measure sitting beside the line to show the steady fraction.\",\"title\":\"A QUARTER OF THE FLOW\"},{\"node\":\"rich\",\"block\":\"spya-fud8q3\",\"quote\":\"the triads inside the rich clubs had 2.7 times the amount of synergy\",\"depicts\":\"The same tight, densely interlinked knot of figures seen earlier, glowing more brightly than the sparse surrounding triads beside it.\",\"title\":\"THE DENSE RICH CLUB\"},{\"node\":\"recur\",\"block\":\"spya-sd9fzd\",\"quote\":\"triads with two recurrent connections and no feedback connections had 50% more synergy\",\"depicts\":\"Two source figures linked by a looping line back and forth between themselves, both also feeding into a third target figure, set beside the rich-club knot.\",\"title\":\"THE LOOPING TRIAD\"},{\"node\":\"corr\",\"block\":\"spya-ybmve2\",\"quote\":\"The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale.\",\"depicts\":\"Two source-figures whose shared glow swells as their activity grows more alike, peaking at a small marked point on a dial before beginning to fade again past it.\",\"title\":\"PEAK AT SEVEN PERCENT\"},{\"node\":\"converge\",\"block\":\"spya-akxt70\",\"quote\":\"To understand better why cortical rich clubs are so dense in information processing, we examined other determinants of synergistic integration\",\"depicts\":\"The four preceding scenes' threads are gathered by a single drawn hand into one bundled cord descending toward a labeled-free ledger of cortical rich-club figures.\",\"title\":\"GATHERING THE THREADS\"},{\"node\":\"caveat\",\"block\":\"spya-j4cy9j\",\"quote\":\"bivariate analyses overestimate the significance of bivariate edges\",\"depicts\":\"A single connecting line between two node-figures shown with a faint crack across it, marking the line as less certain than it looks.\",\"title\":\"THE OVERESTIMATED EDGE\"},{\"node\":\"primatezoom\",\"block\":\"spya-wr7f6y\",\"quote\":\"Varley et al. [5] analyzed spiking neural activity from the pre-motor and motor regions of three macaques\",\"depicts\":\"Three macaque figures seated at a task table, fine signal-lines drawn rising from marked regions of their heads toward recording equipment above.\",\"title\":\"THREE MACAQUES AT WORK\"},{\"node\":\"taskshift\",\"block\":\"spya-t8fayf\",\"quote\":\"during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically\",\"depicts\":\"One of the macaque figures reaching out and closing its hand around an object, its signal-line to the hand drawn doubled and tripled over.\",\"title\":\"REACH AND GRASP\"}],\"prompt\":\"A tall illuminated manuscript page in sepia ink on aged parchment, same hand and palette as the other plates, read top to bottom. No lettering anywhere except the nine small capitalized titles beneath each scene. At the top, ARRAYS OVER CULTURED NEURONS: a flat dish studded with a grid of fine electrode points over scattered cultured neuron-figures. The vine-line forks into three parallel branches set side by side across the width of the page: on the left A QUARTER OF THE FLOW, a three-figure triad with a quarter-filled glowing measure beside its feedforward line; in the middle THE DENSE RICH CLUB, a tightly knotted, brightly glowing cluster of figures; on the right THE LOOPING TRIAD, two source-figures joined by a looping line feeding a third target figure. Below these three, a fourth branch enters from the side: PEAK AT SEVEN PERCENT, two source-figures whose shared glow swells toward a small marked point on a dial before fading. All four branches are drawn gathered downward by a single hand into one bundled cord in GATHERING THE THREADS, descending toward a loose cluster of cortical rich-club figures. From this gathering point a single line continues down to THE OVERESTIMATED EDGE, one connecting line marked with a faint crack. The line then leads to THREE MACAQUES AT WORK, three seated macaque figures with fine signal-lines rising from their heads toward recording equipment. Finally, at the foot of the page, REACH AND GRASP: one macaque reaching out and closing its hand around an object, its signal-line to the hand drawn doubled and tripled over. Palette: warm sepia linework throughout, with the red/blue/purple circle-colouring reserved only for the glow effects in A QUARTER OF THE FLOW, THE DENSE RICH CLUB, THE LOOPING TRIAD and PEAK AT SEVEN PERCENT, matching the earlier plates. Keep every scene large and legible, using the full width of the page for the three-way fork, bare parchment around the scenes, no crowding, no marginal ornament beyond the connecting vine-lines.\"}]}",
+      "report": {
+        "faults": [],
+        "written": 29,
+        "kept": 29,
+        "platesWritten": 3,
+        "platesKept": 3
+      },
+      "model": "claude-sonnet-5",
+      "imageModel": "google/gemini-3.1-flash-image",
+      "inputTokens": 24375,
+      "outputTokens": 29341,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "briefMs": 253572,
+      "draws": [
+        {
+          "sceneId": "overview",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 1,
+          "usedReference": false,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-pid",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-evidence",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        }
+      ],
+      "elapsedMs": 253597
+    },
+    "faq": {
+      "faq": {
+        "version": "faq/5",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+        "questions": [
+          {
+            "id": "spya-xf8nrt",
+            "question": "If mutual information and transfer entropy already track dependence and directed flow between neurons, why is a further decomposition framework even needed?",
+            "passages": [
+              {
+                "blockId": "spya-s0db2g",
+                "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources",
+                "start": 0
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.7
+          },
+          {
+            "id": "spya-trarp9",
+            "question": "How do you tell whether a neuron's joint input is doing extra computation versus just repeating what each source already said on its own?",
+            "passages": [
+              {
+                "blockId": "spya-e94ury",
+                "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.",
+                "start": 0
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-q0e7zq",
+            "question": "If there's no single accepted way to define redundant information, how solid is the whole decomposition into redundant, unique, and synergistic parts?",
+            "passages": [
+              {
+                "blockId": "spya-bgsd4n",
+                "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+                "start": 257
+              },
+              {
+                "blockId": "spya-rc76qn",
+                "quote": "To date, no single universally accepted measure has been proposed.",
+                "start": 112
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.8
+          },
+          {
+            "id": "spya-tch50m",
+            "question": "Why does synergy stop rising and start falling once the source neurons' activity becomes similar enough, instead of just increasing indefinitely?",
+            "passages": [
+              {
+                "blockId": "spya-ybmve2",
+                "quote": "Past this level, the synergy began to decrease (this level is marked by the vertical dotted line in Figure 4E).",
+                "start": 361
+              },
+              {
+                "blockId": "spya-cs9fdy",
+                "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+                "start": 724
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-yszrcq",
+            "question": "The culture studies built their effective networks using bivariate transfer entropy, but doesn't that risk overstating which connections even belong in the analyzed triads?",
+            "passages": [
+              {
+                "blockId": "spya-j4cy9j",
+                "quote": "This matters because it has been shown that bivariate analyses overestimate the significance of bivariate edges [51].",
+                "start": 294
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-d0qpu3",
+            "question": "Given how artificial cultured brain slices are, do the synergy patterns found there actually hold up in a real, behaving animal?",
+            "passages": [
+              {
+                "blockId": "spya-j4cy9j",
+                "quote": "the demands placed on a circuit in the context of a behaving animal are certain to differ from those placed on cultures in vitro.",
+                "start": 861
+              },
+              {
+                "blockId": "spya-wr7f6y",
+                "quote": "Despite this difference, many aspects of the in vitro results were successfully replicated in animal models, including the presence of a rich club and an increase in synergy in high-degree nodes.",
+                "start": 792
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.5
+          },
+          {
+            "id": "spya-fvmu6h",
+            "question": "Does finding synergy in a neuron actually explain why it computes that way, or just describe a statistical pattern without a mechanism?",
+            "passages": [
+              {
+                "blockId": "spya-spdx0y",
+                "quote": "it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.",
+                "start": 177
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-r8xayr",
+            "question": "Since the number of PID pieces explodes combinatorially with more inputs, how can this approach ever handle real neurons that receive input from many sources?",
+            "passages": [
+              {
+                "blockId": "spya-aby2dp",
+                "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+                "start": 302
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.7
+          },
+          {
+            "id": "spya-ut25q5",
+            "question": "Given that entropy and mutual information estimates from finite data are known to be biased upward, could the reported synergy be a statistical artifact rather than real computation?",
+            "passages": [
+              {
+                "blockId": "spya-qa7gt2",
+                "quote": "it is known that the plug-in estimator for the Shannon entropy consistently underestimates the true entropy and overestimates the mutual information",
+                "start": 226
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.7
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 1,
+          "tooLong": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "generatedAt": "2026-10-03T03:53:28.405Z",
+        "elapsedMs": 52628
+      },
+      "blocks": 99,
+      "words": 8580,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 1,
+        "tooLong": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scoreDrops": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 22072,
+      "outputTokens": 6000,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "maxTokens": 45920,
+      "elapsedMs": 52635
+    },
+    "quiz": {
+      "quiz": {
+        "version": "quiz/6",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+        "batchId": "spya-trhmqa",
+        "questions": [
+          {
+            "id": "spya-k82w8m",
+            "question": "What two things historically limited the study of neural information processing, according to the article?",
+            "referenceAnswer": "A lack of enough data to infer complex patterns of dependence among many neurons, and a lack of adequate analytical tools to extract insight from that data.",
+            "evidence": [
+              {
+                "blockId": "spya-s9kmxa",
+                "quote": "The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accurately infer the structure of multivariate dependence.",
+                "start": 116
+              },
+              {
+                "blockId": "spya-s9kmxa",
+                "quote": "The second was a lack of appropriate analytical approaches.",
+                "start": 576
+              }
+            ]
+          },
+          {
+            "id": "spya-sn8uuq",
+            "question": "What technological development eased this data limitation?",
+            "premise": "One of the two limitations was a lack of enough data.",
+            "referenceAnswer": "New electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond resolution.",
+            "evidence": [
+              {
+                "blockId": "spya-s9kmxa",
+                "quote": "with innovative new electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution, this limitation has abated considerably",
+                "start": 375
+              }
+            ]
+          },
+          {
+            "id": "spya-xbsz2m",
+            "question": "What does mutual information measure about the activity of two neurons?",
+            "referenceAnswer": "It measures how much knowing one neuron's state reduces uncertainty about the other's, an undirected measure of instantaneous dependence that says nothing about time-directed flow between them.",
+            "evidence": [
+              {
+                "blockId": "spya-f6sbgx",
+                "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables",
+                "start": 626
+              }
+            ]
+          },
+          {
+            "id": "spya-fgvp7d",
+            "question": "What does transfer entropy add that mutual information lacks?",
+            "premise": "Mutual information is undirected and carries no notion of time-directed flow.",
+            "referenceAnswer": "Transfer entropy quantifies how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains, capturing directed information flow.",
+            "evidence": [
+              {
+                "blockId": "spya-p4pyuy",
+                "quote": "TE(X → Y) is read as the transfer entropy from X’s past to Y’s future.",
+                "start": 295
+              },
+              {
+                "blockId": "spya-p4pyuy",
+                "quote": "TE is understood as quantifying how much the past of the source variable reduces our uncertainty about the future of the target variable, after accounting for information disclosed by the target variable’s own past (autocorrelation).",
+                "start": 531
+              }
+            ]
+          },
+          {
+            "id": "spya-nnnw3n",
+            "question": "Why is information transfer, even directed transfer entropy, still not enough to reveal how neurons process information?",
+            "premise": "Transfer entropy measures directed information flow between a source and a target.",
+            "referenceAnswer": "Because it only captures the overall flow of information between pairs of neurons and cannot reveal how different incoming streams of information interact or combine to produce new or modified information.",
+            "evidence": [
+              {
+                "blockId": "spya-s0db2g",
+                "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-xr6qkv",
+            "question": "In the partial information framework, what does it mean when the joint information two source neurons carry about a target together is greater than the sum of what each carries alone?",
+            "referenceAnswer": "It means the sources carry synergistic information about the target, disclosed only by their joint states and not by either source individually, reflecting an integrating computation.",
+            "evidence": [
+              {
+                "blockId": "spya-e94ury",
+                "quote": "then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics",
+                "start": 114
+              }
+            ]
+          },
+          {
+            "id": "spya-kn9aqp",
+            "question": "What does it mean instead when the whole is less than the sum of the parts?",
+            "premise": "When the whole exceeds the sum of the parts, that excess is synergy.",
+            "referenceAnswer": "It means there is redundant information about the target that is carried by more than one source neuron and gets double-counted when their individual contributions are added up.",
+            "evidence": [
+              {
+                "blockId": "spya-e94ury",
+                "quote": "Conversely, if the whole is less than the sum of its parts, then there must be redundant information about Y instantiated multiple times over the parent neurons that is “double counted” when summing the marginals.",
+                "start": 534
+              }
+            ]
+          },
+          {
+            "id": "spya-v5cndf",
+            "question": "In the two-parent case, what four components does partial information decomposition split the total joint information into?",
+            "referenceAnswer": "Redundant information shared by both sources, the unique information each source alone provides, and the synergistic information only available from their joint states.",
+            "evidence": [
+              {
+                "blockId": "spya-h5jzvm",
+                "quote": "where Red(X₁, X₂;Y) is the information about Y that could be learned by observing X₁ or X₂, Unq(Xᵢ;Y) is the information about Y that could only be learned by observing Xᵢ, and Syn(X₁, X₂;Y) is the information about Y that can only be learned by observing the joint states of X₁ and X₂ together.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-fthfn8",
+            "question": "Why can't classical Shannon information theory alone pin down the values of these four components?",
+            "premise": "The decomposition has four unknown components: redundancy, two unique terms, and synergy.",
+            "referenceAnswer": "Because the resulting system of equations is underdetermined, with only three known mutual-information values but four unknown partial-information terms, so an additional measure of redundancy must be defined to solve it.",
+            "evidence": [
+              {
+                "blockId": "spya-bgsd4n",
+                "quote": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms).",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-dj4yb7",
+            "question": "What complication arises when extending this decomposition from two parent neurons to three or more?",
+            "premise": "Solving the decomposition requires defining a redundancy measure.",
+            "referenceAnswer": "The number of distinct partial-information components grows much faster than the number of known mutual-information equations, so the simple two-source approach no longer works and a more elaborate lattice-based structure is needed.",
+            "evidence": [
+              {
+                "blockId": "spya-q9gytb",
+                "quote": "in the case of three or more parents, the resulting system of equations is not as constrained as in the two-element case, as the number of distinct partial information atoms grows much faster than the number of known mutual information terms.",
+                "start": 284
+              }
+            ]
+          },
+          {
+            "id": "spya-tnntxs",
+            "question": "Why is there no single universally accepted way to measure redundant information?",
+            "referenceAnswer": "Because every proposed redundancy measure has trade-offs, such as only working for a fixed number of sources, only applying to discrete variables, or requiring arbitrary thresholds, so different contexts call for different choices.",
+            "evidence": [
+              {
+                "blockId": "spya-rc76qn",
+                "quote": "All measures have their own trade-offs and drawbacks (such as only being defined for systems of a fixed size, only being amenable to discrete random variables, or requiring arbitrary thresholds).",
+                "start": 179
+              }
+            ]
+          },
+          {
+            "id": "spya-ea0smq",
+            "question": "In the cortical culture recordings, how did synergy relate to the amount of feedforward information propagation (transfer entropy) across groups of three neurons?",
+            "referenceAnswer": "Synergy was strongly positively correlated with a triad's transfer entropy, and was reliably about a quarter of that transfer entropy value.",
+            "evidence": [
+              {
+                "blockId": "spya-kqkb58",
+                "quote": "the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy for that triad",
+                "start": 458
+              }
+            ]
+          },
+          {
+            "id": "spya-k80m65",
+            "question": "How much more synergy did triads located inside network rich clubs show compared to triads outside them?",
+            "premise": "Synergy correlated strongly with how much information propagated through a triad.",
+            "referenceAnswer": "Rich club triads had about 2.7 times as much synergy as non-rich-club triads, and accounted for roughly 88% of all network-wide synergy despite rich club neurons being less than 40% of all neurons.",
+            "evidence": [
+              {
+                "blockId": "spya-fud8q3",
+                "quote": "the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club",
+                "start": 222
+              },
+              {
+                "blockId": "spya-fud8q3",
+                "quote": "the rich club triads accounted for ∼88% of the network-wide synergy",
+                "start": 603
+              }
+            ]
+          },
+          {
+            "id": "spya-v070cc",
+            "question": "How did the number of recurrent connections between source neurons, versus feedback connections from the target back to the sources, relate to synergy in a triad?",
+            "referenceAnswer": "More recurrent connections between source neurons were linked to greater synergy, while feedback connections tended to slightly reduce synergy rather than increase it.",
+            "evidence": [
+              {
+                "blockId": "spya-sd9fzd",
+                "quote": "triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+                "start": 25
+              }
+            ]
+          },
+          {
+            "id": "spya-b7p720",
+            "question": "At short, synaptic-range timescales, how did synergy relate to the similarity between the two source neurons' spiking activity?",
+            "referenceAnswer": "The greater the mutual information (similarity) between the source neurons at synaptic timescales, the greater the synergy, meaning more processing occurred where similar information streams converged.",
+            "evidence": [
+              {
+                "blockId": "spya-hkhpex",
+                "quote": "The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge",
+                "start": 450
+              }
+            ]
+          },
+          {
+            "id": "spya-kp0eac",
+            "question": "What happened to synergy as timescales were extended well beyond the synaptic range and source similarity kept increasing?",
+            "premise": "At short timescales, synergy rose as the source neurons' activity became more similar.",
+            "referenceAnswer": "Synergy only increased up to a point, peaking when the source neurons' mutual information reached about 7% of its maximal possible value, and then decreased as redundancy took over at higher similarity.",
+            "evidence": [
+              {
+                "blockId": "spya-ybmve2",
+                "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease",
+                "start": 187
+              }
+            ]
+          },
+          {
+            "id": "spya-h04tp9",
+            "question": "In the behaving-primate study, how did the balance between synergy and redundancy change during movement execution, such as a reach-and-grasp action?",
+            "referenceAnswer": "Although brain activity was generally synergy-dominated, the relative amount of redundant information increased dramatically during movement execution, likely to ensure reliable transmission of the 'move' signal to distant muscles.",
+            "evidence": [
+              {
+                "blockId": "spya-t8fayf",
+                "quote": "while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically.",
+                "start": 216
+              }
+            ]
+          },
+          {
+            "id": "spya-sn0u9g",
+            "question": "Why does the growth in the number of partial-information components limit how practical PID is for neurons with many inputs?",
+            "referenceAnswer": "The number of distinct partial-information atoms grows extremely fast with the number of parent neurons, so for neurons with many inputs a complete decomposition becomes computationally intractable.",
+            "evidence": [
+              {
+                "blockId": "spya-aby2dp",
+                "quote": "This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms",
+                "start": 302
+              }
+            ]
+          },
+          {
+            "id": "spya-jzaey8",
+            "question": "What does local PID make it possible to construct from neural recordings?",
+            "referenceAnswer": "A time-resolved 'informational time series' showing the redundant, unique, and synergistic information sharing at each individual moment, rather than only an overall expected value.",
+            "evidence": [
+              {
+                "blockId": "spya-mczhkp",
+                "quote": "The local PID framework allows us to perform the same decomposition, but for every individual possible configuration of specific source and target states. In the context of neural recordings, the obvious application of this is the construction of a time-resolved, “informational time series”",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-psw8gg",
+            "question": "What does the existence of synergy in neural recordings suggest about how neurons combine their inputs, according to the article's summary?",
+            "referenceAnswer": "It shows neurons do not simply sum their inputs and fire based on the total, as a basic threshold model would predict, but are instead sensitive to the particular patterns of incoming activity, with this synergistic processing shaped by each neuron's local network environment and the organism's behavioral state.",
+            "evidence": [
+              {
+                "blockId": "spya-sp50v3",
+                "quote": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead they are also sensitive to the particular patterns of incoming stimuli.",
+                "start": 519
+              }
+            ]
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 0,
+          "truncated": 0,
+          "overCap": 0,
+          "malformed": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "gaps": 0
+        },
+        "generatedAt": "2026-10-03T03:54:02.176Z",
+        "elapsedMs": 86395,
+        "profileHash": null
+      },
+      "blocks": 99,
+      "words": 8580,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "gaps": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 24187,
+      "outputTokens": 10773,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 86404
+    },
+    "ideas": {
+      "ideas": {
+        "version": "ideas/4",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.2b20342a8f9d9a9f",
+        "profileHash": null,
+        "ideas": [
+          {
+            "id": "spya-wt0m9a",
+            "name": "Effective (statistically inferred) connectivity is treated as if it were real circuit structure",
+            "provenance": "assumed",
+            "statement": "Edges and motifs (feedforward, feedback, recurrent, rich club) inferred from thresholded transfer-entropy networks built on bivariate spike-train statistics are discussed as if they were actual synaptic connections, even though they are statistical inferences that can misrepresent true circuit wiring.",
+            "whyYouNeedIt": "Without treating effective-network edges as stand-ins for real synapses, claims like 'triads inside the rich club process more information' or 'recurrent connections increase synergy' would be statements about correlational networks rather than about neural circuits, and the whole structure–function narrative would not go through.",
+            "occurrences": [
+              {
+                "blockId": "spya-tfcqnh",
+                "quote": "Analyzing the effective connectivity among neurons using transfer entropy enables extraction of the full effective network upon which the spiking dynamics occurred. The computational triads, consisting of two neurons (source neurons) connecting to a common third neuron (target neuron), can then be identified.",
+                "reasoning": "Moves directly from a statistically inferred effective network to talk of 'computational triads' as if they were concrete circuit elements, without which the later topology claims would not be about circuits at all.",
+                "start": 600
+              },
+              {
+                "blockId": "spya-j4cy9j",
+                "quote": "the functional networks from which triads were drawn and against which the synergy values were compared were generated from bivariate transfer entropy analyses. This matters because it has been shown that bivariate analyses overestimate the significance of bivariate edges",
+                "reasoning": "This later caveat only makes sense as a correction to an assumption, used throughout the empirical sections, that the inferred edges reliably reflect real connectivity.",
+                "start": 133
+              }
+            ]
+          },
+          {
+            "id": "spya-dck5wy",
+            "name": "Mutual information tracks correlation; transfer entropy tracks directed flow",
+            "provenance": "introduced",
+            "statement": "Mutual information is an undirected measure of statistical dependence between two signals (akin to functional connectivity), while transfer entropy measures how much a source's past specifically reduces uncertainty about a target's future beyond the target's own history (akin to effective, directed connectivity).",
+            "occurrences": [
+              {
+                "blockId": "spya-f6sbgx",
+                "quote": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as \"transfer\" or \"flow.\"",
+                "reasoning": "Explicitly denies that mutual information captures directed flow, setting up the need for a separate, directional measure.",
+                "start": 626
+              },
+              {
+                "blockId": "spya-p4pyuy",
+                "quote": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation.",
+                "reasoning": "States the contrast directly as functional versus effective connectivity.",
+                "start": 765
+              }
+            ]
+          },
+          {
+            "id": "spya-k5mq7t",
+            "name": "Synergy as the signature of genuine computation",
+            "provenance": "introduced",
+            "statement": "When the information that two or more neurons jointly carry about a target's future state is greater than the sum of what each carries on its own, that extra, unshareable chunk (synergy) marks a genuine integration or 'computation' performed on the combined pattern, not reducible to any single input.",
+            "occurrences": [
+              {
+                "blockId": "spya-e94ury",
+                "quote": "then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating \"computation\" on all of its inputs considered jointly",
+                "reasoning": "States directly that the mathematical surplus (whole minus sum of parts) is to be read as the neuron performing computation.",
+                "start": 114
+              },
+              {
+                "blockId": "spya-s0db2g",
+                "quote": "Information transfer captures the overall \"flow\" of information through the system; however, it is limited in its ability to reveal how different streams of information \"interact\" and how neurons produce novel or modified information from multiple sources",
+                "reasoning": "Frames the whole motivation for PID around capturing this synergistic, pattern-sensitive production of information as distinct from mere flow.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-vhdfbf",
+            "name": "PID decomposes joint information into redundant, unique, and synergistic atoms via a lattice",
+            "provenance": "introduced",
+            "statement": "Partial information decomposition splits the total information that a set of sources carries about a target into non-overlapping pieces (shared/redundant, unique to each source, and synergistic across combinations), computed by arranging all source subsets into a partially ordered lattice and using Mobius inversion once a redundancy function is chosen.",
+            "occurrences": [
+              {
+                "blockId": "spya-t8mg0s",
+                "quote": "given a suitable measure of redundancy (which we will refer to as I∩(·)), it is possible to decompose the total joint mutual information into a finite set of unique, partial information atoms based on how all the elements of S share information about Y.",
+                "reasoning": "States the core decomposition machinery that the rest of the PID formalism depends on.",
+                "start": 56
+              },
+              {
+                "blockId": "spya-m37w5y",
+                "quote": "Given this partially ordered lattice structure and our redundancy function I∩(·), it is possible to recursively quantify the value of every partial information atom (Π(α)) via Mobius inversion:",
+                "reasoning": "Gives the specific mathematical mechanism (lattice plus Mobius inversion) that converts a redundancy function into the full decomposition.",
+                "start": 199
+              },
+              {
+                "blockId": "spya-t02v4p",
+                "quote": "it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts)",
+                "reasoning": "Credits the origin of the lattice-based decomposition idea that underlies every later application described in the piece.",
+                "start": 58
+              }
+            ]
+          },
+          {
+            "id": "spya-h9agz0",
+            "name": "No single agreed redundancy measure exists, and the choice matters",
+            "provenance": "introduced",
+            "statement": "Because classical information theory does not pin down a unique definition of 'redundant information,' researchers must choose among roughly a dozen competing redundancy functions, each with different assumptions, trade-offs, and domains of applicability, and that choice changes the resulting decomposition.",
+            "occurrences": [
+              {
+                "blockId": "spya-bgsd4n",
+                "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+                "reasoning": "States plainly that the underdetermined system has no canonical solution, motivating the need to pick a redundancy function.",
+                "start": 257
+              },
+              {
+                "blockId": "spya-rc76qn",
+                "quote": "To date, no single universally accepted measure has been proposed. All measures have their own trade-offs and drawbacks (such as only being defined for systems of a fixed size, only being amenable to discrete random variables, or requiring arbitrary thresholds).",
+                "reasoning": "Makes explicit that the lack of a standard measure is a live practical problem, not a solved technicality.",
+                "start": 112
+              }
+            ]
+          },
+          {
+            "id": "spya-z3awwv",
+            "name": "Recurrent connections boost synergy; feedback connections do not",
+            "provenance": "introduced",
+            "statement": "Among the three connection types in a source-source-target triad, more connections between the two source neurons (recurrent) reliably increase synergistic integration, while connections from the target back to the sources (feedback) do not reliably increase it and may even slightly reduce it.",
+            "occurrences": [
+              {
+                "blockId": "spya-sd9fzd",
+                "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy.",
+                "reasoning": "States the asymmetric effect of recurrent versus feedback connectivity on synergy directly.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-xs5660",
+                "quote": "Recurrent connections are connections between the source neurons. Again, there may be zero, one, or two recurrent connections. The question for our analysis was whether synergistic integration was sensitive to the number of feedback or recurrent connections.",
+                "reasoning": "Defines the connectivity motifs whose differential effect on synergy is the point of the idea.",
+                "start": 738
+              }
+            ]
+          },
+          {
+            "id": "spya-xk9gk5",
+            "name": "Synergy peaks at intermediate source correlation, not maximal correlation",
+            "provenance": "introduced",
+            "statement": "As the similarity (mutual information) between two converging input streams increases, synergy first rises but then falls past a certain point, while redundancy keeps rising, so the relationship between input correlation and higher-order computation is non-monotonic rather than ever-increasing.",
+            "occurrences": [
+              {
+                "blockId": "spya-hkhpex",
+                "quote": "The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge",
+                "reasoning": "States the initial positive relationship that sets up the surprise of the later reversal.",
+                "start": 450
+              },
+              {
+                "blockId": "spya-ybmve2",
+                "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease",
+                "reasoning": "States the non-monotonic peak-and-decline pattern that distinguishes this idea from a simple positive correlation.",
+                "start": 187
+              }
+            ]
+          },
+          {
+            "id": "spya-rs6t58",
+            "name": "The balance of synergy and redundancy shifts with task demands and brain region",
+            "provenance": "introduced",
+            "statement": "The relative dominance of synergistic versus redundant information in a circuit is not fixed but changes depending on the behavioral epoch and brain region, for example shifting toward redundancy during motor execution where reliable signal duplication may be favored over integrative computation.",
+            "occurrences": [
+              {
+                "blockId": "spya-t8fayf",
+                "quote": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically.",
+                "reasoning": "States the task-dependent shift from synergy-dominance to redundancy-dominance directly.",
+                "start": 189
+              },
+              {
+                "blockId": "spya-b32ecw",
+                "quote": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+                "reasoning": "Draws the general conclusion that synergy's expression is behaviorally specific rather than a fixed circuit property.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-j4eczd",
+            "name": "Local and multi-target extensions generalize PID beyond static, single-target snapshots",
+            "provenance": "introduced",
+            "statement": "Classic PID computes redundancy, uniqueness, and synergy as expected values averaged over an entire probability distribution and for one target at a time; newer variants localize the decomposition to single moments in time (local PID) or extend it to multiple targets and temporal structure (integrated information decomposition), opening up time-resolved and richer multivariate analyses.",
+            "occurrences": [
+              {
+                "blockId": "spya-mczhkp",
+                "quote": "The local PID framework allows us to perform the same decomposition, but for every individual possible configuration of specific source and target states. In the context of neural recordings, the obvious application of this is the construction of a time-resolved, \"informational time series\"",
+                "reasoning": "States the move from averaged to moment-by-moment decomposition, which is the core of the local PID idea.",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "generatedAt": "2026-10-03T03:54:09.158Z",
+        "elapsedMs": 93370
+      },
+      "blocks": 99,
+      "words": 8580,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 5,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "unargued": 0,
+        "unanchored": 1
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 22870,
+      "outputTokens": 9524,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 93385
+    },
+    "quotes": {
+      "quotes": {
+        "version": "quotes/8",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.9289a616c1a0d898",
+        "profileHash": null,
+        "quotes": [
+          {
+            "id": "spya-qr0r0d",
+            "blockId": "spya-fmdncw",
+            "text": "There are many basic unanswered questions about information processing. What types of circuit connectivity are most favorable for neural information processing? How is neural information processing affected by the overall structure and correlations present in incoming information flows? What are the physiological correlates of information processing at the level of neural circuits? Are distinct transformations promoted by distinct physiological systems? Do distinct transformations relate to the demands of different environmental or behavioral tasks?",
+            "start": 0,
+            "reason": "Lays out the open questions the whole review is organized around",
+            "importance": 0.8,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-eh774b",
+            "blockId": "spya-s9kmxa",
+            "text": "Historically, there have been two key limitations hindering the study of information processing by neural circuits. The first was a lack of appropriate data, since the analysis of synergistic dynamics requires large amounts of data to accurately infer the structure of multivariate dependence. Until recently, such data were difficult to access. In the last decade, however, with innovative new electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution, this limitation has abated considerably. The second was a lack of appropriate analytical approaches.",
+            "start": 0,
+            "reason": "States the two historical bottlenecks that motivate the entire review",
+            "importance": 0.75,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-r56r9h",
+            "blockId": "spya-f6sbgx",
+            "text": "Mutual information [12] can measure the dependence in the spiking between two neurons",
+            "start": 0,
+            "reason": "introduces the core tool used to quantify dependence between neurons"
+          },
+          {
+            "id": "spya-n3yqgw",
+            "blockId": "spya-f6sbgx",
+            "text": "I(X;Y) measures how our ability to correctly infer the state of X changes, depending on whether we are accounting for (potentially) shared dependencies with Y. It can be thought of as a nonlinear correlation between two patterns of activity [3,13].",
+            "start": 317,
+            "reason": "gives the intuitive meaning of mutual information in plain terms",
+            "importance": 0.5,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-bg6kuu",
+            "blockId": "spya-f6sbgx",
+            "text": "It does not, however, quantify information transfer between the neurons, as it is an undirected measure that describes the instantaneous dependency between two variables and has no notion of the time-directed structure that we intuitively understand as “transfer” or “flow.”",
+            "start": 626,
+            "reason": "clarifies a key limitation of mutual information that motivates transfer entropy",
+            "importance": 0.55,
+            "striking": 0.35
+          },
+          {
+            "id": "spya-p0zwwn",
+            "blockId": "spya-p4pyuy",
+            "text": "Whereas mutual information is a measure of functional connectivity, transfer entropy measures effective connectivity [14]. In other words, transfer entropy provides a measure of information propagation.",
+            "start": 765,
+            "reason": "crisp distinction between the two core measures used throughout the paper",
+            "importance": 0.65,
+            "striking": 0.45
+          },
+          {
+            "id": "spya-ceajwv",
+            "blockId": "spya-s0db2g",
+            "text": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources [19].",
+            "start": 0,
+            "reason": "states the gap that motivates moving from transfer entropy to partial information decomposition",
+            "importance": 0.75,
+            "striking": 0.45
+          },
+          {
+            "id": "spya-n0rxsy",
+            "blockId": "spya-e94ury",
+            "text": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent. In this case, the system exhibits synergistic dynamics, and the target neuron can be thought of as performing a kind of integrating “computation” on all of its inputs considered jointly (this is also sometimes referred to as “information modification” in the literature [19]). Conversely, if the whole is less than the sum of its parts, then there must be redundant information about Y instantiated multiple times over the parent neurons that is “double counted” when summing the marginals.",
+            "start": 0,
+            "reason": "defines synergy and redundancy, the two central concepts of the whole framework",
+            "importance": 0.9,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-wp2htt",
+            "blockId": "spya-t02v4p",
+            "text": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts).",
+            "start": 0,
+            "reason": "credits the foundational insight that the whole review builds on",
+            "importance": 0.6,
+            "striking": 0.3
+          },
+          {
+            "id": "spya-yq2ur5",
+            "blockId": "spya-h5jzvm",
+            "text": "where Red(X₁, X₂;Y) is the information about Y that could be learned by observing X₁ or X₂, Unq(Xᵢ;Y) is the information about Y that could only be learned by observing Xᵢ, and Syn(X₁, X₂;Y) is the information about Y that can only be learned by observing the joint states of X₁ and X₂ together.",
+            "start": 0,
+            "reason": "plain-language definitions of redundant, unique, and synergistic information",
+            "importance": 0.8,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-cekxc8",
+            "blockId": "spya-bgsd4n",
+            "text": "The result is an underdetermined system of linear equations, with three known values (the mutual information terms) and four unknown values (the partial information terms). If any of the unknown terms can be defined, then the other three emerge “for free”. Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+            "start": 0,
+            "reason": "explains the core mathematical problem that makes choosing a redundancy function necessary",
+            "importance": 0.7,
+            "striking": 0.35
+          },
+          {
+            "id": "spya-zykt9v",
+            "blockId": "spya-rc76qn",
+            "text": "In the absence of a single accepted measure, different contexts may require the choice of different functions.",
+            "start": 467,
+            "reason": "key practical caveat about the lack of a universal redundancy measure",
+            "importance": 0.5,
+            "striking": 0.25
+          },
+          {
+            "id": "spya-nysqzv",
+            "blockId": "spya-rc76qn",
+            "text": "The majority of the studies discussed in this paper used the original Imin measure proposed in [1], although this measure has been criticized for unintuitive behavior [29,39].",
+            "start": 758,
+            "reason": "flags a methodological limitation underlying most of the empirical results discussed"
+          },
+          {
+            "id": "spya-v3ugtv",
+            "blockId": "spya-bftp48",
+            "text": "By definition, rich clubs are disproportionately dense in information propagation: 20% of the neurons account for 70% of the information propagation in organotypic cortical cultures [49].",
+            "start": 654,
+            "reason": "concrete, striking statistic establishing why rich clubs matter for information flow",
+            "importance": 0.6,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-fz0rrq",
+            "blockId": "spya-fud8q3",
+            "text": "Unambiguously, rich club triads processed more information than triads outside rich clubs. Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B). Due to rich clubs having a high density of triads and rich club triads having a greater synergy per triad, a majority of the network-wide synergy was accounted for by rich club triads. Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy.",
+            "start": 118,
+            "reason": "central empirical finding linking network structure to information processing, with striking numbers",
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-r9rjeu",
+            "blockId": "spya-sd9fzd",
+            "text": "Using PID, we found that triads with more recurrent connections also had greater synergy [4]. Feedback connections were less predictive of synergy but tended to correlate with reduced synergy. Numerically, in comparison to the simplest computational triads (those with no feedback or recurrent connections), triads with two recurrent connections and no feedback connections had 50% more synergy (Figure 4C). Triads with two feedback connections but no recurrent connections had 10% less synergy than the simplest computational triads.",
+            "start": 0,
+            "reason": "key empirical result distinguishing feedforward, feedback, and recurrent contributions to synergy",
+            "importance": 0.75,
+            "striking": 0.45
+          },
+          {
+            "id": "spya-fbphne",
+            "blockId": "spya-hkhpex",
+            "text": "The result was unambiguous. The greater the mutual information between source neurons at the synaptic timescale, the greater the synergy [3]. More information processing occurs where similar information streams converge (Figure 4E, the three leftmost panels for synaptic timescales).",
+            "start": 422,
+            "reason": "states a clean, surprising empirical relationship between input similarity and synergistic computation",
+            "importance": 0.7,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-dh0b84",
+            "blockId": "spya-ybmve2",
+            "text": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale. Past this level, the synergy began to decrease (this level is marked by the vertical dotted line in Figure 4E).",
+            "start": 187,
+            "reason": "nontrivial nonmonotonic finding showing synergy is maximized at intermediate input correlation",
+            "importance": 0.7,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-j9tqtv",
+            "blockId": "spya-cs9fdy",
+            "text": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+            "start": 724,
+            "reason": "interprets why synergy peaks rather than growing indefinitely with correlated input",
+            "importance": 0.55,
+            "striking": 0.35
+          },
+          {
+            "id": "spya-q4tv7n",
+            "blockId": "spya-t8fayf",
+            "text": "The researchers found that while brain activity was generally synergy-dominated (as opposed to redundancy-dominated), during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically.",
+            "start": 189,
+            "reason": "shows that information processing style shifts with behavioral demands, extending the lab findings to real behavior",
+            "importance": 0.7,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-hv4qap",
+            "blockId": "spya-t8fayf",
+            "text": "This increase in relative redundancy was interpreted as a response to the practical requirements of the task: during motor execution, the brain needs to send the “move” signal to distant muscles, and to ensure high-fidelity transmission the brain may duplicate information many times over (minimizing the risk of a single corrupted signal leading to erroneous behavior).",
+            "start": 432,
+            "reason": "offers a vivid functional explanation for why redundancy rises during motor execution",
+            "importance": 0.6,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-rumkzy",
+            "blockId": "spya-b32ecw",
+            "text": "These results show not only that synergistic information dynamics is a feature of ongoing, spontaneous neural activity but also that synergy seems to reflect behaviorally specific patterns of dynamical activity in the cortex.",
+            "start": 0,
+            "reason": "summarizes the significance of the primate findings for the paper's broader thesis",
+            "importance": 0.6,
+            "striking": 0.3
+          },
+          {
+            "id": "spya-zksvk6",
+            "blockId": "spya-spdx0y",
+            "text": "One important caveat to note with respect to PID applied to neural data is that while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.",
+            "start": 0,
+            "reason": "honest limitation distinguishing statistical description from mechanistic explanation",
+            "importance": 0.65,
+            "striking": 0.35
+          },
+          {
+            "id": "spya-fkcjuz",
+            "blockId": "spya-aby2dp",
+            "text": "The most significant is the explosive growth of the PI lattice. For a system with k parent neurons, the number of distinct PI atoms is given by the kth Dedekind number (minus two) [30]. This sequence of numbers grows appallingly fast: in the case of six parent neurons, there are 7,828,354 distinct PI atoms, the vast majority of which are difficult to interpret.",
+            "start": 116,
+            "reason": "vivid, concrete illustration of the scalability problem facing PID",
+            "importance": 0.65,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-u8h6ce",
+            "blockId": "spya-aby2dp",
+            "text": "Given that single neurons can receive inputs from very large numbers of upstream neurons, a “complete” description of the information dynamics of any individual neuron is completely intractable.",
+            "start": 538,
+            "reason": "stark statement of a fundamental practical limit of the framework",
+            "importance": 0.6,
+            "striking": 0.45
+          },
+          {
+            "id": "spya-u5j5gw",
+            "blockId": "spya-sp50v3",
+            "text": "The existence of synergy in empirical data shows us that neurons do not appear to blindly sum the number of inputs and fire in response to the total (as would be expected from a basic threshold model or complex contagion model), but instead they are also sensitive to the particular patterns of incoming stimuli.",
+            "start": 519,
+            "reason": "the paper's closing thesis stated plainly, tying the whole review together",
+            "importance": 0.85,
+            "striking": 0.55
+          }
+        ],
+        "discarded": {
+          "unfound": 0,
+          "otherVoice": 0,
+          "wrongLength": 0,
+          "overlapping": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "passes": 1,
+        "lastAdded": 26,
+        "generatedAt": "2026-10-03T03:53:05.835Z",
+        "elapsedMs": 29852
+      },
+      "blocks": 99,
+      "words": 8580,
+      "dropped": {
+        "unfound": 0,
+        "otherVoice": 0,
+        "wrongLength": 0,
+        "overlapping": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scores": {
+        "importanceAbsent": 2,
+        "importanceRejected": 0,
+        "strikingAbsent": 2,
+        "strikingRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 21783,
+      "outputTokens": 3844,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 30061
+    },
+    "glossary": {
+      "glossary": {
+        "version": "glossary/7",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.9289a616c1a0d898",
+        "profileHash": null,
+        "entries": [
+          {
+            "id": "spya-jbfzad",
+            "name": "Partial Information Decomposition",
+            "kind": "concept",
+            "aliases": [
+              "PID"
+            ],
+            "senseHere": "A mathematical method that splits the total information two or more sources carry about an outcome into separate pieces: information both sources share, information only one source has, and information that only appears when you look at the sources together.",
+            "background": "Introduced by Williams and Beer as a way to formally resolve the long-standing puzzle that information from multiple sources does not simply add up.",
+            "difficulty": 0.75,
+            "centrality": 1,
+            "blocks": [
+              "spya-xn9j9k",
+              "spya-gzwbsr",
+              "spya-wer4cd",
+              "spya-u0wm5e",
+              "spya-crsey4",
+              "spya-t02v4p",
+              "spya-q09pga",
+              "spya-q9gytb",
+              "spya-pvavq4",
+              "spya-rc76qn",
+              "spya-cc282b",
+              "spya-sw5ukx",
+              "spya-tfcqnh",
+              "spya-urrypy",
+              "spya-fud8q3",
+              "spya-sd9fzd",
+              "spya-cs9fdy",
+              "spya-aqcngt",
+              "spya-wr7f6y",
+              "spya-kmgwhs",
+              "spya-uktkdy",
+              "spya-tz99zn",
+              "spya-ng5zs5",
+              "spya-h6h922",
+              "spya-spdx0y",
+              "spya-djfyag",
+              "spya-aby2dp",
+              "spya-qa7gt2",
+              "spya-wbm9cf",
+              "spya-z39m3x",
+              "spya-j6s6fp",
+              "spya-mczhkp",
+              "spya-ckpq7e",
+              "spya-xn6y4f",
+              "spya-cds6mm",
+              "spya-sp50v3"
+            ]
+          },
+          {
+            "id": "spya-cafypu",
+            "name": "Rich club",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The subset of best-connected neurons in a recorded circuit whose connections to each other are denser than would occur by chance; in the article these neurons account for a disproportionate share of both information flow and synergistic computation.",
+            "difficulty": 0.45,
+            "centrality": 0.75,
+            "blocks": [
+              "spya-xn9j9k",
+              "spya-tfcqnh",
+              "spya-urrypy",
+              "spya-e3ghxj",
+              "spya-bftp48",
+              "spya-fud8q3",
+              "spya-akxt70",
+              "spya-sd9fzd",
+              "spya-ybmve2",
+              "spya-wr7f6y",
+              "spya-sp50v3"
+            ]
+          },
+          {
+            "id": "spya-dvqsfn",
+            "name": "Mutual information",
+            "kind": "term",
+            "aliases": [
+              "I(X;Y)"
+            ],
+            "senseHere": "A measure of how much knowing one variable's state reduces uncertainty about another, used here as a kind of nonlinear correlation between two neurons' activity patterns.",
+            "difficulty": 0.55,
+            "centrality": 0.7,
+            "blocks": [
+              "spya-qjdbvj",
+              "spya-f6sbgx",
+              "spya-p4pyuy",
+              "spya-h5dz45",
+              "spya-t02v4p",
+              "spya-q2b0e5",
+              "spya-k29rg5",
+              "spya-bgsd4n",
+              "spya-q9gytb",
+              "spya-t8mg0s",
+              "spya-atvpm9",
+              "spya-urrypy",
+              "spya-hkhpex",
+              "spya-ybmve2",
+              "spya-cs9fdy",
+              "spya-uktkdy",
+              "spya-tz99zn",
+              "spya-cqrzab",
+              "spya-qa7gt2",
+              "spya-j6s6fp",
+              "spya-mgsce6"
+            ]
+          },
+          {
+            "id": "spya-u0ks2h",
+            "name": "Transfer entropy",
+            "kind": "term",
+            "aliases": [
+              "TE"
+            ],
+            "senseHere": "A directional measure of how much knowing a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already tells you.",
+            "difficulty": 0.6,
+            "centrality": 0.75,
+            "blocks": [
+              "spya-qjdbvj",
+              "spya-p4pyuy",
+              "spya-sw5ukx",
+              "spya-tfcqnh",
+              "spya-kqkb58",
+              "spya-urrypy",
+              "spya-cs9fdy",
+              "spya-j4cy9j",
+              "spya-wr7f6y",
+              "spya-ng5zs5",
+              "spya-cwsuea"
+            ]
+          },
+          {
+            "id": "spya-ba2xbu",
+            "name": "Functional connectivity",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "A description of how similar or correlated two neurons' activity patterns are, without implying one directly influences the other, as captured by mutual information.",
+            "difficulty": 0.4,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-f6sbgx",
+              "spya-p4pyuy"
+            ]
+          },
+          {
+            "id": "spya-kf3b6a",
+            "name": "Effective connectivity",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "A description of directed influence from one neuron's activity onto another's future activity, as captured by transfer entropy, distinct from mere correlation.",
+            "difficulty": 0.4,
+            "centrality": 0.35,
+            "blocks": [
+              "spya-p4pyuy",
+              "spya-tfcqnh"
+            ]
+          },
+          {
+            "id": "spya-ybfecz",
+            "name": "Synergy",
+            "kind": "term",
+            "aliases": [
+              "synergistic information",
+              "Syn"
+            ],
+            "senseHere": "The portion of information about a target neuron's activity that can only be learned by observing two or more source neurons jointly, not from any one alone. It is treated in the article as the signature of genuine neural 'computation' or integration.",
+            "difficulty": 0.5,
+            "centrality": 1,
+            "blocks": [
+              "spya-crsey4",
+              "spya-pjdgu6",
+              "spya-h5jzvm",
+              "spya-bgsd4n",
+              "spya-tfcqnh",
+              "spya-kqkb58",
+              "spya-urrypy",
+              "spya-e3ghxj",
+              "spya-fud8q3",
+              "spya-akxt70",
+              "spya-sd9fzd",
+              "spya-zfs2z7",
+              "spya-hkhpex",
+              "spya-ybmve2",
+              "spya-cs9fdy",
+              "spya-j4cy9j",
+              "spya-wr7f6y",
+              "spya-t8fayf",
+              "spya-b32ecw",
+              "spya-spdx0y",
+              "spya-aby2dp",
+              "spya-j6s6fp",
+              "spya-cds6mm",
+              "spya-sp50v3"
+            ]
+          },
+          {
+            "id": "spya-js9scz",
+            "name": "Redundant information",
+            "kind": "term",
+            "aliases": [
+              "redundancy",
+              "Red"
+            ],
+            "senseHere": "Information about a target that could be learned equally well by observing just one source or just another, so it gets double-counted if you naively add up each source's individual information.",
+            "difficulty": 0.45,
+            "centrality": 0.75,
+            "blocks": [
+              "spya-crsey4",
+              "spya-e94ury",
+              "spya-pjdgu6",
+              "spya-h5jzvm",
+              "spya-bgsd4n",
+              "spya-t8mg0s",
+              "spya-m37w5y",
+              "spya-d2quz5",
+              "spya-rc76qn",
+              "spya-tfcqnh",
+              "spya-urrypy",
+              "spya-cs9fdy",
+              "spya-t8fayf",
+              "spya-uktkdy",
+              "spya-cqrzab",
+              "spya-ng5zs5",
+              "spya-cwsuea",
+              "spya-spdx0y",
+              "spya-aby2dp",
+              "spya-j6s6fp",
+              "spya-ckpq7e",
+              "spya-cds6mm"
+            ]
+          },
+          {
+            "id": "spya-wv3m74",
+            "name": "Unique information",
+            "kind": "term",
+            "aliases": [
+              "Unq"
+            ],
+            "senseHere": "Information about a target neuron that only one particular source discloses, not available from any other source in the set.",
+            "difficulty": 0.4,
+            "centrality": 0.5,
+            "blocks": [
+              "spya-pjdgu6",
+              "spya-h5jzvm",
+              "spya-bgsd4n"
+            ]
+          },
+          {
+            "id": "spya-r4bpex",
+            "name": "Williams and Beer",
+            "kind": "person",
+            "aliases": [
+              "Williams",
+              "Beer"
+            ],
+            "background": "Researchers credited with originally proposing the partial information decomposition framework, providing the first systematic way to split joint information among multiple sources into separate components.",
+            "difficulty": 0.3,
+            "centrality": 0.5,
+            "blocks": [
+              "spya-t02v4p",
+              "spya-t8mg0s",
+              "spya-cqrzab",
+              "spya-wbm9cf",
+              "spya-ckpq7e"
+            ]
+          },
+          {
+            "id": "spya-y44c7t",
+            "name": "Redundancy function",
+            "kind": "term",
+            "aliases": [
+              "I∩",
+              "Imin"
+            ],
+            "senseHere": "A formally chosen rule for measuring exactly how much information counts as redundant between sources; without picking one, the decomposition into redundant, unique, and synergistic pieces is mathematically unsolvable.",
+            "difficulty": 0.65,
+            "centrality": 0.65,
+            "blocks": [
+              "spya-bgsd4n",
+              "spya-t8mg0s",
+              "spya-fe63d8",
+              "spya-m37w5y",
+              "spya-rc76qn",
+              "spya-uktkdy",
+              "spya-cqrzab",
+              "spya-ng5zs5",
+              "spya-cwsuea",
+              "spya-ckpq7e",
+              "spya-cds6mm"
+            ]
+          },
+          {
+            "id": "spya-b9jgaf",
+            "name": "Computational triad",
+            "kind": "term",
+            "aliases": [
+              "triad"
+            ],
+            "senseHere": "A basic unit of analysis consisting of two source neurons that both connect to one shared target neuron, used as the simplest case for applying partial information decomposition.",
+            "difficulty": 0.35,
+            "centrality": 0.7,
+            "blocks": [
+              "spya-q9gytb",
+              "spya-sw5ukx",
+              "spya-tfcqnh",
+              "spya-kqkb58",
+              "spya-urrypy",
+              "spya-fud8q3",
+              "spya-akxt70",
+              "spya-xs5660",
+              "spya-sd9fzd",
+              "spya-hkhpex",
+              "spya-j4cy9j",
+              "spya-wr7f6y"
+            ]
+          },
+          {
+            "id": "spya-d6sgm7",
+            "name": "Partial information lattice",
+            "kind": "concept",
+            "aliases": [
+              "PI lattice"
+            ],
+            "senseHere": "A structured diagram of every possible combination of sources that could share information about a target, ordered so each combination's unique contribution can be calculated by subtracting out simpler combinations beneath it.",
+            "difficulty": 0.7,
+            "centrality": 0.7,
+            "blocks": [
+              "spya-k378fv",
+              "spya-t0bbpb",
+              "spya-atvpm9",
+              "spya-cqrzab",
+              "spya-aby2dp"
+            ]
+          },
+          {
+            "id": "spya-ku2vmv",
+            "name": "Mobius inversion",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The mathematical procedure used to work through the partial information lattice step by step, calculating each combination's distinct contribution by removing what is already accounted for by simpler combinations below it.",
+            "difficulty": 0.75,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-m37w5y",
+              "spya-atvpm9"
+            ]
+          },
+          {
+            "id": "spya-qryaht",
+            "name": "Organotypic culture",
+            "kind": "term",
+            "aliases": [
+              "cortical culture",
+              "in vitro culture"
+            ],
+            "senseHere": "A slice of mouse cortical tissue grown in a dish that preserves much of the original circuit's natural connectivity, allowing researchers to record from hundreds of real neurons at once.",
+            "difficulty": 0.5,
+            "centrality": 0.45,
+            "blocks": [
+              "spya-sw5ukx",
+              "spya-bftp48",
+              "spya-j4cy9j"
+            ]
+          },
+          {
+            "id": "spya-snn4we",
+            "name": "O-information",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "A simplified, faster-to-compute measure that approximates whether a group of variables is overall more redundant or more synergistic, used as a practical stand-in when full decomposition is too complex.",
+            "difficulty": 0.55,
+            "centrality": 0.25,
+            "blocks": [
+              "spya-aby2dp"
+            ]
+          },
+          {
+            "id": "spya-jr3xpw",
+            "name": "Dedekind number",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "A rapidly growing count used here to describe how many distinct information-sharing combinations exist once more than a couple of source neurons are considered, explaining why full decomposition quickly becomes computationally impossible.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-aby2dp"
+            ]
+          },
+          {
+            "id": "spya-df43tr",
+            "name": "Local PID",
+            "kind": "concept",
+            "aliases": [
+              "local information decomposition"
+            ],
+            "senseHere": "A version of partial information decomposition calculated for each individual moment or specific pattern of activity, rather than averaged over all possibilities, enabling a time-by-time trace of redundancy, uniqueness, and synergy.",
+            "difficulty": 0.55,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-z39m3x",
+              "spya-mczhkp",
+              "spya-ckpq7e"
+            ]
+          },
+          {
+            "id": "spya-g3s05v",
+            "name": "Neuronal avalanche",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "A cascading burst of neural activity treated in the article as a hallmark of complex, self-organized dynamics, whose internal structure can be analyzed with time-resolved information decomposition.",
+            "background": "A commonly studied pattern in cortical networks where activity propagates in bursts of varying sizes following statistical patterns associated with systems poised near a critical point.",
+            "difficulty": 0.5,
+            "centrality": 0.2,
+            "blocks": [
+              "spya-mczhkp"
+            ]
+          },
+          {
+            "id": "spya-mjdavd",
+            "name": "Integrated information decomposition",
+            "kind": "concept",
+            "aliases": [
+              "ΦID"
+            ],
+            "senseHere": "An extension of partial information decomposition that handles multiple target variables at once, for instance decomposing how the past of several variables jointly shapes the future of several others.",
+            "difficulty": 0.6,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-cds6mm"
+            ]
+          }
+        ],
+        "passes": 1,
+        "generatedAt": "2026-10-03T03:52:59.070Z",
+        "elapsedMs": 23211
+      },
+      "scores": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "blocks": 99,
+      "words": 8580,
+      "added": 20,
+      "unmatched": 0,
+      "model": "claude-sonnet-5",
+      "inputTokens": 23069,
+      "outputTokens": 2610,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 23295
+    },
+    "timeline": {
+      "timeline": {
+        "version": "timeline/4",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.58ba6a7ceb72bf24",
+        "events": [
+          {
+            "id": "spya-h7act4",
+            "label": "Lack of data and methods limited study",
+            "dating": {
+              "kind": "words",
+              "phrase": "Historically, there have been two key limitations hindering the study of information processing by neural circuits."
+            },
+            "order": 1,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-s9kmxa",
+                "quote": "Historically, there have been two key limitations hindering the study of information processing by neural circuits.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-wnt74z",
+            "label": "New recording technologies emerge",
+            "dating": {
+              "kind": "words",
+              "phrase": "In the last decade, however, with innovative new electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution, this limitation has abated considerably."
+            },
+            "order": 2,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-s9kmxa",
+                "quote": "In the last decade, however, with innovative new electrical and optical recording technologies that can record from hundreds or thousands of neurons at sub-millisecond temporal resolution, this limitation has abated considerably.",
+                "start": 346
+              }
+            ]
+          },
+          {
+            "id": "spya-w0rhfg",
+            "label": "Williams and Beer develop PID framework",
+            "dating": {
+              "kind": "words",
+              "phrase": "it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts"
+            },
+            "order": 3,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-t02v4p",
+                "quote": "This inequality has been recognized for decades; however, it was not until the seminal work of Williams and Beer [1] that it was recognized how to algebraically decompose the total joint mutual information into the particular contributions of the parts (and higher-order ensembles of parts).",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-n5b8dt",
+            "label": "PID framework widely applied across fields",
+            "dating": {
+              "kind": "words",
+              "phrase": "Since its introduction, this framework, termed partial information decomposition, has been widely applied in fields from theoretical and computational neuroscience"
+            },
+            "order": 4,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-t02v4p",
+                "quote": "Since its introduction, this framework, termed partial information decomposition, has been widely applied in fields from theoretical and computational neuroscience [9,21] to climate modeling [22] and sociology [23].",
+                "start": 292
+              }
+            ]
+          },
+          {
+            "id": "spya-nwj825",
+            "label": "Software packages implementing PID released",
+            "dating": {
+              "kind": "words",
+              "phrase": "Since the original proposal by Williams and Beer [1], a number of different scientific programming packages have been released"
+            },
+            "order": 5,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-cqrzab",
+                "quote": "Since the original proposal by Williams and Beer [1], a number of different scientific programming packages have been released with implementations of the various redundancy functions.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-zts2wa",
+            "label": "Recording neurons with 512-channel arrays",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 6,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-sw5ukx",
+                "quote": "we used 512-channel multielectrode arrays to record hundreds of individual neurons in vitro from organotypic cultures derived from mouse cortical slices.",
+                "start": 34
+              }
+            ]
+          },
+          {
+            "id": "spya-jkhqme",
+            "label": "Testing synergy vs transfer entropy across recordings",
+            "dating": {
+              "kind": "words",
+              "phrase": "examining 25 separate recordings at timescales varying from 1 ms to 14 ms"
+            },
+            "order": 7,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-kqkb58",
+                "quote": "When we performed this analysis, examining 25 separate recordings at timescales varying from 1 ms to 14 ms, we found that synergy was strongly correlated",
+                "start": 179
+              }
+            ]
+          },
+          {
+            "id": "spya-hwamdu",
+            "label": "Testing synergy in rich club vs non-rich club triads",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 8,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-fud8q3",
+                "quote": "PID allowed us to test whether triads inside the rich club have greater synergy than those outside the rich club [2].",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-bk9zt5",
+            "label": "Examining recurrent and feedback connection effects on synergy",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 9,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-sd9fzd",
+                "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4].",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-bpt6za",
+            "label": "Testing synergy vs source similarity at synaptic timescales",
+            "dating": {
+              "kind": "words",
+              "phrase": "Initially, we tested this for timescales in the synaptic range (<14 ms), consistent with the analyses described above."
+            },
+            "order": 10,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-hkhpex",
+                "quote": "Initially, we tested this for timescales in the synaptic range (<14 ms), consistent with the analyses described above.",
+                "start": 303
+              }
+            ]
+          },
+          {
+            "id": "spya-gjxm4s",
+            "label": "Testing synergy vs source similarity at longer timescales",
+            "dating": {
+              "kind": "words",
+              "phrase": "To test whether synergy increases indefinitely as mutual information grows at longer timescales, we explored a range extending well past the synaptic range (time bins up to 2.25 s wide)"
+            },
+            "order": 11,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ybmve2",
+                "quote": "To test whether synergy increases indefinitely as mutual information grows at longer timescales, we explored a range extending well past the synaptic range (time bins up to 2.25 s wide).",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-btssy9",
+            "label": "Varley et al. analyze macaque motor cortex spiking",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 12,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-wr7f6y",
+                "quote": "Varley et al. [5] analyzed spiking neural activity from the pre-motor and motor regions of three macaques while the monkeys were engaged in a multi-phase behavioral task involving symbol recognition, motor planning, memory storage, and motor execution [52].",
+                "start": 88
+              }
+            ]
+          },
+          {
+            "id": "spya-f7umbc",
+            "label": "Redundancy rises during movement execution",
+            "dating": {
+              "kind": "words",
+              "phrase": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically"
+            },
+            "order": 13,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-t8fayf",
+                "quote": "during movement execution (a reach-and-grasp action) the relative abundance of redundant information increased dramatically",
+                "start": 307
+              }
+            ]
+          },
+          {
+            "id": "spya-vjbb7u",
+            "label": "ΦID multi-target generalization proposed",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 14,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-cds6mm",
+                "quote": "A recent multi-target generalization of the PID, termed integrated information decomposition (ΦID) [69,70] has been proposed, which opens the door to a much wider range of possible analyses than is possible with a single-target PID analysis.",
+                "start": 494
+              }
+            ]
+          },
+          {
+            "id": "spya-ew6dp9",
+            "label": "Discovery of sixteen information dynamics via Iτsx",
+            "dating": {
+              "kind": "words",
+              "phrase": "A recently introduced “temporal redundancy function” (Iτsx), coupled with a ΦID analysis, led to the discovery of a set of sixteen distinct information dynamics"
+            },
+            "order": 15,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-cds6mm",
+                "quote": "A recently introduced “temporal redundancy function” (Iτsx), coupled with a ΦID analysis, led to the discovery of a set of sixteen distinct information dynamics associated with the temporal evolution of pairs of interacting neurons, many of which were previously unknown [45].",
+                "start": 913
+              }
+            ]
+          }
+        ],
+        "orderConflicts": 0,
+        "generatedAt": "2026-10-03T03:53:36.129Z",
+        "elapsedMs": 60344
+      },
+      "blocks": 99,
+      "words": 8580,
+      "frame": null,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 0,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "datedLabel": 0,
+        "unanchored": 0,
+        "unordered": 0,
+        "unparseablePhrase": 0,
+        "phraseNotInOccurrence": 0,
+        "noDateInPhrase": 10,
+        "noYearFrame": 0,
+        "phraseNotFound": 0,
+        "duplicateOrders": 0,
+        "orderConflicts": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 22432,
+      "outputTokens": 7384,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 60353
+    },
+    "arc": {
+      "arc": {
+        "version": "arc/6",
+        "generator": "claude-sonnet-5",
+        "slug": "entropy-24-00930-spya-pywwkq",
+        "entries": [
+          {
+            "range": [
+              "spya-ekjksy",
+              "spya-y66sc5"
+            ],
+            "text": "Neural information processing remains poorly understood; this review stakes a method for actually finding it in data."
+          },
+          {
+            "range": [
+              "spya-yb735k",
+              "spya-gzwbsr"
+            ],
+            "text": "Data and tools once blocked this search; both now exist, but the analytic method itself is not yet laid out."
+          },
+          {
+            "range": [
+              "spya-ygkzd8",
+              "spya-p4pyuy"
+            ],
+            "text": "Flow between neurons can now be tracked; whether tracking flow reveals genuine processing is still unanswered."
+          },
+          {
+            "range": [
+              "spya-dhy39x",
+              "spya-wer4cd"
+            ],
+            "text": "Flow alone cannot show how inputs combine into output; a way to decompose that combination is proposed but not yet built."
+          },
+          {
+            "range": [
+              "spya-u0wm5e",
+              "spya-rc76qn"
+            ],
+            "text": "A formal decomposition into redundant, unique, and synergistic information now exists; which measure of redundancy to use remains unsettled."
+          },
+          {
+            "range": [
+              "spya-cc282b",
+              "spya-b32ecw"
+            ],
+            "text": "Applied to real circuits, synergy turns out concentrated in hubs, recurrent loops, and correlated inputs, and shifts with task; but shown only in cultures and limited primate data."
+          },
+          {
+            "range": [
+              "spya-kmgwhs",
+              "spya-qa7gt2"
+            ],
+            "text": "The framework delivers real findings, yet matching measures, tools, and sample size to the data limits how far it can be pushed."
+          },
+          {
+            "range": [
+              "spya-zz5xxs",
+              "spya-cds6mm"
+            ],
+            "text": "Newer variants promise finer, time-resolved, multi-target views of processing; these remain early extensions, not yet widely tested."
+          },
+          {
+            "range": [
+              "spya-rc5z33",
+              "spya-gajhn8"
+            ],
+            "text": "Settled: neurons compute on patterns, shaped by network position and task; open: what biological machinery actually produces that computation."
+          }
+        ],
+        "sourceHash": "cf8e4259edd94254.0594d51b4c70a4d2.9289a616c1a0d898"
+      },
+      "model": "claude-sonnet-5",
+      "parts": [
+        {
+          "id": "n0002",
+          "gist": "The article introduces authors, affiliation, and an abstract summarizing partial information decomposition's role in revealing synergistic neural computation.",
+          "depth": 1,
+          "range": [
+            "spya-ekjksy",
+            "spya-y66sc5"
+          ],
+          "title": "Front Matter",
+          "parent": "n0001",
+          "children": [
+            "n0003",
+            "n0007"
+          ],
+          "question": "What does this review cover? (an abstract)"
+        },
+        {
+          "id": "n0010",
+          "gist": "Understanding neural information processing has long been limited by data and analytic tools, but new recording technology and information decomposition methods now enable progress.",
+          "depth": 1,
+          "range": [
+            "spya-yb735k",
+            "spya-gzwbsr"
+          ],
+          "title": "1. Introduction",
+          "parent": "n0001",
+          "children": [
+            "n0011",
+            "n0015",
+            "n0017"
+          ],
+          "question": "Why has neural information processing been hard to study and what now makes progress possible? (historical limitations and a solution)",
+          "sourceHeading": "1. Introduction"
+        },
+        {
+          "id": "n0019",
+          "gist": "Information theory can quantify how neural activity reduces uncertainty, requiring choices about data type, elements, and timescale, and tools like mutual information and transfer entropy track flow.",
+          "depth": 1,
+          "range": [
+            "spya-ygkzd8",
+            "spya-p4pyuy"
+          ],
+          "title": "2. Tracking Information in Neural Circuits",
+          "parent": "n0001",
+          "children": [
+            "n0020",
+            "n0027"
+          ],
+          "question": "How does information theory apply to tracking neural activity? (key dimensions and two core tools)",
+          "sourceHeading": "2. Tracking Information in Neural Circuits"
+        },
+        {
+          "id": "n0032",
+          "gist": "Information transfer alone cannot capture how neurons combine multiple inputs, motivating partial information decomposition to isolate genuine information processing.",
+          "depth": 1,
+          "range": [
+            "spya-dhy39x",
+            "spya-wer4cd"
+          ],
+          "title": "3. Information Processing in Neural Circuits",
+          "parent": "n0001",
+          "children": [
+            "n0033",
+            "n0036"
+          ],
+          "question": "How can one examine information processing itself, beyond mere information transfer? (introducing PID)",
+          "sourceHeading": "3. Information Processing in Neural Circuits"
+        },
+        {
+          "id": "n0039",
+          "gist": "PID formally decomposes joint mutual information into redundant, unique, and synergistic components, generalizing from two-parent intuition to a lattice-based framework requiring a redundancy measure.",
+          "depth": 1,
+          "range": [
+            "spya-u0wm5e",
+            "spya-rc76qn"
+          ],
+          "title": "4. PID: Partial Information Decomposition",
+          "parent": "n0001",
+          "children": [
+            "n0040",
+            "n0049",
+            "n0056",
+            "n0065"
+          ],
+          "question": "How does PID mathematically decompose information into redundant, unique, and synergistic parts? (a formal framework)",
+          "sourceHeading": "4. PID: Partial Information Decomposition"
+        },
+        {
+          "id": "n0068",
+          "gist": "Empirical PID studies of cortical cultures and behaving primates show synergy concentrates in rich clubs, recurrent connections, and correlated inputs, and shifts with task demands.",
+          "depth": 1,
+          "range": [
+            "spya-cc282b",
+            "spya-b32ecw"
+          ],
+          "title": "5. PID in Action",
+          "parent": "n0001",
+          "children": [
+            "n0069",
+            "n0076",
+            "n0081",
+            "n0085",
+            "n0090",
+            "n0093"
+          ],
+          "question": "What empirical patterns emerge when PID is applied to real neural recordings? (several case studies)",
+          "sourceHeading": "5. PID in Action"
+        },
+        {
+          "id": "n0098",
+          "gist": "Applying PID requires matching redundancy functions to data type, ensuring adequate sample sizes, choosing among available software tools, and recognizing scalability and estimation limitations.",
+          "depth": 1,
+          "range": [
+            "spya-kmgwhs",
+            "spya-qa7gt2"
+          ],
+          "title": "6. Practical Considerations in PID",
+          "parent": "n0001",
+          "children": [
+            "n0099",
+            "n0103",
+            "n0108",
+            "n0111"
+          ],
+          "question": "What practical choices and limitations must researchers navigate when applying PID? (tools and caveats)",
+          "sourceHeading": "6. Practical Considerations in PID"
+        },
+        {
+          "id": "n0115",
+          "gist": "Emerging extensions like local PID and multi-target integrated information decomposition promise time-resolved and multi-target analyses beyond classic PID.",
+          "depth": 1,
+          "range": [
+            "spya-zz5xxs",
+            "spya-cds6mm"
+          ],
+          "title": "7. Future Directions",
+          "parent": "n0001",
+          "children": [
+            "n0116",
+            "n0124"
+          ],
+          "question": "How might PID be extended beyond its classic single-target, expected-value form? (two emerging extensions)",
+          "sourceHeading": "7. Future Directions"
+        },
+        {
+          "id": "n0127",
+          "gist": "Synergy demonstrates that neurons compute sensitively on input patterns rather than simple sums, with structure shaped by local network environment and behavioral state.",
+          "depth": 1,
+          "range": [
+            "spya-rc5z33",
+            "spya-gajhn8"
+          ],
+          "title": "8. Summary and Closing Matter",
+          "parent": "n0001",
+          "children": [
+            "n0128",
+            "n0131"
+          ],
+          "question": "What does the accumulated evidence establish about synergistic neural computation? (a summary claim)",
+          "sourceHeading": "8. Summary"
+        }
+      ],
+      "blocks": 99,
+      "inputTokens": 22077,
+      "outputTokens": 1613,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 18886
+    }
+  }
+}

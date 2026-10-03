@@ -1920,6 +1920,16 @@ export const comments = spideryarn.table(
      * field that clamps negatives to zero (`validateHits`, src/search.ts).
      */
     valence: integer("valence"),
+
+    /**
+     * **The highlight's colour**, by name — or null, which is every comment
+     * made before 2026-10-03 and every one made without picking a colour, and
+     * which draws today's underline. A highlight is a comment with a colour,
+     * not a second kind of object (docs/plans/261003e-span-highlights-with-a-colour.md).
+     * Stored by name rather than hex so the palette can be retuned without a
+     * migration; the names are `HIGHLIGHT_COLOURS` in src/types.ts.
+     */
+    colour: text("colour"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -1950,6 +1960,17 @@ export const comments = spideryarn.table(
      * shapes in TypeScript; this makes them impossible in the database.
      */
     check("comments_body_nonempty", sql`${t.body} is null or length(btrim(${t.body})) > 0`),
+    /** The closed vocabulary, written out by hand like `comments_status`. */
+    check(
+      "comments_colour",
+      sql`${t.colour} is null or ${t.colour} in ('yellow','green','blue','pink')`,
+    ),
+    /**
+     * A colour needs words to paint. A whole-block row has none, and inline
+     * drawing skips it, so a coloured one would be a "highlight" that shows
+     * nothing (plan 261003e, review S4).
+     */
+    check("comments_colour_needs_quote", sql`${t.colour} is null or ${t.quote} is not null`),
     /**
      * Points at the IDENTITY. This is the whole design: the block's text can
      * vanish in a re-extraction and this row survives, because identities are

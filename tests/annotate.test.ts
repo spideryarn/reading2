@@ -99,6 +99,102 @@ describe("annotateHtml", () => {
   });
 });
 
+/**
+ * **Highlights** — a comment with a colour (plan 261003e). Three rules, each a
+ * review finding: the colour a run wears and the comment a click on it opens
+ * are the same one (S5); the ✳ marks words, so a wordless highlight has none;
+ * and a highlight with words keeps it.
+ */
+describe("annotateHtml — highlights", () => {
+  const html = "<p>alpha beta gamma</p>";
+  const parse = (out: string) => {
+    const host = document.createElement("div");
+    host.innerHTML = out;
+    return host;
+  };
+
+  it("paints a coloured comment's runs with data-colour", () => {
+    const host = parse(
+      annotateHtml(html, [
+        { id: "spya-hla001", start: 6, end: 10, colour: "green", createdAt: "2026-10-01T00:00:00.000Z" },
+      ]),
+    );
+    expect(host.querySelector("mark.cmt")?.getAttribute("data-colour")).toBe("green");
+  });
+
+  it("gives an uncoloured comment no data-colour at all", () => {
+    const host = parse(annotateHtml(html, [{ id: "spya-hla002", start: 6, end: 10 }]));
+    expect(host.querySelector("mark.cmt")?.hasAttribute("data-colour")).toBe(false);
+  });
+
+  it("lists overlapping comments newest first, and wears the newest one's colour", () => {
+    /* The older one is passed first, which is the order the list arrives in
+       (oldest first, as the store reads it) — so input order would put the
+       wrong one first. */
+    const host = parse(
+      annotateHtml(html, [
+        { id: "spya-hla003", start: 0, end: 10, colour: "yellow", createdAt: "2026-10-01T00:00:00.000Z" },
+        { id: "spya-hla004", start: 6, end: 16, colour: "pink", createdAt: "2026-10-02T00:00:00.000Z" },
+      ]),
+    );
+    const overlap = [...host.querySelectorAll("mark.cmt")].find((m) => m.textContent === "beta");
+    expect(overlap?.getAttribute("data-comment")).toBe("spya-hla004 spya-hla003");
+    expect(overlap?.getAttribute("data-colour")).toBe("pink");
+  });
+
+  it("breaks a createdAt tie on the id, so the order is total", () => {
+    const at = "2026-10-01T00:00:00.000Z";
+    const host = parse(
+      annotateHtml(html, [
+        { id: "spya-hla005", start: 0, end: 10, colour: "yellow", createdAt: at },
+        { id: "spya-hla006", start: 6, end: 16, colour: "blue", createdAt: at },
+      ]),
+    );
+    const overlap = [...host.querySelectorAll("mark.cmt")].find((m) => m.textContent === "beta");
+    expect(overlap?.getAttribute("data-comment")).toBe("spya-hla006 spya-hla005");
+    expect(overlap?.getAttribute("data-colour")).toBe("blue");
+  });
+
+  it("puts a newer uncoloured comment first instead of exposing an older highlight", () => {
+    /* One total priority for appearance and clicks (plan-review S5). A newer
+       note supersedes an older highlight on their shared run: otherwise the
+       visible ✳ belongs to the note while pressing it opens the wordless
+       highlight underneath. */
+    const host = parse(
+      annotateHtml(html, [
+        { id: "spya-hla007", start: 0, end: 10, colour: "yellow", createdAt: "2026-10-01T00:00:00.000Z" },
+        { id: "spya-hla008", start: 6, end: 16, createdAt: "2026-10-02T00:00:00.000Z" },
+      ]),
+    );
+    const overlap = [...host.querySelectorAll("mark.cmt")].find((m) => m.textContent === "beta");
+    expect(overlap?.getAttribute("data-comment")).toBe("spya-hla008 spya-hla007");
+    expect(overlap?.hasAttribute("data-colour")).toBe(false);
+  });
+
+  it("draws no ✳ on a wordless highlight", () => {
+    const host = parse(
+      annotateHtml(html, [{ id: "spya-hla009", start: 6, end: 10, colour: "yellow", marker: false }]),
+    );
+    expect(host.querySelector("mark.cmt")).not.toBeNull();
+    expect(host.querySelector("mark.cmt[data-mark-end]")).toBeNull();
+  });
+
+  it("keeps the ✳ on a coloured comment with words", () => {
+    const host = parse(annotateHtml(html, [{ id: "spya-hla010", start: 6, end: 10, colour: "yellow" }]));
+    expect(host.querySelector("mark.cmt[data-mark-end]")?.textContent).toBe("beta");
+  });
+
+  it("keeps the ✳ where a comment that earns one ends inside a wordless highlight", () => {
+    const host = parse(
+      annotateHtml(html, [
+        { id: "spya-hla011", start: 0, end: 16, colour: "green", marker: false },
+        { id: "spya-hla012", start: 0, end: 10 },
+      ]),
+    );
+    expect(host.querySelector("mark.cmt[data-mark-end]")?.textContent).toBe("alpha beta");
+  });
+});
+
 describe("resolveMark", () => {
   const text = "The hard problem is hard. The hard problem returns.";
 

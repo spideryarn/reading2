@@ -71,6 +71,26 @@
   --chat-mark: oklch(0.72 0.12 235);
   --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
 
+  /* **A highlight's four washes** — the reader's own colours, stored by name on
+     the comment (`HighlightColour`, src/types.ts) so they can be retuned here
+     without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
+
+     One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
+     light mode ever comes back these need a light twin like everything else.
+
+     Kept clear of the three washes already in the prose — "don't put three
+     meanings on one hue" (original-version/highlighting.md): the yellow sits
+     at 100°, well round from the orange (58°) that `--highlight-wash` and the
+     gist's active cell mean; the blue at 270°, away from a chat's 235°; and
+     all four are chromatic, where a search's `--hit-wash-rgb` is a deliberately
+     grey slate. Tinted into the page in oklab, for the reason the long note on
+     `--highlight-wash` gives, and at a strength that keeps the light prose
+     comfortably legible on top. */
+  --hl-yellow: color-mix(in oklab, oklch(0.88 0.16 100) 30%, var(--page));
+  --hl-green: color-mix(in oklab, oklch(0.80 0.15 150) 28%, var(--page));
+  --hl-blue: color-mix(in oklab, oklch(0.72 0.14 270) 32%, var(--page));
+  --hl-pink: color-mix(in oklab, oklch(0.76 0.16 350) 30%, var(--page));
+
   /* Left-edge tints that distinguish the granularity columns at a glance.
      One hue family, so the columns read as one system rather than as a rainbow —
      but the ramp runs down BOTH lightness and chroma, coarse to fine. The

@@ -452,7 +452,10 @@ Then the residue nothing refuses at compile time:
 
 A new mode's prompt takes the shared plain-words rule, `plainWords(...)`, naming each kind of text
 it writes — [prompting-guide.md](prompting-guide.md) is the rule, the trade-off and how to measure a
-change. If the model answers in JSON, the request sends a strict schema through
+change. If it is handed the whole article, it also takes `paperwork(kind)`, so the authors' list,
+the acknowledgements and the funding stay out of what it writes, or it is listed in
+`PAPERWORK_EXEMPT` with the reason (`tests/paperwork-coverage.test.ts` holds both) —
+[prompting-guide.md](prompting-guide.md). If the model answers in JSON, the request sends a strict schema through
 `withMessagesJsonSchema` (or `withChatJsonSchema`) — no `enum` of block ids, and the ids still
 resolved after the parse — [prompting-guide.md § What the model writes back](prompting-guide.md).
 

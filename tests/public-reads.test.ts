@@ -464,6 +464,8 @@ describe("the public reads of the owner's own work", () => {
   it("asks for what a reader is here for", () => {
     expect(commentsQuery.sql).toContain('"quote"');
     expect(commentsQuery.sql).toContain('"answer"');
+    /* A highlight's colour, plan 261003e S11 — the select lists columns by hand. */
+    expect(commentsQuery.sql).toContain('"colour"');
     expect(searchesQuery.sql).toContain('"criterion"');
     expect(searchesQuery.sql).toContain('"hits"');
   });

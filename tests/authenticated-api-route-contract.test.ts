@@ -709,6 +709,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["PATCH"],
     witnesses: ["/api/comments/w1/w2/mark"],
   },
+  /* A highlight's colour, plan 261003e. */
+  {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/colour$",
+      flags: "",
+    },
+    methods: ["PATCH"],
+    witnesses: ["/api/comments/w1/w2/colour"],
+  },
   // ------------------------------------------------------- chat, and live
   {
     match: { kind: "regex", source: "^\\/api\\/chat\\/([\\w.%-]+)$", flags: "" },
@@ -878,8 +888,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 86;
-const EXPECTED_GUARD_COUNT = 105;
+const EXPECTED_MATCHER_COUNT = 87;
+const EXPECTED_GUARD_COUNT = 106;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2090,6 +2100,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/answer$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/mark$/",
+        "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)\\/colour$/",
         "PATCH regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/comments\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // chat and the live sessions, 260908a

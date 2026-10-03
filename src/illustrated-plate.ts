@@ -154,8 +154,12 @@ import type { BlockId } from "./types.js";
  *
  * `illustrated/5`, 2026-10-02: the brief-writing request gained
  * `ILLUSTRATED_BRIEF_OUTPUT_SCHEMA`; the prompt text is unchanged.
+ *
+ * `illustrated/6`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("summary")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const ILLUSTRATED_VERSION = "illustrated/5";
+export const ILLUSTRATED_VERSION = "illustrated/6";
 
 /**
  * **How many of the article's figures one plate may be handed.** With the

@@ -158,6 +158,7 @@ import {
 } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 import { hashProfile } from "./profile.js";
 import type {
   Block,
@@ -204,8 +205,12 @@ import type {
  *
  * `quiz/6`, 2026-10-02: the request gained `QUIZ_OUTPUT_SCHEMA`; the prompt
  * text is unchanged.
+ *
+ * `quiz/7`, 2026-10-03: the prompt gained the shared paperwork section,
+ * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
+ * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
  */
-export const PROMPT_VERSION = "quiz/6";
+export const PROMPT_VERSION = "quiz/7";
 
 /**
  * The most questions one batch may carry into the artefact.
@@ -826,6 +831,8 @@ Cover the piece. The takeaways usually draw on all of it, so the path should
 too; do not spend half the steps on its first third.
 
 ${plainWords("ask", "explain")}
+
+${paperwork("pick")}
 
 OUTPUT
 

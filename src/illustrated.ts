@@ -128,6 +128,7 @@ import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Meta } from "./types.js";
 import { plainWords } from "./plain-words.js";
+import { paperwork } from "./paperwork.js";
 
 /**
  * Bumped whenever SYSTEM or `renderPrompt` changes what the model is asked —
@@ -528,6 +529,8 @@ not go in the picture.
 For every node in the sketch scene, before you compose anything, pick ONE CONCRETE THING drawn from a
 specific passage of the article — an example the author gives, an image they use, an incident, a
 named person, a number, an object — and quote that passage. Never a symbol for the section's topic.
+A node that is only the piece's paperwork (below), which an older sketch may still have, gets
+nothing: leave it out of the picture.
 
 A section about anthropomorphism illustrated as "a human silhouette with a question mark" is worth
 nothing; the same section illustrated as the specific thing the author actually described is worth
@@ -619,6 +622,8 @@ The title is a caption and not a claim. The checked quote stays in real text ben
 where a reader can hold it against the article, and it is not shortened or replaced by the title.
 
 ${plainWords("explain")}
+
+${paperwork("summary")}
 
 ## Output
 

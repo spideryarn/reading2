@@ -2981,7 +2981,7 @@ export function Reader({
              tests/opening-read-gates-writes.test.tsx reads this line. */
           loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask, mark) => {
+          onSave={(id, body, ask, mark, colour) => {
             const anchor = annotating;
             setAnnotating(null);
             /* **The free thing is stored first, and the paid thing waits for
@@ -2998,6 +2998,8 @@ export function Reader({
               /* The referee's placement rides along with the free save, so a
                  placement is never a second request that can fail on its own. */
               mark,
+              /* And the highlight colour, for the same reason. */
+              ...(colour ? { colour } : {}),
             }).then((stored) => {
               if (!ask || !stored) return;
               /* The conversation opens on the same words, pre-filled with what
@@ -3103,6 +3105,7 @@ export function Reader({
             onEdit: (body) => void owner.comments.edit(openComment.id, body),
             placing: mode === "referee",
             onPlace: (mark) => void owner.comments.place(openComment.id, mark),
+            onRecolour: (colour) => void owner.comments.recolour(openComment.id, colour),
             error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the

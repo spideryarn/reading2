@@ -1,0 +1,3079 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "after",
+  "sourceSha256": {
+    "sketch.ts": "e6bd113d57cfc45a5c9b65052ea1c4ae072d802a81bcee2115e41742a4eb52e7",
+    "illustrated.ts": "591c1a2e9669c6aca6d1d196d5769d0d2ada5da9accebfc62ff8b8fe5fe589e0",
+    "faq.ts": "62d97e7d5c672575aa1393a7368a8e8db28c7afaaf5277c55a0181afb98f3f75",
+    "quiz.ts": "6742583dbeb9ac2f8accefac716bdfd5c31a81285d1d26d28e1437bda7a72e83",
+    "ideas.ts": "3d88d5b85f122c5770ec471fb3b129154f31771c6190cbfaab67352b4bee53bf",
+    "quotes.ts": "5ead833d172ed71e447ead37840453c192d79254350726d6a439c530bb7b9691",
+    "glossary.ts": "22e53eb4fda265f69811e48ff5abfe2f4aae18eb39c86ea8b5cb5780ad9f4ad7",
+    "timeline.ts": "af08595750bec2e6cb8bc93c29ef942afb80ef077961d924df9e1b5afc4c102d",
+    "arc.ts": "ea33babf476c83f4df77c0c91edaf570e8e2d4f7a3ff47ac08ed776c33215866",
+    "paperwork.ts": "b9be7f63cc797730c97d198d0b2169e02d4914993dba4e4f5c2ad88d8f3847a0"
+  },
+  "outputs": {
+    "sketch": {
+      "sketch": {
+        "version": "sketch/5",
+        "title": "Chain with a fork and an aside",
+        "caption": "The piece is a chain: GPT-3's surprise results feed into a general theory of why scale creates intelligence, which funnels into open questions about pretraining limits, forks into who will actually keep scaling (OpenAI vs DeepMind), converges onto a verdict on AI forecasters, with a final aside on whether scaled-up models secretly become agents.",
+        "scenes": [
+          {
+            "id": "overview",
+            "title": "Overview",
+            "height": 1180,
+            "items": [
+              {
+                "kind": "region",
+                "x": 24,
+                "y": 28,
+                "w": 712,
+                "h": 230,
+                "style": "band",
+                "label": "PART 1 · GPT-3 ARRIVES",
+                "tone": 1
+              },
+              {
+                "kind": "node",
+                "id": "gpt3",
+                "shape": "ellipse",
+                "x": 260,
+                "y": 60,
+                "w": 240,
+                "h": 70,
+                "text": "GPT-3 scales up an old design",
+                "size": "sm",
+                "sub": "and it just works",
+                "tone": 1,
+                "block": "spya-dfggb3"
+              },
+              {
+                "kind": "node",
+                "id": "meta",
+                "shape": "box",
+                "x": 260,
+                "y": 165,
+                "w": 240,
+                "h": 70,
+                "text": "It learns to learn from examples alone",
+                "size": "sm",
+                "tone": 1,
+                "block": "spya-k8ta9q"
+              },
+              {
+                "kind": "region",
+                "x": 24,
+                "y": 270,
+                "w": 712,
+                "h": 220,
+                "style": "band",
+                "label": "PART 2 · WHY SCALE CREATES INTELLIGENCE",
+                "tone": 2,
+                "muted": true
+              },
+              {
+                "kind": "node",
+                "id": "blessings",
+                "shape": "box",
+                "x": 260,
+                "y": 300,
+                "w": 240,
+                "h": 70,
+                "text": "Scale brings stability, generalization, meta-learning",
+                "size": "sm",
+                "sub": "across vision, games, robotics too",
+                "tone": 2,
+                "block": "spya-jwq3zr",
+                "opens": "inside-the-theory"
+              },
+              {
+                "kind": "node",
+                "id": "hypothesis",
+                "shape": "hex",
+                "x": 250,
+                "y": 400,
+                "w": 260,
+                "h": 75,
+                "text": "Strong scaling hypothesis",
+                "size": "md",
+                "sub": "scale alone yields intelligence",
+                "tone": 2,
+                "block": "spya-ag750z",
+                "opens": "inside-the-theory"
+              },
+              {
+                "kind": "region",
+                "x": 24,
+                "y": 500,
+                "w": 712,
+                "h": 200,
+                "style": "band",
+                "label": "PART 3 · WHY DOES PRETRAINING WORK",
+                "tone": 3,
+                "muted": true
+              },
+              {
+                "kind": "node",
+                "id": "pretrain",
+                "shape": "box",
+                "x": 260,
+                "y": 530,
+                "w": 240,
+                "h": 70,
+                "text": "Predicting text forces real understanding",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-ce0ts7"
+              },
+              {
+                "kind": "node",
+                "id": "gpt4",
+                "shape": "box",
+                "x": 260,
+                "y": 630,
+                "w": 240,
+                "h": 60,
+                "text": "No one knows what further scaling unlocks",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-uett4g"
+              },
+              {
+                "kind": "region",
+                "x": 24,
+                "y": 710,
+                "w": 712,
+                "h": 220,
+                "style": "band",
+                "label": "PART 4 · WILL ANYONE SCALE",
+                "tone": 4
+              },
+              {
+                "kind": "node",
+                "id": "deepmind",
+                "shape": "box",
+                "x": 60,
+                "y": 770,
+                "w": 220,
+                "h": 90,
+                "text": "DeepMind: piece-by-piece, cautious bets",
+                "size": "sm",
+                "sub": "weak scaling hypothesis",
+                "tone": 4,
+                "block": "spya-scr8jb"
+              },
+              {
+                "kind": "node",
+                "id": "openai",
+                "shape": "box",
+                "x": 480,
+                "y": 770,
+                "w": 220,
+                "h": 90,
+                "text": "OpenAI: bets everything on scale",
+                "size": "sm",
+                "sub": "restructured to fund it",
+                "tone": 4,
+                "block": "spya-arrq35"
+              },
+              {
+                "kind": "region",
+                "x": 24,
+                "y": 950,
+                "w": 712,
+                "h": 150,
+                "style": "band",
+                "label": "PART 5 · CRITIQUING THE CRITICS",
+                "tone": 5
+              },
+              {
+                "kind": "node",
+                "id": "critics",
+                "shape": "box",
+                "x": 260,
+                "y": 990,
+                "w": 240,
+                "h": 80,
+                "text": "Experts kept predicting stagnation—and kept being wrong",
+                "size": "sm",
+                "tone": 5,
+                "block": "spya-b93jbz"
+              },
+              {
+                "kind": "node",
+                "id": "agency",
+                "shape": "note",
+                "x": 560,
+                "y": 1100,
+                "w": 175,
+                "h": 70,
+                "text": "Aside: scaled models may secretly become agents",
+                "size": "xs",
+                "tone": 6,
+                "block": "spya-hfcz8w",
+                "opens": "inside-agency"
+              },
+              {
+                "kind": "edge",
+                "from": "gpt3",
+                "to": "meta",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "meta",
+                "to": "blessings",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "blessings",
+                "to": "hypothesis",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "hypothesis",
+                "to": "pretrain",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pretrain",
+                "to": "gpt4",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "gpt4",
+                "to": "deepmind",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "gpt4",
+                "to": "openai",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "deepmind",
+                "to": "critics",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "openai",
+                "to": "critics",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "critics",
+                "to": "agency",
+                "via": "curve",
+                "line": "dashed",
+                "arrow": "end",
+                "label": "late aside"
+              }
+            ],
+            "caption": "Down the page follows the article's argument: from GPT-3's surprise, through the theory of scale, to who will act on it, to a verdict on the skeptics, with the agency question hanging off as a late aside."
+          },
+          {
+            "id": "inside-the-theory",
+            "title": "Why scale creates intelligence",
+            "height": 900,
+            "items": [
+              {
+                "kind": "node",
+                "id": "examples",
+                "shape": "box",
+                "x": 260,
+                "y": 40,
+                "w": 240,
+                "h": 80,
+                "text": "Scale fixes problems everywhere",
+                "size": "sm",
+                "sub": "language, vision, games, robots",
+                "tone": 2,
+                "block": "spya-jwq3zr"
+              },
+              {
+                "kind": "node",
+                "id": "ensemble",
+                "shape": "hex",
+                "x": 260,
+                "y": 160,
+                "w": 240,
+                "h": 80,
+                "text": "Big nets act as ensembles",
+                "size": "sm",
+                "sub": "an Occam's razor over sub-models",
+                "tone": 2,
+                "block": "spya-djq0xk"
+              },
+              {
+                "kind": "node",
+                "id": "lazy",
+                "shape": "box",
+                "x": 260,
+                "y": 280,
+                "w": 240,
+                "h": 70,
+                "text": "Easy shortcuts win early, until scale forces better ones",
+                "size": "sm",
+                "tone": 2,
+                "block": "spya-uknzzk"
+              },
+              {
+                "kind": "node",
+                "id": "hyp",
+                "shape": "hex",
+                "x": 250,
+                "y": 390,
+                "w": 260,
+                "h": 75,
+                "text": "Strong scaling hypothesis",
+                "size": "md",
+                "sub": "scale alone yields intelligence",
+                "tone": 2,
+                "block": "spya-ag750z"
+              },
+              {
+                "kind": "node",
+                "id": "pretrainthesis",
+                "shape": "box",
+                "x": 260,
+                "y": 500,
+                "w": 240,
+                "h": 80,
+                "text": "Predicting text forces genuine understanding",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-ce0ts7"
+              },
+              {
+                "kind": "node",
+                "id": "letters",
+                "shape": "box",
+                "x": 60,
+                "y": 610,
+                "w": 200,
+                "h": 70,
+                "text": "Early gains: letters, words, grammar",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-r465ug"
+              },
+              {
+                "kind": "node",
+                "id": "pronouns",
+                "shape": "box",
+                "x": 280,
+                "y": 610,
+                "w": 200,
+                "h": 70,
+                "text": "Later gains: pronouns, consistency",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-rz8jsm"
+              },
+              {
+                "kind": "node",
+                "id": "deepest",
+                "shape": "box",
+                "x": 500,
+                "y": 610,
+                "w": 200,
+                "h": 70,
+                "text": "Last bits are rarest, most valuable",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-kmyg3w"
+              },
+              {
+                "kind": "node",
+                "id": "doubt",
+                "shape": "box",
+                "x": 260,
+                "y": 710,
+                "w": 240,
+                "h": 70,
+                "text": "Hard to trust in advance—only trying proved it",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-e5n86h"
+              },
+              {
+                "kind": "node",
+                "id": "gpt4b",
+                "shape": "box",
+                "x": 260,
+                "y": 800,
+                "w": 240,
+                "h": 60,
+                "text": "What would halving the loss again unlock? Unknown.",
+                "size": "sm",
+                "tone": 3,
+                "block": "spya-uett4g"
+              },
+              {
+                "kind": "edge",
+                "from": "examples",
+                "to": "ensemble",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "ensemble",
+                "to": "lazy",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "lazy",
+                "to": "hyp",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "hyp",
+                "to": "pretrainthesis",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pretrainthesis",
+                "to": "letters",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pretrainthesis",
+                "to": "pronouns",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pretrainthesis",
+                "to": "deepest",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "letters",
+                "to": "doubt",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "pronouns",
+                "to": "doubt",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "deepest",
+                "to": "doubt",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "doubt",
+                "to": "gpt4b",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "A spine from scattered examples of scale working, to the mechanism (ensembles favoring simple solutions), to the general hypothesis, into the pretraining thesis that explains what loss reduction actually buys you."
+          },
+          {
+            "id": "inside-agency",
+            "title": "Agency from data, even formal systems",
+            "height": 880,
+            "items": [
+              {
+                "kind": "node",
+                "id": "itfb",
+                "shape": "box",
+                "x": 260,
+                "y": 40,
+                "w": 240,
+                "h": 80,
+                "text": "GPT-3 imitates agents in its training text",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-hfcz8w"
+              },
+              {
+                "kind": "node",
+                "id": "atoms",
+                "shape": "box",
+                "x": 260,
+                "y": 150,
+                "w": 240,
+                "h": 80,
+                "text": "Agency is built from non-agentic atoms—no clean line",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-yb6wsc"
+              },
+              {
+                "kind": "node",
+                "id": "stance",
+                "shape": "box",
+                "x": 260,
+                "y": 260,
+                "w": 240,
+                "h": 70,
+                "text": "Humans read agency into many natural systems",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-frehf0"
+              },
+              {
+                "kind": "node",
+                "id": "variational",
+                "shape": "box",
+                "x": 260,
+                "y": 360,
+                "w": 240,
+                "h": 80,
+                "text": "Treating a system as 'wanting' a goal is a useful shortcut",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-tyue6z"
+              },
+              {
+                "kind": "node",
+                "id": "expensive",
+                "shape": "box",
+                "x": 260,
+                "y": 470,
+                "w": 240,
+                "h": 70,
+                "text": "But this shortcut must earn its keep—rich, repeated data only",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-wkqdua"
+              },
+              {
+                "kind": "node",
+                "id": "induce",
+                "shape": "box",
+                "x": 260,
+                "y": 570,
+                "w": 240,
+                "h": 60,
+                "text": "How much data diversity triggers it? Unknown.",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-ufadea"
+              },
+              {
+                "kind": "node",
+                "id": "ca",
+                "shape": "box",
+                "x": 80,
+                "y": 660,
+                "w": 200,
+                "h": 70,
+                "text": "Even Conway's Game of Life invites 'gliders want to move'",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-myjtg3"
+              },
+              {
+                "kind": "node",
+                "id": "singletm",
+                "shape": "box",
+                "x": 300,
+                "y": 660,
+                "w": 200,
+                "h": 70,
+                "text": "One Turing machine: no clear agency, just rules",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-etcjwv"
+              },
+              {
+                "kind": "node",
+                "id": "metatm",
+                "shape": "box",
+                "x": 520,
+                "y": 660,
+                "w": 200,
+                "h": 70,
+                "text": "Many Turing machines: inferring intent resembles theory of mind",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-yzb32b"
+              },
+              {
+                "kind": "node",
+                "id": "ambient",
+                "shape": "box",
+                "x": 260,
+                "y": 770,
+                "w": 240,
+                "h": 70,
+                "text": "Agency, like Turing-completeness, is hard to rule out",
+                "size": "sm",
+                "tone": 6,
+                "block": "spya-c8qwnc"
+              },
+              {
+                "kind": "edge",
+                "from": "itfb",
+                "to": "atoms",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "atoms",
+                "to": "stance",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "stance",
+                "to": "variational",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "variational",
+                "to": "expensive",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "expensive",
+                "to": "induce",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "induce",
+                "to": "ca",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "induce",
+                "to": "singletm",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "induce",
+                "to": "metatm",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "ca",
+                "to": "ambient",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "singletm",
+                "to": "ambient",
+                "via": "straight",
+                "line": "solid",
+                "arrow": "end"
+              },
+              {
+                "kind": "edge",
+                "from": "metatm",
+                "to": "ambient",
+                "via": "curve",
+                "line": "solid",
+                "arrow": "end"
+              }
+            ],
+            "caption": "A chain from GPT-3 imitating human agents, broadening step by step to physics, cellular automata, and Turing machines, arguing agency keeps reappearing however abstract the data gets."
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.0578e196164734a1",
+        "profileHash": null
+      },
+      "raw": "{\"caption\":\"The piece is a chain: GPT-3's surprise results feed into a general theory of why scale creates intelligence, which funnels into open questions about pretraining limits, forks into who will actually keep scaling (OpenAI vs DeepMind), converges onto a verdict on AI forecasters, with a final aside on whether scaled-up models secretly become agents.\",\"title\":\"Chain with a fork and an aside\",\"scenes\":[{\"id\":\"overview\",\"title\":\"Overview\",\"caption\":\"Down the page follows the article's argument: from GPT-3's surprise, through the theory of scale, to who will act on it, to a verdict on the skeptics, with the agency question hanging off as a late aside.\",\"height\":1180,\"items\":[{\"kind\":\"region\",\"x\":24,\"y\":28,\"w\":712,\"h\":230,\"label\":\"PART 1 · GPT-3 ARRIVES\",\"style\":\"band\",\"tone\":1},{\"kind\":\"node\",\"id\":\"gpt3\",\"shape\":\"ellipse\",\"x\":260,\"y\":60,\"w\":240,\"h\":70,\"text\":\"GPT-3 scales up an old design\",\"sub\":\"and it just works\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-dfggb3\"},{\"kind\":\"node\",\"id\":\"meta\",\"shape\":\"box\",\"x\":260,\"y\":165,\"w\":240,\"h\":70,\"text\":\"It learns to learn from examples alone\",\"size\":\"sm\",\"tone\":1,\"block\":\"spya-k8ta9q\"},{\"kind\":\"region\",\"x\":24,\"y\":270,\"w\":712,\"h\":220,\"label\":\"PART 2 · WHY SCALE CREATES INTELLIGENCE\",\"style\":\"band\",\"tone\":2,\"muted\":true},{\"kind\":\"node\",\"id\":\"blessings\",\"shape\":\"box\",\"x\":260,\"y\":300,\"w\":240,\"h\":70,\"text\":\"Scale brings stability, generalization, meta-learning\",\"sub\":\"across vision, games, robotics too\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-jwq3zr\",\"opens\":\"inside-the-theory\"},{\"kind\":\"node\",\"id\":\"hypothesis\",\"shape\":\"hex\",\"x\":250,\"y\":400,\"w\":260,\"h\":75,\"text\":\"Strong scaling hypothesis\",\"sub\":\"scale alone yields intelligence\",\"size\":\"md\",\"tone\":2,\"block\":\"spya-ag750z\",\"opens\":\"inside-the-theory\"},{\"kind\":\"region\",\"x\":24,\"y\":500,\"w\":712,\"h\":200,\"label\":\"PART 3 · WHY DOES PRETRAINING WORK\",\"style\":\"band\",\"tone\":3,\"muted\":true},{\"kind\":\"node\",\"id\":\"pretrain\",\"shape\":\"box\",\"x\":260,\"y\":530,\"w\":240,\"h\":70,\"text\":\"Predicting text forces real understanding\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-ce0ts7\"},{\"kind\":\"node\",\"id\":\"gpt4\",\"shape\":\"box\",\"x\":260,\"y\":630,\"w\":240,\"h\":60,\"text\":\"No one knows what further scaling unlocks\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-uett4g\"},{\"kind\":\"region\",\"x\":24,\"y\":710,\"w\":712,\"h\":220,\"label\":\"PART 4 · WILL ANYONE SCALE\",\"style\":\"band\",\"tone\":4},{\"kind\":\"node\",\"id\":\"deepmind\",\"shape\":\"box\",\"x\":60,\"y\":770,\"w\":220,\"h\":90,\"text\":\"DeepMind: piece-by-piece, cautious bets\",\"sub\":\"weak scaling hypothesis\",\"size\":\"sm\",\"tone\":4,\"block\":\"spya-scr8jb\"},{\"kind\":\"node\",\"id\":\"openai\",\"shape\":\"box\",\"x\":480,\"y\":770,\"w\":220,\"h\":90,\"text\":\"OpenAI: bets everything on scale\",\"sub\":\"restructured to fund it\",\"size\":\"sm\",\"tone\":4,\"block\":\"spya-arrq35\"},{\"kind\":\"region\",\"x\":24,\"y\":950,\"w\":712,\"h\":150,\"label\":\"PART 5 · CRITIQUING THE CRITICS\",\"style\":\"band\",\"tone\":5},{\"kind\":\"node\",\"id\":\"critics\",\"shape\":\"box\",\"x\":260,\"y\":990,\"w\":240,\"h\":80,\"text\":\"Experts kept predicting stagnation—and kept being wrong\",\"size\":\"sm\",\"tone\":5,\"block\":\"spya-b93jbz\"},{\"kind\":\"node\",\"id\":\"agency\",\"shape\":\"note\",\"x\":560,\"y\":1100,\"w\":175,\"h\":70,\"text\":\"Aside: scaled models may secretly become agents\",\"size\":\"xs\",\"tone\":6,\"block\":\"spya-hfcz8w\",\"opens\":\"inside-agency\"},{\"kind\":\"edge\",\"from\":\"gpt3\",\"to\":\"meta\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"meta\",\"to\":\"blessings\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"blessings\",\"to\":\"hypothesis\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"hypothesis\",\"to\":\"pretrain\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pretrain\",\"to\":\"gpt4\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"gpt4\",\"to\":\"deepmind\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"gpt4\",\"to\":\"openai\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"deepmind\",\"to\":\"critics\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"openai\",\"to\":\"critics\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"critics\",\"to\":\"agency\",\"via\":\"curve\",\"line\":\"dashed\",\"arrow\":\"end\",\"label\":\"late aside\"}]},{\"id\":\"inside-the-theory\",\"title\":\"Why scale creates intelligence\",\"caption\":\"A spine from scattered examples of scale working, to the mechanism (ensembles favoring simple solutions), to the general hypothesis, into the pretraining thesis that explains what loss reduction actually buys you.\",\"height\":900,\"items\":[{\"kind\":\"node\",\"id\":\"examples\",\"shape\":\"box\",\"x\":260,\"y\":40,\"w\":240,\"h\":80,\"text\":\"Scale fixes problems everywhere\",\"sub\":\"language, vision, games, robots\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-jwq3zr\"},{\"kind\":\"node\",\"id\":\"ensemble\",\"shape\":\"hex\",\"x\":260,\"y\":160,\"w\":240,\"h\":80,\"text\":\"Big nets act as ensembles\",\"sub\":\"an Occam's razor over sub-models\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-djq0xk\"},{\"kind\":\"node\",\"id\":\"lazy\",\"shape\":\"box\",\"x\":260,\"y\":280,\"w\":240,\"h\":70,\"text\":\"Easy shortcuts win early, until scale forces better ones\",\"size\":\"sm\",\"tone\":2,\"block\":\"spya-uknzzk\"},{\"kind\":\"node\",\"id\":\"hyp\",\"shape\":\"hex\",\"x\":250,\"y\":390,\"w\":260,\"h\":75,\"text\":\"Strong scaling hypothesis\",\"sub\":\"scale alone yields intelligence\",\"size\":\"md\",\"tone\":2,\"block\":\"spya-ag750z\"},{\"kind\":\"node\",\"id\":\"pretrainthesis\",\"shape\":\"box\",\"x\":260,\"y\":500,\"w\":240,\"h\":80,\"text\":\"Predicting text forces genuine understanding\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-ce0ts7\"},{\"kind\":\"node\",\"id\":\"letters\",\"shape\":\"box\",\"x\":60,\"y\":610,\"w\":200,\"h\":70,\"text\":\"Early gains: letters, words, grammar\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-r465ug\"},{\"kind\":\"node\",\"id\":\"pronouns\",\"shape\":\"box\",\"x\":280,\"y\":610,\"w\":200,\"h\":70,\"text\":\"Later gains: pronouns, consistency\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-rz8jsm\"},{\"kind\":\"node\",\"id\":\"deepest\",\"shape\":\"box\",\"x\":500,\"y\":610,\"w\":200,\"h\":70,\"text\":\"Last bits are rarest, most valuable\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-kmyg3w\"},{\"kind\":\"node\",\"id\":\"doubt\",\"shape\":\"box\",\"x\":260,\"y\":710,\"w\":240,\"h\":70,\"text\":\"Hard to trust in advance—only trying proved it\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-e5n86h\"},{\"kind\":\"node\",\"id\":\"gpt4b\",\"shape\":\"box\",\"x\":260,\"y\":800,\"w\":240,\"h\":60,\"text\":\"What would halving the loss again unlock? Unknown.\",\"size\":\"sm\",\"tone\":3,\"block\":\"spya-uett4g\"},{\"kind\":\"edge\",\"from\":\"examples\",\"to\":\"ensemble\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"ensemble\",\"to\":\"lazy\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"lazy\",\"to\":\"hyp\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"hyp\",\"to\":\"pretrainthesis\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pretrainthesis\",\"to\":\"letters\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pretrainthesis\",\"to\":\"pronouns\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pretrainthesis\",\"to\":\"deepest\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"letters\",\"to\":\"doubt\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"pronouns\",\"to\":\"doubt\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"deepest\",\"to\":\"doubt\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"doubt\",\"to\":\"gpt4b\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"}]},{\"id\":\"inside-agency\",\"title\":\"Agency from data, even formal systems\",\"caption\":\"A chain from GPT-3 imitating human agents, broadening step by step to physics, cellular automata, and Turing machines, arguing agency keeps reappearing however abstract the data gets.\",\"height\":880,\"items\":[{\"kind\":\"node\",\"id\":\"itfb\",\"shape\":\"box\",\"x\":260,\"y\":40,\"w\":240,\"h\":80,\"text\":\"GPT-3 imitates agents in its training text\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-hfcz8w\"},{\"kind\":\"node\",\"id\":\"atoms\",\"shape\":\"box\",\"x\":260,\"y\":150,\"w\":240,\"h\":80,\"text\":\"Agency is built from non-agentic atoms—no clean line\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-yb6wsc\"},{\"kind\":\"node\",\"id\":\"stance\",\"shape\":\"box\",\"x\":260,\"y\":260,\"w\":240,\"h\":70,\"text\":\"Humans read agency into many natural systems\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-frehf0\"},{\"kind\":\"node\",\"id\":\"variational\",\"shape\":\"box\",\"x\":260,\"y\":360,\"w\":240,\"h\":80,\"text\":\"Treating a system as 'wanting' a goal is a useful shortcut\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-tyue6z\"},{\"kind\":\"node\",\"id\":\"expensive\",\"shape\":\"box\",\"x\":260,\"y\":470,\"w\":240,\"h\":70,\"text\":\"But this shortcut must earn its keep—rich, repeated data only\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-wkqdua\"},{\"kind\":\"node\",\"id\":\"induce\",\"shape\":\"box\",\"x\":260,\"y\":570,\"w\":240,\"h\":60,\"text\":\"How much data diversity triggers it? Unknown.\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-ufadea\"},{\"kind\":\"node\",\"id\":\"ca\",\"shape\":\"box\",\"x\":80,\"y\":660,\"w\":200,\"h\":70,\"text\":\"Even Conway's Game of Life invites 'gliders want to move'\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-myjtg3\"},{\"kind\":\"node\",\"id\":\"singletm\",\"shape\":\"box\",\"x\":300,\"y\":660,\"w\":200,\"h\":70,\"text\":\"One Turing machine: no clear agency, just rules\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-etcjwv\"},{\"kind\":\"node\",\"id\":\"metatm\",\"shape\":\"box\",\"x\":520,\"y\":660,\"w\":200,\"h\":70,\"text\":\"Many Turing machines: inferring intent resembles theory of mind\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-yzb32b\"},{\"kind\":\"node\",\"id\":\"ambient\",\"shape\":\"box\",\"x\":260,\"y\":770,\"w\":240,\"h\":70,\"text\":\"Agency, like Turing-completeness, is hard to rule out\",\"size\":\"sm\",\"tone\":6,\"block\":\"spya-c8qwnc\"},{\"kind\":\"edge\",\"from\":\"itfb\",\"to\":\"atoms\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"atoms\",\"to\":\"stance\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"stance\",\"to\":\"variational\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"variational\",\"to\":\"expensive\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"expensive\",\"to\":\"induce\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"induce\",\"to\":\"ca\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"induce\",\"to\":\"singletm\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"induce\",\"to\":\"metatm\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"ca\",\"to\":\"ambient\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"singletm\",\"to\":\"ambient\",\"via\":\"straight\",\"line\":\"solid\",\"arrow\":\"end\"},{\"kind\":\"edge\",\"from\":\"metatm\",\"to\":\"ambient\",\"via\":\"curve\",\"line\":\"solid\",\"arrow\":\"end\"}]}]}",
+      "report": {
+        "faults": [],
+        "written": 67,
+        "kept": 67,
+        "inferred": 1
+      },
+      "score": {
+        "scenes": 3,
+        "unreachable": 0,
+        "inferred": 1,
+        "nodes": 30,
+        "linked": 30,
+        "reach": 0.27419354838709675,
+        "flow": 0.9888264649460884,
+        "overlap": 0,
+        "overflowing": 0,
+        "faults": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 38785,
+      "outputTokens": 5597,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 45518
+    },
+    "illustrated": {
+      "illustrated": {
+        "version": "illustrated/6",
+        "style": "An illuminated manuscript page — gold-leafed roundels linked by vine-chains down vellum, because the piece itself is framed as a chain of causes with a fork and a hanging aside, and its evidence is full of parables (rivers, cyanobacteria, sinking ships) that read naturally as manuscript emblems.",
+        "plates": [
+          {
+            "sceneId": "overview",
+            "title": "The Chain of Scale",
+            "prompt": "An illuminated manuscript page on cream vellum, bordered in gold leaf with a thin vine-chain of gold links running down the centre of the page connecting roundels in strict top-to-bottom reading order, deep blue and oxblood-red ink for linework, muted period colour washes inside each roundel. At the top, under the first framed register, two roundels side by side joined by a short link: an old gear-and-belt engine still turning smoothly beside a rising, unbending chart-line (OLD ENGINE, RISING CURVE), and a seated figure ringed by cards of foreign phrases, jumbled letters, and a puzzle (ANAGRAMS AND ANALOGIES). The chain descends into a second register: a robotic hand turning an object amid ghostly duplicate objects (DACTYL'S PRACTISED HAND), then a row of brains growing from small to large (PRIMATE BRAIN, SCALED UP). The chain continues into a third register: tiny blue-green organisms releasing marks into water (CYANOBACTERIA OF AI), then a balance-scale with one pan empty in fog beside a signpost (THIRTY PERCENT UNKNOWN). The chain then forks into two parallel roundels side by side: a kitchen sink's pots and tools hurled at a wall (AGENT57'S KITCHEN SINK) on the left, and a rocket launching toward the moon from a workshop (SHOOT FOR THE MOON) on the right; both gold links rejoin into a single roundel below showing crowned robed figures beside bowed cloaked ones (HONOR TO THE FANATICS). Below and slightly to one side, connected not by the main chain but by a thin separate gilt tendril curling off the page's edge, a small pendant roundel shows a wheeled robot arm reaching for a can on a table (ROBOT FETCHES THE CAN), visually marked as a late aside rather than part of the main descent. Each roundel has its capitalized title lettered in a plain serif beneath it on the vellum; nothing else on the page is lettered — no banners, no scrolls, no other inscriptions. Generous bare vellum between registers; only restrained foliate corner ornament, never crowding the scenes.",
+            "vignettes": [
+              {
+                "block": "spya-fvqe70",
+                "quote": "and yet, the first version already manifests crazy runtime meta-learning—and the scaling curves still are not bending!",
+                "depicts": "A battered, old-fashioned engine of gears and belts, clearly obsolete, still turning smoothly; behind it a line on a chart climbs on and on without ever levelling off.",
+                "title": "OLD ENGINE, RISING CURVE",
+                "node": "gpt3"
+              },
+              {
+                "block": "spya-aqts9c",
+                "quote": "to English translation to unscrambling anagrams to SAT analogies",
+                "depicts": "A single seated figure surrounded by scattered cards: foreign-language phrases, jumbled letters rearranging themselves, and a multiple-choice analogy puzzle, all being solved at once without separate training for each.",
+                "title": "ANAGRAMS AND ANALOGIES",
+                "node": "meta"
+              },
+              {
+                "block": "spya-ypbup8",
+                "quote": "Training Dactyl (or humanoid robots) on millions of domain randomizations induced similar implicit meta-learning",
+                "depicts": "A robotic hand turning an object in its fingers, encircled by many faint overlapping copies of the same object in different colours and sizes, showing countless randomized versions it has practiced on.",
+                "title": "DACTYL'S PRACTISED HAND",
+                "node": "blessings"
+              },
+              {
+                "block": "spya-m3gtj6",
+                "quote": "human brains look much like scaled-up primate brains",
+                "depicts": "A row of brains ascending in size from a small primate brain to a much larger human brain, each simply a bigger version of the last, no new parts added.",
+                "title": "PRIMATE BRAIN, SCALED UP",
+                "node": "hypothesis"
+              },
+              {
+                "block": "spya-h74fhr",
+                "quote": "Humans, one might say, are the cyanobacteria of AI",
+                "depicts": "Tiny blue-green organisms adrift in a sea, each one releasing a stream of marks and symbols into the water around it, which drift and accumulate.",
+                "title": "CYANOBACTERIA OF AI",
+                "node": "pretrain"
+              },
+              {
+                "block": "spya-edr6mj",
+                "quote": "what capabilities would another ~30% improvement over GPT-3 gain?",
+                "depicts": "A set of balance-scales, one pan holding a labelled weight, the other pan empty and shrouded in mist, with a signpost pointing onward into fog.",
+                "title": "THIRTY PERCENT UNKNOWN",
+                "node": "gpt4"
+              },
+              {
+                "block": "spya-vr9q2p",
+                "quote": "DM contraptions like Agent57 which throw the kitchen sink at the wall to see what sticks",
+                "depicts": "A cluttered kitchen sink full of pots, pans and tools being hurled bodily at a stone wall, utensils splattering and sticking where they land.",
+                "title": "AGENT57'S KITCHEN SINK",
+                "node": "deepmind"
+              },
+              {
+                "block": "spya-arrq35",
+                "quote": "OA LP, while controlled by OA, can then shoot for the moon.",
+                "depicts": "A slender rocket lifting off from a small workshop, trailing fire, aimed directly at a round pale moon overhead.",
+                "title": "SHOOT FOR THE MOON",
+                "node": "openai"
+              },
+              {
+                "block": "spya-b93jbz",
+                "quote": "all honor to the fanatics, shame and humiliation to the critics!",
+                "depicts": "On one side a handful of robed figures are crowned with laurel; on the other, cloaked figures stand with heads bowed and faces hidden.",
+                "title": "HONOR TO THE FANATICS",
+                "node": "critics"
+              },
+              {
+                "block": "spya-fm6pfc",
+                "quote": "giving a SayCan robot an instruction to ‘fetch a can of Coke and bring it to me’",
+                "depicts": "A small wheeled robot arm reaching across a tabletop toward a can, following a command, shown hanging off to the side of the main page on a thin gilt tendril rather than the main chain.",
+                "title": "ROBOT FETCHES THE CAN",
+                "node": "agency"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "A battered, old-fashioned engine of gears and belts, clearly obsolete, still turning smoothly; behind it a line on a chart climbs on and on without ever levelling off.",
+                "title": "OLD ENGINE, RISING CURVE"
+              },
+              {
+                "where": "A single seated figure surrounded by scattered cards: foreign-language phrases, jumbled letters rearranging themselves, and a multiple-choice analogy puzzle, all being solved at once without separate ",
+                "title": "ANAGRAMS AND ANALOGIES"
+              },
+              {
+                "where": "A robotic hand turning an object in its fingers, encircled by many faint overlapping copies of the same object in different colours and sizes, showing countless randomized versions it has practiced on",
+                "title": "DACTYL'S PRACTISED HAND"
+              },
+              {
+                "where": "A row of brains ascending in size from a small primate brain to a much larger human brain, each simply a bigger version of the last, no new parts added.",
+                "title": "PRIMATE BRAIN, SCALED UP"
+              },
+              {
+                "where": "Tiny blue-green organisms adrift in a sea, each one releasing a stream of marks and symbols into the water around it, which drift and accumulate.",
+                "title": "CYANOBACTERIA OF AI"
+              },
+              {
+                "where": "A set of balance-scales, one pan holding a labelled weight, the other pan empty and shrouded in mist, with a signpost pointing onward into fog.",
+                "title": "THIRTY PERCENT UNKNOWN"
+              },
+              {
+                "where": "A cluttered kitchen sink full of pots, pans and tools being hurled bodily at a stone wall, utensils splattering and sticking where they land.",
+                "title": "AGENT57'S KITCHEN SINK"
+              },
+              {
+                "where": "A slender rocket lifting off from a small workshop, trailing fire, aimed directly at a round pale moon overhead.",
+                "title": "SHOOT FOR THE MOON"
+              },
+              {
+                "where": "On one side a handful of robed figures are crowned with laurel; on the other, cloaked figures stand with heads bowed and faces hidden.",
+                "title": "HONOR TO THE FANATICS"
+              },
+              {
+                "where": "A small wheeled robot arm reaching across a tabletop toward a can, following a command, shown hanging off to the side of the main page on a thin gilt tendril rather than the main chain.",
+                "title": "ROBOT FETCHES THE CAN"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-the-theory",
+            "title": "Why Scale Works",
+            "prompt": "An illuminated manuscript page on cream vellum with gold-leaf border, continuing the same gold vine-chain, deep blue and oxblood ink, muted colour washes. At the very top, framed as the entry roundel (matching the overview plate exactly), the robotic hand turning an object amid ghostly duplicates (DACTYL'S PRACTISED HAND). The chain descends to a robed figure shown as a crowd of smaller blended figures (ENSEMBLE OF SUB-MODELS), then to a traveller on an easy marked footpath beside an unused longer road (LAZY SHORTCUTS WIN FIRST), then to a brain-shaped lattice stretched evenly over a page of text, a picture, and a game board (ONE ARCHITECTURE EVERYWHERE), then to a car's road forking again and again into a long tail of paths (LONG TAIL OF DRIVING). From there the chain forks into two side-by-side roundels: on the left a girl eating ice cream with a corrected thought-bubble word (JANELLE'S ICE CREAM SLIP), on the right a hand lifting a tea mug beside a figure descending an immense staircase (TEA MUG, THOUSAND STEPS); both links rejoin into a single roundel of a stage magician gesturing over a covered box amid diagrams (THE MAGIC TRICK). The chain ends at the bottom in a final roundel: the balance-scales with one pan empty in fog beside a signpost (THIRTY PERCENT UNKNOWN). Each roundel is captioned beneath in plain capitals; no other lettering appears anywhere on the page — no banners, scrolls, or inscriptions. Scenes are large enough to read clearly, spaced with generous bare vellum, modest foliate corner ornament only, filling the width of the page rather than huddling in a narrow column.",
+            "vignettes": [
+              {
+                "block": "spya-ypbup8",
+                "quote": "Training Dactyl (or humanoid robots) on millions of domain randomizations induced similar implicit meta-learning",
+                "depicts": "The same robotic hand turning an object amid countless faint duplicate objects, framing the top of the plate exactly as it appeared in the overview, marking entry into this part of the chain.",
+                "title": "DACTYL'S PRACTISED HAND",
+                "node": "examples"
+              },
+              {
+                "block": "spya-grkhs8",
+                "quote": "They function as an ensemble: even though there are countless overfit sub-models inside the single big model",
+                "depicts": "A single large robed figure revealed, on close inspection, to be composed of a crowd of smaller overlapping figures all blended together into one averaged shape.",
+                "title": "ENSEMBLE OF SUB-MODELS",
+                "node": "ensemble"
+              },
+              {
+                "block": "spya-m3gtj6",
+                "quote": "once we find a scalable architecture like self-attention or convolutions, which like the brain can be applied fairly uniformly",
+                "depicts": "A single brain-shaped lattice stretched evenly like a net over several different scenes — a page of text, a picture, a game board — applied the same way to each.",
+                "title": "ONE ARCHITECTURE EVERYWHERE",
+                "node": "hyp"
+              },
+              {
+                "block": "spya-h74fhr",
+                "quote": "the long tail of scenarios for tasks like self-driving cars or natural language can only be solved by true generalization",
+                "depicts": "A car on a road that branches again and again into a long tail of smaller and smaller forking paths, each a rare and different scenario.",
+                "title": "LONG TAIL OF DRIVING",
+                "node": "pretrainthesis"
+              },
+              {
+                "block": "spya-rz8jsm",
+                "quote": "Janelle ate some ice cream, because he likes sweet things like ice cream",
+                "depicts": "A girl eating ice cream, with a thought-bubble showing the word 'he' crossed out and corrected, a single wrong letter standing for a whole broken sentence.",
+                "title": "JANELLE'S ICE CREAM SLIP",
+                "node": "pronouns"
+              },
+              {
+                "block": "spya-vss5vs",
+                "quote": "We all pick up a tea mug without dropping, and can lift our legs to walk down thousands of steps",
+                "depicts": "A hand lifting a tea mug without spilling a drop, beside a figure walking calmly down an immense staircase of thousands of steps without stumbling.",
+                "title": "TEA MUG, THOUSAND STEPS",
+                "node": "deepest"
+              },
+              {
+                "block": "spya-e5n86h",
+                "quote": "here’s some information theory, here’s a human benchmark, here’s how we can encode all tasks as a sequence prediction problem",
+                "depicts": "A stage magician at a table covered with diagrams and measuring tools, mid-gesture over a covered box, as if the whole argument were a conjuring trick about to be revealed.",
+                "title": "THE MAGIC TRICK",
+                "node": "doubt"
+              },
+              {
+                "block": "spya-edr6mj",
+                "quote": "what capabilities would another ~30% improvement over GPT-3 gain?",
+                "depicts": "The same balance-scales from the overview, one pan weighted, the other empty and lost in fog, closing the plate on an open question.",
+                "title": "THIRTY PERCENT UNKNOWN",
+                "node": "gpt4b"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "The same robotic hand turning an object amid countless faint duplicate objects, framing the top of the plate exactly as it appeared in the overview, marking entry into this part of the chain.",
+                "title": "DACTYL'S PRACTISED HAND"
+              },
+              {
+                "where": "A single large robed figure revealed, on close inspection, to be composed of a crowd of smaller overlapping figures all blended together into one averaged shape.",
+                "title": "ENSEMBLE OF SUB-MODELS"
+              },
+              {
+                "where": "A traveller taking a short, easy footpath through a maze marked with memorized note-cards, while a longer true path lies unused beside it.",
+                "title": "LAZY SHORTCUTS WIN FIRST"
+              },
+              {
+                "where": "A single brain-shaped lattice stretched evenly like a net over several different scenes — a page of text, a picture, a game board — applied the same way to each.",
+                "title": "ONE ARCHITECTURE EVERYWHERE"
+              },
+              {
+                "where": "A car on a road that branches again and again into a long tail of smaller and smaller forking paths, each a rare and different scenario.",
+                "title": "LONG TAIL OF DRIVING"
+              },
+              {
+                "where": "A girl eating ice cream, with a thought-bubble showing the word 'he' crossed out and corrected, a single wrong letter standing for a whole broken sentence.",
+                "title": "JANELLE'S ICE CREAM SLIP"
+              },
+              {
+                "where": "A hand lifting a tea mug without spilling a drop, beside a figure walking calmly down an immense staircase of thousands of steps without stumbling.",
+                "title": "TEA MUG, THOUSAND STEPS"
+              },
+              {
+                "where": "A stage magician at a table covered with diagrams and measuring tools, mid-gesture over a covered box, as if the whole argument were a conjuring trick about to be revealed.",
+                "title": "THE MAGIC TRICK"
+              },
+              {
+                "where": "The same balance-scales from the overview, one pan weighted, the other empty and lost in fog, closing the plate on an open question.",
+                "title": "THIRTY PERCENT UNKNOWN"
+              }
+            ]
+          },
+          {
+            "sceneId": "inside-agency",
+            "title": "Agency All The Way Down",
+            "prompt": "An illuminated manuscript page on cream vellum, gold-leaf border, the same gold vine-chain descending the page, deep blue and oxblood ink, muted washes. At the top, as the entry roundel matching the overview's aside exactly, the small wheeled robot arm reaching for a can on a table (ROBOT FETCHES THE CAN). The chain descends to a human figure dissolving at its edges into the same drifting dust as a swirling cloud beside it (DUST, ROCK, OR HUMAN), then to a winding river flowing toward a distant sea with a faint face in its water (RIVER WANTS THE OCEAN), then to a hand tracing a finger along a map of that same river's course (TRACING THE RIVER'S PATH), then to a single pale planet circling alone in empty space (PLUTO ALONE IN ORBIT). From there the chain forks into two side-by-side roundels: on the left a grid of black-and-white cells with one small cluster drifting across it like a creature (GLIDERS IN THE GRID), on the right a figure leaning over a fence watching another perform a repeated odd action (THE NEIGHBOR'S WEIRD THING); both links rejoin into a final roundel at the bottom showing sailors patching one leak on a listing ship while water sprays from a second hole (PATCHING THE SINKING SHIP). Each roundel is captioned beneath in plain capital lettering; nothing else on the page carries any words — no banners, no scrolls, no inscriptions. Keep scenes large and legible, using the full width of the page for the two forking roundels, generous bare vellum between registers, only light foliate ornament in the corners.",
+            "vignettes": [
+              {
+                "block": "spya-fm6pfc",
+                "quote": "giving a SayCan robot an instruction to ‘fetch a can of Coke and bring it to me’",
+                "depicts": "The same small wheeled robot arm reaching for a can on a table, framing the top of this plate exactly as in the overview's aside, marking entry into this part of the chain.",
+                "title": "ROBOT FETCHES THE CAN",
+                "node": "itfb"
+              },
+              {
+                "block": "spya-ehe426",
+                "quote": "the river-spirit wants to reunite with the ocean",
+                "depicts": "A winding river flowing down through hills toward a distant sea, with a faint small face sketched into the water's surface, reaching toward the waves.",
+                "title": "RIVER WANTS THE OCEAN",
+                "node": "stance"
+              },
+              {
+                "block": "spya-ehe426",
+                "quote": "without simulating it down to the individual water currents, I can look at the map",
+                "depicts": "A hand tracing a finger along a drawn map of the same river's course, skipping over the water entirely to read off its path at a glance.",
+                "title": "TRACING THE RIVER'S PATH",
+                "node": "variational"
+              },
+              {
+                "block": "spya-dbrxu8",
+                "quote": "For a single problem like modeling the orbit of Pluto, it is unlikely that any variational approach would be learned",
+                "depicts": "A single small pale planet circling alone in empty space, with no swirling halo of extra structure around it — just one plain orbit.",
+                "title": "PLUTO ALONE IN ORBIT",
+                "node": "expensive"
+              },
+              {
+                "block": "spya-dxftyx",
+                "quote": "Humans, of course, look at a GoL as a bunch of small entities like ‘gliders’",
+                "depicts": "A grid of black-and-white cells with one small cluster of marked cells drifting diagonally across it, singled out as if it were a little creature journeying through empty squares.",
+                "title": "GLIDERS IN THE GRID",
+                "node": "ca"
+              },
+              {
+                "block": "spya-usu3q6",
+                "quote": "You may not know why your neighbor does that weird thing he does",
+                "depicts": "A figure leaning over a garden fence, watching another figure across the way perform a repeated odd action in their yard, trying to read a pattern in it.",
+                "title": "THE NEIGHBOR'S WEIRD THING",
+                "node": "metatm"
+              },
+              {
+                "block": "spya-jrm0w9",
+                "quote": "as soon as one hole in the sinking ship is patched, you notice another leak spring up",
+                "depicts": "Sailors on a listing wooden ship hammering a patch over one leak while water already sprays in through a second hole nearby.",
+                "title": "PATCHING THE SINKING SHIP",
+                "node": "ambient"
+              }
+            ],
+            "lettering": [
+              {
+                "where": "The same small wheeled robot arm reaching for a can on a table, framing the top of this plate exactly as in the overview's aside, marking entry into this part of the chain.",
+                "title": "ROBOT FETCHES THE CAN"
+              },
+              {
+                "where": "A human figure dissolving at its edges into the same drifting specks of dust as a swirling cloud beside it in open space, with no visible seam between them.",
+                "title": "DUST, ROCK, OR HUMAN"
+              },
+              {
+                "where": "A winding river flowing down through hills toward a distant sea, with a faint small face sketched into the water's surface, reaching toward the waves.",
+                "title": "RIVER WANTS THE OCEAN"
+              },
+              {
+                "where": "A hand tracing a finger along a drawn map of the same river's course, skipping over the water entirely to read off its path at a glance.",
+                "title": "TRACING THE RIVER'S PATH"
+              },
+              {
+                "where": "A single small pale planet circling alone in empty space, with no swirling halo of extra structure around it — just one plain orbit.",
+                "title": "PLUTO ALONE IN ORBIT"
+              },
+              {
+                "where": "A grid of black-and-white cells with one small cluster of marked cells drifting diagonally across it, singled out as if it were a little creature journeying through empty squares.",
+                "title": "GLIDERS IN THE GRID"
+              },
+              {
+                "where": "A figure leaning over a garden fence, watching another figure across the way perform a repeated odd action in their yard, trying to read a pattern in it.",
+                "title": "THE NEIGHBOR'S WEIRD THING"
+              },
+              {
+                "where": "Sailors on a listing wooden ship hammering a patch over one leak while water already sprays in through a second hole nearby.",
+                "title": "PATCHING THE SINKING SHIP"
+              }
+            ]
+          }
+        ],
+        "generator": "claude-sonnet-5",
+        "illustrator": "google/gemini-3.1-flash-image",
+        "slug": "scaling-hypothesis",
+        "profileHash": null
+      },
+      "cancelled": false,
+      "raw": "{\"style\":\"An illuminated manuscript page — gold-leafed roundels linked by vine-chains down vellum, because the piece itself is framed as a chain of causes with a fork and a hanging aside, and its evidence is full of parables (rivers, cyanobacteria, sinking ships) that read naturally as manuscript emblems.\",\"plates\":[{\"sceneId\":\"overview\",\"title\":\"The Chain of Scale\",\"vignettes\":[{\"node\":\"gpt3\",\"block\":\"spya-fvqe70\",\"quote\":\"and yet, the first version already manifests crazy runtime meta-learning—and the scaling curves still are not bending!\",\"depicts\":\"A battered, old-fashioned engine of gears and belts, clearly obsolete, still turning smoothly; behind it a line on a chart climbs on and on without ever levelling off.\",\"title\":\"OLD ENGINE, RISING CURVE\"},{\"node\":\"meta\",\"block\":\"spya-aqts9c\",\"quote\":\"to English translation to unscrambling anagrams to SAT analogies\",\"depicts\":\"A single seated figure surrounded by scattered cards: foreign-language phrases, jumbled letters rearranging themselves, and a multiple-choice analogy puzzle, all being solved at once without separate training for each.\",\"title\":\"ANAGRAMS AND ANALOGIES\"},{\"node\":\"blessings\",\"block\":\"spya-ypbup8\",\"quote\":\"Training Dactyl (or humanoid robots) on millions of domain randomizations induced similar implicit meta-learning\",\"depicts\":\"A robotic hand turning an object in its fingers, encircled by many faint overlapping copies of the same object in different colours and sizes, showing countless randomized versions it has practiced on.\",\"title\":\"DACTYL'S PRACTISED HAND\"},{\"node\":\"hypothesis\",\"block\":\"spya-m3gtj6\",\"quote\":\"human brains look much like scaled-up primate brains\",\"depicts\":\"A row of brains ascending in size from a small primate brain to a much larger human brain, each simply a bigger version of the last, no new parts added.\",\"title\":\"PRIMATE BRAIN, SCALED UP\"},{\"node\":\"pretrain\",\"block\":\"spya-h74fhr\",\"quote\":\"Humans, one might say, are the cyanobacteria of AI\",\"depicts\":\"Tiny blue-green organisms adrift in a sea, each one releasing a stream of marks and symbols into the water around it, which drift and accumulate.\",\"title\":\"CYANOBACTERIA OF AI\"},{\"node\":\"gpt4\",\"block\":\"spya-edr6mj\",\"quote\":\"what capabilities would another ~30% improvement over GPT-3 gain?\",\"depicts\":\"A set of balance-scales, one pan holding a labelled weight, the other pan empty and shrouded in mist, with a signpost pointing onward into fog.\",\"title\":\"THIRTY PERCENT UNKNOWN\"},{\"node\":\"deepmind\",\"block\":\"spya-vr9q2p\",\"quote\":\"DM contraptions like Agent57 which throw the kitchen sink at the wall to see what sticks\",\"depicts\":\"A cluttered kitchen sink full of pots, pans and tools being hurled bodily at a stone wall, utensils splattering and sticking where they land.\",\"title\":\"AGENT57'S KITCHEN SINK\"},{\"node\":\"openai\",\"block\":\"spya-arrq35\",\"quote\":\"OA LP, while controlled by OA, can then shoot for the moon.\",\"depicts\":\"A slender rocket lifting off from a small workshop, trailing fire, aimed directly at a round pale moon overhead.\",\"title\":\"SHOOT FOR THE MOON\"},{\"node\":\"critics\",\"block\":\"spya-b93jbz\",\"quote\":\"all honor to the fanatics, shame and humiliation to the critics!\",\"depicts\":\"On one side a handful of robed figures are crowned with laurel; on the other, cloaked figures stand with heads bowed and faces hidden.\",\"title\":\"HONOR TO THE FANATICS\"},{\"node\":\"agency\",\"block\":\"spya-fm6pfc\",\"quote\":\"giving a SayCan robot an instruction to ‘fetch a can of Coke and bring it to me’\",\"depicts\":\"A small wheeled robot arm reaching across a tabletop toward a can, following a command, shown hanging off to the side of the main page on a thin gilt tendril rather than the main chain.\",\"title\":\"ROBOT FETCHES THE CAN\"}],\"prompt\":\"An illuminated manuscript page on cream vellum, bordered in gold leaf with a thin vine-chain of gold links running down the centre of the page connecting roundels in strict top-to-bottom reading order, deep blue and oxblood-red ink for linework, muted period colour washes inside each roundel. At the top, under the first framed register, two roundels side by side joined by a short link: an old gear-and-belt engine still turning smoothly beside a rising, unbending chart-line (OLD ENGINE, RISING CURVE), and a seated figure ringed by cards of foreign phrases, jumbled letters, and a puzzle (ANAGRAMS AND ANALOGIES). The chain descends into a second register: a robotic hand turning an object amid ghostly duplicate objects (DACTYL'S PRACTISED HAND), then a row of brains growing from small to large (PRIMATE BRAIN, SCALED UP). The chain continues into a third register: tiny blue-green organisms releasing marks into water (CYANOBACTERIA OF AI), then a balance-scale with one pan empty in fog beside a signpost (THIRTY PERCENT UNKNOWN). The chain then forks into two parallel roundels side by side: a kitchen sink's pots and tools hurled at a wall (AGENT57'S KITCHEN SINK) on the left, and a rocket launching toward the moon from a workshop (SHOOT FOR THE MOON) on the right; both gold links rejoin into a single roundel below showing crowned robed figures beside bowed cloaked ones (HONOR TO THE FANATICS). Below and slightly to one side, connected not by the main chain but by a thin separate gilt tendril curling off the page's edge, a small pendant roundel shows a wheeled robot arm reaching for a can on a table (ROBOT FETCHES THE CAN), visually marked as a late aside rather than part of the main descent. Each roundel has its capitalized title lettered in a plain serif beneath it on the vellum; nothing else on the page is lettered — no banners, no scrolls, no other inscriptions. Generous bare vellum between registers; only restrained foliate corner ornament, never crowding the scenes.\"},{\"sceneId\":\"inside-the-theory\",\"title\":\"Why Scale Works\",\"vignettes\":[{\"node\":\"examples\",\"block\":\"spya-ypbup8\",\"quote\":\"Training Dactyl (or humanoid robots) on millions of domain randomizations induced similar implicit meta-learning\",\"depicts\":\"The same robotic hand turning an object amid countless faint duplicate objects, framing the top of the plate exactly as it appeared in the overview, marking entry into this part of the chain.\",\"title\":\"DACTYL'S PRACTISED HAND\"},{\"node\":\"ensemble\",\"block\":\"spya-grkhs8\",\"quote\":\"They function as an ensemble: even though there are countless overfit sub-models inside the single big model\",\"depicts\":\"A single large robed figure revealed, on close inspection, to be composed of a crowd of smaller overlapping figures all blended together into one averaged shape.\",\"title\":\"ENSEMBLE OF SUB-MODELS\"},{\"node\":\"lazy\",\"block\":\"spya-uknzzk\",\"quote\":\"sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally\",\"depicts\":\"A traveller taking a short, easy footpath through a maze marked with memorized note-cards, while a longer true path lies unused beside it.\",\"title\":\"LAZY SHORTCUTS WIN FIRST\"},{\"node\":\"hyp\",\"block\":\"spya-m3gtj6\",\"quote\":\"once we find a scalable architecture like self-attention or convolutions, which like the brain can be applied fairly uniformly\",\"depicts\":\"A single brain-shaped lattice stretched evenly like a net over several different scenes — a page of text, a picture, a game board — applied the same way to each.\",\"title\":\"ONE ARCHITECTURE EVERYWHERE\"},{\"node\":\"pretrainthesis\",\"block\":\"spya-h74fhr\",\"quote\":\"the long tail of scenarios for tasks like self-driving cars or natural language can only be solved by true generalization\",\"depicts\":\"A car on a road that branches again and again into a long tail of smaller and smaller forking paths, each a rare and different scenario.\",\"title\":\"LONG TAIL OF DRIVING\"},{\"node\":\"pronouns\",\"block\":\"spya-rz8jsm\",\"quote\":\"Janelle ate some ice cream, because he likes sweet things like ice cream\",\"depicts\":\"A girl eating ice cream, with a thought-bubble showing the word 'he' crossed out and corrected, a single wrong letter standing for a whole broken sentence.\",\"title\":\"JANELLE'S ICE CREAM SLIP\"},{\"node\":\"deepest\",\"block\":\"spya-vss5vs\",\"quote\":\"We all pick up a tea mug without dropping, and can lift our legs to walk down thousands of steps\",\"depicts\":\"A hand lifting a tea mug without spilling a drop, beside a figure walking calmly down an immense staircase of thousands of steps without stumbling.\",\"title\":\"TEA MUG, THOUSAND STEPS\"},{\"node\":\"doubt\",\"block\":\"spya-e5n86h\",\"quote\":\"here’s some information theory, here’s a human benchmark, here’s how we can encode all tasks as a sequence prediction problem\",\"depicts\":\"A stage magician at a table covered with diagrams and measuring tools, mid-gesture over a covered box, as if the whole argument were a conjuring trick about to be revealed.\",\"title\":\"THE MAGIC TRICK\"},{\"node\":\"gpt4b\",\"block\":\"spya-edr6mj\",\"quote\":\"what capabilities would another ~30% improvement over GPT-3 gain?\",\"depicts\":\"The same balance-scales from the overview, one pan weighted, the other empty and lost in fog, closing the plate on an open question.\",\"title\":\"THIRTY PERCENT UNKNOWN\"}],\"prompt\":\"An illuminated manuscript page on cream vellum with gold-leaf border, continuing the same gold vine-chain, deep blue and oxblood ink, muted colour washes. At the very top, framed as the entry roundel (matching the overview plate exactly), the robotic hand turning an object amid ghostly duplicates (DACTYL'S PRACTISED HAND). The chain descends to a robed figure shown as a crowd of smaller blended figures (ENSEMBLE OF SUB-MODELS), then to a traveller on an easy marked footpath beside an unused longer road (LAZY SHORTCUTS WIN FIRST), then to a brain-shaped lattice stretched evenly over a page of text, a picture, and a game board (ONE ARCHITECTURE EVERYWHERE), then to a car's road forking again and again into a long tail of paths (LONG TAIL OF DRIVING). From there the chain forks into two side-by-side roundels: on the left a girl eating ice cream with a corrected thought-bubble word (JANELLE'S ICE CREAM SLIP), on the right a hand lifting a tea mug beside a figure descending an immense staircase (TEA MUG, THOUSAND STEPS); both links rejoin into a single roundel of a stage magician gesturing over a covered box amid diagrams (THE MAGIC TRICK). The chain ends at the bottom in a final roundel: the balance-scales with one pan empty in fog beside a signpost (THIRTY PERCENT UNKNOWN). Each roundel is captioned beneath in plain capitals; no other lettering appears anywhere on the page — no banners, scrolls, or inscriptions. Scenes are large enough to read clearly, spaced with generous bare vellum, modest foliate corner ornament only, filling the width of the page rather than huddling in a narrow column.\"},{\"sceneId\":\"inside-agency\",\"title\":\"Agency All The Way Down\",\"vignettes\":[{\"node\":\"itfb\",\"block\":\"spya-fm6pfc\",\"quote\":\"giving a SayCan robot an instruction to ‘fetch a can of Coke and bring it to me’\",\"depicts\":\"The same small wheeled robot arm reaching for a can on a table, framing the top of this plate exactly as in the overview's aside, marking entry into this part of the chain.\",\"title\":\"ROBOT FETCHES THE CAN\"},{\"node\":\"atoms\",\"block\":\"spya-yb6wsc\",\"quote\":\"An agentic human is made out of the same fundamental things as a clump of dust swirling in space\",\"depicts\":\"A human figure dissolving at its edges into the same drifting specks of dust as a swirling cloud beside it in open space, with no visible seam between them.\",\"title\":\"DUST, ROCK, OR HUMAN\"},{\"node\":\"stance\",\"block\":\"spya-ehe426\",\"quote\":\"the river-spirit wants to reunite with the ocean\",\"depicts\":\"A winding river flowing down through hills toward a distant sea, with a faint small face sketched into the water's surface, reaching toward the waves.\",\"title\":\"RIVER WANTS THE OCEAN\"},{\"node\":\"variational\",\"block\":\"spya-ehe426\",\"quote\":\"without simulating it down to the individual water currents, I can look at the map\",\"depicts\":\"A hand tracing a finger along a drawn map of the same river's course, skipping over the water entirely to read off its path at a glance.\",\"title\":\"TRACING THE RIVER'S PATH\"},{\"node\":\"expensive\",\"block\":\"spya-dbrxu8\",\"quote\":\"For a single problem like modeling the orbit of Pluto, it is unlikely that any variational approach would be learned\",\"depicts\":\"A single small pale planet circling alone in empty space, with no swirling halo of extra structure around it — just one plain orbit.\",\"title\":\"PLUTO ALONE IN ORBIT\"},{\"node\":\"ca\",\"block\":\"spya-dxftyx\",\"quote\":\"Humans, of course, look at a GoL as a bunch of small entities like ‘gliders’\",\"depicts\":\"A grid of black-and-white cells with one small cluster of marked cells drifting diagonally across it, singled out as if it were a little creature journeying through empty squares.\",\"title\":\"GLIDERS IN THE GRID\"},{\"node\":\"metatm\",\"block\":\"spya-usu3q6\",\"quote\":\"You may not know why your neighbor does that weird thing he does\",\"depicts\":\"A figure leaning over a garden fence, watching another figure across the way perform a repeated odd action in their yard, trying to read a pattern in it.\",\"title\":\"THE NEIGHBOR'S WEIRD THING\"},{\"node\":\"ambient\",\"block\":\"spya-jrm0w9\",\"quote\":\"as soon as one hole in the sinking ship is patched, you notice another leak spring up\",\"depicts\":\"Sailors on a listing wooden ship hammering a patch over one leak while water already sprays in through a second hole nearby.\",\"title\":\"PATCHING THE SINKING SHIP\"}],\"prompt\":\"An illuminated manuscript page on cream vellum, gold-leaf border, the same gold vine-chain descending the page, deep blue and oxblood ink, muted washes. At the top, as the entry roundel matching the overview's aside exactly, the small wheeled robot arm reaching for a can on a table (ROBOT FETCHES THE CAN). The chain descends to a human figure dissolving at its edges into the same drifting dust as a swirling cloud beside it (DUST, ROCK, OR HUMAN), then to a winding river flowing toward a distant sea with a faint face in its water (RIVER WANTS THE OCEAN), then to a hand tracing a finger along a map of that same river's course (TRACING THE RIVER'S PATH), then to a single pale planet circling alone in empty space (PLUTO ALONE IN ORBIT). From there the chain forks into two side-by-side roundels: on the left a grid of black-and-white cells with one small cluster drifting across it like a creature (GLIDERS IN THE GRID), on the right a figure leaning over a fence watching another perform a repeated odd action (THE NEIGHBOR'S WEIRD THING); both links rejoin into a final roundel at the bottom showing sailors patching one leak on a listing ship while water sprays from a second hole (PATCHING THE SINKING SHIP). Each roundel is captioned beneath in plain capital lettering; nothing else on the page carries any words — no banners, no scrolls, no inscriptions. Keep scenes large and legible, using the full width of the page for the two forking roundels, generous bare vellum between registers, only light foliate ornament in the corners.\"}]}",
+      "report": {
+        "faults": [
+          {
+            "where": "plate[1].vignettes[2]",
+            "what": "quote is 21 words, over the 20 the prompt asks for"
+          },
+          {
+            "where": "plate[2].vignettes[1]",
+            "what": "quote is not in block spya-yb6wsc"
+          }
+        ],
+        "written": 27,
+        "kept": 25,
+        "platesWritten": 3,
+        "platesKept": 3
+      },
+      "model": "claude-sonnet-5",
+      "imageModel": "google/gemini-3.1-flash-image",
+      "inputTokens": 33716,
+      "outputTokens": 26905,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "briefMs": 245474,
+      "draws": [
+        {
+          "sceneId": "overview",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": false,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-the-theory",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        },
+        {
+          "sceneId": "inside-agency",
+          "image": {
+            "0": 0
+          },
+          "mediaType": "image/png",
+          "usdCost": 0,
+          "elapsedMs": 0,
+          "usedReference": true,
+          "figures": 0
+        }
+      ],
+      "elapsedMs": 245496
+    },
+    "faq": {
+      "faq": {
+        "version": "faq/6",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.0578e196164734a1",
+        "questions": [
+          {
+            "id": "spya-ut5g3k",
+            "question": "Why would GPT-3 develop meta-learning abilities when it wasn't built or trained to do that?",
+            "passages": [
+              {
+                "blockId": "spya-ewxv9q",
+                "quote": "this is enough to drive meta-learning despite GPT not being designed for meta-learning in any way",
+                "start": 2423
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.8
+          },
+          {
+            "id": "spya-my5j39",
+            "question": "Why wouldn't a vastly larger model just overfit more, instead of generalizing better?",
+            "passages": [
+              {
+                "blockId": "spya-djq0xk",
+                "quote": "Why do larger models not overfit (though they can) and generalize better than smaller models?",
+                "start": 192
+              }
+            ],
+            "difficulty": 0.5,
+            "centrality": 0.9
+          },
+          {
+            "id": "spya-x0ts3k",
+            "question": "If neural networks default to lazy shortcuts like memorization, what stops scale from just producing bigger shortcuts instead of real learning?",
+            "passages": [
+              {
+                "blockId": "spya-uknzzk",
+                "quote": "sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.",
+                "start": 33
+              }
+            ],
+            "difficulty": 0.6,
+            "centrality": 0.7
+          },
+          {
+            "id": "spya-amyq8u",
+            "question": "What exactly separates a model's prediction accuracy from true human-level understanding, given the remaining numerical gap is so tiny?",
+            "passages": [
+              {
+                "blockId": "spya-rjwfkb",
+                "quote": "What is in that missing >0.4?",
+                "start": 195
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-tqxut5",
+            "question": "Isn't the pretraining thesis's leap from 'lower loss' to 'genuine understanding' just a neat-sounding trick rather than a proven mechanism?",
+            "passages": [
+              {
+                "blockId": "spya-faees7",
+                "quote": "Why think pretraining or sequence modeling is not another one of them?",
+                "start": 0
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.8
+          },
+          {
+            "id": "spya-jj6dms",
+            "question": "If GPT-3's scale is cheap by military or government budget standards, why hasn't a full-blown AI arms race started?",
+            "passages": [
+              {
+                "blockId": "spya-scr8jb",
+                "quote": "they do not have any such thing, because Google Brain & DeepMind do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do.",
+                "start": 54
+              }
+            ],
+            "difficulty": 0.2,
+            "centrality": 0.7
+          },
+          {
+            "id": "spya-a08g5b",
+            "question": "Given GPT-3's scaling curves keep improving, why are so many researchers still dismissive of pushing scale further?",
+            "passages": [
+              {
+                "blockId": "spya-scr8jb",
+                "quote": "Just read through machine learning Twitter to see the disdain for the scaling hypothesis.",
+                "start": 212
+              }
+            ],
+            "difficulty": 0.3,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-sfa8vv",
+            "question": "If DeepMind has the compute and talent, why hasn't it built its own GPT-3-scale model?",
+            "passages": [
+              {
+                "blockId": "spya-vr9q2p",
+                "quote": "they still need to be invented & finetuned piece by piece, with little risk or surprise until the final assembly.",
+                "start": 433
+              }
+            ],
+            "difficulty": 0.4,
+            "centrality": 0.6
+          },
+          {
+            "id": "spya-hupvmy",
+            "question": "Does feeding a model data from just one Turing machine already risk inducing agent-like behavior, or does that only happen across many machines?",
+            "passages": [
+              {
+                "blockId": "spya-ufpyk0",
+                "quote": "There is nothing that random TM programs try to minimize or maximize; they simply run.",
+                "start": 305
+              }
+            ],
+            "difficulty": 0.7,
+            "centrality": 0.5
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 11,
+          "tooLong": 0,
+          "duplicate": 0,
+          "unanchored": 2,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "generatedAt": "2026-10-03T04:03:57.752Z",
+        "elapsedMs": 67574
+      },
+      "blocks": 186,
+      "words": 12646,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 11,
+        "tooLong": 0,
+        "duplicate": 0,
+        "unanchored": 2,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scoreDrops": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 30857,
+      "outputTokens": 8059,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "maxTokens": 45920,
+      "elapsedMs": 67581
+    },
+    "quiz": {
+      "quiz": {
+        "version": "quiz/7",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.0578e196164734a1",
+        "batchId": "spya-gghpyc",
+        "questions": [
+          {
+            "id": "spya-u90m80",
+            "question": "When OpenAI released GPT-3, how much larger was it than GPT-2, in terms of parameters?",
+            "referenceAnswer": "GPT-3 had 175 billion parameters, making it about 117 times larger than GPT-2.",
+            "evidence": [
+              {
+                "blockId": "spya-aqts9c",
+                "quote": "a 117× larger 175b-parameter model",
+                "start": 245
+              }
+            ]
+          },
+          {
+            "id": "spya-k7x2ze",
+            "question": "Beyond simply knowing more facts and text than GPT-2, what qualitatively new ability did GPT-3 demonstrate?",
+            "premise": "GPT-3 is about 117 times larger than GPT-2.",
+            "referenceAnswer": "It showed meta-learning: instead of just learning to do a fixed task like summarization, it learned to follow instructions and pick up new tasks from just a few examples given in the prompt.",
+            "evidence": [
+              {
+                "blockId": "spya-ewxv9q",
+                "quote": "while GPT-2 learned how to do common natural language tasks like text summarization, GPT-3 instead learned how to follow directions and learn new tasks from a few examples.",
+                "start": 621
+              }
+            ]
+          },
+          {
+            "id": "spya-w09ert",
+            "question": "What kind of architecture did GPT-3 actually use, despite these surprising new abilities?",
+            "premise": "GPT-3 learned to follow instructions and perform new tasks from a few prompted examples.",
+            "referenceAnswer": "An old, simple architecture, originally from early 2018, that the author calls small and shallow compared to what's now possible, kept mainly for engineering convenience.",
+            "evidence": [
+              {
+                "blockId": "spya-fvqe70",
+                "quote": "it’s a magnificently obsolete architecture from early 2018 (used mostly for software engineering convenience as the infrastructure has been debugged), which is small & shallow compared to what’s possible",
+                "start": 254
+              }
+            ]
+          },
+          {
+            "id": "spya-a4abxx",
+            "question": "What did GPT-3's scaling curves show about whether bigger models were running into diminishing returns?",
+            "premise": "GPT-3's architecture was old and simple, yet its abilities were striking.",
+            "referenceAnswer": "Its performance kept improving along the same smooth logarithmic/power-law trend seen at smaller sizes, with no sign of the gains flattening out or requiring infeasible increases in scale.",
+            "evidence": [
+              {
+                "blockId": "spya-asr663",
+                "quote": "its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast, and it has not hit a regime where gains effectively halt or start to require increases vastly beyond feasibility.",
+                "start": 605
+              }
+            ]
+          },
+          {
+            "id": "spya-kmk0pa",
+            "question": "What did this continued scaling suggest was possible and worthwhile for future models?",
+            "premise": "GPT-3's scaling curve kept following the same smooth trend without flattening.",
+            "referenceAnswer": "It suggested it would be both possible and useful to push on to models with trillions of parameters, since that still fell within feasible compute and budgets.",
+            "evidence": [
+              {
+                "blockId": "spya-asr663",
+                "quote": "That suggests that it would be both possible and useful to head to trillions of parameters",
+                "start": 827
+              }
+            ]
+          },
+          {
+            "id": "spya-jc9w6h",
+            "question": "What objection do some researchers raise against further scaling, based on cost?",
+            "premise": "Continuing to scale up toward trillions of parameters looked both feasible and worthwhile.",
+            "referenceAnswer": "They see it as prohibitively expensive, questioning whether machine learning can justify projects costing a meaningful fraction of a Manhattan Project's budget.",
+            "evidence": [
+              {
+                "blockId": "spya-dfjr4c",
+                "quote": "Researchers are concerned about the prospects for scaling: can ML afford to run projects which cost more than 0.1 milli-Manhattan-Projects⸮",
+                "start": 414
+              }
+            ]
+          },
+          {
+            "id": "spya-ffpmte",
+            "question": "What term does the author use for the pattern that, in deep learning, hard problems become easier to solve as models, data, and compute all get larger?",
+            "referenceAnswer": "He calls it \"the blessings of scale\": everything about training gets better as scale increases, the opposite of most research where small things are easy and large things are hard.",
+            "evidence": [
+              {
+                "blockId": "spya-sfkxh8",
+                "quote": "The blessings of scale is the observation that for deep learning, hard problems are easier to solve than easy problems",
+                "start": 32
+              }
+            ]
+          },
+          {
+            "id": "spya-y5z8v2",
+            "question": "How does the author explain why large models develop better properties like generalization, using the idea of sub-models and an ensemble effect?",
+            "premise": "The blessings of scale means problems get easier to solve as models, data, and compute grow.",
+            "referenceAnswer": "He says a big model acts like an ensemble containing countless sub-models, which average out toward simple solutions, giving the overall model an Occam's-razor-like bias toward simplicity that can still expand to match the data.",
+            "evidence": [
+              {
+                "blockId": "spya-grkhs8",
+                "quote": "They function as an ensemble: even though there are countless overfit sub-models inside the single big model, they all average out, leading to a preference for simple solutions.",
+                "start": 319
+              }
+            ]
+          },
+          {
+            "id": "spya-bcmgfw",
+            "question": "Why does a sub-model that learns a genuine abstract algorithm, like true arithmetic, eventually win out over one that just memorizes examples, as data and scale increase?",
+            "premise": "Big models act like ensembles of sub-models that average out toward simple solutions.",
+            "referenceAnswer": "A memorizing sub-model is simpler at first, but it cannot memorize every instance in an internet-scale dataset without becoming huge and penalized, whereas a single abstract algorithm can handle all of them cheaply, so eventually the simplest accurate predictor is one that has actually learned the algorithm.",
+            "evidence": [
+              {
+                "blockId": "spya-vkkfzh",
+                "quote": "it can’t possibly memorize all the instances of arithmetic (implicit or explicit) in GPT-3’s Internet-scale dataset. If a memorizing sub-model tried to do so, it would become extremely large and penalized.",
+                "start": 574
+              }
+            ]
+          },
+          {
+            "id": "spya-nuekxj",
+            "question": "What is the \"strong scaling hypothesis\", as the author defines it?",
+            "premise": "Continued growth favors sub-models that learn genuine abstract algorithms over ones that merely memorize.",
+            "referenceAnswer": "The idea that once you have a scalable architecture like self-attention, simply training ever larger neural networks will cause increasingly sophisticated behavior to emerge naturally, since more powerful networks are essentially just scaled-up versions of weaker ones.",
+            "evidence": [
+              {
+                "blockId": "spya-m3gtj6",
+                "quote": "once we find a scalable architecture like self-attention or convolutions, which like the brain can be applied fairly uniformly (eg. “The Brain as a Universal Learning Machine” or Hawkins), we can simply train ever larger NNs and ever more sophisticated behavior will emerge naturally as the easiest way to optimize for all the tasks & data.",
+                "start": 39
+              }
+            ]
+          },
+          {
+            "id": "spya-trkuv3",
+            "question": "According to the pretraining thesis, what must a model ultimately develop in order to get as close as possible to perfect next-word prediction?",
+            "referenceAnswer": "Genuine understanding, including causality, commonsense reasoning, and theory of mind, because only true understanding, not surface pattern-matching, can keep improving prediction on the hardest remaining cases.",
+            "evidence": [
+              {
+                "blockId": "spya-g3b5y7",
+                "quote": "it needs to be able to reason our way through the most difficult textual scenarios requiring causality or commonsense reasoning",
+                "start": 130
+              }
+            ]
+          },
+          {
+            "id": "spya-cqqa3z",
+            "question": "About how low can humans get their prediction loss, measured in bits per character, on this same text-prediction task, according to the pretraining thesis discussion?",
+            "premise": "The pretraining thesis says only genuine understanding can close the remaining gap in prediction loss.",
+            "referenceAnswer": "Roughly 0.7 bits per character.",
+            "evidence": [
+              {
+                "blockId": "spya-rjwfkb",
+                "quote": "we can compare this performance directly with humans doing the same objective task, who can achieve closer to 0.7 bits per character",
+                "start": 61
+              }
+            ]
+          },
+          {
+            "id": "spya-t67507",
+            "question": "Despite finding the pretraining thesis logically compelling, what reservation does the author express about it?",
+            "premise": "Humans can reach about 0.7 bits per character, the level the pretraining thesis treats as requiring true understanding.",
+            "referenceAnswer": "He worries it feels too much like a magic trick, since there was no way to prove in advance that scaling would actually deliver such low loss in practice rather than stalling or requiring infeasible amounts of data or a different architecture.",
+            "evidence": [
+              {
+                "blockId": "spya-e5n86h",
+                "quote": "It feels too much like a magic trick",
+                "start": 259
+              },
+              {
+                "blockId": "spya-faees7",
+                "quote": "Why think pretraining or sequence modeling is not another one of them?",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-py90af",
+            "question": "Did anyone, according to the author, actually predict in advance and in quantitative terms that scaling would produce results like GPT-3's?",
+            "premise": "The author doubted in advance whether scaling would actually deliver on the pretraining thesis.",
+            "referenceAnswer": "No, the author says he is not aware of anyone who made such a quantitative prediction beforehand.",
+            "evidence": [
+              {
+                "blockId": "spya-uett4g",
+                "quote": "Q: Did anyone predict, quantitatively, that this would happen where it did?",
+                "start": 0
+              },
+              {
+                "blockId": "spya-mfqqfm",
+                "quote": "A: Not that I know of.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-hkh64j",
+            "question": "The author argues that major AI labs already have enough hardware and budget to match GPT-3. What does he say is actually missing?",
+            "referenceAnswer": "Conviction: the willingness to commit fully to the belief that scaling up existing methods with more data and compute will work, rather than a shortage of hardware or money.",
+            "evidence": [
+              {
+                "blockId": "spya-khnsat",
+                "quote": "will any organization treat GPT-3 as a Sputnik moment and invest aggressively in scaling programs?",
+                "start": 106
+              },
+              {
+                "blockId": "spya-scr8jb",
+                "quote": "But I think they lack a vision.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-xa26cb",
+            "question": "How does the author contrast OpenAI's and DeepMind's beliefs about what is needed for AGI?",
+            "premise": "The author says labs mostly lack conviction in scaling, not hardware or money.",
+            "referenceAnswer": "OpenAI bets on the strong scaling hypothesis, that simply scaling up simple architectures with more data and compute will produce intelligence, while DeepMind holds a weaker version, believing AGI requires finding and assembling the right algorithms piece by piece, reverse-engineering the brain module by module.",
+            "evidence": [
+              {
+                "blockId": "spya-vr9q2p",
+                "quote": "holds what we might call the “weak scaling hypothesis”: they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module",
+                "start": 41
+              },
+              {
+                "blockId": "spya-arrq35",
+                "quote": "OA, lacking anything like DM’s long-term funding from Google or its enormous headcount, is making a startup-like bet that they know an important truth which is a secret: “the scaling hypothesis is true!”",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-gh7gp8",
+            "question": "Why does the author say OpenAI restructured from a pure nonprofit into one that owns a for-profit subsidiary, OpenAI LP?",
+            "premise": "OpenAI, unlike DeepMind, bet fully on the strong scaling hypothesis.",
+            "referenceAnswer": "Because OpenAI lacked a huge endowment or a deep-pocketed backer like Google, so it needed a way to take in outside investment to pay for the massive compute and highly paid researchers that scaling requires.",
+            "evidence": [
+              {
+                "blockId": "spya-arrq35",
+                "quote": "lacking any enormous endowment or extremely deep-pocketed patron like Google, where does it get the money to scale (or hire machine learning engineer/researchers who can command salaries in the millions)?",
+                "start": 529
+              }
+            ]
+          },
+          {
+            "id": "spya-qcgtha",
+            "question": "What does the author say characterizes the 'tone of voice' used by confident experts who predicted AI progress would stall, regardless of whether they turned out right or wrong?",
+            "referenceAnswer": "A calm voice of authority that insists nothing alarming will happen, offers no falsifiable numerical predictions, and is more concerned with sounding respectable than with being provably correct.",
+            "evidence": [
+              {
+                "blockId": "spya-zyncdd",
+                "quote": "The voice of authority insists on calm, and people not “panicking” (the chief of sins).",
+                "start": 93
+              },
+              {
+                "blockId": "spya-zyncdd",
+                "quote": "The voice does not issue any numerical predictions (which could be falsified).",
+                "start": 724
+              }
+            ]
+          },
+          {
+            "id": "spya-b30brf",
+            "question": "In the appendix on agency, does the author treat agency as a strict either/or property or as something else?",
+            "referenceAnswer": "He argues agency is not discrete but exists on a continuum, a capability a model can acquire to varying degrees and that can be useful for a wide range of problems, not just ones narrowly defined as involving agents.",
+            "evidence": [
+              {
+                "blockId": "spya-mkbrjp",
+                "quote": "agency is not discrete or immaterial, but an ordinary continuum of capability",
+                "start": 455
+              }
+            ]
+          },
+          {
+            "id": "spya-jt57tc",
+            "question": "Why does the author think training a generative model like GPT-3 on huge amounts of human-written text tends to produce agent-like behavior?",
+            "premise": "The author treats agency as a continuum of capability rather than a yes/no property.",
+            "referenceAnswer": "Because that text is full of humans planning, acting, and pursuing goals, so a model imitating this data learns generative models of agents and can be prompted to 'roleplay', planning and steering toward goals much as those agents would.",
+            "evidence": [
+              {
+                "blockId": "spya-cw7jg4",
+                "quote": "it learns generative models of many agents, real or fictional. These generative models offer agentic capabilities, because they can be used to prompt the model to ‘roleplay’—plan & take action which will steer environments into small goal regions of state-space",
+                "start": 182
+              }
+            ]
+          }
+        ],
+        "dropped": {
+          "unknownIds": 0,
+          "unquoted": 1,
+          "truncated": 0,
+          "overCap": 0,
+          "malformed": 0,
+          "duplicate": 0,
+          "unanchored": 0,
+          "gaps": 0
+        },
+        "generatedAt": "2026-10-03T04:05:12.458Z",
+        "elapsedMs": 142269,
+        "profileHash": null
+      },
+      "blocks": 186,
+      "words": 12646,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 1,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "duplicate": 0,
+        "unanchored": 0,
+        "gaps": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 32972,
+      "outputTokens": 17125,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 142283
+    },
+    "ideas": {
+      "ideas": {
+        "version": "ideas/5",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.0578e196164734a1",
+        "profileHash": null,
+        "ideas": [
+          {
+            "id": "spya-hx55m2",
+            "name": "Failure on a benchmark can reflect a bad interface, not a missing skill",
+            "provenance": "assumed",
+            "statement": "When a system performs poorly on a standard test, that may be because the test or the way it was asked the question obscures a capability it actually has, rather than because the capability is absent.",
+            "whyYouNeedIt": "The argument that GPT-3's low benchmark scores understate its true abilities only holds together if poor scores can be caused by bad prompting or tokenization rather than genuine incompetence; the article never states this as a general principle, it just keeps invoking it.",
+            "occurrences": [
+              {
+                "blockId": "spya-fvqe70",
+                "quote": "its benchmark performance sabotaged by bad prompts & data tokenization problems (especially arithmetic & commonsense reasoning)",
+                "reasoning": "Attributes poor scores to interface problems rather than to the model lacking the skill, which only makes sense if elicitation and competence are separable.",
+                "start": 706
+              },
+              {
+                "blockId": "spya-s8rx6n",
+                "quote": "Nothing in the raw metrics reported on, say, Penn Tree Bank or LAMBADA or WinoGrande would lead you to expect all of this hilarious and creative output",
+                "reasoning": "Treats the mismatch between benchmark scores and observed output quality as a benchmark failure rather than evidence against the capability.",
+                "start": 97
+              },
+              {
+                "blockId": "spya-ye0m0c",
+                "quote": "the question is not whether we can lawyerly find any way in which it might not work, but whether there is any way which it might work",
+                "reasoning": "Relies on the idea that a single successful elicitation outweighs many failed ones, which presumes failures can be artifacts of how the system was asked rather than proof of inability.",
+                "start": 94
+              }
+            ]
+          },
+          {
+            "id": "spya-vt98jz",
+            "name": "Hard problems get easier, not harder, with scale",
+            "provenance": "introduced",
+            "statement": "Unlike most engineering domains where small versions of a problem are easy and big versions are hard, in deep learning the largest, hardest problems are often where training becomes fastest, most stable, and most capable.",
+            "whyYouNeedIt": "Without this, GPT-3's jump from GPT-2 looks like an anomaly rather than an instance of a general pattern the author is extrapolating from.",
+            "occurrences": [
+              {
+                "blockId": "spya-asr663",
+                "quote": "GPT-3 hits twice that without noticeable change in scaling factors: its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast, and it has not hit a regime where gains effectively halt",
+                "reasoning": "Uses the pattern of continued, undiminished returns at huge scale as evidence.",
+                "start": 537
+              },
+              {
+                "blockId": "spya-ypbup8",
+                "quote": "just simply training a big model on a lot of data induces better properties like meta-learning without even the slightest bit of that architecture being built in",
+                "reasoning": "Extends the pattern to the emergence of meta-learning as a free byproduct of scale.",
+                "start": 174
+              }
+            ]
+          },
+          {
+            "id": "spya-w7v087",
+            "name": "Big models are ensembles that default to simplicity",
+            "provenance": "introduced",
+            "statement": "A very large network effectively contains huge numbers of candidate sub-models competing to fit the data; because they average out like an ensemble, the network as a whole is biased toward the simplest sub-model that still fits, and only gets pushed toward more abstract, general solutions when the data is rich enough to penalize memorization.",
+            "analogy": "Like a firm where thousands of competing internal proposals are tried, and the simplest one that actually handles every client's case becomes the standing policy.",
+            "occurrences": [
+              {
+                "blockId": "spya-grkhs8",
+                "quote": "They function as an ensemble: even though there are countless overfit sub-models inside the single big model, they all average out, leading to a preference for simple solutions.",
+                "reasoning": "States the ensemble/Occam's razor mechanism directly.",
+                "start": 319
+              },
+              {
+                "blockId": "spya-uknzzk",
+                "quote": "sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.",
+                "reasoning": "Explains why small-scale training settles for superficial solutions.",
+                "start": 33
+              }
+            ]
+          },
+          {
+            "id": "spya-m2a4ab",
+            "name": "Scale alone can produce intelligence",
+            "provenance": "introduced",
+            "statement": "Once a learning architecture can be applied uniformly to huge amounts of data (such as self-attention or convolutions), simply making the network, the data, and the compute much bigger will cause increasingly sophisticated behavior to emerge on its own, without needing cleverer architectures or hand-designed tricks.",
+            "analogy": "Like yeast in dough: you don't need a new recipe to make it rise further, just more sugar, warmth, and time.",
+            "occurrences": [
+              {
+                "blockId": "spya-emqjaa",
+                "quote": "We built the compute, and the algorithms did come, and the scaling hypothesis has only looked more and more plausible every year since 201016ya.",
+                "reasoning": "Frames the author's own update toward the claim that scale causes capability.",
+                "start": 456
+              }
+            ]
+          },
+          {
+            "id": "spya-utedf9",
+            "name": "Minimizing prediction error forces real understanding",
+            "provenance": "introduced",
+            "statement": "To keep reducing the error in predicting the next piece of text, a model must progress past surface statistics like letter frequency and grammar into genuinely modeling causality, consistency, and reasoning, because only true understanding removes the remaining errors.",
+            "occurrences": [
+              {
+                "blockId": "spya-n4zu5k",
+                "quote": "The pretraining thesis goes something like this:",
+                "reasoning": "Flags the explicit argument the following passages lay out.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-kmyg3w",
+                "quote": "The implication here is that the final few bits are the most valuable bits, which require the most of what we think of as intelligence.",
+                "reasoning": "Draws the conclusion that the hardest-to-remove prediction errors correspond to the deepest cognitive abilities.",
+                "start": 27
+              }
+            ]
+          },
+          {
+            "id": "spya-wxc4um",
+            "name": "Knowing something is possible is most of the battle",
+            "provenance": "introduced",
+            "statement": "Once people learn that a hard problem definitely has a solution, independent teams tend to reach that solution within a few years anywhere, because most of the original difficulty was uncertainty about whether success was achievable at all, not the specific technical steps.",
+            "analogy": "Like the four-minute mile: once one runner proved it was humanly possible, many others matched it within a short time.",
+            "occurrences": [
+              {
+                "blockId": "spya-s0h95g",
+                "quote": "It just required more compute & data than anyone was willing to risk on it until a few true-believers were able to get their hands on a few million dollars of compute.",
+                "reasoning": "Applies the same logic to GPT-3: belief that it would work, not new technique, was the scarce ingredient.",
+                "start": 257
+              }
+            ]
+          },
+          {
+            "id": "spya-pbqa0x",
+            "name": "Progress waits on affordable hardware, not insight",
+            "provenance": "introduced",
+            "statement": "The technical ideas behind modern neural networks existed decades before they worked; what changed was that computing power eventually became cheap enough for ordinary researchers to run them at the necessary scale, after being reserved for 'more important' uses like physics simulations.",
+            "analogy": "Like rain that has been falling for years with no gutters built to catch it, until someone finally builds them and the water arrives all at once.",
+            "occurrences": [
+              {
+                "blockId": "spya-ad5qgy",
+                "quote": "part of the reason for rapid progress was the hardware overhang: while supercomputers of the necessary power would exist long before the connectionist revolution began, no one would be allowed to use them",
+                "reasoning": "States directly that available compute sat unused before being applied to AI.",
+                "start": 532
+              },
+              {
+                "blockId": "spya-khnsat",
+                "quote": "The existence of the hardware overhang implies that the limiting factor here is less hardware than human: will any organization treat GPT-3 as a Sputnik moment and invest aggressively in scaling programs?",
+                "reasoning": "Applies the hardware-overhang claim to the present moment to argue the bottleneck is organizational will, not resources.",
+                "start": 0
+              }
+            ]
+          },
+          {
+            "id": "spya-m3gj4g",
+            "name": "Confident expert reassurance tracks status quo, not evidence",
+            "provenance": "introduced",
+            "statement": "A calm, authoritative tone that dismisses a possibility as unlikely is not evidence about the world; such reassurances are issued whether or not the underlying claim later turns out true, and carry no real predictive content because they are never stated as falsifiable, checkable forecasts.",
+            "whyYouNeedIt": "Without this, the long list of expert predictions of an AI winter would just be isolated historical trivia rather than grounds for distrusting present-day reassurances.",
+            "occurrences": [
+              {
+                "blockId": "spya-zyncdd",
+                "quote": "The voice does not believe in drawing lines on graphs (it is rank numerology). The voice does not issue any numerical predictions (which could be falsified).",
+                "reasoning": "Names the trait that makes such reassurance immune to being checked against reality.",
+                "start": 645
+              }
+            ]
+          },
+          {
+            "id": "spya-r7ypz8",
+            "name": "Indistinguishable behavior means equivalent underlying competence",
+            "provenance": "introduced",
+            "statement": "If a system performs a task exactly as well as something we already agree understands or wants, there is no further fact that could show it merely fakes that competence; passing every test behavior permits is the same as having the competence.",
+            "analogy": "If something quacks, swims, and walks exactly like a duck in every test you can devise, insisting it isn't 'really' a duck buys you nothing.",
+            "occurrences": [
+              {
+                "blockId": "spya-nkzwpu",
+                "quote": "A sufficiently accurate simulation of an agent just is an agent.",
+                "reasoning": "Applies the same standard to agency rather than understanding.",
+                "start": 190
+              }
+            ]
+          },
+          {
+            "id": "spya-psacfr",
+            "name": "Agency is a continuum, not an on/off switch",
+            "provenance": "introduced",
+            "statement": "Agency is not a special discrete ingredient some systems have and others lack; it is a matter of degree that can be built from non-agentic parts, making it impossible to draw a firm line separating 'safe' non-agentic data or systems from agentic ones.",
+            "analogy": "More like a dimmer switch that can be set anywhere between off and full brightness than a light switch with only two states.",
+            "occurrences": [
+              {
+                "blockId": "spya-msngfz",
+                "quote": "Agency may be like Turing-completeness: even in settings free of selection or optimization, it is a capability too useful and too convergent to guarantee its absence.",
+                "reasoning": "Generalizes the continuum idea into a claim about pervasiveness and difficulty of exclusion.",
+                "start": 0
+              }
+            ]
+          }
+        ],
+        "generatedAt": "2026-10-03T04:05:32.321Z",
+        "elapsedMs": 162126
+      },
+      "blocks": 186,
+      "words": 12646,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 14,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "unargued": 0,
+        "unanchored": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 31655,
+      "outputTokens": 15964,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 162143
+    },
+    "quotes": {
+      "quotes": {
+        "version": "quotes/9",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.6e222707db2f43cc",
+        "profileHash": null,
+        "quotes": [
+          {
+            "id": "spya-zwks27",
+            "blockId": "spya-ye0m0c",
+            "text": "It is ‘just’ a text prediction model, an idiot savant of text; but an idiot savant, we should remember, is only a genetic mutation or bit of brain damage away from a normal human.",
+            "start": 432,
+            "importance": 0.6,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-nrjnaa",
+            "blockId": "spya-ye0m0c",
+            "text": "If RL is the cherry on the top of the supervised learning frosting, and supervised learning is the frosting on top of the unsupervised learning cake, well, it looks like the cake layers are finally rising.",
+            "start": 612,
+            "importance": 0.5,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-nnbpdh",
+            "blockId": "spya-asr663",
+            "text": "GPT-3 hits twice that without noticeable change in scaling factors: its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast, and it has not hit a regime where gains effectively halt or start to require increases vastly beyond feasibility.",
+            "start": 537,
+            "importance": 0.75,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-v9be0y",
+            "blockId": "spya-asr663",
+            "text": "AI is statistics which does what we want it to but doesn’t work; and statistics is AI which works but doesn’t do what we want.",
+            "start": 1358,
+            "importance": 0.3,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-yxsr0n",
+            "blockId": "spya-sfkxh8",
+            "text": "The blessings of scale is the observation that for deep learning, hard problems are easier to solve than easy problems—everything gets better as it gets larger (in contrast to the usual outcome in research, where small things are hard and large things impossible).",
+            "start": 32,
+            "importance": 0.95,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-p3ja0j",
+            "blockId": "spya-sfkxh8",
+            "text": "“NNs are lazy”: they can do far more than we make them do when we push them beyond easy answers & cheap shortcuts. The bitter lesson is the harder and bigger, the better.",
+            "start": 534,
+            "importance": 0.6,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-nwq0zx",
+            "blockId": "spya-ypbup8",
+            "text": "GPT-3 is hamstrung by its training & data, but DL enjoys an unreasonably effective blessing of dimensionality—just simply training a big model on a lot of data induces better properties like meta-learning without even the slightest bit of that architecture being built in; and in general, training on more and harder tasks creates ever more human-like performance, generalization, and robustness.",
+            "start": 64,
+            "importance": 0.8,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-atfy4b",
+            "blockId": "spya-uknzzk",
+            "text": "However, “neural nets are lazy”: sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.",
+            "start": 0,
+            "importance": 0.6,
+            "striking": 0.4
+          },
+          {
+            "id": "spya-hphba6",
+            "blockId": "spya-wq498y",
+            "text": "If the ingredients are there, it’s going to happen.",
+            "start": 340,
+            "importance": 0.5,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-pacgh5",
+            "blockId": "spya-h74fhr",
+            "text": "Humans, one might say, are the cyanobacteria of AI: we constantly emit large amounts of structured data, which implicitly rely on logic, causality, object permanence, history—all of that good stuff.",
+            "start": 0,
+            "importance": 0.6,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-u0t8r7",
+            "blockId": "spya-x3c389",
+            "text": "A sentence like “Jefferson was President after Washington” does in fact mean something (and if occasionally we sample “Washington was President after Jefferson”, well, what do you expect from such an un-converged model).",
+            "start": 177,
+            "importance": 0.3,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-mm3588",
+            "blockId": "spya-g3b5y7",
+            "text": "For a language model, the truth is that which keeps on predicting well—because truth is one and error many.",
+            "start": 924,
+            "importance": 0.85,
+            "striking": 0.9
+          },
+          {
+            "id": "spya-fmhzmu",
+            "blockId": "spya-nhgv5g",
+            "text": "If we trained a model which reached that loss of <0.7, which could predict text indistinguishable from a human, whether in a dialogue or quizzed about ice cream or being tested on SAT analogies or tutored in mathematics, if for every string the model did just as good a job of predicting the next character as you could do, how could we say that it doesn’t truly understand everything?",
+            "start": 0,
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-a9na7n",
+            "blockId": "spya-kmyg3w",
+            "text": "The implication here is that the final few bits are the most valuable bits, which require the most of what we think of as intelligence.",
+            "start": 27,
+            "importance": 0.6,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-b3f2ca",
+            "blockId": "spya-u2vxzs",
+            "text": "A small absolute average improvement in decision quality, if it is in those decisions, may be far more important than its quantity indicates, and give us some intuition for why those last bits are the hardest/deepest.",
+            "start": 351,
+            "importance": 0.5,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-w06s9z",
+            "blockId": "spya-e5n86h",
+            "text": "The pretraining thesis, while logically impeccable—how is a model supposed to solve all possible trick questions without understanding, just guessing?—never struck me as convincing, an argument admitting neither confutation nor conviction.",
+            "start": 19,
+            "importance": 0.6,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-apfj4h",
+            "blockId": "spya-s0h95g",
+            "text": "But apparently, it would’ve worked fine. Even RNNs probably would’ve worked—Transformers are nice, but they seem mostly be about efficiency.",
+            "start": 0,
+            "importance": 0.6,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-aynz5z",
+            "blockId": "spya-khnsat",
+            "text": "The existence of the hardware overhang implies that the limiting factor here is less hardware than human: will any organization treat GPT-3 as a Sputnik moment and invest aggressively in scaling programs?",
+            "start": 0,
+            "importance": 0.8,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-w0cedv",
+            "blockId": "spya-scr8jb",
+            "text": "But I think they lack a vision. As far as I can tell: they do not have any such thing, because Google Brain & DeepMind do not believe in the scaling hypothesis the way that Sutskever, Amodei and others at OA do.",
+            "start": 0,
+            "importance": 0.8,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-yaqrny",
+            "blockId": "spya-arrq35",
+            "text": "OA, lacking anything like DM’s long-term funding from Google or its enormous headcount, is making a startup-like bet that they know an important truth which is a secret: “the scaling hypothesis is true!”",
+            "start": 0,
+            "importance": 0.85,
+            "striking": 0.55
+          },
+          {
+            "id": "spya-mc867w",
+            "blockId": "spya-eexw9k",
+            "text": "said competitors lack the very most important thing, which no amount of money or GPUs can ever cure: the courage of their convictions.",
+            "start": 324,
+            "importance": 0.8,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-tv238z",
+            "blockId": "spya-eexw9k",
+            "text": "To paraphrase St Augustine, most peoples’ reaction to the Bitter Lesson or scaling hypothesis is “grant me scale & compute—but not yet”.",
+            "start": 1203,
+            "importance": 0.6,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-wz9qq0",
+            "blockId": "spya-cxnhav",
+            "text": "It turned out, it’s Hans Moravec’s world, and the rest of us were just living in a fool’s paradise. And there are 28 years left in Moravec’s forecast…",
+            "start": 117,
+            "importance": 0.7,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-za3s6z",
+            "blockId": "spya-ay4yw7",
+            "text": "But of course, if we ever succeed in AI, or in reductionism in general, it must be by reducing Y to ‘just X’. Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!",
+            "start": 0,
+            "importance": 0.75,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-wb2y8d",
+            "blockId": "spya-b93jbz",
+            "text": "If you are still certain that there is near-zero probability of AGI in the next few decades, why? Did you predict—in writing—capabilities like GPT-3? Is this how you expect AI failure to look in the decades beforehand? What specific task, what specific number, would convince you otherwise?",
+            "start": 1157,
+            "importance": 0.85,
+            "striking": 0.65
+          },
+          {
+            "id": "spya-hyjskk",
+            "blockId": "spya-m9r8zx",
+            "text": "What should we think about the experts? Projections of failure were made by eminent, respectable, serious people. They spoke in considered tones of why AI hype was excessive and might trigger an “AI winter”, and the fundamental flaws of fashionable approaches and why brute force could not work. These statements were made routinely in 201412ya, 201511ya, 2016… And they were wrong. I am aware of few issuing a mea culpa or reflecting on it.",
+            "start": 34,
+            "importance": 0.85,
+            "striking": 0.6
+          },
+          {
+            "id": "spya-wfn30j",
+            "blockId": "spya-zyncdd",
+            "text": "The voice of authority insists on calm, and people not “panicking” (the chief of sins). The voice of authority assures you that it won’t happen (because it can’t happen).",
+            "start": 93,
+            "importance": 0.6,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-mc9met",
+            "blockId": "spya-zyncdd",
+            "text": "The voice does not have a model of the future (because a model implies it does not already know the future).",
+            "start": 1025,
+            "importance": 0.5,
+            "striking": 0.8
+          },
+          {
+            "id": "spya-cjda3x",
+            "blockId": "spya-zyncdd",
+            "text": "The voice is always sober, respectable, and credentialed (the voice would be pleased to write an op-ed for your national magazine and/or newspaper).",
+            "start": 1241,
+            "importance": 0.5,
+            "striking": 0.75
+          },
+          {
+            "id": "spya-ytyv7g",
+            "blockId": "spya-zyncdd",
+            "text": "The voice advises you to go back to sleep (right now).",
+            "start": 1622,
+            "importance": 0.5,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-nkkazw",
+            "blockId": "spya-nkzwpu",
+            "text": "A sufficiently accurate simulation of an agent just is an agent.",
+            "start": 190,
+            "importance": 0.75,
+            "striking": 0.85
+          },
+          {
+            "id": "spya-eghw3y",
+            "blockId": "spya-fm6pfc",
+            "text": "if giving a SayCan robot an instruction to ‘fetch a can of Coke and bring it to me’, with it using image inputs to construct step-by-step plans to find, possess, and return with the can, and successfully doing so often in real life on a real robot, does not count as an ‘agent’, then we need a word for such non-agent systems, so we can discuss their non-agency dangers.",
+            "start": 230,
+            "importance": 0.6,
+            "striking": 0.5
+          },
+          {
+            "id": "spya-erarnv",
+            "blockId": "spya-fm6pfc",
+            "text": "tool AIs want to be agent AIs.",
+            "start": 1390,
+            "importance": 0.7,
+            "striking": 0.9
+          },
+          {
+            "id": "spya-qndfhy",
+            "blockId": "spya-jn3pv0",
+            "text": "There is no agency-particle, no pineal gland granting access to ‘Genuine Decision-Making™’. An agentic human is made out of the same fundamental things as a clump of dust swirling in space, or rock, or a computer.",
+            "start": 268,
+            "importance": 0.6,
+            "striking": 0.7
+          },
+          {
+            "id": "spya-jjgycq",
+            "blockId": "spya-msngfz",
+            "text": "Agency may be like Turing-completeness: even in settings free of selection or optimization, it is a capability too useful and too convergent to guarantee its absence.",
+            "start": 0,
+            "importance": 0.85,
+            "striking": 0.7
+          }
+        ],
+        "discarded": {
+          "unfound": 6,
+          "otherVoice": 4,
+          "wrongLength": 0,
+          "overlapping": 0,
+          "overCap": 0,
+          "malformed": 0
+        },
+        "passes": 1,
+        "lastAdded": 35,
+        "generatedAt": "2026-10-03T04:03:23.228Z",
+        "elapsedMs": 32529
+      },
+      "blocks": 186,
+      "words": 12646,
+      "dropped": {
+        "unfound": 6,
+        "otherVoice": 4,
+        "wrongLength": 0,
+        "overlapping": 0,
+        "overCap": 0,
+        "malformed": 0
+      },
+      "scores": {
+        "importanceAbsent": 0,
+        "importanceRejected": 0,
+        "strikingAbsent": 0,
+        "strikingRejected": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 30163,
+      "outputTokens": 4107,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 33046
+    },
+    "glossary": {
+      "glossary": {
+        "version": "glossary/8",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.6e222707db2f43cc",
+        "profileHash": null,
+        "entries": [
+          {
+            "id": "spya-mb2rk0",
+            "name": "GPT-3",
+            "kind": "work",
+            "aliases": [
+              "GPT3"
+            ],
+            "background": "A large language model released by the AI lab OpenAI in 2020, trained to predict the next word in huge amounts of internet text. It was the direct successor to the smaller GPT-2 model from the previous year.",
+            "difficulty": 0.3,
+            "centrality": 1,
+            "blocks": [
+              "spya-suzdvz",
+              "spya-ewxv9q",
+              "spya-aqts9c",
+              "spya-fvqe70",
+              "spya-s8rx6n",
+              "spya-ye0m0c",
+              "spya-jh78mt",
+              "spya-asr663",
+              "spya-uz2hd5",
+              "spya-dfjr4c",
+              "spya-hqpffq",
+              "spya-cgxrdc",
+              "spya-vn0xpd",
+              "spya-yq9zuc",
+              "spya-kc39vs",
+              "spya-hwr65m",
+              "spya-sfkxh8",
+              "spya-ypbup8",
+              "spya-vkkfzh",
+              "spya-edr6mj",
+              "spya-rbx2kz",
+              "spya-khnsat",
+              "spya-scr8jb",
+              "spya-vr9q2p",
+              "spya-eexw9k",
+              "spya-fyy04z",
+              "spya-b6zw9f",
+              "spya-ad5qgy",
+              "spya-b93jbz",
+              "spya-mkbrjp",
+              "spya-cw7jg4",
+              "spya-nkzwpu",
+              "spya-fm6pfc",
+              "spya-vjs6va",
+              "spya-nxp8hh",
+              "spya-cbz06n",
+              "spya-c5ejjt",
+              "spya-pkfkup",
+              "spya-sez7zt",
+              "spya-c43ayy",
+              "spya-dzjmct",
+              "spya-jgq9gz",
+              "spya-duudyc",
+              "spya-arq53q"
+            ]
+          },
+          {
+            "id": "spya-xt7hpz",
+            "name": "meta-learning",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "In this piece it means a model learning, during a single run, how to carry out a brand-new task just from a few examples given in its prompt, without any retraining. GPT-3 shows this even though it was never deliberately built or trained to do it.",
+            "background": "In machine learning this usually means training a system across many different tasks so that it picks up a general strategy for learning, often called learning to learn.",
+            "difficulty": 0.55,
+            "centrality": 0.9,
+            "blocks": [
+              "spya-suzdvz",
+              "spya-ewxv9q",
+              "spya-k8ta9q",
+              "spya-fvqe70",
+              "spya-s8rx6n",
+              "spya-ypbup8",
+              "spya-vkkfzh",
+              "spya-wq498y",
+              "spya-vss5vs",
+              "spya-edr6mj",
+              "spya-vr9q2p",
+              "spya-mkbrjp",
+              "spya-dbrxu8",
+              "spya-yzb32b",
+              "spya-f2fcmq",
+              "spya-cwwvxw",
+              "spya-cc7uc2",
+              "spya-pkfkup",
+              "spya-xcurp2"
+            ]
+          },
+          {
+            "id": "spya-eg27xx",
+            "name": "GPT-2",
+            "kind": "work",
+            "aliases": [],
+            "background": "An earlier, much smaller language model from OpenAI, released in 2019, which could already generate fluent text and summarize passages but showed far less flexible task-learning than its successor.",
+            "difficulty": 0.3,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-ewxv9q",
+              "spya-aqts9c",
+              "spya-fvqe70",
+              "spya-vkkfzh",
+              "spya-edr6mj",
+              "spya-eexw9k",
+              "spya-te5z0q",
+              "spya-c43ayy",
+              "spya-dzjmct"
+            ]
+          },
+          {
+            "id": "spya-u5qdvt",
+            "name": "blessings of scale",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The author's name for the pattern where making a neural network, its training data, and the computing power behind it larger makes it more stable, more able to generalize, and able to learn new skills on its own, rather than running into harder problems as it grows.",
+            "difficulty": 0.6,
+            "centrality": 0.9,
+            "blocks": [
+              "spya-ewxv9q",
+              "spya-jwq3zr",
+              "spya-sfkxh8",
+              "spya-ypbup8",
+              "spya-djq0xk",
+              "spya-arrq35"
+            ]
+          },
+          {
+            "id": "spya-q0nrzh",
+            "name": "OpenAI",
+            "kind": "organization",
+            "aliases": [
+              "OA",
+              "OpenAI LP"
+            ],
+            "background": "The AI research lab that built GPT-3, structured as a nonprofit that controls a for-profit subsidiary so it can raise money to fund very expensive bets on scaling up models.",
+            "difficulty": 0.2,
+            "centrality": 0.6,
+            "blocks": [
+              "spya-ewxv9q",
+              "spya-aqts9c",
+              "spya-ypbup8",
+              "spya-scr8jb",
+              "spya-vr9q2p",
+              "spya-arrq35",
+              "spya-eexw9k",
+              "spya-fm6pfc",
+              "spya-kaz7ph",
+              "spya-te5z0q",
+              "spya-c43ayy",
+              "spya-f0xgqt"
+            ]
+          },
+          {
+            "id": "spya-zea0ak",
+            "name": "Hans Moravec",
+            "kind": "person",
+            "aliases": [],
+            "background": "A robotics researcher who, decades ago, forecast roughly when computer hardware would become cheap and powerful enough to match brains of various sizes, by extrapolating long-term trends in computing power.",
+            "difficulty": 0.4,
+            "centrality": 0.45,
+            "blocks": [
+              "spya-ewxv9q",
+              "spya-cxnhav"
+            ]
+          },
+          {
+            "id": "spya-nmj9x8",
+            "name": "fast weights",
+            "kind": "term",
+            "aliases": [],
+            "senseHere": "The piece suggests GPT-3's attention mechanism works like a kind of memory that can adapt within a single conversation, letting it pick up a new task from examples in its prompt without changing its permanently trained parameters.",
+            "background": "In neural network research this refers to connections in a model that change quickly based on the current input, as opposed to the slow weights adjusted by training, giving the network a short-term working memory.",
+            "difficulty": 0.65,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-aqts9c"
+            ]
+          },
+          {
+            "id": "spya-n8raxk",
+            "name": "AlphaZero",
+            "kind": "work",
+            "aliases": [],
+            "background": "A program from the AI lab DeepMind that reached superhuman play at chess, shogi, and Go purely by playing against itself and learning from the results, without being given human opening theory or strategy.",
+            "difficulty": 0.35,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-ypbup8",
+              "spya-vr9q2p"
+            ]
+          },
+          {
+            "id": "spya-qdaxsz",
+            "name": "MuZero",
+            "kind": "work",
+            "aliases": [],
+            "background": "A later DeepMind program that matched AlphaZero's game-playing strength without even being told the rules of the games in advance, instead learning to predict future outcomes directly from its own experience.",
+            "difficulty": 0.35,
+            "centrality": 0.35,
+            "blocks": [
+              "spya-ypbup8",
+              "spya-rbx2kz"
+            ]
+          },
+          {
+            "id": "spya-z5u9vc",
+            "name": "DeepMind",
+            "kind": "organization",
+            "aliases": [
+              "DM"
+            ],
+            "background": "A London-based AI research lab, now owned by Google, known for projects like AlphaGo. The piece portrays it as favoring step-by-step engineering of brain-like components over simply scaling up one big model.",
+            "difficulty": 0.25,
+            "centrality": 0.5,
+            "blocks": [
+              "spya-ypbup8",
+              "spya-khnsat",
+              "spya-scr8jb",
+              "spya-vr9q2p",
+              "spya-arrq35",
+              "spya-fyy04z",
+              "spya-b6zw9f",
+              "spya-dm7jam"
+            ]
+          },
+          {
+            "id": "spya-maze7g",
+            "name": "double descent",
+            "kind": "term",
+            "aliases": [],
+            "background": "A puzzling pattern seen in training neural networks where test error first falls, then rises, then falls again as the model or amount of training grows, which goes against the older assumption that only moderately-sized models generalize best.",
+            "difficulty": 0.6,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-djq0xk"
+            ]
+          },
+          {
+            "id": "spya-syvp03",
+            "name": "lottery ticket hypothesis",
+            "kind": "concept",
+            "aliases": [],
+            "background": "The idea, from deep learning research, that a large randomly-started neural network contains many smaller sub-networks, and that at least one of these 'winning tickets' is likely to train well on its own, which helps explain why bigger networks are often easier to train successfully than smaller ones built from scratch.",
+            "difficulty": 0.65,
+            "centrality": 0.35,
+            "blocks": [
+              "spya-jg69cy"
+            ]
+          },
+          {
+            "id": "spya-jd9xqb",
+            "name": "AIXI",
+            "kind": "concept",
+            "aliases": [],
+            "background": "A theoretical algorithm, proposed by researcher Marcus Hutter, that is mathematically proven to act optimally in any situation that can be computed, but which would need far more computing power than actually exists to run.",
+            "difficulty": 0.65,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-e5n86h"
+            ]
+          },
+          {
+            "id": "spya-fydbqb",
+            "name": "Norbert Wiener",
+            "kind": "person",
+            "aliases": [],
+            "background": "A mathematician regarded as a founder of cybernetics, the study of control and communication in machines and living things, who wrote influential early work on the social effects of automation and information.",
+            "difficulty": 0.4,
+            "centrality": 0.25,
+            "blocks": [
+              "spya-cn4vbh"
+            ]
+          },
+          {
+            "id": "spya-uexpxk",
+            "name": "hardware overhang",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "A situation where computers powerful enough to run advanced AI already exist, but that power is being spent on other prestigious work, like physics simulations, rather than on AI research, so progress is held back by will rather than by raw capability.",
+            "difficulty": 0.55,
+            "centrality": 0.45,
+            "blocks": [
+              "spya-khnsat",
+              "spya-ad5qgy",
+              "spya-c5ejjt",
+              "spya-pkfkup"
+            ]
+          },
+          {
+            "id": "spya-uuhxes",
+            "name": "Ilya Sutskever",
+            "kind": "person",
+            "aliases": [],
+            "background": "A co-founder and chief scientist of OpenAI, a prominent deep learning researcher who was among the early believers that simply scaling up neural networks and training data would drive major progress.",
+            "difficulty": 0.3,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-epwrdb"
+            ]
+          },
+          {
+            "id": "spya-dcmmcs",
+            "name": "intentional stance",
+            "kind": "concept",
+            "aliases": [],
+            "senseHere": "The piece uses this to argue that it is often the most useful way to understand a system, even a non-human or non-biological one, by describing it as if it wants or tries to achieve some outcome, rather than tracking every low-level step.",
+            "background": "A term from philosopher Daniel Dennett for the strategy of predicting a system's behavior by treating it as if it has beliefs and goals, which can be a useful shortcut even when the system has no real mind.",
+            "difficulty": 0.55,
+            "centrality": 0.5,
+            "blocks": [
+              "spya-mkbrjp",
+              "spya-zh9cmm",
+              "spya-ehe426",
+              "spya-q3nmj0",
+              "spya-c874v8"
+            ]
+          },
+          {
+            "id": "spya-qkp0hq",
+            "name": "Daniel Dennett",
+            "kind": "person",
+            "aliases": [],
+            "background": "A philosopher known for explaining minds and consciousness in naturalistic terms, including the proposal that treating complicated systems as goal-seeking agents is often the easiest way to predict what they will do.",
+            "difficulty": 0.35,
+            "centrality": 0.3,
+            "blocks": [
+              "spya-zh9cmm"
+            ]
+          },
+          {
+            "id": "spya-hpsd9h",
+            "name": "Conway's Game of Life",
+            "kind": "concept",
+            "aliases": [
+              "GoL"
+            ],
+            "senseHere": "The piece uses it to test whether a simple system with no built-in agents can still invite an agent-like way of thinking, since its patterns naturally get seen as traveling things, such as 'gliders', rather than as a grid of on-off cells.",
+            "background": "A cellular automaton: a grid of cells that switch on or off each step according to a few fixed local rules, famous for producing surprisingly complex, self-sustaining patterns from very simple starting rules.",
+            "difficulty": 0.4,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-q3nmj0",
+              "spya-dxftyx",
+              "spya-egwe0x",
+              "spya-p5tx6f"
+            ]
+          },
+          {
+            "id": "spya-rmc8r6",
+            "name": "Turing machine",
+            "kind": "concept",
+            "aliases": [
+              "TM"
+            ],
+            "background": "An abstract mathematical model of computation made of a tape and a simple set of rules for reading, writing, and moving along it, used to define what it means for a process to be computable at all.",
+            "difficulty": 0.45,
+            "centrality": 0.4,
+            "blocks": [
+              "spya-q88ypt",
+              "spya-p5tx6f",
+              "spya-etcjwv",
+              "spya-xz4e9d",
+              "spya-ufpyk0",
+              "spya-yzb32b",
+              "spya-f2fcmq",
+              "spya-fx68sk",
+              "spya-usu3q6",
+              "spya-cwwvxw"
+            ]
+          }
+        ],
+        "passes": 1,
+        "generatedAt": "2026-10-03T04:04:00.065Z",
+        "elapsedMs": 69732
+      },
+      "scores": {
+        "difficultyAbsent": 0,
+        "difficultyRejected": 0,
+        "centralityAbsent": 0,
+        "centralityRejected": 0
+      },
+      "blocks": 186,
+      "words": 12646,
+      "added": 20,
+      "unmatched": 0,
+      "model": "claude-sonnet-5",
+      "inputTokens": 31449,
+      "outputTokens": 7714,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 69880
+    },
+    "timeline": {
+      "timeline": {
+        "version": "timeline/5",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.5cb6e8e83fe9110a",
+        "events": [
+          {
+            "id": "spya-n5d6z2",
+            "label": "Moravec forecasts faster AI progress",
+            "dating": {
+              "kind": "words",
+              "phrase": "In 199828ya, 22 years ago"
+            },
+            "order": 1,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ad5qgy",
+                "quote": "In 199828ya, 22 years ago, Moravec noted that AI research could be deceptive, and hardware limits meant that “intelligent machine research did not make steady progress in its first 50 years, it marked time for 30 of them!”, predicting that as Moore’s law continued, “things will go much faster in the next 50 years than they have in the last 50.”",
+                "start": 155
+              }
+            ]
+          },
+          {
+            "id": "spya-m4gfkz",
+            "label": "Deep learning believers were a tiny group",
+            "dating": {
+              "kind": "words",
+              "phrase": "In 201016ya"
+            },
+            "order": 2,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-b6zw9f",
+                "quote": "In 201016ya, one could easily fit everyone in the world who genuinely believed in deep learning into a moderate-sized conference room (assisted slightly by the fact that 3 of them were busy founding DeepMind).",
+                "start": 346
+              }
+            ]
+          },
+          {
+            "id": "spya-cuczrd",
+            "label": "Experts repeatedly predict AI stagnation",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "2016-01-01",
+                "latest": "2016-12-31",
+                "extent": "instant",
+                "phrase": "in 201412ya, 201511ya, 2016",
+                "at": {
+                  "blockId": "spya-m9r8zx",
+                  "start": 367,
+                  "end": 394
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 4,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-m9r8zx",
+                "quote": "These statements were made routinely in 201412ya, 201511ya, 2016… And they were wrong.",
+                "start": 330
+              },
+              {
+                "blockId": "spya-b93jbz",
+                "quote": "Even in 201511ya, all the experts assured us that AGI the scaling hypothesis seemed highly dubious: you needed something to scale, after all, and it was all too easy to look at flaws in existing systems and imagine that they would never go away and progress would sigmoid any month now, soon.",
+                "start": 20
+              }
+            ]
+          },
+          {
+            "id": "spya-wmjrwx",
+            "label": "GPT-1 released",
+            "dating": {
+              "kind": "words",
+              "phrase": "2 years ago"
+            },
+            "order": 5,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-fvqe70",
+                "quote": "2 years ago, GPT-1 was interestingly useful pretraining and adorable with its “sentiment neuron”.",
+                "start": 27
+              }
+            ]
+          },
+          {
+            "id": "spya-s0jsh0",
+            "label": "GPT-2 released",
+            "dating": {
+              "kind": "words",
+              "phrase": "1 year ago"
+            },
+            "order": 6,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-fvqe70",
+                "quote": "1 year ago, GPT-2 was impressive with its excellent text generation & finetuning capabilities.",
+                "start": 125
+              }
+            ]
+          },
+          {
+            "id": "spya-m0uxta",
+            "label": "OpenAI's Jukebox released",
+            "dating": {
+              "kind": "words",
+              "phrase": "just weeks ago"
+            },
+            "order": 7,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-aqts9c",
+                "quote": "Like OpenAI’s Jukebox just weeks ago (itself a remarkable demonstration of scaling in synthesizing raw audio music complete with remarkably realistic voices/instruments), the announcement of GPT-3 appears to have sunk almost without a trace, so I will go into more depth than usual.",
+                "start": 834
+              }
+            ]
+          },
+          {
+            "id": "spya-us285f",
+            "label": "GPT-3 announced and released",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "2020-05-01",
+                "latest": "2020-05-31",
+                "extent": "instant",
+                "phrase": "in May 2020",
+                "at": {
+                  "blockId": "spya-ewxv9q",
+                  "start": 27,
+                  "end": 38
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 8,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ewxv9q",
+                "quote": "GPT-3, announced by OpenAI in May 2020, is the largest neural network ever trained, by over an order of magnitude.",
+                "start": 0
+              },
+              {
+                "blockId": "spya-aqts9c",
+                "quote": "In May 2020, OA released—to remarkably little interest from researchers, no blog post, no media blitz, and little public discussion beyond the snidely dismissive—the long-awaited followup to GPT-2, one model to rule them all: a 117× larger 175b-parameter model with far more powerful language generation, which lets it solve a wide variety of problems from arithmetic1 to English translation to unscrambling anagrams to SAT analogies—purely from being prompted with text examples, without any specialized training or finetuning whatsoever, merely next-word prediction training on a big Internet text corpus.",
+                "start": 19
+              },
+              {
+                "blockId": "spya-fvqe70",
+                "quote": "This year, GPT-3 is scary because it’s a magnificently obsolete architecture from early 2018 (used mostly for software engineering convenience as the infrastructure has been debugged)",
+                "start": 220
+              }
+            ]
+          },
+          {
+            "id": "spya-qanxtm",
+            "label": "OpenAI opens limited public access to GPT-3",
+            "dating": {
+              "kind": "untimed"
+            },
+            "order": 9,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-ewxv9q",
+                "quote": "Despite this vindication, the scaling hypothesis is so unpopular an idea, and difficult to prove in advance rather than as a fait accompli, that while the GPT-3 results finally drew some public notice after OpenAI enabled limited public access & people could experiment with it live, it is unlikely that many entities will modify their research philosophies, much less kick off an ‘arms race’.",
+                "start": 3950
+              }
+            ]
+          },
+          {
+            "id": "spya-wg9xgw",
+            "label": "No model has surpassed GPT-3 yet",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": null,
+                "latest": "2020-10-26",
+                "extent": "instant",
+                "phrase": "as of 2020-10-26",
+                "at": {
+                  "blockId": "spya-fyy04z",
+                  "start": 295,
+                  "end": 311
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 10,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-fyy04z",
+                "quote": "At least as of 2020-10-26, 152 days later, no model has come near GPT-3, and indeed, no model has even exceeded Turing-NLG’s 17b.",
+                "start": 286
+              }
+            ]
+          },
+          {
+            "id": "spya-x65bqr",
+            "label": "Editor confirms an arms race roughly happened",
+            "dating": {
+              "kind": "dated",
+              "when": {
+                "earliest": "2025-10-19",
+                "latest": "2025-10-19",
+                "extent": "instant",
+                "phrase": "2025-10-19",
+                "at": {
+                  "blockId": "spya-rbx2kz",
+                  "start": 481,
+                  "end": 491
+                },
+                "yearFilled": false
+              }
+            },
+            "order": 11,
+            "modality": "happened",
+            "occurrences": [
+              {
+                "blockId": "spya-rbx2kz",
+                "quote": "[Roughly, yes. —Editor 2025-10-19]",
+                "start": 458
+              }
+            ]
+          }
+        ],
+        "orderConflicts": 0,
+        "generatedAt": "2026-10-03T04:04:31.757Z",
+        "elapsedMs": 101543
+      },
+      "blocks": 186,
+      "words": 12646,
+      "frame": null,
+      "dropped": {
+        "unknownIds": 0,
+        "unquoted": 2,
+        "truncated": 0,
+        "overCap": 0,
+        "malformed": 0,
+        "datedLabel": 0,
+        "unanchored": 1,
+        "unordered": 0,
+        "unparseablePhrase": 0,
+        "phraseNotInOccurrence": 0,
+        "noDateInPhrase": 5,
+        "noYearFrame": 0,
+        "phraseNotFound": 0,
+        "duplicateOrders": 0,
+        "orderConflicts": 0
+      },
+      "model": "claude-sonnet-5",
+      "inputTokens": 31217,
+      "outputTokens": 11914,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 101569
+    },
+    "arc": {
+      "arc": {
+        "version": "arc/7",
+        "generator": "claude-sonnet-5",
+        "slug": "scaling-hypothesis",
+        "entries": [
+          {
+            "range": [
+              "spya-dfggb3",
+              "spya-kc39vs"
+            ],
+            "text": "A single old architecture, merely scaled up, outperforms expectations; how much further this goes is still unknown."
+          },
+          {
+            "range": [
+              "spya-jwq3zr",
+              "spya-emqjaa"
+            ],
+            "text": "This surprising success generalizes across domains; what needs explaining now is why scale itself breeds intelligence."
+          },
+          {
+            "range": [
+              "spya-ce0ts7",
+              "spya-sm7bx4"
+            ],
+            "text": "Granting that bigger models generalize, the remaining question is what minimizing prediction error actually forces a model to learn."
+          },
+          {
+            "range": [
+              "spya-b6zcpu",
+              "spya-fyy04z"
+            ],
+            "text": "Having shown scale can deliver, the open question becomes who besides OpenAI will dare act on it."
+          },
+          {
+            "range": [
+              "spya-bp9mm2",
+              "spya-me38yq"
+            ],
+            "text": "OpenAI's lone bet looks vindicated by a decade of failed predictions against scale, though critics remain unmoved."
+          },
+          {
+            "range": [
+              "spya-hfcz8w",
+              "spya-nxp8hh"
+            ],
+            "text": "Scale's demonstrated power extends further still: imitating human-generated text may itself breed genuine goal-seeking agency."
+          },
+          {
+            "range": [
+              "spya-myjtg3",
+              "spya-hjpau9"
+            ],
+            "text": "Pressed to its limit, agency-like behavior seems to lurk even in the barest formal systems, resisting any clean exclusion."
+          },
+          {
+            "range": [
+              "spya-g9ffua",
+              "spya-vbpzva"
+            ],
+            "text": "Links to pages citing this one, related topics, and its sources."
+          }
+        ],
+        "sourceHash": "ac6af7f152045068.2c96dc1c2626dd30.6e222707db2f43cc"
+      },
+      "model": "claude-sonnet-5",
+      "parts": [
+        {
+          "id": "n0002",
+          "gist": "GPT-3's release revealed that a straightforward, unmodified scale-up of an old architecture yields surprising meta-learning abilities and follows smooth scaling curves that predict much stronger models are affordable at even larger scale.",
+          "depth": 1,
+          "range": [
+            "spya-dfggb3",
+            "spya-kc39vs"
+          ],
+          "title": "GPT-3 Arrives",
+          "parent": "n0001",
+          "children": [
+            "n0003",
+            "n0008",
+            "n0011",
+            "n0016",
+            "n0024"
+          ]
+        },
+        {
+          "id": "n0033",
+          "gist": "Across many domains, scaling models, data, and compute reliably induces stability, generalization, and meta-learning through an ensemble-like Occam's razor effect, motivating the strong scaling hypothesis that intelligence itself may emerge from scale.",
+          "depth": 1,
+          "range": [
+            "spya-jwq3zr",
+            "spya-emqjaa"
+          ],
+          "title": "Why Scale Creates Intelligence",
+          "parent": "n0001",
+          "children": [
+            "n0034",
+            "n0041",
+            "n0048"
+          ]
+        },
+        {
+          "id": "n0052",
+          "gist": "The pretraining thesis holds that minimizing next-token prediction loss forces a model to progress from crude letter statistics to genuine world understanding, though nobody can yet say what further scaling will unlock.",
+          "depth": 1,
+          "range": [
+            "spya-ce0ts7",
+            "spya-sm7bx4"
+          ],
+          "title": "Why Does Pretraining Work",
+          "parent": "n0001",
+          "children": [
+            "n0053",
+            "n0058",
+            "n0064",
+            "n0072",
+            "n0077",
+            "n0082"
+          ],
+          "sourceHeading": "Why Does Pretraining Work?"
+        },
+        {
+          "id": "n0089",
+          "gist": "Whether an AI arms race emerges now depends less on hardware, which major labs already possess, than on organizational conviction, with only OpenAI currently betting everything on scale.",
+          "depth": 1,
+          "range": [
+            "spya-b6zcpu",
+            "spya-fyy04z"
+          ],
+          "title": "Prospects",
+          "parent": "n0001",
+          "children": [
+            "n0090",
+            "n0096",
+            "n0101"
+          ],
+          "sourceHeading": "Prospects"
+        },
+        {
+          "id": "n0105",
+          "gist": "The past decade shows confident expert predictions of AI stagnation were repeatedly wrong, while dismissive reductionist critiques miss that genuine intelligence must ultimately reduce to simple mechanisms at scale.",
+          "depth": 1,
+          "range": [
+            "spya-bp9mm2",
+            "spya-me38yq"
+          ],
+          "title": "Critiquing The Critics",
+          "parent": "n0001",
+          "children": [
+            "n0106",
+            "n0112",
+            "n0118"
+          ],
+          "sourceHeading": "Critiquing The Critics"
+        },
+        {
+          "id": "n0124",
+          "gist": "Because agency exists on a continuum rather than as a discrete property, training generative models on human-generated data can induce genuine agentic behavior, and even ostensibly non-agentic systems may not be safe.",
+          "depth": 1,
+          "range": [
+            "spya-hfcz8w",
+            "spya-nxp8hh"
+          ],
+          "title": "Agency From Data",
+          "parent": "n0001",
+          "children": [
+            "n0125",
+            "n0134",
+            "n0138",
+            "n0141",
+            "n0148",
+            "n0151"
+          ],
+          "sourceHeading": "Appendix"
+        },
+        {
+          "id": "n0154",
+          "gist": "Even highly abstract formal systems like cellular automata or Turing machines admit agent-like interpretations once models must infer underlying rules from data, making agency a pervasive, hard-to-exclude emergent capability.",
+          "depth": 1,
+          "range": [
+            "spya-myjtg3",
+            "spya-hjpau9"
+          ],
+          "title": "Formal Systems And Agency",
+          "parent": "n0001",
+          "children": [
+            "n0155",
+            "n0161",
+            "n0164",
+            "n0168",
+            "n0173"
+          ]
+        },
+        {
+          "id": "n0179",
+          "gist": "The page closes with navigational links to backlinks, related pages, and the bibliography.",
+          "depth": 1,
+          "range": [
+            "spya-g9ffua",
+            "spya-vbpzva"
+          ],
+          "title": "Site Footer",
+          "parent": "n0001",
+          "children": [
+            "n0180",
+            "n0183",
+            "n0186"
+          ]
+        }
+      ],
+      "blocks": 186,
+      "inputTokens": 30959,
+      "outputTokens": 2348,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "elapsedMs": 23308
+    }
+  }
+}

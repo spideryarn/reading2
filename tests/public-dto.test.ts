@@ -1491,6 +1491,37 @@ describe("the artefacts a shared link carries", () => {
     expect(built.comments[0]?.citations?.[0]?.url).toBe("https://example.com/paper?id=7");
   });
 
+  /* Plan 261003e, review S11: a highlight's colour is presentation, not
+     private, and a shared highlight that arrived as a plain underline would
+     have stopped being a highlight. Absent stays absent. */
+  it("carries a highlight's colour, and no colour key for an uncoloured comment", () => {
+    const built = publicArticle({
+      ...ARTICLE_BASE,
+      ...NO_ARTEFACTS,
+      comments: [
+        {
+          id: "spya-cmt3hl",
+          blockId: "spya-k3m9qt",
+          quote: "does not survive",
+          start: 17,
+          createdAt: "2026-10-03T09:00:00.000Z",
+          status: "none",
+          colour: "pink",
+        },
+        {
+          id: "spya-cmt4hl",
+          blockId: "spya-k3m9qt",
+          quote: "does not survive",
+          start: 17,
+          createdAt: "2026-10-03T09:00:00.000Z",
+          status: "none",
+        },
+      ],
+    });
+    expect(built.comments[0]?.colour).toBe("pink");
+    expect("colour" in (built.comments[1] ?? {})).toBe(false);
+  });
+
   /**
    * **A citation that would hand out a secret, or name a host only this machine
    * can reach, is dropped** — and the ones beside it are kept.
