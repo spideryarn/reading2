@@ -224,7 +224,14 @@ function ActiveTouchSelectionChip({ onSelect }: Pick<TouchSelectionChipProps, "o
     /* Its coordinates are the viewport's, so a scroll or a resize makes them
        wrong. Hidden until things settle rather than chased. */
     const onMove = () => {
-      if (!shownRef.current && settle.current === null) return;
+      if (!shownRef.current && settle.current === null) {
+        /* Nothing shown and nothing pending — but a finger's selection that
+           was held back for being off screen (`endOf`) may be scrolling into
+           view, and only a scroll can tell us. `settled` does the real read. */
+        const live = window.getSelection();
+        if (finger.current === true && live && !live.isCollapsed) schedule();
+        return;
+      }
       hide();
       schedule();
     };

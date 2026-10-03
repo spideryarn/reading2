@@ -445,3 +445,20 @@ it("and shows it when the supplied rectangle is on screen", async () => {
     expect(chip()).not.toBeNull();
   });
 });
+
+it("brings the chip back when the words are scrolled on screen again", async () => {
+  const text = await mounted();
+  withRangeAt(window.innerHeight + 100, () => {
+    pointerDown(text.parentElement!, "touch");
+    select(text, 20);
+    wait(SETTLE_MS);
+    expect(chip()).toBeNull();
+  });
+  withRangeAt(100, () => {
+    act(() => {
+      window.dispatchEvent(new Event("scroll"));
+    });
+    wait(SETTLE_MS);
+    expect(chip(), "the selection is still live and now visible").not.toBeNull();
+  });
+});
