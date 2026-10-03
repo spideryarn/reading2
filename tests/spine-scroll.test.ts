@@ -111,18 +111,25 @@ let host: HTMLDivElement;
    this its layout effect throws and the component never measures — which shows
    up as "the spine rendered once and drew nothing", not as a missing global. */
 class FakeResizeObserver {
-  observe(): void {}
+  static instances: FakeResizeObserver[] = [];
+  target: Element | null = null;
+  constructor(private callback: ResizeObserverCallback) {
+    FakeResizeObserver.instances.push(this);
+  }
+  observe(target: Element): void { this.target = target; }
+  notify(): void { this.callback([], this as unknown as ResizeObserver); }
   unobserve(): void {}
   disconnect(): void {}
 }
 
 /**
- * Where the article starts on the page, in px. Zero for every case but the one
- * that pins the band's exact translation — a `docTop` of zero would let a
- * formula that forgot to subtract it pass, and the other cases' scroll
- * positions are written against a zero.
+ * Where the article starts on the page, in px. Defaults to zero; placement
+ * cases set it explicitly so forgetting to subtract `docTop` cannot pass.
  */
 let docOffset = 0;
+let rowHeight = ROW_H;
+let articleOutline: OutlineEntry[];
+const originalFonts = Object.getOwnPropertyDescriptor(document, "fonts");
 
 beforeEach(() => {
   /* Without this React does not treat `act` as authoritative and its updates
@@ -143,6 +150,10 @@ beforeEach(() => {
   ) => clearTimeout(id);
   renders.clear();
   docOffset = 0;
+  rowHeight = ROW_H;
+  articleOutline = outline();
+  FakeResizeObserver.instances = [];
+  Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
   document.body.innerHTML = "";
 
   const table = document.createElement("table");
@@ -165,8 +176,8 @@ beforeEach(() => {
       const block = this.getAttribute("data-block");
       if (!block) return { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
       const i = Number(block.slice(1));
-      const top = docOffset + i * ROW_H - window.scrollY;
-      return { top, bottom: top + ROW_H, left: 0, right: 0, width: 0, height: ROW_H };
+      const top = docOffset + i * rowHeight - window.scrollY;
+      return { top, bottom: top + rowHeight, left: 0, right: 0, width: 0, height: rowHeight };
     },
   });
 
@@ -180,6 +191,8 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  if (originalFonts) Object.defineProperty(document, "fonts", originalFonts);
+  else Reflect.deleteProperty(document, "fonts");
 });
 
 /** Let the requested animation frame run, and React commit what it sets. */
@@ -208,9 +221,9 @@ async function scrollTo(y: number): Promise<void> {
  * late arrival of the first measurement. Both of those happened while writing
  * this.
  */
-async function mount(): Promise<HTMLElement> {
+async function mount(layoutKey = "x"): Promise<HTMLElement> {
   await act(async () => {
-    root.render(createElement(Spine, { outline: outline(), layoutKey: "x", onJump: () => {} }));
+    root.render(createElement(Spine, { outline: articleOutline, layoutKey, onJump: () => {} }));
   });
   /* A **second** act, deliberately. React flushes layout effects as the first
      one exits, so the frame the rail asks for is only *requested* by then —
@@ -253,7 +266,7 @@ describe("the spine during a scroll", () => {
     /**
      * **`transform`, not `top`, and it is a battery fix rather than a style
      * preference.** A per-frame `top` write is layout + paint + raster — in a
-     * Chrome trace of the whole root layer — on every frame of every scroll; a
+     * Chrome trace — on every frame of every scroll; a
      * `transform` on its own layer is none of those.
      * docs/investigations/261003a-what-a-scroll-frame-costs-in-the-reading-view.md
      * has the trace, docs/plans/261003a-ipad-battery-scroll-repaint.md the fix.
@@ -294,6 +307,39 @@ describe("the spine during a scroll", () => {
     }
     expect(band?.style.transform, "the band itself stays put inside the wrapper").toBe("");
   });
+
+  it.each(["window resize", "body resize", "font swap", "mode switch"])(
+    "refreshes placement without another scroll after a %s",
+    async (change) => {
+      await mount();
+      await scrollTo(800);
+      expect(mover()?.style.transform).toBe("translateY(40%)");
+
+      // Rewrapping changes both the article's offset and its height. Keep the
+      // scroll position fixed so only the metric notification can update it.
+      docOffset = 200;
+      rowHeight = 200; // article height 4000px
+      if (change === "window resize") {
+        Object.defineProperty(window, "innerHeight", { value: 750, configurable: true });
+        window.dispatchEvent(new Event("resize"));
+      } else if (change === "body resize") {
+        const observer = FakeResizeObserver.instances.find((o) => o.target === document.body);
+        expect(observer, "the body is observed").toBeDefined();
+        observer?.notify();
+      } else if (change === "font swap") {
+        document.fonts.dispatchEvent(new Event("loadingdone"));
+      } else {
+        // Same outline object: the layoutKey alone must cause the remeasure.
+        await mount("rewrapped");
+      }
+      await settle();
+
+      expect(window.scrollY).toBe(800);
+      expect(mover()?.style.transform).toBe("translateY(15%)"); // (800 − 200) / 4000
+      const band = host.querySelector<HTMLElement>(".spine-viewport");
+      expect(band?.style.height).toBe(change === "window resize" ? "18.75%" : "12.5%");
+    },
+  );
 
   it("lets go of every scroll listener it took when it unmounts", async () => {
     const added = vi.spyOn(window, "addEventListener");

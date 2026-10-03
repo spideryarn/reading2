@@ -35,12 +35,14 @@ clipped to marks the page writes itself, plus `/proc` CPU for the renderer, plus
 
 **Compare per 1000 px, and trust counts over seconds.** The touch gesture waits for each input to be
 acknowledged, so it stretches when the box is loaded; the baseline ran at load 16–28 and the after at
-9–12. Counts of paints, raster tasks and style recalcs do not depend on load and repeated to within a
-few between runs.
+9–12. The iPad touch runs delivered ~480 scroll events each, and their paint, raster and style counts
+repeated within a few. Desktop wheel inputs coalesced differently: 82–111 scroll events before and
+136–142 after, with Paint counts varying by 37–56 even between repeats. Counts still depend on
+delivered frames and input pacing; the desktop comparison is less controlled.
 
 ## What it found
 
-1. **Scrolling is threaded and every listener is passive** — `ScrollTree::ScrollBy` runs on the
+1. **Scrolling is threaded and the recorded scroll listeners are passive** — `ScrollTree::ScrollBy` runs on the
    compositor, no main-thread scrolling reasons. But the main thread is woken every frame by the
    rAF samplers (`useReadingPosition`, `Spine`, `scroll.ts`'s bar watcher, and in Summary
    `OnScreenLinksStyle`).
@@ -78,8 +80,10 @@ The band now sits in a track-height wrapper with `will-change: transform`, and t
 | style recalcs | 662, 663 → 661, 663 | 520, 521 → 521, 521 | 179, 143 → 208, 204 |
 
 Paints fell by 90% and raster by 75% under iPad emulation, and the main thread's CPU per scrolled
-pixel roughly halved; on desktop the gain is ~10–15%, because at DPR 1 there is far less to raster.
-Style recalcs did not move, which is right: the fix removes paint and raster, not style.
+pixel roughly halved. Desktop main-thread CPU per 1000 px averaged ~12% lower, but renderer CPU
+averaged only ~3.4% lower and one repeat was higher after the change. With different scroll-event
+counts and box load, these runs do not isolate a desktop gain or explain it by DPR. iPad style
+recalcs stayed steady; a transform still needs style updates.
 
 ## What this does not show
 
@@ -87,8 +91,8 @@ Style recalcs did not move, which is right: the fix removes paint and raster, no
   on its own policy, so the iPad may already have confined the spine's repaint to a small layer; what
   carries is that a `top` write is layout + paint + raster of *some* layer every frame and a
   transform on a composited layer is none of them. How much battery this buys on Greg's iPad is not
-  measured and cannot be from here — WebKit will not launch on the box
-  ([260912a](../plans/260912a-ipad-battery-drain-the-reading-view-polls-the-job-queue-every-eight-seconds-at-rest.md)).
+  measured here. No WebKit or Safari run was made for this investigation; device battery benefit
+  still needs a measurement on the iPad.
 - **Chrome 152 does not report paint damage** (`LayerTree.layerPainted` never fires, Paint's
   `layerId` is always 0, its `clip` is a cull rect), so "what was repainted" is by layer repaint
   counts and by elimination, not by area.
@@ -98,7 +102,9 @@ Style recalcs did not move, which is right: the fix removes paint and raster, no
 ## Not done, and where it went
 
 Items 3 and 4 above, and the per-frame `getBoundingClientRect` in `useReadingPosition`, are queued
-in [overseer-queue.md](../project/overseer-queue.md) with these numbers. Item 3 is ~13% of the
-iPad-Summary main thread after the fix and needs the band's links reconciled when they remount;
+as proposals with these numbers (`npx tsx scripts/overseer-queue.ts show <id>`; the queue is
+described in [overseer-queue.md](../project/overseer-queue.md)): `qi-scsj9ksv` (item 3),
+`qi-nj66xnmb` (item 4) and `qi-dcxazgza` (reading position). Item 3 is ~13% of the iPad-Summary main thread after the fix and needs
+the band's links reconciled when they remount;
 item 4 is mostly jank at a reversal and touches delicate specificity in `shell.css` and
 `narrow-window.css`. Neither met "a fix that looks promising and won't add too much complexity".

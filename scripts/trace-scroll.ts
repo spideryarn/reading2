@@ -62,8 +62,9 @@
  *     4 up (24 swipes, 14,400px). A real finger flings; this does not.
  *
  * **Headless Chrome on the box has no GPU**, so raster and compositing are in
- * software and their times are not an iPad's. The counts — frames,
- * Paint events, invalidations, layer damage, raster tasks — do not depend on that, or on load.
+ * software and their times are not an iPad's. Counts also depend on delivered
+ * frames and input pacing: the touch runs repeated closely, but desktop wheel
+ * events coalesced differently under load. Compare the delivered scroll events too.
  *
  * `--mutations` adds a page-side `MutationObserver` that counts attribute,
  * `<style>` text and class writes during the scroll, by element. It is JS in
