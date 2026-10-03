@@ -794,9 +794,15 @@ export function useComments(slug: string): CommentsApi {
                 const retry = await fetchOk(url, createRequest(input));
                 const { comment } = await readJson<{ comment: Comment }>(retry);
                 await forget(comment.id, isCurrent());
-              } catch {
-                /* Still ambiguous, or a confirmed collision. Deleting by id
-                   without proving ownership could erase an older real row. */
+              } catch (retryError) {
+                /* A 409 confirms a collision, so preserving that row completes
+                   the reader's delete of this attempted create. Any other
+                   failure leaves it genuinely unknown whether their row is on
+                   disk; say so rather than showing a deletion that may undo
+                   itself on reload. The single retry remains bounded. */
+                if (statusOf(retryError) !== 409 && isCurrent()) {
+                  setError(describeFetchFailure(retryError as Error));
+                }
               }
             }
             return null;

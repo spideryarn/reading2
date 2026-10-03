@@ -165,3 +165,29 @@ words this box will ever have, the recording stays on the device to be offered b
 passage's box, and on Safari and Firefox the field holds only what was typed. Sol's version would
 have flushed a dictated-only Chromium draft as empty, which is the loss this plan exists to stop.
 Accepted side effect: the kept recording may be offered back beside the already-saved rough note.
+
+## Landed, 2026-10-03
+
+- Built as reviewed (67604b379). Reader-facing help and the Dock's Comments sentence were updated
+  too, since they named the tick-box.
+- **Code review, two rounds and one fix check**, all GPT Sol:
+  [round 1](261003i-comment-box-code-review-sol.md) fixed B1 to B4 (a bfcache-restored tab; an edit
+  overtaking a held create; a delete racing a create; help over-promising);
+  [round 2](261003i-comment-box-code-review-2-sol.md), scoped to round 1's own fixes, fixed C1 to C3
+  (a cancelled held create left a tombstone that refused every later bookmark of that paragraph; a
+  delete racing a create whose response was lost; a patch landing in the next article's list);
+  [the fix check](261003i-comment-box-fix-check-sol.md) of C1 and C2 found C1 correct and made C2
+  report a failed confirmation instead of swallowing it. **Discovery closed there**; I read the
+  last diff myself (six lines) and landed it.
+- **What D3 cost.** Holding a create behind the opening read is where B2, B3, C1, C2 and C3 all
+  came from: it gave `useComments` a new state (a create that exists but has not been sent) that
+  edit, delete and the slug change each had to learn about. It is the right fix for the race, and
+  it is now the most intricate part of that hook. Anyone changing `create`, `remove` or the queue
+  should read `tests/use-comments-create-waits-for-the-opening-read.test.ts` first.
+- Browser-checked (Sonnet subagent, Playwright; desktop, iPad profile in Chromium and WebKit, 390px):
+  14 of 14 on the build before the review fixes. From it: the footer buttons are the house touch
+  height on a coarse pointer. **The review fixes after it are covered by tests, not by a second
+  browser pass.**
+- Known and left: by touch, no second box while one is open (the chip is suppressed while a box is
+  up); a drag in the first seconds after a page load sometimes opened no box in the browser check,
+  not reproduced or explained.

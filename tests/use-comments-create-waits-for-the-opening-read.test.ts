@@ -452,6 +452,41 @@ describe("once the read has settled", () => {
     expect(posted).toHaveLength(1);
   });
 
+  it("returns the same confirmed comment to both callers of a coalesced create", async () => {
+    const get = held();
+    const post = held();
+    const writes: string[] = [];
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      return post.promise;
+    };
+    await show("a-piece");
+    get.release(json({ comments: [] }));
+    await settle();
+
+    let first: Comment | null | undefined;
+    let second: Comment | null | undefined;
+    act(() => {
+      void latest!.create(NEW).then((comment) => {
+        first = comment;
+      });
+      void latest!.create(NEW).then((comment) => {
+        second = comment;
+      });
+    });
+    expect(writes, "the coalesced call sent a second POST").toEqual(["POST"]);
+
+    const stored: Comment = { ...NEW, createdAt: OLD.createdAt, status: "none" };
+    post.release(json({ comment: stored }));
+    await settle();
+
+    expect(first).toEqual(stored);
+    expect(second).toEqual(stored);
+    expect(bodies()).toEqual([NEW.body]);
+  });
+
   it("keeps delete ahead of an in-flight create response", async () => {
     const get = held();
     const post = held();
@@ -557,6 +592,45 @@ describe("once the read has settled", () => {
       "POST",
       "POST",
     ]);
+    expect(bodies()).toEqual([]);
+  });
+
+  it("reports when the one ownership-proof retry also fails", async () => {
+    const get = held();
+    const post = held();
+    const writes: string[] = [];
+    let posts = 0;
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return get.promise;
+      writes.push(method);
+      if (method === "POST") {
+        posts++;
+        return posts === 1
+          ? post.promise
+          : Promise.resolve(json({ error: "The comment could not be confirmed." }, 503));
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+    get.release(json({ comments: [] }));
+    await settle();
+
+    let result: Comment | null | undefined;
+    act(() => {
+      void latest!.create(NEW).then((comment) => {
+        result = comment;
+      });
+      latest!.remove(NEW.id);
+    });
+    post.fail(new TypeError("the first response was lost"));
+    await settle();
+
+    expect(result, "the deleted create's caller was left waiting").toBeNull();
+    expect(writes, "the failed proof retried more than once").toEqual(["POST", "POST"]);
+    expect(latest?.error, "the unconfirmed deletion was silent").toBe(
+      "The comment could not be confirmed.",
+    );
     expect(bodies()).toEqual([]);
   });
 });
