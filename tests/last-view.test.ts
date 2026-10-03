@@ -89,9 +89,21 @@ describe("rememberableSearch", () => {
       "?at=spya-a&diagram=force&dhue=topic",
     );
     expect(rememberableSearch("?mode=remember&remember=quiz")).toBe("?remember=quiz");
-    /* Tweets, since it became a mode on 2026-09-29: opening it with no thread
-       writes one on arrival (useTweets.ts § `useAutoRunOnArrival`), and a
-       restore is the one arrival nobody chose. Plan 260929f. */
+    /* **Summary's Thread** (the Tweets mode until 2026-10-03): opening it with
+       no thread writes one on arrival (useTweets.ts § `useAutoRunOnArrival`),
+       and a restore is the one arrival nobody chose. So the mode is dropped
+       when the remembered view is the thread — and `summary=thread` itself
+       stays, dormant, as `diagram=force` does above. Plan 261003l. */
+    expect(rememberableSearch("?mode=summary&summary=thread")).toBe("?summary=thread");
+    expect(rememberableSearch("?at=spya-a&summary=thread&mode=summary")).toBe("?at=spya-a&summary=thread");
+    expect(restoredHref("/read/x", "", "?at=spya-a&mode=summary&summary=thread")).toBe(
+      "/read/x?at=spya-a&summary=thread",
+    );
+    /* The positive control: Summary at a length is restored as it stands. */
+    expect(rememberableSearch("?mode=summary&summary=fuller")).toBe("?mode=summary&summary=fuller");
+    expect(rememberableSearch("?mode=summary")).toBe("?mode=summary");
+    /* A browser that remembered the old mode word: `settleAddress` would lift
+       it to the thread, so it is dropped the same way. */
     expect(rememberableSearch("?mode=tweets")).toBe("");
     expect(rememberableSearch("?at=spya-a&mode=tweets")).toBe("?at=spya-a");
     expect(restoredHref("/read/x", "", "?at=spya-a&mode=tweets")).toBe("/read/x?at=spya-a");

@@ -463,7 +463,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Tied to passages.</strong> Quotes are cut out of the article: the model only
             chose them. FAQ writes no answers at all; each question points to the passages that
-            respond to it. Summary, Tweets, Ideas, Remember and Chat link each claim to the
+            respond to it. Summary and its thread, Ideas, Remember and Chat link each claim to the
             paragraphs behind it, so you can check in one click.
           </li>
           <li>
@@ -514,8 +514,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             button to start it, so a link someone sends you never starts work you did not ask for.
           </li>
           <li>
-            <strong>Tweets is the exception</strong>: on your own article it starts writing as soon as
-            you open it, however you got there.
+            <strong>Summary’s Thread is the exception</strong>: on your own article it starts writing as
+            soon as you open it, however you got there.
           </li>
           <li>
             <strong>Chat, Search and the margin’s ?</strong> work when you ask, and answers appear as

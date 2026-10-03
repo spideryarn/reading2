@@ -281,17 +281,36 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   summary: {
-    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
-    /* Checked against src/simple-summary.ts: one job writes every level (a
-       call each, side by side) and stores them together, and every paragraph
-       keeps one to three passage ids. Until 2026-10-01 this mode was the
-       tree's gists at Parts or Sections, written at ingest; that outline went
-       (plan 261001p), and Structure is where the gists are drawn now. */
-    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
+    description: "The piece restated: in plain words, brief or fuller, or as a thread of short posts",
+    /* Checked against the source, claim by claim (docs/project/mode.md § The
+       card on the button):
+       - "writes the plain-words lengths in one go … kept": src/simple-summary.ts
+         — one job writes every level (a call each, side by side) and stores
+         them together; every paragraph keeps one to three passage ids. A third
+         level, Simple, is still written and not shown (plan 261003l), so this
+         says "the lengths" and no number.
+       - "the thread is one more pass over the whole article": the `tweets`
+         step, one messages-wire call over `articleWithIds` (src/tweets.ts §
+         generateTweets).
+       - "each post points to the passages it came from": `Tweet.blocks`,
+         validated against the blocks sent (src/tweets.ts § checkBlocks); a post
+         whose ids were all dropped keeps its text and draws no link, and a
+         thread from before `tweets/5` has none — hence "points", not "links".
+       - "a post over the length limit is kept as written and marked":
+         `buildThread` keeps each post's text and counts it; the band marks an
+         overrun.
+       About the mode, not the press — a visitor reads what is stored and
+       starts nothing. No price. Until 2026-10-01 this mode was the tree's gists
+       at Parts or Sections (plan 261001p); until 2026-10-03 the thread was a
+       mode of its own, Tweets. */
+    how: "A model writes the plain-words lengths in one go, the first time you ask, and they are kept; each paragraph links to the passages it rests on — the article says it better. The thread is one more pass over the whole article: each post points to the passages it came from, and a post over the length limit is kept as written and marked.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` is not here: the bar has a *Summary › Simple* row that goes
-       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
-       on 2026-10-01 — nothing in Summary is a gist any more. */
+       **Not `tweets`, `thread` or `twitter`**, though mode.md § Retiring a mode
+       says to give the successor the retired name: those words belong to the
+       *Summary › Thread* row (src/web/sub-modes.ts § `SUMMARY_SUB_MODES`). On
+       this row they would select Summary at whatever view the address names —
+       Brief, by default — and could start the plain-words run (GPT Sol, F3 of
+       the 261003l review). `gist` went with the outline on 2026-10-01. */
     aliases: ["summarise", "summarize"],
     experimental: false,
   },
@@ -524,31 +543,6 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        for it in the mainstream: "take Skim and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
        owners-only (`POLICY.skim`, src/web/visitor.ts). */
-    experimental: false,
-  },
-  tweets: {
-    /* `NOT_A_MODE.tweets` in src/web/Dock.tsx until 2026-09-29, when the thread
-       page became this mode (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md). */
-    description: "The article as a numbered thread of short posts",
-    /* **Checked against the source, claim by claim** (docs/project/mode.md §
-       The card on the button):
-       - "one model pass over the whole article": the `tweets` step, one
-         messages-wire call over `articleWithIds` (src/tweets.ts § generateTweets).
-       - "not part of adding a piece": `DEFAULT_INGEST_STEPS` excludes `tweets`
-         (src/pipeline.ts).
-       - "each post points to the passages it came from": `Tweet.blocks`,
-         validated against the blocks sent (src/tweets.ts § checkBlocks); a post
-         whose ids were all dropped keeps its text and draws no link, and a
-         thread from before `tweets/5` has none — hence "points", not "links",
-         and no promise that every post does.
-       - "nothing is shortened to fit": `buildThread` keeps each post's text
-         (trimmed) and counts it; the band marks an overrun.
-       About the mode, not the press — a visitor reads the stored thread and
-       starts nothing. No price. */
-    how: "One model pass over the whole article, written once and kept — it is not part of adding a piece, so a thread exists only where somebody asked for one. Each post points to the passages it came from, and nothing is shortened to fit: a post over the length limit is kept as written and marked.",
-    /* The command bar's Tweets *page* row carried these until the page went. */
-    aliases: ["thread", "twitter", "x", "social"],
-    /* The page it replaces was on everybody's bar. */
     experimental: false,
   },
   marginalia: {

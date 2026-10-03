@@ -1460,7 +1460,13 @@ function mountSummary(): ReactNode {
   return createElement(
     NuqsAdapter,
     null,
-    createElement(VisitorSummaryBand, { simple: undefined, onJump: noop }),
+    createElement(VisitorSummaryBand, {
+      slug: SLUG,
+      simple: undefined,
+      thread: undefined,
+      article: OWNED,
+      onJump: noop,
+    }),
   );
 }
 
@@ -1524,7 +1530,14 @@ function mountTimeline(timeline: Timeline | null, over: Partial<TimelineOwner> =
    Tweets shapes below are simply what the band draws *now*, printed from the
    mounted panel and then checked against `Tweets.tsx` by eye: they pin the
    shape from here on, against the next refactor, and say nothing about a
-   baseline. GPT Sol code review, findings 3 and 4. */
+   baseline. GPT Sol code review, findings 3 and 4.
+
+   **Summary's Thread view since 2026-10-03** (plan 261003l), so the panel is
+   mounted the way `SummaryBand` mounts it: with Summary's row of controls,
+   which it draws first, above its own header. */
+
+/** Stands in for `SummaryControls`: the shape is the row's, not the control's. */
+const THREAD_CONTROLS = createElement("div", { className: "summ-views" });
 
 const TWEET_THREAD: TweetThread = {
   version: "tweets/5",
@@ -1566,6 +1579,7 @@ function mountTweets(owner: UseTweets): ReactNode {
     article: OWNED,
     slug: SLUG,
     onJump: noop,
+    controls: THREAD_CONTROLS,
   });
 }
 
@@ -1575,6 +1589,7 @@ function mountVisitorTweets(): ReactNode {
     article: OWNED,
     slug: SLUG,
     onJump: noop,
+    controls: THREAD_CONTROLS,
   });
 }
 
@@ -1796,38 +1811,49 @@ const TIMELINE_LOADING: BandShape = {
 };
 
 /* Tweets — see the note above `TWEET_THREAD`: these are what the band draws
-   now, not a baseline. */
+   now, not a baseline. The band is Summary's (its label, and `summ` in its
+   class), and its first row after the (i) is Summary's control row. */
 const TWEETS_SHAPE: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: true,
   /* No foot for a settled thread since 2026-10-01: who wrote it went into the
      (i), first in the band (spya-ucu35y, plan 261001m). */
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.summ-controls",
+    "div.band-head",
+    "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4",
+  ],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
-/** No thread yet: no header, no footer, only the empty state. */
+/** No thread yet: no header, no footer, only the control row and the empty state. */
 const TWEETS_NONE: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.gloss-empty"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "div.gloss-empty"],
 };
 
 const TWEETS_LOADING: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "p.gloss-quiet"],
 };
 
 /** A visitor has the posts and the (i), and no footer. */
 const TWEETS_VISITOR: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.summ-controls",
+    "div.band-head",
+    "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4",
+  ],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
@@ -2171,22 +2197,22 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(OUTLINE);
   });
 
-  it("draws Tweets' band for the owner with a thread: the (i), header and posts", async () => {
+  it("draws the thread's band for the owner with a thread: the (i), the control row, header and posts", async () => {
     await paint(mountTweets(tweetsOwner(TWEET_THREAD)));
     expectShape(TWEETS_SHAPE);
   });
 
-  it("draws Tweets' band with no header and no footer when nobody has written a thread", async () => {
+  it("draws the thread's band with no header and no footer when nobody has written a thread", async () => {
     await paint(mountTweets(tweetsOwner(null)));
     expectShape(TWEETS_NONE);
   });
 
-  it("draws Tweets' band with no header while the thread is being looked for", async () => {
+  it("draws the thread's band with no header while the thread is being looked for", async () => {
     await paint(mountTweets(tweetsOwner(null, { status: "loading" })));
     expectShape(TWEETS_LOADING);
   });
 
-  it("draws Tweets' band for a visitor, with the (i) and the posts and no footer", async () => {
+  it("draws the thread's band for a visitor, with the (i), the control row and the posts, and no footer", async () => {
     await paint(mountVisitorTweets());
     expectShape(TWEETS_VISITOR);
   });

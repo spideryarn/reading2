@@ -58,13 +58,35 @@ describe("the Run again rows", () => {
   });
 
   it("are found by the mode's name and its nicknames, not only by the label", () => {
-    /* The thread's label is *Thread*, and the mode it shows in is *Tweets*;
-       `terms` is one of Glossary's own nicknames (mode-catalog.ts). */
-    expect(labels(rankCommands("rerun tweets", LIST))[0]).toBe("Thread › Run again");
+    /* `terms` is one of Glossary's own nicknames (mode-catalog.ts). */
     expect(labels(rankCommands("regenerate terms", LIST))[0]).toBe("Glossary › Run again");
     expect(labels(rankCommands("rerun cross references", LIST))[0]).toBe(
       "Cross-references › Run again",
     );
+  });
+
+  /* **Summary shows two artefacts, and each re-run answers only to its own
+     words** — GPT Sol's F5 on plan 261003l. The thread's row borrowed the
+     Tweets mode's name and aliases through `RERUN_MODE` until the mode went on
+     2026-10-03; pointing that at Summary instead would have made `rerun
+     summary` force a thread. */
+  it("keeps `rerun tweets` on the thread now that Tweets is not a mode", () => {
+    for (const query of ["rerun tweets", "regenerate thread", "redo tweet thread", "twitter again"]) {
+      const ranked = rankCommands(query, LIST);
+      expect(labels(ranked)[0], query).toBe("Thread › Run again");
+      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-tweets" });
+    }
+  });
+
+  it("`rerun summary` writes the plain-words lengths again, and never a thread", () => {
+    for (const query of ["rerun summary", "regenerate summary", "summary again", "rerun summarise"]) {
+      const ranked = rankCommands(query, LIST);
+      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-simple" });
+      expect(
+        ranked.map((c) => (c.kind === "action" ? c.id : "")),
+        query,
+      ).not.toContain("rerun-tweets");
+    }
   });
 
   it("leaves the plain name to the mode, which comes first", () => {

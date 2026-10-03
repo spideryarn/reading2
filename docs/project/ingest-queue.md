@@ -617,7 +617,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 it can also start the main modes.** While the import runs, the page shows a tick
 box that is on by default. When the import finishes, the page opens the article and queues one job
-per main mode: Tweets, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
+per main mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
 front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
 the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
 paper before `structure`):
@@ -844,7 +844,7 @@ same machinery given a different sub-list, and none of them needed a special cas
   wait on it ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
-- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the Tweets mode's band (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)); `useTweets.ts` sends it.
+- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the thread's band — Summary's Thread view (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); `useTweets.ts` sends it.
 - **Buy the paragraph labels** — `{ slug, steps: ["labels"] }`, and nothing else. That is the whole
   shape of the successor job an ingest leaves behind, and `unrunnableStepPlan` is checked against it
   by name in `tests/jobs.test.ts`.

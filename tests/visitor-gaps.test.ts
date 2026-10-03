@@ -246,35 +246,32 @@ describe("what a visitor is told, mode by mode", () => {
     }
   });
 
-  /* **And the other way round, since Tweets became a mode on 2026-09-29** —
-     it reads its own flag and no other, so the one-built fixture that catches
-     a crossed wire is asked about it too (plan 260929f). */
-  it("reads the tweets flag, and only the tweets flag, for Tweets", () => {
-    expect(visitorGap("tweets", only("tweets"))).toBeNull();
-    for (const other of ["glossary", "quotes", "ideas", "faq", "arc"] as const) {
-      expect(visitorGap("tweets", only(other))?.kind, `tweets when only ${other} is built`).toBe(
-        "not-built",
-      );
-    }
+  /* **Summary stands open whatever is stored, the thread included.** Tweets
+     was a mode with an artefact gate of its own from 2026-09-29 to 2026-10-03;
+     the thread is Summary's Thread view now, and Summary's band says for
+     itself, under its control, which of its two artefacts nobody has made
+     (plan 261003l). A gate here would take the control away with it. */
+  it("leaves Summary open to a visitor with or without a thread or a summary", () => {
+    expect(visitorGap("summary", NOTHING_BUILT)).toBeNull();
+    expect(visitorGap("summary", only("tweets"))).toBeNull();
+    expect(visitorGap("summary", only("simpleSummary"))).toBeNull();
   });
 
   /**
-   * **The tweet thread's sentence**, which a visitor's Tweets band shows when
-   * nobody wrote one.
+   * **The tweet thread's sentence**, which a visitor's Summary band shows on
+   * its Thread view when nobody wrote one.
    *
    * It was the page's own answer until 2026-09-29: `VisitorTweetsPage`
    * branched on the artefact key itself and took its sentence from
    * `notBuiltGap`, with no `tweetsGap` beside it — a policy function returning
    * a value TypeScript cannot narrow on would have been a second answer to a
-   * question already decided (GPT Sol, 2026-08-28). Tweets is a mode now, so
-   * its gap comes through `POLICY.tweets` like any other artefact mode's, and
-   * this asserts that route says the same sentence about a tweet thread.
-   * tests/public-network-trace.test.tsx drives both branches on the band.
+   * question already decided (GPT Sol, 2026-08-28). `VisitorSummaryBand` does
+   * the same again now (SummaryMode.tsx), having been `POLICY.tweets`'s in
+   * between. tests/public-network-trace.test.tsx drives both branches on the band.
    */
   it("has a sentence for a thread nobody wrote", () => {
     expect(notBuiltGap("tweets")).toEqual({ kind: "not-built", noun: expect.any(String) });
     expect(visitorSentence(notBuiltGap("tweets"))).toContain("tweet thread");
-    expect(visitorGap("tweets", NOTHING_BUILT)).toEqual(notBuiltGap("tweets"));
   });
 
   /**
@@ -400,10 +397,6 @@ describe("what a visitor is told, mode by mode", () => {
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
         mode === "citations" ||
-        /* And Tweets, a page of its own until 2026-09-29 and a mode since, on
-           the same terms: the stored thread rides on the payload
-           (plan 260929f). */
-        mode === "tweets" ||
         /* And the Debate, the same day, once its rows' boundary was built
            (plan 260929c stage 4). */
         mode === "debate" ||

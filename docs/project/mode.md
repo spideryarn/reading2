@@ -425,10 +425,11 @@ Then the residue nothing refuses at compile time:
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
-  is nothing there**; arriving does not. (One mode starts on arrival instead: Tweets, since
-  2026-09-29 a mode rather than a page, kept the rule Greg asked of its page on 2026-09-12 —
-  `useAutoRunOnArrival` in the same file — and is in last-view's `NEEDS_AN_EXPLICIT_PRESS` so a
-  restore cannot spend. A new mode that wants the same needs both halves.)
+  is nothing there**; arriving does not. (One view starts on arrival instead: the thread, since
+  2026-10-03 Summary's Thread view rather than a mode, kept the rule Greg asked of its page on
+  2026-09-12 — `useAutoRunOnArrival` in the same file — and last-view's `opensTheThread` drops the
+  mode from a restore that would open it, so a restore cannot spend. A new mode that wants the same
+  needs both halves.)
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*

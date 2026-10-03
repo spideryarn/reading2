@@ -81,7 +81,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
 | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
 | `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
-| `summary` | which of Summary's three plain-words levels the slider is on: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `simple` or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
+| `summary` | which of Summary's three views is showing: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `fuller` or `thread` — [summaries.md](summaries.md), [tweets.md](tweets.md). `simple` was a value until 2026-10-03 and reads as `brief`. Arriving on a length never spends; only pressing Brief or Fuller does. **`thread` is the exception**: its band writes the thread when its owner arrives, so a remembered view on the thread is restored without `mode` (below). `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
@@ -356,7 +356,7 @@ default to mean what it used to. Anywhere else, reaching words mode is something
 doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 
 **A third segment says which of the article's pages**, added the same day:
-`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode and the old address began redirecting to it — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)). That does not bend the rule — those are still the
+`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) — and then, on 2026-10-03, Summary's Thread view; both old addresses now land on `?mode=summary&summary=thread`, on a cold load, an in-app link and Back or Forward, with any carried `mode` or `summary` replaced: `liftLegacyTweets` in [`router.ts`](../../src/web/router.ts), [plan](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)). That does not bend the rule — those are still the
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
@@ -667,7 +667,10 @@ of those starts something merely by being arrived in — Diagram POSTs `/api/sim
 open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or
 Remember later returns the reader to the picture or the half they had chosen. The list is
 `NEEDS_AN_EXPLICIT_PRESS` in [`last-view.ts`](../../src/web/last-view.ts), with the evidence for
-each beside it. Two of the three were found by a cross-family review after a survey had reported all
+each beside it. **Summary is remembered as no mode too while its view is the thread**
+(`mode=summary` with `summary=thread`, or the older `mode=tweets`): opening the thread with none
+stored writes one, and a restore is the one arrival nobody chose. `summary=thread` itself stays
+remembered, like the others' subordinate parameters — `opensTheThread`, same file. Two of the three were found by a cross-family review after a survey had reported all
 thirteen modes inert — so **check the mode's own hook before adding one back**, and note that a
 `?mode=` a reader *sent* in a link is untouched either way: this is only about what is replayed
 unasked.

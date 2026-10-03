@@ -45,7 +45,7 @@
  *     its Dock button does** — same activation, same generate-on-open, same
  *     cost. On the Metadata page it follows the mode link drawn there and arms
  *     nothing, which is likewise exactly what that surface's control does
- *     (Dock.tsx § `useActivateMode`). A non-mode row can spend too: Tweets
+ *     (Dock.tsx § `useActivateMode`). A non-mode row could spend too: Tweets
  *     was plain navigation to the thread page (until it became a mode,
  *     2026-09-29), which wrote on owner arrival when empty, and the row wore
  *     the `generates` marker for that consequence.

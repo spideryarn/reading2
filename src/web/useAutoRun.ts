@@ -177,8 +177,9 @@ export function useAutoRun(
 
 /**
  * **A page the owner opened, with nothing on it, starts itself — no press.**
- * One caller: the Tweets band (useTweets.ts) — the Tweets page until it became
- * a mode on 2026-09-29, when the arrival rule came with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
+ * One caller: the thread's band (useTweets.ts), Summary's Thread view — the
+ * Tweets page until it became a mode on 2026-09-29, when the arrival rule came
+ * with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
  *
  * > The Tweets mode should automatically start generating (if it hasn't already
  * > generated) when opened (without having to click a button to kick it off)
@@ -191,8 +192,10 @@ export function useAutoRun(
  * `/read/<slug>/tweets` was a **path**, and arriving at it was the intent. So the
  * token went, and everything else stayed. When the page became a mode on
  * 2026-09-29 the rule came with it — Greg's *"when opened"* was not revoked —
- * and the one arrival nobody chose, a last-view restore, drops `?mode=tweets`
- * instead (last-view.ts § `NEEDS_AN_EXPLICIT_PRESS`). What stays:
+ * and it came again on 2026-10-03, when the mode became Summary's Thread view
+ * (`?mode=summary&summary=thread`). The one arrival nobody chose, a last-view
+ * restore, drops the mode instead (last-view.ts § `opensTheThread`). What
+ * stays:
  *
  *  - **one attempt per `(slug, target)` per page load** — `beginAutoAttempt`,
  *    which records before it answers, so `<StrictMode>`'s double effect is

@@ -1414,6 +1414,12 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     /* Its own band since Simple (plan 260930i): the visitor's reads the
        stored paragraphs off the payload, with no `useSimple` under it. */
     { label: "VisitorSummaryBand", as: "visitor" },
+    /* The thread, Summary's third view since 2026-10-03 (plan 261003l) and a
+       mode of its own before: a second owner band behind the same boundary.
+       `VisitorTweetsBand` needs a stored thread on the payload, and the owner
+       witness proves its composition, as for the artefact twins above. */
+    { label: "TweetsBand", as: "owner", extra: "&summary=thread" },
+    { label: "VisitorSummaryBand", as: "visitor", extra: "&summary=thread" },
   ],
   diagram: [
     { label: "DiagramBand", as: "owner" },
@@ -1451,13 +1457,6 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
   ],
   faq: [
     { label: "FaqBand", as: "owner" },
-    { label: "VisitorBand", as: "visitor" },
-  ],
-  /* A mode since 2026-09-29 (plan 260929f), FAQ's shape: the owner's band and
-     the visitor's gap. `VisitorTweetsBand` needs a stored thread on the
-     payload, and the owner witness proves its composition, as above. */
-  tweets: [
-    { label: "TweetsBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
   structure: [
@@ -1827,11 +1826,11 @@ describe("a press that met any broken band is retired", () => {
     expect(jobPosts()).toEqual([]);
   });
 
-  /* Summary's plain-words slider (plans 260930i, 261001b): `bandTarget` must
-     answer `simple` for every level — Fuller here, the one Sol's plan review
+  /* Summary's control (plans 260930i, 261001b, 261003l): `bandTarget` must
+     answer `simple` for both lengths — Fuller here, the one Sol's plan review
      found missing (P1-3) — or the boundary retires nothing and the token
      waits for a later mount to spend. */
-  it("summary: the slider moved to Fuller, when the plain-words view throws under the real useSimple", async () => {
+  it("summary: the Fuller segment pressed, when the plain-words view throws under the real useSimple", async () => {
     who.set(OWNER_A);
     notBuilt = "/api/simple/";
     await open("?mode=summary");
@@ -1839,13 +1838,11 @@ describe("a press that met any broken band is retired", () => {
     trace.length = 0;
 
     probe.throwAt = "OwnerSimple";
-    const input = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
-    expect(input, "no plain-words slider").not.toBeNull();
-    await act(async () => {
-      if (!input) return;
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    const fuller = [...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]')].find(
+      (b) => b.textContent === "Fuller",
+    );
+    expect(fuller, "no Fuller segment").toBeDefined();
+    await act(async () => fuller?.click());
     await settle();
 
     containedInside("summary");

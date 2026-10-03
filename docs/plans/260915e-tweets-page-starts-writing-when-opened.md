@@ -35,7 +35,7 @@ string, never the path.
 **arms** a token; nothing proved the page **spends** it. So the press could have been minted and
 dropped on the way through the router with every test green.
 
-[tests/tweets-press-starts-it.test.tsx](../../tests/tweets-press-starts-it.test.tsx) is that pair:
+[tests/tweets-press-starts-it.test.tsx](../../tests/summary-thread-press.test.tsx) is that pair:
 the real `Dock`, `Link`, `navigate()`, `useRoute` and `Tweets` under `<StrictMode>`, with only the
 network and the job queue posed. Green on `dev` as it stands; **red** with the `useAutoRun` call
 removed from Tweets.tsx (watched, 2026-09-15: *expected [] to have a length of 1 but got +0*).
@@ -155,7 +155,7 @@ pointer here.
 
 ### Evidence
 
-- [tests/tweets-press-starts-it.test.tsx](../../tests/tweets-press-starts-it.test.tsx) becomes the
+- [tests/tweets-press-starts-it.test.tsx](../../tests/summary-thread-press.test.tsx) becomes the
   arrival test: a pasted link to an article with no thread posts **exactly one** unforced `tweets`
   job under `<StrictMode>` — red on today's code, which is the failing test for this report; a
   press from the bar still posts one, not two; a thread already there posts nothing; a second

@@ -258,6 +258,10 @@ export function commandText(command: Command): CommandText {
         `${words.label} ${parent}`,
         `${parent} ${words.label}`,
         `${words.label} mode`,
+        /* The sub-mode's own nicknames — Summary's Thread answers to `tweets`
+           (sub-modes.ts § `SubModeWords`). Here and not on the parent's catalog
+           row, so the word selects this row and not the mode's. */
+        ...(words.aliases ?? []),
       ],
       description: words.description,
     };

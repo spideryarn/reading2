@@ -182,7 +182,7 @@ const listed = (): string[] =>
  * *usually* true of it, and would go on passing if a page row started being
  * built as a mode.
  */
-type RowKind = "mode" | "page" | "action";
+type RowKind = "mode" | "submode" | "page" | "action";
 
 const rowsOfKind = (kind: RowKind): HTMLElement[] =>
   rows().filter((row) => row.dataset.kind === kind);
@@ -594,10 +594,6 @@ const GENERATES: Record<Mode, boolean> = {
   citations: true,
   faq: true,
   skim: true,
-  /* A mode since 2026-09-29, and it spends: the band writes the thread on
-     arrival when there is none (useTweets.ts § `useAutoRunOnArrival`). The
-     marker it wore as a page row is now the mode row's. */
-  tweets: true,
 };
 
 /**
@@ -737,14 +733,15 @@ describe("the `generates` marker", () => {
    * 2026-09-07). Tweets was that page, so the marker came to follow the row's
    * own `generates` rather than its kind (`commandGenerates`).
    *
-   * Tweets is now the mode `?mode=tweets` (plan 260929f), and no page row
-   * spends. So the claim is the pair of named rows that is still true: the
-   * Tweets row is a **mode** row and carries the marker, and the pages that
-   * only go somewhere do not. Named rather than counted, for the reason the
-   * old version gave — *some row has it and some does not* would be satisfied
-   * by the two being the wrong way round.
+   * Tweets then became a mode (plan 260929f), and on 2026-10-03 Summary's
+   * Thread view (plan 261003l), and no page row spends. So the claim is the
+   * pair of named rows that is still true: the thread's row is a **sub-mode**
+   * row and carries the marker — it arms nothing, and its band writes on
+   * arrival — and the pages that only go somewhere do not. Named rather than
+   * counted, for the reason the old version gave — *some row has it and some
+   * does not* would be satisfied by the two being the wrong way round.
    */
-  it("is on the Tweets mode row and not on the page rows that only go somewhere", () => {
+  it("is on the thread's row and not on the page rows that only go somewhere", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
     const markedOf = (kind: RowKind) =>
@@ -755,9 +752,11 @@ describe("the `generates` marker", () => {
         ]),
       );
     const modes = markedOf("mode");
+    const subModes = markedOf("submode");
     const pages = markedOf("page");
-    expect(modes.get("Tweets"), "the Tweets mode row is missing").toBe(true);
-    expect(pages.has("Tweets"), "Tweets is a mode now, not a page row").toBe(false);
+    expect(subModes.get("Thread"), "Summary's Thread row is missing").toBe(true);
+    expect(modes.has("Tweets"), "Tweets is not a mode any more").toBe(false);
+    expect(pages.has("Tweets"), "nor a page row").toBe(false);
     expect(pages.get("Metadata"), "the Metadata row is missing").toBe(false);
     expect(pages.get("Library"), "the Library row is missing").toBe(false);
     expect(pages.get(CHANGELOG_LABEL), "the changelog row is missing").toBe(false);
@@ -1037,9 +1036,13 @@ describe("the rows that are not modes", () => {
        — and each of these is one of his six, with `Homepage` folded into
        Library per the plan's § Library and Homepage are one row. */
     const names = listed();
-    for (const label of ["Metadata", "Tweets", "Comments", "Library", "Profile", "Feedback"]) {
+    for (const label of ["Metadata", "Comments", "Library", "Profile", "Feedback"]) {
       expect(names, `no row called ${label}`).toContain(label);
     }
+    /* His sixth, Tweets, is Summary's Thread view since 2026-10-03 (plan
+       261003l): a row called Thread, which the word he used still finds first
+       — "selects the thread's row" below. */
+    expect(names, "no row for the thread").toContain("Thread");
   });
 
   /**
@@ -1129,28 +1132,31 @@ describe("the rows that are not modes", () => {
   });
 
   /**
-   * **The Tweets row is the mode now, and it says it spends.**
+   * **The word `tweets` finds Summary's Thread, and the row says it spends.**
    *
-   * It was a page row from 2026-09-08 that navigated to `/read/<slug>/tweets`;
-   * since 2026-09-29 Tweets is `?mode=tweets` (plan 260929f), so typing its
-   * name selects the mode row, and taking it opens the mode without moving the
+   * It was a page row from 2026-09-08 that navigated to `/read/<slug>/tweets`,
+   * a mode row from 2026-09-29 (plan 260929f), and since 2026-10-03 the
+   * sub-mode row *Summary › Thread* (plan 261003l). Typing the old name
+   * selects that row and **not** Summary's own, which would open Brief (GPT
+   * Sol's F3), and taking it opens Summary on the thread without moving the
    * address. The marker is still true: the band writes the thread on arrival
    * when there is none (useTweets.ts § `useAutoRunOnArrival`), which
-   * tests/tweets-press-starts-it.test.tsx holds end to end.
+   * tests/summary-thread-press.test.tsx holds end to end.
    */
-  it("selects the Tweets mode row, opens the mode in place, and wears the `generates` marker", () => {
+  it("selects the thread's row for `tweets`, opens it in place, and wears the `generates` marker", () => {
     const onMode = vi.fn();
     readingSignedIn({ onMode, experimental: EXPERIMENTAL_ON });
     openBar();
     type("tweets");
-    /* The mode first, and the thread's *Run again* row after it since
-       2026-10-02 — `tweets again` is one of its words (rerun-commands.ts), and
-       a row that ties the mode loses on order (plan 261002c). */
-    expect(listed()).toEqual(["Tweets", "Thread › Run again"]);
-    expect(rows()[0]?.dataset.kind).toBe("mode");
+    /* The sub-mode first, and the thread's *Run again* row after it —
+       `tweets again` is one of its words (rerun-commands.ts), and a typed-only
+       row comes after the sub-modes (plan 261002c). Summary's own row is not
+       offered for this word at all. */
+    expect(listed()).toEqual(["Thread", "Thread › Run again"]);
+    expect(rows()[0]?.dataset.kind).toBe("submode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("tweets", undefined, false);
+    expect(onMode).toHaveBeenCalledWith("summary", { mode: "summary", view: "thread" });
     expect(wentTo()).toBeNull();
   });
 

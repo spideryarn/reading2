@@ -37,7 +37,7 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
-| `/read/<slug>/tweets` | redirects to `?mode=tweets`, the thread as a mode since 2026-09-29 — [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
+| `/read/<slug>/tweets` | redirects to `?mode=summary&summary=thread`: the thread was a mode from 2026-09-29 ([260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) and is Summary's Thread view since 2026-10-03 ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
@@ -78,7 +78,7 @@ active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has bo
 flight* holds the article row open so each race happens on purpose rather than by luck.
 
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
-route with two views rather than two routes (three until 2026-09-29, when the tweets page became `?mode=tweets`): same article, same fetch, same bottom bar, so
+route with two views rather than two routes (three until 2026-09-29, when the tweets page became a mode, and since 2026-10-03 Summary's Thread view): same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
 ([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
 above that branch, so stepping
