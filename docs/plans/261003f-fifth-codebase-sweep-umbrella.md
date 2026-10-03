@@ -115,8 +115,9 @@ commits, so read the fix counts loosely):
 a split, so splitting is rejected again; likewise `schema.ts` and `pg.ts`. `routes.ts` is the
 exception, and only partly — see Tier 3.
 
-Postmortem classes: of the 64 postmortems since 09-08, 56 fall into seven families (the other eight
-were not assigned — KN § classes): A, a check asserts less than it claims (13); B, the comment
+Postmortem classes: 64 postmortems since 09-08 were grouped into seven families
+(KN § classes). The family counts as reported sum to 56, not 64, and the difference was not
+resolved — treat the counts as approximate: A, a check asserts less than it claims (13); B, the comment
 states the rule and the line below breaks it, or the instance was fixed and not the class (7); C,
 layout or scroll computed at the wrong time (8); D, React store or event timing (8); E, a test
 depends on state it does not own (6); F, a model-output contract too strict or leaking (9); G, a
@@ -167,7 +168,7 @@ manifests against the tree; the edges it found are in.
 | **2** | **Injection scan decodes stored pages wrongly** | XZ-X3 | R ×2 | 5 | 5 | low | `src/source-scan.ts`, one new test | — |
 | **3** | **Four one-file fixes** | SR-R1, WC-W1, XZ-X12, AccessSharing's silent copy | R (R1, W1, X12), C (copy) | 5 | 3 | low | `src/routes.ts` (`part()` only) + `tests/authenticated-api-route-contract.test.ts`; `src/web/Spine.tsx` + `tests/spine-card.test.tsx`; `src/web/PageContents.tsx`; `src/web/AccessSharing.tsx` | — |
 | **4** | **A shelf link finds nothing for `café`, `don’t` or `eﬃcient`** | WC-W11 = DF-F1, the `foldWithMap` offset bugs, DF's fold-twin parity test | R ×3 | 3 | 4 | low | `src/web/library-hits.ts` (owns `foldWithMap`), `src/web/search-hits.ts`, `src/web/Library.tsx` (snippet only), `tests/library-hits.test.ts` | — |
-| **6a** | **Referee can lose or overwrite an answer** | DP-D1, XZ-X4, the Claims input fingerprint | R (D1), C ×2 (rest) | 3 | 4 | med | `src/store/pg-referee-criteria.ts`, `src/store/pg-referee-claims.ts`, `src/searches.ts`, `src/referee-criteria-store.ts`, `src/db/schema.ts` + one migration (Claims' attempt column), the two Referee handlers in `src/routes.ts` | **3** (R1 lands in `routes.ts` first; minutes) |
+| **6a** | **Referee can lose or overwrite an answer** | DP-D1, XZ-X4, the Claims input fingerprint | R (D1), C ×2 (rest) | 3 | 4 | med | `src/store/pg-referee-criteria.ts`, `src/store/pg-referee-claims.ts`, `src/store/contracts.ts` (the Claims signatures only), `src/searches.ts`, `src/referee-criteria-store.ts`, `src/db/schema.ts` + one migration (Claims' attempt column), the two Referee handlers in `src/routes.ts` | **3** (R1 lands in `routes.ts` first; minutes) |
 | **7** | **Link summaries survive a profile change** | XZ-X10 | R ×2 | 3 | 3 | med | `src/web/link-facts.ts`, `src/web/useProfile.ts`, `src/web/purpose.ts`, `src/web/useAutosavedText.ts` | — |
 | **10** | **Illustrated loses the refusal sentence** | DP-D2 | C ×2 | 4 | 2 | low | `src/illustrated.ts`, `src/job-failure.ts` (a false comment), one test | — |
 | **5** | **A failed read is a dead end; raw error text on screen; Regenerate re-arms early** | WC-W2, XZ-X9, XZ-X11, Illustrated's retry, XZ-X13k, WC-W4 (Quiz only) | C ×2 | 2 | 4 | med | the 14 read hooks XZ-X9 lists and the panels WC-W2 and XZ-X11 list (including Simple, Skim and Tweets), `FaqPanel.tsx`, `IllustratedView.tsx`, `useSourceScan.ts`, a new `ReadError.tsx`, one mode-matrix test | — |
@@ -322,7 +323,8 @@ orchestrator-tier, so it still goes early.
    Alongside: paperwork comparisons skip missing and failed counterparts without changing the
    denominator (F6); two Structure eval paths accept a truncated answer production would refuse
    (F7, low value); in the harnesses that will run again, hash the **rendered system prompt** rather
-   than a hand-kept file list (F5, cut down by the reviewer from "hash every request"); and the two
+   than a hand-kept file list (F5, cut down by the reviewer from "hash every request"; still a
+   T2 — it rides here because it shares these harness files, and gets its own test first); and the two
    `260930a` scripts, which import live wording they claim to compare against, are frozen or
    deleted. One hypothesis to check here: `9ac3ee21b` changed Structure's prompt wording without
    bumping the `toc/12` version stamp — production effect unverified.
@@ -447,36 +449,41 @@ There are ten places where an answer streams in. If the reader closes the tab pa
 - **three stop the model call**;
 - **seven let it run to the end**: comment answers, glossary term lookups, Referee criteria,
   Referee claims, meaning searches (quick searches do stop), citation investigations and Mirror.
-  They do not share a reason. Most save the finished answer, so it is there when the reader comes
-  back. Mirror saves nothing — its call just runs on, paid for and unseen. And glossary Ask does
-  the opposite: it stops, although it would have saved.
+  They do not share a reason. Six of them save the finished answer, so it is there when the reader
+  comes back. Mirror saves nothing — its call just runs on, paid for and unseen. And glossary Ask
+  does the opposite: it stops, although it would have saved.
 
 So there is no rule today, only seven separate choices. The decision is what the rule should be:
 - *"Always stop":* no paid call runs unwatched. A reader who leaves and returns finds no answer and
   asks again.
-- *"Finish only what will be saved":* Mirror stops (pure saving); the four that save carry on;
-  glossary Ask would carry on too.
+- *"Finish only what will be saved":* Mirror stops, which is pure saving. The six that save carry
+  on as now. Glossary Ask would start carrying on too — so when a reader changes their question
+  mid-answer, the first answer would finish and be paid for, where today it is cut off.
 - *Leave it:* cluster 8 writes down what each one does, and nothing changes.
-The middle option looks best: it costs readers nothing and stops the one call that is pure waste.
+The cheapest useful step is narrower than any of the three: **stop Mirror, change nothing else.**
+It costs readers nothing and ends the one call that is pure waste.
 Which of the seven really save was read from the code by one reviewer, not tested; whoever builds
 this checks each first.
 
 **5. Start deleting abandoned drafts?** (`STEP_START_DRAFT_SWEEP`, carried over from earlier sweeps)
 When a pipeline step runs, it writes a draft copy of the article's data and publishes it at the
 end. If the step dies, the draft is left behind. A sweep at the start of each new job finds drafts
-that are more than six hours old, belong to no job, and were never published or current — at most
-ten per job — and today only **counts** them. Switching it to "delete" removes them.
+that are more than six hours old, belong to no job, and were never published or current — only
+for the article the new job is about, and at most ten per job — and today only **counts** them. Switching it to "delete" removes them.
 - *Removes:* dead rows that grow without limit, and the "count" mode itself.
 - *Costs:* those intermediate outputs are gone for good. Nothing a reader sees is built from them.
-- *Not known:* how many there are. The count is logged and this sweep did not read it; that number
-  should be in front of you before you decide, and reading it is a small job for the Overseer.
+- *How many:* on a local database in September the plan that added the sweep measured 134
+  candidates, 9.9 MiB. **Production has not been measured**, by this sweep or since; that number
+  should be in front of you before you decide, and reading it is a small read-only job for the
+  Overseer.
 
 **6. Will the old "toc/10" Structure eval arm ever be run again?**
 It exists to compare today's Structure prompt against the one from before. It turned out not to be
 frozen (cluster 9).
 - *If yes:* cluster 9 pins it properly, and it has to be kept working.
-- *If no:* delete the arm and keep the saved 2026-10-02 results as the baseline. That is less code
-  and nothing to keep in step — but a future prompt change can then only be compared with those
+- *If no:* delete the arm and keep the saved 2026-10-02 results as the baseline (keeping the
+  parser, which `evals/paperwork/structure-starts-replay.ts` still uses). That is less code and
+  nothing to keep in step — but a future prompt change can then only be compared with those
   saved numbers, on those articles.
 
 **7. Edits to docs whose wording is a rule.** This is an approval queue rather than one decision.
@@ -639,7 +646,13 @@ comments still describe it.
   coverage added; For Greg 4 and 5 rewritten and 6 added; the `types.ts` attribution and the guard
   design settled. It also re-checked five claims against the tree (clusters 1, 2, 4, 6a and R1) and
   all five held.
-- Round 2: see below, once run.
+- Round 2: [GPT Sol](261003f-fifth-codebase-sweep-umbrella-review-2-sol.md). Four of the eight
+  applied in full and four partly; **no remaining file overlap** between clusters that may run in
+  parallel. Verdict again **ready with these fixes**, five of them, all applied here: 6a's manifest
+  gains `contracts.ts`; F5 stays T2; the postmortem coverage claim replaced with the measured sum;
+  For Greg 4's count corrected (six save, not four) and its recommendation narrowed to Mirror;
+  For Greg 5 gains its scope and the one measurement that exists; 21 and 22 scheduled. **One gap
+  is left open on purpose:** the production count of abandoned drafts was not measured.
 
 ## What happens next
 
@@ -647,9 +660,10 @@ The Overseer dispatches clusters as separate engineering-manager runs.
 
 - **First wave, disjoint files:** **1**, **2**, **3**, **4**, **7**, **10**.
 - **As soon as 3's `routes.ts` commit lands:** **6a**.
-- **Second wave:** **5**, **11**, **9**, **12**, **14**, **15**, **16**.
+- **Second wave:** **5**, **11**, **9**, **12**, **14**, **15**, **16**, **21**.
 - **Then, in the order their "After" columns give:** 6b → 8; 13 and 18 after 5; 17 after 12 and 6a;
-  19 after 9, 10 and 12; 20 after 13, 18 and 3.
+  19 after 9, 10 and 12; 20 after 13, 18 and 3; 22 whenever there is room; 23 only on a recorded
+  stall.
 
 Before each: re-run the cluster's greps against the tree of the day, because this audit's tree is
 already behind.
