@@ -91,6 +91,7 @@ import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
 import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { supabase } from "./supabase.js";
+import { noteRequest } from "./writes.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
 const SNIPPET = 300;
@@ -422,6 +423,40 @@ export async function readJson<T>(res: Response): Promise<T> {
  * question anyone asks about this design.
  */
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  return (await apiFetchOwned(input, init)).response;
+}
+
+/**
+ * `apiFetch`, and **whose session actually answered** — the owner of the
+ * credential the returned response was sent with, the retry's when there was
+ * one.
+ *
+ * For the article preload (prefetch-article.ts), which holds a response for
+ * later and must hand it only to the same reader. Asking `accessToken()` again
+ * beside the request would be the cross-account race the comment on `owner`
+ * below describes: two lookups a moment apart can straddle a sign-in, and B's
+ * article would be filed as A's. GPT Sol's P0 on
+ * docs/plans/261003d-preload-recent-shelf-articles.md.
+ *
+ * **And every write is counted here, sent and finished** (writes.ts), which is
+ * what tells a held read it may have gone stale.
+ */
+export async function apiFetchOwned(input: string, init: RequestInit = {}): Promise<Owned> {
+  noteRequest(input, init.method);
+  try {
+    return await sendOwned(input, init);
+  } finally {
+    noteRequest(input, init.method);
+  }
+}
+
+/** A response, and the reader whose credential it was sent with. */
+export interface Owned {
+  response: Response;
+  owner: string | null;
+}
+
+async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
   if (!input.startsWith("/api/")) {
     throw new Error(`apiFetch is for our own API only, and this is not: ${input}`);
   }
@@ -479,14 +514,14 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
    */
   const ticket = await ticketFor(input, init, owner);
   const first = await attempt(input, init, () => send(token), owner);
-  if (first.status !== 401) return saving(input, init, first, owner, ticket);
+  if (first.status !== 401) return { response: saving(input, init, first, owner, ticket), owner };
 
   /* **Nobody was signed in, so there is nothing to refresh.** Without this the
      sign-in screen's own requests would each provoke a pointless refresh call,
      and — worse — `refreshSession()` on a signed-out client is a shape this
      code then has to guess at. A 401 for an anonymous request is not a race, it
      is the correct answer. */
-  if (!token) return first;
+  if (!token) return { response: first, owner };
 
   /* One refresh, one retry. Not a loop: if a fresh token is also refused then
      the answer really is no, and a client that keeps asking turns a refusal
@@ -502,27 +537,30 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
     /* Offline this cannot succeed, and the SDK will spend around twenty-five
        seconds finding that out — see `accessToken` below. A 401 we already have
        is a better answer than the same 401 half a minute later. */
-    if (!probablyOnline()) return first;
+    if (!probablyOnline()) return { response: first, owner };
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
     refreshedOwner = data?.session?.user?.id ?? owner;
   } catch {
-    return first;
+    return { response: first, owner };
   }
-  if (!refreshed) return first;
+  if (!refreshed) return { response: first, owner };
   /* **A fresh ticket, not the one above.** The retry is a newly issued request:
      it may belong to a refreshed owner, and it has to see any mutation that
      happened between the two attempts. Reusing the first ticket would let the
      retry commit a body from before an invalidation that ran while we were
      refreshing. */
   const retryTicket = await ticketFor(input, init, refreshedOwner);
-  return saving(
-    input,
-    init,
-    await attempt(input, init, () => send(refreshed), refreshedOwner),
-    refreshedOwner,
-    retryTicket,
-  );
+  return {
+    response: saving(
+      input,
+      init,
+      await attempt(input, init, () => send(refreshed), refreshedOwner),
+      refreshedOwner,
+      retryTicket,
+    ),
+    owner: refreshedOwner,
+  };
 }
 
 /**
@@ -1135,7 +1173,13 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
      is no one left to tell — but the buffer is not a person, and if the page
      turns out to survive (a bfcache suspend rather than a close) the row is
      there. */
-  void fetch(input, { ...init, headers, keepalive: true }).catch((e: unknown) => {
+  /* Counted like any other write, sent and finished (writes.ts): a purpose
+     saved on the way out is a `PATCH /api/library/<slug>`, which may change
+     what an article preload is holding. */
+  noteRequest(input, method);
+  void fetch(input, { ...init, headers, keepalive: true })
+    .finally(() => noteRequest(input, method))
+    .catch((e: unknown) => {
     recordLog({
       kind: "api",
       outcome: "transport-failed",

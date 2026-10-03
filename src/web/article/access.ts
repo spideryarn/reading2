@@ -17,6 +17,7 @@ import type { Article, Comment, Crossref, UnreadPaper } from "../../types.js";
 import { sanitizeArticle } from "../sanitize.js";
 import type { SavedSearch } from "../useSearch.js";
 import { apiFetch, detailsOf, readJson } from "../lib/api.js";
+import { takePreloaded } from "../lib/prefetch-article.js";
 import { loadPublicArticle } from "../public-api.js";
 import { beginArticleLoad, rehostImages, type ArticleLoad } from "../rehost.js";
 import { renderArticleMaths } from "../maths.js";
@@ -240,7 +241,7 @@ export function useArticleAccess(
     const load = beginArticleLoad();
     let live = true;
     setAnswer(null);
-    void resolveAccess(slug, readerId !== null, load)
+    void resolveAccess(slug, readerId, load)
       .then(({ access, withImages }) => {
         if (!live) return;
         setAnswer({ slug, readerId, access });
@@ -330,10 +331,11 @@ const NO_SECOND_ANSWER: Promise<ArticleAccess | null> = Promise.resolve(null);
    hook above is its only caller in the app. */
 export async function resolveAccess(
   slug: string,
-  signedIn: boolean,
+  /** The authenticated reader, or `null` signed out. */
+  readerId: string | null,
   load: ArticleLoad,
 ): Promise<ResolvedAccess> {
-  const found = await findArticle(slug, signedIn, load.signal);
+  const found = await findArticle(slug, readerId, load.signal);
   if (found.kind === "not-shared" || found.kind === "reauth-required" || found.kind === "unread") {
     return { access: found, withImages: NO_SECOND_ANSWER };
   }
@@ -475,7 +477,7 @@ export async function resolveAccess(
  */
 async function findArticle(
   slug: string,
-  signedIn: boolean,
+  readerId: string | null,
   signal: AbortSignal,
 ): Promise<
   | { kind: "not-shared" }
@@ -492,8 +494,15 @@ async function findArticle(
    * needs nothing carried.
    */
   let sessionUnconfirmed = false;
-  if (signedIn) {
-    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`, { signal });
+  if (readerId !== null) {
+    /* **The shelf may already have asked**, for one of the articles opened most
+       recently (lib/prefetch-article.ts). A preloaded answer is only ever a
+       fresh 200 fetched for this same reader, so everything below treats it as
+       the response it is; `null` is every other case, and the request goes out
+       as it always did. */
+    const res =
+      (await takePreloaded(slug, readerId, signal)) ??
+      (await apiFetch(`/api/article/${encodeURIComponent(slug)}`, { signal }));
     /* 404 is *not mine*; 401 is *we cannot tell*, after `apiFetch` has already
        spent its one refresh and one retry on it (lib/api.ts). Everything else,
        `readJson` turns into a message — including a 500, which must not be
