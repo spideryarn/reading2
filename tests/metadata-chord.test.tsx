@@ -234,17 +234,60 @@ describe("⌘/Ctrl-Enter is left alone", () => {
     expect(press({ keyCode: 229 } as KeyboardEventInit)).toBe(false);
     expect(here()).toBe(START);
   });
+});
 
-  it("on the Metadata page itself — no toggle back", () => {
-    history.replaceState(null, "", "/read/a-piece/metadata?at=spya-k3m9qt");
+/* **On the Metadata page it toggles back**, since 2026-10-03 — Greg,
+   spya-bpczdx: *"Tapping on Metadata mode in bottom bar when active should
+   close it"*. The chord follows the button, as it always has. Until then this
+   case asserted the press was left alone ("nothing to toggle back to", plan
+   260929g). docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
+describe("⌘/Ctrl-Enter on the Metadata page", () => {
+  it.each(["input", "textarea"])("leaves a Metadata %s's chord alone", (tag) => {
+    const start = "/read/a-piece/metadata?mode=glossary";
+    history.replaceState(null, "", start);
+    mount({ view: "metadata" });
+    focusOn(document.createElement(tag));
+    expect(press()).toBe(false);
+    expect(here()).toBe(start);
+  });
+
+  it("returns from a visitor's public Metadata page with the carried search", () => {
+    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&margin=1&panel=questions");
+    mount({ view: "metadata", visitor: true, onMode: undefined, mode: undefined });
+    expect(press({ metaKey: false, ctrlKey: true })).toBe(true);
+    expect(here()).toBe("/read/a-piece?mode=glossary&margin=1");
+  });
+
+  it("goes back to the article, carrying the mode and the place", () => {
+    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&at=spya-k3m9qt");
     act(() => {
       root.render(
         // biome-ignore lint/suspicious/noExplicitAny: this arm is missing props on purpose
         createElement(Dock as any, { slug: "a-piece", view: "metadata", experimental: EXPERIMENTAL_OFF }),
       );
     });
-    expect(press()).toBe(false);
-    expect(here()).toBe("/read/a-piece/metadata?at=spya-k3m9qt");
+    expect(press()).toBe(true);
+    expect(here()).toBe("/read/a-piece?mode=glossary&at=spya-k3m9qt");
+  });
+
+  it("is where the Metadata button points there, drawn as the page you are on", () => {
+    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&margin=1&at=spya-k3m9qt");
+    act(() => {
+      root.render(
+        // biome-ignore lint/suspicious/noExplicitAny: this arm is missing props on purpose
+        createElement(Dock as any, { slug: "a-piece", view: "metadata", experimental: EXPERIMENTAL_OFF }),
+      );
+    });
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
+    expect(link, "the Dock draws no Metadata link").not.toBeNull();
+    expect(link?.getAttribute("href")).toBe("/read/a-piece?mode=glossary&margin=1&at=spya-k3m9qt");
+    expect(link?.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("leaves the button on the reading view pointing at the Metadata page", () => {
+    mount();
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
+    expect(link?.getAttribute("href")).toBe(METADATA);
   });
 });
 

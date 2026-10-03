@@ -189,8 +189,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           If a word you need is missing, type it into <strong>Look up a term…</strong>: that explains
-          the passage it is in, without adding it to the list. <strong>Find more</strong> looks for
-          quieter terms, and <strong>Dig deeper</strong> on an entry searches the web. On someone
+          the passage it is in, and adds it to your list, marked as added by you. <strong>Find more</strong>, at the top
+          of the panel, looks for quieter terms; it says <strong>Find terms again</strong> instead
+          when a new run would write a fresh list rather than add to this one.{" "}
+          <strong>Dig deeper</strong> on an entry searches the web. On someone
           else’s shared article you see the glossary already made, but cannot add to it.
         </p>
       </>

@@ -45,7 +45,19 @@ panned by hand; you do it from a gist column rather than from the middle of a se
 
 A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Four places reveal
 first and act second**, and all for the same reason: they carry a hover card, and a surface with
-no hover has to let the first press mean *show me* or the reader commits blind.
+no hover has to let the first press mean *show me* or the reader commits blind. Since 2026-10-03
+there are two more, both answering Greg's reports (spya-a868zs, spya-vskqfn):
+
+- **A Structure row, in both faces** — first tap opens the row's card ("Tap again to go here"),
+  second goes there; a row with no card goes there at once. One `useTapReveal` per row, never a
+  state shared across the grid
+  ([260828g](../postmortems/260828g-spine-hover-cards.md)).
+- **The reading-time line** — a tap opens its card and there is no second step, since the line
+  does nothing when pressed. Under a coarse pointer its target reaches 1.25rem back over the
+  gutter column, under every control (gutter.css, the end).
+
+[261003c](../plans/261003c-tap-opens-structure-row-cards-and-the-reading-time-card-on-touch.md).
+The four older ones:
 
 - **The spine**, whose bands are proportional, so most are a few pixels tall and tapping one blind
   is a coin flip. First tap opens the band's card, second goes there (Spine.tsx § bandPress). That
@@ -429,6 +441,10 @@ notices.
 > select a block.
 >
 > — Greg, 2026-09-07, reading on an iPad (SPIDERYARN-READING2-2G)
+
+(The icons have been on the *right* of the block since 2026-10-03, at Greg's request, spya-kd5dk5 —
+[261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
+depends on the side.)
 
 **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
 The bookmark and the blue chat mark are facts about the article and are always there; the permalink,

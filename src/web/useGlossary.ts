@@ -222,6 +222,8 @@ export interface GlossaryRead {
   outdated: boolean;
   profiled: boolean;
   profileChanged: boolean;
+  /** `GlossaryResponse.panelRun`, passed through; absent when the server did not say. */
+  panelRun?: "append" | "rewrite" | undefined;
   error: string | null;
   /**
    * Fetch again **only if nothing is already fetching** — the band's mount.
@@ -320,6 +322,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const [panelRun, setPanelRun] = useState<"append" | "rewrite" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   /* The hide write may outlive the article it started on. Kept beside the
      other per-article state so the render-time slug reset below can clear it
@@ -352,6 +355,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setOutdated(false);
           setProfiled(false);
           setProfileChanged(false);
+          setPanelRun(undefined);
           setError(null);
           setStatus("none");
           return;
@@ -367,6 +371,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            empty string. */
         setProfiled(loaded.glossary.profileHash != null);
         setProfileChanged(loaded.profileChanged);
+        setPanelRun(loaded.panelRun);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -426,6 +431,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     setOutdated(false);
     setProfiled(false);
     setProfileChanged(false);
+    setPanelRun(undefined);
     setError(null);
     /* Entry ids are scoped to an article, and an old write's completion must
        not call its captured `refresh()` after this reset: that closure reads
@@ -672,6 +678,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     outdated,
     profiled,
     profileChanged,
+    panelRun,
     error,
     reload,
     refresh,
@@ -693,6 +700,11 @@ export interface UseGlossary {
   stale: boolean;
   /** The list predates the current prompt. A different fact from `stale`, with its own sentence. */
   outdated: boolean;
+  /**
+   * What the panel's run button will do with this list — `GlossaryResponse.panelRun`,
+   * absent when the server did not say. GlossaryPanel.tsx § `MoreRow` reads it. Plan 261003c.
+   */
+  panelRun?: "append" | "rewrite" | undefined;
   /**
    * This list was written from a reader profile, and whether that profile is
    * still the one they have.
@@ -817,7 +829,7 @@ export interface UseGlossary {
  * the fetch moved up there and what the band still has to do on mount.
  */
 export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
-  const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
+  const { status, glossary, stale, outdated, profiled, profileChanged, panelRun, error } = read;
   /* Dig deeper's state is the read's, not the band's, since 2026-10-02 — see
      `look` on `GlossaryRead`. Passed through unchanged, so the panel still reads
      one object. */
@@ -1057,6 +1069,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     outdated,
     profiled,
     profileChanged,
+    panelRun,
     slug,
     error,
     job: queue.job,

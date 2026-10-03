@@ -95,12 +95,15 @@ function fixture(): { tree: Tree; blocks: Block[] } {
     "ONE BETA",
   ]);
   part("n-p2", "PART TWO TITLE", "WHAT PART TWO ESTABLISHES.", ["TWO ALPHA", "TWO BETA"]);
+  /* A second part the reader is not in, so two rows have cards — what the
+     group test at the end needs. */
+  part("n-p3", "PART THREE TITLE", "WHAT PART THREE ESTABLISHES.", ["THREE ALPHA", "THREE BETA"]);
 
   nodes["n-r" as NodeId] = {
     id: "n-r" as NodeId,
     depth: 0,
     parent: null,
-    children: ["n-p1" as NodeId, "n-p2" as NodeId],
+    children: ["n-p1" as NodeId, "n-p2" as NodeId, "n-p3" as NodeId],
     range: [id(0), id(b - 1)],
     title: "Root",
     gist: "The root's gist.",
@@ -189,7 +192,9 @@ function hover(el: HTMLElement | undefined) {
     vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
   });
   act(() => {
-    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+    /* Past the group's 400ms instant-phase timeout as well as its close delay:
+       a card that disappears just after the click is still a failed tap. */
+    vi.advanceTimersByTime(1_000);
   });
 }
 
@@ -240,4 +245,141 @@ it("puts no tooltip on the measuring copies", () => {
   expect(hidden.length).toBeGreaterThan(0);
   hover(rowNamed(hidden, "PART ONE TITLE"));
   expect(cards()).toHaveLength(0);
+});
+
+/**
+ * **A finger's first tap opens the card; the second goes there** — the rule in
+ * docs/project/touch.md, which these cards lacked until 2026-10-03 (Greg,
+ * spya-a868zs; plan 261003c). Replay the whole iPad-shaped stream: touch
+ * pointer hover and lift events, compatibility mouse events, then the click,
+ * which says `mouse` on iOS 18.2 and later (WebKit bug 282988). Leaving those
+ * middle events out is the class of synthetic test that missed the glossary
+ * card closing itself after every tap (touch.md).
+ */
+function fire(el: Element, type: string, pointerType: string, detail = 1) {
+  el.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: type !== "pointerleave",
+      cancelable: true,
+      detail,
+      pointerType,
+      pointerId: 1,
+    }),
+  );
+}
+
+function tap(el: Element, down: "touch" | "mouse", click = "mouse") {
+  act(() => {
+    if (down === "touch") {
+      fire(el, "pointerover", "touch");
+      fire(el, "pointerdown", "touch");
+      fire(el, "pointerup", "touch");
+      fire(el, "pointerout", "touch");
+      fire(el, "pointerleave", "touch");
+      el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mouseenter"));
+      el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    } else {
+      fire(el, "pointerdown", "mouse");
+      fire(el, "pointerup", "mouse");
+    }
+    fire(el, "click", click);
+  });
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
+}
+
+function renderCounting(): BlockId[] {
+  const jumps: BlockId[] = [];
+  act(() => {
+    reactRoot.render(
+      <StructurePanel
+        root={summaryRoot}
+        focusRow={IN_PART_TWO}
+        allowParagraphs={true}
+        onJump={(id) => jumps.push(id)}
+      />,
+    );
+  });
+  return jumps;
+}
+
+it("on a finger, the first tap on a row opens its card and the second goes there", () => {
+  const jumps = renderCounting();
+  const row = rowNamed(visibleColumnA(), "PART ONE TITLE");
+  tap(row, "touch");
+  expect(jumps, "the first tap reads the row, it does not move the article").toHaveLength(0);
+  expect(cards()).toHaveLength(1);
+  expect(cards()[0]?.textContent).toContain("WHAT PART ONE ESTABLISHES.");
+  expect(cards()[0]?.textContent).toContain("Tap again to go here");
+  tap(row, "touch");
+  expect(jumps).toHaveLength(1);
+});
+
+it("a mouse click goes there at once, and its card never says tap again", () => {
+  const jumps = renderCounting();
+  const row = rowNamed(visibleColumnA(), "PART ONE TITLE");
+  hover(row);
+  expect(cards()[0]?.textContent ?? "").not.toContain("Tap again");
+  tap(row, "mouse");
+  expect(jumps).toHaveLength(1);
+});
+
+it("a keyboard's click goes there at once", () => {
+  const jumps = renderCounting();
+  const row = rowNamed(visibleColumnA(), "PART ONE TITLE");
+  act(() => {
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+  });
+  expect(jumps).toHaveLength(1);
+});
+
+it("a row with no card goes there on the first tap", () => {
+  const jumps = renderCounting();
+  tap(rowNamed(visibleColumnA(), "PART TWO TITLE"), "touch");
+  expect(jumps).toHaveLength(1);
+  expect(cards()).toHaveLength(0);
+});
+
+it("a scroll closes a card a finger opened", () => {
+  renderCounting();
+  tap(rowNamed(visibleColumnA(), "PART ONE TITLE"), "touch");
+  expect(cards()).toHaveLength(1);
+  act(() => {
+    host.dispatchEvent(new Event("scroll"));
+  });
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
+  expect(cards()).toHaveLength(0);
+});
+
+/**
+ * **Two rows in the one real `TooltipGroup`** — the class a single-row test
+ * cannot see (docs/postmortems/260828g-spine-hover-cards.md): a group closes
+ * every other member when one opens, and a close that lands on the wrong row's
+ * state takes the new card away. Each row owns its state here, so moving a
+ * finger from one row to the next must leave the second open and its second
+ * tap must still jump. GPT Sol, plan review of 261003c.
+ */
+it("a finger moving from one row's card to another's keeps the second, and its second tap goes there", () => {
+  const jumps = renderCounting();
+  const a = rowNamed(visibleColumnA(), "PART ONE TITLE");
+  const b = rowNamed(visibleColumnA(), "PART THREE TITLE");
+  /* No `hover` first: it leaves its card open in jsdom (there is no
+     `mouseleave`), and a press that begins with the card open commits by
+     design (useTapReveal.ts) — which a finger, that never hovers, cannot do. */
+  tap(a, "touch");
+  tap(b, "touch");
+  act(() => {
+    vi.advanceTimersByTime(1000);
+  });
+  expect(jumps).toHaveLength(0);
+  expect(cards()).toHaveLength(1);
+  expect(cards()[0]?.textContent).toContain("Tap again to go here");
+  tap(b, "touch");
+  expect(jumps).toHaveLength(1);
 });

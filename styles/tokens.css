@@ -240,8 +240,10 @@
     --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
 
-    /* One face per voice — the author's, the model's, the reader's — read ONLY by
-       src/web/styles/voices.css, for every reader since 2026-10-02. Greg, 2026-10-01:
+    /* One face per voice — the author's, the model's, the reader's — applied to
+       visible words by src/web/styles/voices.css, for every reader since 2026-10-02.
+       Geometry-only boxes that resolve the prose's `ch` measure also read
+       `--font-author`; their visible children set their own face. Greg, 2026-10-01:
        Courier for AI, a serif for the author, Arial for the reader. Geist stays the chrome, so it
        becomes the fourth voice by being left alone. Courier became IBM Plex Mono on 2026-10-02 —
        "Courier is really ugly" — still monospaced, so still machine-made. docs/project/fonts.md. */

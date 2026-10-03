@@ -46,7 +46,15 @@
  * *part*, which is a different fact and belongs to the column rather than to the
  * band.
  */
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { BlockId } from "../types.js";
 import { ModeSurface } from "./ModeSurface.js";
 import {
@@ -59,6 +67,7 @@ import {
 } from "./structure.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import type { SummaryNode } from "./tree.js";
+import { useTapReveal } from "./useTapReveal.js";
 import { type Voice, voiceClass, withVoice } from "./voice.js";
 
 /**
@@ -239,7 +248,8 @@ function RowCard({
   number,
   text,
   voice,
-}: { card: StructureCard; number: string; text: string; voice: Voice }) {
+  tapHint,
+}: { card: StructureCard; number: string; text: string; voice: Voice; tapHint: boolean }) {
   return (
     <>
       <div className="tip-title">
@@ -258,6 +268,10 @@ function RowCard({
           {card.more > 0 && <li className="tip-more">+ {card.more} more</li>}
         </ul>
       )}
+      {/* Only when a finger opened it, in the spine's words (Spine.tsx §
+          BandCard): the row was pressed and nothing moved, and without this
+          that reads as a row that is broken. */}
+      {tapHint && <div className="tip-tap">Tap again to go here</div>}
     </>
   );
 }
@@ -279,6 +293,7 @@ function Row({
   onJump(id: BlockId): void;
   tip: boolean;
 }) {
+  const card = tip ? row.card : null;
   const classes = ["struct-row", `struct-${row.kind}`];
   if (row.supplement) classes.push("struct-supp");
   if (row.before) classes.push("struct-read");
@@ -293,7 +308,7 @@ function Row({
    * in Chrome as well as read, because a claim about a library is not a claim
    * a test here can settle (docs/plans/260916b-…).
    */
-  const button = (
+  const button = (press: RowPress) => (
     <button
       type="button"
       className={classes.join(" ")}
@@ -303,7 +318,7 @@ function Row({
            `now` row. Never set on a paragraph — structure.ts
            § `PARAGRAPH_IS_NEVER_CURRENT`. */
         {...(row.here ? { "aria-current": "true" as const } : {})}
-        onClick={() => onJump(row.blockId)}
+        {...press}
       >
         <span className="struct-line">
           {/* **Always rendered, empty on the apparatus**, which is what makes the
@@ -324,12 +339,57 @@ function Row({
       </button>
   );
 
-  const card = tip ? row.card : null;
   return (
     <li>
       {card === null ? (
-        button
+        /* No card, nothing to read first: a tap goes there, as it always has —
+           and no `useTapReveal`, whose first finger tap would otherwise arm a
+           card that does not exist and leave the row silently needing two.
+           GPT Sol, plan review of 261003c. */
+        button({ onClick: () => onJump(row.blockId) })
       ) : (
+        <CardRow row={row} card={card} button={button} onJump={onJump} />
+      )}
+    </li>
+  );
+}
+
+/** The handlers a row's button is drawn with — `Row`'s, or `CardRow`'s. */
+interface RowPress {
+  onClick(e: ReactMouseEvent): void;
+  onPointerDown?(e: ReactPointerEvent): void;
+  onPointerCancel?(): void;
+}
+
+/**
+ * **A row with a card: a finger's first tap opens it, the second goes there**
+ * (docs/project/touch.md; Greg, spya-a868zs; plan 261003c). The press is read
+ * at `pointerdown`, because on an iPad the click says `mouse` for a finger.
+ *
+ * **State of this row's own, never one shared across the grid** — the shape
+ * that took the spine's cards away for a day: a delay group closes every other
+ * member, and a shared state hears those closes as its own
+ * (docs/postmortems/260828g-spine-hover-cards.md). Owned per row, a close can
+ * only ever clear the row it came from, which is what the uncontrolled tooltip
+ * here did before.
+ *
+ * A component of its own so that the hook exists only where a card does — not
+ * on the current part, and not on the measuring copies, of which there can be
+ * hundreds.
+ */
+function CardRow({
+  row,
+  card,
+  button,
+  onJump,
+}: {
+  row: StructureRow;
+  card: StructureCard;
+  button(press: RowPress): ReactElement<Record<string, unknown>>;
+  onJump(id: BlockId): void;
+}) {
+  const reveal = useTapReveal(true);
+  return (
         /* **`right`, and deliberately without `keepSide`** — where Structure's
             other face uses it. The band is the strip *between the spine and the
             prose* (layout.ts § the mode band), so a card thrown right lands on
@@ -357,12 +417,26 @@ function Row({
         <Tooltip
           placement="right"
           className="tip-struct"
-          content={<RowCard card={card} number={row.number} text={row.text} voice={row.voice} />}
+          open={reveal.open}
+          onOpenChange={reveal.onOpenChange}
+          content={
+            <RowCard
+              card={card}
+              number={row.number}
+              text={row.text}
+              voice={row.voice}
+              tapHint={reveal.tap !== undefined}
+            />
+          }
         >
-          {button}
+          {button({
+            onPointerDown: reveal.onPointerDown,
+            onPointerCancel: reveal.onPointerCancel,
+            onClick: (e) => {
+              if (reveal.commit(e)) onJump(row.blockId);
+            },
+          })}
         </Tooltip>
-      )}
-    </li>
   );
 }
 

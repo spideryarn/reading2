@@ -777,6 +777,17 @@ export interface GlossaryResponse {
    * src/profile.ts is the one place those two rules live.
    */
   profileChanged: boolean;
+  /**
+   * **What the panel's own run button will do with this list** — `panelRunKind`
+   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
+   * again* when it rewrites. The route adds it, beside `profileChanged`,
+   * because the profile half needs the reader's current profile. Plan 261003c.
+   *
+   * Optional only so a hand-built response in a test need not carry it; the
+   * route always sends it. The panel reads absent as `rewrite` when the list is
+   * stale or outdated and `append` otherwise (useGlossary.ts).
+   */
+  panelRun?: "append" | "rewrite";
 }
 
 /**
@@ -792,7 +803,7 @@ export interface GlossaryResponse {
  */
 export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
 /** As `ThreadFound`, for the glossary. */
-export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
+export type GlossaryFound = Omit<GlossaryResponse, "profileChanged" | "panelRun">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;

@@ -1,0 +1,11 @@
+Code review of commit HEAD (plan docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md; your plan review is 261003c-block-gutter-icons-right-plan-review-sol.md). The scoped diff is docs/plans/261003c-block-gutter-icons-right-code-review.diff.
+
+It moves the block gutter to the right by swapping --text-pad-l/--text-pad-r, mirrors .blk-gutter (right:), span.blk-read (right: 100%, ::after right: 0), and td.text.note .blk-gutter (right: whole surplus). It also adds font-family: var(--font-author) to .blk-gutter and .fold-toggle because the browser measured an 88px gap at 1440: the prose's ch is now the author serif (voices.css, universal since 2026-10-02) and these two measured Geist ch. Browser measurements after the change (Playwright): gutter.left - prose.right = 5.6px at 1440/820/390, 4.2/7.0 at 12/20px roots; fold chevron to gutter gap = inset; margin notes clear.
+
+Please check, with file:line evidence:
+- correctness of each mirrored rule and the footnote formula;
+- whether `font-family: var(--font-author)` on .blk-gutter can change anything visible: any text descendant of .blk-gutter or .fold-toggle without its own font-family (BlockGutter.tsx, FoldToggle.tsx, tooltip/card portals), and whether the face is ever different per article/voice so --font-author would be the wrong face (e.g. does .prose ever get a different face, quote blocks, code blocks, AI-voice blocks inside td.text?);
+- whether other rules use `ch` against the prose measure with the wrong face (masthead-inner rules in narrow-window.css are known and deferred — confirm the deferral is honest, or say if it is worse than "a few pixels");
+- tests: do the new assertions actually fail if the change is reverted (e.g. the regex in prose-centred-in-its-cell.test.ts that reads voices.css), and any stale comments left describing the gutter on the left.
+
+Fix what you find inside this change's scope (CSS, tests, comments, the plan doc); report anything wider rather than fixing it. Run `npx vitest run tests/gutter-target-size.test.ts tests/prose-centred-in-its-cell.test.ts tests/text-alone-centring.test.ts` and `npm run typecheck` after any edit. Do not commit. End with a verdict: ship / ship with changes / don't ship.

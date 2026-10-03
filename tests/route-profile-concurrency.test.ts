@@ -198,6 +198,7 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     /* The same profile string the artefact was written under, so nothing has
        changed — proving the two halves were joined and not merely started. */
     expect(body.profileChanged).toBe(false);
+    if (name === "glossary") expect(body.panelRun).toBe("append");
     if (name === "quiz") {
       expect((body.quiz as { questions: unknown[] }).questions).toEqual([
         expect.objectContaining({ band: "easy", value: 3, question: "Why?" }),
@@ -294,6 +295,9 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
        append an unprofiled pass while retaining this stamp: its badge must say
        "older profile", not "written for you". */
     expect(body.profileChanged).toBe(name === "quotes");
+    /* Clearing is not a badge warning, but it is a different run profile:
+       the panel must say it rewrites even while profileChanged stays false. */
+    if (name === "glossary") expect(body.panelRun).toBe("rewrite");
   });
 
   it("says the profile changed when the artefact was written for another one", async () => {
@@ -307,6 +311,7 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     const { status, body } = await reply;
     expect(status).toBe(200);
     expect(body.profileChanged).toBe(true);
+    if (name === "glossary") expect(body.panelRun).toBe("rewrite");
   });
 
   it("does not call a legacy artefact with no profile hash changed", async () => {
@@ -321,5 +326,6 @@ describe.each(ROUTES)("$name and the reader's profile", ({ name, url, stamp }) =
     const { status, body } = await reply;
     expect(status).toBe(200);
     expect(body.profileChanged).toBe(false);
+    if (name === "glossary") expect(body.panelRun).toBe("append");
   });
 });
