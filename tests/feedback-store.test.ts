@@ -71,6 +71,7 @@ import {
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
   MAX_FEEDBACK_BODY_CHARS,
+  MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
   type FeedbackEnvironment,
   type FeedbackKind,
@@ -651,6 +652,28 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
         runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mintId(), body: `${atTheCap}x` }))),
       ),
     ).toBe("feedback_body_shape");
+  });
+
+  /* The constant in src/types.ts and the number written into the CHECK are two
+     copies that a migration has to keep equal — it went from 400,000 to two
+     megabytes on 2026-10-03 — so the pair is held here against the real table.
+     Zeros rather than a picture: the column counts octets and nothing else. */
+  it("takes a screenshot of exactly the database's cap, and refuses one byte more", async () => {
+    const filed = await runAsOwner(ALICE, () =>
+      pgFeedbackStore.submit(
+        report({ id: mintId(), screenshot: new Uint8Array(MAX_FEEDBACK_SCREENSHOT_BYTES) }),
+      ),
+    );
+    expect(filed.kind).toBe("created");
+    expect(
+      await violation(() =>
+        runAsOwner(ALICE, () =>
+          pgFeedbackStore.submit(
+            report({ id: mintId(), screenshot: new Uint8Array(MAX_FEEDBACK_SCREENSHOT_BYTES + 1) }),
+          ),
+        ),
+      ),
+    ).toBe("feedback_screenshot_size");
   });
 
   it("files a report under every kind there is, and under none", async () => {

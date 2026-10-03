@@ -22,7 +22,7 @@
  * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -44,6 +44,7 @@ import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
 } from "../src/types.js";
 import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
@@ -288,7 +289,11 @@ const PNG = Buffer.from(
  */
 function bigPng(): Buffer {
   const width = 1000;
-  const height = 95;
+  /* 99% of the cap, in rows of 4,001 bytes. Derived rather than written down:
+     it was a literal 95 for a 400,000 cap, and when the cap went to two
+     megabytes on 2026-10-03 the "largest" picture would have gone on being
+     380 KB and this helper's name would have gone on saying otherwise. */
+  const height = Math.floor((MAX_FEEDBACK_SCREENSHOT_BYTES * 0.99) / (width * 4 + 1));
   const raster = Buffer.alloc(height * (width * 4 + 1));
   /* An xorshift, so the bytes really are incompressible. A tidy arithmetic
      pattern deflates to nothing, and the first version of this helper did
@@ -316,6 +321,13 @@ function bigPng(): Buffer {
     pngChunk("IDAT", deflateSync(raster, { level: 9 })),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+/** The inflated raster of a PNG that has exactly one `IDAT`, straight after `IHDR`. */
+function pixelsOf(png: Buffer): Buffer {
+  /* 8 of signature, 25 of IHDR, 8 of IDAT length and type; then 4 of IDAT CRC
+     and 12 of IEND at the far end. */
+  return inflateSync(png.subarray(41, png.length - 16));
 }
 
 /** One chunk, length and CRC included. */
@@ -595,9 +607,10 @@ describe("POST /api/feedback", () => {
   });
 
   it("answers 413 for a body past its own limit", async () => {
-    /* Two megabytes, which is past the feedback route's limit and five figures
-       past the shared one. Raw, because the point is the byte count. */
-    const raw = Buffer.alloc(2 * 1024 * 1024, "x");
+    /* Four megabytes, which is past the feedback route's limit (a little under
+       three, since the screenshot cap went to two) and far past the shared
+       one. Raw, because the point is the byte count. */
+    const raw = Buffer.alloc(4 * 1024 * 1024, "x");
     const reply = await call(undefined, { raw });
     expect(reply.status).toBe(413);
     expect(submitted).toHaveLength(0);
@@ -678,10 +691,35 @@ describe("POST /api/feedback", () => {
        out small — a screenshot helper whose "random" pixels deflated to nothing,
        say, which is exactly what the first draft of `bigPng` did — would pass
        the 201 below while proving nothing at all about the limit. */
-    expect(bytes).toBeGreaterThan(550_000);
+    expect(bytes).toBeGreaterThan(2_700_000);
     const reply = await call(body);
     expect(reply.status).toBe(201);
     expect(submitted).toHaveLength(1);
+  });
+
+  /**
+   * **A real picture at the ceiling, through the route and into the store.**
+   *
+   * The test above is about the *body*; this one is about the picture. When the
+   * cap went from 400,000 to two megabytes, 2026-10-03, nothing here decoded a
+   * PNG anywhere near the new number, and the server's re-encode had only ever
+   * been run on rasters a fifth the size (GPT Sol's review of 261003k, F1 and
+   * F2). So: incompressible pixels, 99% of the cap, taken apart and written
+   * again, and what reaches the store is still that picture.
+   */
+  it("takes a real screenshot just under the cap, and stores it rebuilt", async () => {
+    const png = bigPng();
+    expect(png.length).toBeGreaterThan(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.98);
+    expect(png.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+
+    const reply = await call(minimal({ screenshot: png.toString("base64") }));
+    expect(reply.status).toBe(201);
+    const stored = Buffer.from(submitted[0]!.screenshot!);
+    expect(stored.length).toBeGreaterThan(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.98);
+    expect(stored.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+    /* Same signature, same `IHDR` — the dimensions are in it — so it is the
+       picture that was sent and not merely something of the right size. */
+    expect(stored.subarray(0, 33).equals(png.subarray(0, 33))).toBe(true);
   });
 
   it("takes a report with no kind at all", async () => {
@@ -849,7 +887,14 @@ describe("POST /api/feedback", () => {
   it("takes a screenshot as bytes and gives a caller nowhere to type a MIME", async () => {
     await call(minimal({ screenshot: PNG.toString("base64") }));
     expect(submitted[0]?.screenshot).toBeInstanceOf(Uint8Array);
-    expect(Buffer.from(submitted[0]!.screenshot!).equals(PNG)).toBe(true);
+    /* The same picture, not the same file: the server writes its own deflate
+       stream, and the fixture's was written at another level (the two differ in
+       one byte of zlib header). So the header chunk and the *inflated* pixels
+       are compared — this asserted byte equality until the level moved from 9
+       to 6 on 2026-10-03, which was true only by coincidence of settings. */
+    const stored = Buffer.from(submitted[0]!.screenshot!);
+    expect(stored.subarray(0, 33).equals(PNG.subarray(0, 33))).toBe(true);
+    expect(pixelsOf(stored).equals(pixelsOf(PNG))).toBe(true);
 
     for (const field of ["screenshotType", "screenshotName", "contentType", "filename"]) {
       const reply = await call(minimal({ screenshot: PNG.toString("base64"), [field]: "image/svg+xml" }));
@@ -921,7 +966,7 @@ describe("POST /api/feedback", () => {
   });
 
   it("refuses a screenshot past the decoded cap", async () => {
-    const big = Buffer.concat([PNG, Buffer.alloc(400_001)]);
+    const big = Buffer.concat([PNG, Buffer.alloc(MAX_FEEDBACK_SCREENSHOT_BYTES + 1)]);
     const reply = await call(minimal({ screenshot: big.toString("base64") }));
     expect(reply.status).toBe(413);
     expect(submitted).toHaveLength(0);

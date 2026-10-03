@@ -4704,7 +4704,7 @@ export const feedback = spideryarn.table(
     ),
     check(
       "feedback_screenshot_size",
-      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 400000`,
+      sql`${t.screenshot} is null or octet_length(${t.screenshot}) <= 2000000`,
     ),
     /**
      * An event id without a time it was mirrored would be a row that says Sentry

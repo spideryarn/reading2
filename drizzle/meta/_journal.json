@@ -918,6 +918,13 @@
       "when": 1791038790468,
       "tag": "20261003144630_gpt_live_sessions_and_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1791043364774,
+      "tag": "20261003160244_feedback_screenshot_size_two_megabytes",
+      "breakpoints": true
     }
   ]
 }
