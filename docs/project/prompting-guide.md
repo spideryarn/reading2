@@ -99,11 +99,14 @@ ${PROFILE_RULES}`;
   [260928c](../plans/260928c-block-refs-shown-to-readers.md).
 - **Summarising the whole piece? Leave its paperwork out.** `paperwork(kind)` in
   [`src/paperwork.ts`](../../src/paperwork.ts) is a second shared section, beside `plainWords`: the
-  authors' list, affiliations, acknowledgements, funding and disclosures are paperwork when they
-  only record how the piece was produced, and content when the piece uses them. `"summary"` leaves
-  it out; `"structure"` keeps the node a table of contents must have and labels it. Summary, Tweets
-  and both structure-step prompts carry it; the evidence is
-  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md).
+  title block, the authors' list, affiliations, acknowledgements, funding, disclosures and the
+  reference list are paperwork when they only identify the piece or record how it was produced,
+  published or sourced, and content when the piece uses them. `"summary"` leaves it out;
+  `"structure"` keeps the node a table of contents must have and labels it, and labels a node that
+  is only the front abstract the same way.
+  Summary, Tweets and both structure-step prompts carry it; the evidence is
+  [261001p](../plans/261001p-summaries-skip-the-paperwork-and-lead-with-the-takeaway.md) and
+  [261003c](../plans/261003c-summary-and-structure-skip-the-front-matter.md).
 - **No words for a reader, no rule.** A prompt whose output is a verdict, a URL, ids or a verbatim
   transcription is listed in `PLAIN_WORDS_EXEMPT` in the same file, with its reason. A transcriber
   told to prefer common words is a transcriber invited to tidy.

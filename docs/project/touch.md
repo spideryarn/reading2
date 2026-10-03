@@ -442,6 +442,10 @@ notices.
 >
 > — Greg, 2026-09-07, reading on an iPad (SPIDERYARN-READING2-2G)
 
+(The icons have been on the *right* of the block since 2026-10-03, at Greg's request, spya-kd5dk5 —
+[261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
+depends on the side.)
+
 **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
 The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
 the chat door, the "?" and the "…" wait to be asked for. A finger has no hover, so on 2026-09-04 the

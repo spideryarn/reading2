@@ -47,6 +47,10 @@
    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
 .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
+/* The run row, *Find more* or *Find terms again*, above the Look up box since
+   2026-10-03 (Greg, spya-s660yh; plan 261003c), so it is the owner's top row
+   now and clears the (i) too. Its own padding is in footnotes.css § `.gloss-more`. */
+.mode-band.has-about .gloss-more { padding-right: calc(0.7rem + var(--band-about-room)); }
 /* The buttons as one named group. The profile badge that used to sit beside
    it moved to the band's corner in plan 261002e. */
 .gloss-sort-group {

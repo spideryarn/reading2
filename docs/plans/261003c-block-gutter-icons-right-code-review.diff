@@ -1,0 +1,738 @@
+diff --git a/docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md b/docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md
+new file mode 100644
+index 000000000..cf852bc90
+--- /dev/null
++++ b/docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md
+@@ -0,0 +1,122 @@
++# The block's gutter icons move to the right of the block
++
++**Status:** built 2026-10-03, on `dev`. Report `spya-kd5dk5`, Overseer queue item `qi-crm2g6dr`.
++The Sol plan review (`261003c-block-gutter-icons-right-plan-review-sol.md`) found no P0 and asked
++for tests that pin each rule's side and for checks at 12px and 20px roots; both are in. The
++screenshots found one more thing, § A gap that was already there.
++
++> For the icons currently to the left of the block (e.g. Permalink, Comment, Question, etc)
++> - Let's try moving them to the right-hand-side of the block
++> - Add a slightly bigger vertical gap between each of them
++>
++> — Greg, 2026-09-29
++
++## What is already done
++
++**The gap.** Plan [261002e](261002e-mode-corner-icons-and-gutter-icon-polish.md) gave the icons
++4px more air (13px between glyphs instead of 9) for `spya-jc0vm6`, which asked the same thing on
++2026-10-02. This plan does not widen it again. It moves the column.
++
++## What is in the way
++
++The queue item warned that **Marginalia** now has the right-hand column. The reason it does not
++conflict: a Marginalia note sits *outside* the reading cell (`left: 100%` of `td.text`, then
++`--marg-gap`), and the gutter sits *inside* the cell's padding. On the right, the order becomes:
++
++```
++| prose ...................... | ⟂ icons |   note in the margin ...
++                               ^ cell's right pad (the gutter's column)
++                                         ^ cell's edge, then --marg-gap
++```
++
++This fits [interface-vision.md](../project/interface-vision.md): the right column is for what is
++anchored to the text, and a bookmark or a question on a block is exactly that.
++
++**The heading's fold chevron** (`.fold-toggle`) is at the right-hand end of a heading's line. It is
++placed `--text-pad-r` plus the centring slack in from the cell's right edge, which puts it at the
++prose's right edge, *inside* the measure. When the right pad becomes the gutter, the chevron stays
++at the end of the heading line and the heading's icons sit one gutter-inset to its right. They are
++neighbours, not overlapping. The screenshots check this.
++
++## The design
++
++**Swap which side of the cell holds the gutter.** Every rule that places something against the
++prose already reads two tokens, `--text-pad-l` and `--text-pad-r`, and most were written for "any
++pair" on purpose (narrow-window.css § the title over the column says so at length). So:
++
++1. `shell.css`: `--text-pad-r` becomes the gutter's column,
++   `calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)`, and `--text-pad-l` becomes the plain
++   breathing space, `1.4rem`. The total is unchanged, so `proseAloneMaxPx`, `fitMargin` and the
++   lone-column cap in `layout.ts` are unchanged (their comments get the sides swapped).
++2. `narrow-window.css`: the phone's trailing pad `--text-pad-r: 0.9rem` becomes
++   `--text-pad-l: 0.9rem`. The phone's masthead and controls bar already align to `--text-pad-l`,
++   so the title still starts on the same pixel as the first line of prose.
++3. `gutter.css` § the gutter: `left: calc(--blk-gutter-x + max(0, slack / 2))` becomes the same
++   expression as `right:`. The expression is symmetric in the two pads, so nothing else in it
++   changes.
++4. `gutter.css` § the reading-time line: it hangs in the gap between the column and the prose,
++   which is now on the column's left: `left: 100%` → `right: 100%`, and the 2px line is drawn at
++   the strip's right edge (next to the column, as now).
++5. `footnotes.css`: a footnote's prose is left-aligned, not centred, so its gutter is
++   `right: calc(--blk-gutter-x + max(0, 100% - padL - padR - measure))` rather than
++   `left: --blk-gutter-x`, to stay beside the note's own right edge rather than out at the cell's.
++6. Comments and docs that say "left of the prose" for the gutter: gutter.css, prose.css,
++   shell.css, narrow-window.css, layout.ts, BlockGutter.tsx, and the docs that describe it
++   (touch.md § the gutter, comments.md, reading-time.md, and others a grep finds). Each one is
++   read, not search-and-replaced.
++7. The tests that assert these numbers (`tests/prose-centred-in-its-cell.test.ts`,
++   `tests/text-alone-centring.test.ts`, `tests/gutter-target-size.test.ts`, the layout tests)
++   follow the swap. A test that asserted "the gutter's `left`" now asserts its `right`.
++
++**What does not move:** the spine's marks (left edge of the window), the open "…" panel (it grows
++downward, one slot wide), the tooltip cards (the delegated card places itself against the control).
++The screenshots check the last two.
++
++## Checked by
++
++Before-and-after screenshots at 1440, 820 and 390 (touch) wide: plain reading, a band mode,
++Marginalia open, and a heading with its fold chevron, with box measurements: the gutter's left edge
++must be ≥ the prose's right edge plus `--blk-gutter-x`, at most a couple of pixels off; it must not
++overlap `.fold-toggle` or the first `.marg-note`; and on the phone it must stay inside the window.
++
++## What the screenshots show
++
++Playwright on the box, article `ds-spya-me0d4g`. Measured after both fixes: the icons start 5.6px
++(one `--blk-gutter-x`) past the prose's right edge at 1440, 820 and 390, and 4.2 / 7.0px at 12 / 20px
++roots; the fold chevron and a heading's icons are the same inset apart at every root; with
++Marginalia open the icons are 25.6px (820) to 114px (1440) clear of a note's words; the open "…"
++panel and the tooltip stay inside the cell and the window.
++
++| | before | after |
++|---|---|---|
++| paragraph, 1440 | ![](261003c-shot-before-plain-1440-para.png) | ![](261003c-shot-after-plain-1440-para.png) |
++| Marginalia open, 1440 | ![](261003c-shot-before-margin-1440-para.png) | ![](261003c-shot-after-margin-1440-para.png) |
++| heading and its fold chevron, 1440 | ![](261003c-shot-before-plain-1440-heading.png) | ![](261003c-shot-after-plain-1440-heading.png) |
++| phone, a tapped paragraph | ![](261003c-shot-before-plain-390-para.png) | ![](261003c-shot-after-plain-390-para.png) |
++
++On a phone the text gains about 21px on the left (35.2 → 14.4) and gives the same back on the right.
++
++## A gap that was already there
++
++The first "after" screenshots put the icons **88px** right of the text at 1440. The "before" set had
++the same 88px on the *left*: the gutter sat 11.7px from the cell's edge and the text 123.7px. The
++gutter (and the fold chevron) place themselves at the edge of a 65ch measure, and `ch` is the zero
++of the font it is used on. Since 2026-10-02 the prose is set in the author's face for every reader
++(styles/voices.css), so `.prose` measures 65 serif zeroes while these two went on measuring 65 Geist
++ones. On the left it showed less, because the text's first letters line up; beside ragged line ends
++on the right it is obvious.
++
++The fix is one line in each rule: `font-family: var(--font-author)`, the face voices.css gives
++`.prose`. `tests/prose-centred-in-its-cell.test.ts` reads that face from voices.css rather than
++naming it, so a later change to the prose's face goes red here too. The two mastheads use `ch` the
++same way and were not touched. They set the UI face on purpose (their children inherit it), and a
++title a few pixels off is a separate, smaller thing; it is deferred.
++
++## The simpler option passed over, and the one deferred
++
++- **A switch** (an experimental toggle, or a reader setting, keeping both sides) was passed over.
++  Greg said "let's try", and a beta on `dev` is how we try. Two layouts would double every rule
++  above and their tests. Going back is reverting one commit, or swapping the two tokens back.
++- **Not moving the gutter while Marginalia is open** was passed over, because the drawing above
++  shows they do not collide. If the screenshots show they crowd each other, that is the first thing
++  to revisit.
+diff --git a/docs/plans/261003c-block-gutter-icons-right-plan-review-prompt.md b/docs/plans/261003c-block-gutter-icons-right-plan-review-prompt.md
+new file mode 100644
+index 000000000..1e4790d66
+--- /dev/null
++++ b/docs/plans/261003c-block-gutter-icons-right-plan-review-prompt.md
+@@ -0,0 +1,13 @@
++Review the plan docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md before it is built. It moves the per-block gutter of icons (`.blk-gutter`) from the left of each paragraph to the right by swapping the values of `--text-pad-l` / `--text-pad-r` and mirroring a few `left` rules.
++
++Read the actual code the plan relies on: src/web/styles/shell.css (tokens), src/web/styles/gutter.css (all of it, especially § the gutter, the open "…" panel, the reading-time line span.blk-read), src/web/styles/prose.css (td.text, .fold-toggle), src/web/styles/narrow-window.css (every use of --text-pad-l/--text-pad-r and the masthead/controls rules), src/web/styles/footnotes.css, src/web/styles/marginalia.css, src/web/layout.ts (proseAloneMaxPx, fitMargin, fitBoth), src/web/BlockGutter.tsx, and the tests that read these (grep tests/ for text-pad, blk-gutter, prose-centred, text-alone).
++
++Questions to answer, with file:line evidence:
++1. Is any rule that reads --text-pad-l/--text-pad-r NOT symmetric in them, i.e. would silently become wrong after the swap? (masthead, controls bar padding, notes-head/note-num, figure-note, hierarchy/gist columns, opaque/callout blocks, anything else.)
++2. Does anything else assume the gutter is on the left: hover cards' placement, the row-active touch rules, the comment mark, keyboard focus, `.pin-left`, the spine, the "…" panel, z-index/overlap with the next column, scroll-into-view, `scatter.ts`, `spine-marks.ts`? 
++3. With Marginalia open (and with Marginalia beside a band, fitBoth), does a right-hand gutter collide with or crowd `.marg-note`, or change `--marg-reserve` arithmetic?
++4. Does the heading's `.fold-toggle` really end up beside, not under, the heading's gutter, at every width including the phone and a 12px/20px root?
++5. Is there a simpler or more robust mechanism than the token swap?
++6. Anything missing from the plan's list of docs/tests to update.
++
++Be concrete. Rank findings P0/P1/P2. Do not edit any files.
+diff --git a/docs/plans/261003c-block-gutter-icons-right-plan-review-sol.md b/docs/plans/261003c-block-gutter-icons-right-plan-review-sol.md
+new file mode 100644
+index 000000000..5f56ae18e
+--- /dev/null
++++ b/docs/plans/261003c-block-gutter-icons-right-plan-review-sol.md
+@@ -0,0 +1,101 @@
++The implementation approach is sound. I found no P0 runtime issue and no token consumer that would silently become wrong after the proposed swap. I would approve the design after strengthening the test plan in two places.
++
++## Findings
++
++### P0
++
++None.
++
++### P1 — the plan claims a directional test that does not exist
++
++The plan says an existing test asserting the gutter’s `left` will be changed to assert `right` ([plan:64](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md:64)). There is no such assertion for the ordinary gutter:
++
++- The centring test only checks that `.blk-gutter` mentions the inset, measure, and both pads; it never checks `left` versus `right` ([prose-centred-in-its-cell.test.ts:71](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/prose-centred-in-its-cell.test.ts:71)).
++- The only directional gutter assertion is the footnote override’s current `left` ([prose-centred-in-its-cell.test.ts:122](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/prose-centred-in-its-cell.test.ts:122)).
++- `gutter-target-size.test.ts` checks that the gutter-bearing token is currently the left pad ([gutter-target-size.test.ts:178](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/gutter-target-size.test.ts:178)), and it pins the reading strip’s `left: 100%` and pseudo-element’s `left: 0` ([gutter-target-size.test.ts:195](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/gutter-target-size.test.ts:195)), but not the base gutter’s side.
++
++Add positive and negative assertions:
++
++- `.blk-gutter` contains `right: calc(...)` and no positioning `left:`.
++- `td.text.note .blk-gutter` contains the full `right:` formula and no `left:`.
++- `.blk-read` contains `right: 100%`; its `::after` contains `right: 0`; neither retains the old directional property.
++- `--text-pad-r` derives from the gutter, while `--text-pad-l` is the plain rem pad.
++
++Otherwise accidentally swapping the tokens but forgetting the base `left → right` change can pass the structural suite.
++
++### P1 — the stated fold invariant is not checked at 12px or 20px roots
++
++The screenshot matrix names widths only ([plan:72](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md:72)). This code explicitly supports non-default roots: the slot is `max(1.5rem, 24px)` ([shell.css:38](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/shell.css:38)), and previous root-specific overhangs are why the heading and gutter floors exist ([gutter.css:277](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/gutter.css:277)).
++
++The proposed geometry is correct, but the plan should require either browser measurements or an explicit arithmetic test at 12, 16, and 20px roots, including 390px and a wide centred cell. The current functional fold tests do not inspect layout ([fold.test.ts:284](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/fold.test.ts:284)).
++
++### P2 — add Marginalia’s owning doc; preserve historical quotes
++
++Because coexistence with Marginalia is the main design decision, record the resulting order in [marginalia.md:1](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/docs/project/marginalia.md:1), not only in the plan.
++
++Do not “correct” Greg’s historical wording in [touch.md:428](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/docs/project/touch.md:428) or the quoted report in [BlockGutter.tsx:862](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/BlockGutter.tsx:862). Those are dated direct quotes; add current-state prose around them instead.
++
++## Answers to the six questions
++
++1. No token consumer becomes wrong, although several are intentionally asymmetric.
++
++- `td.text` uses the pads as their physical sides, so the swap is exactly what moves its reserved space ([prose.css:75](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:75)).
++- `.fold-toggle` uses the right pad plus the symmetric centring slack; it should remain unchanged ([prose.css:145](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:145)).
++- The lone-column masthead’s signed `padR − padL` is correct: it follows the prose axis when the asymmetry reverses ([narrow-window.css:1224](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/narrow-window.css:1224)).
++- The band-mode masthead expression carries both pads and both masthead gutters explicitly, so it also reverses correctly ([narrow-window.css:1318](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/narrow-window.css:1318)).
++- The phone controls and masthead intentionally use only `--text-pad-l`; moving the `0.9rem` override to that token keeps them aligned with the new plain left edge ([narrow-window.css:170](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/narrow-window.css:170), [narrow-window.css:226](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/narrow-window.css:226)).
++- `.notes-head` and `.note-num` intentionally use the prose’s starting edge, so they should move to the new plain left pad ([footnotes.css:115](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/footnotes.css:115), [footnotes.css:129](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/footnotes.css:129)).
++- `.figure-note` does not read either token directly; it begins at the cell’s content edge and remains outside `.prose` ([prose.css:529](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:529)).
++- Callouts, captions, and opaque blocks merely use narrower centred `.prose` boxes; the gutter deliberately follows the ordinary 65ch measure, as it does today ([prose.css:391](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:391)). There are no remaining hierarchy/gist-column token consumers.
++
++The proposed footnote formula is also correct: because footnotes opt out of centring ([footnotes.css:71](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/footnotes.css:71)), it must consume all surplus width, not half of it.
++
++2. No other runtime mechanism assumes the block gutter is left.
++
++- Gutter hover cards use the control’s rectangle with top placement plus `flip` and `shift`, not a hard-coded horizontal side ([BlockLinkCard.tsx:327](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/BlockLinkCard.tsx:327)).
++- Touch activation is selector- and event-based; `.blk-gutter` is excluded as a hit surface regardless of its coordinates ([TableView.tsx:426](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/TableView.tsx:426)).
++- The comment mark and keyboard focus are children of the gutter, so they travel with it. Focus styling is local to those children ([gutter.css:787](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/gutter.css:787), [gutter.css:882](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/gutter.css:882)).
++- `.pin-right` does not pin anything; it only removes the last border ([table.css:90](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/table.css:90)).
++- The open `…` panel changes height, stacking, border, and hit testing but not horizontal placement, so it follows the moved gutter ([gutter.css:825](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/gutter.css:825)).
++- Scroll targeting reads row and passage rectangles vertically; there is no horizontal gutter term ([scroll.ts:981](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/scroll.ts:981)).
++- The spine is independently fixed to the viewport’s left edge, and `spine-marks.ts` works in row/document pixels ([spine-marks.ts:19](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/spine-marks.ts:19)).
++- `scatter.ts`’s `PAD_X` is internal diagram padding, unrelated to article-cell geometry ([scatter.ts:103](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/scatter.ts:103)).
++
++3. Marginalia does not collide, and `--marg-reserve` must not change.
++
++`.marg-note` starts at `left: 100%` of the cell and puts its text another `--marg-gap` beyond that ([marginalia.css:35](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/marginalia.css:35)). The gutter remains wholly inside the cell.
++
++At minimum slack, the gap from the gutter target’s outer edge to note text is:
++
++`--blk-gutter-x + --marg-gap`
++
++That is 19.2px at a 12px root, 25.6px at 16px, and 32px at 20px. Even the Marginalia chevron begins on the far side of the cell edge: `1.25rem − 0.9rem = 0.35rem`, matching the gutter inset ([marginalia.css:164](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/marginalia.css:164)). Thus the two target boxes retain `2 × --blk-gutter-x` between them.
++
++`fitMargin` and `fitBoth` position Marginalia from the table’s outer right edge, not the prose’s internal padding ([layout.ts:543](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/layout.ts:543), [layout.ts:598](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/layout.ts:598)). Since the two pad widths merely exchange sides, `proseAloneMaxPx`, `margReserve`, `margLeft`, and every crossover remain unchanged.
++
++4. Yes, the fold toggle remains beside the gutter rather than underneath it.
++
++Let `S` be the non-negative centring slack and `G = --blk-gutter-x`. After the swap:
++
++- prose right edge = `cellRight − padR − S`
++- fold box = the final `--blk-slot` inside that prose edge
++- gutter box begins at `proseRight + G`
++
++because the new right pad is `slot + 2G`.
++
++So the fold control and gutter are always separated by exactly `G`: 4.2px at a 12px root, 5.6px at 16px, and 7px at 20px. The phone’s `0.9rem` change affects only the left pad and therefore cannot alter this relationship. The heading also reserves one slot at the end of its prose ([prose.css:412](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:412)) and floors the row to contain the target ([prose.css:136](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/src/web/styles/prose.css:136)).
++
++The plan’s reasoning is right; its verification matrix needs the root-size cases noted above.
++
++5. The token swap is the simplest mechanism.
++
++Moving each consumer independently would duplicate the side decision and make masthead/phone alignment easier to miss. Logical properties would encode writing direction, whereas the requested design is specifically the physical right side. Semantic aliases such as `--text-pad-gutter` and `--text-pad-plain` would be slightly more descriptive but add indirection without eliminating any mirrored positioning rule. I would keep the proposed swap.
++
++6. Missing or clarified updates:
++
++- Add exact direction assertions for the base gutter, footnote gutter, reading strip, and line.
++- Add fold/gutter rendered measurements at 12px and 20px roots, not just the default root.
++- Add the resulting gutter–note ordering to `docs/project/marginalia.md`.
++- Update side-specific comments in the named source and test files, including the cap test that currently parses the plain pad specifically from `--text-pad-r` ([gutter-target-size.test.ts:723](/home/greg/code/spideryarn2/.claude/worktrees/fbkd5dk5-gutter-icons-right/tests/gutter-target-size.test.ts:723)).
++- Preserve dated quotations that say “left”; they describe the original report rather than current geometry.
++- `tests/layout-margin.test.ts`, `scatter.ts`, `spine-marks.ts`, scroll tests, and functional fold tests require no value changes. Their underlying behavior is unchanged.
+\ No newline at end of file
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 67dbbadc3..f01ca6bd9 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -9,6 +9,13 @@ The code is `src/web/marginalia/`: `notes.ts` decides which note goes beside whi
+ tested in `tests/marginalia-notes.test.ts`), `MarginaliaColumn.tsx` draws them and the head, and
+ `press.ts` decides what the Dock button does on a narrow window.
+ 
++**The block's gutter of icons sits between the prose and the notes.** It moved to the right of the
++block on 2026-10-03 ([261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md)),
++into the reading cell's right padding; a note starts past the cell's edge, so the order across the
++page is prose, icons, then the note, with at least `--blk-gutter-x + --marg-gap` between the icons
++and a note's words. Nothing in the column's arithmetic (`fitMargin`, `--marg-reserve`) changed,
++because the two pads only swapped sides.
++
+ ## What it shows
+ 
+ **It generates nothing.** Every note comes from something another mode has already stored, and
+diff --git a/docs/project/touch.md b/docs/project/touch.md
+index b09cc2535..3cf356619 100644
+--- a/docs/project/touch.md
++++ b/docs/project/touch.md
+@@ -430,6 +430,10 @@ notices.
+ >
+ > — Greg, 2026-09-07, reading on an iPad (SPIDERYARN-READING2-2G)
+ 
++(The icons have been on the *right* of the block since 2026-10-03, at Greg's request, spya-kd5dk5 —
++[261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md). Nothing below
++depends on the side.)
++
+ **The block gutter's grammar is that at rest it shows *state* and on hover it shows *affordances*.**
+ The bookmark and the blue chat mark are facts about the article and are always there; the permalink,
+ the chat door, the "?" and the "…" wait to be asked for. A finger has no hover, so on 2026-09-04 the
+diff --git a/src/web/layout.ts b/src/web/layout.ts
+index 1ee04f666..b11fc982e 100644
+--- a/src/web/layout.ts
++++ b/src/web/layout.ts
+@@ -141,7 +141,8 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
+  * more.** `proseAloneMaxPx` below is the cap; this is the rem part of it.
+  *
+  * 49rem is `--reading-measure` (65ch, ≈46rem in the reading face), plus the
+- * cell's `--text-pad-r` (1.4), plus the gutter's inset on each side (0.35 × 2)
++ * cell's plain pad (1.4 — `--text-pad-l` since the gutter moved right in
++ * 261003c, `--text-pad-r` before; the sum is the same), plus the gutter's inset on each side (0.35 × 2)
+  * — 48.1, rounded up to something round, exactly as the old 50 rounded its own
+  * 49.5. The rounding runs upwards on purpose: `.prose` keeps its own clamp, so
+  * slack here is a few pixels of margin inside the column rather than a clipped
+@@ -186,7 +187,7 @@ export const BLK_SLOT_REM = 1.5;
+  * `PROSE_ALONE_MAX_REM * root` would be the whole answer if every term scaled
+  * with the root. Two of the gutter's do not: `--blk-slot` is `max(1.5rem, 24px)`,
+  * so below a 16px root the gutter stops shrinking and the *rem* width of the
+- * cell's left padding goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
++ * cell's gutter padding (its right since 261003c) goes **up** — 2.2rem at 16, 2.7rem at 12. A single rem
+  * constant therefore cannot be right at every root, and the one that was here
+  * under-reserved by 1.2px at 12px and by 12.9px at 9px, silently clipping the
+  * measure it exists to protect. GPT Sol's stage 1 review, 2026-09-04.
+diff --git a/src/web/styles/footnotes.css b/src/web/styles/footnotes.css
+index 1f54580ae..d2ab0debc 100644
+--- a/src/web/styles/footnotes.css
++++ b/src/web/styles/footnotes.css
+@@ -93,8 +93,21 @@ td.text.note .prose {
+   margin-inline: 0;
+ }
+ /* The gutter comes back with it, or the reader's icons would be centred beside
+-   a note that is not. § the gutter. */
+-td.text.note .blk-gutter { left: var(--blk-gutter-x); }
++   a note that is not. § the gutter. **On the right since 261003c**, and a
++   left-aligned note leaves ALL the room the measure does not use on its right,
++   so the column takes the whole of it rather than the half § the gutter takes:
++   the same `clamp` and the same reading face, so `ch` means what it means in
++   the note's prose. */
++td.text.note .blk-gutter {
++  right: calc(
++    var(--blk-gutter-x) +
++      max(
++        0px,
++        100% - var(--text-pad-l) - var(--text-pad-r) -
++          clamp(45ch, 90vw, var(--reading-measure))
++      )
++  );
++}
+ /* A note's body is an `<li>` (src/notes.ts § What "canonical" means here), and
+    stage 3 hands each one to its own row — so the browser draws a list marker for
+    a list that is not there. Harmless until this change, and now a bullet sitting
+diff --git a/src/web/styles/gutter.css b/src/web/styles/gutter.css
+index f486893c8..6d67ccf63 100644
+--- a/src/web/styles/gutter.css
++++ b/src/web/styles/gutter.css
+@@ -131,8 +131,17 @@
+ 
+      The `max(0px, …)` above is the second reason this rule is safe where the
+      masthead's is not: it self-limits to "leave the gutter alone", where a
+-     fixed `max-width` cannot. */
+-  left: calc(
++     fixed `max-width` cannot.
++
++     **`right`, not `left`, since 2026-10-03** (spya-kd5dk5, docs/plans/261003c-…):
++     the column moved to the right of the block, into `--text-pad-r`. Everything
++     above still holds with the sides swapped, because the expression is
++     symmetric in the two pads: it is the inset from the cell's right edge now,
++     and the "left of where the words start" caveat is "right of where they
++     end". Heading rows: § folding a section in prose.css puts the fold chevron
++     at the prose's right edge, and this column starts `--blk-gutter-x` past
++     it — neighbours, never on top of each other, at every root. */
++  right: calc(
+     var(--blk-gutter-x) +
+       max(
+         0px,
+@@ -154,7 +163,16 @@
+      Nothing in this column is changed by them: every glyph is a fixed-px icon,
+      `.blk-n` sets its own size, and `line-height` is 0 below. If a child is ever
+      added that sizes itself in `em`, these are the lines that will have moved
+-     it. */
++     it.
++
++     **And the family, since 2026-10-03.** The author's face became every
++     reader's on 2026-10-02 (styles/voices.css), so `.prose` measures 65 serif
++     zeroes; this column went on measuring 65 Geist ones and stood 88px off the
++     text at 1440 — measured in the browser for 261003c. Nothing in the column
++     is set in it: `.blk-n` and `.block-chat-n` name their own face.
++     tests/prose-centred-in-its-cell.test.ts holds this to whatever voices.css
++     gives `.prose`. */
++  font-family: var(--font-author);
+   font-size: var(--reading-size);
+   font-weight: var(--reading-weight);
+   top: var(--blk-top);
+@@ -969,7 +987,9 @@ td.text.kind-heading .blk-gutter[data-open] {
+   position: absolute;
+   top: 0;
+   bottom: 0;
+-  left: 100%;
++  /* The gap between the column and the prose is on the column's LEFT since
++     the column moved to the right of the block (261003c). */
++  right: 100%;
+   width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x));
+   min-height: 0;
+   padding: 0;
+@@ -995,8 +1015,9 @@ td.text.kind-heading .blk-gutter[data-open] {
+      (SPIDERYARN-READING2-84), *"What are they for? They should ideally have
+      tooltips"*, two days after the tooltip shipped. Measured in the browser,
+      docs/plans/261001l-…. The line moves rather than the strip growing back
+-     over the column, for the reason above. */
+-  left: 0;
++     over the column, for the reason above. Its RIGHT edge since 261003c: the
++     strip is left of the column now, so that is the edge beside it. */
++  right: 0;
+   width: 2px;
+   pointer-events: none;
+   /* **`--ink`, so on this dark page the line gets *lighter* as you read** —
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 53c0605f2..7ff0c7296 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -101,8 +101,12 @@
+      is one more focusable element per block on the narrow layout, which is said
+      out loud in docs/plans/prose-gutter-icons.md rather than glossed. */
+ 
+-  /* Trailing padding still shrinks: 1.4rem of right margin is generous when the
+-     measure is 366px. The left is § text's now.
++  /* The plain padding still shrinks: 1.4rem of margin is generous when the
++     measure is 366px. It is the LEFT one since 2026-10-03, when the gutter
++     moved to the right of the block and took the right pad with it (shell.css,
++     docs/plans/261003c-…); the phone's title and controls bar read
++     `--text-pad-l`, so they come in with it and still start on the same pixel
++     as the prose.
+ 
+      **The token, not the padding, and that is a fix rather than a tidy-up.**
+      This was `td.text { padding-right: 0.9rem }` until 2026-09-05, which left
+@@ -111,10 +115,10 @@
+      wrong the moment something did. Three rules now do: `.blk-gutter` and both
+      mastheads compute *half the room the centring divides* from it (§ the
+      gutter, § plain, centred), and each was quietly 0.25rem out below 731px.
+-     Set here rather than in the `:root` block above because `--text-pad-r` is
++     Set here rather than in the `:root` block above because the pad tokens are
+      declared on `.reader`, which would win. GPT Sol found it while reviewing
+      the merge that introduced the second and third readers, 2026-09-05. */
+-  .reader { --text-pad-r: 0.9rem; }
++  .reader { --text-pad-l: 0.9rem; }
+ 
+   /* ------------------------------------------------------------------------
+      The two bars that were silently eating their own controls.
+@@ -216,13 +220,15 @@
+      room held for the corner wordmark — which came to 37.6px against a prose
+      inset of 35.2px, so the two edges lined up to within about two pixels *by
+      accident*. Taking the reservation away took the alignment with it. Naming
+-     `--text-pad-l` makes it deliberate and makes it track: the inset is a
+-     `--blk-slot` of icons plus its padding (§ text), and it has moved twice
+-     already this month.
++     `--text-pad-l` makes it deliberate and makes it track: the inset was a
++     `--blk-slot` of icons plus its padding (§ text) until 2026-10-03, and is
++     the plain 0.9rem since the icons moved to the right (261003c) — the third
++     time it has moved, and the first this rule did not have to hear about.
+ 
+      The right side stays a plain gutter. The prose's own right inset is
+-     `--text-pad-r`, 0.9rem here, and matching it would be symmetry for its own
+-     sake — nothing lines up against that edge, because the title wraps. */
++     `--text-pad-r`, the icons' column now, and matching it would be symmetry
++     for its own sake — nothing lines up against that edge, because the title
++     wraps. */
+   .masthead {
+     --masthead-pad-l: var(--text-pad-l);
+     --masthead-pad-r: 1rem;
+@@ -1145,7 +1151,7 @@
+    reason this is one declaration rather than a section. Four things are drawn
+    against the cell's own edges and would every one of them be left behind by
+    text that moved on its own: the gutter is absolutely positioned at the
+-   cell's left (§ the gutter), a search hit paints an inset shadow at x=0
++   cell's right (§ the gutter; its left until 261003c), a search hit paints an inset shadow at x=0
+    (§ has-hit), `row-active` fills the cell, and the hover target *is* the
+    cell. Moving the column moves all four, and no rule above has to learn that
+    a mode exists.
+@@ -1284,9 +1290,10 @@
+    **Not `margin-inline: auto`**, which is what the alone rule can afford, and
+    the reason survives the bar becoming symmetric. Auto margins would centre
+    this box in the bar, but the prose is *not* centred in the reading cell — the
+-   cell's own padding is lopsided (`--text-pad-l` is a gutter of icons,
+-   `--text-pad-r` is trailing space), so the prose sits half that difference
+-   right of centre. So the left margin is stated: the prose's own inset
++   cell's own padding is lopsided (`--text-pad-r` is a gutter of icons since
++   261003c, `--text-pad-l` is plain space), so the prose sits half that
++   difference off centre — left of it now, right of it until 2026-10-03, and
++   the expression below is true either way. So the left margin is stated: the prose's own inset
+    (`--text-pad-l` plus half the room the centring divides) measured from the
+    bar's content edge, which is where a margin starts.
+ 
+diff --git a/src/web/styles/prose.css b/src/web/styles/prose.css
+index 217b02d77..8f44ab6ba 100644
+--- a/src/web/styles/prose.css
++++ b/src/web/styles/prose.css
+@@ -13,7 +13,7 @@
+    typography research (styles/tokens.css) — 80 chars per line reads ~7% faster
+    but comprehends ~12% worse. `--font-reading` supplies the Geist base; the
+    author voice in styles/voices.css supplies the visible Source Serif face.
+-   The gutter's `left:` rule three thousand lines down depends on the active
++   The gutter's `right:` rule (gutter.css) depends on the active
+    face because `ch` is measured where the length is used. The measure is applied to
+    .prose rather than by using .reading-column, because that class centres
+    itself and here the text is left-aligned in a table cell.  */
+@@ -123,9 +123,12 @@ tbody tr:first-child td.text.kind-heading {
+    The chevron at the right-hand end of a heading's line, which folds the
+    section under it away (FoldToggle.tsx, fold.ts; plan 261002e).
+ 
+-   **Right, not left.** Left of the heading is the gutter, and left of the
+-   gutter is `--blk-gutter-x` — 0.35rem — whenever the cell is no wider than
+-   the measure, which is every band mode.
++   **At the prose's right edge, with the gutter just past it.** It was placed
++   right because the gutter was on the left; since 2026-10-03 the gutter is on
++   the right too (261003c), in the cell's right pad, so on a heading row the
++   chevron ends the line and the heading's icons start `--blk-gutter-x` further
++   on. Neighbours, at every root: both are one `--blk-slot` wide and the pad is
++   exactly a slot plus two insets (GPT Sol, plan review of 261003c).
+ 
+    **It follows the measure the way the gutter does, mirrored.** `.prose` is
+    `clamp(45ch, 90vw, --reading-measure)` and centred in the cell (§ text), so
+@@ -154,6 +157,10 @@ td.text.kind-heading:has(> .fold-toggle) {
+           ) / 2
+       )
+   );
++  /* The prose's face too, or `ch` is a Geist zero against a serif measure
++     (gutter.css § the gutter, 261003c). The chevron is an icon; no text is set
++     in it. */
++  font-family: var(--font-author);
+   font-size: var(--reading-size);
+   font-weight: var(--reading-weight);
+   top: var(--blk-top);
+diff --git a/src/web/styles/shell.css b/src/web/styles/shell.css
+index 7d03f022c..c74cded81 100644
+--- a/src/web/styles/shell.css
++++ b/src/web/styles/shell.css
+@@ -58,16 +58,26 @@
+      side of the text to be minimal, to maximise the space we have for the
+      text."* */
+   --blk-gutter-w: var(--blk-slot);
+-  /* How far the gutter sits from each edge of the cell's left padding. */
++  /* How far the gutter sits from each edge of the cell's right padding (the
++     left until 261003c). */
+   --blk-gutter-x: 0.35rem;
+-  /* The reading cell's own horizontal padding — the gutter's column on the left
+-     (§ the gutter) and an ordinary breathing space on the right. Named because
++  /* The reading cell's own horizontal padding — an ordinary breathing space on
++     the left and the gutter's column on the right (§ the gutter).
++
++     **The gutter has been on the right since 2026-10-03**, when Greg asked to
++     *"try moving them to the right-hand-side of the block"* (spya-kd5dk5,
++     docs/plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md).
++     The two values swapped sides and nothing else had to: every rule that
++     places something against the prose reads both tokens, and most were
++     written to be true for any pair. Marginalia's notes start past the cell's
++     right edge, so the column sits between the prose and them. Named because
+      two rules need the same two numbers: `td.text` sets them as padding, and
+      the centred masthead (§ plain, centred) insets itself by them so the title
+      starts on the same pixel as the first line of the article under it.
+ 
+-     **The left one is the gutter's column and nothing else, so it is computed
+-     from it rather than restated.** It was `2.1rem` for a one-icon-wide column
++     **The right one is the gutter's column and nothing else, so it is computed
++     from it rather than restated.** (It was the left one until 2026-10-03, and
++     the history below is that side's.) It was `2.1rem` for a one-icon-wide column
+      until 2026-09-04 and then `3.7rem` for the pad, which was correct and was
+      three numbers that had to be kept in step by hand — the same trap `--blk-top`
+      below exists to close. Written as `calc()`, the icons cannot touch the prose
+@@ -78,8 +88,8 @@
+      multiplication, 2026-09-05.) That is the prose's half of the day.
+      **`proseAloneMaxPx` in layout.ts is a fact about this number**, and goes
+      stale the moment it moves. */
+-  --text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
+-  --text-pad-r: 1.4rem;
++  --text-pad-l: 1.4rem;
++  --text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2);
+   /* **How much horizontal room the mode band takes from the table**, set inline
+      in pixels by App from `fit.modeW`. Declared here so every rule below can
+      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
+diff --git a/tests/gutter-target-size.test.ts b/tests/gutter-target-size.test.ts
+index 1f32d1cdd..442417353 100644
+--- a/tests/gutter-target-size.test.ts
++++ b/tests/gutter-target-size.test.ts
+@@ -175,11 +175,24 @@ describe("the gutter's targets meet WCAG 2.5.8 at every root", () => {
+     expect(head).toContain("align-content: end");
+   });
+ 
+-  it("derives the cell's left padding from the gutter instead of restating it", () => {
++  it("derives the cell's right padding from the gutter instead of restating it", () => {
+     /* The three numbers this replaced — 3rem, 0.35rem, 3.7rem — were correct and
+        had to be kept in step by hand. Written as `calc()` they cannot drift, and
+-       the px floor flows into the padding for free. */
+-    expect(css).toContain("--text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
++       the px floor flows into the padding for free. The right pad since
++       2026-10-03, when the gutter moved to the right of the block (spya-kd5dk5,
++       docs/plans/261003c-…); the left is the plain breathing space. */
++    expect(css).toContain("--text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
++    expect(css).toMatch(/--text-pad-l:\s*1\.4rem/);
++    expect(css).not.toContain("--text-pad-l: calc(var(--blk-gutter-w)");
++  });
++
++  it("puts the gutter on the right of the block, not the left", () => {
++    /* The swap of the two pads above moves the room; this is the rule that
++       moves the icons into it. Without it the tokens could swap and the column
++       stay on the left, over the prose's first words. */
++    const g = rule(".blk-gutter");
++    expect(g).toMatch(/(^|[;\s])right: calc\(/);
++    expect(g).not.toMatch(/(^|[;\s])left:/);
+   });
+ });
+ 
+@@ -197,7 +210,9 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
+     const strip = rule(".blk-gutter > span.blk-read");
+     expect(strip).toContain("display: block");
+     expect(strip).toContain("position: absolute");
+-    expect(strip).toContain("left: 100%");
++    // Hangs in the gap between the column and the prose, now on its left.
++    expect(strip).toContain("right: 100%");
++    expect(strip).not.toMatch(/(^|[;\s])left:/);
+     expect(strip).toContain(
+       "width: clamp(0px, calc(var(--read, 0) * var(--blk-gutter-x)), var(--blk-gutter-x))",
+     );
+@@ -220,9 +235,11 @@ describe("the reading-time strip stays outside the gutter's control slots", () =
+        box, so pointing at the line found the table cell and its title never
+        showed (SPIDERYARN-READING2-84, measured in the browser). The strip does
+        not grow back over the column instead: the controls own it.
+-       docs/plans/261001l-…. */
+-    expect(line).toContain("left: 0");
+-    expect(line).not.toMatch(/left: -/);
++       docs/plans/261001l-…. At the strip's right edge since 261003c, which is
++       the edge beside the column now that the column is on the right. */
++    expect(line).toContain("right: 0");
++    expect(line).not.toMatch(/right: -/);
++    expect(line).not.toMatch(/(^|[;\s])left:/);
+     expect(line).toContain("width: 2px");
+     expect(line).toContain("pointer-events: none");
+     /* Zero at level 0, so an unread row draws nothing — the 2px line is not
+@@ -723,21 +740,23 @@ describe("layout.ts's copy of the slot agrees with the stylesheet", () => {
+   it("reserves the whole gutter in the lone-column cap, at every root", () => {
+     /* The failure this replaces: a single rem constant under-reserved by 1.2px
+        at a 12px root and 12.9px at 9px, because below 16 the gutter stops
+-       shrinking while everything else keeps going — so the cell's left padding
+-       grows *in rem terms* exactly where a rem constant cannot follow it.
++       shrinking while everything else keeps going — so the cell's gutter padding
++       (the left until 261003c, the right since) grows *in rem terms* exactly where a rem constant cannot follow it.
+ 
+        `--reading-measure` is 65ch, ≈46rem in the reading face; that
+        approximation is the constant's own, and the assertion is the inequality
+-       rather than the total. `--text-pad-r` is read from the stylesheet so this
+-       fails if it moves. */
++       rather than the total. The plain pad — `--text-pad-l` since the gutter
++       moved right (261003c) — is read from the stylesheet so this fails if it
++       moves. */
+     const MEASURE_REM = 46;
+-    const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
++    const padPlain = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
+     const insetRem = Number(/--blk-gutter-x:\s*([\d.]+)rem/.exec(css)?.[1]);
+-    expect(padR).toBeGreaterThan(0);
++    // The desktop value, not the phone's 0.9rem override further down the sheet.
++    expect(padPlain).toBe(1.4);
+     expect(insetRem).toBeGreaterThan(0);
+ 
+     for (const root of ROOTS) {
+-      const needed = (MEASURE_REM + padR + insetRem * 2) * root + slotPx(root);
++      const needed = (MEASURE_REM + padPlain + insetRem * 2) * root + slotPx(root);
+       expect(proseAloneMaxPx(root), `the cap clips the measure at a ${root}px root`).toBeGreaterThanOrEqual(
+         Math.round(needed),
+       );
+diff --git a/tests/prose-centred-in-its-cell.test.ts b/tests/prose-centred-in-its-cell.test.ts
+index 23b4e8320..ddd7668dd 100644
+--- a/tests/prose-centred-in-its-cell.test.ts
++++ b/tests/prose-centred-in-its-cell.test.ts
+@@ -86,6 +86,27 @@ describe("the reading column is centred in its cell", () => {
+     expect(r).toContain("font-weight: var(--reading-weight)");
+   });
+ 
++  it("the gutter and the fold chevron measure `ch` in the prose's own face", () => {
++    /* `65ch` is the zero glyph of the font it is used on — family as well as
++       size and weight. When the author's face became every reader's on
++       2026-10-02 (styles/voices.css), `.prose` started measuring 65 serif
++       zeroes while these two went on measuring 65 Geist ones, and at 1440 the
++       icons stood 88px off the text — on the left, and then on the right when
++       the column moved there (261003c, measured in the browser). So the face is
++       asserted against whatever voices.css gives `.prose`, not against a name:
++       if the prose's face changes again, this goes red. */
++    // Lazy, because a selector list holds `:not(…)`s; only `) {` ends one.
++    const voice = /:root :is\(([\s\S]*?)\)\s*\{\s*font-family:\s*([^;]+);/g;
++    let proseFace: string | undefined;
++    for (const m of css.matchAll(voice)) {
++      const selectors = (m[1] ?? "").split(",").map((x) => x.trim());
++      if (selectors.includes(".prose")) proseFace = m[2]?.trim();
++    }
++    expect(proseFace, "voices.css no longer names a face for .prose").toBeTruthy();
++    expect(rule(".blk-gutter")).toContain(`font-family: ${proseFace}`);
++    expect(rule(".fold-toggle")).toContain(`font-family: ${proseFace}`);
++  });
++
+   /**
+    * **The prose heading has no height.**
+    *
+@@ -125,7 +146,12 @@ describe("the reading column is centred in its cell", () => {
+        something ~90px different from the same offset in the prose. Both stay
+        put, and the note's prose stays with them. */
+     expect(rule("td.text.note .prose")).toContain("margin-inline: 0");
+-    expect(rule("td.text.note .blk-gutter")).toContain("left: var(--blk-gutter-x)");
++    /* Left-aligned prose keeps ALL the surplus on its right, so the gutter
++       (on the right since 261003c) takes the whole of it, not half. */
++    const g = rule("td.text.note .blk-gutter");
++    expect(g).toMatch(/right: calc\(\s*var\(--blk-gutter-x\) \+\s*max\(\s*0px/);
++    expect(g).toContain("var(--reading-measure)");
++    expect(g).not.toMatch(/(^|[;\s])left:/);
+   });
+ 
+   it("the masthead follows the prose wherever the two share a box", () => {
+diff --git a/tests/text-alone-centring.test.ts b/tests/text-alone-centring.test.ts
+index 6c0e5b379..c21d6ce01 100644
+--- a/tests/text-alone-centring.test.ts
++++ b/tests/text-alone-centring.test.ts
+@@ -102,12 +102,13 @@ describe("the article on its own is centred", () => {
+     expect(css).toContain(
+       "padding: var(--block-pad) var(--text-pad-r) var(--block-pad) var(--text-pad-l)",
+     );
+-    /* The left one stopped being a literal on 2026-09-04: it is the prose
++    /* The gutter's one stopped being a literal on 2026-09-04: it is the prose
+        gutter's column and nothing else, so it is computed from the gutter rather
+-       than restated beside it. What matters to *this* file is only that the
+-       masthead and the cell still name the same token. */
+-    expect(css).toContain("--text-pad-l: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
+-    expect(css).toContain("--text-pad-r: 1.4rem");
++       than restated beside it. It is the RIGHT one since 2026-10-03, when the
++       icons moved to the right of the block (261003c). What matters to *this*
++       file is only that the masthead and the cell still name the same token. */
++    expect(css).toContain("--text-pad-r: calc(var(--blk-gutter-w) + var(--blk-gutter-x) * 2)");
++    expect(css).toContain("--text-pad-l: 1.4rem");
+   });
+ 
+   it("and the cap in layout.ts is wide enough to hold them plus the measure", () => {
+@@ -128,8 +129,10 @@ describe("the article on its own is centred", () => {
+        Given a fact one home; what is left here is the default root, so this
+        file's own story stays readable. */
+     const MEASURE_REM = 46;
+-    const padR = Number(/--text-pad-r:\s*([\d.]+)rem/.exec(css)?.[1]);
+-    const padL = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
++    // The plain pad is the left one, and the gutter's the right, since 261003c.
++    const padL = Number(/--text-pad-l:\s*([\d.]+)rem/.exec(css)?.[1]);
++    const padR = 2.2; // max(1.5rem, 24px) + 2 × 0.35rem, at a 16px root
++    expect(padL).toBe(1.4);
+     expect(proseAloneMaxPx(DEFAULT_ROOT_PX)).toBeGreaterThanOrEqual(
+       (MEASURE_REM + padL + padR) * DEFAULT_ROOT_PX,
+     );

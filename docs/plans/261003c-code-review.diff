@@ -1,0 +1,1010 @@
+diff --git a/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md b/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md
+new file mode 100644
+index 000000000..831e6ee27
+--- /dev/null
++++ b/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md
+@@ -0,0 +1,112 @@
++# 261003c: Glossary's Find more at the top of the column; a press on Metadata, on Metadata, goes back
++
++Two of Greg's reports from 2026-10-02, both on
++`/read/entropy-26-00481-with-cover-from-taylor-beck-spya-naz564`, both about one control.
++
++## 1. spya-s660yh — Find more, at the top of the Glossary column
++
++> There used to be a Find More button in Glossary mode. Add it back, at the top of the column
++>
++> — Greg, 2026-10-02
++
++### Why he could not see it
++
++It was never removed. `Foot` in `src/web/GlossaryPanel.tsx` still draws *Find more*, pinned
++under the list — **unless the list is outdated**, when `more={!owner.outdated}` hides it. That
++rule is plan 260929c (SPIDERYARN-READING2-55), and it was on purpose: on a list written by an
++older prompt, `existingFor` (src/glossary.ts) refuses to append, so the run behind a button saying
++"more" would **replace** the list — dropping every term the model did not find again. Greg's
++article's glossary is `glossary/4`; the current prompt is `glossary/7` (read from production,
++read-only, 2026-10-03). So on this article the button was hidden, and it is hidden on every
++article whose glossary predates `glossary/7` — probably most of the shelf.
++
++Today's Glossary work (261002c Hide / Dig deeper; 261002f added terms) did not touch it.
++
++### Does the reason still hold?
++
++Yes. `existingFor` still refuses a list from another prompt version, so a press on an outdated
++list still rewrites. And not only then: it also rewrites when the article has moved (`stale`), and
++when a list written for a profile is pressed after the reader has changed **or cleared** that
++profile — the cleared case being one `profileChanged` deliberately does not count (GPT Sol, P1).
++
++What a rewrite keeps: terms the reader added (`glossary_lookups.added_name`, outside the
++document). When the article has not changed, entry ids are inherited by name (`idsByTerm`, which
++predates 260929c — Sol, P2), so a `?term=` link, a *Dig deeper* answer or a hide on a term the new
++run finds again carries over. What it loses: any model-found term the new run does not find
++again, along with whatever was attached to it (Sol, P1).
++
++### What we build
++
++One row at the **top** of the column — first thing in the band's body, above *Look up a term* —
++for the owner, whenever their glossary has arrived. The foot goes: one button in one place.
++
++- One press, always `owner.more(owner.profiled)`, as the foot sent. **Its label is decided by
++  what that press will do**, which the server now says: `GET /api/glossary/:slug` returns
++  `panelRun: "append" | "rewrite"`, from `panelRunKind` in src/glossary.ts — `existingFor`'s
++  three tests (source, prompt version, profile) applied to *this press's* profile (the list's
++  own setting; today's profile if it was written for one). The route computes it beside
++  `profileChanged`, from the same profile read.
++- **Appends:** **Find more**, as it always was.
++- **Rewrites:** **Find terms again**, with a tooltip that says so plainly — *writes a fresh list
++  rather than adding to this one, so some terms here may not come back; terms you added are kept*.
++  No banner: Greg's *"it's not worth bugging the user about it"* (55) is about a nag, and a label
++  on a button he asked for is not one.
++- A running job, the progress and Cancel, and a failure message all move with it, exactly as
++  `Foot` drew them.
++- **The stale banner keeps its sentence and loses its own *Find them again* button** — two buttons
++  drawing one job's progress was the duplicate Sol's P2 named. The top row is the one run control.
++
++**The simpler option passed over:** show plain *Find more* on every list, outdated or not. One
++fewer branch, but it is exactly the bug 3f4c83524 and 260929c fixed — "Find more terms was one
++landing away from meaning replace the glossary". **The other option passed over:** make a Find
++more on an outdated list append across prompt versions. That changes `existingFor`'s contract
++(provenance stamped on a merged list from two prompts) and is not a small fix.
++
++Visitor: unchanged, no button (the endpoint is owner-only).
++
++## 2. spya-bpczdx — Metadata, pressed on Metadata, goes back
++
++> Tapping on Metadata mode in bottom bar when active should close it
++>
++> — Greg, 2026-10-02
++
++261002g made a second press on the band you are in close it (`modePress`). Metadata is not a
++band — it is a page, `/read/<slug>/metadata`, reached by `DockLink` with
++`href={readHref(slug, search, "metadata")}` — so it missed that. On the metadata page the link
++points at itself.
++
++### What we build
++
++On the metadata page the Metadata button's href becomes the **article** with the same carried
++query string: `readHref(slug, search, "article")`. `search` is `carriedSearch(location.search)`,
++which already holds `?mode=`, `?margin=` and `?at=` — so the reader lands back where they were,
++in the mode they came from. It stays drawn as current (`aria-current="page"`, `.on`), as an
++active mode's button does. ⌘-Enter does the same on the metadata page (it was disabled there
++because "there is nothing to toggle back to", plan 260929g assumption 3 — there is now). The
++tooltip's chord sentence changes to say it toggles.
++
++**The simpler option passed over:** `history.back()`. It is the reader's real previous page only
++when they came from the article; arriving from a pasted link or the shelf it would leave the
++site. The carried query string is the same place, deterministically.
++
++Applies to the visitor's public metadata page too, which mounts the same bar.
++
++## What review changed
++
++GPT Sol's plan review (`261003c-plan-review-sol.md`): P1 the label must follow the real
++append/rewrite decision, not `outdated` alone → `panelRun` from the server. P1 the tooltip must
++not promise what survives → it says some terms may go. P2 the stale banner's duplicate button →
++removed. P2 id inheritance predates 260929c → corrected above. P2 `carriedSearch` keeps an
++encoded `%70anel=` → predates this work and is not touched; noted here.
++
++## Tests (seen red first)
++
++- Glossary: on an outdated owner list, the top row offers *Find terms again*; on a current one,
++  *Find more*; the row is above *Look up a term*; no foot button.
++- Dock: on `view="metadata"` the Metadata link's href is the article with the carried search;
++  on the article view it is still the metadata page.
++
++## Docs
++
++`docs/project/glossary.md`, `docs/project/url-state.md` if it lists the link, the Help page's
++modes text, feedback notes for both reports.
+diff --git a/docs/plans/261003c-plan-review-prompt.md b/docs/plans/261003c-plan-review-prompt.md
+new file mode 100644
+index 000000000..dd02ca468
+--- /dev/null
++++ b/docs/plans/261003c-plan-review-prompt.md
+@@ -0,0 +1,5 @@
++Review the plan docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md before any code is written. Read-only.
++
++Check every factual claim against the code: src/web/GlossaryPanel.tsx (Foot, `more={!owner.outdated}`, AskATerm), src/web/useGlossary.ts (`more`, `outdated`), src/glossary.ts (existingFor, id inheritance by term), src/store/pg-glossary.ts and the glossary_hidden_entries / glossary_lookups tables in src/db/schema.ts (do hidden entries, Dig deeper answers and added terms really survive a rewrite?), src/web/Dock.tsx (DockLink for Metadata, metadataHref, useMetadataChord, NOT_A_MODE.metadata), src/web/router.ts (readHref, carriedSearch), src/web/reader/mode-press.ts.
++
++Answer: (1) Is any claim false? (2) Is the "Find terms again" label on an outdated list honest about what the run does, and is there a case (profile changed, source changed, a visitor, a list with zero entries, a running job) the plan mishandles? (3) For Metadata: does the carried search really restore mode, margin and place on the article; any query param that would break (panel=, a sub-mode, the public metadata page for a visitor)? (4) Anything simpler. Give findings as P0/P1/P2 with file:line.
+diff --git a/docs/plans/261003c-plan-review-sol.md b/docs/plans/261003c-plan-review-sol.md
+new file mode 100644
+index 000000000..f0051ec8e
+--- /dev/null
++++ b/docs/plans/261003c-plan-review-sol.md
+@@ -0,0 +1,19 @@
++No P0 findings. The Metadata approach is sound; the glossary plan needs two substantive corrections.
++
++- **P1 — “Current list → appends” is false.** [Plan:39](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md:39) distinguishes only prompt versions. [`existingFor`:415](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/glossary.ts:415) also requires matching source and profile hashes. `owner.more(owner.profiled)` preserves whether a profile is used, but the server resolves **today’s** profile ([routes.ts:9967](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/routes.ts:9967)). Changing—or clearing—a previously used profile therefore makes “Find more” replace the list. Source changes do likewise. Checking `profileChanged` alone misses clearing: [`profileIsStale`:275](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/profile.ts:275) returns false when the current profile is absent. Base the label on the actual append/rewrite decision; [`glossaryRunKind`:455](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/glossary.ts:455) already centralises it, provided it receives this button’s effective profile.
++
++- **P1 — The preservation promise overstates what remains accessible.** [Plan:29](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md:29) and its tooltip promise need qualification. IDs are inherited only when the source hash matches ([glossary.ts:1436](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/glossary.ts:1436)), and only for matching names/aliases. If a model-found term disappears, its lookup and hide rows remain stored, but no entry attaches them; its `?term=` link loses its target ([pg.ts:3525](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/store/pg.ts:3525)). Added terms survive separately, although a model entry can absorb their displayed row, and **their hide does not follow** ([pg.ts:3515](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/store/pg.ts:3515)). “Find terms again” honestly names an outdated-list rewrite, but the tooltip should explicitly say some existing terms may disappear.
++
++- **P2 — Moving the footer leaves a second run control on stale-source lists.** [GlossaryPanel.tsx:504](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/web/GlossaryPanel.tsx:504) already draws “Find them again”, progress and Cancel in the stale banner. Merely moving `Foot` leaves duplicate controls and progress, contradicting “one button in one place”. Keep the stale explanation, but let the top row own the run controls.
++
++- **P2 — ID inheritance did not arrive after 260929c.** [Plan:28](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md:28) is historically false: 260929c’s commit `f46e2dc7` already contains `idsByTerm` and the same-source inheritance guard. The recent additions are hiding and reader-added terms.
++
++- **P2 — An existing encoded-parameter exception undermines the drawer-stripping claim.** [`carriedSearch`:624](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/web/router.ts:624) strips literal `panel=`, but retains `%70anel=questions`. Query parsing decodes that key, so returning can reopen the drawer. This predates the toggle; decode keys when filtering if the plan promises drawers always close.
++
++Ordinary Metadata navigation preserves `mode`, `margin`, `at` and sub-mode parameters such as `summary=simple` or `remember=quiz`: the helper carries everything except literal `panel=`. The visitor metadata page mounts the same Dock ([PublicPages.tsx:298](/home/greg/code/spideryarn2/.claude/worktrees/fb-glossary-findmore-metadata-toggle/src/web/PublicPages.tsx:298)); no owner callback is needed. Position restoration is to the saved block, not an exact pixel offset.
++
++Visitors, zero-entry lists and running jobs are otherwise handled by the proposed existing guards. Preserve `job || starting`, the ready-status guard, and failure rendering. Add coverage for those states and the Metadata return chord.
++
++The simplest implementation remains hoisting the existing run UI and changing one shared Metadata destination for both link and chord. No `modePress` extension or new navigation state is needed.
++
++`glossary/7` is confirmed in code. The production `/4` stamp and “probably most of the shelf” cannot be verified from code alone. I changed no files.
+\ No newline at end of file
+diff --git a/src/glossary.ts b/src/glossary.ts
+index 402bfc610..767161411 100644
+--- a/src/glossary.ts
++++ b/src/glossary.ts
+@@ -462,6 +462,32 @@ export function glossaryRunKind(
+   return existingFor(onDisk, sourceHash, runProfileHash(profile)) ? "append" : "rewrite";
+ }
+ 
++/**
++ * **What the glossary panel's own run button will do** — append or rewrite —
++ * for its label: *Find more* or *Find terms again*. Plan 261003c § 1.
++ *
++ * The same three tests as `existingFor`, read off what the glossary read
++ * already has: `stale` is the source test (`isStale` compares the same
++ * fingerprint `existingFor` does), `outdated` is the prompt test, and the
++ * profile test is against **the press's** profile, which is not Metadata's.
++ * The panel's press keeps the list's own setting (`more(profiled)` in
++ * src/web/GlossaryPanel.tsx): a plain list is run plainly, so it matches; a
++ * list written for a profile is run with today's, so it matches only if today's
++ * hashes the same — and not if the reader has changed it **or cleared it**,
++ * which `profileChanged` deliberately does not count (src/profile.ts §
++ * `profileIsStale`). GPT Sol's plan review of 261003c, P1.
++ *
++ * `nowHash` is the hash of the reader's current profile, or null for none.
++ */
++export function panelRunKind(
++  found: { glossary: Glossary; stale: boolean; outdated: boolean },
++  nowHash: string | null,
++): "append" | "rewrite" {
++  const recorded = found.glossary.profileHash ?? null;
++  const pressHash = recorded === null ? null : nowHash;
++  return found.stale || found.outdated || recorded !== pressHash ? "rewrite" : "append";
++}
++
+ /**
+  * The ids an older list already spent, keyed by every name it answers to.
+  *
+diff --git a/src/routes.ts b/src/routes.ts
+index 01efb6d96..2b004116a 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -426,6 +426,7 @@ import { processSingleton } from "./process-state.js";
+ import { captureFailure, setMonitoringUser } from "./monitoring.js";
+ import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
+ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
++import { panelRunKind } from "./glossary.js";
+ import { routeProfileIsStale } from "./skim.js";
+ import {
+   type ArticleStage,
+@@ -6030,6 +6031,13 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
+    * replace still treats deletion as no reason to rewrite them.
+    */
+   clearedCountsAsChanged = false,
++  /**
++   * Anything else the route answers from the current profile — the glossary's
++   * `panelRun` alone, plan 261003c. Here rather than a second
++   * `resolveProfile` in the route, which would be two more queries for a hash
++   * this function already has.
++   */
++  alsoFrom?: (found: Omit<R, "profileChanged">, nowHash: string | null) => Partial<R>,
+ ): Promise<R> {
+   /* Both started before either is awaited — that is the point of the thunk. */
+   const artefact = load();
+@@ -6044,6 +6052,7 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
+   const nowHash = now ? hashProfile(now) : null;
+   return {
+     ...found,
++    ...alsoFrom?.(found, nowHash),
+     profileChanged:
+       profileIsStale(recorded, nowHash) ||
+       (clearedCountsAsChanged && recorded != null && nowHash === null),
+@@ -8477,7 +8486,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     handler: async ({ request: { res } }, captures) => {
+       {
+         const at = slugPart(captures, 1);
+-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
++        send(
++          res,
++          200,
++          await withProfileChanged<GlossaryResponse>(
++            at,
++            () => loadGlossary(at),
++            (found) => found.glossary,
++            false,
++            (found, nowHash) => ({ panelRun: panelRunKind(found, nowHash) }),
++          ),
++        );
+       }
+     },
+   },
+diff --git a/src/types.ts b/src/types.ts
+index 7a4288b9a..422edb69a 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -777,6 +777,17 @@ export interface GlossaryResponse {
+    * src/profile.ts is the one place those two rules live.
+    */
+   profileChanged: boolean;
++  /**
++   * **What the panel's own run button will do with this list** — `panelRunKind`
++   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
++   * again* when it rewrites. The route adds it, beside `profileChanged`,
++   * because the profile half needs the reader's current profile. Plan 261003c.
++   *
++   * Optional only so a hand-built response in a test need not carry it; the
++   * route always sends it. The panel reads absent as `rewrite` when the list is
++   * stale or outdated and `append` otherwise (useGlossary.ts).
++   */
++  panelRun?: "append" | "rewrite";
+ }
+ 
+ /**
+@@ -792,7 +803,7 @@ export interface GlossaryResponse {
+  */
+ export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
+ /** As `ThreadFound`, for the glossary. */
+-export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
++export type GlossaryFound = Omit<GlossaryResponse, "profileChanged" | "panelRun">;
+ /** As `ThreadFound`, for the ideas. */
+ export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
+ export type SketchFound = Omit<SketchResponse, "profileChanged">;
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index b2559e6a3..8267ff8d8 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1483,13 +1483,13 @@ function useCommandBarChord(
+  *  - Not over an open native `<dialog>`, and not once a handler nearer the
+  *    press has `preventDefault`ed it.
+  *
+- * `preventDefault()` only when claimed. Reading view only (`enabled`): on the
+- * metadata page there is nothing to toggle back to — plan 260929g,
+- * assumption 3.
++ * `preventDefault()` only when claimed. **On the metadata page it goes back to
++ * the article**, as the button does there (`metadataHref`), since 2026-10-03;
++ * until then it stood down, "nothing to toggle back to" (plan 260929g,
++ * assumption 3).
+  */
+-function useMetadataChord(enabled: boolean, href: string): void {
++function useMetadataChord(href: string): void {
+   useEffect(() => {
+-    if (!enabled) return;
+     const onKey = (e: KeyboardEvent) => {
+       if (!isModChord(e, "Enter") || e.defaultPrevented) return;
+       const focused = document.activeElement;
+@@ -1500,7 +1500,7 @@ function useMetadataChord(enabled: boolean, href: string): void {
+     };
+     window.addEventListener("keydown", onKey);
+     return () => window.removeEventListener("keydown", onKey);
+-  }, [enabled, href]);
++  }, [href]);
+ }
+ 
+ /**
+@@ -1864,9 +1864,18 @@ export function Dock({
+   const commandBar = useCommandBarChord(!isVisitor, onPanel);
+   /* One value for the Metadata button and its chord, so the two cannot send
+      the reader to different places. Keyed on `view` rather than `onMode`, unlike
+-     ⌘-K: a visitor's reading view draws the Metadata button too. */
+-  const metadataHref = readHref(slug, search, "metadata");
+-  useMetadataChord(view === "article", metadataHref);
++     ⌘-K: a visitor's reading view draws the Metadata button too.
++
++     **On the metadata page it points back at the article**, since 2026-10-03 —
++     Greg, spya-bpczdx: *"Tapping on Metadata mode in bottom bar when active
++     should close it"*, the feel a second press on a band has had since
++     261002g (`modePress`). The carried string already holds `?mode=`,
++     `?margin=` and `?at=`, so the reader lands where they were, in the mode
++     they came from. Not `history.back()`: arriving from a pasted link or the
++     shelf, that would leave the article altogether.
++     docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
++  const metadataHref = readHref(slug, search, view === "metadata" ? "article" : "metadata");
++  useMetadataChord(metadataHref);
+   /* One value for the Help link and the command bar's Help row, for the same
+      reason: two doors that open on different sections teach the reader that
+      neither can be trusted. */
+@@ -2469,9 +2478,9 @@ const NOT_A_MODE = {
+     how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
+   },
+   metadata: {
+-    /* The chord in the Commands card's own format. Said on the metadata page
+-       too, where it does not fire — hence "from the article". */
+-    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it from the article",
++    /* The chord in the Commands card's own format. The same card on both
++       pages, so it says both directions (since 2026-10-03, plan 261003c). */
++    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article",
+     /* **"Opening it spends nothing" — and the two wider claims that came
+        before it were each false, a few hours apart.**
+ 
+diff --git a/src/web/GlossaryPanel.tsx b/src/web/GlossaryPanel.tsx
+index 848bff149..6449adeb5 100644
+--- a/src/web/GlossaryPanel.tsx
++++ b/src/web/GlossaryPanel.tsx
+@@ -363,37 +363,37 @@ export function GlossaryPanel({
+           holds its place while the list is coming, and the corner sits in it
+           (mode-band.css floors a head at the corner's height). */
+       head={sorts.length > 0 ? null : <></>}
+-      /* Pinned under the scroller rather than at the end of it, which is what
+-          `foot` is for. The guard is the one it had as a trailing child: the
+-          run row belongs to an owner whose glossary has arrived. */
+-      foot={
+-        glossary && (owner === null || owner.status === "ready") && owner?.glossary ? (
+-          <Foot
+-            job={owner.job}
+-            starting={owner.starting}
+-            failed={owner.failed}
+-            /* **No *Find more* on an outdated list.** There the run it sends
+-               does not append: `existingFor` refuses a list from another
+-               prompt version, so it would *replace* the list under a button
+-               that says "more" — the reason Quotes hides its own. The banner
+-               that used to offer the honest rewrite went on 2026-09-29
+-               (SPIDERYARN-READING2-55); re-running is in Metadata. A job or
+-               a failure still shows. Plan 260929c. */
+-            more={!owner.outdated}
+-            /* **In the list's own recorded setting**, not the current profile.
+-               `existingFor` refuses to append across a profile difference, so
+-               asking a plain list's Find more for the profile would *rewrite*
+-               it — dropping every term the model did not return again — under
+-               a button that says "more". The *Use your profile* checkbox used
+-               to carry this, seeded from the list; since it went on 2026-09-13
+-               the list's `profiled` is passed directly. useGlossary.ts § `more`;
+-               tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
+-            onMore={() => owner.more(owner.profiled)}
+-            onCancel={owner.cancel}
+-          />
+-        ) : null
+-      }
+     >
++      {/* **The run row, first thing in the column**, since 2026-10-03 — Greg,
++          spya-s660yh: *"There used to be a Find More button in Glossary mode.
++          Add it back, at the top of the column"*. It was pinned in the foot,
++          and hidden there on an outdated list (plan 260929c) — most lists, and
++          Greg's. Now it shows on every owner's finished list, and says what
++          its run will do: *Find more* when it appends, *Find terms again* when
++          it rewrites (`MoreRow`). The guard is the one the foot had: an owner
++          whose glossary has arrived.
++          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */}
++      {glossary && owner?.status === "ready" && owner.glossary ? (
++        <MoreRow
++          job={owner.job}
++          starting={owner.starting}
++          failed={owner.failed}
++          /* The server's verdict when it gave one (`panelRunKind`, which
++             also sees a changed or cleared profile); otherwise the two facts
++             the panel has. Plan 261003c, GPT Sol's plan review P1. */
++          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
++          /* **In the list's own recorded setting**, not the current profile.
++             `existingFor` refuses to append across a profile difference, so
++             asking a plain list's Find more for the profile would *rewrite*
++             it — dropping every term the model did not return again — under
++             a button that says "more". The *Use your profile* checkbox used
++             to carry this, seeded from the list; since it went on 2026-09-13
++             the list's `profiled` is passed directly. useGlossary.ts § `more`;
++             tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
++          onMore={() => owner.more(owner.profiled)}
++          onCancel={owner.cancel}
++        />
++      ) : null}
+ 
+       {/* **Above the list and above the sort**, because it is the way in rather
+           than a way of arranging what is already there — and because a reader
+@@ -484,9 +484,8 @@ export function GlossaryPanel({
+           {/* The article has moved and the list has not. Said plainly, at the
+               top, because every entry below it is now a claim about a version
+               of the piece that no longer exists — and the occurrences in
+-              particular will point at blocks that may not be there. The button
+-              needs no `force`: the step's own freshness check already knows
+-              this glossary is out of date, so an ordinary run rewrites it. */}
++              particular will point at blocks that may not be there. The run
++              that rewrites it is the row at the top (plan 261003c). */}
+           {/* Two different facts, and they were nearly one. `stale` is *the
+               article moved underneath these terms* — every entry below is a
+               claim about a piece that no longer exists, and the occurrences in
+@@ -507,23 +506,16 @@ export function GlossaryPanel({
+                 <TriangleAlert size={13} />
+                 These terms describe an older version of the article.
+               </p>
+-              <div className="gloss-run">
+-                <Progress
+-                  job={owner.job}
+-                  starting={owner.starting}
+-                  failed={owner.failed}
+-                      stalled={owner.stalled}
+-                  onRun={() => owner.find()}
+-                  onCancel={owner.cancel}
+-                  label="Find them again"
+-                />
+-              </div>
++              {/* **No run button of its own since 2026-10-03**: *Find terms
++                  again* at the top of the column is the same rewrite, and two
++                  buttons each drawing the one job's progress was a second
++                  place to look. GPT Sol's plan review of 261003c, P2. */}
+             </div>
+           ) : null}
+           {/* **No banner for an outdated glossary** (older prompt, same
+               article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
+-              worth bugging the user about it."* Re-running is in Metadata; the
+-              foot below drops its *Find more* on such a list. Plan 260929c. */}
++              worth bugging the user about it."* Plan 260929c. The run row at
++              the top says *Find terms again* on such a list (plan 261003c). */}
+ 
+           {/* One list again, in every order. It was a `div` wrapping two headed
+               `ol`s from 2026-08-26 until 2026-09-03, when the threshold started
+@@ -2195,12 +2187,16 @@ export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
+  * number the reader was actually waiting for. The generator and the version are
+  * pipeline facts — the public projection already drops them for a visitor
+  * (src/public-types.ts) — and they are still in the artefact and the export.
++ *
++ * **It was the foot until 2026-10-03**, pinned under the list, and drew nothing
++ * on an outdated list (plan 260929c). It is the column's first row now, on
++ * every finished list (plan 261003c) — see the caller.
+  */
+-function Foot({
++function MoreRow({
+   job,
+   starting,
+   failed,
+-  more,
++  rewrites,
+   onMore,
+   onCancel,
+ }: {
+@@ -2219,14 +2215,29 @@ function Foot({
+    */
+   starting: boolean;
+   failed: StepFailure | null;
+-  /** Whether *Find more* is offered; false on an outdated list (see the caller). */
+-  more: boolean;
++  /**
++   * **This press writes a fresh list rather than adding to this one** —
++   * `existingFor` (src/glossary.ts) refuses to merge when the article, the
++   * prompt version or the profile differs, so a button saying "more" would
++   * replace the list (the reason plan 260929c hid it on an outdated list). It
++   * says *Find terms again* instead, and its tooltip says so plainly: some
++   * terms may go. Terms the reader added survive (they are outside the
++   * document, `glossary_lookups.added_name`), and so does anything keyed to an
++   * entry the new run finds again under the same name, when the article has
++   * not changed (`idsByTerm`); a `?term=` link, a *Dig deeper* answer or a hide
++   * on a term that does not come back has nothing to attach to.
++   */
++  rewrites: boolean;
+   onMore(): Promise<void>;
+   onCancel(id: string): void;
+ }) {
++  const label = rewrites ? "Find terms again" : "Find more";
++  const title = rewrites
++    ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
++    : "Another model call, told what it has already found, looking for the quieter terms";
+   if (job || starting) {
+     return (
+-      <div className="gloss-foot">
++      <div className="gloss-more">
+         <Progress
+           job={job}
+           starting={starting}
+@@ -2237,31 +2248,18 @@ function Foot({
+           stalled={false}
+           onRun={() => onMore()}
+           onCancel={onCancel}
+-          label="Find more"
++          label={label}
+         />
+       </div>
+     );
+   }
+ 
+-  if (!more) {
+-    return failed ? (
+-      <div className="gloss-foot">
+-        <p className="gloss-error">{failed.message}</p>
+-      </div>
+-    ) : null;
+-  }
+-
+   return (
+-    <div className="gloss-foot">
++    <div className="gloss-more">
+       <div className="gloss-actions">
+-        <button
+-          type="button"
+-          className="gloss-btn"
+-          title="Another model call, told what it has already found, looking for the quieter terms"
+-          onClick={() => void onMore()}
+-        >
++        <button type="button" className="gloss-btn" title={title} onClick={() => void onMore()}>
+           <Search size={12} />
+-          Find more
++          {label}
+         </button>
+       </div>
+ 
+diff --git a/src/web/ModeHerald.tsx b/src/web/ModeHerald.tsx
+index 5ed200503..a757cb6a7 100644
+--- a/src/web/ModeHerald.tsx
++++ b/src/web/ModeHerald.tsx
+@@ -25,7 +25,7 @@
+  * The top was the band's first row — Search's box, Glossary's controls, the
+  * first items of every list — which is what a reader who has just opened a mode
+  * looks at first. But the band's literal bottom is no freer: eleven modes can
+- * end in pinned furniture (*Find more*, Chat's composer, Diagram's step row and
++ * end in pinned furniture (Quotes' *Find more*, Chat's composer, Diagram's step row and
+  * card). So the card stands **on** it, at the bottom-left of the scroller, and
+  * `footRoom` below is how it knows how much room it takes.
+  * docs/plans/260928a-the-mode-herald-moves-to-the-foot-of-the-band.md.
+@@ -144,8 +144,8 @@ function scrolls(el: Element): boolean {
+ function Card({ mode, onDone }: { mode: BandMode; onDone(): void }) {
+   const card = useRef<HTMLDivElement>(null);
+   /* **Measured on arrival and again whenever the band changes shape**, because
+-     a foot can arrive after the card does: Glossary's *Find more* renders once
+-     its list has loaded, which can be inside the three seconds. A child added
++     a foot can arrive after the card does: a panel's foot often renders once
++     its artefact has loaded, which can be inside the three seconds. A child added
+      or removed is a mutation; a composer growing a line is a resize. Written
+      onto the slot as `--herald-foot`, which mode-band.css § the herald turns
+      into the room under the card, and taken off again when the card goes. */
+diff --git a/src/web/ModeSurface.tsx b/src/web/ModeSurface.tsx
+index dcb25cc90..edf0087ea 100644
+--- a/src/web/ModeSurface.tsx
++++ b/src/web/ModeSurface.tsx
+@@ -174,7 +174,7 @@ export function ModeSurface({
+    * its own**, because every one of them is already a direct child of the band
+    * and the CSS says so.
+    *
+-   * **Seven panels want it, not four**: `.gloss-foot`, `.ideas-again`,
++   * **Seven panels want it, not four**: `.gloss-foot` (the top of the column since 2026-10-03, plan 261003c), `.ideas-again`,
+    * `.quotes-foot`, `.tl-again`, and — missed by the first inventory and by the
+    * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Skim's
+    * `.skim-foot`. All are direct
+diff --git a/src/web/styles/footnotes.css b/src/web/styles/footnotes.css
+index 1f54580ae..11acb42c0 100644
+--- a/src/web/styles/footnotes.css
++++ b/src/web/styles/footnotes.css
+@@ -277,11 +277,13 @@ td.text.note-open {
+    this panel gives about the quality of what the model returned. */
+ .gloss-nowhere { color: var(--ink-faint); font-style: italic; }
+ 
+-/* ---- the foot ---- */
++/* ---- the run row ----
++   The foot until 2026-10-03, pinned under the list; now the column's first row
++   (plan 261003c), so its rule is underneath. */
+ 
+-.gloss-foot {
++.gloss-more {
+   padding: 0.5rem 0.7rem;
+-  border-top: 1px solid var(--rule);
++  border-bottom: 1px solid var(--rule);
+ }
+ .gloss-actions {
+   display: flex;
+diff --git a/src/web/styles/glossary.css b/src/web/styles/glossary.css
+index 57cc9e59e..89f1a87c9 100644
+--- a/src/web/styles/glossary.css
++++ b/src/web/styles/glossary.css
+@@ -47,6 +47,10 @@
+    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
+    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
+ .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
++/* The run row, *Find more* or *Find terms again*, above the Look up box since
++   2026-10-03 (Greg, spya-s660yh; plan 261003c), so it is the owner's top row
++   now and clears the (i) too. Its own padding is in footnotes.css § `.gloss-more`. */
++.mode-band.has-about .gloss-more { padding-right: calc(0.7rem + var(--band-about-room)); }
+ /* The buttons as one named group. The profile badge that used to sit beside
+    it moved to the band's corner in plan 261002e. */
+ .gloss-sort-group {
+diff --git a/src/web/useGlossary.ts b/src/web/useGlossary.ts
+index 1501b2711..c61fcf84b 100644
+--- a/src/web/useGlossary.ts
++++ b/src/web/useGlossary.ts
+@@ -222,6 +222,8 @@ export interface GlossaryRead {
+   outdated: boolean;
+   profiled: boolean;
+   profileChanged: boolean;
++  /** `GlossaryResponse.panelRun`, passed through; absent when the server did not say. */
++  panelRun?: "append" | "rewrite" | undefined;
+   error: string | null;
+   /**
+    * Fetch again **only if nothing is already fetching** — the band's mount.
+@@ -320,6 +322,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
+   const [outdated, setOutdated] = useState(false);
+   const [profiled, setProfiled] = useState(false);
+   const [profileChanged, setProfileChanged] = useState(false);
++  const [panelRun, setPanelRun] = useState<"append" | "rewrite" | undefined>(undefined);
+   const [error, setError] = useState<string | null>(null);
+   /* The hide write may outlive the article it started on. Kept beside the
+      other per-article state so the render-time slug reset below can clear it
+@@ -352,6 +355,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
+           setOutdated(false);
+           setProfiled(false);
+           setProfileChanged(false);
++          setPanelRun(undefined);
+           setError(null);
+           setStatus("none");
+           return;
+@@ -367,6 +371,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
+            empty string. */
+         setProfiled(loaded.glossary.profileHash != null);
+         setProfileChanged(loaded.profileChanged);
++        setPanelRun(loaded.panelRun);
+         setError(null);
+         setStatus("ready");
+       } catch (err) {
+@@ -426,6 +431,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
+     setOutdated(false);
+     setProfiled(false);
+     setProfileChanged(false);
++    setPanelRun(undefined);
+     setError(null);
+     /* Entry ids are scoped to an article, and an old write's completion must
+        not call its captured `refresh()` after this reset: that closure reads
+@@ -672,6 +678,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
+     outdated,
+     profiled,
+     profileChanged,
++    panelRun,
+     error,
+     reload,
+     refresh,
+@@ -693,6 +700,11 @@ export interface UseGlossary {
+   stale: boolean;
+   /** The list predates the current prompt. A different fact from `stale`, with its own sentence. */
+   outdated: boolean;
++  /**
++   * What the panel's run button will do with this list — `GlossaryResponse.panelRun`,
++   * absent when the server did not say. GlossaryPanel.tsx § `MoreRow` reads it. Plan 261003c.
++   */
++  panelRun?: "append" | "rewrite" | undefined;
+   /**
+    * This list was written from a reader profile, and whether that profile is
+    * still the one they have.
+@@ -817,7 +829,7 @@ export interface UseGlossary {
+  * the fetch moved up there and what the band still has to do on mount.
+  */
+ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
+-  const { status, glossary, stale, outdated, profiled, profileChanged, error } = read;
++  const { status, glossary, stale, outdated, profiled, profileChanged, panelRun, error } = read;
+   /* Dig deeper's state is the read's, not the band's, since 2026-10-02 — see
+      `look` on `GlossaryRead`. Passed through unchanged, so the panel still reads
+      one object. */
+@@ -1057,6 +1069,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
+     outdated,
+     profiled,
+     profileChanged,
++    panelRun,
+     slug,
+     error,
+     job: queue.job,
+diff --git a/tests/glossary-compact-header.test.tsx b/tests/glossary-compact-header.test.tsx
+index 076975cf2..6a70b7daa 100644
+--- a/tests/glossary-compact-header.test.tsx
++++ b/tests/glossary-compact-header.test.tsx
+@@ -406,8 +406,9 @@ describe("the kind of a term", () => {
+    (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* And with
+    no banner, *Find more* must not stand in for it: on an outdated list the run
+    it sends replaces the list rather than appending (src/glossary.ts §
+-   existingFor), so it is hidden, as Quotes hides its own. A job or a failure
+-   still shows in the foot. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
++   existingFor). It was hidden until 2026-10-03; since then the run row at the
++   top of the column says *Find terms again* there instead (Greg, spya-s660yh;
++   plan 261003c). docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
+ describe("an outdated glossary", () => {
+   const RUNNING: Job = {
+     id: "job-glossary",
+@@ -428,23 +429,23 @@ describe("an outdated glossary", () => {
+   const findMore = () =>
+     [...host.querySelectorAll("button")].some((b) => /find more/i.test(b.textContent ?? ""));
+ 
+-  it("says nothing about it, and offers no Find more", async () => {
++  it("says nothing about it, and offers no Find more (it offers Find terms again)", async () => {
+     await mount(owner(glossary(null, SCORED), { outdated: true }));
+     expect(host.querySelector(".gloss-stale")).toBeNull();
+     expect(host.textContent).not.toContain("different version of the glossary");
+     expect(findMore()).toBe(false);
+   });
+ 
+-  it("still shows a running job, and a failure, in the foot", async () => {
++  it("still shows a running job, and a failure, in the run row", async () => {
+     await mount(owner(glossary(null, SCORED), { outdated: true, job: RUNNING }));
+-    expect(host.querySelector(".gloss-foot")?.textContent).toContain("Stop");
++    expect(host.querySelector(".gloss-more")?.textContent).toContain("Stop");
+     await mount(
+       owner(glossary(null, SCORED), {
+         outdated: true,
+         failed: { message: "The re-run failed visibly.", retryable: false, retry: null },
+       }),
+     );
+-    expect(host.querySelector(".gloss-foot")?.textContent).toContain("The re-run failed visibly.");
++    expect(host.querySelector(".gloss-more")?.textContent).toContain("The re-run failed visibly.");
+   });
+ 
+   it("keeps the stale banner, and a current list keeps Find more", async () => {
+diff --git a/tests/glossary-find-more-keeps-the-lists-profile.test.tsx b/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
+index 0d9852e56..c725897e9 100644
+--- a/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
++++ b/tests/glossary-find-more-keeps-the-lists-profile.test.tsx
+@@ -124,11 +124,16 @@ async function mount(view: GlossaryOwner): Promise<void> {
+   });
+ }
+ 
+-async function pressFindMore(): Promise<void> {
+-  const button = [...host.querySelectorAll<HTMLButtonElement>(".gloss-foot button")].find((b) =>
+-    /find more/i.test(b.textContent ?? ""),
++/** The run row at the top of the column — the foot until 2026-10-03 (plan 261003c). */
++function moreButton(): HTMLButtonElement | undefined {
++  return [...host.querySelectorAll<HTMLButtonElement>(".gloss-more button")].find((b) =>
++    /find more|find terms again/i.test(b.textContent ?? ""),
+   );
+-  if (!button) throw new Error("no Find more in the foot");
++}
++
++async function pressFindMore(): Promise<void> {
++  const button = moreButton();
++  if (!button) throw new Error("no Find more at the top of the column");
+   await act(async () => button.click());
+ }
+ 
+@@ -143,7 +148,7 @@ afterEach(() => {
+   host.remove();
+ });
+ 
+-describe("Find more in the glossary's foot", () => {
++describe("Find more at the top of the glossary", () => {
+   it("tops a plain list up plainly", async () => {
+     const more = vi.fn(async () => {});
+     await mount(owner(glossary(null), { more }));
+@@ -183,9 +188,66 @@ describe("Find more in the glossary's foot", () => {
+ 
+   it("offers no profile control of any kind beside it", async () => {
+     await mount(owner(glossary(null), {}));
+-    const foot = host.querySelector(".gloss-foot");
+-    expect(foot?.querySelector('input[type="checkbox"]')).toBeNull();
++    const row = host.querySelector(".gloss-more");
++    expect(row?.querySelector('input[type="checkbox"]')).toBeNull();
+     expect(host.querySelector(".prof-row")).toBeNull();
+-    expect(foot?.textContent).not.toContain("Your profile");
++    expect(row?.textContent).not.toContain("Your profile");
++  });
++});
++
++/* **At the top of the column, on every owner's list, outdated ones included**
++   — Greg, 2026-10-02, spya-s660yh: *"There used to be a Find More button in
++   Glossary mode. Add it back, at the top of the column"*. It was in the foot,
++   and hidden on a list from an older prompt (plan 260929c), which is most
++   lists; Greg's own was `glossary/4`. On such a list the forced run rewrites
++   (`existingFor` refuses to append across prompt versions), so the button says
++   so rather than "more". docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */
++describe("where the run row is, and what it says", () => {
++  it("is above Look up a term, and the foot holds no button", async () => {
++    await mount(owner(glossary(null), {}));
++    const row = host.querySelector(".gloss-more");
++    const ask = host.querySelector(".gloss-ask");
++    expect(row, "no run row").not.toBeNull();
++    expect(ask, "no Look up a term").not.toBeNull();
++    if (row && ask) {
++      expect(row.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
++    }
++    expect(host.querySelector(".gloss-foot")).toBeNull();
++    expect(moreButton()?.textContent).toMatch(/find more/i);
++  });
++
++  it("on an outdated list, offers Find terms again, and it sends the same forced run", async () => {
++    const more = vi.fn(async () => {});
++    await mount(owner(glossary(null), { more, outdated: true }));
++    const button = moreButton();
++    expect(button?.textContent).toMatch(/find terms again/i);
++    expect(button?.textContent).not.toMatch(/find more/i);
++    await pressFindMore();
++    expect(more.mock.calls).toEqual([[false]]);
++  });
++
++  /* The server's verdict wins over the panel's two facts: it also sees a
++     changed or cleared profile, which `outdated` and `stale` do not
++     (`panelRunKind`, GPT Sol's plan review P1). */
++  it("says Find terms again when the server says the press rewrites, on a current list", async () => {
++    await mount(owner(glossary("a-profile"), { panelRun: "rewrite" }));
++    expect(moreButton()?.textContent).toMatch(/find terms again/i);
++  });
++
++  it("says Find more when the server says the press appends", async () => {
++    await mount(owner(glossary(null), { panelRun: "append" }));
++    expect(moreButton()?.textContent).toMatch(/find more/i);
++  });
++
++  it("on a stale list, the banner says so and the one run button is the top row's", async () => {
++    await mount(owner(glossary(null), { stale: true }));
++    expect(host.querySelector(".gloss-stale")).not.toBeNull();
++    expect(host.querySelector(".gloss-stale button")).toBeNull();
++    expect(moreButton()?.textContent).toMatch(/find terms again/i);
++  });
++
++  it("while a run is going, shows its progress in the same place", async () => {
++    await mount(owner(glossary(null), { starting: true }));
++    expect(host.querySelector(".gloss-more")?.textContent).toMatch(/starting/i);
+   });
+ });
+diff --git a/tests/glossary-panel-run-kind.test.ts b/tests/glossary-panel-run-kind.test.ts
+new file mode 100644
+index 000000000..f925493f3
+--- /dev/null
++++ b/tests/glossary-panel-run-kind.test.ts
+@@ -0,0 +1,70 @@
++/**
++ * **What the glossary panel's run button will do — append or rewrite** —
++ * `panelRunKind` in src/glossary.ts, which picks the label *Find more* or *Find
++ * terms again*. Plan 261003c § 1.
++ *
++ * The case that made it a server answer rather than the panel's own guess is
++ * the cleared profile: a list written for a profile, pressed after the reader
++ * deleted theirs, is run with no profile, so `existingFor` refuses to append —
++ * and `profileChanged` deliberately says false there (src/profile.ts §
++ * `profileIsStale`). GPT Sol's plan review, P1.
++ *
++ * Each case is also checked against `existingFor` itself, with the press's
++ * profile hash, so the two cannot reach different verdicts.
++ */
++import { describe, expect, it } from "vitest";
++import { existingFor, PROMPT_VERSION, panelRunKind } from "../src/glossary.js";
++import type { Glossary } from "../src/types.js";
++
++const SOURCE = "source-hash";
++
++function list(over: Partial<Glossary> = {}): Glossary {
++  return {
++    version: PROMPT_VERSION,
++    generator: "test",
++    slug: "a-piece",
++    sourceHash: SOURCE,
++    profileHash: null,
++    entries: [],
++    passes: 1,
++    generatedAt: "2026-10-03T00:00:00.000Z",
++    elapsedMs: 1,
++    ...over,
++  };
++}
++
++/** The verdict `existingFor` reaches for the panel's press: the list's own setting. */
++function viaExistingFor(g: Glossary, sourceNow: string, nowHash: string | null): "append" | "rewrite" {
++  const pressHash = g.profileHash == null ? null : nowHash;
++  return existingFor(g, sourceNow, pressHash) ? "append" : "rewrite";
++}
++
++const CASES: {
++  name: string;
++  g: Glossary;
++  sourceNow: string;
++  nowHash: string | null;
++  want: "append" | "rewrite";
++}[] = [
++  { name: "a current plain list, reader with a profile", g: list(), sourceNow: SOURCE, nowHash: "p1", want: "append" },
++  { name: "a current plain list, reader without one", g: list(), sourceNow: SOURCE, nowHash: null, want: "append" },
++  { name: "a profiled list, same profile", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p1", want: "append" },
++  { name: "a profiled list, profile changed", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p2", want: "rewrite" },
++  { name: "a profiled list, profile cleared", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
++  { name: "an outdated list", g: list({ version: "glossary/4" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
++  { name: "a stale list", g: list(), sourceNow: "moved", nowHash: null, want: "rewrite" },
++];
++
++describe("panelRunKind", () => {
++  for (const c of CASES) {
++    it(`${c.name}: ${c.want}`, () => {
++      const found = {
++        glossary: c.g,
++        stale: c.g.sourceHash !== c.sourceNow,
++        outdated: c.g.version !== PROMPT_VERSION,
++      };
++      expect(panelRunKind(found, c.nowHash)).toBe(c.want);
++      expect(viaExistingFor(c.g, c.sourceNow, c.nowHash)).toBe(c.want);
++    });
++  }
++});
+diff --git a/tests/metadata-chord.test.tsx b/tests/metadata-chord.test.tsx
+index bcceed0ed..fc447419a 100644
+--- a/tests/metadata-chord.test.tsx
++++ b/tests/metadata-chord.test.tsx
+@@ -234,17 +234,44 @@ describe("⌘/Ctrl-Enter is left alone", () => {
+     expect(press({ keyCode: 229 } as KeyboardEventInit)).toBe(false);
+     expect(here()).toBe(START);
+   });
++});
+ 
+-  it("on the Metadata page itself — no toggle back", () => {
+-    history.replaceState(null, "", "/read/a-piece/metadata?at=spya-k3m9qt");
++/* **On the Metadata page it toggles back**, since 2026-10-03 — Greg,
++   spya-bpczdx: *"Tapping on Metadata mode in bottom bar when active should
++   close it"*. The chord follows the button, as it always has. Until then this
++   case asserted the press was left alone ("nothing to toggle back to", plan
++   260929g). docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
++describe("⌘/Ctrl-Enter on the Metadata page", () => {
++  it("goes back to the article, carrying the mode and the place", () => {
++    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&at=spya-k3m9qt");
+     act(() => {
+       root.render(
+         // biome-ignore lint/suspicious/noExplicitAny: this arm is missing props on purpose
+         createElement(Dock as any, { slug: "a-piece", view: "metadata", experimental: EXPERIMENTAL_OFF }),
+       );
+     });
+-    expect(press()).toBe(false);
+-    expect(here()).toBe("/read/a-piece/metadata?at=spya-k3m9qt");
++    expect(press()).toBe(true);
++    expect(here()).toBe("/read/a-piece?mode=glossary&at=spya-k3m9qt");
++  });
++
++  it("is where the Metadata button points there, drawn as the page you are on", () => {
++    history.replaceState(null, "", "/read/a-piece/metadata?mode=glossary&margin=1&at=spya-k3m9qt");
++    act(() => {
++      root.render(
++        // biome-ignore lint/suspicious/noExplicitAny: this arm is missing props on purpose
++        createElement(Dock as any, { slug: "a-piece", view: "metadata", experimental: EXPERIMENTAL_OFF }),
++      );
++    });
++    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
++    expect(link, "the Dock draws no Metadata link").not.toBeNull();
++    expect(link?.getAttribute("href")).toBe("/read/a-piece?mode=glossary&margin=1&at=spya-k3m9qt");
++    expect(link?.getAttribute("aria-current")).toBe("page");
++  });
++
++  it("leaves the button on the reading view pointing at the Metadata page", () => {
++    mount();
++    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
++    expect(link?.getAttribute("href")).toBe(METADATA);
+   });
+ });
+ 
+diff --git a/tests/mode-surface-changes-no-markup.test.tsx b/tests/mode-surface-changes-no-markup.test.tsx
+index d4deee56f..2ab6d2204 100644
+--- a/tests/mode-surface-changes-no-markup.test.tsx
++++ b/tests/mode-surface-changes-no-markup.test.tsx
+@@ -1696,7 +1696,9 @@ const GLOSSARY_SHAPE: BandShape = {
+   className: "mode-band gloss has-about",
+   label: "Glossary",
+   head: true,
+-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "div.gloss-list", "div.gloss-foot"],
++  /* The run row is the first thing in the column, not the foot, since
++     2026-10-03 (plan 261003c). */
++  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-more", "div.gloss-ask", "div.gloss-list"],
+   /* `WrittenForYou` is in this row too and renders nothing for an owner who has
+      not run with a profile, which is this fixture. The count used to be the row;
+      it moves into the (i) card since 2026-10-01, plan 261001m, so the row is empty. */
+@@ -2000,7 +2002,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
+     expectShape(SUMMARY);
+   });
+ 
+-  it("draws Glossary's band with its list, its ask box and its footer", async () => {
++  it("draws Glossary's band with its run row, its ask box and its list", async () => {
+     await paint(mountGlossary({ kind: "owner", owner: glossaryOwner(GLOSSARY), glossary: GLOSSARY }));
+     expectShape(GLOSSARY_SHAPE);
+   });
+@@ -2010,7 +2012,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
+     expectShape(GLOSSARY_LOADING);
+   });
+ 
+-  it("draws Glossary's band for a visitor, without the owner's box or footer", async () => {
++  it("draws Glossary's band for a visitor, without the owner's run row or box", async () => {
+     await paint(mountGlossary({ kind: "visitor", glossary: GLOSSARY }));
+     expectShape(GLOSSARY_VISITOR);
+   });

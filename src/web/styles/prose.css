@@ -13,7 +13,7 @@
    typography research (styles/tokens.css) — 80 chars per line reads ~7% faster
    but comprehends ~12% worse. `--font-reading` supplies the Geist base; the
    author voice in styles/voices.css supplies the visible Source Serif face.
-   The gutter's `left:` rule three thousand lines down depends on the active
+   The gutter's `right:` rule (gutter.css) depends on the active
    face because `ch` is measured where the length is used. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
    itself and here the text is left-aligned in a table cell.  */
@@ -60,11 +60,10 @@
    those 24px back at every root but 20, where it has 30.
    docs/plans/260905c-gutter-shows-as-many-icons-as-the-row-has-room-for.md.
 
-   The width is still the hit target, and it is two of them. All three of
-   those numbers are **one** number now — `--blk-slot` in § tokens — because this
-   note used to name them separately and a reader had to trust that 3.7 = 3 +
-   0.35 × 2 by eye. `--text-pad-l` is `calc()` over the gutter, the gutter is two
-   slots, and the slot carries a **24px floor** so the target survives a reader
+   The gutter's width is still the hit target: one slot. The pad that contains
+   it is arithmetic now rather than three numbers a reader has to keep in step:
+   `--text-pad-r` is one `--blk-slot` plus two 0.35rem insets. The slot carries
+   a **24px floor** so the target survives a reader
    whose browser root is 12px rather than 16. GPT Sol's stage 1 review found that
    last one, and it was the difference between meeting WCAG 2.5.8 and claiming
    to.
@@ -78,8 +77,8 @@ td.text {
   border-bottom: 0;
   /* `--blk-slot` used to be declared here, and it has moved up to `.reader`
      (§ tokens) — the row floor below reads it, the grid's columns read it, and
-     the cell's own `--text-pad-l` is now computed from it, so it has to be
-     visible to all three. A custom property inherits, and `.reader` is an
+     the cell's own gutter pad (`--text-pad-r` since 261003c) is computed from
+     it, so it has to be visible to all three. A custom property inherits, and `.reader` is an
      ancestor of every one of them. */
   /* **Where the gutter's first row starts, measured from the top of the cell —
      and it is the cell's own `padding-top` plus a hair.** Named because three
@@ -123,14 +122,17 @@ tbody tr:first-child td.text.kind-heading {
    The chevron at the right-hand end of a heading's line, which folds the
    section under it away (FoldToggle.tsx, fold.ts; plan 261002e).
 
-   **Right, not left.** Left of the heading is the gutter, and left of the
-   gutter is `--blk-gutter-x` — 0.35rem — whenever the cell is no wider than
-   the measure, which is every band mode.
+   **At the prose's right edge, with the gutter just past it.** It was placed
+   right because the gutter was on the left; since 2026-10-03 the gutter is on
+   the right too (261003c), in the cell's right pad, so on a heading row the
+   chevron ends the line and the heading's icons start `--blk-gutter-x` further
+   on. Neighbours, at every root: both are one `--blk-slot` wide and the pad is
+   exactly a slot plus two insets (GPT Sol, plan review of 261003c).
 
    **It follows the measure the way the gutter does, mirrored.** `.prose` is
    `clamp(45ch, 90vw, --reading-measure)` and centred in the cell (§ text), so
    the inset from the cell's right edge is the right pad plus half the room the
-   centring divides — `.blk-gutter`'s `left` with the sides swapped, and the
+   centring divides — the same quantity as `.blk-gutter`'s `right` — and the
    same `font-size` / `font-weight` so `ch` means what it means in the prose
    (gutter.css § the gutter has the argument). */
 /* `--blk-slot` has a 24px floor while heading type and padding still scale with
@@ -154,6 +156,10 @@ td.text.kind-heading:has(> .fold-toggle) {
           ) / 2
       )
   );
+  /* The prose's face too, or `ch` is a Geist zero against a serif measure
+     (gutter.css § the gutter, 261003c). The chevron is an icon; no text is set
+     in it. */
+  font-family: var(--font-author);
   font-size: var(--reading-size);
   font-weight: var(--reading-weight);
   top: var(--blk-top);
