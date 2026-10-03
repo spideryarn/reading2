@@ -18,6 +18,9 @@ answer from the model only if you ask for one. Saving costs nothing.
 > [260828a-comments-and-bookmarks.md](../plans/260828a-comments-and-bookmarks.md) is the plan, and its GPT Sol
 > review is beside it.
 >
+> **The tick-box became a button on 2026-10-03**, and the box stopped losing drafts —
+> [§ The box a selection opens](#the-selection-box).
+>
 > **Read the rest of this file with that in mind.** Everything it says about *anchoring*,
 > *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
 > has changed is what a selection creates, and what a comment is allowed to hold.
@@ -32,6 +35,65 @@ Three independent properties, and a comment may have any combination of them:
    the answer    only on one made before 2026-08-28, or on a chat it started.
    the placement optional — `criterionId` + `valence`, and only in Referee mode.
 ```
+
+### The box a selection opens <a id="the-selection-box"></a>
+
+The quote, a Copy button, a place to write, a colour row, and three buttons:
+
+```
+   Discard                                  [ Ask AI ]  [ Save ]
+```
+
+- **Save** stores the comment — a bookmark if nothing was written. It is the only submit button, so
+  ⌘/Ctrl+Enter is the free Save and plain Enter is a newline.
+- **Ask AI** stores it and then opens the chat composer on those words, pre-filled, for the reader
+  to send ([§ Asking the model](#asking-the-model-and-the-link-back)). Pressing it spends nothing;
+  the model is called when the reader sends.
+- **Discard** throws the draft away. It is the only thing that does.
+
+**Ask AI was a tick-box until 2026-10-03**, and the box kept everything as a draft until its one
+button was pressed. Greg:
+
+> I highlighted a word I didn't understand and clicked highlight or comment, and then I ticked the
+> save and ask AI, and then clicked something else, and I don't know what happened, but it
+> disappeared. So maybe save and ask AI should be a button, or I think it should auto-save, and so
+> then ask AI would be a button. And it's just generally a bit confusing.
+>
+> — Greg, 2026-10-03 (spya-pnnamg)
+
+A ticked box looks like an action taken, and it was not one. And five things threw the draft away
+without a word: Cancel, the ×, Escape, another selection in the prose, and leaving the page.
+
+**The rule now: no way out silently discards a draft.** A draft *with something in it* — words, a
+colour, or a Referee placement — is stored as a comment, exactly as Save would store it and never
+asking the AI, by each of:
+
+| The way out | What stores it |
+|---|---|
+| the ×, and the box's Escape | the box, before it closes |
+| another selection in the prose | the old box unmounting — the box is keyed on its passage, so each one owns one anchor, one draft id and one latch, and the draft is stored against the passage it was written about |
+| leaving the article inside the app | the same unmount |
+| a reload, a closed tab, a link out | a `pagehide` listener, with the keepalive write (`leavingFetch`) that outlives the page |
+
+**An untouched box stores nothing**, by any of them. That is the one place this is narrower than
+"it should auto-save" read literally: storing a bookmark the moment the box opened would leave a
+mark behind every time a reader selects words to copy them
+([§ Copying the passage](#copying-the-passage)). The textarea's own first Escape still clears what
+was typed — that is the reader removing their words, not the box losing them.
+
+Two things follow from storing on the way out:
+
+- **A draft stored mid-dictation is stored as the box stands.** Save refuses while the microphone is
+  armed because better words are about to arrive; at an exit nothing better will, so the words the
+  reader could see are kept ([dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box)).
+- **A create made before the comment list has loaded waits for it**, inside `useComments.create`.
+  The Save button already waited ([260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md));
+  a box that is going away has no button to wait at, so the order is kept one layer down as well.
+
+What this does **not** promise is under [§ Deliberate limits](#deliberate-limits). The plan is
+[261003i](../plans/261003i-the-comment-box-never-loses-a-draft-and-ask-ai-is-a-button.md); the
+tests are [`tests/annotate-dialog-keeps-a-draft.test.tsx`](../../tests/annotate-dialog-keeps-a-draft.test.tsx)
+and [`tests/use-comments-create-waits-for-the-opening-read.test.ts`](../../tests/use-comments-create-waits-for-the-opening-read.test.ts).
 
 ### The whole-block bookmark <a id="the-whole-block-bookmark"></a>
 
@@ -198,8 +260,8 @@ was what let the one remaining writer reach the anchor and the reader's words.
 
 ### Asking the model, and the link back
 
-Ticking **Also ask the AI about it** saves the comment *first* — free, and saved — and then opens
-the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built, pre-filled with
+Pressing **Ask AI** (a tick-box, *Also ask the AI about it*, until 2026-10-03) saves the comment
+*first* — free, and saved — and then opens the anchored chat that [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md) built, pre-filled with
 whatever was written. If the chat call fails, the reader still has their words.
 
 The link between the two is written **on the server**, from inside the chat stream, because that is
@@ -219,10 +281,10 @@ now-deleted filesystem store never could — is in the plan.
 
 ### A click on a doubly-marked passage opens the comment
 
-A comment made with *Save & ask* has a `cmt` mark and a `chat` mark over identical words.
+A comment made with *Ask AI* (*Save & ask*, until 2026-10-03) has a `cmt` mark and a `chat` mark over identical words.
 `annotateHtml` merges them into one `<mark class="cmt chat">`, and until 2026-08-28 chat won the
 click. That rule was right when comments were closed and an overlap was always an older
-explanation under a living conversation — but **every Save & ask now creates the overlap on
+explanation under a living conversation — but **every Ask AI now creates the overlap on
 purpose**, so it would hide the reader's own note behind the chat it started, every time.
 
 So the comment wins when the comment's `threadId` names that chat. An overlap with an *unrelated*
@@ -284,11 +346,12 @@ rather than two, because a copy that quietly failed is
 undefined in every insecure context.
 
 **The interesting failures are all the same one, and none of them shows in a screenshot: the button
-saying something true about a copy that is no longer the copy in front of the reader.** `App` keeps
-one `AnnotateDialog` mounted and swaps its `anchor`, so a tick from passage A sat there over passage
+saying something true about a copy that is no longer the copy in front of the reader.** `App` kept
+one `AnnotateDialog` mounted and swapped its `anchor`, so a tick from passage A sat there over passage
 B's words with A still on the clipboard; a write still in flight when the reader moved on reported
 success over the new passage; and of two presses the *older* outcome landed last and reported failure
-over a clipboard holding exactly what was asked for. The fixes are a `key` on the anchor and a press
+over a clipboard holding exactly what was asked for. The fixes are a `key` on the anchor (the button's own
+until 2026-10-03, the whole box's since — [§ The box a selection opens](#the-selection-box)) and a press
 token, both in [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) with the reasoning beside
 them, and each has a test that was red first. GPT Sol found all three reviewing the built code,
 2026-09-05. [`tests/annotate-dialog-copy.test.tsx`](../../tests/annotate-dialog-copy.test.tsx).
@@ -655,7 +718,7 @@ row state (Sol F12, overruled in the
 
 It is offered on a comment that has an answer — `done` or `error` — and on **no other**. It used to
 be offered on anything that was not `pending`, which included `status: "none"`: every bookmark and
-every note written without ticking "Also ask the AI". Those are exactly what `beginAnswer` refuses
+every note written without pressing Ask AI. Those are exactly what `beginAnswer` refuses
 with a 409, *"was never a question, so there is nothing to answer"* — so a reader who wrote
 *"what is the evidence for this?"* as a plain comment was offered a button labelled **Search the
 web** and told, on pressing it, that they had never asked anything. Fixed 2026-09-05 while
@@ -855,7 +918,7 @@ Pressing one goes through the same jump a comment row uses (`jumpToComment`, wit
 as the opener): the floating chat dialog, or the band in Chat mode, and from Remember it switches to
 Chat. They are still chats, in `chat_threads`; the drawer only shows them. Left out: an unanchored
 chat (it is about the whole piece, and stays in Chat mode), and a chat a comment already points at
-through `threadId` (*Also ask the AI*), whose comment row covers it. The count on the Comments
+through `threadId` (*Ask AI*), whose comment row covers it. The count on the Comments
 button counts both, and the drawer does not say *"Nothing marked yet"* until both lists have
 loaded.
 
@@ -876,7 +939,7 @@ true for a legacy explanation that is pending or failed as well as for one answe
 a chat. Nothing new is stored: `commentKind` in
 [`comment-nav.ts`](../../src/web/comment-nav.ts) reads the involvement off `threadId`, a legacy
 status or an answer, and a question is an anchored chat, which `askedQuestions` already keeps apart
-from the comments. *Save & ask* whose chat failed before it existed reads as a plain comment, which
+from the comments. *Ask AI* whose chat failed before it existed reads as a plain comment, which
 is what it ended up being.
 
 A visitor's copy has neither `threadId` nor status. It therefore keeps *Comment + AI* only when a
@@ -897,8 +960,8 @@ bare bookmark.
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the drawer the list lives in, and its focus contract — [§ The drawer](#the-drawer) |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
-| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, and the tick-box |
-| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |
+| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, Ask AI and Save — and the rule that no exit drops a draft |
+| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, the client-minted id, and a create that waits behind the opening read |
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
@@ -1064,6 +1127,18 @@ rather than blanked, and if none survives the key comes off entirely.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
+- **A draft whose write fails after the box has closed is lost.** The promise is *no exit silently
+  discards a draft*, not *a draft is never lost*. Every exit hands the draft to `create`; if that
+  request is then refused or the network is down, the optimistic row is removed, the Dock says the
+  save failed, and the words are in neither the box nor Postgres — as they would have been after a
+  pressed Save, before 2026-10-03 as well. Keeping a recoverable failed draft is its own piece of
+  work, not built (GPT Sol's review of plan 261003i, D6). The `pagehide` write is weaker still: it
+  is a keepalive request nobody reads the answer to, and a token that expired seconds earlier
+  refuses it.
+- **A crash or a killed browser fires no event**, so a draft open at that moment is gone. `pagehide`
+  is the last thing a page reliably hears; nothing is written before it, because an untouched box
+  must store nothing and a keystroke-by-keystroke save would need a create-then-edit ordering the
+  store does not have for a comment that does not exist yet.
 - **A finger's selection opens nothing by itself.** There is no mouseup on an iPad, so a touch
   selection gets a "Highlight or comment" button below it, and the press opens this box —
   [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).

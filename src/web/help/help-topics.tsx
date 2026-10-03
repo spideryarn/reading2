@@ -668,14 +668,20 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
       <>
         <p>
           <strong>Select a few words in the article</strong> and a box opens. Write a note, or write
-          nothing and press <strong>Save comment</strong> — an empty comment is a bookmark. Either way
+          nothing and press <strong>Save</strong> — an empty comment is a bookmark. Either way
           it is free. The passage is underlined, and clicking it later opens your note again.
         </p>
         <ul>
           <li>
-            <strong>The AI is a tick-box.</strong> Tick <strong>Also ask the AI about it</strong> and
-            the button becomes <strong>Save &amp; ask AI</strong>: your comment is saved first, then a
-            conversation about the passage starts. If the AI call fails, your words are still kept.
+            <strong>The AI is a button.</strong> Press <strong>Ask AI</strong> instead of Save: your
+            comment is saved first, then a conversation about the passage opens with your words
+            ready to send. If the AI call fails, your words are still kept.
+          </li>
+          <li>
+            <strong>Closing the box keeps what you wrote.</strong> If you typed something or picked
+            a colour, the ×, Escape, selecting something else and leaving the page all save it as a
+            comment. Only <strong>Discard</strong> throws it away. A box you did not touch saves
+            nothing.
           </li>
           <li>
             <strong>To bookmark a whole paragraph</strong>, use the bookmark icon in its margin; you

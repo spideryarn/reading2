@@ -634,7 +634,7 @@ export function CommentDialog({
 
             **And hidden on a FREE comment**, which `!== "pending"` alone let
             through. `status: "none"` is every bookmark and every note written
-            without ticking "Also ask the AI" — and `beginAnswer` in
+            without pressing Ask AI — and `beginAnswer` in
             src/comments.ts refuses exactly that with a 409, *"was never a
             question, so there is nothing to answer"*. So a reader who wrote
             "what is the evidence for this?" as a plain comment was offered a

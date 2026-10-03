@@ -2524,7 +2524,7 @@ const NOT_A_MODE = {
        revision, and `orderComments` keeps one whose block is gone entirely.
        So the sentence states the two halves and the outcome, and claims no
        mechanism between them. */
-    how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
+    how: "Saving one costs nothing and asks the model nothing — the Ask AI button saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
     /* The chord in the Commands card's own format. The same card on both

@@ -378,6 +378,13 @@ chat, the comment follow-up, annotate, quiz and Feedback — and
 the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
 a second later, and the next blur saves it again, so there is nothing to lose.
 
+**The guard is for a press, not for a box that is going away.** The annotate box stores a draft on
+its way out (the ×, Escape, another selection, an unmount), and that store has neither guard: the
+press is refused because better words are about to arrive, and at an exit nothing better will —
+unmounting aborts the transcription — so the choice is the words the reader could see, or none. The
+kept recording is still offered back in that passage's next box. Arbitrated by Opus, 2026-10-03;
+[comments.md § The box a selection opens](comments.md#the-selection-box).
+
 **And if the box lives in a component that stays mounted when it disappears** — a dialog whose
 parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One

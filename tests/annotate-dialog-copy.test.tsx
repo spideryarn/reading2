@@ -16,7 +16,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AnnotateDialog } from "../src/web/AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../src/web/AnnotateDialog.js";
 import { readerCss } from "./helpers/stylesheets.js";
 import type { BlockId } from "../src/types.js";
 
@@ -45,9 +45,12 @@ afterEach(() => {
  * Render the dialog over a passage — **into the same root every time**, which
  * is the whole point of the second passage below.
  *
- * `App` keeps one `AnnotateDialog` mounted and swaps its `anchor` as the reader
- * selects, so a test that unmounted between passages would be testing a
- * component this app does not have, and would agree with a stale tick.
+ * Until 2026-10-03 `Reader` kept one `AnnotateDialog` mounted and swapped its
+ * `anchor`, and this fixture modelled that unkeyed. Since then the whole box is
+ * keyed on the passage (`annotateKey`, plan 261003i D1), so a new selection
+ * remounts it — and this fixture keys it the same way, into the same root. The
+ * second-passage cases below still ask what they asked: no tick over B's words
+ * for a copy of A's.
  */
 function paint(
   opts: {
@@ -57,17 +60,19 @@ function paint(
     onCancel?: () => void;
   } = {},
 ): void {
+  const anchor = {
+    blockId: "spya-k3m9qt" as BlockId,
+    quote: opts.quote ?? QUOTE,
+    start: opts.start ?? 0,
+  };
   act(() => {
     root.render(
       <AnnotateDialog
-        anchor={{
-          blockId: "spya-k3m9qt" as BlockId,
-          quote: opts.quote ?? QUOTE,
-          start: opts.start ?? 0,
-        }}
+        key={annotateKey(anchor)}
+        anchor={anchor}
         placing={false}
         loaded
-        onSave={opts.onSave ?? (() => {})}
+        onSave={(draft) => opts.onSave?.(draft.id)}
         onCancel={opts.onCancel ?? (() => {})}
       />,
     );
@@ -231,9 +236,9 @@ describe("what it says is about the copy in front of you", () => {
     await settle();
     expect(icon()).toContain("clipboard-check");
 
-    // Inside the 1.6s window, and into the same mounted dialog — which is what
-    // App does. An unkeyed button sat here still showing the tick, over B's
-    // words, with A on the clipboard.
+    // Inside the 1.6s window, and into the same root — which is what Reader
+    // does. An unkeyed button sat here still showing the tick, over B's words,
+    // with A on the clipboard.
     paint({ quote: OTHER, start: 40 });
     expect(icon()).toContain("lucide-copy");
     expect(icon()).not.toContain("clipboard-check");

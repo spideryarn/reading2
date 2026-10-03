@@ -157,19 +157,9 @@
 .annotate-dialog textarea::placeholder { color: var(--ink-faint); }
 .annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
-/* The tick-box is the whole of the paid/free decision, so it gets a row of its
-   own rather than sitting in the button strip where it would read as a third
-   button. */
-.annotate-ask {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.6rem 0 0.15rem;
-  font-size: 0.84rem;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.annotate-ask input { cursor: pointer; }
+/* **A tick-box row lived here until 2026-10-03** ("Also ask the AI about it").
+   It is the Ask AI button in the strip below now: a ticked box looked like an
+   action taken, and was not one. AnnotateDialog.tsx's header has Greg's report. */
 
 /* ---- the highlight colour row ------------------------------------------
    HighlightSwatches.tsx, in both comment boxes (AnnotateDialog and
@@ -233,6 +223,9 @@
   margin-top: 0.55rem;
 }
 .annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
+/* Discard sits apart on the left, away from the two buttons that keep the
+   draft: it is the one press here that throws the reader's words away. */
+.annotate-actions button.linky { margin-right: auto; }
 
 /* **The fourth `.linky`, and it had never been styled.** The class was scoped on
    purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since
@@ -262,7 +255,10 @@
 }
 .annotate-dialog button.linky:hover { color: var(--highlight-text); }
 
-.annotate-save {
+/* Ask AI and Save are one shape: both store the comment, and neither spends
+   anything by being pressed. Save is last, where the primary button was. */
+.annotate-save,
+.annotate-ask-ai {
   padding: 0.32rem 0.6rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -271,8 +267,10 @@
   font-family: var(--font-ui);
   cursor: pointer;
 }
-.annotate-save:hover { border-color: var(--highlight); }
-.annotate-save:disabled { opacity: 0.4; cursor: default; }
+.annotate-save:hover,
+.annotate-ask-ai:hover { border-color: var(--highlight); }
+.annotate-save:disabled,
+.annotate-ask-ai:disabled { opacity: 0.4; cursor: default; }
 
 .annotate-hint {
   margin: 0.5rem 0 0;

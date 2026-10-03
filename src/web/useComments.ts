@@ -24,7 +24,7 @@ import {
   type HighlightColour,
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, leavingFetch, readJson } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -151,6 +151,14 @@ export interface CommentsApi {
    * server refused — the caller needs to know before it opens a chat about it.
    */
   create(input: NewCommentInput): Promise<Comment | null>;
+  /**
+   * **`create`, when the page is being torn down** (`pagehide`): the same
+   * request, started at once as a `keepalive` write (`leavingFetch`,
+   * src/web/lib/api.ts), because an ordinary fetch from a dying page often
+   * never leaves. Best effort by nature — nothing is awaited and nothing is
+   * drawn. Its one caller is the draft in `AnnotateDialog` (plan 261003i, D2).
+   */
+  createOnLeave(input: NewCommentInput): void;
   /** Change the reader's words, or clear them back to a bare bookmark. */
   edit(id: string, body: string | null): Promise<void>;
   /**
@@ -222,6 +230,58 @@ function markFields(mark: Mark | undefined): { criterionId?: string; valence?: n
     ...(mark.valence !== null ? { valence: mark.valence } : {}),
   };
 }
+
+/**
+ * The request that creates a comment — one spelling, for the ordinary write and
+ * the leaving one, so the two cannot come to store different things.
+ */
+function createRequest(input: NewCommentInput): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: input.id,
+      blockId: input.blockId,
+      /* No `quote` and no `start` is a whole-block bookmark; the route
+         refuses one without the other. */
+      ...anchorFields(input),
+      ...(input.body ? { body: input.body } : {}),
+      ...markFields(input.mark),
+      ...(input.colour ? { colour: input.colour } : {}),
+    }),
+  };
+}
+
+/** How an opening read ended, as far as a held `create` cares — `opening`. */
+type OpeningEnd = "live" | "gone";
+
+interface OpeningGate {
+  /** How it ended, or `null` while the read is still out. Read synchronously. */
+  settled: OpeningEnd | null;
+  /** The same, for a `create` that has to wait. Never rejects. */
+  done: Promise<OpeningEnd>;
+  /** First call wins: a read that answered cannot later be called gone. */
+  settle(end: OpeningEnd): void;
+}
+
+function openGate(): OpeningGate {
+  let resolve!: (end: OpeningEnd) => void;
+  const gate: OpeningGate = {
+    settled: null,
+    done: new Promise<OpeningEnd>((r) => {
+      resolve = r;
+    }),
+    settle(end) {
+      if (gate.settled !== null) return;
+      gate.settled = end;
+      resolve(end);
+    },
+  };
+  return gate;
+}
+
+/** Before the first effect, and after the last cleanup: no list to draw in. */
+const GONE: OpeningGate = { settled: "gone", done: Promise.resolve("gone"), settle() {} };
 
 export function useComments(slug: string): CommentsApi {
   const [comments, setComments] = useState<ClientComment[]>([]);
@@ -304,8 +364,39 @@ export function useComments(slug: string): CommentsApi {
     return next;
   }, []);
 
+  /**
+   * **The opening read, as something a `create` can wait behind.**
+   *
+   * That read's answer *replaces* the list, so a row created while it is out is
+   * wiped from the tab when it lands
+   * (docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md).
+   * Since 2026-09-11 the Save button has waited on `loaded` for that reason, and
+   * while a press was the only way to save that was enough. Since 2026-10-03 it
+   * is not: the box a selection opens stores its draft on the way *out* — the ×,
+   * Escape, another selection, an unmount — and a box that is going away has no
+   * button to wait at. So the order is kept here too, in the one place every
+   * create passes through. GPT Sol's review of plan 261003i, D3. The button's
+   * gate stays: it is what tells the reader why nothing happened.
+   *
+   * `settled` is the synchronous half, and it is what keeps the ordinary case
+   * as it was: once the list is in, `create` draws its row in the same turn.
+   *
+   * It ends one of two ways. `"live"`: the read answered, failed or was given
+   * up on at its deadline — in every case it can no longer commit a snapshot,
+   * and (resolved after `setComments` in the same callback) the held create's
+   * row is queued behind the list's. `"gone"`: this hook went away, or moved to
+   * another article, first. The reader's words are still theirs, so the held
+   * create is still **sent**; it just has no list left to draw itself in.
+   *
+   * A ref, set by the effect below, rather than state: `create` must see the
+   * gate that is current when it is *called*, not the one it closed over.
+   */
+  const opening = useRef<OpeningGate>(GONE);
+
   useEffect(() => {
     let live = true;
+    const gate = openGate();
+    opening.current = gate;
     setComments([]);
     /* Both cleared alongside the comments, not left over from the last article
        — the whole point of them is that they describe *this* slug's fetch. */
@@ -330,6 +421,8 @@ export function useComments(slug: string): CommentsApi {
         if (body.error) setLoadError(body.error);
         else setComments(body.comments ?? []);
         setLoaded(true);
+        /* After the list is queued, so a held create's row lands on top of it. */
+        gate.settle("live");
       })
       .catch((e: Error) => {
         if (!live) return;
@@ -338,10 +431,15 @@ export function useComments(slug: string): CommentsApi {
            network is down waits for ever, spinner turning, next to an error
            message — one of them lying. See `loaded` in CommentsApi. */
         setLoaded(true);
+        gate.settle("live");
       });
     return () => {
       live = false;
       read.abandon();
+      /* Release whatever is held behind this read: it is never going to answer
+         now, and a create left waiting on it would be the reader's words kept
+         in a promise nobody resolves. */
+      gate.settle("gone");
     };
   }, [slug]);
 
@@ -562,6 +660,24 @@ export function useComments(slug: string): CommentsApi {
   const create = useCallback(
     async (input: NewCommentInput): Promise<Comment | null> => {
       const id = input.id;
+      const url = `/api/comments/${encodeURIComponent(slug)}`;
+      /* **Behind the opening read, if it is still out** — see `opening`. The
+         `settled` check keeps the ordinary case synchronous: no `await`, so the
+         mark is drawn in the turn the reader let go of the mouse. */
+      const gate = opening.current;
+      const list = gate.settled ?? (await gate.done);
+      if (list === "gone") {
+        /* The hook left this article while the create was held (or, in the gap
+           between a new article's render and its effect, before there was a
+           read to wait behind). Send the words; touch no state — the list on
+           screen, if there is one, is another article's. */
+        try {
+          const r = await fetchOk(url, createRequest(input));
+          return (await readJson<{ comment: Comment }>(r)).comment;
+        } catch {
+          return null;
+        }
+      }
       const optimistic: ClientComment = {
         id,
         blockId: input.blockId,
@@ -589,20 +705,7 @@ export function useComments(slug: string): CommentsApi {
       });
       setError(null);
       try {
-        const r = await fetchOk(`/api/comments/${encodeURIComponent(slug)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id,
-            blockId: input.blockId,
-            /* No `quote` and no `start` is a whole-block bookmark; the route
-               refuses one without the other. */
-            ...anchorFields(input),
-            ...(input.body ? { body: input.body } : {}),
-            ...markFields(input.mark),
-            ...(input.colour ? { colour: input.colour } : {}),
-          }),
-        });
+        const r = await fetchOk(url, createRequest(input));
         const { comment } = await readJson<{ comment: Comment }>(r);
         /* The server may have minted a different id. Drop the row we invented
            before putting the real one, or `put` appends it and the reader has
@@ -621,6 +724,22 @@ export function useComments(slug: string): CommentsApi {
       }
     },
     [slug, put],
+  );
+
+  /**
+   * `create`, for a page that is going away — see `CommentsApi.createOnLeave`.
+   *
+   * No optimistic row, no waiting behind the opening read, and no answer read:
+   * there may be no page left to do any of it on. If the page does come back
+   * (a `pagehide` can be a back/forward-cache suspend) the comment is on the
+   * server and not in this tab's list until the next load — the same state a
+   * second tab is always in.
+   */
+  const createOnLeave = useCallback(
+    (input: NewCommentInput): void => {
+      leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input));
+    },
+    [slug],
   );
 
   /**
@@ -832,6 +951,7 @@ export function useComments(slug: string): CommentsApi {
     loadFailed: loadError !== null,
     loadError,
     create,
+    createOnLeave,
     edit,
     place,
     recolour,

@@ -23,7 +23,7 @@ export interface SelectionAnchor {
  * It was 8 until 2026-09-05, on the stated ground that *"every one of these
  * costs a model call"*. That reason died on 2026-08-28, when a selection
  * stopped buying anything at all — it opens a comment box, saving is free and
- * the model is a tick-box (docs/plans/260828a-comments-and-bookmarks.md). The
+ * the model is opt-in (docs/plans/260828a-comments-and-bookmarks.md). The
  * constant outlived its reason by eight days, and in the meantime it refused
  * `AI`, `GDP`, `Ryle` and `qualia` — the commonest short selection there is,
  * and the one docs/project/comments.md § The two questions a selection raises
