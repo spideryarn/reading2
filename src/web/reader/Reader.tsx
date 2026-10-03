@@ -3443,6 +3443,9 @@ export function Reader({
         mode={mode}
         margin={marginOpen}
         summary={summaryView}
+        /* The same state the Diagram band's chips read (`diagramParam`), not
+           the address, which lags a chip press — Dock.tsx § Props `diagram`. */
+        diagram={subNav.diagram}
         onMode={(next, sub, toggle = false) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old

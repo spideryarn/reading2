@@ -131,7 +131,7 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
   /* The Tweets mode's name and aliases, kept when the mode went on 2026-10-03
      so `rerun tweets` still forces the thread. Not `x`: `rerun x` is too
      little to hang a paid run on. */
-  tweets: ["tweets", "tweet thread", "twitter"],
+  tweets: ["tweets", "tweet thread", "twitter", "social"],
 };
 
 /**

@@ -376,9 +376,23 @@ interface Props {
    * Summary press armed from the stale address leaves a `simple` token with
    * the thread mounted, for Back to spend (activation.ts § `PressContext`; GPT
    * Sol, F1 of the 261003l review). tests/summary-thread-press.test.tsx holds
-   * it. The older `diagram` beside it still reads the address at render.
+   * it.
    */
   summary?: SummaryView;
+  /**
+   * **Which picture Diagram is showing** (`?diagram=`), as the reading view has
+   * parsed it — `diagramParam`'s value, which is the one `diagramInSearch`
+   * gives for a settled address (params.ts § `DEFAULT_DIAGRAM`). Off the
+   * reading view the carried query string says.
+   *
+   * **The same rule as `summary` above, for the same reason**, and it was the
+   * older of the two: a Diagram press armed from the stale address left a
+   * `sketch` token with Force mounted, and Back to the Sketch spent it on a
+   * drawing nobody pressed for (GPT Sol, F8 of the 261003l review;
+   * docs/postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md).
+   * tests/every-mode-draws-its-surface.test.tsx holds it.
+   */
+  diagram?: DiagramKind;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -1666,6 +1680,7 @@ export function Dock({
   onMode,
   margin: marginProp,
   summary: summaryProp,
+  diagram: diagramProp,
   marked,
   visitor,
   shelfRow,
@@ -1778,8 +1793,12 @@ export function Dock({
    * opened something else, which is precisely the extra button-click the
    * auto-run rule removed. params.ts owns the degrade rule and every reader
    * takes it from there.
+   *
+   * **The reading view's own parsed state where there is one**, and the carried
+   * address only off it, where a press is a link and arms nothing anyway — the
+   * address lags a chip press by up to ~50ms. § Props `diagram`.
    */
-  const diagram = diagramInSearch(search);
+  const diagram = diagramProp ?? diagramInSearch(search);
   /* Which of Summary's views a Summary press would land on: the reading view's
      own parsed state where there is one, and the carried address only off it,
      where a press is a link and arms nothing anyway. § Props `summary`. */

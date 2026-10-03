@@ -78,6 +78,14 @@ describe("the Run again rows", () => {
     }
   });
 
+  it("keeps the retired Social nickname on the thread's re-run row (F5)", () => {
+    for (const query of ["rerun social", "regenerate social", "social again"]) {
+      const ranked = rankCommands(query, LIST);
+      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-tweets" });
+      expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-simple" }));
+    }
+  });
+
   it("`rerun summary` writes the plain-words lengths again, and never a thread", () => {
     for (const query of ["rerun summary", "regenerate summary", "summary again", "rerun summarise"]) {
       const ranked = rankCommands(query, LIST);

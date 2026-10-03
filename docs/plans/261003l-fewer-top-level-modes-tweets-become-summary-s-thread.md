@@ -224,3 +224,23 @@ All of this goes to Greg as questions in the debrief; none of it is built here.
   8. Its note that the hidden Simple level can still fail the all-or-none store is true today as
   well and is part of the question to Greg about dropping it. All seven checked against the code
   before accepting.
+- 2026-10-03 — built by an Opus subagent from the reviewed plan, commit `655cd40a1`. Red first:
+  the router lift, last-view, layout, F2 (the queue fell to five steps), and F3, F4's Back/Forward
+  and F5 by reverting each fix. Deviations: the retired word's aliases are on the Thread row and not
+  on Summary (F3), against [mode.md § Retiring a mode](../project/mode.md#retiring-a-mode) step 2,
+  whose wording is unchanged and is a question for Greg; a remembered `mode=tweets` is dropped from a
+  restore as well as `summary=thread`.
+- 2026-10-03 — browser check (Sonnet, Playwright, an article with a stored thread): passes at
+  desktop, iPad portrait and landscape, and phone. The control stays put when the band widens
+  (288 → 345px iPad portrait, 448 → 496px landscape; no change on desktop or phone). Not checked: a
+  signed-out visitor, the empty and failed thread states, light mode off desktop. Arrow keys do not
+  move the control, as on Structure's toggle; Tab and Enter do. Screenshots `261003l-shot-*.png`.
+- 2026-10-03 — GPT Sol code review,
+  [261003l-fewer-modes-code-review-sol.md](261003l-fewer-modes-code-review-sol.md): *pass with its
+  fixes*. F5 again (the `social` alias was dropped from "rerun") — fixed by Sol, red first. F9 (P3,
+  url-state.md) — fixed by Sol. It added real-Reader tests for F1 and for "tweets" + Enter. **F8
+  (P0, established, older than this work): Diagram's press read the address at render**, so Force
+  then the Diagram command row left a Sketch token for Back to spend. Fixed here the way F1 was
+  (`<Dock diagram>` from Reader's parsed state), red first, by an Opus subagent;
+  [the postmortem](../postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md).
+  Sol's doc-wording test was removed as a check that could not fail usefully.

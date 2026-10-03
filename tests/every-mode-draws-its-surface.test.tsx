@@ -1844,3 +1844,97 @@ describe("the notes beside a band", () => {
     expect(notes()).toBeGreaterThan(0);
   }, PHASE_MS);
 });
+
+/** Review 261003l: exercise the real Reader callback and Dock prop, including
+ * nuqs's frame before the URL flush. A band-only harness cannot catch a
+ * missing prop or a second arming path in Reader. */
+describe("Summary Thread through the real Reader", () => {
+  function chooseSegment(label: string): void {
+    const button = [...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]')]
+      .find((b) => b.textContent === label);
+    expect(button).toBeDefined();
+    act(() => button!.click());
+  }
+
+  function takeCommand(query: string, kind: string): void {
+    const opener = host.querySelector<HTMLButtonElement>(".dock-commands");
+    expect(opener).not.toBeNull();
+    act(() => opener!.click());
+    const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    expect(input).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter!.call(input, query);
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelector<HTMLElement>('dialog.cmdbar [role="option"]')?.dataset.kind).toBe(kind);
+    act(() => input!.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter", bubbles: true, cancelable: true,
+    })));
+  }
+
+  async function waitFor(check: () => boolean): Promise<void> {
+    for (let i = 0; i < 100 && !check(); i++) {
+      await act(async () => { await new Promise((go) => setTimeout(go, 10)); });
+    }
+    expect(check()).toBe(true);
+    await settle();
+  }
+
+  it("a Summary command immediately after Thread leaves no token for Back (F1)", async () => {
+    await open("?mode=summary");
+    expect(posts).toEqual([]);
+    expect(host.querySelector(".simple-scroll")).not.toBeNull();
+    chooseSegment("Thread");
+    expect(host.querySelector(".mode-band.tweets")).not.toBeNull();
+    expect(new URLSearchParams(location.search).get("summary")).toBeNull();
+    takeCommand("summary", "mode");
+    await settle();
+    expect(stillPending()).toEqual([]);
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    await waitFor(() => new URLSearchParams(location.search).get("summary") === "thread");
+    act(() => history.back());
+    await waitFor(() => host.querySelector(".simple-scroll") !== null);
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    expect(stillPending()).toEqual([]);
+    chooseSegment("Brief");
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"], ["simple"]]);
+  });
+
+  it("tweets plus Enter replaces Fuller with Thread and never arms simple", async () => {
+    await open("?mode=summary&summary=fuller");
+    expect(posts).toEqual([]);
+    takeCommand("tweets", "submode");
+    await waitFor(() => new URLSearchParams(location.search).get("summary") === "thread");
+    expect(host.querySelector(".mode-band.tweets")).not.toBeNull();
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    expect(stillPending()).toEqual([]);
+  });
+
+  /* The same frame, for the older sub-mode: F8 of the same review, and
+     docs/postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md.
+     Force is mounted, the address still says Sketch, and a Diagram press armed
+     from the address leaves a `sketch` token nothing claims until Back mounts
+     the Sketch and buys a drawing nobody pressed for. The token and the job
+     are asserted apart: the first is the hazard, the second the charge. */
+  it("a Diagram command immediately after Force leaves no sketch token for Back (F8)", async () => {
+    await open("?mode=diagram");
+    expect(posts).toEqual([]);
+    const force = [...host.querySelectorAll<HTMLButtonElement>('.diag-kinds [role="radio"]')]
+      .find((b) => b.textContent?.includes("Force"));
+    expect(force, "the fixture has the experimental switch on, so Force is drawn").toBeDefined();
+    act(() => force!.click());
+    expect(force!.getAttribute("aria-checked")).toBe("true");
+    expect(new URLSearchParams(location.search).get("diagram")).toBeNull();
+    takeCommand("diagram", "mode");
+    expect(stillPending()).toEqual([]);
+    await waitFor(() => new URLSearchParams(location.search).get("diagram") === "force");
+    expect(stillPending()).toEqual([]);
+    act(() => history.back());
+    await waitFor(() => new URLSearchParams(location.search).get("diagram") === null);
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([]);
+    expect(stillPending()).toEqual([]);
+  });
+});
