@@ -193,6 +193,11 @@ header, reads as not shipped: the label is never claimed without a note saying s
 say is "on `dev`, not yet live"; declined and awaiting both read as *not shipped*. The header format,
 split reports (`parts:`), the accepted limits, and why this beat a status column are in
 [260930e](../plans/260930e-earlier-tab-filters-by-done-from-the-notes.md).
+
+**Each pill says how many, since 2026-10-03**: every answer carries `counts` for all three
+filters, uncapped, counted over the same ids the filter uses and in the same snapshot as the list,
+and the cap line reads "Showing the 50 most recent of your N not-shipped reports" —
+[261003b](../plans/261003b-earlier-tab-counts-on-the-pills.md).
 `tests/feedback-endings.test.ts` goes red when a header does not parse or the committed map is stale.
 **The same flip emails the reader**, since 2026-10-02, if they are not an admin: the deploy that
 carries the note sends it once that deploy is live —

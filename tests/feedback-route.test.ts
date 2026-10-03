@@ -64,6 +64,10 @@ let listFilters: unknown[] = [];
 let listOwners: string[] = [];
 /** What the fake `listMine` answers with — deliberately loose, see § GET. */
 let listAnswer: unknown = { reports: [], more: false };
+/** The ids each `listMine` was asked to count, and the owner in force. */
+let counted: { ids: readonly string[]; owner: string }[] = [];
+/** The counts the fake `listMine` adds to its answer. */
+let countAnswer: unknown = { all: 0, in: 0 };
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -123,15 +127,16 @@ vi.mock("../src/store/index.js", async (importActual) => {
         return answer ?? { kind: "created", report: storedReport(input) };
       },
       read: async () => null,
-      listMine: async (limit: number, filter?: unknown) => {
+      listMine: async (limit: number, countIds: readonly string[], filter?: unknown) => {
         listed.push(limit);
         listFilters.push(filter);
         /* The real store resolves this at the start of its query. Doing the
            same here proves this route reached it only after the gate installed
            the signed-in reader's owner. */
         listOwners.push(currentOwnerId());
+        counted.push({ ids: countIds, owner: currentOwnerId() });
         if (listAnswer instanceof Error) throw listAnswer;
-        return listAnswer;
+        return { counts: countAnswer, ...(listAnswer as object) };
       },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
@@ -345,6 +350,8 @@ beforeEach(() => {
   listFilters = [];
   listOwners = [];
   listAnswer = { reports: [], more: false };
+  counted = [];
+  countAnswer = { all: 0, in: 0 };
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
@@ -381,6 +388,7 @@ describe("GET /api/feedback", () => {
       ],
       more: true,
     };
+    countAnswer = { all: 115, in: 70 };
     const reply = await call(undefined, { method: "GET" });
     expect(reply.status).toBe(200);
     expect(reply.headers["cache-control"]).toBe("private, no-store");
@@ -395,6 +403,7 @@ describe("GET /api/feedback", () => {
         },
       ],
       more: true,
+      counts: { all: 115, shipped: 70, unshipped: 45 },
     });
     /* The cap is the server's, not a query parameter somebody can raise. */
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
@@ -432,6 +441,20 @@ describe("GET /api/feedback", () => {
       EARLIER_FEEDBACK_LIMIT,
     ]);
     expect(listOwners).toEqual([TEST_OWNER, TEST_OWNER, TEST_OWNER]);
+  });
+
+  it("counts every filter on every answer, by the same shipped ids the filter uses", async () => {
+    countAnswer = { all: 9, in: 4 };
+    for (const show of ["shipped", "unshipped", "all"]) {
+      const reply = await call(undefined, { method: "GET", path: `/api/feedback?show=${show}` });
+      expect((reply.body as { counts: unknown }).counts, show).toEqual({ all: 9, shipped: 4, unshipped: 5 });
+    }
+    const shipped = ["spya-k3m9qt", "spya-sh1pd2"];
+    expect(counted).toEqual([
+      { ids: shipped, owner: TEST_OWNER },
+      { ids: shipped, owner: TEST_OWNER },
+      { ids: shipped, owner: TEST_OWNER },
+    ]);
   });
 
   it("refuses a show it does not know, rather than passing the whole list off as filtered", async () => {

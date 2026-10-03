@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_EMAIL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
-import { MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
+import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
@@ -120,6 +120,13 @@ const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButto
 
 let host: HTMLDivElement;
 let root: Root;
+
+/** The per-filter counts every Earlier answer carries (261003b). */
+const COUNTS = { all: 2, shipped: 1, unshipped: 1 };
+/** Counts for an empty answer. */
+const NONE = { all: 0, shipped: 0, unshipped: 0 };
+/** Counts past the cap, for an answer with `more`. */
+const MANY = { all: 345, shipped: 230, unshipped: 115 };
 
 /** An answer to `GET /api/feedback`. */
 function page(body: unknown, status = 200): () => Promise<Response> {
@@ -289,7 +296,7 @@ beforeEach(() => {
   posts.length = 0;
   answer = ok(201);
   lists.length = 0;
-  listAnswer = page({ reports: [], more: false });
+  listAnswer = page({ reports: [], more: false, counts: NONE });
   carried = null;
   finishShot = null;
 });
@@ -1304,11 +1311,13 @@ describe("the Earlier tab", () => {
       },
     ],
     more: false,
+    counts: COUNTS,
   };
 
   function showButton(name: "All" | "Shipped" | "Not shipped"): HTMLButtonElement {
+    /* The label is the first text node; a count may follow it in its own span. */
     const found = [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].find(
-      (b) => (b.textContent ?? "").trim() === name,
+      (b) => (b.firstChild?.textContent ?? "").trim() === name,
     );
     if (!found) throw new Error(`no ${name} filter`);
     return found;
@@ -1349,6 +1358,7 @@ describe("the Earlier tab", () => {
           { ...REPORTS.reports[1], createdAt: "2026-07-01T08:00:00.000Z" },
         ],
         more: false,
+        counts: COUNTS,
       });
       mount();
       click(tab("Earlier"));
@@ -1386,7 +1396,7 @@ describe("the Earlier tab", () => {
     mount();
     click(tab("Earlier"));
     await act(async () => {});
-    listAnswer = page({ reports: [REPORTS.reports[1]], more: false });
+    listAnswer = page({ reports: [REPORTS.reports[1]], more: false, counts: COUNTS });
     click(showButton("Not shipped"));
     await act(async () => {});
     const items = [...panelOf("Earlier").querySelectorAll("li")];
@@ -1397,7 +1407,7 @@ describe("the Earlier tab", () => {
 
   it("refuses a report without a shipped flag as the wrong shape", async () => {
     const { shipped: _dropped, ...withoutFlag } = REPORTS.reports[0] ?? { shipped: true };
-    listAnswer = page({ reports: [withoutFlag], more: false });
+    listAnswer = page({ reports: [withoutFlag], more: false, counts: COUNTS });
     mount();
     click(tab("Earlier"));
     await act(async () => {});
@@ -1414,7 +1424,7 @@ describe("the Earlier tab", () => {
       expect(b.getAttribute("type")).toBe("button");
     }
 
-    listAnswer = page({ reports: [], more: false });
+    listAnswer = page({ reports: [], more: false, counts: NONE });
     click(showButton("Shipped"));
     await act(async () => {});
     expect(lists).toEqual(["/api/feedback", "/api/feedback?show=shipped"]);
@@ -1451,12 +1461,12 @@ describe("the Earlier tab", () => {
     click(showButton("Shipped"));
     await act(async () => {});
 
-    listAnswer = page({ reports: [], more: false });
+    listAnswer = page({ reports: [], more: false, counts: NONE });
     click(showButton("Not shipped"));
     await act(async () => {});
     expect(panelOf("Earlier").textContent).toContain("Every report you've sent has a shipped change.");
 
-    const onlyShipped = { reports: [REPORTS.reports[0]], more: false };
+    const onlyShipped = { reports: [REPORTS.reports[0]], more: false, counts: COUNTS };
     await act(async () => {
       settleShipped?.(new Response(JSON.stringify(onlyShipped), { status: 200 }));
     });
@@ -1481,7 +1491,7 @@ describe("the Earlier tab", () => {
     await act(async () => {
       settle?.(new Response(JSON.stringify(REPORTS), { status: 200 }));
     });
-    listAnswer = page({ reports: [], more: false });
+    listAnswer = page({ reports: [], more: false, counts: NONE });
     click(tab("Earlier"));
     await act(async () => {});
     expect(lists, "the new opening read afresh").toHaveLength(2);
@@ -1518,12 +1528,111 @@ describe("the Earlier tab", () => {
     expect(panelOf("Earlier").textContent).toContain("You haven't sent us any feedback yet.");
   });
 
-  it("says the list is cut short when there were more", async () => {
-    listAnswer = page({ ...REPORTS, more: true });
+  /* SPIDERYARN-READING2-95: "Is that true? Are there >50 not shipped?" The
+     line names the total for the filter showing. */
+  it("says the list is cut short when there were more, and of how many", async () => {
+    const fullPage = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+      ...(REPORTS.reports[i % REPORTS.reports.length] ?? REPORTS.reports[0]),
+      id: `spya-page-${i}`,
+    }));
+    listAnswer = page({ reports: fullPage, more: true, counts: MANY });
     mount();
     click(tab("Earlier"));
     await act(async () => {});
-    expect(panelOf("Earlier").textContent).toContain("Showing your 50 most recent.");
+    expect(panelOf("Earlier").textContent).toContain("Showing the 50 most recent of your 345 reports.");
+
+    const fullUnshippedPage = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+      ...REPORTS.reports[1],
+      id: `spya-unshipped-page-${i}`,
+    }));
+    listAnswer = page({ reports: fullUnshippedPage, more: true, counts: MANY });
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain(
+      "Showing the 50 most recent of your 115 not-shipped reports.",
+    );
+  });
+
+  /* SPIDERYARN-READING2-95: "Perhaps include a number/badge in the tab-pills
+     for Shipped and Not shipped?" */
+  it("puts each filter's count on its pill once an answer lands, and none before", async () => {
+    let settle: ((res: Response) => void) | null = null;
+    listAnswer = () => new Promise<Response>((resolve) => (settle = resolve));
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").querySelectorAll(".fb-show-count"), "no number is a guess").toHaveLength(0);
+
+    await act(async () => {
+      settle?.(new Response(JSON.stringify(REPORTS), { status: 200 }));
+    });
+    expect(showButton("All").querySelector(".fb-show-count")?.textContent).toBe("2");
+    expect(showButton("Shipped").querySelector(".fb-show-count")?.textContent).toBe("1");
+    expect(showButton("Not shipped").querySelector(".fb-show-count")?.textContent).toBe("1");
+    expect(showButton("Not shipped").textContent).toBe("Not shipped 1");
+  });
+
+  /* GPT Sol's plan review: the showing filter's own answer labels the pills,
+     so a later answer that differs (a deploy in between) is never outvoted by
+     an older one. */
+  it("labels the pills from the showing filter's answer when answers differ", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(showButton("Not shipped").querySelector(".fb-show-count")?.textContent).toBe("1");
+
+    listAnswer = page({ reports: [], more: false, counts: { all: 2, shipped: 2, unshipped: 0 } });
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    expect(showButton("Not shipped").querySelector(".fb-show-count")?.textContent).toBe("0");
+    expect(showButton("Shipped").querySelector(".fb-show-count")?.textContent).toBe("2");
+
+    click(showButton("All"));
+    await act(async () => {});
+    expect(showButton("Not shipped").querySelector(".fb-show-count")?.textContent, "All's own answer").toBe("1");
+  });
+
+  it.each([
+    ["no counts", { reports: REPORTS.reports, more: false }],
+    ["counts that do not add up", { ...REPORTS, counts: { all: 3, shipped: 1, unshipped: 1 } }],
+    [
+      "more with a count the list already holds",
+      {
+        reports: Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+          ...REPORTS.reports[0],
+          id: `spya-full-but-not-more-${i}`,
+        })),
+        more: true,
+        counts: { all: EARLIER_FEEDBACK_LIMIT, shipped: EARLIER_FEEDBACK_LIMIT, unshipped: 0 },
+      },
+    ],
+    ["more with fewer reports than the cap", { ...REPORTS, more: true, counts: MANY }],
+    ["no more but a count past the list", { ...REPORTS, counts: { all: 3, shipped: 1, unshipped: 2 } }],
+    ["a negative count", { ...REPORTS, counts: { all: 2, shipped: 3, unshipped: -1 } }],
+    ["a shipped row above a zero shipped count", { ...REPORTS, counts: { all: 2, shipped: 0, unshipped: 2 } }],
+    [
+      "duplicate report ids",
+      { reports: [REPORTS.reports[0], REPORTS.reports[0]], more: false, counts: { all: 2, shipped: 2, unshipped: 0 } },
+    ],
+  ])("refuses an answer with %s as the wrong shape", async (_case, body) => {
+    listAnswer = page(body);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  it("refuses a shipped row in the Not shipped answer", async () => {
+    listAnswer = page(REPORTS);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+
+    listAnswer = page({ reports: [REPORTS.reports[0]], more: false, counts: COUNTS });
+    click(showButton("Not shipped"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
   });
 
   it("says so when the list cannot be loaded, and tries again on request", async () => {
@@ -1545,7 +1654,7 @@ describe("the Earlier tab", () => {
   });
 
   it("treats a wrong-shaped successful response as a load failure", async () => {
-    listAnswer = page({ reports: "not a list", more: false });
+    listAnswer = page({ reports: "not a list", more: false, counts: COUNTS });
     mount();
     click(tab("Earlier"));
     await act(async () => {});

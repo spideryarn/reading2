@@ -732,7 +732,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
+  const { earlier, counts, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -1295,7 +1295,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter show={show} onShow={setShow} />
+          <EarlierFilter show={show} counts={counts} onShow={setShow} />
           <EarlierList earlier={earlier} show={show} retry={retry} />
         </div>
 
