@@ -1,0 +1,166 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "arm": "final-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Partial Information Decomposition",
+      "kind": "concept",
+      "aliases": [
+        "PID"
+      ],
+      "senseHere": "A mathematical framework that splits the information two or more sources jointly carry about a target into separate pieces: what each source alone tells you, what they tell you redundantly together, and what only emerges from considering them jointly."
+    },
+    {
+      "name": "rich club",
+      "kind": "term",
+      "aliases": [
+        "rich clubs"
+      ],
+      "senseHere": "The subset of best-connected neurons in a network that are more densely interconnected with each other than chance would predict, and which the article shows carry a disproportionate share of synergistic computation."
+    },
+    {
+      "name": "mutual information",
+      "kind": "concept",
+      "aliases": [
+        "I(X;Y)"
+      ],
+      "senseHere": "A measure of how much knowing one variable's state reduces uncertainty about another's, used here as an undirected, instantaneous measure of shared dependence between two neurons' activity."
+    },
+    {
+      "name": "transfer entropy",
+      "kind": "concept",
+      "aliases": [
+        "TE"
+      ],
+      "senseHere": "A directional measure of how much a source neuron's past activity reduces uncertainty about a target neuron's future activity, beyond what the target's own past already explains. It stands in for information flow between neurons."
+    },
+    {
+      "name": "functional connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A measure of statistical similarity or shared dependence between two neurons' activity patterns, without implying any direction of influence, as captured by mutual information."
+    },
+    {
+      "name": "effective connectivity",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A measure of directed influence from one neuron's activity to another's over time, as captured by transfer entropy, contrasted with the undirected similarity measured by functional connectivity."
+    },
+    {
+      "name": "synergy",
+      "kind": "term",
+      "aliases": [
+        "synergistic information",
+        "Syn"
+      ],
+      "senseHere": "The portion of information about a target neuron's activity that can only be learned by observing two or more source neurons together, not from any one of them alone. The article treats this as the signature of genuine neural computation."
+    },
+    {
+      "name": "redundancy",
+      "kind": "term",
+      "aliases": [
+        "redundant information",
+        "Red"
+      ],
+      "senseHere": "Information about the target that is carried in common by two or more sources, so that learning it from one source makes learning it again from another source add nothing new."
+    },
+    {
+      "name": "unique information",
+      "kind": "term",
+      "aliases": [
+        "Unq"
+      ],
+      "senseHere": "The information about a target that only one particular source can provide, not available from any other source in the group."
+    },
+    {
+      "name": "redundancy function",
+      "kind": "term",
+      "aliases": [
+        "I∩"
+      ],
+      "senseHere": "A mathematical rule chosen to define exactly how much information counts as redundant between sets of sources; no single agreed-upon version exists, and different choices give different PID results."
+    },
+    {
+      "name": "Imin",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The original, most commonly used rule for measuring redundant information in PID, proposed by Williams and Beer, though criticized for giving unintuitive results in some cases."
+    },
+    {
+      "name": "computational triad",
+      "kind": "term",
+      "aliases": [
+        "triads",
+        "triad"
+      ],
+      "senseHere": "A minimal unit of analysis consisting of two source neurons that both connect to one shared target neuron, used as the basic building block for applying PID across a whole recorded network."
+    },
+    {
+      "name": "partial information lattice",
+      "kind": "concept",
+      "aliases": [
+        "PI lattice"
+      ],
+      "senseHere": "A structured diagram of all the distinct ways that subsets of source variables can share information, ordered so that simpler combinations sit below more complex ones; PID values are computed by working up this structure."
+    },
+    {
+      "name": "Mobius inversion",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A mathematical technique from combinatorics for recovering individual contributions from cumulative totals across a partially ordered structure, used generally to isolate a quantity at one point in a structure from measurements that mix it with others."
+    },
+    {
+      "name": "organotypic cultures",
+      "kind": "term",
+      "aliases": [
+        "organotypic cortical cultures",
+        "cortical cultures"
+      ],
+      "senseHere": "Thin slices of mouse brain tissue grown in nutrient media outside the animal, which retain much of the original tissue's cell organization and connectivity patterns, used as a laboratory stand-in for intact cortex."
+    },
+    {
+      "name": "feedforward, feedback, and recurrent connections",
+      "kind": "term",
+      "aliases": [
+        "feedforward connections",
+        "feedback connections",
+        "recurrent connections"
+      ],
+      "senseHere": "Within a computational triad, feedforward connections run from the two source neurons to the target, feedback connections run from the target back to the sources, and recurrent connections run between the two sources themselves; the article finds recurrent connections boost synergy while feedback connections slightly reduce it."
+    },
+    {
+      "name": "Dedekind number",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A rapidly growing sequence of numbers that gives the count of distinct information-sharing combinations (PI atoms) possible for a given number of source variables, explaining why PID becomes computationally intractable for many sources."
+    },
+    {
+      "name": "O-information",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A simplified, more computationally scalable measure of overall redundancy versus synergy in a system, used as a practical stand-in when full PID analysis of many variables is intractable."
+    },
+    {
+      "name": "local PID",
+      "kind": "concept",
+      "aliases": [
+        "local information theory"
+      ],
+      "senseHere": "A version of PID that computes redundancy, uniqueness, and synergy for each individual moment or specific configuration of activity, rather than as an average over all possible states, enabling time-resolved tracking of information dynamics."
+    },
+    {
+      "name": "integrated information decomposition",
+      "kind": "concept",
+      "aliases": [
+        "ΦID"
+      ],
+      "senseHere": "An extension of PID that decomposes information shared not just from multiple sources to one target but across multiple targets or across time, allowing analysis of how redundant, unique, and synergistic information evolves or spreads."
+    }
+  ]
+}

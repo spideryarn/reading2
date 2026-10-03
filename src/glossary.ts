@@ -287,15 +287,17 @@ function text(value: unknown): string {
  * **A cited work is not a term**: Citations lists those (Greg, 2026-10-03,
  * spya-zn97q5, on an entry named "Saha et al."). The prompt is what tells a
  * citation from a work the piece discusses, and it is only a request. This is
- * the one shape that needs no judgment, because nothing is *called* "et al.",
- * so `toEntries` drops it whatever the model did. Author-and-year forms
+ * a mechanical backstop for the reported author-label shape, so `toEntries`
+ * drops it whatever the model did. A standalone "et al." survives; a longer
+ * real phrase containing "word et al." can be a false positive, the trade-off
+ * the plan accepts to make "Saha et al." impossible. Author-and-year forms
  * ("Stenhoff (1999)") are left to the prompt: in code they cannot be told from
  * "Blade Runner (1982)". docs/project/glossary.md § A cited work is not a term.
  */
 export function citesByEtAl(value: string): boolean {
-  /* A name before it, so a piece about the abbreviation itself, or a work
-     titled "Et Al.", keeps its entry (GPT Sol's plan review, finding 1). */
-  return /\S\s+et\s+al\b/i.test(value);
+  /* Some text before it, so an entry named only for the abbreviation, or a
+     work titled exactly "Et Al.", survives (GPT Sol's plan review, finding 1). */
+  return /\S\s+et\.?\s+al\b/i.test(value);
 }
 
 /**

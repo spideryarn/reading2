@@ -1,0 +1,152 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3b-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher well known for naming the 'hard problem of consciousness,' the puzzle of why physical processes give rise to subjective experience at all. He has argued conscious machines may be possible in the near future."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [],
+      "background": "An American philosopher known for a famous 1974 essay asking what it is like to be a bat, which framed consciousness as the presence of a subjective, felt quality of experience."
+    },
+    {
+      "name": "Anthropocentrism",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Judging other systems by treating the human case as the definition of how properties like intelligence and consciousness go together, rather than as just one example."
+    },
+    {
+      "name": "Human exceptionalism",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The habit of placing humans at the very top of every hierarchy of beings, sometimes closer to gods than to other animals."
+    },
+    {
+      "name": "Anthropomorphism",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Projecting human qualities, like understanding or feeling, onto non-human things because of a surface resemblance such as using language."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The tendency to see meaningful patterns, like faces or minds, in things that do not actually have them, used here to describe why people project consciousness onto AI.",
+      "background": "A well-known psychological phenomenon, such as seeing a face in a piece of toast or a religious figure in a cinnamon bun."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information processing is, by itself, enough to produce consciousness. The essay argues this assumption is widely taken for granted rather than proven."
+    },
+    {
+      "name": "Alan Turing",
+      "kind": "person",
+      "aliases": [],
+      "background": "British mathematician who laid the theoretical foundations of computer science, formalizing the abstract 'Turing machine' and later proposing the Turing test for machine intelligence."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "An abstract symbol-manipulating device that defines what counts as an algorithm; the essay uses 'Turing world' for the view of brains as this kind of machine, separable into software and hardware.",
+      "background": "Alan Turing's 1930s formalization of computation. A universal Turing machine can simulate any other such machine, which is why software is normally thought of as independent of whatever hardware runs it."
+    },
+    {
+      "name": "McCulloch-Pitts neuron",
+      "kind": "concept",
+      "aliases": [
+        "McCulloch-Pitts neurons"
+      ],
+      "senseHere": "A simplified mathematical model of a nerve cell that sums weighted inputs and produces an output, forming the basis of modern artificial neural networks.",
+      "background": "Introduced by Walter Pitts and Warren McCulloch in an influential early paper showing that networks of such simple units could perform logical operations."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A living system's constant work of maintaining and regenerating its own material basis, which the essay treats as a defining mark of life relevant to consciousness.",
+      "background": "Coined from Greek for 'self-production,' originally by biologists describing how living cells sustain the very structures that keep them alive."
+    },
+    {
+      "name": "Generative entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A system's parts are so interwoven across many scales that no single piece can be swapped out without changing what the whole system does."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A form of computing so tied to its particular physical device that the program effectively dies when that device is destroyed, unlike ordinary transferable software.",
+      "background": "A concept introduced by AI researcher Geoffrey Hinton, motivated partly by the goal of saving the large amounts of energy standard digital computing requires."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive is necessary, though maybe not sufficient, for consciousness, so no non-living system could ever truly have experiences.",
+      "background": "A position developed by philosopher John Searle, who argued consciousness is produced by specific biological properties of brains rather than by any computation a system happens to run."
+    },
+    {
+      "name": "Predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "controlled hallucination"
+      ],
+      "senseHere": "The theory that conscious perception is the brain's best guess about the hidden causes of its sensory signals, constantly corrected by incoming data rather than a direct readout of the world."
+    },
+    {
+      "name": "Interoceptive inference",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The brain's best-guessing about the body's own internal state, such as heart rate or hunger, using the same predictive process it uses to perceive the outside world."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that our entire reality, including our minds, might be an elaborate computer simulation run by a future civilization.",
+      "background": "Associated with philosopher Nick Bostrom, who argued on statistical grounds that we might be more likely to be living inside such a simulation than in original, unsimulated reality."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Used as an analogy for how, even once we know an AI is not conscious, we may be unable to stop feeling that it is.",
+      "background": "A classic visual illusion in which two lines of equal length look different in length because of arrow-like fins added to their ends, an effect that persists no matter how many times you are shown it is false."
+    },
+    {
+      "name": "Garland test",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A test of whether a person still feels a machine is conscious even after being told plainly that it is only a machine, rather than a test of the machine itself.",
+      "background": "Named after Alex Garland, who directed the film 'Ex Machina,' where a character proposes exactly this scenario to his creation's human observer."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "silicon neuron replacement"
+      ],
+      "senseHere": "A hypothetical scenario where brain neurons are swapped one by one for functionally identical silicon parts, meant to show consciousness could survive the switch. The essay argues this fails because a perfect silicon equivalent of a neuron is impossible.",
+      "background": "This thought experiment is most closely associated with philosopher David Chalmers as an argument that consciousness does not depend on being made of biological tissue."
+    }
+  ]
+}

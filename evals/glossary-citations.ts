@@ -38,7 +38,7 @@ const SOURCES = ["glossary.ts", "paperwork.ts", "plain-words.ts"];
 
 /** "et al", or a year: the two marks of an author-and-year citation. A screen, not a verdict. */
 export function looksCited(text: string): boolean {
-  return /\bet\s+al\b/i.test(text) || /\b(1[5-9]|20)\d\d[a-z]?\b/.test(text);
+  return /\bet\.?\s+al\b/i.test(text) || /\b(1[5-9]|20)\d\d[a-z]?\b/.test(text);
 }
 
 interface Entry {

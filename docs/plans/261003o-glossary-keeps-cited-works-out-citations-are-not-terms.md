@@ -74,7 +74,9 @@ rather than unlikely, so it is worth having.
 (drop an entry or alias equal to a cited work's in-text label). It would catch the author-and-year
 shapes in code too. It also makes the glossary step depend on the citations step: its order in the
 pipeline, its staleness, and what to do when Citations has not run. That is two stages braided
-together to catch what the prompt already catches; the measurement below decided against it.
+together to catch a wider class than the reported `et al.` case. The measurement below checks the
+prompt but does not establish the total residual rate: five author-shaped candidates were not
+classified against the text.
 
 **4. A term the reader looks up themselves is left alone.** If a reader types "Saha et al." into
 *Look up a term…*, that is their request, and it is added to their own list as now
@@ -106,8 +108,9 @@ citations), the second was no better, and the third is shipped: the "what is the
 piece" test Sol asked for, a worked BAD/GOOD case from another field, and "do not make up a name the
 piece does not use" (Sol's finding 6). The numbers are in
 [261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md):
-entries named for a cited book, three runs in five before and none in ten after; citation aliases,
-five in five runs before and two in ten after; people kept.
+entries named for a cited book, four runs in five before and none in fifteen after; citation aliases,
+six confirmed aliases in all five runs before and two in fifteen after. Five author-shaped candidates
+were not classified, so two is a lower bound; the small essay samples showed no clear regression.
 
 ### Stage 3 — the code guard ✅
 
@@ -129,30 +132,52 @@ changes.
 
 1. **The "et al" guard can remove a real term** (a piece about the abbreviation, a work titled "Et
    Al.", a study discussed at length but called "Saha et al." throughout); drop it. **Kept,
-   narrowed.** It now needs a name before "et al", so the first two cases survive, and the test
-   covers one. The third is the reported case itself: Greg objected to an entry named "Saha et al.",
-   and however much a piece says about that study, the entry's name is still a citation label. The
-   guard costs one line and makes the reported case impossible rather than unlikely.
+   narrowed.** It now needs text before "et al", so an entry named only "et al." or a work titled
+   exactly "Et Al." survives, and the test covers both spellings. A longer real phrase containing
+   it can still be removed. The study case is the reported case itself: Greg objected to an entry
+   named "Saha et al.", and however much a piece says about that study, the entry's name is still a
+   citation label. The guard costs one line and makes the reported case impossible rather than
+   unlikely.
 2. **The wording needs an operational test and worked cases.** Done; it is the shipped wording, and
-   it is what kept the people.
+   it recovered more of the people in the measured paper than the first wording did.
 3. **The eval cannot see the prompt's effect once the guard is in.** Reordered, above. The final
    arm does include the guard; the investigation says what that is worth (one alias in five old
    runs).
 4. **Two draws and loose criteria will not separate effect from wobble.** Five old-prompt runs and
-   ten of the shipped prompt on the paper that shows the failure; per-candidate rates reported;
+   fifteen of the shipped prompt on the paper that shows the failure; per-candidate rates reported;
    `noema` people run on both sides. Not done: forbidden and protected lists declared before the
-   run (they were read off the first runs), and blind classification (the classes are "is this name
-   only ever a citation in the text", checked against the text).
+   run (they were read off the first runs), and blind classification. The cited-book and alias
+   candidates counted above were checked against the text; five author-shaped candidates were not.
 5. **A visitor to a public article goes on seeing an old list, and cannot hide or re-run.** True,
    and left so: see the question below. A read-time filter stays out, as Sol agreed.
 6. **An idea keeps an entry only if the piece names it.** In the prompt.
 
+## GPT Sol's code review, and what was done with it
+
+[The review](261003o-glossary-keeps-cited-works-out-code-review-sol.md). Verdict: push after the P1
+fixes it made. It fixed three things and I checked each:
+
+1. **The investigation's counts were wrong.** It recounted from the raw lists: cited-book entries in
+   four old runs of five, not three (one was kind `other`, which the report's person-and-work list
+   does not print), and six citation aliases, not five (one had no year, so the regex missed it).
+   Both checked against the JSON; both right. It also cut "essays were unchanged" down to what two
+   and three runs can show.
+2. **Two older sentences in the prompt contradict the new rule**, and it qualified them. **Taken
+   back out.** I re-ran the prompt as it left it (`final-*`): lists on the paper were shorter still
+   and the essay lost people in two runs of three. Those two sentences exist to stop people being
+   dropped. The shipped prompt is the wording that was measured, and a second batch of it (`v3b-*`)
+   confirmed it. Detail in the investigation § Three wordings that were dropped.
+3. **The guard missed "et. al."** Fixed by it, with the test extended; kept.
+
+Its P2, that "Guide to et al." would be dropped, is accepted as it stands.
+
 ## What is not built, and why it is not owed
 
 **The Citations cross-check** (drop an entry or alias equal to a cited work's in-text label). The
-measurement says what still gets through is two aliases in ten runs on the densest paper we have.
-That does not pay for making the glossary step depend on the citations step. It is a passed-over
-option, not a deferred half of this report, so it has no queue entry.
+measurement confirms two aliases in fifteen runs on the densest paper, but five author-shaped candidates
+were not classified, so it does not show that only two get through. The cross-check stays out because
+it would make glossary depend on citations to solve a wider class than the reported `et al.` case.
+It is a passed-over option, not a deferred half of this report, so it has no queue entry.
 
 ## Questions for Greg (none block the work)
 
@@ -165,8 +190,8 @@ option, not a deferred half of this report, so it has no queue entry.
    is rewritten the next time its glossary step runs, and until then the owner can **Hide** an
    entry. A visitor to a shared article cannot do either. If that matters for the public shelf, the
    fix is re-running those glossaries through the ordinary job, which is yours to ask for.
-3. **The cost, on a paper dense with citations:** the list is two or three entries shorter, and in
-   two runs of ten it was much shorter (7 and 12 entries, where the old prompt gave 17 to 19).
+3. **The cost, on a paper dense with citations:** the list is about two entries shorter, and in
+   two runs of fifteen it was much shorter (7 and 12 entries, where the old prompt gave 17 to 19).
    *Find more* fills it in. If short lists turn up in real use, the next thing to try is the
    wording, not the rule.
 
@@ -176,5 +201,7 @@ option, not a deferred half of this report, so it has no queue entry.
   the only session named for the report is this one).
 - 2026-10-03: plan reviewed by GPT Sol (build with the P1 changes); five of six findings taken, one
   kept with a narrower regex.
-- 2026-10-03: measured, 63 glossary calls on Sonnet in all. The first wording's clean result was
+- 2026-10-03: measured, 83 glossary calls on Sonnet in all. The first wording's clean result was
   thrown out because the prompt quoted the eval paper's citations as its examples.
+- 2026-10-03: GPT Sol's code review: push after its P1 fixes. Two of its three fixes kept; its prompt
+  edit measured and reverted.
