@@ -74,11 +74,21 @@ export function applyTheme(theme: Theme, doc: Document = document): void {
 
 const listeners = new Set<() => void>();
 let current: Appearance | null = null;
+/* A choice whose storage write failed belongs to this page until it closes.
+   In particular, a System media-query change and a bfcache restore must not
+   replace it with the older value still in storage. */
+let currentIsVolatile = false;
 
-function refresh(): void {
-  current = readAppearance();
+function applyCurrent(): void {
+  current ??= readAppearance();
   applyTheme(resolveTheme(current, systemPrefersDark()));
   for (const l of listeners) l();
+}
+
+function refreshFromStorage(): void {
+  current = readAppearance();
+  currentIsVolatile = false;
+  applyCurrent();
 }
 
 /**
@@ -95,8 +105,8 @@ export function setAppearance(choice: Appearance): boolean {
     saved = false;
   }
   current = choice;
-  applyTheme(resolveTheme(choice, systemPrefersDark()));
-  for (const l of listeners) l();
+  currentIsVolatile = !saved;
+  applyCurrent();
   return saved;
 }
 
@@ -112,16 +122,19 @@ export function startAppearance(): void {
   started = true;
   if (typeof window.matchMedia === "function") {
     window.matchMedia(SYSTEM_DARK).addEventListener("change", () => {
-      if ((current ?? readAppearance()) === "system") refresh();
+      if ((current ?? readAppearance()) === "system") applyCurrent();
     });
   }
   window.addEventListener("storage", (e) => {
-    if (e.key === APPEARANCE_KEY || e.key === null) refresh();
+    if (e.key === APPEARANCE_KEY || e.key === null) refreshFromStorage();
   });
   window.addEventListener("pageshow", (e) => {
-    if (e.persisted) refresh();
+    if (e.persisted) {
+      if (currentIsVolatile) applyCurrent();
+      else refreshFromStorage();
+    }
   });
-  refresh();
+  refreshFromStorage();
 }
 
 function subscribe(l: () => void): () => void {
@@ -136,6 +149,11 @@ function snapshot(): Appearance {
 /** The current choice, for the /profile control. */
 export function useAppearance(): Appearance {
   return useSyncExternalStore(subscribe, snapshot, () => DEFAULT_APPEARANCE);
+}
+
+/** Whether the current choice survived the last localStorage write. */
+export function useAppearanceSaved(): boolean {
+  return useSyncExternalStore(subscribe, () => !currentIsVolatile, () => true);
 }
 
 /** The theme on the page now, read off the attribute rather than recomputed. */

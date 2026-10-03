@@ -158,7 +158,11 @@ const PAIRS: [string, string, number][] = [
   ["--foreground", "--sidebar", 7],
   ["--muted-foreground", "--sidebar", 4.5],
   ["--highlight-ink", "--background", 4.5],
+  ["--highlight-foreground", "--highlight", 4.5],
   ["--popover-foreground", "--popover", 7],
+  /* A focus indicator is non-text: 3:1 (WCAG 1.4.11). */
+  ["--ring", "--background", 3],
+  ["--highlight-text", "--background", 3],
 ];
 
 describe.each([
@@ -168,4 +172,14 @@ describe.each([
   it.each(PAIRS)("%s on %s clears %s:1", (fg, bg, floor) => {
     expect(contrast(fg, bg, palette)).toBeGreaterThanOrEqual(floor);
   });
+});
+
+it("keeps Dark's former filled-control ink while making Light's destructive button legible", () => {
+  expect(dark.get("--highlight-foreground")).toBe("var(--page)");
+  expect(dark.get("--destructive-button-foreground")).toBe("oklch(1 0 0)");
+
+  const lightPalette = new Map([...dark, ...light]);
+  expect(contrast("--destructive-button-foreground", "--destructive", lightPalette)).toBeGreaterThanOrEqual(
+    4.5,
+  );
 });

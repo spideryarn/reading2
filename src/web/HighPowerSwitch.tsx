@@ -113,7 +113,7 @@ export function HighPowerSwitch({
           type="checkbox"
           /* The native box, tinted — as SettingsSection.tsx's experimental
              switch, and for the reason written there. */
-          className="tw:[accent-color:var(--highlight)]"
+          className="tw:[accent-color:var(--highlight-text)]"
           checked={Boolean(since)}
           disabled={!loaded || saving}
           onChange={(e) => set(e.target.checked)}

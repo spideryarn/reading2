@@ -70,7 +70,7 @@
 /* The open one is not truncated — the one label in the row that has to be
    readable is the one saying where you are. The row already scrolls. */
 .ill-plate-chip.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
-.ill-plate-chip:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.ill-plate-chip:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .ill-up, .ill-zoom {
   display: inline-flex; align-items: center; gap: 0.2rem;
@@ -82,7 +82,7 @@
 .ill-up { flex: none; }
 .ill-zoom { margin-left: auto; }
 .ill-up:hover, .ill-zoom:hover { background: var(--surface-raised); color: var(--ink); }
-.ill-up:focus-visible, .ill-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.ill-up:focus-visible, .ill-zoom:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* ---- the plate, and the three things it can be instead ---- */
 
@@ -172,7 +172,7 @@
   font-family: var(--font-ui);
 }
 .ill-row:hover { background: var(--surface-raised); }
-.ill-row:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.ill-row:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 /* **The caption that is lettered on the plate itself**, so the row and the
    picture can be matched by eye. Small, tracked and quiet: it is a wayfinding
    label, and the two lines under it — what is drawn, and the article's own

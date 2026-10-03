@@ -70,7 +70,7 @@ export function SettingsSection() {
                a class, because this page is written in `tw:` throughout and a
                one-property rule in the stylesheet would be the only thing on
                `/profile` that is not. */
-            className="tw:[accent-color:var(--highlight)]"
+            className="tw:[accent-color:var(--highlight-text)]"
             checked={experimental.on}
             /* **Until the server has answered, there is nothing to toggle.** An
                enabled switch drawn from a default would let the reader send

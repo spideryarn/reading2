@@ -12,7 +12,9 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   APPEARANCE_KEY,
@@ -21,7 +23,9 @@ import {
   applyTheme,
   parseAppearance,
   resolveTheme,
+  startAppearance,
 } from "../src/web/appearance.js";
+import { AppearanceSetting } from "../src/web/AppearanceSetting.js";
 
 const html = readFileSync(join(import.meta.dirname, "..", "index.html"), "utf8");
 const inline = /<script id="appearance-boot">([\s\S]*?)<\/script>/.exec(html)?.[1];
@@ -56,6 +60,9 @@ function runInline(stored: string | null | "throws", osDark: boolean): Document 
 
 afterEach(() => {
   delete document.documentElement.dataset.theme;
+  Reflect.deleteProperty(window, "localStorage");
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("index.html's before-paint script", () => {
@@ -110,5 +117,77 @@ describe("applyTheme", () => {
     expect(doc.documentElement.dataset.theme).toBe("light");
     expect(doc.querySelector('meta[name="color-scheme"]')?.getAttribute("content")).toBe("light");
     expect(doc.querySelector('meta[name="theme-color"]')?.getAttribute("content")).toBe("#fafafa");
+  });
+});
+
+describe("the live appearance", () => {
+  it("keeps an unsaved System choice through OS changes and a bfcache restore", () => {
+    let osDark = false;
+    let stored = "light";
+    let mediaChange: () => void = () => {
+      throw new Error("System listener was not installed");
+    };
+    let pageShow: (event: PageTransitionEvent) => void = (_event) => {
+      throw new Error("pageshow listener was not installed");
+    };
+    let storageChange: (event: StorageEvent) => void = (_event) => {
+      throw new Error("storage listener was not installed");
+    };
+
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => (key === APPEARANCE_KEY ? stored : null),
+        setItem: () => {
+          throw new DOMException("blocked", "SecurityError");
+        },
+      },
+    });
+    vi.stubGlobal("matchMedia", () => ({
+      get matches() {
+        return osDark;
+      },
+      addEventListener: (_type: string, listener: () => void) => {
+        mediaChange = listener;
+      },
+    }));
+    vi.spyOn(window, "addEventListener").mockImplementation((type, listener) => {
+      if (type === "pageshow") pageShow = listener as (event: PageTransitionEvent) => void;
+      if (type === "storage") storageChange = listener as (event: StorageEvent) => void;
+    });
+
+    startAppearance();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    act(() => root.render(createElement(AppearanceSetting)));
+    const radio = (value: string) => host.querySelector<HTMLInputElement>(`input[value="${value}"]`)!;
+    expect(radio("light").checked).toBe(true);
+    expect(host.textContent).toContain("Saved on this device.");
+
+    act(() => radio("system").click());
+    expect(radio("system").checked).toBe(true);
+    expect(host.textContent).toContain("Couldn't save it on this device");
+
+    osDark = true;
+    act(() => mediaChange());
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(radio("system").checked).toBe(true);
+    expect(host.textContent).toContain("Couldn't save it on this device");
+
+    act(() => pageShow({ persisted: true } as PageTransitionEvent));
+    osDark = false;
+    act(() => mediaChange());
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(radio("system").checked).toBe(true);
+
+    /* A real cross-tab write supersedes both the page-only choice and its
+       failure message. */
+    stored = "dark";
+    act(() => storageChange({ key: APPEARANCE_KEY } as StorageEvent));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(radio("dark").checked).toBe(true);
+    expect(host.textContent).toContain("Saved on this device.");
+    act(() => root.unmount());
   });
 });

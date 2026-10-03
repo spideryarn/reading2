@@ -12,18 +12,21 @@
  * kind of control.
  */
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useState } from "react";
 
-import { type Appearance, APPEARANCES, setAppearance, useAppearance } from "./appearance.js";
+import {
+  type Appearance,
+  APPEARANCES,
+  setAppearance,
+  useAppearance,
+  useAppearanceSaved,
+} from "./appearance.js";
 
 const LABEL: Record<Appearance, string> = { system: "System", light: "Light", dark: "Dark" };
 const ICON: Record<Appearance, typeof Sun> = { system: Monitor, light: Sun, dark: Moon };
 
 export function AppearanceSetting() {
   const choice = useAppearance();
-  /* `null` until something is picked on this visit: a choice read back from
-     storage was, by definition, saved. */
-  const [saved, setSaved] = useState<boolean | null>(null);
+  const saved = useAppearanceSaved();
   return (
     <fieldset className="tw:m-0 tw:flex tw:flex-col tw:gap-1.5 tw:border-0 tw:p-0">
       <legend className="tw:mb-1.5 tw:p-0 tw:text-sm tw:text-foreground">Appearance</legend>
@@ -39,9 +42,9 @@ export function AppearanceSetting() {
                 type="radio"
                 name="appearance"
                 value={value}
-                className="tw:[accent-color:var(--highlight)]"
+                className="tw:[accent-color:var(--highlight-text)]"
                 checked={choice === value}
-                onChange={() => setSaved(setAppearance(value))}
+                onChange={() => setAppearance(value)}
               />
               <Icon size={13} className="tw:text-ink-faint" />
               <span>{LABEL[value]}</span>
@@ -51,7 +54,7 @@ export function AppearanceSetting() {
       </div>
       <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
         {choice === "system" ? "Follows your device's light or dark setting. " : ""}
-        {saved === false
+        {!saved
           ? "Couldn't save it on this device, so it lasts until you close this page."
           : "Saved on this device."}
       </p>

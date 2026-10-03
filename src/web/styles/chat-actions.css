@@ -141,7 +141,7 @@
   line-height: 1.4;
   resize: vertical;
 }
-.chat-edit-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-edit-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* The count of what an edit will throw away. The only warning there is, so it
    is the one thing in the editing box that is not quiet. */

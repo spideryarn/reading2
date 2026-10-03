@@ -398,7 +398,8 @@ the element, and it only exists while Tab is held. It is also not a misconfigura
 Two fixes, both in [tokens.css](../../styles/tokens.css) and
 [`toggle.tsx`](../../src/web/components/ui/toggle.tsx):
 
-- `--ring` is the app's orange, 7.3:1, matching the focus convention the hand-written CSS already
+- `--ring` is the app's orange, 7.3:1 on the dark page (on the light one it is `--highlight-ink`
+  instead — [§ Appearance](#appearance-light-dark-and-system)), matching the focus convention the hand-written CSS already
   had in `.spine-hit` ([`styles/spine.css`](../../src/web/styles/spine.css)) and `.cmt-search`
   ([`styles/annotations.css`](../../src/web/styles/annotations.css)). The token alone could not fix it — halved, even the orange is
   2.6:1 — so the `/50` came off.
@@ -471,7 +472,8 @@ What is true of the dark palette, and still worth knowing before touching it:
 - **The orange is `#DB8A45` as a fill in both themes**, and better on dark: about 7.8:1 on the
   near-black page, about 2.6:1 on white. So orange *as text*, or as a thin line or glyph, is
   `--highlight-text` (`tw:text-highlight-text`): the plain orange on dark, `--highlight-ink` — the
-  orange taken towards black — on light. Fills, borders, outlines and washes stay `--highlight`. Text
+  orange taken towards black — on light. Focus outlines, `--ring` and native `accent-color` use it
+  too, because a focus indicator needs 3:1. Fills, borders and washes stay `--highlight`. Text
   *on* an orange fill is `--primary-foreground`.
 - **Neither page is pure.** Dark is `oklch(0.145 0 0)` with text at `oklch(0.97 0 0)`, because pure
   white on pure black haloes at reading sizes; the other half of that fix is `--reading-weight: 450`

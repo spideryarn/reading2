@@ -116,8 +116,8 @@
        invalid-declaration trap that makes it worth writing out. */
     --quote-stroke-color: rgb(var(--quote-stroke-rgb) / 0.95);
 
-    /* The sheet an article's pictures are printed on, and the one deliberately
-       LIGHT surface in a dark-only app.
+    /* The sheet an article's pictures are printed on, deliberately light in
+       either appearance.
 
        Article images are routinely PNGs with an alpha channel carrying
        near-black ink — equations, line diagrams, and data tables rendered as
@@ -139,7 +139,7 @@
        rectangle on a near-black page glares. */
     --figure-sheet: #f4f3f0;
 
-    /* ---- surfaces and text (dark only; see the header) ---------------- */
+    /* ---- surfaces and text (Dark; Light overrides follow below) ------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
        because pure white on pure black haloes at reading sizes. That was first noticed in Georgia,
        and it did not go away when the reading face became Geist — light-on-dark bloom is about the
@@ -169,6 +169,10 @@
     --popover: oklch(0.26 0 0);
     --popover-foreground: oklch(0.97 0 0);
     --destructive-foreground: oklch(0.97 0 0);
+    /* The destructive Button used literal white before appearance themes.
+       This semantic name preserves that Dark rendering without fixing Light
+       to a colour keyword. */
+    --destructive-button-foreground: oklch(1 0 0);
 
     --border: oklch(0.27 0 0);
     --input: oklch(0.3 0 0);
@@ -176,7 +180,7 @@
        purpose. Two reasons, and the second is the real one.
 
        First, consistency: this app already had a focus convention before any
-       shadcn arrived — `outline: 1px solid var(--highlight)`, on .spine-hit and
+       shadcn arrived — `outline: 1px solid var(--highlight-text)`, on .spine-hit and
        on .cmt-search in styles.css. A second, greyer convention arriving with
        the components would have been a split, not an addition.
 
@@ -263,8 +267,8 @@
     /* Geist is a VARIABLE face (weight axis 100-900), so body weight need not be a round 400.
        Light text on a dark ground optically thins — the same bloom that made us pull --foreground
        back off pure white. The original app's own wishlist named the fix and could not use it,
-       having no variable face: "add ~50 to the weight axis in dark mode". We are dark-only and now
-       have one, so we take it. 450, not 400. Drop this to 400 the day a light theme appears. */
+       having no variable face: "add ~50 to the weight axis in dark mode". Dark takes it at 450;
+       the Light block below returns to 400. */
     --reading-weight: 450;
 
     /* ---- vertical rhythm (the article column only) --------------------- */
@@ -379,12 +383,18 @@
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.2 0 0);
     --destructive-foreground: oklch(0.985 0 0);
+    --destructive-button-foreground: var(--destructive-foreground);
     --border: oklch(0.885 0 0);
     --input: oklch(0.85 0 0);
     --sidebar: oklch(0.96 0 0);
     --sidebar-foreground: oklch(0.2 0 0);
     --sidebar-accent: oklch(0.92 0 0);
     --sidebar-border: oklch(0.885 0 0);
+    /* The focus ring, darkened with the orange-as-a-line token: the raw orange is
+       ~2.6:1 on this page, under the 3:1 a focus indicator needs (WCAG 1.4.11).
+       Every hand-written focus outline and native `accent-color` reads
+       --highlight-text for the same reason (GPT Sol, code review of 261003e). */
+    --ring: var(--highlight-ink);
 
     /* Dark text on a light ground does not bloom, so the extra weight the dark
        page needs (--reading-weight, above) would read as bold here. */

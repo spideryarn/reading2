@@ -40,8 +40,8 @@ Kept in full under `docs/plans/`, because the reasoning is most of the value and
 the first place to look when one of these disappoints on screen.
 
 - **[The brief](../plans/260907f-logo-animations-brief.md)** — the DOM, the constraints, the mark
-  itself, and **two corrections** made after the fact: the app is dark-only (the brief said
-  otherwise), and the two copies of the wordmark are set in different typefaces.
+  itself, and **two corrections** made after the fact: the app was dark-only at the time (the brief
+  said otherwise), and the two copies of the wordmark are set in different typefaces.
 - **Eight longlists, about 140 ideas**, each written by a subagent given a different framing and
   told to stay in its lane: the product's
   [principles](../plans/260907f-logo-animations-longlist-principles.md), its

@@ -256,12 +256,23 @@ describe("assignSlots", () => {
  * hold a colour drawn for paper to the near-black page's rules.
  */
 const paletteCss = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
+const tokenCss = readFileSync(path.join(root, "styles/tokens.css"), "utf8");
 const PALETTE_BLOCKS = {
   dark: [...paletteCss.matchAll(/^:root\s*\{([\s\S]*?)^\}/gm)].map((m) => m[1] ?? ""),
   light: [...paletteCss.matchAll(/^:root\[data-theme="light"\]\s*\{([\s\S]*?)^\}/gm)].map(
     (m) => m[1] ?? "",
   ),
 };
+
+/** The actual neutral page lightness in each token block, not a copied value. */
+function pageLightness(theme: "dark" | "light"): number {
+  const selector = theme === "dark" ? ":root" : ':root[data-theme="light"]';
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const body = new RegExp(`^${escaped}\\s*\\{([\\s\\S]*?)^\\}`, "gm").exec(tokenCss)?.[1] ?? "";
+  const match = /--background\s*:\s*oklch\(\s*([\d.]+)\s+0\s+0\s*\)/.exec(body);
+  if (!match?.[1]) throw new Error(`no neutral --background in the ${theme} token block`);
+  return Number(match[1]);
+}
 
 describe("the stylesheet holds one dark palette and one light one", () => {
   it("has exactly one block of each, and every --cat-N-rgb lives in one of them", () => {
@@ -374,9 +385,9 @@ describe.each(["dark", "light"] as const)("the palette the slots index into, %s"
        perfectly. Measured rather than trusted, because eight of these were
        generated and a generator is exactly the thing that can be wrong the
        same way sixteen times. WCAG's 3:1 for a mark that is not text, against
-       each theme's own page (`oklch(0.145 0 0)` and `oklch(0.985 0 0)`; for a
-       neutral, relative luminance is OKLab L cubed). */
-    const page = (theme === "dark" ? 0.145 : 0.985) ** 3;
+       each theme's own `--background` in styles/tokens.css; for a neutral,
+       relative luminance is OKLab L cubed. */
+    const page = pageLightness(theme) ** 3;
     for (const [slot, triplet] of triplets) {
       const y = luminance(triplet);
       const ratio = (Math.max(y, page) + 0.05) / (Math.min(y, page) + 0.05);

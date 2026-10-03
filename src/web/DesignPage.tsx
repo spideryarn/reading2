@@ -268,7 +268,7 @@ const SWATCHES: { group: string; names: string[] }[] = [
   },
   { group: "Ink", names: ["--ink", "--ink-soft", "--ink-faint"] },
   {
-    /* The one deliberately LIGHT surface in a dark-only app, and the one whose
+    /* The one deliberately light surface in either appearance, and the one whose
        contrast figure is meaningless as printed: the ratio measured beside it is
        against our ink, and nothing of ours is ever drawn on it. What sits there
        is a stranger's picture, whose ink we do not choose and cannot see (the
@@ -1093,7 +1093,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           <strong>Then the two switches a reader does see</strong>, and neither is a{" "}
           <code className="design-token">Toggle</code>: both are the native checkbox in a label,
-          tinted with <code className="design-token">accent-color: var(--highlight)</code>, which is
+          tinted with <code className="design-token">accent-color: var(--highlight-text)</code>, which is
           every other boolean in this app. <em>High-powered AI</em> is{" "}
           <code className="design-token">HighPowerSwitch</code>, off and on, for an article that does
           not exist. <em>Experimental features</em> is <code className="design-token">SettingsSection</code>{" "}

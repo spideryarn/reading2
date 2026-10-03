@@ -60,7 +60,7 @@
    that has to be readable, cut off to make room for the ones that do not. The
    row already scrolls, so this costs the others nothing. */
 .sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); max-width: none; }
-.sk-scene:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.sk-scene:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .sk-up, .sk-crumb, .sk-zoom {
   display: inline-flex; align-items: center; gap: 0.2rem;
@@ -75,7 +75,7 @@
 .sk-bar > .prof-badge { margin-left: auto; flex: none; }
 .sk-bar > .prof-badge + .sk-zoom { margin-left: 0; }
 .sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
-.sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Up sits before the scene row, not after it: it is the way out of where you
    are, and the row is a list of where you could be. */
 .sk-up { flex: none; }
@@ -341,7 +341,7 @@
    The same rule the other three pictures follow (docs/project/diagram.md). */
 .sk-node.on .sk-shape { stroke: var(--highlight); stroke-width: 2.5; }
 .sk-node.focus .sk-shape { stroke: var(--highlight-ink); stroke-width: 2; }
-.sk-svg:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.sk-svg:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: -2px; }
 
 /* ---- the card under the picture ---- */
 

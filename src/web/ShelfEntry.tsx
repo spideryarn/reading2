@@ -211,7 +211,7 @@ export function ShelfCard({
     /* `@container`: the card's own width decides whether a finger gets the
        icons or the "⋯" (`Actions` § `fingerRow`), because the shelf's column,
        not the window, is what has to fit them. */
-    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+    <article className="tw:@container tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight-text">
       <div className="tw:flex tw:items-start tw:gap-3">
         {editing ? (
           <TitleEditor

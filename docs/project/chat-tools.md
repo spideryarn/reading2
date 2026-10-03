@@ -621,7 +621,7 @@ Three things it could **not** confirm, recorded rather than rounded up to a pass
 - **No label was long enough to wrap.** The panel is ~400px and the longest label tried was
   `searched this article for “consciousness”`. The wrapping rules in `.chat-tool` are written and
   unverified.
-- **Dark mode was not checked** — there is no theme toggle in the app to check it with.
+- **A second appearance was not checked** — the app was dark-only at the time.
 
 It also found the bug in the section below, and one that is not this feature's:
 [260826a-chat-mode.md § What is still open](../plans/260826a-chat-mode.md#what-is-still-open) now records a dropped

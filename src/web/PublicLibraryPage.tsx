@@ -315,7 +315,7 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
   ].filter(Boolean) as string[];
 
   return (
-    <article className="tw:relative tw:h-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+    <article className="tw:relative tw:h-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight-text">
       <h2 className={withVoice("tw:m-0 tw:text-xl tw:leading-snug", articleTitleVoice(false))}>
         {/* The stretched link: a real `<a href>` whose ::after covers the card,
             so the whole card is a click target and ⌘-click still opens a tab.

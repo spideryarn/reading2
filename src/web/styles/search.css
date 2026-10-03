@@ -42,7 +42,7 @@
   font-size: 0.94rem;
   line-height: 1.4;
 }
-.srch-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .srch-input::placeholder { color: var(--ink-faint); }
 /* The browser's own clear button on `type="search"`, which on a dark page is a
    dark X on a dark field. Ours is Escape, and it is in the keydown handler. */
@@ -161,7 +161,7 @@
   width: 0.85rem;
   height: 0.85rem;
   margin: 0;
-  accent-color: var(--highlight);
+  accent-color: var(--highlight-text);
   cursor: pointer;
 }
 /* Each row's box takes the search's own colour, so the control and the mark it
@@ -226,7 +226,7 @@
    it. The ↺ and 🗑 beside it keep the browser ring; they are secondary, and this
    is the control the keyboard is here for. */
 .srch-saved-body:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: -2px;
 }
 .srch-saved-criterion {
@@ -362,7 +362,7 @@
 }
 .srch-picker-swatch:hover { border-color: color-mix(in oklab, var(--ink) 55%, transparent); }
 .srch-picker-swatch:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 /* The ninth choice, and the only one with words on it — "whichever colour it
@@ -386,7 +386,7 @@
 }
 .srch-picker-auto.current { color: var(--ink); border-color: var(--rule-strong); }
 .srch-picker-auto:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: -1px;
 }
 
@@ -552,7 +552,7 @@
    list is a scroller, and an outward ring on the first or last row is clipped. */
 .srch-hit-btn:focus-visible,
 .srch-gutter:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: -2px;
 }
 /* The row's own left edge in its search's hue — the same pairing the saved rows

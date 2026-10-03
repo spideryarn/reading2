@@ -324,7 +324,7 @@
   background: none;
   cursor: pointer;
 }
-.prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.prose-card-open:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* **A quote's half** — ProseHoverCard.tsx § `QuoteCard`, plan 261002h § 2.
    The position sits at the label's right; the two raw scores as the band's
@@ -392,7 +392,7 @@
 .prose-card-act:disabled { opacity: 0.45; cursor: default; }
 .prose-card-act:disabled:hover { color: var(--ink-faint); }
 .prose-card-act svg { flex: none; }
-.prose-card-act:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.prose-card-act:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .prose-card-failed { color: var(--highlight-ink); }
 
 

@@ -171,3 +171,32 @@ CSP anywhere). Every finding accepted:
     drawn over the page. Over a light page that is pale-on-pale. It cannot be fixed by swapping the
     meta at runtime (iOS reads it at install/launch), and nobody here can check it from the box.
     Named in web-client.md as a known gap.
+
+## What landed, the browser check, and the code review
+
+**Stages 1 and 2 landed together** in `0f49c71ef`: two Opus subagents did the scales (and the scale
+tests, now per theme) and the literal sweep (only ~59 real literals once comments and channel forms
+were excluded, not ~190; most were already theme-neutral shadows). The sweep found a wider problem
+than literals: about 90 places used the fill orange as *text*, ~2.6:1 on the light page. Those moved
+to a new `--highlight-text` (the orange on dark, `--highlight-ink` on light), 178 sites, dark
+unchanged.
+
+**Browser check** (Sonnet, Playwright, 1280 and 390, both themes; screenshots
+`261003e-shot-*.png`): no flash (the attribute is `light` from document start under a dark OS), the
+radios apply at once, System follows an emulated OS switch live, unset is Dark. No contrast problems
+found on any page. One thing changed from it: the Google sign-in button now uses Google's specified
+light palette in Light rather than staying a near-black pill. The landing page's product screenshot is
+a dark-theme image on a light page — deferred with the other baked-in pictures.
+
+**Code review** ([261003e-light-dark-and-system-code-review-sol.md](261003e-light-dark-and-system-code-review-sol.md)),
+GPT Sol fixing as it went: an unsaved choice (storage refused) could be reverted by the next OS change
+or bfcache restore, so page-only choices are tracked and the control reads `useAppearanceSaved()`;
+Dark had stopped being pixel-identical in two places (destructive button text, text on orange fills),
+fixed with `--destructive-button-foreground` / `--highlight-foreground`; three logo animations
+escaped the text sweep; two scale tests measured against copied page values rather than the real
+tokens; stale dark-only comments. **One it left for me, now done:** focus indicators. `--ring` and 95
+focus outlines, 11 `accent-color`s, 5 ring/outline utilities and 11 focus borders used the raw orange,
+under the 3:1 a focus indicator needs on the light page. All now use `--highlight-text`
+(`--ring` is `--highlight-ink` in light); the palette test measures `--ring` and `--highlight-text` at
+3:1 (seen red with the raw orange put back), and the fixed-colours guard rejects raw orange in
+outlines and accents as well as text.

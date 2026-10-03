@@ -449,7 +449,7 @@ export function PageContents({
         placeholder="Search this page"
         enterKeyHint="search"
         aria-label="Search this page's sections"
-        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight tw:focus-visible:outline-none"
+        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Kept mounted before the first keystroke: a live region inserted with
           its first message is not announced consistently. Sighted readers only

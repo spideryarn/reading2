@@ -67,7 +67,7 @@ export function BackLink({
       <Link
         href={href}
         aria-label={label}
-        className={`tw:-ml-1.5 tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-ink-faint tw:no-underline tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-highlight tw:pointer-coarse:size-10 ${className ?? ""}`}
+        className={`tw:-ml-1.5 tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-ink-faint tw:no-underline tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-highlight-text tw:pointer-coarse:size-10 ${className ?? ""}`}
       >
         <Icon size={16} aria-hidden="true" />
       </Link>

@@ -38,6 +38,7 @@ import { HUE_STOPS } from "../src/web/topic-colour.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const css = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
+const tokenCss = readFileSync(path.join(root, "styles/tokens.css"), "utf8");
 
 type Theme = "dark" | "light";
 const THEMES: readonly Theme[] = ["dark", "light"];
@@ -48,20 +49,23 @@ const SELECTOR: Record<Theme, string> = {
   light: ':root[data-theme="light"]',
 };
 
-/**
- * `--background` in each theme, as OKLab L — so "is this visible on the page"
- * is a real question. styles/tokens.css: `oklch(0.145 0 0)` and
- * `oklch(0.985 0 0)`.
- */
-const PAGE_L: Record<Theme, number> = { dark: 0.145, light: 0.985 };
-
 /** Every top-level `<selector> { … }` body in the file with exactly this selector. */
-function blocksFor(selector: string): string[] {
+function blocksFor(selector: string, source = css): string[] {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return [...css.matchAll(new RegExp(`^${escaped}\\s*\\{([\\s\\S]*?)^\\}`, "gm"))].map(
+  return [...source.matchAll(new RegExp(`^${escaped}\\s*\\{([\\s\\S]*?)^\\}`, "gm"))].map(
     (m) => m[1] ?? "",
   );
 }
+
+/** The real page token in each theme, as OKLab L. */
+const PAGE_L = Object.fromEntries(
+  THEMES.map((theme) => {
+    const body = blocksFor(SELECTOR[theme], tokenCss)[0] ?? "";
+    const match = /--background\s*:\s*oklch\(\s*([\d.]+)\s+0\s+0\s*\)/.exec(body);
+    if (!match?.[1]) throw new Error(`no neutral --background in the ${theme} token block`);
+    return [theme, Number(match[1])];
+  }),
+) as Record<Theme, number>;
 
 const BLOCK: Record<Theme, string> = {
   dark: blocksFor(SELECTOR.dark)[0] ?? "",

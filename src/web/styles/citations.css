@@ -260,7 +260,7 @@
 .cite-inv-toggle:hover,
 .cite-inv-again:hover { color: var(--ink); }
 .cite-inv-toggle:focus-visible,
-.cite-inv-again:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cite-inv-again:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .cite-inv-again[aria-disabled="true"],
 .cite-investigate[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 

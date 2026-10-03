@@ -8,7 +8,7 @@
  * backwards in the other: a white hairline that separates a panel on the dark
  * page is no line at all on the light one. The tokens say the direction
  * instead — `--toward-ink` / `--toward-page`, `--toward-ink-rgb` for a
- * translucent lift, `--primary-foreground` for text on the orange — and they
+ * translucent lift, `--highlight-foreground` for text on orange fills — and they
  * flip in the light block of src/web/styles/tokens.css.
  *
  * So: a component stylesheet under src/web/styles/ (not tokens.css), or any
@@ -90,6 +90,11 @@ const ALLOWLIST: readonly Allowed[] = [
     why: "the scrim behind the command bar dialog",
   },
   // ---- not ours to recolour, or not the app ----
+  {
+    file: "src/web/SignInControls.tsx",
+    contains: 'background: "#FFFFFF"',
+    why: "Google's specified light-theme sign-in button fill; the button is themed by choosing Google's palette, not ours",
+  },
   {
     file: "src/web/ViewportProbe.tsx",
     contains: 'color: "#fff"',
@@ -252,7 +257,7 @@ describe("no bare white or black outside the token files", () => {
     expect(
       unexplained,
       "Bare white/black is right in one theme and backwards in the other. Use a token " +
-        "(--toward-ink, --toward-page, rgb(var(--toward-ink-rgb) / a), --primary-foreground, " +
+        "(--toward-ink, --toward-page, rgb(var(--toward-ink-rgb) / a), --highlight-foreground, " +
         "--ink, --page) or, if it is genuinely theme-neutral, add it to ALLOWLIST with a reason.",
     ).toEqual([]);
   });
@@ -266,6 +271,41 @@ describe("no bare white or black outside the token files", () => {
 
   it("every allowlist entry says why", () => {
     for (const a of ALLOWLIST) expect(a.why.length, `${a.file}: ${a.contains}`).toBeGreaterThan(20);
+  });
+});
+
+describe("the fill orange is not used as text", () => {
+  it("uses --highlight-text for CSS color and Tailwind text utilities", () => {
+    const hits: string[] = [];
+    for (const file of walk(STYLES, (p) => p.endsWith(".css") && !p.endsWith("/tokens.css"))) {
+      stripCssComments(readFileSync(file, "utf8"))
+        .split("\n")
+        .forEach((line, i) => {
+          /* Text, and since the code review the focus outlines and native
+             accents too: a focus indicator needs 3:1, which the raw orange
+             misses on the light page. */
+          if (
+            /(?<![-\w])color\s*:\s*var\(--highlight\)\s*;/.test(line) ||
+            /outline[a-z-]*\s*:[^;]*var\(--highlight\)/.test(line) ||
+            /accent-color\s*:\s*var\(--highlight\)/.test(line)
+          ) {
+            hits.push(`${relative(ROOT, file)}:${i + 1}`);
+          }
+        });
+    }
+    for (const file of walk(WEB, (p) => /\.tsx?$/.test(p) && !p.endsWith(".d.ts"))) {
+      stripTsComments(readFileSync(file, "utf8"))
+        .split("\n")
+        .forEach((line, i) => {
+          if (
+            /(?:^|:)(?:text|outline|ring)-highlight(?![-\w])/.test(line) ||
+            /accent-color:var\(--highlight\)/.test(line)
+          ) {
+            hits.push(`${relative(ROOT, file)}:${i + 1}`);
+          }
+        });
+    }
+    expect(hits, "--highlight is a fill; text needs the contrast-safe --highlight-text").toEqual([]);
   });
 });
 

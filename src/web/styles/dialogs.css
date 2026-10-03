@@ -155,7 +155,7 @@
   resize: vertical;
 }
 .annotate-dialog textarea::placeholder { color: var(--ink-faint); }
-.annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 /* The tick-box is the whole of the paid/free decision, so it gets a row of its
    own rather than sitting in the button strip where it would read as a third

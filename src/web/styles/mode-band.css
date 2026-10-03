@@ -821,7 +821,7 @@
   line-height: 1.4;
   resize: none;
 }
-.chat-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.chat-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
    should be bigger and maybe have some kind of outline to indicate that it's
    probably the most important button in that little area."* So it is the one
@@ -874,7 +874,7 @@
 /* Brightness, not a colour: an orange fill composited toward the page goes
    darker on this ground (controls.md § Two hover languages). */
 .chat-send[type="submit"]:not([aria-disabled="true"]):hover { filter: brightness(1.1); }
-.chat-send:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-send:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* ---- Remember mode's composer ----
    Same component as chat's, two differences on screen: the box is a place to
@@ -961,15 +961,13 @@
 .chat-live-btn.on {
   border-color: var(--highlight);
   background: var(--highlight);
-  /* `--primary-foreground`, which is what `.prof-mic.on` uses — the
-     microphone beside this one, lit the same way. (It was `--page` until
-     2026-10-03, the same near-black on the dark page and near-white, at about
-     2.6:1, on the light one.) It said `--paper` for about an hour, which is a
+  /* `--highlight-foreground`, which is what `.prof-mic.on` uses — the
+     microphone beside this one, lit the same way. It said `--paper` for about an hour, which is a
      token this app does not have: an undefined custom property with no fallback
      makes the whole declaration invalid, so the glyph would have *inherited*
      its colour and gone near-invisible on the orange. Nothing errors.
      tests/css-tokens.test.ts is the only thing that would ever have said so. */
-  color: var(--primary-foreground);
+  color: var(--highlight-foreground);
 }
 .chat-live-label {
   font-size: 0.88rem;
@@ -979,7 +977,7 @@
 /* The label follows the button, so "Listening…" carries the same signal the
    colour does — said twice, for the one control in this app worth being
    unambiguous about. */
-.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--primary-foreground); }
+.chat-live:has(.chat-live-btn.on) .chat-live-label { color: var(--highlight-foreground); }
 
 /* **The live session's one status line**: a state word in a pill whose colour
    says it too, then the meter, then a sentence. Listening is the only filled
@@ -1004,7 +1002,7 @@
 .chat-live-status.is-listening .chat-live-state {
   border-color: var(--highlight);
   background: var(--highlight);
-  color: var(--primary-foreground);
+  color: var(--highlight-foreground);
 }
 .chat-live-status.is-error { border-color: var(--destructive); }
 .chat-live-status.is-error .chat-live-state {
@@ -1050,7 +1048,7 @@
 .chat-live-stall { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem; }
 .chat-live-advanced { margin-top: 0.45rem; }
 .chat-live-advanced summary { cursor: pointer; color: var(--ink-faint); width: max-content; }
-.chat-live-advanced summary:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-live-advanced summary:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 .chat-live-advanced-note { margin: 0.2rem 0 0.45rem; color: var(--ink-faint); }
 
 /* **The live words in the thread** (LiveTail.tsx): the same bubbles a saved
@@ -1086,7 +1084,7 @@
 .chat-live-status button { border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--ink); background: var(--panel); padding: 0.2rem 0.4rem; font: inherit; cursor: pointer; }
 .chat-live-status button:hover:not(:disabled) { border-color: var(--highlight); color: var(--highlight-ink); }
 .chat-live-status button:disabled { opacity: 0.5; cursor: default; }
-.chat-live-status button:focus-visible, .chat-live-status select:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.chat-live-status button:focus-visible, .chat-live-status select:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 
 /* **What a spoken answer pointed at**, in place of the citations it cannot
    make: it is forbidden to say a block id aloud and uses `show_passage`
@@ -1198,7 +1196,7 @@
 }
 .band-about:hover { color: var(--ink); background: var(--surface-raised); }
 .band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
-.band-about:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.band-about:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Wider than a control's card (20rem): the (i) carries the mode's two catalog
    paragraphs and then its own, and Citations' card ran to 834px at 20rem — off
    the bottom of an 800px window (browser check, plan 261001m). */
