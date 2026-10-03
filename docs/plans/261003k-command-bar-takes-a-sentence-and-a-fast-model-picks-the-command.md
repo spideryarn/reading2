@@ -256,6 +256,40 @@ Every finding checked against the code and accepted.
 | F5 | P1 | An id can mean the opposite row by the time the answer lands (Archive / Put back) | Keys are id + label, resolved against today's rows; a request revision |
 | F6 | P2 | The selection rule could prefer two calls over an equal one | Rewritten: complete outcomes, floors, one call preferred |
 | F7 | P2 | The runner would reuse the old 72 answers | A fresh results folder |
+| F8 | P1 | A pick can navigate after the bar unmounts: its continuation has no unmount invalidation (`src/web/CommandBar.tsx:1711` at 75f6927f4). The red regression navigated to `/changelog` after `root.unmount()`. | fixed: layout cleanup aborts the request and advances its revision, so even a transport ignoring abort cannot act; `tests/command-bar-pick.test.tsx:518` |
+| F9 | P1 | Re-resolving a drawn suggestion drops missing rows but preserves an index into the shortened list (`src/web/CommandBar.tsx:794`, `:1431` at 75f6927f4). Selecting Archive, then losing that row, made Enter open generating Glossary; a glossary refresh likewise opened the wrong term. | fixed: changed catalogue/context/kinds invalidate requests and suggestions; drawn proposals also retain an ordered signature of their resolved ids and labels and disappear when it changes; red-first row-removal and glossary-refresh regressions |
+| F10 | P2 | The disconnect test listens to the reader's controller directly, so deleting the signal passed to the gateway still passes (`tests/command-pick.test.ts:428` at 75f6927f4). | fixed: the fetch stub listens only to the signal it actually received, and asserts it was aborted; the same mutation now fails |
+| F11 | P2 | Inherited gateway risk: `openRouterJson` rejects non-2xx before reading their usage (`src/ai-call.ts:1986`, `:2003`), unlike the Decisions seam. A priced error from the words call would lose its reported charge. No such production chat response is established here. | reported: predates this stage and affects all JSON chat jobs; left for a gateway-scoped change |
+
+Code review, 2026-10-03, against Stage 2 **75f6927f4** (Stage 1 **a914523da**),
+with fixes left uncommitted. Independent trace first, then the builder's suspicions.
+
+- **Red-first evidence:** F8 navigated after unmount; F9 opened Glossary in place of Archive and
+  Free energy in place of Surprise. All three regressions pass with the fixes.
+- **Three mutation checks:** allowing a generating row to run failed its no-auto-run test;
+  changing the generated Plain description failed the catalogue freshness test; removing the
+  forwarded disconnect signal passed originally, then failed with F10's corrected witness.
+  Every mutation was restored.
+- **Validation:** the four requested files pass (86 tests, two generator-write tests skipped).
+  Thirteen further offline files pass (751 tests), covering the gateway's `noul`/`choice`, the
+  route contract, existing bar/argument/rerun/sub-mode behavior and quick search. Typechecking
+  passes via `node --import tsx scripts/typecheck.ts` (the npm wrapper's tsx IPC socket is denied
+  in this sandbox). Lint passes on the three edited code/test files. No build, Postgres or
+  network checks were run.
+- **Other review conclusions:** id-only deduplication selects one trusted face and cannot smuggle
+  option prose into the prompt; a real bar offers one face per id. The provider's error message
+  here is `ProviderRefused`'s fixed house sentence, and 499 carries only fixed disconnected prose.
+  The bar is mounted only by the owner Dock, so pages without a Dock have no bar needing another
+  sign-in source. The relative JSON import is bundled by Vite's API build (`vite.api.config.ts`:
+  relative/absolute imports are bundled), rather than becoming a runtime Vercel file dependency;
+  this is source reasoning, not a build result. Production uses the measured pick/extraction
+  wording and model settings; the declared differences are context-dependent options and the
+  slug-free Metadata key. Both jobs use the request collector and signed-in owner attribution,
+  with no article attribution. No new sentence logging or model-proxy path was found.
+
+**Verdict: land after these fixes** — F8–F10 are applied in this worktree; the pristine Stage 2
+commit still contains F8–F9. F11 is the wider inherited risk, reported only.
+
 
 ## Progress
 

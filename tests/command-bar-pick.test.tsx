@@ -107,7 +107,7 @@ let root: Root;
 let openedModes: string[];
 let openedTerms: string[];
 /** Every post to the pick route, each with the way to answer it. */
-let asked: { body: PickRequest; answer: (json: unknown, status?: number) => void }[];
+let asked: { body: PickRequest; signal: AbortSignal | null | undefined; answer: (json: unknown, status?: number) => void }[];
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -135,6 +135,7 @@ beforeEach(() => {
       return new Promise<Response>((resolve) => {
         asked.push({
           body: JSON.parse(String(init?.body)) as PickRequest,
+          signal: init?.signal,
           answer: (json, status = 200) => resolve(new Response(JSON.stringify(json), { status })),
         });
       });
@@ -516,6 +517,34 @@ describe("a pick that generates, writes or takes words never runs without a seco
 });
 
 describe("an answer is for the bar that asked", () => {
+  it("cannot navigate after its bar unmounted, and aborts the abandoned request", async () => {
+    reading();
+    openBar();
+    await ask();
+    const pending = asked[0];
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await answer(row(CHANGELOG, 1));
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    expect(pending?.signal?.aborted).toBe(true);
+  });
+
+  it("drops the drawn choices when a disappearing row would shift Enter to a different command", async () => {
+    const tags = { edit: vi.fn(async () => []) };
+    reading({ shelfRow: { archive: archive(), tags } });
+    openBar();
+    await ask("show me something useful here");
+    await answer(row(PROFILE, 0.5, [ARCHIVE, GLOSSARY]));
+    press("ArrowDown");
+    expect(rows()[1]?.getAttribute("aria-selected")).toBe("true");
+    reading({ shelfRow: { archive: { ...archive(), at: undefined }, tags } });
+    press("Enter");
+    await settle();
+    expect(openedModes).toEqual([]);
+    expect(listed()).toEqual([]);
+    expect(asked).toHaveLength(2);
+  });
+
   it("leaves no suggestion when Archive became Put back while it was out (F5)", async () => {
     const tags = { edit: vi.fn(async () => []) };
     reading({ shelfRow: { archive: archive(), tags } });
@@ -562,6 +591,20 @@ describe("an answer is for the bar that asked", () => {
     press("Enter");
     await settle();
     expect(later.set).not.toHaveBeenCalled();
+  });
+
+  it("drops argument choices when a refreshed glossary would move the selection to a different term", async () => {
+    reading();
+    openBar();
+    await ask("remind me what fe stands for here");
+    await answer({ kind: "argument", argument: "glossary", words: "fe" });
+    press("ArrowDown");
+    reading({ exec: { ...executor(), sources: { glossary: { ready: true, terms: TERMS.slice(0, 1) } } } });
+    press("Enter");
+    await settle();
+    expect(openedTerms).toEqual([]);
+    expect(listed()).toEqual([]);
+    expect(asked).toHaveLength(2);
   });
 
   it("throws the answer away when the reader typed during the call", async () => {

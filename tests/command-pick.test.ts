@@ -426,15 +426,16 @@ describe("pickCommand", () => {
 
   it("stops the call when the reader leaves, and says that rather than a timeout", async () => {
     const gone = new AbortController();
-    stubModels(
-      (s) =>
-        new Promise<Response>((_, reject) => {
-          void s;
-          gone.signal.addEventListener("abort", () => reject(gone.signal.reason));
-        }),
-    );
+    let forwarded: AbortSignal | null | undefined;
+    vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
+      forwarded = init.signal;
+      return new Promise<Response>((_, reject) => {
+        init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      });
+    });
     const pending = collectSpend(() => pickCommand(request(), gone.signal));
     gone.abort();
+    expect(forwarded?.aborted).toBe(true);
     expect((await pending).result).toMatchObject({ ok: false, why: "abandoned" });
   });
 

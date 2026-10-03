@@ -804,6 +804,11 @@ function suggestedRows(
   }
 }
 
+/** The ordered rows a reader has been shown, including an argument's resolved target. */
+function suggestionSignature(rows: readonly Command[]): string {
+  return JSON.stringify(rows.map((row) => [commandId(row), commandText(row).label]));
+}
+
 /** One argument row as a bar row, or `null` where nothing here can run it. */
 function argumentCommand(article: CommandBarArticle, runners: ProposalRunners, row: ProposedRow): Command | null {
   if (row.kind === "ready" && row.proposal.id === "find") return findRow(article, row.proposal.words);
@@ -1276,7 +1281,7 @@ export function CommandBar({
    * as an answer and not as rows — what is drawn is looked up again at every
    * render (`suggestedRows`), in whatever the row list is by then.
    */
-  const [suggested, setSuggested] = useState<PickAnswer | null>(null);
+  const [suggested, setSuggested] = useState<{ answer: PickAnswer; rowsSignature: string } | null>(null);
   /**
    * **The request revision** (GPT Sol's F5): bumped by every edit to the box
    * and every opening or closing of the bar. An answer that comes back to a
@@ -1302,6 +1307,14 @@ export function CommandBar({
       inFlight.current = false;
     }
     setSuggested(null);
+  }, []);
+
+  /* Navigation can unmount the Dock without closing its dialog first. Stop
+     the request and invalidate its continuation even if fetch ignores abort. */
+  useLayoutEffect(() => () => {
+    revision.current += 1;
+    asking.current?.abort();
+    asking.current = null;
   }, []);
 
   /**
@@ -1400,12 +1413,18 @@ export function CommandBar({
    * **The rows as the server knows them**, and their signature — the row list
    * reduced to what an answer can name. The keys are what a sentence is asked
    * over; the signature is how an answer knows the list it was asked over is
-   * still the list when it lands (F5). Once drawn, a suggestion needs no such
-   * check: each row is looked up afresh at every render, so one that has gone
-   * is simply no longer drawn.
+   * still the list when it lands (F5). A changed list also clears drawn
+   * suggestions: removing a row must not move Enter to its neighbour.
    */
   const keys = useMemo(() => commands.map((c) => pickKey(c, article?.slug)), [commands, article?.slug]);
-  const signature = useMemo(() => keys.map((k) => `${k.id}\n${k.label}`).join("\n"), [keys]);
+  const signature = JSON.stringify([keys, article?.slug, article?.view, argumentKindsHere(article), experimental.signedIn]);
+  const previousSignature = useRef(signature);
+  useLayoutEffect(() => {
+    if (previousSignature.current === signature) return;
+    previousSignature.current = signature;
+    dropAsk();
+    setSaid((was) => (was?.kind === "asking" ? null : was));
+  }, [signature, dropAsk]);
   /* What an answer needs when it lands, a render or several later. Refs, for
      `jobsRef`'s reason: the `.then` below must read today's, not the ones its
      closure was made with. */
@@ -1416,10 +1435,17 @@ export function CommandBar({
    * **What a model suggested, as today's rows** — drawn only while nothing
    * the reader typed matches; their own match always wins.
    */
-  const offered = useMemo(
-    () => (suggested === null ? [] : suggestedRows(suggested, commands, article)),
+  const resolvedSuggestions = useMemo(
+    () => (suggested === null ? [] : suggestedRows(suggested.answer, commands, article)),
     [suggested, commands, article],
   );
+  const suggestionsChanged = suggested !== null && suggested.rowsSignature !== suggestionSignature(resolvedSuggestions);
+  const offered = suggestionsChanged ? [] : resolvedSuggestions;
+  /* Argument resolution can change without changing the catalogue's keys
+     (for example, a glossary refresh removes one of two matching terms). */
+  useLayoutEffect(() => {
+    if (suggestionsChanged) dropAsk();
+  }, [suggestionsChanged, dropAsk]);
   const suggesting = matched.length === 0 && offered.length > 0;
   const results = suggesting ? offered : matched;
   /**
@@ -1737,7 +1763,7 @@ export function CommandBar({
         return;
       }
       setSelected(0);
-      setSuggested(answer);
+      setSuggested({ answer, rowsSignature: suggestionSignature(rows) });
     });
   }, [canAsk, dictationBusy, draft, keys, signature, article]);
 
