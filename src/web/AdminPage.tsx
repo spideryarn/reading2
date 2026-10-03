@@ -23,14 +23,14 @@
  * Tailwind utilities rather than styles.css, like every other chrome page —
  * note the `tw:` prefix, without which the class does nothing.
  */
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
 
 import type { AdminUser } from "../admin.js";
-import { FEEDBACK_FROM, type FeedbackFrom } from "../types.js";
+import { FEEDBACK_FROM, type AdminFeedbackReport, type FeedbackFrom } from "../types.js";
 import { ADMIN_CHIP_ORDER, adminColumns } from "./admin-columns.js";
 import { buildCommit, buildTime, shortCommit } from "./build-stamp.js";
 import { DataTable, naturalDirections, SortChips, useSortedTable } from "./lib/DataTable.js";
@@ -414,14 +414,32 @@ export function AdminFeedbackPage() {
   /* Not in the address bar yet: a reload goes back to everyone. Deferred until
      it bites — docs/plans/261001l-…. */
   const [from, setFrom] = useState<FeedbackFrom>("everyone");
+  const [saving, setSaving] = useState(false);
+  const writePending = useRef(false);
+  const runWrite = useCallback(async (write: () => Promise<void>) => {
+    if (writePending.current) return;
+    writePending.current = true;
+    setSaving(true);
+    try {
+      await write();
+    } finally {
+      writePending.current = false;
+      setSaving(false);
+    }
+  }, []);
+  const changeFrom = (next: FeedbackFrom) => {
+    /* The guard outlives the keyed inbox and takes effect before React draws
+       disabled buttons. A fresh inbox must not read before a write settles. */
+    if (!writePending.current) setFrom(next);
+  };
 
   return (
     <Shell title="Feedback" back={{ href: ADMIN_HREF, label: "Back to Admin" }}>
-      <FeedbackFromToggle from={from} onChange={setFrom} />
+      <FeedbackFromToggle from={from} onChange={changeFrom} disabled={saving} />
       {/* **Keyed on the filter**, so a switch is a fresh inbox — its own
           request, cursor and in-flight guard — rather than a reload the old
           one's *Load older* could race. useAdminFeedback.ts § `from`. */}
-      <FeedbackInbox key={from} from={from} />
+      <FeedbackInbox key={from} from={from} runWrite={runWrite} />
     </Shell>
   );
 }
@@ -443,9 +461,11 @@ const FROM_LABEL: Record<FeedbackFrom, { label: string; title: string }> = {
 function FeedbackFromToggle({
   from,
   onChange,
+  disabled,
 }: {
   from: FeedbackFrom;
   onChange: (next: FeedbackFrom) => void;
+  disabled: boolean;
 }) {
   return (
     /* biome-ignore lint/a11y/useSemanticElements: toggle buttons rather than
@@ -455,10 +475,11 @@ function FeedbackFromToggle({
         <button
           key={value}
           type="button"
+          disabled={disabled}
           aria-pressed={from === value}
           title={FROM_LABEL[value].title}
           onClick={() => onChange(value)}
-          className={`tw:inline-flex tw:h-7 tw:items-center tw:rounded-full tw:border tw:px-3 tw:text-xs ${
+          className={`tw:inline-flex tw:h-7 tw:items-center tw:rounded-full tw:border tw:px-3 tw:text-xs tw:disabled:opacity-50 ${
             from === value
               ? "tw:border-highlight/50 tw:text-foreground"
               : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:text-foreground"
@@ -472,12 +493,20 @@ function FeedbackFromToggle({
 }
 
 /** The inbox under one filter. Remounted when the filter changes — see above. */
-function FeedbackInbox({ from }: { from: FeedbackFrom }) {
+function FeedbackInbox({
+  from,
+  runWrite,
+}: {
+  from: FeedbackFrom;
+  runWrite: (write: () => Promise<void>) => Promise<void>;
+}) {
   const { reports, error, loading, saving, hasMore, reload, loadMore, setIgnored } =
     useAdminFeedback(from);
   /* The list and the Ignore write take turns — useAdminFeedback.ts § `setIgnored`. */
   const busy = loading || saving;
   const now = useNow();
+  const onIgnore = (report: AdminFeedbackReport, ignored: boolean) =>
+    runWrite(() => setIgnored(report, ignored));
 
   return (
     <>
@@ -537,7 +566,7 @@ function FeedbackInbox({ from }: { from: FeedbackFrom }) {
                 report={report}
                 now={now}
                 disabled={busy}
-                onIgnore={setIgnored}
+                onIgnore={onIgnore}
               />
             ))}
           </ul>

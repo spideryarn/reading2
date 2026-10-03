@@ -164,7 +164,9 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
     /* A slot of its own in the same guard, and deliberately no `signal` on the
        request: a write is not abandoned half-sent. If this inbox goes while it
        is in flight, the cleanup below clears the slot and the answer is
-       dropped by the identity check; the fresh inbox reads the row. */
+       dropped by the identity check. AdminFeedbackPage prevents filter
+       remounts until the write settles, so a replacement inbox cannot read
+       the pre-write row. */
     const slot = new AbortController();
     inFlight.current = slot;
     setSaving(true);

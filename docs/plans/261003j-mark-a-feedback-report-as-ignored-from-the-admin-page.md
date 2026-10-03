@@ -131,6 +131,22 @@ Sonnet subagent at desktop, iPad and phone widths. GPT Sol on this plan, then on
   asserts it on the 200 and the 404.
 - F4 (P3): the Earlier-tab sentence above was wrong for a report whose note says shipped. Corrected.
 
+**Code review, GPT Sol, 2026-10-03, on `14e70b90b`: approve the patched candidate.**
+
+- F5 (P1, fixed by Sol, red first): switching Everyone / Readers only during the PATCH remounted
+  the inbox, whose fresh GET could read the row before the write committed, while the old hook
+  dropped the write's answer. `AdminFeedbackPage` now owns a write guard that outlives the keyed
+  inbox, and the filter cannot change until the write settles. Postmortem
+  [261003c](../postmortems/261003c-a-mutation-guard-ends-before-the-mutation.md). I read the diff
+  and reran the suites; this fix has had no second review.
+- F6 (P3): feedback-reports.md said Undo puts a report back in the sweep's list. Only if nothing
+  already covers it. Corrected.
+
+**Browser check, Sonnet subagent, on `14e70b90b`**: desktop 1280, iPad 820, phone 390, dark mode.
+Ignore, reload, Undo, reload all behaved; no overflow, no console errors. The button is 28px tall,
+the same as Refresh and the filter pills beside it. Light mode was not checked. Sol's F5 change
+came after this check and only disables the two filter pills during a write.
+
 **The deploy gap, measured.** With this branch's script and production still without the column:
 `feedback-unswept.ts --since 2d` answered `93 report(s) … 0 named by no note header…`, exit 0, and
 `--show spya-g95x4j` printed the row. `tests/admin-feedback-store.test.ts` runs the same two

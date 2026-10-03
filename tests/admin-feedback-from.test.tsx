@@ -343,4 +343,50 @@ describe("Ignore", () => {
     /* Pressable again: a failure is not a dead button. */
     expect(within(card("ASDF1"), "Ignore").disabled).toBe(false);
   });
+
+  it.each([200, 500])("waits for Ignore to settle before switching filters (status %s)", async (status) => {
+    await twoReports();
+    await act(async () => within(card("ASDF1"), "Ignore").click());
+    await waitFor("the PATCH", () => asked.length === 2);
+
+    /* A remounted inbox would read the old row before this write commits,
+       then discard the write's answer because it belongs to the old hook. */
+    await act(async () => button("Readers only").click());
+    await settle();
+    expect(asked).toHaveLength(2);
+    expect(button("Everyone").getAttribute("aria-pressed")).toBe("true");
+    expect(bodies()).toEqual(["ASDF1", "a real bug"]);
+
+    const next = {
+      ...report("spya-eeeeee", READER, "ASDF1"),
+      ignoredAt: status === 200 ? "2026-10-03T10:00:00.000Z" : null,
+    };
+    await act(async () => asked[1]?.reply(status === 200 ? { report: next } : { error: "Could not save." }, status));
+    await waitFor("the filter released", () => !button("Readers only").disabled);
+    if (status === 200) expect(card("ASDF1").dataset.ignored).toBe("true");
+    else expect(card("ASDF1").querySelector('[role="alert"]')).not.toBeNull();
+
+    await act(async () => button("Readers only").click());
+    await waitFor("the readers request after the write", () => asked.length === 3);
+    expect(asked[2]?.url).toContain("from=readers");
+    await act(async () => asked[2]?.answer({ reports: [next], hasMore: false, nextCursor: null }));
+    await waitFor("the readers card", () => bodies().length === 1);
+    expect(card("ASDF1").dataset.ignored).toBe(status === 200 ? "true" : undefined);
+  });
+
+  it("keeps the filter locked when a second Ignore is pressed before the buttons redraw", async () => {
+    await twoReports();
+    await act(async () => {
+      within(card("ASDF1"), "Ignore").click();
+      within(card("a real bug"), "Ignore").click();
+    });
+    await waitFor("the single PATCH", () => asked.length === 2);
+    await settle();
+    await act(async () => button("Readers only").click());
+    await settle();
+    expect(asked).toHaveLength(2);
+    expect(button("Readers only").disabled).toBe(true);
+    await act(async () => asked[1]?.reply({ report: report("spya-eeeeee", READER, "ASDF1") }));
+    await waitFor("the released filter", () => !button("Readers only").disabled);
+  });
 });
