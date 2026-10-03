@@ -191,6 +191,7 @@ export function emptyDrops(): SkimDrops {
     badRole: 0,
     badCue: 0,
     badAgain: 0,
+    overCarried: 0,
     overCap: 0,
   };
 }
@@ -663,6 +664,9 @@ function againOf(value: unknown, depth: SkimDepth): { again: SkimDepth[]; bad: n
  *    twice, the winner of rule 4 keeps its own `again`; the two are not
  *    merged. A stop carried nowhere has **no `again` key**, so a route that
  *    carries nothing is shaped exactly as one from before `skim/9`.
+ * 8. the carried stops of each pass are capped against its own
+ *    (`maxCarried`), in route order: past the cap an `again` entry goes
+ *    (`overCarried`), and **the stop is kept** (Sol, code review F7).
  *
  * `again` reaches none of rules 1–6: the caps and `visibleCounts` count a stop
  * once, at its `depth`, however many passes it is walked in.
@@ -747,15 +751,44 @@ export function validateRoute(
      `offeredDepths` (src/web/skim-route.ts) and deliberately not "some stop is
      walked there": that would let `again` create the pass it points at. */
   const placedAt = new Set<SkimDepth>(kept.map((s) => s.depth));
+  /* 8 — the carried stops of a pass are capped against its own, in route
+     order: the earliest keep their place and the rest lose that one `again`
+     entry, never the stop (`maxCarried`). */
+  const own = (d: SkimDepth) => kept.reduce((n, s) => (s.depth === d ? n + 1 : n), 0);
+  const room: Record<SkimDepth, number> = { 1: 0, 2: maxCarried(own(2)), 3: maxCarried(own(3)) };
   return kept.map((stop): SkimStop => {
     if (!stop.again) return stop;
-    const again = stop.again.filter((d) => placedAt.has(d));
-    const lost = stop.again.length - again.length;
-    if (lost === 0) return stop;
-    dropped.badAgain = (dropped.badAgain ?? 0) + lost;
-    const { again: _unoffered, ...rest } = stop;
+    const again: SkimDepth[] = [];
+    for (const d of stop.again) {
+      if (!placedAt.has(d)) {
+        dropped.badAgain = (dropped.badAgain ?? 0) + 1;
+      } else if (room[d] <= 0) {
+        dropped.overCarried = (dropped.overCarried ?? 0) + 1;
+      } else {
+        room[d]--;
+        again.push(d);
+      }
+    }
+    if (again.length === stop.again.length) return stop;
+    const { again: _was, ...rest } = stop;
     return again.length > 0 ? { ...rest, again } : rest;
   });
+}
+
+/**
+ * **How many earlier stops a pass may carry: half as many as it has of its
+ * own, rounded up.** So a deeper walk is at least two-thirds new passages once
+ * it has more than a stop or two of its own, which is what the prompt's
+ * "mostly NEW passages" asks and what wording alone did not hold: measured
+ * uncapped, one More was half carried stops and two routes carried every Gist
+ * stop, while another run of the same article carried none
+ * (docs/investigations/261003e-skim-again-carried-stops-eval.md; GPT Sol, code
+ * review F7). Greg found full nesting annoying (SPIDERYARN-READING2-4P) and
+ * no carrying disjointed (spya-ms9d69); this is the bound between them. A
+ * number to measure, like `targetsFor`, not a product constant.
+ */
+export function maxCarried(ownStops: number): number {
+  return Math.ceil(ownStops / 2);
 }
 
 /** How many stops are visible at depth ≤ 1, ≤ 2 and ≤ 3. */
@@ -913,8 +946,9 @@ WHAT YOU DECIDE
    1 = GIST: the few stops that give the gist on their own;
    2 = MORE: go round again, in more detail — the stops that fill in how and why;
    3 = MOST: nearly everything else worth stopping at.
-   Each pass must ADD stops of its own to the one before it: some stops must
-   have depth 2, and some depth 3.
+   Each pass must ADD stops of its own when its target is larger than the one
+   before it. When two adjacent targets are the same because only one or two
+   quotes were offered, that pass may be absent.
 
    And "again" for each stop: the deeper passes it is ALSO walked in. The
    reader walks one pass at a time. A pass is its own stops (the ones whose
@@ -933,7 +967,8 @@ WHAT YOU DECIDE
      thing in more detail;
    - or the only reason is that it matters. Do not carry everything: a reader
      who walked the shallower pass first should mostly meet NEW passages in
-     the deeper one.
+     the deeper one. Carry into a pass at most half as many stops as it
+     has of its own: one or two into a pass of four, never as many as it adds.
    Carrying is neither required nor forbidden. Some routes carry several
    stops, some one, some none: decide stop by stop.
 

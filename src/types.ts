@@ -1284,8 +1284,10 @@ export interface QuotesResponse {
 /**
  * The pass a stop belongs to. **The model plans the passes as nesting** (depth
  * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
- * counts); **the reader walks each pass as only its own stops** — plan 260929e,
- * src/web/skim-route.ts.
+ * counts). **The reader walks a pass as the stops first placed there plus any
+ * earlier stops whose `again` names it** — plan 261003l, `walkedIn` in
+ * src/web/skim-route.ts. Before `skim/9`, there were no carried stops, so each
+ * pass was only its own (plan 260929e).
  */
 export type SkimDepth = 1 | 2 | 3;
 
@@ -1360,6 +1362,11 @@ export interface SkimDrops {
    * Optional, as `badCue` is: routes before `skim/9` have none.
    */
   badAgain?: number;
+  /**
+   * `again` entries dropped because the pass already carried as many earlier
+   * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
+   */
+  overCarried?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
@@ -1386,11 +1393,12 @@ export interface Skim {
    * here. src/skim.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Each pass walks its own stops in this order (see `SkimDepth`). */
+  /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
-   * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
+   * and validated. Growing, by construction. Not what the band counts: it counts the own and
+   * carried stops the selected pass actually walks.
    */
   visible: [number, number, number];
   /**

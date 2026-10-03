@@ -274,8 +274,8 @@ export function skimPromise(profiled: boolean): string {
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
  * N"*. **All three, not Most alone**: since plan 260929e a pass does not
- * contain the ones before it (it may carry a few of their stops since plan
- * 261003l, never all), so Most by itself would undercount. The denominator is the route's stored `offered`, not today's raw
+ * contain the ones before it (it may carry some of their stops since plan
+ * 261003l), so Most by itself would undercount. The denominator is the route's stored `offered`, not today's raw
  * Quotes count: abstract quotes were deliberately never offered. `null` below
  * Most, or with no Quotes.
  */

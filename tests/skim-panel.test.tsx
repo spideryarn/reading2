@@ -102,7 +102,7 @@ vi.mock("../src/web/useJobs.js", async (importOriginal) => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, passages, jumpPassages, movement, aligns } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, jumpPassages, movement, aligns, flashOrder } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
   /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
@@ -112,6 +112,7 @@ const { scrolled, flashed, passages, jumpPassages, movement, aligns } = vi.hoist
   /* How each Skim movement asked to land — plan 260929a § 3. */
   aligns: [] as string[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
+  flashOrder: [] as string[],
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/scroll.js")>();
@@ -141,6 +142,7 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
     },
     dropPendingFlash: () => {
       movement.dropped += 1;
+      flashOrder.push("old flash dropped");
     },
     resetFlash: () => {
       flashed.length = 0;
@@ -155,6 +157,7 @@ const { armSkimOpening, firstSkimArrival, SkimBand } = await import(
   "../src/web/modes/skim/SkimMode.js"
 );
 const { resetFlash } = await import("../src/web/flash.js");
+const { useModeFlashOwnership } = await import("../src/web/reader/mode-flash.js");
 const { resolveQuotes } = await import("../src/web/search-hits.js");
 const { quoteStroke } = await import("../src/web/QuotesPanel.js");
 
@@ -177,6 +180,27 @@ describe("the reading view's Skim arrival mailbox", () => {
     history.replaceState(null, "", "/read/a-route?mode=skim&stop=q-popped");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(firstSkimArrival("skim")).toEqual({ stop: null, open: false });
+  });
+});
+
+describe("a held flash across a mode change", () => {
+  function IncomingBand({ mode }: { mode: "plain" | "skim" }) {
+    useEffect(() => {
+      if (mode === "skim") flashOrder.push("incoming landing");
+    }, [mode]);
+    return null;
+  }
+
+  function FlashOwner({ mode }: { mode: "plain" | "skim" }) {
+    useModeFlashOwnership(mode, mode === "skim");
+    return createElement(IncomingBand, { key: mode, mode });
+  }
+
+  it("drops the departing mode's flash before the incoming band claims its landing", async () => {
+    await act(async () => root.render(createElement(FlashOwner, { mode: "plain" })));
+    flashOrder.length = 0;
+    await act(async () => root.render(createElement(FlashOwner, { mode: "skim" })));
+    expect(flashOrder).toEqual(["old flash dropped", "incoming landing"]);
   });
 });
 

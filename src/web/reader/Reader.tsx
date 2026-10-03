@@ -145,7 +145,7 @@ import { BandBackChip } from "../BandBackChip.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
-import { dropPendingFlash, flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
+import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
@@ -173,6 +173,7 @@ import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
+import { useModeFlashOwnership } from "./mode-flash.js";
 import { proseFound, railFound, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
@@ -625,16 +626,11 @@ export function Reader({
      keep it: the prose can be moved from there by a path that never passes
      `beginJump` and so never drops it (comment-jump.ts § `stepToComment`, for
      one), and the next time the prose is exposed the old stop would wash,
-     wherever the reader had got to. Declared after the
-     flush so that a change which also exposes the prose has already played it.
-     Only on a real change of mode, never on mount: a deep link's landing held
-     by a child's own mount effect is this mode's, and has to survive. */
-  const flashMode = useRef(mode);
-  useEffect(() => {
-    if (flashMode.current === mode) return;
-    flashMode.current = mode;
-    if (bandOverProse) dropPendingFlash();
-  }, [mode, bandOverProse]);
+     wherever the reader had got to. A change which exposes the prose skips the
+     drop (`bandOverProse` is false), then the passive effect above plays it.
+     Only on a real change of mode, never on mount; the hook's layout effect runs
+     before an incoming child's passive landing effect, so that new flash survives. */
+  useModeFlashOwnership(mode, bandOverProse);
   /* A held or live flash belongs to this article. ArticlePage keys the reader
      by slug, so leaving it unmounts here; clear both the pending id and the live
      removal timer rather than retaining a detached prose cell for 1.2s. */

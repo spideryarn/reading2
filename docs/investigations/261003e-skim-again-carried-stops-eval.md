@@ -14,8 +14,9 @@ round one, left as written. [Round two](#round-two-new-b-the-route-is-one-order-
 and the [conclusion](#conclusion) follow them.
 
 **Both rounds in one paragraph.** NEW-b does what it was changed to do: carried stops now sit
-among More's own stops in 7 of 11 runs, against 1 of 11. It is as valid as NEW-a, and the Gist walk,
-pass sizes and coverage are not disturbed. But it carries **more**: a third of More and a fifth of
+among More's own stops in 7 of 11 runs, against 1 of 11. It is as valid as NEW-a, and the Gist walk
+and aggregate Idea coverage hold. First-placed pass sizes changed in four matched runs: three moved
+one stop and one moved two. It also carries **more**: a third of More and a fifth of
 Most, against a quarter and a seventh, and More is now within ten points of the full nesting Greg
 found annoying. The blind judge still prefers the new More for a reader who starts there (11 of
 12). For a reader coming from Gist, which is the complaint, it came out 8 to 3 with 1 tie; the
@@ -427,8 +428,9 @@ the head of the walk, which every later stop leans on and none sits beside.
 **NEW-b is not worse than NEW-a on validity, on the Gist walk or on coverage.** It is worse on one
 thing that matters: it carries more, and more of it into Most.
 
-1. **Both wordings are safe**: no failed route, no bad `again`, no truncation, coverage and pass
-   sizes inside the old prompt's own noise.
+1. **Both wordings are valid**: no failed route, no bad `again`, no truncation. Aggregate coverage
+   holds. NEW-b changes first-placed pass sizes in four matched runs; the old prompt also varied,
+   but “pass sizes did not move” would be too strong.
 2. **Both clearly help the reader who opens More without walking Gist** (12 of 12, 11 of 12;
    control 3 to 1). Nobody asked for that, but it is real.
 3. **Neither is shown to fix what Greg reported**, the walk from Gist into More. NEW-a 6 to 2,

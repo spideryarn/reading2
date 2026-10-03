@@ -284,7 +284,9 @@ check each by id.
 - 2026-10-03: stage 1 built and committed (`6236d0957`). The plan missed two things the build
   found: `tests/skim-panel.test.tsx` already pinned the old stepping-aside (rewritten there), and a
   flash can now stay held for a whole walk, so `Reader` drops it on a change to another covering
-  mode. That effect has no test — there is no Reader-level harness — and is in the browser check.
+  mode. The code review found that its passive timing could instead discard the incoming mode's
+  landing, moved it to a small layout-effect hook and pinned the parent/child ordering without a
+  full Reader harness.
 
 - 2026-10-03: plan written; prior-work check clean.
 - 2026-10-03: stage 2 built by two Opus subagents (server; client) and measured by a third —
@@ -297,6 +299,9 @@ check each by id.
   full nesting, and within "many of or some of". **Not shown**: that More reads more connected
   after Gist (8–3, inside the control's 5–0). Shown: that it reads more complete started cold
   (11–1 against a control of 3–1).
+- Code review: the raw totals above reproduce, but the investigation concludes “not as it stands”:
+  NEW-b needs a limit. Individual More walks ranged from 0% to 50% carried and two runs carried all
+  of Gist into More. No cap is implemented; that product choice remains before landing.
 - What the build changed from the plan: the mark's hidden words name only the *other* passes
   ("Also in Gist"); the pips are off when no stop is walked in more than one *offered* pass; the
   door's *More detail ›* title no longer says "the stops the passes before it left out".

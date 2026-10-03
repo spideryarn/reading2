@@ -358,8 +358,9 @@ when each pass walked only its own. So:
   (src/skim.ts). A route planned before it has no `again`, is not announced as out of date
   (260929c), and walks as it did until planned again from Metadata. Measured on six articles
   ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)): about a third of a More
-  walk and a fifth of a Most walk are carried stops, against 43% under full nesting; pass sizes and
-  Idea coverage did not move; a blind read preferred the new More for a reader who starts there in
+  walk and a fifth of a Most walk are carried stops, against 43% under full nesting. Aggregate Idea
+  coverage held; four corresponding OLD/NEW-b runs changed first-placed pass sizes (three by one
+  stop, one by two). A blind read preferred the new More for a reader who starts there in
   11 of 12 pairs. For a reader coming from Gist it was preferred 8 to 3, which is inside what two
   runs of the old prompt differ by, so that half is not shown. The prompt also says the route is one
   order with the depths mixed, because the first wording put every carried stop at the head of More
@@ -445,8 +446,9 @@ Three things follow from Greg's words and they shape everything below:
   first pass's stops again at the second was the thing Greg found annoying, so each pass now walks
   only the stops it adds (above, under *Each pass walks only its own stops*). The route is still
   one order, planned as nesting passes; only the walk changed. **Amended 2026-10-03**: part of the
-  way back — a pass may carry *some* earlier stops, chosen by the route and marked with pips, never
-  all of them (above, under *A stop may be walked at more than one depth*).
+  way back — a pass may carry earlier stops chosen by the route and marked with pips (above, under
+  *A stop may be walked at more than one depth*). There is currently no enforced limit; measured
+  routes sometimes carried all of Gist into More.
 
 **Who is reading changes the route.** When the reader has said who they are
 ([reader-profile.md](reader-profile.md) — *About you*) or why they are reading this piece (the

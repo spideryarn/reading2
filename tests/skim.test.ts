@@ -45,6 +45,7 @@ import {
   renderPrompt,
   targetsFor,
   usableQuotes,
+  maxCarried,
   validateRoute,
   visibleCounts,
 } from "../src/skim.js";
@@ -364,11 +365,12 @@ describe("validating the model's route", () => {
   it("keeps a stop's `again`: only 2 or 3, deeper than its own depth, unique, ascending", () => {
     const d = emptyDrops();
     const stops = validateRoute(
-      [carried(0, 1, [3, 2, 3]), carried(1, 2, [3]), carried(2, 3, []), stop(3, 2), stop(4, 3)],
+      /* Three stops of Most's own, so the two carried into it are within `maxCarried`. */
+      [carried(0, 1, [3, 2, 3]), carried(1, 2, [3]), carried(2, 3, []), stop(3, 2), stop(4, 3), stop(5, 3)],
       quotesOf(10),
       d,
     );
-    expect(stops.map((s) => s.again)).toEqual([[2, 3], [3], undefined, undefined, undefined]);
+    expect(stops.map((s) => s.again)).toEqual([[2, 3], [3], undefined, undefined, undefined, undefined]);
     /* One repeat (the second 3) and nothing else. */
     expect(d.badAgain).toBe(1);
   });
@@ -383,12 +385,13 @@ describe("validating the model's route", () => {
         carried(3, 1, [4, 0, "2", 2.5, null, 3]), // only the 3 is a pass
         stop(4, 2),
         stop(5, 3),
+        stop(6, 3), // a third of Most's own, so two carried into it are within `maxCarried`
       ],
       quotesOf(10),
       d,
     );
-    expect(stops).toHaveLength(6);
-    expect(stops.map((s) => s.again)).toEqual([[2], [3], undefined, [3], undefined, undefined]);
+    expect(stops).toHaveLength(7);
+    expect(stops.map((s) => s.again)).toEqual([[2], [3], undefined, [3], undefined, undefined, undefined]);
     expect(d.badAgain).toBe(1 + 2 + 2 + 5);
     expect(d.malformed).toBe(0);
   });
@@ -435,6 +438,34 @@ describe("validating the model's route", () => {
     const two = validateRoute([carried(0, 1, [2, 3]), stop(1, 3)], quotesOf(5), d2);
     expect(two.map((s) => s.again)).toEqual([[3], undefined]);
     expect(d2.badAgain).toBe(1);
+  });
+
+  it("carries into a pass at most half as many stops as the pass has of its own (Sol F7)", () => {
+    /* Three Gist stops all carried into a More of two: the cap is one, so the
+       first in route order keeps its place in More and the other two lose it.
+       Most has three of its own: the cap is two, and both carried there stay. */
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [
+        carried(0, 1, [2, 3]),
+        carried(1, 1, [2]),
+        stop(3, 2),
+        carried(2, 1, [2, 3]),
+        stop(4, 2),
+        stop(5, 3),
+        stop(6, 3),
+        stop(7, 3),
+      ],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => s.again)).toEqual([[2, 3], undefined, undefined, [3], undefined, undefined, undefined, undefined]);
+    expect(d.overCarried).toBe(2);
+    expect(d.badAgain).toBe(0);
+    expect(maxCarried(2)).toBe(1);
+    expect(maxCarried(3)).toBe(2);
+    expect(maxCarried(1)).toBe(1);
+    expect(maxCarried(0)).toBe(0);
   });
 
   it("judges that on the stops that were KEPT, not the ones the model named", () => {
@@ -698,6 +729,7 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).toMatch(/neither required nor forbidden/);
     expect(SKIM_SYSTEM).toMatch(/Do not carry everything/);
     expect(SKIM_SYSTEM).toMatch(/Each pass must ADD stops/);
+    expect(SKIM_SYSTEM).toMatch(/When two adjacent targets are the same[\s\S]*that pass may be absent/);
     /* The targets are still cumulative counts of first-placed stops, and the
        user message says a carried stop is not counted in them. */
     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
