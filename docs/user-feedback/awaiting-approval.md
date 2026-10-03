@@ -36,8 +36,8 @@ in this directory records which, and the line comes off.
   [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md) ·
   [note](261002_2036-a-reading-text-size-setting.md)
 
-- 2026-09-30 · report spya-ntyes8 (no Sentry sign-in on this run; short id to be added by the next
-  sweep) · better shelf topic pills: let GPT-6 Luna name the topics and file the articles, instead
+- 2026-09-30 · report spya-ntyes8 (Sentry has no copy of this report, so there is no short id and
+  no status to set: searched by report_id, sweep of 2026-10-03) · better shelf topic pills: let GPT-6 Luna name the topics and file the articles, instead
   of only scoring phrases the articles use. It won all six synthetic shelves against today's list;
   about a thirtieth of a penny per article if the topics are re-thought each time the shelf grows
   by a tenth. Three questions: try it on your own shelf first? replace the pills or sit in front of
