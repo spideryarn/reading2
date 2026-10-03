@@ -222,6 +222,8 @@ function isDrawableEntry(value: unknown): boolean {
        that in the app's face rather than refusing the whole shelf over it. */
     maybe(e.gistVoice, (v) => v === "ai" || v === "author") &&
     maybe(e.lastOpenedAt, str) &&
+    /* Absent on most entries, and on every body saved before plan 261003m. */
+    maybe(e.publishedAt, str) &&
     maybe(e.archivedAt, str) &&
     maybe(e.fixture, (v) => typeof v === "boolean") &&
     maybe(e.titleOverridden, (v) => typeof v === "boolean") &&

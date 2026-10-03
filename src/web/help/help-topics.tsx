@@ -587,7 +587,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Sorting.</strong> The chips set the order; press the one you are on to reverse
             it. <strong>Shift-click</strong> a second chip to sort within the first — by Added, then
-            by Length, say.
+            by Length, say. <strong>Published</strong> is the date the publisher gives; an article
+            with none, which includes every PDF, goes last.
           </li>
           <li>
             <strong>Cards or Table.</strong> The same list two ways: cards for deciding what to read

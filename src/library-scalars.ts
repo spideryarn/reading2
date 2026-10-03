@@ -273,6 +273,7 @@ export function describeArticle(input: {
     ...(meta.siteName ? { siteName: meta.siteName } : {}),
     ...(meta.url ? { url: meta.url } : {}),
     addedAt: input.addedAt,
+    ...(meta.publishedAt ? { publishedAt: meta.publishedAt } : {}),
     words: scalars.wordCount,
     minutes: readingMinutes(scalars.wordCount),
     blocks: scalars.blockCount,

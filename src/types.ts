@@ -2000,6 +2000,17 @@ export interface LibraryEntry {
   /** ISO. `meta.fetchedAt` where stage 2 recorded one, else the mtime of blocks.json. */
   addedAt: string;
   /**
+   * **When the publisher says it was published** — `Meta.publishedAt`,
+   * verbatim: `YYYY-MM-DD`, or that day with a time and an offset. The shelf
+   * sorts on it and prints it (plan 261003m). Only the calendar day means
+   * anything, so read it with `calendarDay` (src/web/relative-time.ts), never
+   * `Date.parse`.
+   *
+   * Absent for most of a shelf: a PDF never has one, and nor does a web page
+   * that states none or was last extracted before 2026-08-31.
+   */
+  publishedAt?: string;
+  /**
    * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
    * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
    * bibliographies are on the page and are not what the card is promising.
