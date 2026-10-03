@@ -114,15 +114,15 @@ screenshots of A to decide against — [Q-margin-chat] in the debrief.
 
 - **When it docks.** `chatDock(fit, windowWidth)` in [`layout.ts`](../../src/web/layout.ts), pure:
   the room is from the column's left edge (`fit.margLeft`) plus `CHAT_DOCK_INSET` to the window's
-  right edge, less a 12px gutter (Sol F3: the inset comes off before the minimum is applied). The
+  right edge, less an 8px gutter (Sol F3: the inset comes off before the minimum is applied). The
   helper returns that room in px or `null`; Reader passes it down and the panel writes it as
-  `--chat-dock-room`, so the cap stays in CSS as `min(26rem, var(--chat-dock-room))`. Docked when `fit.margW > 0` and that room is at least `CHAT_DOCK_MIN` = 272px
-  (17rem). Below that the panel floats exactly as today: a 200px chat is worse than an overlapping
+  `--chat-dock-room`, so the cap stays in CSS as `min(26rem, var(--chat-dock-room))`. Docked when `fit.margW > 0` and that room is at least `CHAT_DOCK_MIN` = 256px
+  (16rem; first written as 272 behind 10 and 12, see *What the build found*). Below that the panel floats exactly as today: a 200px chat is worse than an overlapping
   one. So: Marginalia off, a phone, a covering band, a narrow iPad portrait — all unchanged.
   The panel's width is `min(26rem, the room)`: on a wide window where the centred prose leaves more
   than the column beside it, the panel keeps its full width and still clears the prose.
 - **Where.** `.chat-dialog.docked`: `left` at the column's edge (`--safe-left + --marg-left`, the
-  same expression `.marg-head` uses, plus `CHAT_DOCK_INSET` = 10px so the gutter icons stay
+  same expression `.marg-head` uses, plus `CHAT_DOCK_INSET` = 8px so the gutter icons stay
   clear), `right: auto`, and **the bottom anchor, height and `--kb-inset` exactly as the floating
   panel has them**. So it is a horizontal dock only: the panel sits in the lower part of the
   column. A lighter shadow, since it no longer floats over prose. (The first draft anchored it to
@@ -139,7 +139,7 @@ screenshots of A to decide against — [Q-margin-chat] in the debrief.
   anchor from `owner.chatAnchors`. No mark for an unanchored thread. A rule rather than a wash:
   the flash and the search hit already use the wash.
 
-**Tests**: `chatDock` in `tests/layout-margin.test.ts` (no column → not docked; column with 272px →
+**Tests**: `chatDock` in `tests/layout-margin.test.ts` (no column → not docked; column with the minimum →
 docked at that width; wide window → capped at 26rem; band + column). A render test that
 `ChatDialog` carries `docked` only when told to. The mark: a test at whatever seam `TableView`
 already takes per-block classes through.
@@ -184,3 +184,30 @@ a harness for one already exists.
 
 - 2026-10-03: plan written.
 - 2026-10-03: Sol's plan review in; stage 1 built (red first: the tools-all-done case had no waiting line).
+- 2026-10-03: stage 2 built.
+
+## What the build found
+
+- **With the first numbers the panel never docked where it was asked for.** The column is at most
+  288px, and beside a band it is against the window's edge, so the room was 288 − 10 − 12 = 266,
+  under a 272 minimum: at 1440px with a Structure band (the report's layout) it floated. Now the
+  minimum is 256 and the inset and gutter 8 each, so a full column gives a 272px panel.
+  `tests/layout-margin.test.ts` has the 1440 case by name.
+- **The browser check** (Playwright, the Noema consciousness article; Entropy is not in the local
+  library). Docked and clear of the prose at 1440 with Structure + Marginalia (panel left 1160,
+  prose cell right 1152), at 1440 with Marginalia alone, and at 1180 (iPad landscape) both ways.
+  Floating, unchanged, at 820 portrait (the column is narrower than a full one there), at 390, and
+  at 1440 with Marginalia off. A typed draft survived 1440 → 900 → 1440 with the class flipping
+  both ways. `.marg-head` stays visible. No page errors.
+- **The spinner**, sampled every 100ms through one real "?" turn: present in all 49 samples until
+  the first word, none with neither spinner nor text. No tool ran in that turn, so the gap state
+  itself is covered by the unit test only.
+- **It is tight.** At 272px the answer ran two to four words a line. The docked panel's side
+  padding went from 1.1rem to 0.7rem afterwards; shots 2 and 3 were taken before that.
+- Screenshots: [before, floating](261003p-shot-1-A-before-floating.png) ·
+  [after, docked](261003p-shot-2-A-after-docked.png) · [the spinner](261003p-shot-3-A-spinner.png) ·
+  [the block's rule](261003p-shot-4-A-block-zoom.png) ·
+  [iPad landscape with a band](261003p-shot-8-D-ipad-landscape-structure.png) ·
+  [iPad portrait, floating](261003p-shot-9-E-ipad-portrait.png) ·
+  [phone, floating](261003p-shot-10-F-phone.png).
+- `/help` says nothing about where the block chat appears; unchanged.

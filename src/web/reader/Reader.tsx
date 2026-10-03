@@ -137,7 +137,7 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
+import { bandCoversProse, bandShapeFor, chatDock, fitView } from "../layout.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -958,6 +958,24 @@ export function Reader({
           : null));
 
   /**
+   * **The block the floating panel is about**, for the prose to mark
+   * (`td.text.chat-open`) — the panel is fixed to the window, docked or not, so
+   * its position says nothing about which paragraph it belongs to.
+   *
+   * A draft carries its anchor. A thread's is on its summary, the same list
+   * `overlay` has just looked the thread up in, and a conversation about the
+   * whole piece has none: `null`, and no mark. Derived from `overlay`, so it
+   * is `null` in the two conversation modes and for a visitor without saying
+   * so again. A string, so `memo(TableView)` holds while it does not change.
+   */
+  const chatOpenBlock: BlockId | null =
+    overlay === null
+      ? null
+      : overlay.kind === "draft"
+        ? overlay.anchor.blockId
+        : (chatSummaries.find((t) => t.id === overlay.threadId)?.anchor?.blockId ?? null);
+
+  /**
    * **Every** glossary term, so every one of them can be underlined in the
    * prose — in any mode, and whether or not the band has ever been opened.
    *
@@ -1564,6 +1582,13 @@ export function Reader({
       ? (owner.citations.citations?.citations ?? null)
       : null;
   const marginRoom = marginOpen && fit.margW > 0;
+  /* Whether the block chat panel sits over the column rather than over the
+     prose, and the room it has there — layout.ts § `chatDock`. From the same
+     `fit` the column is drawn from, so the two cannot disagree about whether
+     there is one. Computed whether or not a panel is open: it is two
+     subtractions, and the panel must get a new value on a resize without
+     being remounted. */
+  const chatDockRoom = chatDock(fit, windowWidth);
   /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
      questions the reader asked sit in the margin too and open through it
      (plan 261002j). */
@@ -3062,6 +3087,7 @@ export function Reader({
            call them theirs — BlockGutter.tsx § `notesBy`. */
         notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
+        chatOpenBlock={chatOpenBlock}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
@@ -3255,6 +3281,7 @@ export function Reader({
                would find this very conversation and reopen it, so the button
                would do nothing. ChatDialog.tsx § `onNewConversation`. */
             onNewConversation={startChatAboutBlock}
+            dockRoom={chatDockRoom}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
           />
