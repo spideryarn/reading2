@@ -1329,13 +1329,19 @@ function RememberInvitation() {
  * *"I think it might start with the sort of basic recall question. You know,
  * what do you remember about the article? But it may be that the user says
  * nothing. I haven't read it yet."*
+ *
+ * **It offers, and does not ask them to say so.** Greg, `spya-hw8mhz`,
+ * 2026-10-03: *"I don't think the user should have to say that they haven't
+ * read it … you're letting them know it's okay if they haven't read/finished
+ * it."* The composer's placeholder and `readItFor` in src/converse.ts say the
+ * same thing in the same way.
  */
 function TutorialInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
-        What do you remember about this article? Or say you haven't read it yet — either is a fine
-        place to start.
+        What do you remember about this article? It's fine if you haven't read it yet, or haven't
+        finished — we can start from wherever you are.
       </p>
       <p className="chat-empty-hint">
         We'll take short turns: a little of the piece at a time, with a link to the passage, and then
@@ -2181,7 +2187,7 @@ export function Composer({
           busy
             ? "Waiting for the answer…"
             : kind === "tutorial"
-              ? "What do you remember about it? Or say you haven't read it yet."
+              ? "What do you remember about it? It's fine if you haven't read it yet."
               : remember
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")

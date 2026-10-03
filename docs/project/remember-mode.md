@@ -250,6 +250,61 @@ and the reminder covers paraphrase too: run 5 had every opening turn linked, fou
 cited, and none over 112 words. Still imperfect: "that's exactly" survives as an opener twice, and
 one opening turn asked a two-part question.
 
+### It is about the author first (2026-10-03)
+
+Greg, `spya-mtsf0y`, after a session on a paper he had read well:
+
+> I would like to make just a tiny nudge towards tutorial mode focusing more on retention of the
+> article rather than helping me explore my own thoughts. … that's not to say that tutorial mode
+> shouldn't push me to think at all. It's great that it does, but just a bit less, or at least a bit
+> more of a focus on retention. To say understanding the author's, what the author is trying to say,
+> and internalizing it.
+
+His thread showed why: the prompt said "when they answer well, move up", the top of its ladder was
+*Doubt*, and a rich first account took it there at once — three turns running asked what *he*
+thought. So "moving up" now means a harder question **about the article** (what a step needs, how
+two parts fit, what the author would say to a case), and a task that asks for the reader's own view
+is rationed: never in the first two tasks, never two running, about one turn in four. When the
+reader sets off on a line of their own, the tutor answers briefly, points to Chat, and comes back to
+the piece. The opening prediction for a reader who has not read it is not one of the rationed tasks.
+
+Measured before and after on two articles with a blind judge: own-view tasks fell from 19 of 60
+turns to 6 of 60, none in a first two turns —
+[261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md). The eval's readers are
+now per article (`--readers=noema|entropy`), each run prints a hash of its prompt, and `--out` keeps
+one arm from overwriting another. The pointer to Chat is not yet reliable.
+
+**The invitation offers; it does not ask the reader to say so** (`spya-hw8mhz`): *"It's fine if you
+haven't read it yet, or haven't finished."* A first message with nothing of the piece in it and no
+request is started from zero without comment; a short one that names a goal is taken to the goal.
+
+**A separate *Exploration* sub-mode**, for "what do I think?", with the reader's comments,
+highlights and chat threads in view, is proposed and not built:
+[261003i § Stage 3](../plans/261003i-tutorial-leans-to-retention-a-softer-blurb-quote-links-that-show-the-quote.md).
+
+## A link after a quotation shows the quoted words
+
+In every answer drawn by `Cited` — Chat, Recall, Tutorial — a block link whose sentence quotes the
+article paints **those words** when pressed, not the whole paragraph. Greg, `spya-hzpf9b`: *"so
+that the user can see the quote in situ."* His links were all to the right blocks; the blocks were
+200 to 250 words long.
+
+`quotesBefore` in [`src/web/citations.ts`](../../src/web/citations.ts) gives a chip every
+double-quoted run in its own sentence; the click carries them to `flashBlock`
+([`src/web/flash.ts`](../../src/web/flash.ts)), which finds each in the block's text and paints it
+with the CSS Custom Highlight API for 2.4 seconds. Three rules:
+
+- **Only words that are in the block are painted**, so a quotation attached to the wrong link can
+  never mark the wrong words. Nothing found, or a browser without the API, washes the paragraph as
+  before.
+- **Footnote markers are stepped over by node**, never by a digit pattern: the page reads *Self² as
+  a process* where the model quotes *Self as a process*, and `CO2` must stay `CO2`.
+- **The scroll is unchanged**: the block is centred, and only the paint narrows.
+
+Known limits: a quotation with emphasis inside it is split across Markdown nodes and falls back to
+the paragraph wash; a quotation the model altered is not found. Tests:
+[`quote-flash.test.tsx`](../../tests/quote-flash.test.tsx).
+
 ## A Remember conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of

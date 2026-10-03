@@ -140,7 +140,7 @@ import { BandBackChip } from "../BandBackChip.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
-import { flushPendingFlash, resetFlash } from "../flash.js";
+import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
 import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
@@ -658,8 +658,10 @@ export function Reader({
     setBandAway(true);
   }, [bandAway, rememberBandFocus]);
   const bandJump = useCallback(
-    (blockId: BlockId, passage?: string) => {
-      jumpTo(blockId, passage);
+    /* `aim`: a passage key (Skim, Citations), or the quotation a chip in a
+       model's answer follows, to be painted on landing — flash.ts § `JumpAim`. */
+    (blockId: BlockId, aim?: JumpAim) => {
+      jumpTo(blockId, aim);
       if (!bandCovers) return;
       rememberBandFocus();
       setBandAway(true);

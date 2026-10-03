@@ -199,6 +199,23 @@ describe("beginJump and the flash", () => {
     expect(cell?.querySelector("mark")?.classList.contains("passage-flash")).toBe(true);
   });
 
+  it("carries a quote to the flash, and sends the scroll no passage key (spya-hzpf9b)", () => {
+    /* A chip whose sentence quotes the article (Cited.tsx). The quote narrows the paint
+       and nothing else: `scrollToBlock` treats an unresolved passage key as
+       provisional and re-measures, so the quote must not travel as one. With no
+       highlight API here the flash falls back to the cell, which is enough to
+       show it arrived. */
+    expect(beginJump(BLOCKS, block(20), (id) => void pushed.push(id), { quotes: ["some quoted words"] })).toBe(true);
+    expect(calls.hows.at(-1)).toEqual({ align: "centre", passage: undefined });
+    expect(flashed()).toEqual([block(20)]);
+  });
+
+  it("is already there for a quote in the block under the reading line: it flashes and moves nothing", () => {
+    expect(beginJump(BLOCKS, block(15), (id) => void pushed.push(id), { quotes: ["some quoted words"] })).toBe(false);
+    expect(pushed).toEqual([]);
+    expect(flashed()).toEqual([block(15)]);
+  });
+
   it("narrows the no-movement branch to the passage too", () => {
     const key = `quote-15:${block(15)}:0`;
     const cell = document
