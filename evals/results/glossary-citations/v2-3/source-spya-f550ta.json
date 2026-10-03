@@ -1,0 +1,125 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v2-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "background": "A European-funded research collaboration proposal on the physics of lightning, bringing together researchers from about 30 countries."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as splintered into disconnected efforts, with no shared framework tying together data collection, theorizing, and laboratory testing."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A US program that photographed the night sky continuously for over a decade to track meteors falling to Earth, incidentally capturing other rare sky phenomena."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist who was a member of Vienna's Imperial Academy of Sciences, known for careful scientific observation and documentation."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American paleontology professor at Yale and president of the US National Academy of Sciences, famous for his fossil discoveries and rivalry with another paleontologist in the 'Bone Wars'."
+    },
+    {
+      "name": "Abbott Lawrence Rotch",
+      "kind": "person",
+      "aliases": [
+        "Rotch"
+      ],
+      "background": "An American meteorologist who founded the Blue Hill Observatory near Boston and pioneered the use of kites to measure the upper atmosphere."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor renowned for the 1922 Stern-Gerlach experiment, which demonstrated that atomic particles have quantized spin, a foundational result in quantum physics."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer who worked at the Jodrell Bank Observatory before becoming a physics professor at the University of Kent."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "organization",
+      "aliases": [],
+      "background": "The physics research laboratory of Cambridge University, one of the world's most famous centers for discoveries in physics."
+    },
+    {
+      "name": "Pikes Peak",
+      "kind": "place",
+      "aliases": [],
+      "background": "A 4302 m mountain in Colorado's Rocky Mountains, the highest summit in the southern Front Range, once home to a Harvard weather observation station."
+    },
+    {
+      "name": "Puy de Dôme Observatory",
+      "kind": "organization",
+      "aliases": [
+        "Puy de Dôme"
+      ],
+      "background": "A scientific observatory atop a 1465 m extinct volcano in France's Massif Central, historically used for atmospheric and weather research."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity using an ungrounded conductor."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by nearby lightning or electrical shock, distinct from lasting psychological trauma.",
+      "background": "The term describes a recognized medical effect of lightning strikes on the nervous system, still used by doctors today to distinguish immediate physical shock symptoms from longer-term nerve or psychological injury."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A French physician considered the founder of modern neurology, who taught at the University of Paris and was Sigmund Freud's teacher in the 1880s."
+    },
+    {
+      "name": "Soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes soil minerals, creating a glowing ball of burning particles."
+    }
+  ]
+}

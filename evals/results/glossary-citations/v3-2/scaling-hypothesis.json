@@ -1,0 +1,147 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "v3-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The idea, central to the piece, that intelligence can emerge just from running simple neural-network architectures at ever-larger size on ever-more data and compute, without needing new algorithms or hand-built structure."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "The 175-billion-parameter language model from OpenAI, over ten times larger than its predecessor, that the piece treats as proof that simply scaling up an old, architecturally unmodified network produces qualitatively new abilities like learning new tasks from a few examples rather than just more fact-retention."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [
+        "learning to learn"
+      ],
+      "senseHere": "The capability, which the piece argues emerged unexpectedly in GPT-3 purely from scale, of a model learning how to pick up a new task from a handful of examples or instructions at runtime, rather than needing to be retrained for each task."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "OpenAI's earlier, much smaller language model, used in the piece as the baseline showing that GPT-3's meta-learning (following instructions, learning tasks from examples) was not simply present already at smaller scale."
+    },
+    {
+      "name": "Transformer",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The neural network design GPT-3 is built from, described in the piece as an old, already-outdated choice kept mainly for engineering convenience rather than because it is especially powerful."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [
+        "blessing of dimensionality"
+      ],
+      "senseHere": "The author's name for the repeated pattern across deep learning where making a model, its data, and its compute bigger makes training more stable and the result more general and human-like, rather than running into the usual problems of difficulty increasing with scale."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "background": "A robotics researcher who, decades before deep learning's rise, argued from projected computing-hardware growth that cheap-enough compute for insect-level, then mouse-level, then human-level AI would arrive on a roughly datable schedule, a forecast the piece says is holding up."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA",
+        "OA LP"
+      ],
+      "background": "The AI lab that built GPT-3, originally a nonprofit that restructured to include a for-profit arm so it could raise the money needed to keep scaling its models, a bet the piece treats as evidence of organizational conviction that rivals lack."
+    },
+    {
+      "name": "the bitter lesson",
+      "kind": "term",
+      "aliases": [
+        "Bitter Lesson"
+      ],
+      "senseHere": "Used in the piece to mean that, time and again in AI research, approaches relying on brute-force scale and general learning methods beat approaches built on human-crafted structure or domain knowledge."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "background": "A Google-owned AI research lab known for reinforcement-learning systems like AlphaGo, AlphaZero, and AlphaStar, built from large research teams with reliable corporate funding rather than external investment."
+    },
+    {
+      "name": "double descent",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The puzzling pattern where a model's error first improves, then gets temporarily worse, then improves again as its size or training increases, raised in the piece as one of the unresolved mysteries behind why bigger models generalize better."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that a large trained network contains many smaller sub-networks, one of which happens to solve the task well, which the piece draws on to explain why bigger models are more likely to contain a sub-network that generalizes rather than merely memorizes."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The claim, walked through step by step in the piece, that forcing a model to predict text as accurately as a human requires it to progress from memorizing letter frequencies all the way up to real-world reasoning, because only genuine understanding can close the remaining gap in prediction accuracy."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A situation where computing power sufficient to run powerful AI systems already exists and is affordable, but no organization has yet chosen to actually commit it to the task, so the limiting factor is willingness rather than technology."
+    },
+    {
+      "name": "weak scaling hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view the piece attributes to DeepMind: that intelligence does require scale, but only after researchers first hand-design the right separate algorithms or modules (mirroring distinct brain functions), each of which is then scaled up individually, rather than one architecture scaling into everything at once."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Treating a system as if it has beliefs, goals, and intentions because doing so is a useful shortcut for predicting its behavior, even when the system is really just physical parts following rules, as the piece argues can apply to rivers or planetary orbits as much as to people."
+    },
+    {
+      "name": "SayCan",
+      "kind": "work",
+      "aliases": [],
+      "background": "A system that pairs a large language model with a real robot, letting the model turn a spoken instruction into a step-by-step plan which the robot then carries out, such as fetching an object."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "work",
+      "aliases": [
+        "GoL",
+        "Game of Life"
+      ],
+      "background": "A simple grid-based cellular automaton where each cell turns on or off based on fixed rules about its neighbors, famous for generating complex self-propagating patterns like 'gliders' from very basic rules."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "TM",
+        "TMs"
+      ],
+      "senseHere": "Used in the piece as the most general possible model of computation, framed through Turing's own picture of a person following a fixed list of instructions to mark up a tape, to test whether even the most abstract, rule-following systems could still give rise to agent-like behavior in a trained model."
+    }
+  ]
+}

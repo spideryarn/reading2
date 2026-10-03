@@ -1,0 +1,112 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-8",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing sphere seen during thunderstorms that scientists still cannot explain, reported by thousands of witnesses but almost never caught on camera or instruments. It appears unpredictably, lasts only seconds, and vanishes with or without leaving marks, and researchers disagree on whether it is even one single phenomenon."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "senseHere": "A US network of cameras that continuously photographed the night sky for over a decade to catch meteorites falling, and which incidentally captured two probable ball-lightning events among thousands of photographs."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground stations that automatically detects and records every lightning strike's location, timing, and electrical strength. The author used its records to match reported ball-lightning sightings against real lightning strokes nearby."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, which records the location and strength of lightning strikes across the country. It was used to confirm a very strong lightning strike coinciding with a 1994 ball-lightning sighting in Neuruppin."
+    },
+    {
+      "name": "positive and negative lightning strokes",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "Lightning strikes are classified by the sign of electric charge they carry from cloud to ground, measured as peak current in kiloamps; the article notes an unexpectedly high share of positive strokes coinciding with ball-lightning sightings compared to lightning generally."
+    },
+    {
+      "name": "F.R.S.",
+      "kind": "term",
+      "aliases": [
+        "Fellow of the Royal Society"
+      ],
+      "senseHere": "An honorary title marking someone as an elected member of Britain's leading scientific academy, attached to physicist Alfred Brian Pippard's name to signal his high scientific standing when his ball-lightning observation is reported."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "senseHere": "A Baltic German physicist killed in 1753 while experimenting on atmospheric electricity, whose death was popularly but incorrectly depicted as caused by a ball of lightning rather than an ordinary ungrounded lightning strike. This false image helped cement a dramatic, deadly popular picture of ball lightning.",
+      "background": "Richmann was a member of the St Petersburg Academy of Sciences and one of the earliest scientists to study atmospheric electricity experimentally, inspired by Benjamin Franklin's work."
+    },
+    {
+      "name": "Frankenstein",
+      "kind": "work",
+      "aliases": [
+        "the 1818 Frankenstein novel"
+      ],
+      "senseHere": "Invoked as a comparison for how a scientist's death could be dramatized into a cautionary, almost gothic tale, just as Richmann's ordinary lightning death was popularly reimagined as a ball-lightning strike.",
+      "background": "Mary Shelley's 1818 novel about a scientist whose experiment creates a monster, often read as a warning about scientific overreach."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by a lightning or ball-lightning strike, distinct from longer-lasting nerve or psychological damage. The article uses it for cases like a boy's arm going numb after ball lightning hit a gatepost he was touching."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "senseHere": "He examined a patient who claimed to have been struck by ball lightning and used the case to distinguish short-term nerve paralysis from longer-lasting psychological trauma caused by such an encounter.",
+      "background": "Charcot was a pioneering French neurologist at the Salpêtrière Hospital in Paris who taught Sigmund Freud and is considered a founder of modern neurology."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "Thottapillil's proposal P18"
+      ],
+      "senseHere": "A European research collaboration proposal on the physics of lightning, backed by about 30 researchers, whose organizers affirmed that ball lightning is a real phenomenon worth studying even though it remained poorly documented."
+    },
+    {
+      "name": "cloud–ground and cloud–cloud strokes",
+      "kind": "term",
+      "aliases": [
+        "cloud-ground stroke",
+        "cloud-cloud stroke"
+      ],
+      "senseHere": "Lightning strikes are also classified by whether they travel from a cloud down to the ground or jump between clouds; the study found cloud-to-ground strikes far more often linked to ball-lightning sightings than cloud-to-cloud ones."
+    }
+  ]
+}

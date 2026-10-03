@@ -1,0 +1,111 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "final-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, still-unexplained glowing orb-like phenomenon associated with thunderstorms that lasts a few seconds and vanishes with or without a trace. The article treats it as a real but poorly documented atmospheric phenomenon, distinct from ordinary lightning, that may actually comprise several different underlying effects."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist of the early 19th century whose 1837 work on thunder, Sur le tonnerre, is credited with establishing the term ball lightning as a scientific subject."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German senior school official who wrote Der Kugelblitz (1923), the only German-language monograph on ball lightning, compiling early case reports including Arago's."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "senseHere": "A European research collaboration on the physics of lightning, mentioned in the article as a body of about 30 researchers who reached consensus that ball lightning is a genuine phenomenon rather than illusion or error."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as splintered into disconnected efforts, with some researchers only collecting sightings, others only building theories, and others only running lab experiments, without a shared coordinated approach."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [],
+      "background": "A US network of cameras that continuously photographed the night sky for over a decade to catch meteorites, incidentally searched for ball lightning images among roughly 12,000 photographic records, finding only two probable cases."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "A modern Austrian network that detects and locates individual lightning strokes, used in the article to cross-check the timing, strength, and polarity of lightning strikes against reported ball lightning sightings."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "A German lightning-detection network comparable to ALDIS, used in the article to confirm the timing and strength of lightning strokes coinciding with reported ball lightning sightings in Germany."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "An Austrian geologist and mineralogist and member of the Imperial Academy of Sciences at Vienna, who recorded a detailed 1868 ball lightning sighting with sketches and reported it formally to his academy."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 while experimenting with atmospheric electricity. Investigation showed his death was caused by an ordinary ungrounded lightning conductor, though popular imagery later falsely depicted him being struck by a ball of lightning."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or loss of sensation in a limb caused by a nearby lightning or ball lightning event, distinguished in the article from longer-lasting traumatic nervous aftereffects such as phobia or persistent sensory loss."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as the founder of modern neurology, based at the Salpêtrière Hospital in Paris, who taught Sigmund Freud. He studied a patient's reported ball lightning encounter to distinguish short-term paralysis from lasting traumatic nervous symptoms."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes soil minerals, producing a glowing ball whose light comes from burning particles of elements like iron, calcium, and silicon. The article cites spectral readings from a ball lightning event showing exactly these elements as support for the theory."
+    }
+  ]
+}

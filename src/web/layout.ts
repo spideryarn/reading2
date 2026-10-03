@@ -49,15 +49,17 @@ export const SPINE_W = 12;
 
 /* **The narrowest a gist column read at, when there were gist columns** — and
    still a term of the phone breakpoint, which is why it outlived them.
-   Exported for `tests/spine-width.test.ts` alone: both breakpoints in styles.css
-   are `GIST_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
-   query cannot read a custom property, and that test is the only thing that can
-   notice when one of them moves and the others don't. **The mode crossover is
+   Exported because the narrow-window boundary is
+   `GIST_MIN + PROSE_MIN + SPINE_W − 1`. CSS has to perform that sum by hand —
+   a media query cannot read a custom property — and `tests/spine-width.test.ts`
+   is what notices when one of its copies moves. **The mode crossover is
    deliberately not among them** — it moves with `?spine=0`, which no query can
    see, so the stylesheet is told it by a class instead (`.band-covers`, written
    from `fit.modeW`). That test asserts its absence. */
 export const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
 export const PROSE_MIN = 544; // 34rem — the width the reading column is defended at
+/** The last viewport width at which the reading view uses its narrow-window rules. */
+export const NARROW_WINDOW_MAX = GIST_MIN + PROSE_MIN + SPINE_W - 1;
 
 /**
  * **The narrowest the reading column may actually be, as against the width it

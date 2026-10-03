@@ -1,0 +1,113 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "final-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A short-lived glowing sphere seen during thunderstorms, appearing at random and vanishing within seconds, whose physical cause remains unexplained. The article treats it as a real but poorly documented atmospheric phenomenon, distinct from ordinary lightning bolts, known mainly through eyewitness description rather than instrument recordings."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman"
+      ],
+      "background": "An American lightning researcher whose group has triggered real lightning strikes under controlled conditions using rockets trailing grounded wires, at a Florida test site. His team's experiments striking various ground materials produced bright but short-lived effects that they stopped short of calling true ball lightning."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered across unconnected individuals and small projects, with no shared method, data, or agreed theory tying the work together."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground sensors that detects and locates individual lightning strokes, giving their time, position, and electrical current strength. The article uses its data to check whether reported ball lightning sightings coincided with real, located lightning strikes."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-location network, recording the position, timing, and current strength of lightning strokes. It is used in the article to confirm a strong strike coinciding with a reported ball lightning sighting."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of the Imperial Academy of Sciences in Vienna, known for work on mineral optics. In 1868 he recorded and sketched his own sighting of ball lightning from his Vienna home."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann"
+      ],
+      "background": "An astrophysicist at the Göttingen university observatory who, as a child in 1951, witnessed a striking ball lightning event that fragmented into smaller spheres over an asphalt road. He later published and calculated the plasma energy density from the melted asphalt and also contributed other case material to this article."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American professor of palaeontology at Yale University and president of the US National Academy of Sciences, best known for discovering many dinosaur fossils. In 1878 he witnessed and later described a ball lightning incident aboard a yacht in Southampton harbour."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern-Gerlach experiment demonstrating that electron spin takes only discrete values in a magnetic field. In 1927 he witnessed and carefully timed a ball lightning event near Tübingen."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer at Jodrell Bank Observatory who later became a professor of physical electronics at the University of Kent. His 1963 account of ball lightning passing down an aircraft aisle, published in Nature, became one of the most widely reported cases in the field."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity. He was killed by an ungrounded lightning conductor, an incident later mythologised in a popular engraving as a ball lightning strike."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or numbness in part of the body caused by a nearby lightning strike or, in several cases here, contact with ball lightning. The article distinguishes it from longer-lasting psychological aftereffects such as thunderstorm phobia."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as the founder of modern neurology, based at the Salpêtrière Hospital in Paris, and a teacher of Sigmund Freud. He studied nervous disorders following traumatic shocks, including a patient who reported being struck by ball lightning."
+    }
+  ]
+}

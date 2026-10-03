@@ -1,0 +1,127 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "after-2",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, unexplained glowing sphere seen during thunderstorms, lasting seconds before vanishing, sometimes with a bang, burn marks, or damage. It is distinct from ordinary lightning bolts and has no agreed scientific explanation despite thousands of eyewitness reports."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "COST Action"
+      ],
+      "background": "A European-funded research collaboration on the physics of lightning involving around 30 researchers, which concluded that the existence of ball lightning as a real phenomenon was not in doubt."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "Austria's network of ground stations that detects and pinpoints lightning strikes in real time, used here to cross-check reported ball lightning sightings against actual recorded lightning strokes nearby."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "Germany's lightning detection network, used in the same way as its Austrian counterpart to confirm the timing, location, and polarity of lightning strokes coinciding with reported ball lightning."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist who was a member of the Imperial Academy of Sciences in Vienna. His detailed 1868 written account and sketch of a ball lightning sighting from his own window is treated as one of the earliest rigorous scientific observations of the phenomenon."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern-Gerlach experiment demonstrating quantum spin. In 1927 he witnessed and mathematically analyzed a ball lightning event near Tübingen, calculating its improbable speed from timing of thunder and an explosion."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "place",
+      "aliases": [],
+      "background": "The physics research laboratory at Cambridge University, a historically prominent center for experimental physics, where several staff members witnessed a ball lightning event during a 1982 thunderstorm."
+    },
+    {
+      "name": "Pikes Peak",
+      "kind": "place",
+      "aliases": [],
+      "background": "A 4302 m mountain in Colorado's Front Range, site of a 19th-century Harvard weather observatory whose staff recorded early ball lightning-like events during lightning strikes at the station."
+    },
+    {
+      "name": "Puy de Dôme Observatory",
+      "kind": "place",
+      "aliases": [
+        "Puy de Dôme"
+      ],
+      "background": "A weather observatory atop a 1465 m extinct volcano in central France where staff recorded repeated ball lightning sightings during an unusually active 1916 thunderstorm."
+    },
+    {
+      "name": "Mt Sonnblick observatory",
+      "kind": "place",
+      "aliases": [
+        "Sonnblick"
+      ],
+      "background": "A high-altitude weather station at 3106 m in the Austrian Alps, where staff reported ball lightning entering the building through wiring during thunderstorms in the 1940s."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 while experimenting with atmospheric electricity. Investigation showed he was killed by an ordinary ungrounded lightning conductor, yet popular illustrations later falsely depicted a ball of fire striking him, cementing a deadly, dramatic image of ball lightning in popular culture."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by a nearby lightning or ball lightning strike, which fades within hours, as distinct from longer-lasting nerve or psychological injury from the same event."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as the founder of modern neurology, based at the Salpêtrière Hospital in Paris, who taught Sigmund Freud. He studied a patient's account of being struck by ball lightning to distinguish temporary shock-induced paralysis from longer-lasting traumatic nerve damage."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Artificially induced lightning strikes created at a research facility by firing a small rocket trailing a grounded wire into a thundercloud, used to study what happens when lightning hits different ground materials."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss theory"
+      ],
+      "senseHere": "The idea that ball lightning forms when a lightning strike vaporizes soil minerals, producing a glowing cloud of burning metal and silicon particles whose spectrum matches elements found in earth."
+    },
+    {
+      "name": "slitless spectroscopy",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A camera technique using a diffraction grating without a narrow slit to capture the spread of light wavelengths from a fast-moving or transient object, letting researchers identify the chemical elements glowing within a ball lightning event."
+    }
+  ]
+}

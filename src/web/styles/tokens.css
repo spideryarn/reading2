@@ -193,13 +193,15 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
-  --bar-h: 2.75rem; /* .controls */
+  /* .controls: 44px. One rule raises it: crumbs.css § a narrow window, to
+     4.25rem while the bar holds the headings breadcrumb on a narrow window. */
+  --bar-h: 2.75rem;
   /**
    * **The y where the controls bar ends**, and the one name for what five
    * separate rules were each spelling `var(--bar-h)`: the table head, the mode
    * band, the spine, the overflow fade and a gist cell's sticky box all pin
    * *underneath the controls bar*, and the bar itself derives its own `top`
-   * from it. A bar that moved without them would leave a 44px band of article
+   * from it. A bar that moved without them would leave a bar-high band of article
    * sliding along above a row of pinned chrome, so they have to move together —
    * one substitution rather than five judgement calls, and the next thing that
    * pins below the bar gets it right by using the obvious token.

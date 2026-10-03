@@ -1,0 +1,147 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-7",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, still-unexplained glowing sphere seen during thunderstorms that lasts a few seconds before vanishing, sometimes with a bang or burn marks. The article treats it as a real but poorly documented atmospheric phenomenon, distinct from ordinary lightning strokes, with no agreed scientific explanation."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "senseHere": "The French scientist whose 1837 book first used the term that became 'ball lightning' in English, giving the phenomenon its name in Western science.",
+      "background": "Arago was a 19th-century French astronomer and physicist known for work on optics and electromagnetism, and for popularizing scientific topics to general readers."
+    },
+    {
+      "name": "Der Kugelblitz",
+      "kind": "work",
+      "aliases": [
+        "Brand (1923, 2010)"
+      ],
+      "senseHere": "The only German-language book-length study of ball lightning, compiling historical eyewitness cases including the 1841 Milan sighting and Haidinger's 1868 report."
+    },
+    {
+      "name": "Fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as splintered into isolated groups of data-collectors, theorists, and lab experimenters who rarely work together or agree on basic facts."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "senseHere": "A US network of cameras that continuously photographed the night sky for over a decade to catch meteors, incidentally capturing two probable images of ball lightning."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground sensors that detects and records the location, timing, and electrical strength of every lightning stroke across the country."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, used in the article to confirm the timing and strength of strokes linked to reported ball lightning sightings."
+    },
+    {
+      "name": "Cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-cloud stroke"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the ground, as opposed to one that stays entirely within or between clouds; the article tracks which type accompanied each ball lightning sighting."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of Vienna's Imperial Academy of Sciences, known for pioneering work on mineral optics."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann"
+      ],
+      "background": "An astrophysicist at the Göttingen university observatory who, as a child in 1951, witnessed and later carefully documented a ball lightning event."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor famous for the 1922 Stern-Gerlach experiment, which showed that electron spin is quantized in a magnetic field."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer who worked at the Jodrell Bank Observatory and later became a professor of physical electronics at the University of Kent."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed while experimenting with atmospheric electricity in 1753."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician often called the founder of modern neurology, based at Salpêtrière Hospital in Paris and a teacher of Sigmund Freud. He used case studies of patients to distinguish different nervous disorders."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by a nearby lightning or ball lightning event, distinct from lasting nerve or psychological damage.",
+      "background": "The term combines the Greek word for lightning with paralysis, and is still used in medicine today to describe temporary lightning-related limb paralysis."
+    },
+    {
+      "name": "Soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss theory"
+      ],
+      "senseHere": "A proposed explanation in which lightning striking soil vaporizes minerals, which then burn in air to form the glowing ball, explaining why its light spectrum matches elements like iron, calcium, and silicon found in soil."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "Thottapillil's COST Action proposal"
+      ],
+      "senseHere": "A European research collaboration project on the physics of lightning whose members, despite scientific uncertainty about its cause, agreed that ball lightning is a real phenomenon."
+    }
+  ]
+}

@@ -214,6 +214,9 @@ right instead, beside a band or without one.
   handler has to keep.
 - **[touch.md](touch.md)** — reading on an iPad: the prose keeps momentum scrolling (a swipe over a
   gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
+- **[phone-and-touch.md](phone-and-touch.md)** — the map for a phone, an iPad and a finger: what
+  Greg has said he wants on each, every policy in a line with its owner, and where the code
+  branches on the device. Open it first when a report says "on my iPhone".
 - **[url-state.md](url-state.md)** — every parameter, which push history and which replace, and why
   position is a *section* rather than an offset. Also the home of the **↩ Back to …** chip: every
   jump in every mode — a block link, a glossary term, a citation, a Skim row, opening

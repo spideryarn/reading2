@@ -1,0 +1,346 @@
+arm	slug	prompt	entries	people	works	cited-names	cited-aliases
+after	analog-cognition-and-consciousness-4-28-26-spya-f03kqf	glossary/9	16	0	0	0	0
+after	entropy-24-00930-spya-pywwkq	glossary/9	21	0	0	0	0
+after	scaling-hypothesis	glossary/9	20	3	6	0	0
+after	source-spya-f550ta	glossary/9	15	8	0	0	0
+after-2	analog-cognition-and-consciousness-4-28-26-spya-f03kqf	glossary/9	16	0	0	0	0
+after-2	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+after-2	scaling-hypothesis	glossary/9	20	1	6	0	0
+after-2	source-spya-f550ta	glossary/9	16	4	0	0	0
+after-3	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+after-3	source-spya-f550ta	glossary/9	17	5	0	0	0
+after-4	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+after-4	source-spya-f550ta	glossary/9	14	2	0	0	0
+after-5	entropy-24-00930-spya-pywwkq	glossary/9	21	0	0	0	0
+after-5	source-spya-f550ta	glossary/9	19	7	0	0	0
+before	analog-cognition-and-consciousness-4-28-26-spya-f03kqf	glossary/8	15	0	0	0	0
+before	entropy-24-00930-spya-pywwkq	glossary/8	19	0	0	0	0
+before	scaling-hypothesis	glossary/8	22	2	6	0	0
+before	source-spya-f550ta	glossary/8	19	9	0	0	0
+before-2	analog-cognition-and-consciousness-4-28-26-spya-f03kqf	glossary/8	15	0	0	0	0
+before-2	entropy-24-00930-spya-pywwkq	glossary/8	19	0	0	0	0
+before-2	scaling-hypothesis	glossary/8	22	4	4	0	0
+before-2	source-spya-f550ta	glossary/8	17	9	1	0	2
+before-3	entropy-24-00930-spya-pywwkq	glossary/8	20	0	0	0	0
+before-3	source-spya-f550ta	glossary/8	19	7	1	0	1
+before-4	entropy-24-00930-spya-pywwkq	glossary/8	20	1	0	0	0
+before-4	source-spya-f550ta	glossary/8	18	9	1	0	1
+before-5	entropy-24-00930-spya-pywwkq	glossary/8	21	0	0	0	0
+before-5	source-spya-f550ta	glossary/8	17	8	0	0	1
+final-1	entropy-24-00930-spya-pywwkq	glossary/9	19	0	0	0	0
+final-1	noema-mythology-of-conscious-ai	glossary/9	21	1	1	0	0
+final-1	source-spya-f550ta	glossary/9	13	5	0	0	0
+final-2	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+final-2	noema-mythology-of-conscious-ai	glossary/9	19	6	2	0	0
+final-2	source-spya-f550ta	glossary/9	13	8	0	0	0
+final-3	noema-mythology-of-conscious-ai	glossary/9	20	1	0	0	0
+final-3	source-spya-f550ta	glossary/9	16	6	0	0	0
+final-4	source-spya-f550ta	glossary/9	9	3	0	0	0
+final-5	source-spya-f550ta	glossary/9	15	8	0	0	0
+noema-before-1	noema-mythology-of-conscious-ai	glossary/8	20	3	0	0	0
+noema-before-2	noema-mythology-of-conscious-ai	glossary/8	20	2	0	0	0
+noema-before-3	noema-mythology-of-conscious-ai	glossary/8	20	3	0	0	0
+v2-1	entropy-24-00930-spya-pywwkq	glossary/9	16	0	0	0	0
+v2-1	scaling-hypothesis	glossary/9	21	2	4	0	0
+v2-1	source-spya-f550ta	glossary/9	12	1	0	0	0
+v2-2	entropy-24-00930-spya-pywwkq	glossary/9	19	0	0	0	0
+v2-2	scaling-hypothesis	glossary/9	20	2	8	0	0
+v2-2	source-spya-f550ta	glossary/9	17	6	0	0	0
+v2-3	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+v2-3	source-spya-f550ta	glossary/9	15	7	0	0	0
+v2-4	entropy-24-00930-spya-pywwkq	glossary/9	19	0	0	0	0
+v2-4	source-spya-f550ta	glossary/9	10	8	0	0	0
+v2-5	entropy-24-00930-spya-pywwkq	glossary/9	18	0	0	0	0
+v2-5	source-spya-f550ta	glossary/9	13	2	0	0	1
+v3-1	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+v3-1	noema-mythology-of-conscious-ai	glossary/9	20	4	0	0	0
+v3-1	scaling-hypothesis	glossary/9	20	3	4	0	0
+v3-1	source-spya-f550ta	glossary/9	7	0	0	0	0
+v3-10	source-spya-f550ta	glossary/9	18	8	0	0	0
+v3-2	entropy-24-00930-spya-pywwkq	glossary/9	21	0	0	0	0
+v3-2	noema-mythology-of-conscious-ai	glossary/9	20	4	0	0	0
+v3-2	scaling-hypothesis	glossary/9	19	1	4	0	0
+v3-2	source-spya-f550ta	glossary/9	17	8	0	0	0
+v3-3	entropy-24-00930-spya-pywwkq	glossary/9	20	0	0	0	0
+v3-3	noema-mythology-of-conscious-ai	glossary/9	24	6	1	0	0
+v3-3	source-spya-f550ta	glossary/9	18	7	0	0	1
+v3-4	entropy-24-00930-spya-pywwkq	glossary/9	23	0	0	0	0
+v3-4	source-spya-f550ta	glossary/9	17	8	0	0	0
+v3-5	entropy-24-00930-spya-pywwkq	glossary/9	19	0	0	0	0
+v3-5	source-spya-f550ta	glossary/9	16	9	0	0	0
+v3-6	source-spya-f550ta	glossary/9	14	5	0	0	0
+v3-7	source-spya-f550ta	glossary/9	17	7	1	0	1
+v3-8	source-spya-f550ta	glossary/9	12	2	1	0	1
+v3-9	source-spya-f550ta	glossary/9	16	6	0	0	0
+v3b-1	noema-mythology-of-conscious-ai	glossary/9	20	3	0	0	0
+v3b-1	source-spya-f550ta	glossary/9	18	8	0	0	0
+v3b-2	noema-mythology-of-conscious-ai	glossary/9	20	3	0	0	0
+v3b-2	source-spya-f550ta	glossary/9	20	10	0	0	0
+v3b-3	noema-mythology-of-conscious-ai	glossary/9	20	3	0	0	0
+v3b-3	source-spya-f550ta	glossary/9	19	7	0	0	0
+v3b-4	noema-mythology-of-conscious-ai	glossary/9	20	7	1	0	0
+v3b-4	source-spya-f550ta	glossary/9	17	10	0	0	0
+v3b-5	noema-mythology-of-conscious-ai	glossary/9	20	7	1	0	0
+v3b-5	source-spya-f550ta	glossary/9	18	5	0	0	0
+
+=== every name or alias the screen flagged (read them: a year is not always a citation) ===
+[alias] before-2 source-spya-f550ta: Rakov and Uman (2003)  (alias of [work] Rakov and Uman)
+[alias] before-2 source-spya-f550ta: Stenhoff (1999)  (alias of [person] Stenhoff)
+[alias] before-3 source-spya-f550ta: Rakov and Uman (2003)  (alias of [work] Rakov and Uman)
+[alias] before-4 source-spya-f550ta: Rakov and Uman, 2003  (alias of [work] Rakov and Uman)
+[alias] before-5 source-spya-f550ta: Cen et al. case  (alias of [event] Qinghai Plateau spectroscopy case)
+[alias] v2-5 source-spya-f550ta: 1922 experiment  (alias of [event] spin quantization experiment)
+[alias] v3-3 source-spya-f550ta: fragmented science (2001)  (alias of [term] fragmented science)
+[alias] v3-7 source-spya-f550ta: Brand (1923, 2010)  (alias of [work] Der Kugelblitz)
+[alias] v3-8 source-spya-f550ta: the 1818 Frankenstein novel  (alias of [work] Frankenstein)
+
+=== every person and work entry (read them: these are what must not be lost) ===
+after analog-cognition-and-consciousness-4-28-26-spya-f03kqf
+  people: (none)
+  works:  (none)
+after entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+after scaling-hypothesis
+  people: Hans Moravec | Ilya Sutskever | Daniel Dennett
+  works:  GPT-3 | GPT-2 | AlphaGo Zero | MuZero | OpenAI Five | Conway's Game of Life
+after source-spya-f550ta
+  people: François Arago | Walther Brand | Wilhelm von Haidinger | Axel Wittmann | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+after-2 analog-cognition-and-consciousness-4-28-26-spya-f03kqf
+  people: (none)
+  works:  (none)
+after-2 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+after-2 scaling-hypothesis
+  people: Hans Moravec
+  works:  GPT-3 | GPT-2 | AlphaGo Zero | AlphaZero | MuZero | OpenAI Five
+after-2 source-spya-f550ta
+  people: Wilhelm von Haidinger | Walther Gerlach | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+after-3 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+after-3 source-spya-f550ta
+  people: Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+after-4 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+after-4 source-spya-f550ta
+  people: Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+after-5 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+after-5 source-spya-f550ta
+  people: Wilhelm von Haidinger | Axel Wittmann | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+before analog-cognition-and-consciousness-4-28-26-spya-f03kqf
+  people: (none)
+  works:  (none)
+before entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+before scaling-hypothesis
+  people: Hans Moravec | Daniel Dennett
+  works:  GPT-3 | GPT-2 | AlphaZero | MuZero | OpenAI Five | Dactyl
+before source-spya-f550ta
+  people: François Arago | Walther Brand | Martin A. Uman | Pyotr Leonidovich Kapitsa | Wilhelm von Haidinger | Axel D. Wittmann | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+before-2 analog-cognition-and-consciousness-4-28-26-spya-f03kqf
+  people: (none)
+  works:  (none)
+before-2 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+before-2 scaling-hypothesis
+  people: Hans Moravec | Norbert Wiener | Ilya Sutskever | Daniel Dennett
+  works:  GPT-3 | GPT-2 | AlphaGo Zero | MuZero
+before-2 source-spya-f550ta
+  people: François Arago | Walther Brand | Stenhoff | Wilhelm von Haidinger | Axel Wittmann | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  Rakov and Uman
+before-3 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+before-3 source-spya-f550ta
+  people: François Arago | Stenhoff | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  Rakov and Uman
+before-4 entropy-24-00930-spya-pywwkq
+  people: Williams and Beer
+  works:  (none)
+before-4 source-spya-f550ta
+  people: François Arago | Walther Brand | Vladimir Lvovich Bychkov | Wilhelm von Haidinger | Walther Gerlach | Anatoly Il'ich Nikitin | Georg Wilhelm Richmann | Jean-Martin Charcot | Jianyong Cen
+  works:  Rakov and Uman
+before-5 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+before-5 source-spya-f550ta
+  people: François Arago | Walther Brand | Stanley Singer | Vladimir Lvovich Bychkov | Wilhelm von Haidinger | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+final-1 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+final-1 noema-mythology-of-conscious-ai
+  people: Blake Lemoine
+  works:  LaMDA
+final-1 source-spya-f550ta
+  people: François Arago | Walther Brand | Wilhelm von Haidinger | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+final-2 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+final-2 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | David Chalmers | Geoffrey Hinton | Thomas Nagel | John Searle | Nick Bostrom
+  works:  LaMDA | AlphaFold
+final-2 source-spya-f550ta
+  people: Martin A. Uman | Wilhelm von Haidinger | Axel D. Wittmann | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+final-3 noema-mythology-of-conscious-ai
+  people: Blake Lemoine
+  works:  (none)
+final-3 source-spya-f550ta
+  people: Wilhelm von Haidinger | Axel D. Wittmann | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+final-4 source-spya-f550ta
+  people: François Arago | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+final-5 source-spya-f550ta
+  people: François Arago | Vladimir Lvovich Bychkov | Wilhelm von Haidinger | Axel D. Wittmann | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+noema-before-1 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | David Chalmers | Geoffrey Hinton
+  works:  (none)
+noema-before-2 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | Thomas Nagel
+  works:  (none)
+noema-before-3 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | Geoffrey Hinton | Thomas Nagel
+  works:  (none)
+v2-1 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v2-1 scaling-hypothesis
+  people: Hans Moravec | Ilya Sutskever
+  works:  GPT-3 | GPT-2 | AlphaZero | MuZero
+v2-1 source-spya-f550ta
+  people: Wilhelm von Haidinger
+  works:  (none)
+v2-2 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v2-2 scaling-hypothesis
+  people: Hans Moravec | Ilya Sutskever
+  works:  GPT-3 | GPT-2 | Jukebox | AlphaGo Zero | MuZero | AlphaStar | Dactyl | OA5
+v2-2 source-spya-f550ta
+  people: Pyotr Leonidovich Kapitsa | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v2-3 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v2-3 source-spya-f550ta
+  people: Wilhelm von Haidinger | Othniel Charles Marsh | Abbott Lawrence Rotch | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v2-4 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v2-4 source-spya-f550ta
+  people: François Arago | Pyotr Leonidovich Kapitsa | Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v2-5 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v2-5 source-spya-f550ta
+  people: Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-1 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v3-1 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | Geoffrey Hinton | David Chalmers | Nick Bostrom
+  works:  (none)
+v3-1 scaling-hypothesis
+  people: Hans Moravec | Ilya Sutskever | Daniel Dennett
+  works:  AlphaZero | MuZero | OpenAI Five | Conway's Game of Life
+v3-1 source-spya-f550ta
+  people: (none)
+  works:  (none)
+v3-10 source-spya-f550ta
+  people: François Arago | Walther Brand | Martin A. Uman | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-2 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v3-2 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | David Chalmers | Thomas Nagel | Nick Bostrom
+  works:  (none)
+v3-2 scaling-hypothesis
+  people: Hans Moravec
+  works:  GPT-3 | GPT-2 | SayCan | Conway's Game of Life
+v3-2 source-spya-f550ta
+  people: Pyotr Leonidovich Kapitsa | Wilhelm von Haidinger | Axel Wittmann | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-3 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v3-3 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | Geoffrey Hinton | David Chalmers | Thomas Nagel | John Searle | Nick Bostrom
+  works:  LaMDA
+v3-3 source-spya-f550ta
+  people: Walther Brand | François Arago | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-4 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v3-4 source-spya-f550ta
+  people: Vladimir Lvovich Bychkov | Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Anatoly Il'ich Nikitin | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-5 entropy-24-00930-spya-pywwkq
+  people: (none)
+  works:  (none)
+v3-5 source-spya-f550ta
+  people: François Arago | Walther Brand | Martin A. Uman | Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-6 source-spya-f550ta
+  people: François Arago | Wilhelm von Haidinger | Walther Gerlach | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3-7 source-spya-f550ta
+  people: François Arago | Wilhelm von Haidinger | Axel D. Wittmann | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  Der Kugelblitz
+v3-8 source-spya-f550ta
+  people: Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  Frankenstein
+v3-9 source-spya-f550ta
+  people: François Arago | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3b-1 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | John Searle | Nick Bostrom
+  works:  (none)
+v3b-1 source-spya-f550ta
+  people: François Arago | Walther Brand | Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3b-2 noema-mythology-of-conscious-ai
+  people: David Chalmers | Thomas Nagel | Alan Turing
+  works:  (none)
+v3b-2 source-spya-f550ta
+  people: Walther Brand | François Arago | Martin A. Uman | Vladimir Lvovich Bychkov | Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3b-3 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | Thomas Nagel | Nick Bostrom
+  works:  (none)
+v3b-3 source-spya-f550ta
+  people: François Arago | Walther Brand | Wilhelm von Haidinger | Walther Gerlach | Roger Clifton Jennison | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3b-4 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | David Chalmers | Geoffrey Hinton | Thomas Nagel | Alan Turing | John Searle | Nick Bostrom
+  works:  Müller-Lyer illusion
+v3b-4 source-spya-f550ta
+  people: Wilhelm von Haidinger | Othniel Charles Marsh | Walther Gerlach | James Durward | Hans Dolezalek | Leopold Breitenecker | Roger Clifton Jennison | Alfred Brian Pippard | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)
+v3b-5 noema-mythology-of-conscious-ai
+  people: Blake Lemoine | David Chalmers | Geoffrey Hinton | Thomas Nagel | Alan Turing | John Searle | Nick Bostrom
+  works:  LaMDA
+v3b-5 source-spya-f550ta
+  people: François Arago | Walther Brand | Walther Gerlach | Georg Wilhelm Richmann | Jean-Martin Charcot
+  works:  (none)

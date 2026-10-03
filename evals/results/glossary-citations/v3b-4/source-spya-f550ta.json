@@ -1,0 +1,145 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3b-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "406c56f8eeec02fba123307afd30a72408ef30ed21ed2c5d7b21783a328481f6",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A label for ball lightning research as a field splintered into disconnected groups of data collectors, theorists, and lab experimenters who rarely combine their work into one coherent effort."
+    },
+    {
+      "name": "COST Action",
+      "kind": "organization",
+      "aliases": [
+        "COST Action P18"
+      ],
+      "background": "COST (European Cooperation in Science and Technology) funds networks of European researchers to coordinate work on a shared topic across countries, without funding the research itself."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "background": "ALDIS is Austria's network of ground sensors that detects and locates individual lightning strokes, recording details like their position, timing, and electrical current."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "background": "BLIDS is Germany's equivalent lightning-detection network, used to pinpoint and characterize lightning strikes across the country."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century geologist and mineralogist who was a member of Vienna's Imperial Academy of Sciences, known for careful scientific observation and reporting of natural phenomena."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "A prominent 19th-century American paleontologist, Yale professor, and president of the US National Academy of Sciences, famous for dinosaur fossil discoveries and academic rivalries."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physicist renowned for the 1922 Stern-Gerlach experiment, which demonstrated that atomic particles have quantized spin by passing them through a magnetic field."
+    },
+    {
+      "name": "James Durward",
+      "kind": "person",
+      "aliases": [
+        "Durward"
+      ],
+      "background": "A British meteorologist who directed Iraq's national weather service in the late 1930s, bringing professional observational training to his reported sightings."
+    },
+    {
+      "name": "Hans Dolezalek",
+      "kind": "person",
+      "aliases": [
+        "Dolezalek"
+      ],
+      "background": "A German-trained physicist who later worked on atmospheric electricity research for the US Navy."
+    },
+    {
+      "name": "Leopold Breitenecker",
+      "kind": "person",
+      "aliases": [
+        "Breitenecker"
+      ],
+      "background": "An Austrian physician who became a professor of forensic medicine at the University of Vienna."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer who worked at the Jodrell Bank Observatory before becoming a physics professor at the University of Kent."
+    },
+    {
+      "name": "Jodrell Bank Observatory",
+      "kind": "place",
+      "aliases": [
+        "Jodrell Bank"
+      ],
+      "background": "A major British astronomical observatory in Cheshire, England, famous for its large radio telescopes used to study celestial objects."
+    },
+    {
+      "name": "Alfred Brian Pippard",
+      "kind": "person",
+      "aliases": [
+        "Pippard"
+      ],
+      "background": "A British physicist and Fellow of the Royal Society who was a professor at Cambridge University's Cavendish Laboratory, known for work on superconductivity."
+    },
+    {
+      "name": "Cavendish Laboratory",
+      "kind": "place",
+      "aliases": [
+        "Cavendish"
+      ],
+      "background": "The physics department of Cambridge University, one of the world's most historically important centers for experimental physics, where discoveries like the electron were made."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity, becoming an early cautionary figure in the study of lightning."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A temporary paralysis or loss of sensation caused by being near or struck by lightning, distinct from lasting psychological trauma.",
+      "background": "The term combines the Greek word for lightning with paralysis and is used in medicine to describe short-lived nerve effects from electrical injury."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician widely regarded as a founder of modern neurology, who taught Sigmund Freud and studied patients' nervous disorders at the Salpêtrière Hospital in Paris."
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-5",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A still-unexplained glowing ball-shaped phenomenon linked to thunderstorms, lasting seconds before vanishing with or without a trace. It is distinct from ordinary branching lightning bolts and has never been reliably captured by instruments, only described by witnesses.",
+      "background": "The term was coined by the French scientist François Arago in his 1837 work on thunder. It remains a disputed topic in atmospheric physics with thousands of reports but no agreed scientific explanation."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist of the early 19th century who wrote an influential treatise on thunder and lightning in 1837, in which he coined the term for this phenomenon."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German senior school official who wrote the only German-language monograph devoted to this phenomenon, published in 1923 and reissued in 2010, drawing on earlier reports such as Arago's."
+    },
+    {
+      "name": "Martin A. Uman",
+      "kind": "person",
+      "aliases": [
+        "Uman"
+      ],
+      "background": "A prominent American lightning researcher whose group has used rockets trailing wires to deliberately trigger lightning strikes for controlled study at a Florida test site."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "COST Action",
+        "P18"
+      ],
+      "senseHere": "A European research collaboration proposal on lightning physics, bringing together about 30 researchers who agreed that the phenomenon under study genuinely occurs, even without a settled explanation."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "A network of ground sensors across Austria that detects and locates individual lightning strokes, letting researchers match reported sightings to real strikes by time and position."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "A German counterpart to Austria's lightning detection network, used to pinpoint and characterize individual lightning strokes tied to reported sightings."
+    },
+    {
+      "name": "cloud–ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-ground flash",
+        "ground stroke"
+      ],
+      "senseHere": "A lightning discharge that travels between a cloud and the ground, as opposed to one that stays within or between clouds. The article counts how many sightings coincided with this type versus cloud-to-cloud discharges."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "19th-century geologist and mineralogist who was a member of Vienna's Imperial Academy of Sciences and formally reported his 1868 sighting to that academy."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American paleontology professor at Yale and president of the US National Academy of Sciences in the late 19th century, known for pioneering dinosaur fossil research."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "German physics professor famous for the 1922 Stern-Gerlach experiment demonstrating that particles' magnetic properties come in discrete steps rather than a continuous range."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "British radio astronomer who worked at the Jodrell Bank Observatory before becoming a physics professor at the University of Kent."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting on atmospheric electricity, killed by an ungrounded lightning conductor."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or loss of feeling in a limb caused by a lightning or ball lightning encounter, as distinguished from longer-lasting nerve or psychological damage."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician regarded as a founder of modern neurology, a professor in Paris who taught Sigmund Freud and studied patients with nerve disorders following traumatic events."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that when lightning strikes soil, it vaporizes minerals in the ground, creating a floating glowing cloud of burning particles that looks like a ball of fire."
+    }
+  ]
+}
