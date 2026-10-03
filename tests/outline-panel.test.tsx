@@ -625,20 +625,49 @@ describe("Expanded follow-along", () => {
  * **A finger's first tap on a row opens its card; the second goes there** —
  * docs/project/touch.md, for the list face as for the two-column one (Greg,
  * spya-a868zs; plan 261003c). The click says `mouse` on iOS 18.2 and later
- * (WebKit bug 282988), so only the `pointerdown` says it was a finger.
+ * (WebKit bug 282988), so only the `pointerdown` says it was a finger. The
+ * touch hover/lift and compatibility mouse events are included because those
+ * are the events that have closed touch-opened cards before their click.
  */
 describe("a tap on a row", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
   function fire(el: Element, type: string, pointerType: string, detail = 1) {
-    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, detail });
-    Object.defineProperty(ev, "pointerType", { value: pointerType });
-    Object.defineProperty(ev, "pointerId", { value: 1 });
-    el.dispatchEvent(ev);
+    el.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: type !== "pointerleave",
+        cancelable: true,
+        detail,
+        pointerType,
+        pointerId: 1,
+      }),
+    );
   }
   function tap(el: Element, down: "touch" | "mouse") {
     act(() => {
-      fire(el, "pointerdown", down);
-      fire(el, "pointerup", down);
+      if (down === "touch") {
+        fire(el, "pointerover", "touch");
+        fire(el, "pointerdown", "touch");
+        fire(el, "pointerup", "touch");
+        fire(el, "pointerout", "touch");
+        fire(el, "pointerleave", "touch");
+        el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mouseenter"));
+        el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      } else {
+        fire(el, "pointerdown", "mouse");
+        fire(el, "pointerup", "mouse");
+      }
       fire(el, "click", "mouse");
+    });
+    act(() => {
+      /* Let the group's delayed hover open/close and the exit transition land;
+         an immediate assertion would miss a card that closes itself just after
+         the click. */
+      vi.advanceTimersByTime(1_000);
     });
   }
   const firstRow = (panel: HTMLElement) =>

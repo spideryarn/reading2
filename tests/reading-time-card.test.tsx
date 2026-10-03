@@ -236,9 +236,10 @@ describe("the reading-time line", () => {
  * **A tap opens the card** (Greg, spya-vskqfn; plan 261003c). On a touch screen
  * nothing hovers, so before this the line could not explain itself on an iPad.
  * A finger's tap fires the hover events too — `pointerover` at the press, and
- * `pointerout` at the lift, *before* the click (docs/project/touch.md § a lift
- * fires the hover events) — so the test replays that whole order, and the
- * click says `mouse`, as iOS 18.2 and later reports it.
+ * `pointerout` and `pointerleave` at the lift, *before* compatibility mouse
+ * events and the click (docs/project/touch.md § a lift fires the hover events)
+ * — so the test replays that whole order, and the click says `mouse`, as iOS
+ * 18.2 and later reports it.
  */
 describe("a tap on the reading-time line", () => {
   function finger(el: Element, clientY = 10): void {
@@ -247,6 +248,12 @@ describe("a tap on the reading-time line", () => {
     el.dispatchEvent(new PointerEvent("pointerdown", opts));
     el.dispatchEvent(new PointerEvent("pointerup", opts));
     el.dispatchEvent(new PointerEvent("pointerout", { ...opts, relatedTarget: null }));
+    el.dispatchEvent(new PointerEvent("pointerleave", { ...opts, bubbles: false, relatedTarget: null }));
+    el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, clientY }));
+    el.dispatchEvent(new MouseEvent("mouseenter", { clientY }));
+    el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientY }));
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientY }));
+    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientY }));
     const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1, clientY });
     Object.defineProperty(click, "pointerType", { value: "mouse" });
     el.dispatchEvent(click);

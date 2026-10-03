@@ -192,7 +192,9 @@ function hover(el: HTMLElement | undefined) {
     vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
   });
   act(() => {
-    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+    /* Past the group's 400ms instant-phase timeout as well as its close delay:
+       a card that disappears just after the click is still a failed tap. */
+    vi.advanceTimersByTime(1_000);
   });
 }
 
@@ -248,21 +250,41 @@ it("puts no tooltip on the measuring copies", () => {
 /**
  * **A finger's first tap opens the card; the second goes there** — the rule in
  * docs/project/touch.md, which these cards lacked until 2026-10-03 (Greg,
- * spya-a868zs; plan 261003c). A tap is down, up, then click, and the click
- * says `mouse` on iOS 18.2 and later (WebKit bug 282988), which is why only
- * the `pointerdown` says whether it was a finger.
+ * spya-a868zs; plan 261003c). Replay the whole iPad-shaped stream: touch
+ * pointer hover and lift events, compatibility mouse events, then the click,
+ * which says `mouse` on iOS 18.2 and later (WebKit bug 282988). Leaving those
+ * middle events out is the class of synthetic test that missed the glossary
+ * card closing itself after every tap (touch.md).
  */
 function fire(el: Element, type: string, pointerType: string, detail = 1) {
-  const ev = new MouseEvent(type, { bubbles: true, cancelable: true, detail });
-  Object.defineProperty(ev, "pointerType", { value: pointerType });
-  Object.defineProperty(ev, "pointerId", { value: 1 });
-  el.dispatchEvent(ev);
+  el.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: type !== "pointerleave",
+      cancelable: true,
+      detail,
+      pointerType,
+      pointerId: 1,
+    }),
+  );
 }
 
 function tap(el: Element, down: "touch" | "mouse", click = "mouse") {
   act(() => {
-    fire(el, "pointerdown", down);
-    fire(el, "pointerup", down);
+    if (down === "touch") {
+      fire(el, "pointerover", "touch");
+      fire(el, "pointerdown", "touch");
+      fire(el, "pointerup", "touch");
+      fire(el, "pointerout", "touch");
+      fire(el, "pointerleave", "touch");
+      el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mouseenter"));
+      el.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    } else {
+      fire(el, "pointerdown", "mouse");
+      fire(el, "pointerup", "mouse");
+    }
     fire(el, "click", click);
   });
   act(() => {
