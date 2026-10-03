@@ -38,9 +38,8 @@ import { createHash } from "node:crypto";
 import { buildConverseMessages, converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
 import { findQuote } from "../src/quote-match.js";
+import { isMain } from "../src/is-main.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
-
-loadEnvLocal();
 
 interface Reader {
   readonly name: string;
@@ -234,7 +233,7 @@ const cites = (t: string) => (t.match(/\bspya-[a-z0-9]{6}\b/g) ?? []).length;
  *
  *   unlinked   the article's words, and no [id] before the sentence ends
  *   apart      the article's words, the id later in the same sentence rather
- *              than straight after the closing mark — about a quarter of
+ *              than straight after the closing mark — about one in ten of
  *              quotations, old prompt and new, and not a fault: the reader's
  *              click still finds it (src/web/citations.ts § quotes for a chip)
  *   misplaced  the article's words, but the sentence's id names another block
@@ -269,14 +268,18 @@ function holds(block: Block, pieces: readonly string[]): boolean {
   }
   return true;
 }
-function quoteCheck(text: string, blocks: readonly Block[]): QuoteCheck {
+export function quoteCheck(text: string, blocks: readonly Block[]): QuoteCheck {
   const check: QuoteCheck = { article: 0, unlinked: [], apart: 0, misplaced: [], altered: [] };
   for (const m of text.matchAll(QUOTED)) {
     const after = idsAfter(text.slice((m.index ?? 0) + m[0].length));
+    // A closing mark may take the model's sentence punctuation inside it.
+    // Keep internal punctuation and every nonempty piece, including "not".
     const pieces = (m[1] ?? "")
+      .trim()
+      .replace(/[.,;:]+$/, "")
       .split(/…|\.\.\./)
       .map((piece) => piece.trim())
-      .filter((piece) => piece.length >= 4);
+      .filter((piece) => piece.length > 0);
     if (pieces.length === 0) continue;
     const label = `“${(m[1] ?? "").slice(0, 40)}…”`;
     const homes = blocks.filter((block) => holds(block, pieces)).map((block) => block.id as string);
@@ -425,4 +428,7 @@ async function main(): Promise<void> {
 
 /* `withLedger` so the spend is recorded under an eval scope — see the note at
    the foot of evals/remember-recall.ts. */
-await withLedger("eval", main);
+if (isMain(import.meta.url)) {
+  loadEnvLocal();
+  await withLedger("eval", main);
+}

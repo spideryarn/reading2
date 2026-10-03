@@ -12,7 +12,7 @@
  *
  *  - **which words** — `quotesBefore` (src/web/citations.ts): every quotation
  *    since the previous chip with no sentence break between it and this one.
- *    About a quarter of the quotations in 160 real tutor turns were not straight
+ *    About one in ten of the quotations in 120 real tutor turns were not straight
  *    before their chip, which is why the rule is the sentence and not adjacency;
  *  - **carrying them** — the chip's click hands the quotes to `onJump` beside
  *    the id, and `beginJump` hands them to the flash without sending the scroll
@@ -331,6 +331,34 @@ describe("flashBlock with a quote", () => {
     expect(washed(A)).toBe(false);
     vi.advanceTimersByTime(CITE_FLASH_MS);
     expect(painted()).toBeNull();
+  });
+
+  it("flashes drawn passage marks in preference to matching quotes", () => {
+    const prose = cell(A);
+    if (!prose) throw new Error("missing prose cell");
+    prose.innerHTML = '<p><mark class="hit" data-hit="chosen">the drawn passage</mark> and other quoted words</p>';
+    flashBlock(A, { passage: "chosen", quotes: ["other quoted words"] });
+    expect(prose.querySelector("mark")?.classList.contains("passage-flash")).toBe(true);
+    expect(painted()).toBeNull();
+    expect(washed(A)).toBe(false);
+  });
+
+  it("uses matching quotes when the requested passage has no drawn marks", () => {
+    flashBlock(A, { passage: "missing", quotes: ["an intelligent data pattern"] });
+    expect(painted()).toEqual(["an intelligent data pattern"]);
+    expect(washed(A)).toBe(false);
+  });
+
+  it("maps forgiving matches back across whitespace, inline nodes and Unicode", () => {
+    const prose = cell(A);
+    if (!prose) throw new Error("missing prose cell");
+    prose.innerHTML = '<p>Before  \n <em>İstanbul</em>  falls <strong>apart</strong> 🕷. After.</p>';
+    flashBlock(A, { quotes: ["i\u0307stanbul fall s a part 🕷"] });
+    const range = registry.get(QUOTE_HIGHLIGHT)?.ranges[0];
+    expect(range?.toString()).toBe("İstanbul  falls apart 🕷");
+    expect(range?.startContainer).toBe(prose.querySelector("em")?.firstChild);
+    expect(range?.startOffset).toBe(0);
+    expect(washed(A)).toBe(false);
   });
 
   it("ignores a quote the block does not have, and paints the one it does", () => {

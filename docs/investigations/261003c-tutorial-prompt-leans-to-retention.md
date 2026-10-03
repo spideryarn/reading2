@@ -8,10 +8,15 @@ Up: [investigations.md](../project/investigations.md) · the plan:
 article rather than helping me explore my own thoughts."* Does the changed `TUTORIAL_SYSTEM` ask
 about the author more and about the reader's own view less, without getting longer or citing worse?
 
-**Answer: yes.** Tasks asking for the reader's own view fell from 19 of 60 turns to 6 of 60, against
-a control spread of one turn (9 and 10 in the two old-prompt samples). None is now in a reader's
-first two turns (6 before), and one follows another once (7 before). Length and citing did not get
-worse.
+**The blind labels say yes.** Tasks asking for the reader's own view fell from 19 of
+60 turns to 6 of 60, against a control spread of one turn (9 and 10 in the two old-prompt samples).
+None is now in a reader's
+first two turns (6 before), and one follows another once (7 before). Uncited turns fell from five
+to one, but one new-prompt reply exceeded 140 words and quotation-link faults remain.
+The judge's input, the key and its labels are in the tree, so the totals below can be recounted:
+`evals/results/remember-tutorial.261003i-judge-items.md` (what it was shown), `…-judge-key.json`
+(which arm, reader and turn each item is) and `…-judge-labels.json`. GPT Sol's code review asked for
+them (CR-5); they had been left in a scratch directory.
 
 ## Method
 
@@ -54,20 +59,20 @@ worse.
 - **Own view straight after own view:** 7 before, 1 after (Noema's `expert`, turns 3 and 4, in one
   sample).
 - **Where the old prompt did it most:** the `expert` (3 and 4 of 5 turns) and the reader who had not
-  read it (3 and 2 of 5). The new prompt's remaining six are one each for five conversations and two
-  for that one `expert` run: the "now and then" the prompt allows.
+  read it (3 and 2 of 5). The new prompt's remaining six are one each for four conversations and two
+  for that one `expert` run. That run breaches the prompt's ban on consecutive own-view tasks.
 - The judge named ten items it found hard to call: four in new-prompt runs that it labelled A, three
   in old-prompt runs that it labelled B, and three others. Flipping every one of those seven against
   the result gives 16 before and 10 after — still a wider gap than the control's.
 
 ## Reading the turns
 
-The counts agree with the conversations. On Greg's own script, after he speculates and asks for a
-web search, the old prompt searched and closed with *"Does collapsing that line strike you as
-solving the puzzle, or dodging it?"* The new prompt also searched, and closed with *"what would
+The conversations show the intended shift. On Greg's own script, after he speculates and asks for a
+web search, the old prompt discussed critiques and closed with *"Does collapsing that line strike you as
+solving the puzzle, or dodging it?"* The new prompt also discussed critiques, and closed with *"what would
 count as evidence that a memory is doing work, rather than just being shaped by whatever stores
 it?"* — closer to the piece, which calls this a hypothesis to be investigated, though it is one of
-the judge's hard calls. **The pointer to Chat is not reliable**: it appeared after the search in both
+the judge's hard calls. **The pointer to Chat is not reliable**: it appeared after the search request in both
 new-prompt Noema runs (*"For going deeper into that debate, Chat is the better place."*) and in
 neither Entropy run. `terseGoal` was taken straight to the passage on polycomputing in all four
 arms, old and new, and never started from zero or asked whether they had read it. The opening
@@ -85,16 +90,26 @@ Printed in each result file; none of them is the measure.
 | … with no id before the sentence ends | 6 | 9 |
 | … with the id later in the sentence, not straight after | 8 | 9 |
 | … with an id that names another block | 1 | 8 |
+| quoted with an id, but not found as quoted | 8 | 4 |
 
-**The quotation screen over-counts, and reading says there is no real fault under it.** It treats
+**These are the original screen's counts, and they sum correctly from the eight files.** A review
+subsequently fixed two gaps in `quoteCheck`: it dropped ellipsis pieces shorter than four characters
+(even an invented "not"), and it missed a phrase when a closing quotation mark included a comma or
+full stop. Those fixes do not rewrite these historical counts; rerunning the screen would be a new
+measurement. Regression tests are in
+[`tutorial-quote-screen.test.ts`](../../tests/tutorial-quote-screen.test.ts).
+
+**The quotation screen also over-counts.** It treats
 any quoted run of eight characters that occurs in some block as a quotation of the article, so a
 scare-quoted term — "temptations", "life matters", "software", "polycomputing" — counts, and is then
 flagged because the sentence's id is for a different passage or there is none. Every flagged item in
 the new-prompt files was read (seventeen of them): all are single terms, a two- or three-word phrase,
-or a section's title. No quoted *sentence* of
-the article lacked its block's id. So GPT Sol's gate (PR-2, no unlinked article quotation) is met by
-reading and not by the count; a four-word minimum would make the count say so, and is not done here
-because it would change what these eight files' numbers mean.
+or a section's title. That does not establish GPT Sol's gate (PR-2, no unlinked article quotation).
+In Entropy's new sample 1, `richRecall` turn 2 repeats *"facilitates its own transformation,"* in
+the closing question without an id in that sentence. This is a four-word phrase quoted from the
+article earlier in the same answer; the terminal comma made the original screen miss it. A
+four-word minimum would therefore not prove the gate either. The retention result should not be
+read as a guarantee that every quoted phrase has its link, or that every quotation is faithful.
 
 **The own-view pattern in the eval is noise** and is kept only as a flag: it marked 7 turns under the
 old prompt and 7 under the new, where the blind labels found 19 and 6.

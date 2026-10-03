@@ -226,6 +226,34 @@ So **Stage 2 as built is option B, narrowed**: a click on a chip that sits strai
 quotation paints the quoted words with the CSS Custom Highlight API, inside `flashBlock`; anything
 that cannot be matched, and any browser without the API, gets today's whole-paragraph wash.
 
+### What landed
+
+- **Stage 1**: the three surfaces and the help page say it is fine not to have read it; the prompt
+  is weighted to the author. Measured: own-view tasks 19 of 60 turns before, 6 of 60 after, by a
+  blind judge ([261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md)). Still
+  imperfect: the pointer to Chat appears in half the runs, one run asked for the reader's view two
+  turns running, and a short phrase re-quoted later in an answer can lack its id.
+- **Stage 2**: built as above. One change from evidence: about one article quotation in ten has its
+  id later in the same sentence, so a chip takes every quotation in its sentence, not only the one
+  straight before it. Seen in a real browser at desktop, iPad and phone widths, light and dark; on
+  a phone the band steps aside and the paint follows. The paragraph-wash fallback was not seen in a
+  browser (the answer had no paraphrase chip); tests hold it.
+- **Stage 3**: not built; queued as `qi-pbskakrj`, waiting on Greg. Reading time for the tutor is
+  queued as `qi-a7p9xc4p`.
+
+### The code review
+
+[261003i-tutorial-retention-code-review-sol.md](261003i-tutorial-retention-code-review-sol.md), on
+`b34ad2d3c`: six findings, no P0 or P1, *land with the fixes above*. Sol fixed four itself: two gaps
+in the eval's quotation screen (CR-1, CR-2, with
+[a postmortem](../postmortems/261003c-a-quotation-screen-changes-which-words-it-promises-to-verify.md)),
+and two tests that could not fail — nothing checked that a drawn passage wins over quotes, and the
+jump test asserted a fallback that dropping the quotes also produces (CR-3, CR-4, with
+[a postmortem](../postmortems/261003b-the-fallback-outcome-stands-in-for-evidence-of-the-preferred-path.md)).
+CR-5, the blind judge's files not being in the tree, was right and is fixed: they are in
+`evals/results/`. CR-6 corrected claims in the investigation that the evidence did not carry. One
+round; nothing overruled.
+
 **Stage 3, option B, restated after PR-9:** one read-only Chat tool that returns the reader's own
 comments and highlights on this article (capped, with the cap announced), and an index of their
 other threads on it — title and turn count — with a second, bounded call to read one. Scoped to the

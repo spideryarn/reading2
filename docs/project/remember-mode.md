@@ -272,7 +272,8 @@ Measured before and after on two articles with a blind judge: own-view tasks fel
 turns to 6 of 60, none in a first two turns —
 [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md). The eval's readers are
 now per article (`--readers=noema|entropy`), each run prints a hash of its prompt, and `--out` keeps
-one arm from overwriting another. The pointer to Chat is not yet reliable.
+one arm from overwriting another. The pointer to Chat is not yet reliable, and one run still asked
+for the reader's view two turns running.
 
 **The invitation offers; it does not ask the reader to say so** (`spya-hw8mhz`): *"It's fine if you
 haven't read it yet, or haven't finished."* A first message with nothing of the piece in it and no
@@ -302,7 +303,7 @@ with the CSS Custom Highlight API for 2.4 seconds. Three rules:
 - **The scroll is unchanged**: the block is centred, and only the paint narrows.
 
 Known limits: a quotation with emphasis inside it is split across Markdown nodes and falls back to
-the paragraph wash; a quotation the model altered is not found. Tests:
+the paragraph wash; a quotation that cannot be matched gets that fallback too. Tests:
 [`quote-flash.test.tsx`](../../tests/quote-flash.test.tsx).
 
 ## A Remember conversation IS a chat thread
