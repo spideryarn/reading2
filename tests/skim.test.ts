@@ -45,6 +45,7 @@ import {
   renderPrompt,
   targetsFor,
   usableQuotes,
+  maxCarried,
   validateRoute,
   visibleCounts,
 } from "../src/skim.js";
@@ -339,12 +340,12 @@ describe("validating the model's route", () => {
 
   it("budgets for the largest permitted answer: every quote the list can hold, each with a cue at the cap", () => {
     /* The widest the model may legitimately answer: MAX_QUOTES_TOTAL stops,
-       three-digit labels, a cue at the cap, one stop a line in the layout the
-       prompt's OUTPUT section shows. */
+       three-digit labels, the longest `again` there is, a cue at the cap, one
+       stop a line in the layout the prompt's OUTPUT section shows. */
     const cue = "w".repeat(MAX_CUE_CHARS);
     const lines = Array.from(
       { length: MAX_QUOTES_TOTAL },
-      (_, i) => `  {"quote": "Q${i + 1}", "depth": 3, "cue": "${cue}"}`,
+      (_, i) => `  {"quote": "Q${i + 1}", "depth": 1, "again": [2, 3], "cue": "${cue}"}`,
     );
     const largest = `{"stops": [\n${lines.join(",\n")}\n]}`;
     expect(JSON.parse(largest).stops).toHaveLength(MAX_QUOTES_TOTAL);
@@ -353,6 +354,224 @@ describe("validating the model's route", () => {
     /* A control that the check can fail: a cue at twice the cap does not fit. */
     const over = largest.replaceAll("w".repeat(MAX_CUE_CHARS), "w".repeat(MAX_CUE_CHARS * 2));
     expect(Math.ceil(over.length / 3)).toBeGreaterThan(ANSWER_TOKENS);
+  });
+
+  /* ---- `again`: the deeper passes a stop is also walked in (plan 261003l) ---- */
+
+  /** A raw stop that also names the deeper passes it is carried into. */
+  const carried = (n: number, depth: unknown, again: unknown) => ({ ...stop(n, depth), again });
+  const CUE = "Look for what this passage does.";
+
+  it("keeps a stop's `again`: only 2 or 3, deeper than its own depth, unique, ascending", () => {
+    const d = emptyDrops();
+    const stops = validateRoute(
+      /* Three stops of Most's own, so the two carried into it are within `maxCarried`. */
+      [carried(0, 1, [3, 2, 3]), carried(1, 2, [3]), carried(2, 3, []), stop(3, 2), stop(4, 3), stop(5, 3)],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => s.again)).toEqual([[2, 3], [3], undefined, undefined, undefined, undefined]);
+    /* One repeat (the second 3) and nothing else. */
+    expect(d.badAgain).toBe(1);
+  });
+
+  it("drops and counts an `again` entry not deeper than the stop, or not 2 or 3, and keeps the stop", () => {
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [
+        carried(0, 1, [1, 2]), // 1 is its own depth
+        carried(1, 2, [2, 1, 3]), // 2 is its own depth, 1 is shallower
+        carried(2, 3, [3, 2]), // nothing is deeper than 3
+        carried(3, 1, [4, 0, "2", 2.5, null, 3]), // only the 3 is a pass
+        stop(4, 2),
+        stop(5, 3),
+        stop(6, 3), // a third of Most's own, so two carried into it are within `maxCarried`
+      ],
+      quotesOf(10),
+      d,
+    );
+    expect(stops).toHaveLength(7);
+    expect(stops.map((s) => s.again)).toEqual([[2], [3], undefined, [3], undefined, undefined, undefined]);
+    expect(d.badAgain).toBe(1 + 2 + 2 + 5);
+    expect(d.malformed).toBe(0);
+  });
+
+  it("reads an `again` that is not an array as none, and counts it when it was something", () => {
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [carried(0, 1, 2), carried(1, 1, "2,3"), carried(2, 1, { 0: 2 }), carried(3, 1, null), stop(4, 1), stop(5, 2)],
+      quotesOf(10),
+      d,
+    );
+    expect(stops).toHaveLength(6);
+    expect(stops.every((s) => !("again" in s))).toBe(true);
+    /* A number, a string and an object were each a wrong answer. `null` and an
+       absent field say "none", which is all an answer before skim/9 can say. */
+    expect(d.badAgain).toBe(3);
+  });
+
+  it("stores no `again` key on a stop carried nowhere, so an uncarried route is shaped as before", () => {
+    const d = emptyDrops();
+    const stops = validateRoute([stop(0, 1), carried(1, 2, []), stop(2, 3)], quotesOf(10), d);
+    expect(stops).toEqual([
+      { quoteId: qid(0), depth: 1, role: null, cue: CUE },
+      { quoteId: qid(1), depth: 2, role: null, cue: CUE },
+      { quoteId: qid(2), depth: 3, role: null, cue: CUE },
+    ]);
+    expect(Object.keys(stops[1]!)).toEqual(["quoteId", "depth", "role", "cue"]);
+    expect(d.badAgain).toBe(0);
+  });
+
+  it("drops an `again` naming a depth no kept stop is first placed at (Sol F1)", () => {
+    /* The reviewer's fixture: fewer than eight quotes, so the growth rule lets
+       a one-pass route through, and `again: [2]` would offer a More that is
+       the same one stop again. */
+    const d = emptyDrops();
+    const one = validateRoute([carried(0, 1, [2])], quotesOf(5), d);
+    expect(one).toEqual([{ quoteId: qid(0), depth: 1, role: null, cue: CUE }]);
+    expect(d.badAgain).toBe(1);
+    expect(visibleCounts(one)).toEqual([1, 1, 1]);
+    expect(growthFailure(visibleCounts(one), 5)).toBeNull();
+
+    /* Depth 3 has a stop of its own and depth 2 does not: 3 stays, 2 goes. */
+    const d2 = emptyDrops();
+    const two = validateRoute([carried(0, 1, [2, 3]), stop(1, 3)], quotesOf(5), d2);
+    expect(two.map((s) => s.again)).toEqual([[3], undefined]);
+    expect(d2.badAgain).toBe(1);
+  });
+
+  it("carries into a pass at most half as many stops as the pass has of its own (Sol F7)", () => {
+    /* Three Gist stops all carried into a More of two: the cap is one, so the
+       first in route order keeps its place in More and the other two lose it.
+       Most has three of its own: the cap is two, and both carried there stay. */
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [
+        carried(0, 1, [2, 3]),
+        carried(1, 1, [2]),
+        stop(3, 2),
+        carried(2, 1, [2, 3]),
+        stop(4, 2),
+        stop(5, 3),
+        stop(6, 3),
+        stop(7, 3),
+      ],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => s.again)).toEqual([[2, 3], undefined, undefined, [3], undefined, undefined, undefined, undefined]);
+    expect(d.overCarried).toBe(2);
+    expect(d.badAgain).toBe(0);
+    expect(maxCarried(2)).toBe(1);
+    expect(maxCarried(3)).toBe(2);
+    expect(maxCarried(1)).toBe(1);
+    expect(maxCarried(0)).toBe(0);
+  });
+
+  it("judges that on the stops that were KEPT, not the ones the model named", () => {
+    /* Depth 2's only stop names a quote that does not exist, so it is dropped
+       and nothing is first placed at More. */
+    const d = emptyDrops();
+    const lost = validateRoute(
+      [carried(0, 1, [2, 3]), { quote: "tq-invented", depth: 2, cue: CUE }, stop(2, 3)],
+      quotesOf(5),
+      d,
+    );
+    expect(lost.map((s) => s.again)).toEqual([[3], undefined]);
+    expect(d.unknownQuote).toBe(1);
+    expect(d.badAgain).toBe(1);
+
+    /* And a depth emptied by the one-stop-per-block rule: quotes 0 and 12
+       share block 0, so the only depth-2 stop loses to a depth-1 one. */
+    const d2 = emptyDrops();
+    const shared = validateRoute(
+      [carried(1, 1, [2]), stop(0, 1), stop(12, 2)],
+      quotesOf(14),
+      d2,
+    );
+    expect(shared.map((s) => [s.quoteId, s.again])).toEqual([
+      [qid(1), undefined],
+      [qid(0), undefined],
+    ]);
+    expect(d2.sameBlock).toBe(1);
+    expect(d2.badAgain).toBe(1);
+  });
+
+  it("keeps the shallowest occurrence's own `again` when a quote is named twice, and does not merge", () => {
+    const d = emptyDrops();
+    const stops = validateRoute(
+      [carried(0, 2, [3]), carried(0, 1, [2]), stop(1, 2), stop(2, 3)],
+      quotesOf(10),
+      d,
+    );
+    expect(stops.map((s) => [s.quoteId, s.depth, s.again])).toEqual([
+      [qid(0), 1, [2]],
+      [qid(1), 2, undefined],
+      [qid(2), 3, undefined],
+    ]);
+    expect(d.duplicate).toBe(1);
+  });
+
+  it("leaves the counts, the caps and the growth rule on `depth` alone: a carried stop counts once", () => {
+    const d = emptyDrops();
+    const plain = validateRoute(goodRoute, quotesOf(10), emptyDrops());
+    const withAgain = validateRoute(
+      goodRoute.map((s, i) => (i < 2 ? { ...s, again: [2, 3] } : i < 5 ? { ...s, again: [3] } : s)),
+      quotesOf(10),
+      d,
+    );
+    expect(withAgain.map((s) => [s.quoteId, s.depth])).toEqual(plain.map((s) => [s.quoteId, s.depth]));
+    expect(visibleCounts(withAgain)).toEqual(visibleCounts(plain));
+    expect(visibleCounts(withAgain)).toEqual([2, 5, 10]);
+    expect(growthFailure(visibleCounts(withAgain), 10)).toBeNull();
+    expect(d.badAgain).toBe(0);
+    expect(d.overCap).toBe(0);
+
+    /* The caps: seven depth-1 stops all carried into More and Most, then eight
+       at depth 2 — fifteen at ≤ 2, exactly the cap, and none is dropped for
+       the carrying. */
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      id: `ta${String(i).padStart(4, "0")}`,
+      blockId: `spya-a${String(i).padStart(5, "0")}` as BlockId,
+      text: `t${i}`,
+    }));
+    const d2 = emptyDrops();
+    const full = validateRoute(
+      [
+        ...many.slice(0, 7).map((q) => ({ quote: q.id, depth: 1, cue: "c", again: [2, 3] })),
+        ...many.slice(7, 15).map((q) => ({ quote: q.id, depth: 2, cue: "c", again: [] })),
+        ...many.slice(15, 20).map((q) => ({ quote: q.id, depth: 3, cue: "c", again: [] })),
+      ],
+      many,
+      d2,
+    );
+    expect(full).toHaveLength(20);
+    expect(visibleCounts(full)).toEqual([7, 15, 20]);
+    expect(d2.overCap).toBe(0);
+    expect(d2.badAgain).toBe(0);
+
+    /* A route that does not grow still fails, however much it carries. */
+    expect(() =>
+      buildSkim(
+        { stops: [carried(0, 1, [2, 3]), carried(1, 1, [2, 3]), stop(2, 3)] },
+        buildOpts(quotesOf(10)),
+      ),
+    ).toThrow(/each depth has to add stops/);
+  });
+
+  it("writes `again` into the artefact, beside counts that are still of first-placed stops", () => {
+    const route = goodRoute.map((s, i) => (i === 0 ? { ...s, again: [2] } : { ...s, again: [] }));
+    const skim = buildSkim({ stops: route }, buildOpts(quotesOf(10)));
+    expect(skim.stops[0]).toEqual({
+      quoteId: qid(8),
+      depth: 1,
+      role: null,
+      cue: "Look for the headline comparison.",
+      again: [2],
+    });
+    expect(skim.stops.slice(1).every((s) => !("again" in s))).toBe(true);
+    expect(skim.visible).toEqual([2, 5, 10]);
+    expect(skim.dropped.badAgain).toBe(0);
   });
 
   it("applies the caps to the cumulative counts, dropping the excess in route order", () => {
@@ -487,7 +706,7 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("skim/8");
+    expect(PROMPT_VERSION).toBe("skim/9");
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
     expect(SKIM_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
@@ -496,6 +715,26 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).toMatch(/LOOK FOR/);
     expect(SKIM_SYSTEM).toMatch(/NEVER what it found/);
     expect(SKIM_SYSTEM).toMatch(/Never refer to another stop/);
+  });
+
+  it("asks for `again` on every stop, and no longer says the passes nest (skim/9, plan 261003l)", () => {
+    /* The schema: always present, and only a pass that can be a deeper one. */
+    const item = SKIM_OUTPUT_SCHEMA.properties.stops.items;
+    expect(item.required).toEqual(["quote", "depth", "again", "cue"]);
+    expect(item.properties.again).toEqual({ type: "array", items: { type: "integer", enum: [2, 3] } });
+    /* The prompt shows both shapes of it, and says when to carry and when not. */
+    expect(SKIM_SYSTEM).toContain(`"again": [2]`);
+    expect(SKIM_SYSTEM).toContain(`"again": []`);
+    expect(SKIM_SYSTEM).not.toMatch(/The passes nest/);
+    expect(SKIM_SYSTEM).toMatch(/neither required nor forbidden/);
+    expect(SKIM_SYSTEM).toMatch(/Do not carry everything/);
+    expect(SKIM_SYSTEM).toMatch(/Each pass must ADD stops/);
+    expect(SKIM_SYSTEM).toMatch(/When two adjacent targets are the same[\s\S]*that pass may be absent/);
+    /* The targets are still cumulative counts of first-placed stops, and the
+       user message says a carried stop is not counted in them. */
+    const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
+    expect(prompt).toContain("Targets: about 2 at depth 1; about 5 at depth 1 or 2; about 10 in all.");
+    expect(prompt).toMatch(/does not count again/);
   });
 
   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {
@@ -528,6 +767,14 @@ describe("freshness", () => {
     expect(hash(rescored)).not.toBe(base);
     const reworded = quotesOf(10).map((q, i) => (i === 3 ? { ...q, text: `${q.text}.` } : q));
     expect(hash(reworded)).not.toBe(base);
+  });
+
+  it("did not move the input hash at skim/9: `again` is in the answer, not the input (plan 261003l)", () => {
+    /* A literal, recorded from this fixture while `skimInput` and
+       `skimInputHash` were still byte-for-byte `skim/8`'s (the stage's diff
+       touches neither). The version alone stales a stored route; if the hash
+       moved as well, nobody could tell which of the two had changed. */
+    expect(skimInputHash(inputOf(quotesOf(10)))).toBe("85a84fc58c7c372f");
   });
 
   it("does not move the input hash for score precision the prompt does not render", () => {

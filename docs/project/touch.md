@@ -719,7 +719,9 @@ What it deliberately does not do:
 - **Step aside while the picture is being walked.** Diagram's step buttons and arrow keys follow the
   picture in the prose (`onFollow`); only a press on a node or a row steps the band aside.
 - **Touch Skim's own rule.** It jumps when it opens, so it keeps plain `jumpTo` and steps aside
-  itself when a stop is chosen, as it has since 2026-09-28; it gets the pill like every other mode.
+  itself when a row is pressed, as it has since 2026-09-28; it gets the pill like every other mode.
+  Its ‹ ›, ← → and depth buttons stepped aside too until 2026-10-03 and now keep the band up, as
+  Diagram's step buttons do above ([skim.md](skim.md), report spya-kudr63).
 
 It keys on the band covering the prose (`fit.modeW === 0`), not on a device, so a narrow desktop
 window behaves the same. Focus that was in the band moves to the pill and back again.

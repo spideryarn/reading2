@@ -181,7 +181,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
+const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 
 /** A job for this article, landing in the hook's poll as finished. */
 function finishJob(step: string, slug = "constitution"): void {

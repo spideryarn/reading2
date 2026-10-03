@@ -11,10 +11,11 @@
  * and docs/project/referee-mode.md for the mode itself.
  */
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
-import { TriangleAlert } from "lucide-react";
+import { Info, TriangleAlert } from "lucide-react";
 import type { Block, BlockId, Comment } from "../../../types.js";
+import { LINKAGE_NOT_ADEQUACY } from "../../../referee-claims.js";
 import {
   REFEREE_CANDIDATES_REACHES_SEARCH,
   REFEREE_DECLARE_IT,
@@ -32,9 +33,9 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
    is the scanner and it calls no model. */
 import { SourceScanNotice, sourceScanOpens } from "../../SourceScanNotice.js";
 import { type SourceScanState, useSourceScan } from "../../useSourceScan.js";
-import { CriteriaBand } from "../../CriteriaPanel.js";
+import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../CriteriaPanel.js";
 import { ClaimsBand } from "../../ClaimsPanel.js";
-import { MirrorBand } from "../../MirrorPanel.js";
+import { MIRROR_IS_NOT_GIVEN_THE_PAPER, MirrorBand } from "../../MirrorPanel.js";
 import { CandidatesBand } from "../../CandidatesPanel.js";
 import { ModeSurface } from "../../ModeSurface.js";
 
@@ -269,10 +270,90 @@ export function RefereeFrame({
             chip's own card, from the same constant, so a referee on a touch
             device (no hover) is told what the sub-mode is for. Inside the
             scroller, so it gives its height back once there are results. */}
-        <p className="ref-lead">{REFEREE_VIEW_TIP[view].what}</p>
+        <p className="ref-lead">
+          {REFEREE_VIEW_TIP[view].what}{" "}
+          {/* Keyed by the view, so an open card shuts when the sub-mode
+              changes rather than showing one panel's rules over another. */}
+          <HowToRead key={view} view={view} />
+        </p>
         {children}
       </div>
     </ModeSurface>
+  );
+}
+
+/**
+ * **How to read each panel, one press away** — the sentences that used to open
+ * the panel as visible text, word for word, from the constants the panels
+ * printed.
+ *
+ * Greg, 2026-10-03, on [Q-referee-panel-rules]: *"B"*, the option that moves
+ * them out of the panel. They are what stops a list of passages reading as a
+ * verdict, so `HowToRead` puts them behind a button a finger can press rather
+ * than in a hover card a phone never shows.
+ * docs/plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md,
+ * which also says what was not moved: the notes that sit beside results
+ * (Claims' order, Mirror's evidence, Criteria's key).
+ *
+ * Criteria's two are both here from the start, where the panel printed each
+ * only once it had a criterion or a result: a card whose contents changed
+ * between two presses would be harder to trust than one that mentions a number
+ * a moment early.
+ *
+ * A total `Record`, `REFEREE_VIEW_TIP`'s reason. Candidates is empty and draws
+ * no button: nothing of its was moved, and `COI_NOT_CHECKED` stays printed.
+ */
+const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
+  criteria: [WHAT_THE_TICK_DOES, WHAT_THE_RANK_IS],
+  claims: [LINKAGE_NOT_ADEQUACY],
+  mirror: [MIRROR_IS_NOT_GIVEN_THE_PAPER],
+  candidates: [],
+};
+
+/**
+ * **The button at the end of a panel's lead line, and its card.**
+ *
+ * `BandAbout`'s shape (docs/project/tooltips.md § Where the code is): a
+ * *controlled* `Tooltip` on a real `<button>`, so a tap toggles it on a device
+ * with no hover, and hover and keyboard focus open it too. Words beside the
+ * icon, because the band's corner already holds a bare (i) that says what the
+ * mode is, and two identical marks a few lines apart would mean two things.
+ */
+function HowToRead({ view }: { view: RefereeView }) {
+  const [open, setOpen] = useState(false);
+  // A press can close before the pending hover-open timer fires. The child's
+  // click bypasses Floating UI's openchange emitter, so that timer survives.
+  // Keep the reader's dismissal until a fresh pointer entry or keyboard focus.
+  const dismissedByPress = useRef(false);
+  const sentences = REFEREE_HOW_TO_READ[view];
+  if (sentences.length === 0) return null;
+  return (
+    <Tooltip
+      placement="bottom"
+      keepSide
+      open={open}
+      onOpenChange={(next) => {
+        if (!next || !dismissedByPress.current) setOpen(next);
+      }}
+      className="ref-rules-card"
+      content={sentences.map((sentence) => (
+        <p key={sentence}>{sentence}</p>
+      ))}
+    >
+      <button
+        type="button"
+        className={`ref-rules${open ? " on" : ""}`}
+        aria-expanded={open}
+        onPointerEnter={() => { dismissedByPress.current = false; }}
+        onFocusCapture={() => { dismissedByPress.current = false; }}
+        onClick={() => {
+          dismissedByPress.current = open;
+          setOpen(!open);
+        }}
+      >
+        <Info size={13} aria-hidden="true" /> How to read this
+      </button>
+    </Tooltip>
   );
 }
 
@@ -415,7 +496,8 @@ export function RefereeViews({
  * - **Criteria** never scores the paper, and the run is a model call over the
  *   whole of it, so pressing Run is not free.
  * - **Claims** asserts linkage and never adequacy — `LINKAGE_NOT_ADEQUACY` in
- *   src/referee-claims.ts says the same thing in the panel, above the button.
+ *   src/referee-claims.ts says the same thing behind the panel's *How to read
+ *   this* button (`HowToRead` above).
  * - **Mirror** is never given the paper (src/referee-mirror.ts § the three
  *   constraints) and keeps nothing (`useMirror.ts`: *one button, one run,
  *   nothing stored*).

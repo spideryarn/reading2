@@ -1237,9 +1237,10 @@ function liftLegacyAbout(at: Address): Address {
 /**
  * **The rewrite below, for an address that arrives after boot** — a `navigate()`
  * to an old link, or Back/Forward onto a history entry written while the page
- * still existed. `settleAddress` runs once, at boot; without these two a tab
- * open across the deploy would land on *not found*. GPT Sol, plan review,
- * 2026-09-29. `null` when the address is not the old one.
+ * (or, until 2026-10-03, the mode) still existed. `settleAddress` runs once, at
+ * boot; without these two a tab open across the deploy would land on *not
+ * found*, or on Summary at Brief. GPT Sol, plan review, 2026-09-29, and F4 of
+ * the 261003l review. `null` when the address is neither old spelling.
  */
 export function liftedTweetsHref(href: string): string | null {
   const at = splitHref(href);
@@ -1248,26 +1249,59 @@ export function liftedTweetsHref(href: string): string | null {
 }
 
 /**
- * `/read/<slug>/tweets` → `/read/<slug>?mode=tweets`. The thread was a page of
- * its own from 2026-08-25 until 2026-09-29, when it became a mode (Greg,
- * SPIDERYARN-READING2-5A); links to the page — pasted, bookmarked, in a sent
- * thread's own history — land on the mode rather than on *not found*.
+ * **Both of the thread's old addresses, to where the thread is now**:
+ * `/read/<slug>/tweets` and `?mode=tweets` → `?mode=summary&summary=thread`.
  *
- * Every other parameter is carried, so an old link keeps its `?at=`; a `mode`
- * already on it is replaced, because the path said which view it meant.
- * `parseRoute` no longer knows the segment, so this has to run before anything
- * asks it — `settleAddress`'s chain on boot (main.tsx), and `liftedTweetsHref`
- * above after it.
- * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ * The thread was a page of its own from 2026-08-25 until 2026-09-29, then a
+ * mode until 2026-10-03, when it became Summary's Thread view (Greg,
+ * SPIDERYARN-READING2-5A and spya-thpsnd). Links to either — pasted,
+ * bookmarked, in a sent thread's own history — land on the thread rather than
+ * on *not found* or on Summary at Brief, which is all `RETIRED_MODES`
+ * (src/modes.ts) can say by itself. A visitor to a public article with a thread
+ * and no summary would otherwise be told nobody has made one (GPT Sol, F4).
+ *
+ * Every other parameter is carried, so an old link keeps its `?at=`. **Every
+ * `mode` and every `summary` pair is replaced**, because the old spelling said
+ * which view it meant: a carried `summary=fuller` would otherwise win, and two
+ * `summary` pairs would leave the answer to their order.
+ *
+ * `parseRoute` no longer knows the path segment, so this has to run before
+ * anything asks it — `settleAddress`'s chain on boot (main.tsx), and
+ * `liftedTweetsHref` above after it.
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md,
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  */
 function liftLegacyTweets(at: Address): Address {
+  const selects = (pair: string) => hasKey(pair, "mode") || hasKey(pair, "summary");
+  const toThread = (search: string) => {
+    const rest = withoutPairs(search, selects);
+    return rest ? `${rest}&${SUMMARY_THREAD}` : SUMMARY_THREAD;
+  };
   const m = /^\/read\/([^/]+)\/tweets\/?$/.exec(at.pathname);
-  if (!m) return at;
-  const route = parseRoute(`/read/${m[1]}`);
-  if (route.kind !== "read") return at;
-  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "mode"));
-  return { ...splitHref(readHref(route.slug, rest ? `${rest}&mode=tweets` : "mode=tweets")), hash: at.hash };
+  if (m) {
+    const route = parseRoute(`/read/${m[1]}`);
+    if (route.kind !== "read") return at;
+    return { ...splitHref(readHref(route.slug, toThread(at.search))), hash: at.hash };
+  }
+  /* The retired mode word, on any page that carries it — the metadata page's
+     links hand the query back to the article. The first `mode` pair is the one
+     every reader of the address acts on (`get("mode")`). */
+  const first = queryPairs(at.search).find((pair) => hasKey(pair, "mode"));
+  if (first === undefined || !first.includes("=")) return at;
+  /* Decoded as the parser decodes it, for `hasKey`'s reason; a malformed
+     escape is not the word and must not throw. */
+  let value = first.slice(first.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "tweets") return at;
+  return { pathname: at.pathname, search: `?${toThread(at.search)}`, hash: at.hash };
 }
+
+/** Where both old Tweets addresses land: Summary, on its Thread view. */
+const SUMMARY_THREAD = "mode=summary&summary=thread";
 
 /**
  * Go somewhere, without a page load.
@@ -1293,8 +1327,9 @@ export function navigate(
     scroll?: boolean;
   } = {},
 ): void {
-  /* The thread's old page is a mode now; an old link goes to the mode rather
-     than to *not found*. § `liftedTweetsHref`. */
+  /* The thread's old page, and its old mode word, are Summary's Thread view
+     now; an old link goes there rather than to *not found* or to Summary at
+     Brief. § `liftedTweetsHref`. */
   const lifted = liftedTweetsHref(to);
   const href = lifted ?? to;
   /* The hash counts only for a lifted link — GPT Sol's code review found an old
@@ -1805,14 +1840,27 @@ export function useRoute(): Route {
     () => location.pathname,
     () => "/",
   );
-  /* **Back or Forward onto the thread's old page** — the one way an old address
-     reaches here without passing `settleAddress` or `navigate()`. Rewritten in
-     place, and parsed as where it is going meanwhile, so the frame before the
-     rewrite shows the article rather than *not found*. § `liftedTweetsHref`. */
+  /* **Back or Forward onto one of the thread's old addresses** — the one way an
+     old address reaches here without passing `settleAddress` or `navigate()`.
+     Rewritten in place, and parsed as where it is going meanwhile, so the frame
+     before the rewrite shows the article rather than *not found*.
+     § `liftedTweetsHref`.
+
+     **On `popstate` as well as on a new pathname**, since 2026-10-03: the old
+     *mode* word is query state, so Back between two entries on one article
+     changes no pathname and would never re-run this effect — leaving
+     `?mode=tweets` to parse as Summary at Brief (GPT Sol, F4 of the 261003l
+     review). Only history can put an old spelling on the address after boot
+     without `navigate()`, so `popstate` is the whole of the gap. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the subscribed signal; the effect must rewrite the complete address as it stands when the effect runs.
   useEffect(() => {
-    const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
-    if (lifted !== null) history.replaceState(history.state, "", lifted);
+    const lift = () => {
+      const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
+      if (lifted !== null) history.replaceState(history.state, "", lifted);
+    };
+    lift();
+    window.addEventListener("popstate", lift);
+    return () => window.removeEventListener("popstate", lift);
   }, [pathname]);
   return useMemo(() => {
     const lifted = liftedTweetsHref(pathname);

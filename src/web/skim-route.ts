@@ -5,15 +5,26 @@
  * keys and the door all ask one module the same question.
  *
  * The stored route is one list (src/types.ts § `Skim`): **the array order
- * is the route, and each stop has the depth of the pass it belongs to.** The
- * model plans the passes as nesting — depth *d* covering every stop with
- * `depth ≤ d` — but **the reader walks each pass as only its own stops**: Gist
- * the depth-1 stops, More the depth-2 ones, Most the depth-3 ones. Greg,
+ * is the route, and each stop has the depth of the shallowest pass it belongs
+ * to.** The caps are counted as nesting — depth *d* covering every stop with
+ * `depth ≤ d` — but **the reader does not walk the passes that way.**
+ *
+ * Since plan 260929e a pass walks the stops first placed at its depth: Gist the
+ * depth-1 stops, More the depth-2 ones, Most the depth-3 ones. Greg,
  * SPIDERYARN-READING2-4P: *"it's a bit annoying for the more detailed levels of
  * granularity to reuse the same snippets as the coarser levels if I've just read
- * the coarser level."* So More and Most are what the shallower passes left out,
- * not skims that stand alone — plan
+ * the coarser level."*
  * docs/plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md.
+ *
+ * **Since plan 261003l a pass may also walk a shallower stop again** — one the
+ * route carries into it with `SkimStop.again`. Walked that strictly, two related
+ * points landed one in Gist and one in More, and Greg found it disjointed
+ * (spya-ms9d69, 2026-10-03): *"it's not a guarantee, but nor is it excluded that
+ * something in a coarser level shows up in a more detailed level."* A route with
+ * no `again` — every one written before `skim/9` — walks exactly as 260929e
+ * left it. `walkedIn` is the one definition; everything below asks it.
+ * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md
+ * § Stage 2.
  *
  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § The mode (client) is where the other rules below were first specified.
@@ -30,27 +41,57 @@ export const DEPTH_LABEL: Record<SkimDepth, string> = {
   3: "Most",
 };
 
-/** The stops a pass walks — exactly that depth's, in route order. */
+/** `walkedIn`, with the offered depths already in hand — one scan per pass, not per stop. */
+function inPass(stop: SkimStop, depth: SkimDepth, offered: readonly SkimDepth[]): boolean {
+  if (stop.depth === depth) return true;
+  return offered.includes(depth) && (stop.again?.includes(depth) ?? false);
+}
+
+/**
+ * **Whether a stop is walked in a pass — the one definition** (plan 261003l).
+ * It is when the stop was first placed at that depth, or when its `again` names
+ * the depth **and the route offers it** (`offeredDepths`). The second half is
+ * Sol's plan-review F1: a carried stop does not make a pass, so an `again`
+ * naming a depth nothing is first placed at is ignored here, as `validateRoute`
+ * (src/skim.ts) drops it before it is stored.
+ */
+export function walkedIn(stops: readonly SkimStop[], stop: SkimStop, depth: SkimDepth): boolean {
+  return inPass(stop, depth, offeredDepths(stops));
+}
+
+/**
+ * The stops a pass walks, in route order: the ones first placed at that depth,
+ * and any shallower stop carried into it (`walkedIn`). A carried stop keeps its
+ * one place in the order.
+ */
 export function passRoute(
   stops: readonly SkimStop[],
   depth: SkimDepth,
 ): SkimStop[] {
-  return stops.filter((s) => s.depth === depth);
+  const offered = offeredDepths(stops);
+  return stops.filter((s) => inPass(s, depth, offered));
 }
 
-/** How many stops a pass walks. */
+/** How many stops a pass walks — its own and the carried ones. */
 export function passCount(stops: readonly SkimStop[], depth: SkimDepth): number {
-  return stops.reduce((n, s) => (s.depth === depth ? n + 1 : n), 0);
+  const offered = offeredDepths(stops);
+  return stops.reduce((n, s) => (inPass(s, depth, offered) ? n + 1 : n), 0);
 }
 
 /**
- * **The depths with a stop**, shallowest first. A short spiral is allowed on
- * an article with few quotes (the plan's growth rule), so a depth can have
- * none, and a pass with nothing to walk is not a choice worth a button.
+ * **The depths with a stop first placed there**, shallowest first. A short
+ * spiral is allowed on an article with few quotes (the plan's growth rule), so
+ * a depth can have none, and a pass with nothing to walk is not a choice worth
+ * a button.
  *
- * **Any stop at all is enough** — a deeper pass no bigger than the one before
- * it is still a pass of stops the reader has not stood at (Sol, plan review
- * F1: a real route's passes are 2 / 2 / 4).
+ * **Any stop of its own is enough** — a deeper pass no bigger than the one
+ * before it is still a pass of stops the reader has not stood at (Sol, plan
+ * 260929e review F1: a real route's passes are 2 / 2 / 4).
+ *
+ * **A carried stop is not enough, and this does not ask `walkedIn`** (Sol, plan
+ * 261003l review F1): one Gist stop with `again: [2]` and no More stop would
+ * otherwise offer a More that is the same one stop again. `walkedIn` asks this,
+ * not the other way round.
  */
 export function offeredDepths(stops: readonly SkimStop[]): SkimDepth[] {
   return DEPTHS.filter((d) => stops.some((s) => s.depth === d));
@@ -85,11 +126,16 @@ export interface Location {
 
 /**
  * **Where `?depth=` and `?stop=` put the reader — the stop wins** (Sol, plan
- * review F4). A stop is the precise address and a depth only the pass around
- * it; with separate passes the two can disagree, as every link written before
- * plan 260929e that names a Gist stop at `depth=2` does. So:
+ * 260929e review F4). A stop is the precise address and a depth only the pass
+ * around it, and the two can disagree, as every link written before plan
+ * 260929e that names a Gist stop at `depth=2` does. So:
  *
- * 1. a `?stop=` on the route draws that stop's own pass, standing on it;
+ * 1. a `?stop=` on the route is stood on, in **the asked pass when the stop is
+ *    walked there, else the stop's own** — its `depth`, the shallowest it is in.
+ *    Until plan 261003l a stop had exactly one pass, so the asked depth never
+ *    mattered once a stop was named; an old route, with no `again`, still
+ *    behaves that way, and so does a link with no `?depth=` (Sol, plan 261003l
+ *    review F5);
  * 2. otherwise the asked depth (`effectiveDepth`), on its first stop — **a stale
  *    `?stop=` falls back to stop 1** (the plan's § URL): a quote chosen again,
  *    or a link from before a rebuild.
@@ -100,7 +146,11 @@ export function locate(
   askedStop: string | null,
 ): Location {
   const named = askedStop === null ? undefined : stops.find((s) => s.quoteId === askedStop);
-  const depth = named ? named.depth : effectiveDepth(stops, askedDepth);
+  const depth = named
+    ? askedDepth !== null && walkedIn(stops, named, askedDepth)
+      ? askedDepth
+      : named.depth
+    : effectiveDepth(stops, askedDepth);
   if (depth === null) return { depth: null, route: [], current: null };
   const route = passRoute(stops, depth);
   return { depth, route, current: named ?? route[0] ?? null };
@@ -125,13 +175,18 @@ export function stepStop(
 /**
  * **Where a change of depth lands: stop 1 of the new pass**, deeper or
  * shallower. Until plan 260929e a depth change kept your stop, because a deeper
- * pass contained it; separate passes never share a stop, and stop 1 is where
- * *More detail ›* lands too, so the buttons and the door agree. Remembering
- * where you were in each pass is deferred (the plan's § Deferred). `null` for a
- * pass with no stops.
+ * pass contained it; a pass no longer contains the one before, and stop 1 is
+ * where *More detail ›* lands too, so the buttons and the door agree.
+ * Remembering where you were in each pass is deferred (that plan's § Deferred).
+ *
+ * **Stop 1 of the new pass can be the stop the reader is on** since plan
+ * 261003l — a carried stop that comes first in the deeper pass. The caller
+ * changes the pass and does not move (SkimMode.tsx § `changeDepth`). `null` for
+ * a pass with no stops.
  */
 export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): string | null {
-  return stops.find((s) => s.depth === depth)?.quoteId ?? null;
+  const offered = offeredDepths(stops);
+  return stops.find((s) => inPass(s, depth, offered))?.quoteId ?? null;
 }
 
 /**
@@ -139,8 +194,10 @@ export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): strin
  *
  * - `next`: the next stop on this pass.
  * - `end`: the last stop of the pass. When a deeper pass exists, *More
- *   detail ›* — that `deeper` depth, landing on **its** stop 1, which since plan
- *   260929e is always a stop the reader has not stood at. At the end of the
+ *   detail ›* — that `deeper` depth, landing on **its** stop 1. On a route with
+ *   no `again` that is always a stop the reader has not stood at (260929e);
+ *   with one it can be a carried stop, even the one being stood at, in which
+ *   case the pass changes and the door becomes *Next stop ›* (261003l). At the
  *   deepest pass `deeper` is `null` and the door offers no button, only the
  *   line saying which pass ended. *Go round again* (stop 1 of this pass) went in
  *   plan 260929b: ← walks back (SPIDERYARN-READING2-51).

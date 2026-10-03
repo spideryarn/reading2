@@ -79,7 +79,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
+const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 const { AddPage } = await import("../src/web/AddPage.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 

@@ -33,7 +33,10 @@
  * there would finish behind it. It is held instead and `flushPendingFlash` fires
  * it when the prose is exposed — Reader calls that when the band closes or
  * steps aside — so leaving the mode shows you where you landed. A newer jump
- * replaces a held one. Sol F2.
+ * replaces a held one. Sol F2. Skim's ‹ › on a phone is the long-lived case
+ * since 2026-10-03 (spya-kudr63): the band stays up for the whole walk, each
+ * step drops the last held flash, and one that outlives a switch to another
+ * covering band is dropped by Reader rather than played under it.
  *
  * Module state rather than React state because the cell is a DOM node the
  * memoised table owns, and re-rendering 2,000 rows to toggle one class would

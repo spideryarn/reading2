@@ -484,7 +484,7 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
     ]);
   });
 
-  it("says what the tick does, because its own label is the criterion", async () => {
+  it("leaves what the tick does to the band's how-to-read button, and prints no copy", async () => {
     /* Sol's finding 8. Claims labels its identical checkbox in visible text —
        *"Mark these passages in the paper"* — and this one's label is the
        referee's own words, so nothing on screen said that the box is what
@@ -497,10 +497,14 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
        *false*, so the literal asserted here is the corrected one — Sol's finding
        7 on the built code — and the old sentence is asserted absent, because a
        later edit that put it back would otherwise pass. */
+    /* **And it left the panel on 2026-10-03**, when Greg chose to move each
+       panel's how-to-read sentences behind a button (plan 261003m). The
+       corrected sentence is asserted as a literal where it is drawn now —
+       tests/referee-notices.test.tsx § one press away — and here the panel is
+       held to printing no second copy of it, nor the false one. */
     await paint([-80]);
     const said = flat(host.querySelector(".crit")?.textContent);
-    expect(said).toContain("A criterion marks its passages while its tick is on");
-    expect(said).toContain("New runs turn it on automatically");
+    expect(said).not.toContain("A criterion marks its passages while its tick is on");
     expect(said).not.toContain("Nothing is marked until you do");
   });
 });
@@ -522,8 +526,8 @@ describe("pressing a result rings that phrase rather than washing the block", ()
     answer = () => Promise.resolve(json({ criteria: [diverging([-80, 40])], sourceHash: "h" }));
     mount();
     await flush();
-    /* Tick it, or nothing is marked at all — which is the rule the sentence
-       above the list now states. */
+    /* Tick it, or nothing is marked at all — the rule behind the band's
+       How to read this button. */
     click(host.querySelector(".crit-tick input") as Element);
     await flush();
 

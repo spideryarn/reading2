@@ -297,7 +297,7 @@ on an already-shared article publishes it and asks nobody. The list is *derived*
 month appears on the withheld side whether or not its author opens the file. Only the rows that are
 not modes at all are prose — the text, the pictures, the provenance and, since 2026-09-04, **the
 owner's comments**; the lookups, profile, rename, uploaded file and the cost of it all; and the
-**arc**, which crosses like an artefact but has no mode to be swept. (The tweet thread was here too until 2026-09-29, when it became a mode; it is now swept through `POLICY.tweets` in `src/web/visitor.ts`.)
+**arc**, which crosses like an artefact but has no mode to be swept. (The tweet thread is the second: a mode from 2026-09-29 to 2026-10-03, swept through `POLICY.tweets`, and now Summary's Thread view, with a fixed row of its own again — `SHARED_THREAD`.)
 
 **The comments row moved from the withheld side to the shared side**, and it is the only row that
 ever has ([260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3). Two kinds of
