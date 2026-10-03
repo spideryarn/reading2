@@ -1,0 +1,77 @@
+{
+  "seed": 261003,
+  "key": [
+    {
+      "pair": 1,
+      "slug": "vb-spya-vu3xen",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "pair": 2,
+      "slug": "vb-spya-vu3xen",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "pair": 3,
+      "slug": "cargocult-spya-rz663q",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "pair": 4,
+      "slug": "cargocult-spya-rz663q",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "pair": 5,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "pair": 6,
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "pair": 7,
+      "slug": "source-spya-furjgs",
+      "A": "new#1",
+      "B": "old#1"
+    },
+    {
+      "pair": 8,
+      "slug": "source-spya-furjgs",
+      "A": "new#2",
+      "B": "old#2"
+    },
+    {
+      "pair": 9,
+      "slug": "best-spya-ny2pgx",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "pair": 10,
+      "slug": "best-spya-ny2pgx",
+      "A": "old#2",
+      "B": "new#2"
+    },
+    {
+      "pair": 11,
+      "slug": "fowler-phrenology",
+      "A": "old#1",
+      "B": "new#1"
+    },
+    {
+      "pair": 12,
+      "slug": "fowler-phrenology",
+      "A": "old#2",
+      "B": "new#2"
+    }
+  ]
+}

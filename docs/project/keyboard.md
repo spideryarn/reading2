@@ -190,8 +190,9 @@ The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/we
 horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
 ([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
-lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[skim.md](skim.md) § What shipped). It runs **after every guard** on this
+lands on (since 2026-09-28, [skim.md](skim.md) § What shipped). None of them steps a covering band
+aside on a narrow window: they did until 2026-10-03, and now only a row press does (report
+spya-kudr63). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop

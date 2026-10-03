@@ -49,11 +49,12 @@ import {
   passCount,
   positionsOf,
   stepStop,
+  walkedIn,
 } from "../../skim-route.js";
 import type { QuotesRead } from "../../useQuotes.js";
 import { type WhereRow, whereForBlock } from "../../where.js";
 import { useSkim } from "../../useSkim.js";
-import { SkimPanel, type SkimRow } from "../../SkimPanel.js";
+import { SkimPanel, type SkimPass, type SkimRow } from "../../SkimPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
@@ -345,7 +346,7 @@ export function VisitorSkimBand({
 export interface SkimView {
   /** The depth drawn, or `null` for a route with no stops. */
   depth: SkimDepth | null;
-  /** Each offered depth, its label and how many stops it shows. */
+  /** Each offered depth, its label and how many stops it walks — carried ones included. */
   depths: { depth: SkimDepth; label: string; count: number }[];
   rows: SkimRow[];
   /** 1-based position of the current stop on this pass, or 0 for none. */
@@ -405,7 +406,8 @@ function useSkimMode({
   });
 
   /* **The stop wins over the depth** (Sol, plan 260929e review F4): a
-     `?stop=` draws its own pass, since passes no longer share a stop. */
+     `?stop=` is stood on, in the asked pass when the stop is walked there and
+     otherwise in its own — a stop can be in more than one since plan 261003l. */
   const { depth, route, current } = useMemo(
     () => locate(stops, asked.depth, asked.stop),
     [stops, asked.depth, asked.stop],
@@ -449,24 +451,40 @@ function useSkimMode({
    * **Every direct movement along the route goes through here** — ‹ ›, ← →,
    * the door, a depth change that moves you (Sol F29): the
    * stop's block scrolled near the top and flashed when the glide settles
-   * (`arrive`), and on a narrow window the band steps aside so the prose it
-   * landed on can be seen. One helper, so the keys cannot do less than the
-   * buttons. A row press is not here: it is a jump, through `onJump`.
+   * (`arrive`). One helper, so the keys cannot do less than the buttons. A row
+   * press is not here: it is a jump, through `onJump`.
+   *
+   * **It does not step the band aside.** Until 2026-10-03 it did, on a window
+   * where the band lies over the prose (`covers`), so on a phone ‹ › showed one
+   * stop and then closed the band on the reader:
+   *
+   * > in this special case, the left and right buttons of skim mode should stay
+   * > in skim mode ... if it's showing me a quote and I click on the quote, I
+   * > think I do want to be taken to the article.
+   * >
+   * > — Greg, 2026-10-03 (spya-kudr63)
+   *
+   * So the rule is one a reader can learn: **a control in the head stays in
+   * Skim; a row goes to the article** (`onRow`, below, the only caller of
+   * `onAway`). The depth buttons are in the head, so they stay too. The prose
+   * still scrolls to the stop underneath, so it is already there when the row
+   * is pressed or the band closed, and the flash waits behind the band until
+   * then (flash.ts § a flash nobody can see is held). It keys on nothing: with
+   * the band beside the prose, or already aside (the door), there was never
+   * anything to step. docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md § Stage 1.
    */
-  const moveTo = useCallback(
-    (block: BlockId, quoteId: string) => {
-      arrive(block, quoteId);
-      if (covers) onAway();
-    },
-    [covers, onAway],
-  );
+  const moveTo = useCallback((block: BlockId, quoteId: string) => {
+    arrive(block, quoteId);
+  }, []);
 
   /**
-   * A stop determines its pass, so keep the URL's two coordinates in step when
-   * traversal replaces the current entry. This matters for an old link whose
-   * valid `?stop=` disagrees with `?depth=`: `locate` correctly draws the stop's
-   * pass, and the first interaction canonicalises the address to that pass.
-   * Gist keeps the documented absent-depth default.
+   * Keep the URL's two coordinates in step when traversal replaces the current
+   * entry: the stop, and **the pass being drawn** — not the stop's own, since a
+   * carried stop is in more than one (plan 261003l) and a step must not throw
+   * the reader out of the pass they are walking. This matters for an old link
+   * whose valid `?stop=` disagrees with `?depth=`: `locate` draws a pass the
+   * stop is walked in, and the first interaction canonicalises the address to
+   * it. Gist keeps the documented absent-depth default.
    */
   const replaceStop = useCallback(
     (quoteId: string) => {
@@ -497,16 +515,17 @@ function useSkimMode({
     /** @param land where to stand instead of where a depth change keeps you — *More detail ›*. */
     (to: SkimDepth, land?: string) => {
       if (depth === null) return;
-      /* Stop 1 of the new pass: passes share no stop to stay on (260929e). */
+      /* Stop 1 of the new pass (260929e). Since plan 261003l that can be the
+         stop the reader is on — a carried stop that comes first in the new
+         pass — and then the pass changes and the reader does not move. */
       const next = land ?? firstStopOf(stops, to);
       const moved = next !== null && next !== current?.quoteId;
       const block = moved ? blockOf(next) : null;
       if (moved && block === null) return;
       /* **One update, pushed** — depth and stop together. */
       void setRoute({ depth: to, stop: next }, { history: "push" });
-      /* Scroll — and flash — only when the change moved the reader, which,
-         since passes stopped sharing stops (260929e), is every time there is
-         a stop to go to. */
+      /* Scroll — and flash — only when the change moved the reader. Landing on
+         the stop already stood at is one pushed entry and nothing else. */
       if (block !== null && next !== null) moveTo(block, next);
     },
     [depth, stops, current, setRoute, blockOf, moveTo],
@@ -638,6 +657,23 @@ function useSkimMode({
     [stops],
   );
   const positions = useMemo(() => positionsOf(blocks), [blocks]);
+  /* **Which passes each stop is in — the pips** (plan 261003l § The mark), or
+     `null` for every row when they are not drawn: on a route offering one
+     depth, and on one that carries no stop anywhere, which is every route from
+     before `skim/9`. Three pips that never vary would be noise. Asked of
+     `walkedIn`, so an `again` naming a depth the route does not offer neither
+     fills a pip nor turns the mark on. */
+  const passesOf = useMemo<Map<string, SkimPass[]> | null>(() => {
+    if (depths.length < 2) return null;
+    const all = new Map(
+      stops.map((stop) => [
+        stop.quoteId,
+        depths.map((d) => ({ depth: d.depth, label: d.label, on: walkedIn(stops, stop, d.depth) })),
+      ]),
+    );
+    const carried = [...all.values()].some((passes) => passes.filter((p) => p.on).length > 1);
+    return carried ? all : null;
+  }, [stops, depths]);
   const rows = useMemo<SkimRow[]>(
     () =>
       route.map((stop, i) => {
@@ -660,12 +696,16 @@ function useSkimMode({
           words: byId.get(stop.quoteId)?.text ?? null,
           /* Where it sits in the outline, for the position mark's card (260929f § 3). */
           where: block === null ? NO_WHERE : whereForBlock(tree, index, block),
+          passes: passesOf?.get(stop.quoteId) ?? null,
         };
       }),
-    [route, blockOf, index, tree, current, positions, byId],
+    [route, blockOf, index, tree, current, positions, byId, passesOf],
   );
 
-  /** Choosing a stop in the band: a jump, and on a narrow window the band steps aside. */
+  /**
+   * Choosing a stop in the band: a jump, and on a narrow window the band steps
+   * aside. **The only thing in Skim that does** since 2026-10-03 — `moveTo`.
+   */
   const onRow = useCallback(
     (quoteId: string) => {
       /* **A row press is a jump, not a step**, as a comment chosen from the
@@ -679,7 +719,8 @@ function useSkimMode({
     },
     [blockOf, replaceStop, onJump, covers, onAway],
   );
-  /* ‹ › — the band's own buttons. Stepping aside is `moveTo`'s, so the keys get it too. */
+  /* ‹ › — the band's own buttons. The same `step` the keys and the door call,
+     and none of them steps a covering band aside (spya-kudr63, `moveTo`). */
   const onStep = useCallback(
     (dir: -1 | 1) => {
       step(dir);
@@ -737,7 +778,10 @@ function useSkimMode({
  * docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  */
 function arrive(block: BlockId, quoteId: string): void {
-  /* A landing still held behind a covering band belongs to the step before. */
+  /* A landing still held behind a covering band belongs to the step before.
+     Since the head's controls stopped stepping the band aside (spya-kudr63)
+     this is the ordinary case on a phone, not a rare one: every ‹ › holds its
+     flash, and this is what keeps the one that finally plays the last stop's. */
   dropPendingFlash();
   const passage = quoteMarkKey(quoteId, block);
   /* Centred on the quote, as every jump is since plan 260929a § 3 — the

@@ -6,12 +6,13 @@
  * The controls include artefact-backed mode buttons in the bar and the
  * sub-mode controls for Diagram, Remember, Referee and Summary (including
  * their command-bar rows). Several gestures may arm the same target: Summary's
- * bar button, slider, end buttons and four command rows (the mode and its three
- * levels) all arm `simple`.
+ * bar button, its Brief and Fuller segments and their command rows all arm
+ * `simple`.
  * The bar's Tweets link armed a token from 2026-09-06 to 2026-09-15, when the
- * thread page began writing on arrival instead — it is a path rather than
- * query state, so the reason below does not reach it
- * (useAutoRun.ts § `useAutoRunOnArrival`).
+ * thread page began writing on arrival instead
+ * (useAutoRun.ts § `useAutoRunOnArrival`). The thread is Summary's third view
+ * since 2026-10-03 and still writes on arrival, so nothing that opens it arms
+ * anything — § `activationForSummary`.
  * Greg's rule is *"if the user **clicks** a mode that
  * hasn't been run yet, automatically run it"*, and the word that carries the
  * money is **clicks**.
@@ -141,7 +142,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { RememberView } from "./params.js";
+import type { RememberView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -197,34 +198,45 @@ export type { AutoRunTarget };
  * experimental-features switch, so the button is not in front of every reader,
  * and that the blurb on it says so.
  *
- *  - **`arrival`** — the band starts its own work when it mounts, so a press
- *    arms nothing, yet opening the mode may well spend. One row: `tweets`, a
- *    page until 2026-09-29 that kept its page's rule (useTweets.ts, useAutoRun.ts
- *    § `useAutoRunOnArrival`). A fourth answer rather than `fixed`, because a
- *    `fixed` press mints a token no `useAutoRun` would ever claim — an
- *    unclaimed token is a spend still owed, and the sweep in
- *    tests/every-mode-draws-its-surface.test.tsx says so — and rather than
- *    `none`, because `modeGenerates` must stay true for it.
+ * A fourth answer, **`arrival`**, stood here from 2026-09-29 to 2026-10-03 for
+ * the one mode whose band starts its own work when it mounts: Tweets. The
+ * thread is Summary's Thread view now and still writes on arrival, which a
+ * `delegated` row already says — its function answers `null` for the thread, as
+ * Diagram's does for the pictures that buy an embedding on mount — so no mode
+ * needs the fourth kind (GPT Sol, F7 of the 261003l review).
  */
 export type ModeActivation =
   | { kind: "fixed"; target: AutoRunTarget }
   | { kind: "delegated"; target: (ctx: PressContext) => AutoRunTarget | null; why: string }
-  | { kind: "arrival"; target: AutoRunTarget; why: string }
   | { kind: "none"; reason: string };
 
 /**
  * **What the bar knew at the moment of the press**, for the rows that cannot
  * decide without it.
  *
- * One field so far, and it is deliberately the *answer* rather than the raw
- * query string: the bar has already run `diagramInSearch` (params.ts), so an
- * unrecognised `?diagram=` arrives here as `sketch`, exactly as `diagramParam`
- * would open it. This module knows nothing about URLs and must not start to —
+ * Each field is deliberately the *answer* rather than the raw query string:
+ * the bar has already run `diagramInSearch` (params.ts), so an unrecognised
+ * `?diagram=` arrives here as `sketch`, exactly as `diagramParam` would open
+ * it. This module knows nothing about URLs and must not start to —
  * `activationForDiagram` below says what reading the raw value cost.
  */
 export interface PressContext {
   /** Which picture a Diagram press is about to land on. */
   diagram: DiagramKind;
+  /**
+   * Which of Summary's views a Summary press is about to land on.
+   *
+   * **On the reading view this is the parsed React state that picks the band,
+   * never `location.search` read at render.** nuqs updates React at once and
+   * the address up to ~50ms later, so in that gap the address still names the
+   * view the reader has just left: choose Thread, then at once take the
+   * command bar's Summary row, and a context read from the old address arms
+   * `simple` while the thread is what is mounted. Nothing claims that token,
+   * and Back to Brief then spends it on a navigation (GPT Sol, F1 of the
+   * 261003l review, P0). Dock.tsx § `summary` is where the two sources are
+   * told apart.
+   */
+  summary: SummaryView;
 }
 
 const MODE_TARGET: Record<Mode, ModeActivation> = {
@@ -239,9 +251,9 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      first (`precededBy`, src/web/useSkim.ts): the press is for this
      mode's artefact, and the token is keyed on it. */
   skim: { kind: "fixed", target: "skim" },
-  /* **One job writes all three plain-words levels**, so whichever level the
-     band opens on, the press arms `simple` — as the band's own slider and the
-     command bar's three rows do one level down (SummaryMode.tsx §
+  /* **One job writes every plain-words level**, so whichever length the band
+     opens on, the press arms `simple` — as the band's own Brief and Fuller
+     segments and their command-bar rows do one level down (SummaryMode.tsx §
      `SummaryControls`). Until 2026-10-01 Summary opened on the tree's gists,
      which were free; that outline went
      (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md), and
@@ -249,15 +261,19 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      "Write it". Greg: *"When I open any of the Summary submodes, if they
      haven't already been generated, automatically kick off the generation."*
      (7T, docs/plans/261002a-summary-generates-on-open.md). "Write it" stays,
-     for an arrival, which arms nothing here as for every mode. */
-  summary: { kind: "fixed", target: "simple" },
-  tweets: {
-    kind: "arrival",
-    target: "tweets",
-    why: "the band writes the thread when its owner opens it and there is none — Greg, 2026-09-12",
+     for an arrival, which arms nothing here as for every mode.
+
+     **Delegated since 2026-10-03**, when the thread became the third view: a
+     press that lands on it arms nothing, because its band writes on arrival
+     (§ `activationForSummary`). A `fixed` row would mint a `simple` token with
+     no `useSimple` mounted to claim it. */
+  summary: {
+    kind: "delegated",
+    target: (ctx) => activationForSummary(ctx.summary),
+    why: "the view a press lands on is whatever `?summary=` says: a length arms `simple`, the thread nothing",
   },
 
-  /* The one delegated row, and the reason the variant carries a function at
+  /* The first delegated row, and the reason the variant carries a function at
      all: the picture a Diagram press lands on is whatever `?diagram=` says, so
      a fixed row would be a lie about half the presses — and an expensive one,
      which `activationForDiagram` below spells out step by step. */
@@ -361,12 +377,16 @@ export function modeGenerates(mode: Mode): boolean {
  * a second list of "the step each mode makes" would be the copy nobody watches.
  *
  * `delegated` is `null` because the step is the press's, not the mode's
- * (Diagram's picture comes from `?diagram=`); the two stream targets are `null`
- * because they have no job row. docs/plans/260930c-auto-generate-the-main-modes-after-import.md.
+ * (Diagram's picture comes from `?diagram=`, Summary's view from `?summary=`);
+ * the two stream targets are `null` because they have no job row. **So a
+ * delegated mode drops out of the add page's list unless that file names its
+ * steps itself**, which it does for Summary (auto-modes.ts §
+ * `DELEGATED_MODE_STEPS`; GPT Sol, F2 of the 261003l review).
+ * docs/plans/260930c-auto-generate-the-main-modes-after-import.md.
  */
 export function modeStep(mode: Mode): StepName | null {
   const row = MODE_TARGET[mode];
-  if (row.kind !== "fixed" && row.kind !== "arrival") return null;
+  if (row.kind !== "fixed") return null;
   return row.target === "claims" || row.target === "candidates" ? null : row.target;
 }
 
@@ -471,7 +491,7 @@ export function armActivation(slug: string, target: AutoRunTarget): void {
 
 /**
  * **A press on one of the bottom bar's mode buttons**, whatever that mode turns
- * out to arm — which, for eight of the seventeen, is nothing.
+ * out to arm — which, for several of them, is nothing.
  *
  * The `switch` is exhaustive and ends on a `never`, so a fourth variant cannot
  * be added to `ModeActivation` without a branch here. And because the table is
@@ -494,8 +514,6 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
       if (target !== null) armActivation(slug, target);
       return;
     }
-    /* The band starts itself on mount; a token here would never be claimed. */
-    case "arrival":
     case "none":
       return;
     default: {
@@ -503,6 +521,28 @@ export function armActivationForMode(slug: string, mode: Mode, ctx: PressContext
       throw new Error(`unhandled activation: ${JSON.stringify(unhandled)}`);
     }
   }
+}
+
+/**
+ * **What a press that lands on one of Summary's views arms**: `simple` for
+ * either length, and nothing for the thread.
+ *
+ * One answer for the three places that must agree — the bar's delegated row,
+ * the band's own segments and their command-bar rows (`subModeTarget`), and the
+ * token the boundary retires (`bandTarget`).
+ *
+ * **The thread arms nothing because its band writes on arrival**, not on a
+ * press: `useTweets` calls `useAutoRunOnArrival`, which claims no token
+ * (Greg, 2026-09-12: *"automatically start generating … when opened (without
+ * having to click a button to kick it off)"*, kept on 2026-10-03 with *"keep
+ * all of the tweet thread. Functionality and UI"*). A token minted here would
+ * be `simple`'s, with `TweetsBand` mounted and no `useSimple` to claim it — a
+ * spend still owed, which Back onto Brief would then collect.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md §
+ * Decision 6.
+ */
+export function activationForSummary(view: SummaryView): AutoRunTarget | null {
+  return view === "thread" ? null : "simple";
 }
 
 /**
@@ -600,8 +640,9 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *    whatever `?diagram=` said before the press, which is the orphaned-token bug
  *    that function's docblock walks through;
  *  - Referee: `REFEREE_TARGET`;
- *  - Summary: every plain-words level arms the one `simple` step that writes them
- *    all (SummaryMode.tsx § `SummaryControls`, and `bandTarget` below).
+ *  - Summary: `activationForSummary` of the view **the row names** — `simple`
+ *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
+ *    `SummaryControls`, and `bandTarget` below).
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -616,7 +657,7 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     case "referee":
       return REFEREE_TARGET[sub.view] ?? null;
     case "summary":
-      return "simple";
+      return activationForSummary(sub.view);
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
@@ -638,10 +679,14 @@ export function armActivationForSubMode(slug: string, sub: SubMode): void {
  * down, for the command bar's `generates` marker. Every Diagram picture says
  * yes, for the reason `modeGenerates` gives the delegated row: Force, Drift and
  * Trail arm nothing but buy an embedding on mount, and a marker that went quiet
- * for them would be wrong in the direction that costs money.
+ * for them would be wrong in the direction that costs money. **Summary's Thread
+ * says yes by name for the same reason**: its row arms nothing and its band
+ * writes the thread on arrival.
  */
 export function subModeGenerates(sub: SubMode): boolean {
-  return sub.mode === "diagram" || subModeTarget(sub) !== null;
+  if (sub.mode === "diagram") return true;
+  if (sub.mode === "summary" && sub.view === "thread") return true;
+  return subModeTarget(sub) !== null;
 }
 
 /**
@@ -655,9 +700,9 @@ export function subModeGenerates(sub: SubMode): boolean {
  * to spend it. So each arm below reads the table the press itself read — the
  * bar's `MODE_TARGET` for a mode press, `REFEREE_TARGET` for a Referee chip, and
  * the literal `"quiz"` the Remember toggle arms (QuizPanel.tsx §
- * `RememberSubModeToggle`), and `"simple"` the Summary controls arm. A Diagram
- * chip arms `activationForDiagram` of the picture it lands on, which is the
- * delegated row's answer too.
+ * `RememberSubModeToggle`). A Diagram chip arms `activationForDiagram` of the
+ * picture it lands on and a Summary segment `activationForSummary` of its view,
+ * which are the delegated rows' answers too.
  *
  * `sub` is the sub-mode each band is showing, **already parsed** the way the
  * band parses it — this module knows nothing about URLs, for the reason
@@ -665,7 +710,7 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView },
+  sub: { diagram: DiagramKind; referee: RefereeView; remember: RememberView; summary: SummaryView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee] ?? null;
   if (mode === "remember") return sub.remember === "quiz" ? "quiz" : null;
@@ -674,9 +719,8 @@ export function bandTarget(
     case "fixed":
       return decision.target;
     case "delegated":
-      return decision.target({ diagram: sub.diagram });
+      return decision.target({ diagram: sub.diagram, summary: sub.summary });
     /* No press was armed, so there is none to retire. */
-    case "arrival":
     case "none":
       return null;
     default: {

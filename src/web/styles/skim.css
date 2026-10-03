@@ -209,6 +209,32 @@
   background: var(--highlight);
 }
 
+/* **Which passes the stop is in** (plan 261003l, spya-ms9d69): one pip per
+   pass the route offers, shallowest first, filled when the stop is walked
+   there. Between the number and the position line, in the number's column, so
+   it costs no width — three pips are 16px of a column at least 1.4em wide, at
+   a 280px band and on a phone alike. Muted, in the sparkline's own colours
+   (`.skim-spark-dot`): hollow is the page with a faint ring, filled is the
+   ring's colour. Not a control — SkimPanel.tsx § StopPasses.
+   Its height and gap are variables on `.skim-line`, because `.skim-where`
+   below has to move down by exactly as much. */
+.skim-pips {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  height: var(--skim-pips-height);
+  margin-top: var(--skim-pips-gap);
+}
+.skim-pip {
+  box-sizing: border-box;
+  width: var(--skim-pips-height);
+  height: var(--skim-pips-height);
+  border: 1px solid var(--ink-faint);
+  border-radius: 50%;
+  background: var(--page);
+}
+.skim-pip.on { background: var(--ink-faint); }
+
 .skim-read-error { margin: 0.4rem 0.7rem 0; }
 .skim-read-error .gloss-error { margin: 0 0 0.5rem; }
 
@@ -391,18 +417,26 @@
    own button rather than in it (Sol, plan 260929f F5). Invisible — the mark
    under it is the drawing; this is only the thing to point at. The hit target's
    top is derived from the same padding, number line and gap that place the
-   mark, rather than assuming a font-dependent offset from `.skim-line`. */
+   mark — the pips' room included, on a row that has them — rather than
+   assuming a font-dependent offset from `.skim-line`. */
 .skim-line {
   --skim-row-pad-x: 0.4rem;
   --skim-row-pad-y: 0.35rem;
   --skim-number-line: 1rem;
   --skim-pos-gap: 0.2rem;
   --skim-pos-height: 1.6rem;
+  --skim-pips-gap: 0.1rem;
+  --skim-pips-height: 4px;
+  /* What the pips add above the position line: nothing on a row without them. */
+  --skim-pips-room: 0px;
   position: relative;
 }
+.skim-line.piped { --skim-pips-room: calc(var(--skim-pips-gap) + var(--skim-pips-height)); }
 .skim-where {
   position: absolute;
-  top: calc(var(--skim-row-pad-y) + var(--skim-number-line) + var(--skim-pos-gap));
+  top: calc(
+    var(--skim-row-pad-y) + var(--skim-number-line) + var(--skim-pips-room) + var(--skim-pos-gap)
+  );
   left: var(--skim-row-pad-x);
   width: 1.2rem;
   height: 2rem;

@@ -5,7 +5,8 @@
  *
  * Two halves. The panel, from a posed hook and view: the pinned head, the depth
  * control that offers only the depths that add stops, the role line on the
- * current row only, each pass's own stops, and the foot's promise. Then the
+ * current row only, each pass's stops, the pips that say which passes a stop
+ * is in (plan 261003l), and the foot's promise. Then the
  * band, for real, over a stubbed network inside a
  * `NuqsAdapter`: what a step and a depth change write to the address and to the
  * history stack, that a stale `?stop=` falls back to the first stop, and that
@@ -101,7 +102,7 @@ vi.mock("../src/web/useJobs.js", async (importOriginal) => {
 
 /* Scrolls are recorded — jsdom has no layout, and the claim is that a step
    scrolls rather than pushes. comment-jump.test.ts does the same. */
-const { scrolled, flashed, passages, jumpPassages, movement, aligns } = vi.hoisted(() => ({
+const { scrolled, flashed, passages, jumpPassages, movement, aligns, flashOrder } = vi.hoisted(() => ({
   scrolled: [] as string[],
   flashed: [] as string[],
   /* The passage each flash was narrowed to (plan 260928a § 7b), or null. */
@@ -111,6 +112,7 @@ const { scrolled, flashed, passages, jumpPassages, movement, aligns } = vi.hoist
   /* How each Skim movement asked to land — plan 260929a § 3. */
   aligns: [] as string[],
   movement: { outcome: "settled" as "settled" | "cancelled" | "missing", dropped: 0 },
+  flashOrder: [] as string[],
 }));
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/web/scroll.js")>();
@@ -140,6 +142,7 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
     },
     dropPendingFlash: () => {
       movement.dropped += 1;
+      flashOrder.push("old flash dropped");
     },
     resetFlash: () => {
       flashed.length = 0;
@@ -154,6 +157,7 @@ const { armSkimOpening, firstSkimArrival, SkimBand } = await import(
   "../src/web/modes/skim/SkimMode.js"
 );
 const { resetFlash } = await import("../src/web/flash.js");
+const { useModeFlashOwnership } = await import("../src/web/reader/mode-flash.js");
 const { resolveQuotes } = await import("../src/web/search-hits.js");
 const { quoteStroke } = await import("../src/web/QuotesPanel.js");
 
@@ -176,6 +180,27 @@ describe("the reading view's Skim arrival mailbox", () => {
     history.replaceState(null, "", "/read/a-route?mode=skim&stop=q-popped");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(firstSkimArrival("skim")).toEqual({ stop: null, open: false });
+  });
+});
+
+describe("a held flash across a mode change", () => {
+  function IncomingBand({ mode }: { mode: "plain" | "skim" }) {
+    useEffect(() => {
+      if (mode === "skim") flashOrder.push("incoming landing");
+    }, [mode]);
+    return null;
+  }
+
+  function FlashOwner({ mode }: { mode: "plain" | "skim" }) {
+    useModeFlashOwnership(mode, mode === "skim");
+    return createElement(IncomingBand, { key: mode, mode });
+  }
+
+  it("drops the departing mode's flash before the incoming band claims its landing", async () => {
+    await act(async () => root.render(createElement(FlashOwner, { mode: "plain" })));
+    flashOrder.length = 0;
+    await act(async () => root.render(createElement(FlashOwner, { mode: "skim" })));
+    expect(flashOrder).toEqual(["old flash dropped", "incoming landing"]);
   });
 });
 
@@ -289,6 +314,16 @@ const SKIM_BODY = {
   notOnRoute: 0,
 };
 
+/**
+ * **The same route with two stops carried into a deeper pass** (plan 261003l,
+ * spya-ms9d69): Gist q2 q0, More q2 q3, Most q3 q1. Stop 1 of More is stop 1
+ * of Gist, so a depth change from the top of Gist stays where it is.
+ */
+const SHARED_STOPS: SkimStop[] = STOPS.map((s) =>
+  s.quoteId === Q[2] ? { ...s, again: [2] } : s.quoteId === Q[3] ? { ...s, again: [3] } : s,
+);
+const SHARED_BODY = { ...SKIM_BODY, skim: { ...ROUTE, stops: SHARED_STOPS } };
+
 /* ------------------------------------------------------------- the harness -- */
 
 let host: HTMLDivElement;
@@ -374,9 +409,9 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [] },
-      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [] },
-      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [] },
+      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null },
+      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null },
+      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null },
     ],
     position: 2,
     card: null,
@@ -455,7 +490,7 @@ describe("the panel", () => {
       owner(),
       view({
         rows: [
-          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [] },
+          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null },
         ],
       }),
     );
@@ -469,8 +504,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [] },
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
+        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
       ],
       position: 1,
     });
@@ -500,9 +535,10 @@ describe("the panel", () => {
           position: null,
           words: "First.",
           where: [],
+          passes: null,
         },
         // The same text in other voices is still the same place: said, not drawn.
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [] },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
       ],
       position: 1,
     });
@@ -701,7 +737,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [] }],
+      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
@@ -918,6 +954,67 @@ describe("the panel", () => {
     await draw(owner(), view());
     expect(host.querySelector(".skim-pos")).toBeNull();
     expect(host.querySelector(".skim-pos-said")).toBeNull();
+  });
+
+  describe("the pips: which passes a stop is in (261003l, spya-ms9d69)", () => {
+    const pass = (on: boolean[]) =>
+      (["Gist", "More", "Most"] as const).map((label, i) => ({ depth: (i + 1) as 1 | 2 | 3, label, on: on[i]! }));
+    /* Drawn at More (`view()`'s depth 2): a Gist stop carried in, More's own,
+       and a More stop carried on into Most. */
+    const piped = () => {
+      const v = view();
+      const on = [[true, true, false], [false, true, false], [false, true, true]];
+      return view({ rows: v.rows.map((r, i) => ({ ...r, position: 0.5, passes: pass(on[i]!) })) });
+    };
+    const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
+    const info = () => host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+
+    it("draws one pip per offered depth on every row, filled for the passes the stop is walked in", async () => {
+      await draw(owner(), piped());
+      const rows = [...host.querySelectorAll<HTMLElement>(".skim-row")];
+      const pips = rows.map((r) => [...r.querySelectorAll(".skim-pip")].map((p) => p.classList.contains("on")));
+      expect(pips).toEqual([[true, true, false], [false, true, false], [false, true, true]]);
+      /* Inside the row's own button, in the number's column, above the position line. */
+      const run = rows[0]!.querySelector(".skim-go .skim-n .skim-pips")!;
+      expect(run.getAttribute("aria-hidden")).toBe("true");
+      expect(run.textContent, "no printed label").toBe("");
+      expect(run.compareDocumentPosition(rows[0]!.querySelector(".skim-pos")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      /* Not a control: nothing to focus, nothing that could press or collide. */
+      expect(host.querySelector(".skim-pips button, .skim-pips [tabindex], .skim-pips [role]")).toBeNull();
+      expect(rows.map((r) => r.querySelector(".skim-line")!.classList.contains("piped"))).toEqual([true, true, true]);
+    });
+
+    it("says the other passes in the row's name, for a stop in more than one, and prints nothing", async () => {
+      await draw(owner(), piped());
+      const said = [...host.querySelectorAll<HTMLElement>(".skim-row")].map(
+        (r) => r.querySelector(".skim-go .skim-pips-said")?.textContent ?? null,
+      );
+      expect(said).toEqual(["Also in Gist", null, "Also in Most"]);
+      expect(host.querySelector(".skim-pips-said")!.classList.contains("sr-only")).toBe(true);
+      const v = piped();
+      await draw(owner(), { ...v, depth: 1, rows: [{ ...v.rows[0]!, passes: pass([true, true, true]) }] });
+      expect(host.querySelector(".skim-pips-said")?.textContent).toBe("Also in More and Most");
+    });
+
+    it("draws none on a route that carries no stop — every old route", async () => {
+      await draw(owner(), view());
+      expect(host.querySelector(".skim-pips")).toBeNull();
+      expect(host.querySelector(".skim-pips-said")).toBeNull();
+      expect(host.querySelector(".skim-line.piped")).toBeNull();
+    });
+
+    it("explains them in the band's (i) only when they are drawn", async () => {
+      await draw(owner(), piped());
+      await act(async () => info().click());
+      expect(tip()).toContain("The dots under a stop's number show which passes it is in — Gist, More, Most.");
+      expect(tip()).toContain("more than one filled");
+      await act(async () => info().click());
+      await draw(owner(), view());
+      await act(async () => info().click());
+      expect(tip()).toContain(skimPromise(false));
+      expect(tip()).not.toContain("The dots");
+      await act(async () => info().click());
+    });
   });
 
   it("says when the Quotes will be chosen first", async () => {
@@ -1495,6 +1592,93 @@ describe("the band, walked", () => {
     expect(current()).toBe(Q[3]);
   });
 
+  describe("a route that carries stops into deeper passes (261003l, spya-ms9d69)", () => {
+    beforeEach(() => {
+      skimBody = SHARED_BODY;
+    });
+    const pips = () =>
+      [...host.querySelectorAll<HTMLElement>(".skim-row")].map((r) =>
+        [...r.querySelectorAll(".skim-pip")].map((p) => (p.classList.contains("on") ? "●" : "○")).join(""),
+      );
+
+    it("walks a carried stop in both passes, and counts it in both", async () => {
+      await mount();
+      expect([...host.querySelectorAll(".skim-depth-n")].map((n) => n.textContent)).toEqual(["2", "2", "2"]);
+      expect(pips()).toEqual(["●●○", "●○○"]);
+      history.replaceState(null, "", "/read/a-route?mode=skim&depth=3");
+      await mount();
+      expect([...host.querySelectorAll<HTMLElement>(".skim-row")].map((r) => r.getAttribute("data-stop"))).toEqual([Q[3], Q[1]]);
+      expect(pips()).toEqual(["○●●", "○○●"]);
+      expect(host.querySelector(".skim-row .skim-pips-said")?.textContent).toBe("Also in More");
+    });
+
+    it("a depth change that stays on the same stop pushes one entry and does not scroll (Sol F5)", async () => {
+      await mount();
+      expect(current()).toBe(Q[2]);
+      scrolled.length = 0;
+      flashed.length = 0;
+      const before = history.length;
+      await act(async () => host.querySelectorAll<HTMLButtonElement>(".skim-depth")[1]!.click());
+      await settled();
+      expect(history.length, "one entry for the depth").toBe(before + 1);
+      expect([param("depth"), param("stop"), current()]).toEqual(["2", Q[2], Q[2]]);
+      expect(host.querySelector(".skim-depth.on")?.textContent).toContain("More");
+      expect(text(".band-head")).toContain("Stop 1 of 2");
+      expect(scrolled, "the reader is already there").toEqual([]);
+      expect(flashed).toEqual([]);
+      /* The door is More's now: on to More's own stop. */
+      expect(control?.door).toEqual({ kind: "next", cue: "Where does it stop holding?" });
+
+      /* Back undoes the depth change and nothing else. */
+      await act(async () => {
+        const popped = new Promise<void>((resolve) =>
+          window.addEventListener("popstate", () => resolve(), { once: true }),
+        );
+        history.back();
+        await popped;
+      });
+      await settled();
+      expect([param("depth"), current()]).toEqual([null, Q[2]]);
+      expect(host.querySelector(".skim-depth.on")?.textContent).toContain("Gist");
+      expect(text(".band-head")).toContain("Stop 1 of 2");
+    });
+
+    it("draws a link's asked pass when its stop is walked there, else the stop's own", async () => {
+      history.replaceState(null, "", `/read/a-route?mode=skim&depth=2&stop=${Q[2]}`);
+      await mount();
+      expect([current(), host.querySelector(".skim-depth.on")?.textContent?.slice(0, 4)]).toEqual([Q[2], "More"]);
+      expect(text(".band-head")).toContain("Stop 1 of 2");
+      /* A step from there keeps the pass it was drawn in. */
+      await act(async () => void control!.step(1));
+      await settled();
+      expect([param("depth"), param("stop")]).toEqual(["2", Q[3]]);
+
+      history.replaceState(null, "", `/read/a-route?mode=skim&depth=3&stop=${Q[2]}`);
+      await mount();
+      expect([current(), host.querySelector(".skim-depth.on")?.textContent?.slice(0, 4)]).toEqual([Q[2], "Gist"]);
+      history.replaceState(null, "", `/read/a-route?mode=skim&stop=${Q[3]}`);
+      await mount();
+      expect([current(), host.querySelector(".skim-depth.on")?.textContent?.slice(0, 4)]).toEqual([Q[3], "More"]);
+    });
+
+    it("More detail at the end of Gist goes back to a carried stop 1 of More", async () => {
+      await mount();
+      await act(async () => void control!.step(1));
+      await settled();
+      scrolled.length = 0;
+      await act(async () => control!.deeper());
+      await settled();
+      expect([param("depth"), param("stop")]).toEqual(["2", Q[2]]);
+      expect(scrolled).toEqual([B[2]]);
+    });
+  });
+
+  it("draws no pips on a route with no carried stop (261003l)", async () => {
+    await mount();
+    expect(host.querySelectorAll(".skim-row")).toHaveLength(2);
+    expect(host.querySelector(".skim-pips")).toBeNull();
+  });
+
   it("draws Most as only the stops Most adds, none dimmed (260929e)", async () => {
     history.replaceState(null, "", "/read/a-route?mode=skim&depth=3");
     await mount();
@@ -1552,31 +1736,52 @@ describe("the band, walked", () => {
     expect(flashed).toEqual([]);
   });
 
-  it("flashes on ‹ › in the band too, and steps aside after on a narrow window (5a)", async () => {
+  /* **A control in the head stays in Skim; a row goes to the article** — Greg's
+     spya-kudr63, plan 261003l. Until then every step called `onAway` (Sol F29),
+     so on a phone ‹ › showed one stop and then closed the band on the reader. */
+  it("flashes on ‹ › in the band too, and stays up on a narrow window (5a, spya-kudr63)", async () => {
     await mount(true);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
     await settled();
-    expect(flashed).toEqual([B[0]]);
-    expect(away).toBe(1);
+    /* The prose still goes to the stop underneath, and the list follows. */
+    expect([scrolled, flashed]).toEqual([[B[0]], [B[0]]]);
+    expect([param("stop"), current()]).toEqual([Q[0], Q[0]]);
+    expect(away).toBe(0);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Previous stop"]')!.click());
+    await settled();
+    expect([current(), away]).toEqual([Q[2], 0]);
   });
 
-  it("steps aside on ← → and on a depth change, as on ‹ › (Sol F29)", async () => {
+  it("stays up on ← → and on a depth change, as on ‹ › (spya-kudr63; was Sol F29's step aside)", async () => {
     await mount(true);
     /* The keys reach the band through the published control, not the panel. */
     await act(async () => void control!.step(1));
     await settled();
-    expect([flashed, away]).toEqual([[B[0]], 1]);
+    expect([flashed, away]).toEqual([[B[0]], 0]);
     /* The door, back to the next stop: ← then the door's Next stop. */
     await act(async () => void control!.step(-1));
     await settled();
     await act(async () => control!.advance());
     await settled();
-    expect([flashed, away]).toEqual([[B[0], B[2], B[0]], 3]);
+    expect([flashed, away]).toEqual([[B[0], B[2], B[0]], 0]);
     /* A depth change always moves the reader now: Most's own stop 1. */
     await act(async () => host.querySelectorAll<HTMLButtonElement>(".skim-depth")[2]!.click());
     await settled();
     expect([param("depth"), param("stop")]).toEqual(["3", Q[1]]);
-    expect([flashed.at(-1), away]).toEqual([B[1], 4]);
+    expect([flashed.at(-1), away]).toEqual([B[1], 0]);
+  });
+
+  it("still steps aside for a row pressed after the head's controls were used (spya-kudr63)", async () => {
+    await mount(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Next stop"]')!.click());
+    await settled();
+    expect(away).toBe(0);
+    /* The quote itself: a jump to the article, as before. */
+    await act(async () => host.querySelector<HTMLButtonElement>(".skim-row.current .skim-go")!.click());
+    await settled();
+    expect(away).toBe(1);
+    expect(scrolled.at(-1)).toBe(`jump ${B[0]}`);
+    expect(jumpPassages.at(-1)).toBe(`${Q[0]}:${B[0]}:0`);
   });
 
   it("flashes when More detail or a depth button moves the reader (5a)", async () => {
