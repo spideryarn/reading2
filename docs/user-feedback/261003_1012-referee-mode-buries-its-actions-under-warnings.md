@@ -37,3 +37,13 @@ Three questions went to Greg through the Overseer, written out in the plan's § 
 whether a one-line *"text already sent"* fact should stay on screen ([Q-referee-notices-hidden]),
 whether Candidates should start on its chip again ([Q-candidates-press]), and whether to thin the
 rule sentences inside each panel next ([Q-referee-panel-rules], not built).
+
+## Greg's answers, 2026-10-03
+
+> Q-referee-notices-hidden A
+>
+> Q-candidates-press yeah that's fine for now
+>
+> Q-referee-panel-rules B
+
+The Notices button and the press-to-start Candidates stay as built. **The panels' how-to-read sentences move into hover cards or the (i)**, which is queued as session fb-referee-panel-rules.
