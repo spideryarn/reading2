@@ -105,6 +105,32 @@ describe("a shut line", () => {
     expect(el.querySelector(".marg-shut-button")?.textContent).toContain("3 works");
   });
 
+  /* Greg, spya-zmdb7y (plan 261003j): nothing about a cited work beyond what
+     the article's own bibliography gives. `why` is the model's paraphrase. */
+  it("opens a citation to the article's own entry, never the model's sentence about the work", () => {
+    const cited = {
+      id: "a",
+      title: "A work",
+      authors: "Tulving",
+      year: "1983",
+      why: "THE MODEL'S SENTENCE.",
+      entry: "Tulving, E. (1983). Elements of Episodic Memory. Oxford.",
+    } as unknown as CitedWork;
+    const el = draw([{ kind: "citation", items: [cited] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const item = el.querySelector(".marg-open-item");
+    expect(item?.textContent).not.toContain("THE MODEL'S SENTENCE.");
+    expect(item?.querySelector(".marg-cite-entry")?.textContent).toBe(cited.entry);
+  });
+
+  it("opens a lone citation with no by-line and no entry to its title, not to nothing", () => {
+    const bare = { id: "a", title: "A bare work", why: "THE MODEL'S SENTENCE." } as unknown as CitedWork;
+    const el = draw([{ kind: "citation", items: [bare] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const item = el.querySelector(".marg-open-item");
+    expect(item?.textContent).toBe("A bare work");
+  });
+
   it("opens a reader's comment to the whole of it, its line cut at one", () => {
     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;

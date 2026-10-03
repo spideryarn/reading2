@@ -123,6 +123,76 @@ function toRow(r: Row): AiCallRow {
     outputTextTokens: r.outputTextTokens,
     outputAudioTokens: r.outputAudioTokens,
     transcriptionSeconds: r.transcriptionSeconds,
+    voiceSeconds: r.voiceSeconds,
+  };
+}
+
+/**
+ * **One ledger row as the columns it is inserted into.** The article id is the
+ * caller's to supply: `record` looks it up from the slug, and the voice meter
+ * takes it off the session row it already holds, so that a transaction never
+ * waits on a second connection for it.
+ *
+ * A named function because there are two inserts: `record` below, and the
+ * GPT-Live voice meter (`advanceVoiceSeconds` in
+ * [realtime-sessions-pg.ts](realtime-sessions-pg.ts)), which writes its row in
+ * the same transaction that advances a session's high-water mark. Two copies of
+ * a fifty-column mapping would be one copy that gets the next column.
+ */
+export function aiCallInsertValues(
+  row: AiCallRow,
+  articleId: string | null,
+): typeof aiCalls.$inferInsert {
+  return {
+    id: row.id,
+    runId: row.runId,
+    generationId: row.generationId,
+    scopeKind: row.scopeKind,
+    ownerId: row.ownerId,
+    articleId,
+    articleSlug: row.articleSlug,
+    jobId: row.jobId,
+    stepName: row.stepName,
+    wire: row.wire,
+    purpose: row.job,
+    requestedModel: row.requestedModel,
+    answeredModel: row.answeredModel,
+    upstream: row.upstream,
+    credentialFingerprint: row.credentialFingerprint,
+    startedAt: new Date(row.startedAt),
+    finishedAt: new Date(row.finishedAt),
+    durationMs: row.durationMs,
+    outcome: row.outcome,
+    creditsUsedNanos: row.creditsUsedNanos,
+    byokUpstreamNanos: row.byokUpstreamNanos,
+    isByok: row.isByok,
+    providerAccount: row.providerAccount,
+    costSource: row.costSource,
+    computedCostNanos: row.computedCostNanos,
+    priceVersion: row.priceVersion,
+    reportedInputTokens: row.reportedInputTokens,
+    outputTokens: row.outputTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheWriteTokens: row.cacheWriteTokens,
+    cacheWrite5mTokens: row.cacheWrite5mTokens,
+    cacheWrite1hTokens: row.cacheWrite1hTokens,
+    reasoningTokens: row.reasoningTokens,
+    webSearches: row.webSearches,
+    serviceTier: row.serviceTier,
+    inferenceGeo: row.inferenceGeo,
+    realtimeSessionId: row.realtimeSessionId,
+    providerEventId: row.providerEventId,
+    eventKind: row.eventKind,
+    providerStatus: row.providerStatus,
+    inputTextTokens: row.inputTextTokens,
+    inputAudioTokens: row.inputAudioTokens,
+    inputImageTokens: row.inputImageTokens,
+    cachedTextTokens: row.cachedTextTokens,
+    cachedAudioTokens: row.cachedAudioTokens,
+    outputTextTokens: row.outputTextTokens,
+    outputAudioTokens: row.outputAudioTokens,
+    transcriptionSeconds: row.transcriptionSeconds,
+    voiceSeconds: row.voiceSeconds,
   };
 }
 
@@ -157,56 +227,7 @@ export const pgCostStore: CostStore = {
       : null;
     await getDb()
       .insert(aiCalls)
-      .values({
-        id: row.id,
-        runId: row.runId,
-        generationId: row.generationId,
-        scopeKind: row.scopeKind,
-        ownerId: row.ownerId,
-        articleId,
-        articleSlug: row.articleSlug,
-        jobId: row.jobId,
-        stepName: row.stepName,
-        wire: row.wire,
-        purpose: row.job,
-        requestedModel: row.requestedModel,
-        answeredModel: row.answeredModel,
-        upstream: row.upstream,
-        credentialFingerprint: row.credentialFingerprint,
-        startedAt: new Date(row.startedAt),
-        finishedAt: new Date(row.finishedAt),
-        durationMs: row.durationMs,
-        outcome: row.outcome,
-        creditsUsedNanos: row.creditsUsedNanos,
-        byokUpstreamNanos: row.byokUpstreamNanos,
-        isByok: row.isByok,
-        providerAccount: row.providerAccount,
-        costSource: row.costSource,
-        computedCostNanos: row.computedCostNanos,
-        priceVersion: row.priceVersion,
-        reportedInputTokens: row.reportedInputTokens,
-        outputTokens: row.outputTokens,
-        cacheReadTokens: row.cacheReadTokens,
-        cacheWriteTokens: row.cacheWriteTokens,
-        cacheWrite5mTokens: row.cacheWrite5mTokens,
-        cacheWrite1hTokens: row.cacheWrite1hTokens,
-        reasoningTokens: row.reasoningTokens,
-        webSearches: row.webSearches,
-        serviceTier: row.serviceTier,
-        inferenceGeo: row.inferenceGeo,
-        realtimeSessionId: row.realtimeSessionId,
-        providerEventId: row.providerEventId,
-        eventKind: row.eventKind,
-        providerStatus: row.providerStatus,
-        inputTextTokens: row.inputTextTokens,
-        inputAudioTokens: row.inputAudioTokens,
-        inputImageTokens: row.inputImageTokens,
-        cachedTextTokens: row.cachedTextTokens,
-        cachedAudioTokens: row.cachedAudioTokens,
-        outputTextTokens: row.outputTextTokens,
-        outputAudioTokens: row.outputAudioTokens,
-        transcriptionSeconds: row.transcriptionSeconds,
-      })
+      .values(aiCallInsertValues(row, articleId))
       /* **The same call must not produce two rows.** The id is minted before the
          request goes out, so a retry of the *insert* — not of the call — has a
          key to collide on, and a ledger that double-counts is wrong in the

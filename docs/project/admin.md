@@ -807,9 +807,12 @@ a Retry where the server allows one. How they are kept to once each is
 
 ## What it cannot do, and what is not built
 
-- **Nothing on `/admin/users` or `/admin/feedback` writes.** No delete, no ban, no spend. An admin
-  page that can only look is a much smaller thing to get wrong. `/admin/vouchers`, above, is the
-  exception, and the only thing it can change is a voucher.
+- **Nothing on `/admin/users` writes, and `/admin/feedback` writes one timestamp.** No delete, no
+  ban, no spend. An admin page that can only look is a much smaller thing to get wrong.
+  `/admin/vouchers`, above, is one exception, and the only thing it can change is a voucher. The
+  other, since 2026-10-03, is the **Ignore** button on a feedback card: it sets or clears
+  `feedback.ignored_at` and changes nothing the reader sent
+  ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).
 - **No model spend per user**, though `ai_calls` is right there. It carries no `owner_id` — it hangs
   off a revision — so per-user spend is a join through revisions and articles, and it is a page of
   its own the day a spend limit exists ([auth.md § Still open](auth.md#still-open)).

@@ -19,7 +19,8 @@
  * endpoint and it is the opposite: it is the seam where live conversation stops
  * being its own feature and becomes a turn in a conversation.
  */
-import type { MicPlacement } from "../../types.js";
+import type { GptLiveTicket, MicPlacement } from "../../types.js";
+import type { GptLiveUsageReport } from "./gpt-live/meter.js";
 import type { MeterTransport, PostOutcome } from "./meter.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
 
@@ -70,9 +71,38 @@ export interface LiveToolResult {
   detail: string;
 }
 
+/** What the browser sends to open a GPT-Live call. The server's half is `liveChatSession` in src/routes.ts. */
+export interface GptLiveOffer {
+  /** The peer connection's SDP offer. Our server passes it to OpenAI and returns the answer. */
+  sdp: string;
+  placement?: MicPlacement;
+  useProfile?: boolean;
+}
+
 export interface LiveWiring extends MeterTransport {
   /** Mint a session for this conversation, and get its history with it. */
   ticket(slug: string, threadId: string, placement: MicPlacement, signal?: AbortSignal): Promise<LiveTicket>;
+  /**
+   * **GPT-Live's counterpart to `ticket`**: hand over this tab's SDP offer and
+   * get the answer back, with our journal row's id and the conversation's tail.
+   * `POST /api/chat/:slug/:threadId/live-session`.
+   *
+   * One request where Realtime makes two, because GPT-Live has no short-lived
+   * client secret: only our server may talk to OpenAI's create endpoint, so the
+   * SDP exchange goes through it. The audio still does not.
+   *
+   * **Optional, with `gptLiveUsage` below**, so that a wiring written for
+   * Realtime alone (the preview page, every existing test) is still a
+   * `LiveWiring`. `useGptLive` refuses to start without both and says so; it
+   * never runs unmetered.
+   */
+  session?(slug: string, threadId: string, offer: GptLiveOffer, signal?: AbortSignal): Promise<GptLiveTicket>;
+  /**
+   * One GPT-Live usage report. The same route as `liveUsage`, which takes all
+   * four kinds; a second method because the two engines' reports are two types
+   * and `liveUsage` is pinned to Realtime's (tests/live-meter.test.ts).
+   */
+  gptLiveUsage?(sessionId: string, report: GptLiveUsageReport, keepalive: boolean): Promise<PostOutcome>;
   /** Run one chat tool the model asked for. */
   runTool(
     slug: string,
@@ -173,6 +203,36 @@ export const apiWiring: LiveWiring = {
     };
   },
 
+  async session(slug, threadId, offer, signal) {
+    const res = await apiFetch(
+      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live-session`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(offer),
+        ...(signal ? { signal } : {}),
+      },
+    );
+    if (!res.ok) throw await failure(res);
+    const ticket = await readJson<Partial<GptLiveTicket>>(res);
+    /* Checked rather than cast, as `ticket` is. Without an answer there is
+       nothing to connect with. Without our session id the call would run
+       unmetered, and by now OpenAI has already billed its first fifteen
+       seconds, so this is refused rather than shrugged at. */
+    if (typeof ticket.sdp !== "string" || ticket.sdp === "") {
+      throw new Error("The server started a session without an answer for it. [live-upstream]");
+    }
+    if (typeof ticket.sessionId !== "string" || ticket.sessionId === "") {
+      throw new Error("The server started a session without a record of it. [live-upstream]");
+    }
+    return {
+      sdp: ticket.sdp,
+      sessionId: ticket.sessionId,
+      liveSessionId: typeof ticket.liveSessionId === "string" ? ticket.liveSessionId : "",
+      tailId: ticket.tailId ?? null,
+    };
+  },
+
   async runTool(slug, name, args, signal) {
     const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
       method: "POST",
@@ -194,6 +254,10 @@ export const apiWiring: LiveWiring = {
   },
 
   liveUsage(sessionId, report, keepalive) {
+    return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive);
+  },
+
+  gptLiveUsage(sessionId, report, keepalive) {
     return post(`/api/live/${encodeURIComponent(sessionId)}/usage`, report, keepalive);
   },
 

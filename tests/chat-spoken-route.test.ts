@@ -100,7 +100,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
-import { LIVE_MODEL } from "../src/live.js";
+import { GPT_LIVE_MODEL, LIVE_MODEL } from "../src/live.js";
 import type { ChatThread } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -300,6 +300,34 @@ describe("what the route refuses to take the browser's word for", () => {
   it("does not let the browser name the model", async () => {
     const thread = threadOf(await post("spya-vaaaaf", exchange({ model: "something-else" })));
     expect(thread.messages[1]?.model).toBe(LIVE_MODEL);
+  });
+
+  it("marks a GPT-Live answer with that engine's model, from the engine the browser names", async () => {
+    /* The browser names the *engine*; the model id stays this server's to
+       write. Two engines, two marks, so the instruments can tell which one
+       spoke. docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md */
+    const live = threadOf(await post("spya-vgptl1", exchange({ engine: "gpt-live" })));
+    expect(live.messages[1]?.model).toBe(GPT_LIVE_MODEL);
+    expect(GPT_LIVE_MODEL).not.toBe(LIVE_MODEL);
+
+    const realtime = threadOf(await post("spya-vgptl2", exchange({ engine: "realtime" })));
+    expect(realtime.messages[1]?.model).toBe(LIVE_MODEL);
+
+    /* And still not the browser's own word for the model. */
+    const named = threadOf(
+      await post("spya-vgptl3", exchange({ engine: "gpt-live", model: "something-else" })),
+    );
+    expect(named.messages[1]?.model).toBe(GPT_LIVE_MODEL);
+  });
+
+  it("refuses an engine it does not know, and writes nothing", async () => {
+    /* Not read as Realtime: a GPT-Live answer filed under the wrong model is a
+       wrong row nothing would ever flag. */
+    for (const engine of ["gpt-live-1", "GPT-Live", "", 1, null, true]) {
+      const out = await post("spya-vgptl4", exchange({ engine }));
+      expect(out.status, String(engine)).toBe(400);
+    }
+    expect((await threads()).find((t) => t.id === "spya-vgptl4")).toBeUndefined();
   });
 
   it("refuses a passage pointing at something that is not a block id", async () => {

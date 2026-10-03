@@ -199,9 +199,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             as you scroll, and its height shows how much of the article fits on one screen.
           </li>
           <li>
-            <strong>Grey shading from the left edge: where you have spent time reading.</strong> The
-            longer you spent on a stretch, the further across the strip it reaches. Use it to find
-            where you had got to after jumping around. Only whoever added the article sees it, and it
+            <strong>
+              A tinted area from the left edge, with a brighter line at its edge: where you have
+              spent time reading.
+            </strong>{" "}
+            The further across the strip it reaches, the longer you spent there. A quick glance
+            may leave no shading. Use it to find where you had got to after jumping
+            around. Only whoever added the article sees it, and it
             is <HelpRef to="experimental-features">experimental</HelpRef>.
           </li>
           <li>
@@ -735,8 +739,8 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <strong>More modes</strong>: {listOf(EXPERIMENTAL_MODES)}.
           </li>
           <li>
-            <strong>Reading time on the spine</strong>: grey shading where you have spent longer.
-            Only you see it.
+            <strong>Reading time on the spine</strong>: a tinted area that reaches further across
+            where you have spent longer. Only you see it.
           </li>
           <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.

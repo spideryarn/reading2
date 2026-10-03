@@ -35,6 +35,23 @@ export interface UseAdminFeedback {
   reload: () => Promise<void>;
   /** Append the next page. A no-op when there is none, or while one is in flight. */
   loadMore: () => Promise<void>;
+  /**
+   * **A write is in flight** — the Ignore button's. Kept apart from `loading`
+   * so Refresh does not say *Loading…* about something that is not a load,
+   * but the page disables the same controls for either.
+   */
+  saving: boolean;
+  /**
+   * **Mark one report ignored, or take the mark back**, and put the server's
+   * answer in place of the copy held here. Rejects when the write failed, so
+   * the card can say so; the list is left as it was.
+   *
+   * **It shares the list's in-flight slot, and that is the point.** A Refresh
+   * that read the old row and landed after this write would redraw *Ignore* on
+   * a report the database is already ignoring (GPT Sol, 2026-10-03). So the
+   * list and the write take turns: neither starts while the other is out.
+   */
+  setIgnored: (report: AdminFeedbackReport, ignored: boolean) => Promise<void>;
 }
 
 /**
@@ -51,6 +68,7 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
   const [reports, setReports] = useState<AdminFeedbackReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [cursor, setCursor] = useState<FeedbackCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
   /**
@@ -139,5 +157,44 @@ export function useAdminFeedback(from: FeedbackFrom = "everyone"): UseAdminFeedb
     };
   }, [reload]);
 
-  return { reports, error, loading, hasMore, reload, loadMore };
+  const setIgnored = useCallback(async (report: AdminFeedbackReport, ignored: boolean) => {
+    /* The buttons are disabled while anything is in flight, so this is the
+       second line of defence rather than the first. */
+    if (inFlight.current) return;
+    /* A slot of its own in the same guard, and deliberately no `signal` on the
+       request: a write is not abandoned half-sent. If this inbox goes while it
+       is in flight, the cleanup below clears the slot and the answer is
+       dropped by the identity check. AdminFeedbackPage prevents filter
+       remounts until the write settles, so a replacement inbox cannot read
+       the pre-write row. */
+    const slot = new AbortController();
+    inFlight.current = slot;
+    setSaving(true);
+    try {
+      const body = await readJson<{ report: AdminFeedbackReport }>(
+        await apiFetch(
+          `/api/admin/feedback/${encodeURIComponent(report.ownerId)}/${encodeURIComponent(report.id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ignored }),
+          },
+        ),
+      );
+      if (inFlight.current !== slot) return;
+      /* Matched on the pair, since an id alone can be two readers' reports. */
+      const next = body.report;
+      setReports(
+        (held) =>
+          held?.map((r) => (r.ownerId === next.ownerId && r.id === next.id ? next : r)) ?? held,
+      );
+    } finally {
+      if (inFlight.current === slot) {
+        inFlight.current = null;
+        setSaving(false);
+      }
+    }
+  }, []);
+
+  return { reports, error, loading, saving, hasMore, reload, loadMore, setIgnored };
 }

@@ -36,8 +36,8 @@ export function expectedSeconds(words: number): number {
  * **Absolute and per block**, not relative to the article's most-read block:
  * that would answer "where did I spend most time", and one paragraph stared at
  * for ten minutes would make the rest of the piece look unread. Four steps
- * rather than a width in pixels, so that neighbouring blocks merge into runs on
- * the spine and the gutter's style sheet changes only when a block crosses one.
+ * rather than a width in pixels, so that the gutter's style sheet changes only
+ * when a block crosses one. The spine draws the finer `readReach` below.
  *
  * **Each level's elapsed-time threshold is twice the preceding threshold**
  * (0.35, 0.7, 1.4, 2.8 of the reading time), so the later levels grow
@@ -61,6 +61,42 @@ export function readLevel(seconds: number, words: number): ReadLevel {
   if (ratio < 1.4) return 2;
   if (ratio < 2.8) return 3;
   return 4;
+}
+
+/**
+ * How far across the spine's rail a block's reading time reaches, in
+ * **sixteenths**: 0, or a whole number from 4 to 16 — `readReach`.
+ */
+export type ReadReach = number;
+
+/**
+ * `readLevel`, four times finer: the width of the spine's area chart at one
+ * block. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ *
+ * > the distance from the left-hand margin would be an indication of how much
+ * > time I've spent reading it […] So I could just look at a glance and see
+ * > that wiggly line going down to show which bits I've read the most
+ * >
+ * > — Greg, 2026-10-03 (spya-jhe9mc)
+ *
+ * The same doubling scale, so the level boundaries do not move: 0.35 of the
+ * reading time is 4, 0.7 is 8, 1.4 is 12, 2.8 and over is 16, and each
+ * sixteenth between is a quarter of a doubling — `floor(4 × log2(ratio / 0.175))`.
+ *
+ * **The level is taken from `readLevel` and the logarithm only places the reach
+ * inside it.** On its own the formula runs a step ahead at the representable
+ * value just under 1.4 and 2.8 (12 at 1.3999999999999997), and the rail would
+ * then disagree with the gutter line about the same block. So
+ * `Math.floor(readReach / 4) === readLevel` for every input, by the clamp
+ * rather than by an epsilon. GPT Sol's F1 on the plan;
+ * tests/reading-time.test.ts walks the doubles either side of each boundary.
+ */
+export function readReach(seconds: number, words: number): ReadReach {
+  const level = readLevel(seconds, words);
+  if (level === 0) return 0;
+  if (level === 4) return 16;
+  const raw = Math.floor(4 * Math.log2(seconds / expectedSeconds(words) / 0.175));
+  return Math.min(4 * level + 3, Math.max(4 * level, raw));
 }
 
 /**
