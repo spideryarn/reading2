@@ -44,30 +44,10 @@
  {
   "id": "mode:summary",
   "label": "Summary",
-  "description": "The piece in plain words, at the length you choose — brief, simple or fuller",
+  "description": "The piece restated: in plain words, brief or fuller, or as a thread of short posts",
   "aliases": [
    "summarise",
    "summarize"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-experimental-off",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
-  "id": "mode:tweets",
-  "label": "Tweets",
-  "description": "The article as a numbered thread of short posts",
-  "aliases": [
-   "thread",
-   "twitter",
-   "x",
-   "social"
   ],
   "kind": "mode",
   "generates": true,
@@ -394,14 +374,14 @@
   ]
  },
  {
-  "id": "submode:summary:simple",
-  "label": "Simple",
-  "description": "The piece in plain words, a few short paragraphs",
+  "id": "submode:summary:fuller",
+  "label": "Fuller",
+  "description": "The piece in plain words, a little longer and keeping more of its terms",
   "aliases": [
    "Summary",
-   "Simple Summary",
-   "Summary Simple",
-   "Simple mode"
+   "Fuller Summary",
+   "Summary Fuller",
+   "Fuller mode"
   ],
   "kind": "submode",
   "generates": true,
@@ -414,14 +394,19 @@
   ]
  },
  {
-  "id": "submode:summary:fuller",
-  "label": "Fuller",
-  "description": "The piece in plain words, a little longer and keeping more of its terms",
+  "id": "submode:summary:thread",
+  "label": "Thread",
+  "description": "The article as a numbered thread of short posts",
   "aliases": [
    "Summary",
-   "Fuller Summary",
-   "Summary Fuller",
-   "Fuller mode"
+   "Thread Summary",
+   "Summary Thread",
+   "Thread mode",
+   "tweets",
+   "tweet thread",
+   "twitter",
+   "x",
+   "social"
   ],
   "kind": "submode",
   "generates": true,
@@ -849,6 +834,13 @@
    "refresh tweets",
    "tweets again",
    "run tweets again",
+   "rerun tweet thread",
+   "re-run tweet thread",
+   "regenerate tweet thread",
+   "redo tweet thread",
+   "refresh tweet thread",
+   "tweet thread again",
+   "run tweet thread again",
    "rerun twitter",
    "re-run twitter",
    "regenerate twitter",
@@ -856,13 +848,6 @@
    "refresh twitter",
    "twitter again",
    "run twitter again",
-   "rerun x",
-   "re-run x",
-   "regenerate x",
-   "redo x",
-   "refresh x",
-   "x again",
-   "run x again",
    "rerun social",
    "re-run social",
    "regenerate social",
@@ -1357,7 +1342,28 @@
    "redo simple",
    "refresh simple",
    "simple again",
-   "run simple again"
+   "run simple again",
+   "rerun summary",
+   "re-run summary",
+   "regenerate summary",
+   "redo summary",
+   "refresh summary",
+   "summary again",
+   "run summary again",
+   "rerun summarise",
+   "re-run summarise",
+   "regenerate summarise",
+   "redo summarise",
+   "refresh summarise",
+   "summarise again",
+   "run summarise again",
+   "rerun summarize",
+   "re-run summarize",
+   "regenerate summarize",
+   "redo summarize",
+   "refresh summarize",
+   "summarize again",
+   "run summarize again"
   ],
   "kind": "action",
   "generates": true,
