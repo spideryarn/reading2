@@ -20,7 +20,7 @@
  *
  * This runs against the source of truth this test *can* see — the environment
  * and `dist/` if it has been built. The deployed bundle is checked separately
- * and from outside, by `scripts/check-production-gate.sh`, because a local
+ * and from outside, by `npm run deploy -- --verify-only`, because a local
  * `dist/` is not what production is serving.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -95,7 +95,7 @@ describe("no secret reaches the browser", () => {
    * Only a warning when the build is stale, deliberately: `npm test` must not
    * start demanding a build, or people will stop running one of them. What it
    * must not do is stay silent. The real check on what production is actually
-   * serving is `scripts/check-production-gate.sh`, which downloads the served
+   * serving is `npm run deploy -- --verify-only`, which downloads the served
    * JavaScript — this can only ever be a local proxy for it.
    */
   it.skipIf(!existsSync(DIST))("says so if that bundle is older than the source", () => {
