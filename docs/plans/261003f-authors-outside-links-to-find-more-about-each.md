@@ -76,8 +76,9 @@ no P0 or P1):
 
 - **Quote marks come out of the name** (straight and curly) and whitespace is collapsed before it is
   quoted, so `Jane "JJ" Doe` cannot break the search's own grammar. Initials and diacritics stay.
-- **The affiliation hint is capped** at 80 characters, cut at a word, because a stored affiliation
-  can be 300 (`AUTHOR_LIMITS`) and the hint only has to tell two people apart.
+- **The affiliation hint is capped** at 80 Unicode code points, cut at the last whole word when it
+  has spaces and hard-cut safely when it does not. Trailing search punctuation comes off. A stored
+  affiliation can be 300 (`AUTHOR_LIMITS`), and the hint only has to tell two people apart.
 - Tests read the *decoded* `q`, not the encoded URL. The browser check emulates touch, to show a
   tap on a masthead name still follows the shelf link now that its card is interactive.
 
@@ -85,9 +86,34 @@ no P0 or P1):
 
 - `authorSearchLinks`: the Scholar query quotes the name with the `author:` operator; the web query
   includes the first affiliation and only the first; there is no affiliation clause when there is
-  none; the query is URL-encoded, with a name containing `&` and quotes.
+  none; the query is URL-encoded, with a name containing `&` and quotes; the affiliation boundary
+  covers astral code points, an unspaced value and trailing punctuation.
 - The masthead component test (`tests/masthead-authors.test.tsx`): the card holds both links, they
   open in a new tab with `noreferrer`, and the card is interactive (labelled).
 - The Metadata page shows the links under each author.
 - Browser check at desktop and phone width: the pointer can cross into the card and click a link;
   the Metadata page has the links and nothing overflows.
+
+## Code review and browser check, 2026-10-03
+
+GPT Sol's code review ([261003f-authors-code-review-sol.md](261003f-authors-code-review-sol.md)),
+no P0 or P1. It fixed four things in place: the links take the house link colour, so they no longer
+fall back to the browser's blue; a short affiliation loses trailing punctuation too; the comment no
+longer promises Scholar puts a profile first; and the tests cover Escape, a touch-style tap and the
+Metadata page's inline links. It also said the phone screenshot showed the reading view. It does
+not: `261003f-shot-phone-metadata.png` is the Metadata page's Authors section.
+
+Browser check (a Sonnet subagent, Playwright on the box, the local Entropy paper):
+
+- At 1280×800, the pointer crossed from the name into the card and onto *Google Scholar* without the
+  card closing.
+- From the keyboard, Tab went from the name to Scholar and then Web search. Escape closed the card
+  and put focus back on the name.
+- A plain click on the name still opens `/?q=Ehren%20Newman`.
+- At 390×844 with touch emulated, one tap on a masthead name followed the shelf link. On the
+  Metadata page, both links show under each of the five authors, and nothing overflows (`scrollWidth`
+  390 of 390). Each link is 16px tall, the same as the app's other inline text links, so it is left
+  as it is.
+- Legible in Light and Dark.
+
+Screenshots: `261003f-shot-*.png` beside this plan.

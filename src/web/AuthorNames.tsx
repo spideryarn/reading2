@@ -52,7 +52,7 @@ export function shelfHrefFor(name: string): string {
   return `${LIBRARY_HREF}?q=${encodeURIComponent(query || name)}`;
 }
 
-/** The longest affiliation hint a web search carries, cut at a word. */
+/** The longest affiliation hint a web search carries, in Unicode code points. */
 const AFFILIATION_HINT = 80;
 
 /** Text fit for a search: no quote marks of its own (they would close the
@@ -64,13 +64,20 @@ function unquoted(text: string): string {
     .trim();
 }
 
-/** The first affiliation, short enough to be a hint: whole words up to `AFFILIATION_HINT`. */
+/**
+ * The first affiliation, short enough to be a hint. Cut at the last whole word
+ * where there is one; an unspaced string still gets a hard, code-point-safe
+ * ceiling. Search punctuation dangling at the end carries no useful identity.
+ */
 function affiliationHint(author: Author): string {
   const first = [...unquoted(author.affiliations[0] ?? "")];
-  if (first.length <= AFFILIATION_HINT) return first.join("");
-  const cut = first.slice(0, AFFILIATION_HINT + 1).join("");
-  const space = cut.lastIndexOf(" ");
-  return (space > 0 ? cut.slice(0, space) : first.slice(0, AFFILIATION_HINT).join("")).replace(/[\s,;:]+$/, "");
+  let hint = first.join("");
+  if (first.length > AFFILIATION_HINT) {
+    const cut = first.slice(0, AFFILIATION_HINT + 1).join("");
+    const space = cut.lastIndexOf(" ");
+    hint = space > 0 ? cut.slice(0, space) : first.slice(0, AFFILIATION_HINT).join("");
+  }
+  return hint.replace(/[\s,;:.]+$/, "");
 }
 
 /**
@@ -79,9 +86,9 @@ function affiliationHint(author: Author): string {
  * the top few links for them."*
  *
  * Two searches, never a guessed address. Scholar's `author:` operator lists
- * their papers, with a matching public profile first when Scholar has one; the
- * web search adds the first affiliation, unquoted, to tell them from someone
- * else of the same name. Plan 261003f.
+ * their papers and may surface a matching public profile; the web search adds
+ * the first affiliation, unquoted, to tell them from someone else of the same
+ * name. Plan 261003f.
  */
 export function authorSearchLinks(author: Author): { scholar: string; web: string } {
   const name = unquoted(author.name);
@@ -100,14 +107,27 @@ export function authorSearchLinks(author: Author): { scholar: string; web: strin
  */
 export function AuthorSearchLinks({ author }: { author: Author }) {
   const links = authorSearchLinks(author);
+  const linkClass = "tw:text-highlight-text tw:underline tw:underline-offset-2 tw:hover:text-foreground";
   return (
     <span className="tw:mt-1 tw:block tw:text-xs tw:text-ink-faint" data-testid="author-out">
       Find out more:{" "}
-      <a href={links.scholar} target="_blank" rel="noreferrer noopener" aria-label={`${author.name} on Google Scholar`}>
+      <a
+        href={links.scholar}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={`${author.name} on Google Scholar`}
+        className={linkClass}
+      >
         Google Scholar
       </a>
       {" · "}
-      <a href={links.web} target="_blank" rel="noreferrer noopener" aria-label={`Search the web for ${author.name}`}>
+      <a
+        href={links.web}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={`Search the web for ${author.name}`}
+        className={linkClass}
+      >
         Web search
       </a>
     </span>
