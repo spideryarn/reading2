@@ -10,7 +10,7 @@
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md.
  */
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId } from "../../../types.js";
 import {
@@ -38,6 +38,19 @@ import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
 import { SearchPanel } from "../../SearchPanel.js";
+import {
+  type BandTyping,
+  searchDraftFor,
+  type SearchDraft,
+  useHandoff,
+} from "../../search-draft.js";
+import {
+  IDLE,
+  PAUSE_MS,
+  type QuickEvent,
+  type QuickSession,
+  stepQuickSession,
+} from "../../quick-session.js";
 
 /**
  * Search, and the fetch that belongs to it.
@@ -90,11 +103,17 @@ export function SearchBand({
      reaches it through this ref. A rename swaps the id in place, and does
      nothing if the reader has already unticked or deleted the search. */
   const renameActive = useRef<(from: string, to: string) => void>(() => {});
+  const renameSession = useRef<(from: string, to: string) => void>(() => {});
   /* Only a request this tab started is known to be in flight — `running` and
      `isRunning` are the hook's, because only the hook knows the id the server
      answered under. useSearch.ts § inFlight. */
-  const { runs, loaded, loadError, ask, retry, running, isRunning, remove, recolour, error } =
-    useSearch(slug, { onRenamed: (from, to) => renameActive.current(from, to) });
+  const { runs, loaded, loadError, ask, retry, revise, running, isRunning, remove, recolour, error } =
+    useSearch(slug, {
+      onRenamed: (from, to) => {
+        renameActive.current(from, to);
+        renameSession.current(from, to);
+      },
+    });
   const { panel, setActive } = useSearchMode({
     runs,
     blocks,
@@ -107,6 +126,31 @@ export function SearchBand({
   renameActive.current = (from, to) =>
     setActive((ids) => (ids.includes(from) ? ids.map((id) => (id === from ? to : id)) : ids));
 
+  /* **Quick search as you type** (plan 261002h): one typing session, one saved
+     row. The first pause asks — and ticks the new row, as any ask does — and
+     every later pause revises that row, which neither re-ticks it (the reader
+     may have unticked it) nor adds anything to `?runs=`. */
+  const typing = useTypingSession({
+    slug,
+    loaded,
+    start: (words) => {
+      if (isRunning(words, "quick")) return null;
+      const id = ask(words, "quick");
+      setActive((ids) => [...ids, id]);
+      onOpenHit(null);
+      return id;
+    },
+    revise,
+  });
+  renameSession.current = typing.renamed;
+  /* A matcher switch ends the session; the words stay in the box, inert. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `panel.matcher` is the trigger, not an input — a switch is what ends the session.
+  useEffect(() => {
+    typing.end();
+  }, [panel.matcher, typing]);
+  const draft = searchDraftFor(slug);
+  useBarHandoff(draft, panel.matcher, typing, () => onOpenHit(null));
+
   return (
     <SearchPanel
       {...panel}
@@ -115,8 +159,12 @@ export function SearchBand({
         loaded,
         loadError,
         error,
-        onAsk: (criterion, kind) => {
+        typing,
+        draft,
+        onAsk: (criterion, kind, sourceId) => {
           const question = criterion.trim();
+          // Flesh out ends only the session belonging to that quick row.
+          if (sourceId !== undefined) typing.rowGone(sourceId);
           if (isRunning(question, kind)) return;
           /* `ask` mints the id, so `?runs=` can name the search before the
              model has said anything — the same trick `?note=` and `?thread=`
@@ -140,6 +188,7 @@ export function SearchBand({
            like, never which marks are drawn or which one the reader is on. */
         onRecolour: recolour,
         onDelete: (id) => {
+          typing.rowGone(id);
           remove(id);
           setActive((ids) => ids.filter((x) => x !== id));
           onOpenHit(null);
@@ -147,6 +196,183 @@ export function SearchBand({
       }}
     />
   );
+}
+
+/**
+ * **The band's half of the bar's quick-search box** (plan 261002h stage 3,
+ * src/web/DockQuickSearch.tsx). Two jobs, both through the shared draft:
+ *
+ * - **While on *quick*, the band's typing session is registered**, so the
+ *   bar's keystrokes, Enter, focus and blur reach the very session the
+ *   panel's box drives. One session, one row, whichever box is typed in.
+ * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
+ *   this band was closed or on another matcher. Not on *quick* yet: switch,
+ *   replacing the history entry the mode's own press just pushed so one Back
+ *   still leaves Search mode, and take it on the next pass. On *quick*: ask
+ *   with the draft as it is now, which is the latest the reader typed.
+ *
+ * Declared after the matcher-switch effect in `SearchBand`, so a switch's
+ * `end` runs before the handoff starts the new session, not after it.
+ */
+function useBarHandoff(
+  draft: SearchDraft,
+  matcher: Matcher,
+  typing: BandTyping,
+  clearOpenHit: () => void,
+): void {
+  const [, setMatch] = useQueryState("match", matchParam);
+  const handoff = useHandoff(draft);
+  const lifetime = useRef<{ draft: SearchDraft } | null>(null);
+  useEffect(() => {
+    const token = { draft };
+    lifetime.current = token;
+    return () => {
+      // Real departure drops pending actions; StrictMode's immediate setup
+      // creates a new token for the same draft and keeps them for consumption.
+      queueMicrotask(() => {
+        if (lifetime.current === token || lifetime.current?.draft !== draft) {
+          draft.clearHandoffs();
+        }
+      });
+    };
+  }, [draft]);
+  useEffect(
+    () => (matcher === "quick" ? draft.registerBand(typing) : undefined),
+    [draft, matcher, typing],
+  );
+  // Defer consumption past StrictMode's setup/cleanup replay: its session
+  // cleanup must not erase an intent that was already removed from the store.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `clearOpenHit` only clears a selection.
+  useEffect(() => {
+    let live = true;
+    queueMicrotask(() => {
+      if (!live || draft.handoff() === null) return;
+      if (matcher !== "quick") {
+        void setMatch("quick", { history: "replace" });
+        clearOpenHit();
+        return;
+      }
+      let taken = draft.take();
+      while (taken !== null) {
+        if (taken.type === "pause") {
+          typing.edit(draft.text());
+          typing.pause();
+        } else if (taken.type === "enter" && taken.text.trim() !== "") {
+          typing.flush(taken.text);
+        }
+        const next = draft.take();
+        // Words edited after the last sealed Enter belong to a fresh session.
+        if (next === null && taken.type === "enter" && draft.text() !== taken.text) {
+          typing.edit(draft.text());
+        }
+        taken = next;
+      }
+    });
+    return () => { live = false; };
+  }, [handoff, matcher, draft, typing, setMatch]);
+}
+
+/**
+ * **The timers and effects around `stepQuickSession`** — the pure rules live
+ * in src/web/quick-session.ts, and this is the only place they meet a clock.
+ *
+ * State in a ref, not in React state: nothing renders from it, and an edit
+ * must see the session the previous edit left synchronously, inside one
+ * batch. Unmounting (leaving Search mode) drops it, and a new article ends it,
+ * so words left in the box are inert until the next edit.
+ */
+function useTypingSession({
+  slug,
+  loaded,
+  start,
+  revise,
+}: {
+  slug: string;
+  loaded: boolean;
+  /** Ask a new quick search, returning its id — or `null` if it was refused. */
+  start(words: string): string | null;
+  revise(id: string, words: string): void;
+}): BandTyping & {
+  renamed(from: string, to: string): void;
+  rowGone(id: string): void;
+} {
+  const latest = useRef({ loaded, start, revise });
+  latest.current = { loaded, start, revise };
+
+  const controls = useMemo(() => {
+    let state: QuickSession = IDLE;
+    let pauseTimer: ReturnType<typeof setTimeout> | undefined;
+    let blurTimer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => {
+      clearTimeout(pauseTimer);
+      clearTimeout(blurTimer);
+      pauseTimer = undefined;
+      blurTimer = undefined;
+    };
+    const dispatch = (event: QuickEvent): void => {
+      const out = stepQuickSession(state, event);
+      state = out.state;
+      if (!state.open) stop();
+      const effect = out.effect;
+      if (effect?.type === "ask") {
+        const id = latest.current.start(effect.words);
+        if (!out.sealed) dispatch({ type: "asked", id });
+      } else if (effect?.type === "revise") latest.current.revise(effect.id, effect.words);
+      // Drain sealed flushes before any pause carried by the new session.
+      if (out.sealed) dispatch({ type: "loaded" });
+    };
+    return {
+      edit(text: string) {
+        dispatch({ type: "edit", text });
+        clearTimeout(pauseTimer);
+        pauseTimer = state.open
+          ? setTimeout(() => dispatch({ type: "pause", loaded: latest.current.loaded }), PAUSE_MS)
+          : undefined;
+      },
+      flush(text: string) {
+        clearTimeout(pauseTimer);
+        dispatch({ type: "flush", loaded: latest.current.loaded, text });
+      },
+      /* The pause already happened, in the bar's box (plan 261002h stage 3):
+         ask now rather than wait another 600 ms. */
+      pause() {
+        clearTimeout(pauseTimer);
+        pauseTimer = undefined;
+        dispatch({ type: "pause", loaded: latest.current.loaded });
+      },
+      end: () => dispatch({ type: "end" }),
+      /* Blurred for longer than a pause ends it (Opus): somebody who searched,
+         read for five minutes and types again starts a new row, rather than
+         overwriting a search they may want. */
+      blur() {
+        clearTimeout(blurTimer);
+        blurTimer = state.open ? setTimeout(() => dispatch({ type: "end" }), PAUSE_MS) : undefined;
+      },
+      focus() {
+        clearTimeout(blurTimer);
+        blurTimer = undefined;
+      },
+      loaded: () => dispatch({ type: "loaded" }),
+      renamed: (from: string, to: string) => dispatch({ type: "renamed", from, to }),
+      rowGone: (id: string) => dispatch({ type: "rowGone", id }),
+      stop,
+    };
+  }, []);
+
+  // A pause that came before the saved list is asked when it lands (Sol F1).
+  useEffect(() => {
+    if (loaded) controls.loaded();
+  }, [loaded, controls]);
+  // Another article, or leaving the mode, ends the session.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — a new article ends the session.
+  useEffect(
+    () => () => {
+      controls.end();
+      controls.stop();
+    },
+    [slug, controls],
+  );
+  return controls;
 }
 
 /**

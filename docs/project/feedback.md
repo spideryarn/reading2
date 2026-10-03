@@ -344,13 +344,25 @@ The design work, the options weighed and the two reviews that changed it are in
 
 ```
 FeedbackDialog.tsx  ──POST /api/feedback──▶  routes.ts  ──▶  Postgres `feedback`   (authoritative)
-                                                        └──▶  Sentry               (best effort)
+                                                        ├──▶  Sentry               (best effort)
+                                                        └──▶  an email to us       (best effort, readers only)
 ```
 
 **The row is written first and it is the report.** The reader is told the report landed because the
 row landed; the Sentry item is a mirror for the sake of the tools that already watch Sentry, and it
 cannot fail the request. Only a *newly created* row is mirrored — Sentry does not dedupe feedback
 events, so a retry would otherwise file the same bug twice there while filing it once here.
+
+**A reader's report is also mailed to us, since 2026-10-02**, at Greg's request (report
+`spya-wwx6ks`): *"Anytime someone submits feedback that isn't from me, the admin, please send me an
+email with their feedback."* Same rules as the mirror — a newly created row only, after the reader
+has been answered, unable to fail the request — plus two of its own: never an admin's report
+(`isAdmin`), and at most 20 a day across every reader and 5 from any one, because Resend's free
+quota is shared with auth mail. The mail carries the words, kind, page address, slug and the reader's email address
+(`/admin/feedback` already shows that address), as plain text with the words quoted and their links
+defanged. [`src/feedback-notice.ts`](../../src/feedback-notice.ts); the mail side is
+[email.md § Mail the server sends itself](email.md#mail-the-server-sends-itself); the plan is
+[261002j](../plans/261002j-email-the-admin-each-reader-s-feedback.md).
 
 **The browser posts to us rather than to Sentry directly**, which is the load-bearing architectural
 choice and the plan argues it at length. In one line: it is the only arrangement where the
@@ -390,6 +402,7 @@ which *is* the verified account id.
 | the route | [`src/routes.ts`](../../src/routes.ts), § feedback |
 | the store, the idempotency and the rate cap | [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts) |
 | the Sentry mirror | [`src/feedback.ts`](../../src/feedback.ts) |
+| the email to us about a reader's report | [`src/feedback-notice.ts`](../../src/feedback-notice.ts) |
 | the guard on the final Sentry envelope | [`src/feedback-envelope.ts`](../../src/feedback-envelope.ts) |
 | the reader's own article — source file and `article.json` — gathered for a consented report | [`src/feedback-article.ts`](../../src/feedback-article.ts) |
 | the screenshot, taken apart and written again | [`src/feedback-image.ts`](../../src/feedback-image.ts) |

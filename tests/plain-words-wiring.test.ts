@@ -63,6 +63,12 @@ const prompts: { name: string; text: () => string; kinds: PlainKind[]; oldSenten
     oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
   },
   {
+    name: "Tutorial",
+    text: () => textOf(buildConverseMessages({ ...chatBase, kind: "tutorial" })[0]?.content),
+    kinds: ["explain"],
+    oldSentence: "PLAIN WORDS. Keep the author's vocabulary",
+  },
+  {
     name: "quiz mark",
     text: () => textOf(buildMarkMessages({ meta, blocks, question: "Why?", referenceAnswer: "Because.", evidence: [], answer: "Maybe." })[0]?.content),
     kinds: ["explain"],

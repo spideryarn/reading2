@@ -84,6 +84,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "../types.js";
+import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { PassageLinks } from "./PassageLinks.js";
@@ -231,8 +232,8 @@ interface Props {
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Quiz control**, when this panel is the Recall half of
-   * Remember. Absent in chat mode.
+   * **The Recall | Tutorial | Quiz control**, when this panel is one of
+   * Remember's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
    * belongs to `RememberBand` (src/web/App.tsx): the navigation rules behind it —
@@ -355,7 +356,11 @@ export function ChatPanel({
   seed,
 }: Props) {
   useRenderCount("ChatPanel");
-  const remember = kind === "remember";
+  /* **Remember's layout, for both of its conversations** — Recall and
+     Tutorial are each one thread per article, dictated into a tall box, with
+     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+     is words, decided per kind below. */
+  const remember = isSingleThreadKind(kind);
   const open = threads.find((t) => t.id === threadId) ?? null;
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
@@ -473,7 +478,13 @@ export function ChatPanel({
       feature={`chat${remember ? " remember" : ""}`}
       /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
       mode={remember ? "remember" : "chat"}
-      label={remember ? "Remember what you took from this article" : "Chat about this article"}
+      label={
+        kind === "tutorial"
+          ? "A tutorial on this article"
+          : remember
+            ? "Remember what you took from this article"
+            : "Chat about this article"
+      }
       head={
         <>
           {/* **Remember's header says Remember**, never the thread's title: there
@@ -1186,7 +1197,13 @@ export function Conversation({
         }}
       >
         {empty &&
-          (kind === "remember" ? <RememberInvitation /> : <Suggestions onAsk={(q) => onSend(q)} />)}
+          (kind === "tutorial" ? (
+            <TutorialInvitation />
+          ) : kind === "remember" ? (
+            <RememberInvitation />
+          ) : (
+            <Suggestions onAsk={(q) => onSend(q)} />
+          ))}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1301,6 +1318,28 @@ function RememberInvitation() {
       <p className="chat-empty-hint">
         Stuck for a way in? Try the argument in one sentence, the part you're least sure of, or what
         you'd tell someone about it.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * **Tutorial's empty state asks the opening question**, so the reader speaks
+ * first and the model never writes an unprompted turn. Greg, `spya-j0scgz`:
+ * *"I think it might start with the sort of basic recall question. You know,
+ * what do you remember about the article? But it may be that the user says
+ * nothing. I haven't read it yet."*
+ */
+function TutorialInvitation() {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        What do you remember about this article? Or say you haven't read it yet — either is a fine
+        place to start.
+      </p>
+      <p className="chat-empty-hint">
+        We'll take short turns: a little of the piece at a time, with a link to the passage, and then
+        a question for you to answer in your own words.
       </p>
     </div>
   );
@@ -1990,7 +2029,8 @@ export function Composer({
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
-  const remember = kind === "remember";
+  /* Recall's and Tutorial's box alike: tall, microphone first. */
+  const remember = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
@@ -2140,9 +2180,11 @@ export function Composer({
         placeholder={
           busy
             ? "Waiting for the answer…"
-            : remember
-              ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
-              : (placeholder ?? "Ask about this article…")
+            : kind === "tutorial"
+              ? "What do you remember about it? Or say you haven't read it yet."
+              : remember
+                ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+                : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
           setValue(e.target.value);

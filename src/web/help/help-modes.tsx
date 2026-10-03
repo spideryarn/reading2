@@ -240,8 +240,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           <strong>quick</strong> asks the same kind of question and answers in about a second: a
           fast model scores every paragraph, and the ones that match are marked whole, with no
-          reasons. Use it for a first look; <strong>flesh out</strong> on a quick search runs the
-          full meaning search on the same words.
+          reasons. It searches whenever you pause typing, and what you type keeps one saved search,
+          updated as you go rather than a new one each time. Press Enter when you are done; typing
+          again after that, or after a break, starts a new one. Use it for a first look;{" "}
+          <strong>flesh out</strong> on a quick search runs the full meaning search on the same
+          words.
+        </p>
+        <p>
+          To start a quick search from anywhere in the article, type in the{" "}
+          <strong>Quick search</strong> box in the bottom bar, tap the <strong>⚡</strong> button when
+          it is shown instead, or press <strong>/</strong>.
         </p>
       </>
     ),
@@ -439,13 +447,15 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   remember: {
-    keywords: "recall memory quiz test yourself questions retention learn check understanding explain back study revise",
+    keywords:
+      "recall memory tutorial guided reading quiz test yourself questions retention learn check understanding explain back study revise",
     whenToUse: (
       <>
         <p>
-          When you have finished a piece, or a part of one, and want it to stick. Saying what you took
-          from something and finding out where you went wrong does more for memory than reading it
-          again. For something you will not need next week, it is not worth the effort.
+          When you are working through a piece, or have finished a part of one, and want it to stick.
+          Saying what you took from something and finding out where you went wrong does more for
+          memory than reading it again. For something you will not need next week, it is not worth the
+          effort.
         </p>
         <ul>
           <li>
@@ -457,6 +467,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             instead. It does not praise or grade you, and disagreeing with the author is not counted as
             misunderstanding. There is one Recall conversation per article; the bin icon starts it
             over.
+          </li>
+          <li>
+            <strong>Tutorial</strong>: short turns, a little of the piece at a time. Say what you
+            remember, or that you haven’t read it yet, and each reply teaches one small piece,
+            links the passage, and asks you to put it in your own words, give an example or push back.
+            Now and then it comes back to an earlier point. It takes your profile and your reason for
+            reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered

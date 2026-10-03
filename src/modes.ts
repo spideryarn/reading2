@@ -94,7 +94,7 @@ export const MODES = [
      sitting beside a tool whose whole subject is peer review; *Remember* names
      what the product is *for* — vision.md's "internalise and interrogate" —
      where *Review* named only the mechanism; and it works as an umbrella over
-     the two sub-modes that now live under it, Recall and Quiz.
+     the sub-modes that now live under it, Recall and Quiz (and Tutorial since 2026-10-02).
 
      The cost, named rather than hidden: *Remember* can suggest saved memories
      or spaced repetition, and this mode does neither. Its description

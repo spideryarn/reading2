@@ -200,6 +200,28 @@ describe("the third arm of the toggle", () => {
     expect(asked).toEqual([["anywhere he gives numbers", "quick"]]);
   });
 
+  /* Sol's D9, 261002h stage 3 review: an Enter that ends an IME composition
+     picks a word, it does not ask. Both spellings — the flag and keyCode 229.
+     docs/project/keyboard.md § Enter in a text box. */
+  it("asks nothing on the Enter that ends an IME composition", async () => {
+    await mount({ access: owner(), runs: [], start: "quick", active: [] });
+    type("日本語の");
+    const flagged = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true });
+    const legacy = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      keyCode: 229,
+    } as KeyboardEventInit);
+    act(() => {
+      input().dispatchEvent(flagged);
+      input().dispatchEvent(legacy);
+    });
+    expect(asked).toEqual([]);
+    expect(flagged.defaultPrevented).toBe(false);
+    expect(legacy.defaultPrevented).toBe(false);
+  });
+
   it("keeps the draft between quick and meaning, and carries it to words and back", async () => {
     await mount({ access: owner(), runs: [], start: "meaning", active: [] });
     type("where the controls are");
