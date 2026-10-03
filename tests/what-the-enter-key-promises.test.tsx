@@ -82,6 +82,8 @@ const PROMISES: Record<string, string> = {
      the keyboard, so the promise has something behind it. */
   "GlossaryPanel.tsx › Look up a term in this article": "search",
   "Library.tsx › Search the library": "search",
+  /* Enter asks the quick search now, without waiting for the pause (plan 261002h). */
+  "DockQuickSearch.tsx › Quick search": "search",
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
   /* Enter goes to the best match by setting the address (plan 261002b). */

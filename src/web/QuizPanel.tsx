@@ -89,7 +89,7 @@ import { firstWrongIn, type SectionTally, sectionTally, weakSections } from "./q
 import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
-import type { RememberView } from "./params.js";
+import { REMEMBER_VIEWS, type RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -184,7 +184,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Quiz**, at the top of the Remember band.
+ * **Recall | Tutorial | Quiz**, at the top of the Remember band.
  *
  * A control rather than two links, because the two are one choice — and it is
  * rendered by `RememberBand` and handed to whichever panel is showing, so that
@@ -224,7 +224,7 @@ export function RememberSubModeToggle({
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
     <div className="remember-submode">
-      {(["recall", "quiz"] as const).map((view) => (
+      {REMEMBER_VIEWS.map((view) => (
         <button
           key={view}
           type="button"
@@ -293,7 +293,7 @@ export function QuizPanel({
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Quiz control, built by `RememberBand`. */
+  /** The Recall | Tutorial | Quiz control, built by `RememberBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -850,7 +850,7 @@ export function QuizPanel({
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
               docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the Recall | Quiz control, which is the one thing here
+              stays for the Recall | Tutorial | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
           {/* Written for your profile, and the Regenerate in its panel — Greg,

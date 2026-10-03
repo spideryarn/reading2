@@ -193,6 +193,11 @@ p.marg-shut {
   line-clamp: 3;
   overflow: hidden;
 }
+/* A question's way back to its conversation (plan 261002j): a `.linky`
+   button, held to its own width rather than stretched across the grid cell. */
+.marg-open-asked {
+  justify-self: start;
+}
 .marg-open a {
   color: inherit;
   text-decoration: underline 1px var(--rule-strong);

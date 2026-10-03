@@ -602,7 +602,11 @@ export function BlockGutter({
           data-tip={markTitle(notesBy, comments?.length ?? 1)}
           aria-label={markName(notesBy, comments?.length ?? 1)}
         >
-          <Bookmark size={GLYPH} aria-hidden="true" />
+          {/* **Filled**, the one filled glyph in the column, so a bookmark
+              reads as state at a glance rather than as one more control —
+              Greg, SPIDERYARN-READING2-9C: *"it should be a bit more
+              visible."* Plan 261002j. */}
+          <Bookmark size={GLYPH} fill="currentColor" aria-hidden="true" />
           {comments && comments.length > 1 && (
             <span className="blk-n">{comments.length}</span>
           )}
@@ -688,13 +692,13 @@ export function BlockGutter({
              With no conversation on the block, both are unchanged. */
           data-tip={
             chatCount
-              ? `Open a conversation about this paragraph (${chatCount} total)`
-              : "Chat about this paragraph"
+              ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
+              : "Chat with the AI about this paragraph"
           }
           aria-label={
             chatCount
-              ? `Open a conversation about this paragraph (${chatCount} total)`
-              : "Chat about this paragraph"
+              ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
+              : "Chat with the AI about this paragraph"
           }
         >
           <MessageSquare size={GLYPH} aria-hidden="true" />
@@ -768,7 +772,7 @@ export function BlockGutter({
               announce(stored ? "Bookmarked this paragraph." : "Bookmark not confirmed.");
             });
           }}
-          data-tip="Bookmark this paragraph"
+          data-tip="Bookmark this paragraph, and comment if you like (no AI)"
           aria-label="Bookmark this paragraph"
         >
           <Bookmark size={GLYPH} aria-hidden="true" />

@@ -568,8 +568,16 @@ describe("pressing a line", () => {
 describe("memo(TableView) and the quiz lines", () => {
   it("holds across an ?at=-only change, and gives way to a new batch", async () => {
     who.set(OWNER_A);
-    await open("?mode=remember&remember=recall");
+    /* Marginalia is open too: this is the callback added to its memo in 261002j,
+       so an `?at=`-only render has to prove that map stays stable. */
+    await open("?mode=remember&remember=recall&margin=1");
     expect(allLines()).toHaveLength(4);
+    const reader = host.querySelector<HTMLElement>(".reader");
+    expect(param("margin"), "the render-budget case never asked for Marginalia").toBe("1");
+    expect(
+      reader?.style.getPropertyValue("--marg-w"),
+      "the render-budget case gave Marginalia no room, so its memo returned null",
+    ).not.toBe("0px");
 
     /* The next quiz read is held open, so the band's mount reload can be let
        go on cue — the only change in the last step is then the batch. */

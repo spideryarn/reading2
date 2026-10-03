@@ -108,11 +108,63 @@ describe("a shut line", () => {
   it("opens a reader's comment to the whole of it, its line cut at one", () => {
     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;
-    const el = draw([{ kind: "comment", items: [comment] }]);
+    const el = draw([{ kind: "comment", items: [{ as: "comment", comment }] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
-    expect(button?.textContent).toContain("Note");
+    expect(button?.querySelector(".marg-stamp")?.textContent).toBe("Comment");
     act(() => button?.click());
     expect(el.querySelector(".marg-open")?.textContent).toContain(body);
+  });
+
+  /* SPIDERYARN-READING2-9H, plan 261002j: the stamp is the kind. */
+  it("stamps a comment that asked the AI, and a question, with their kinds", () => {
+    const comment = {
+      id: "c",
+      blockId: "spya-aaaaa1",
+      createdAt: "t",
+      body: "why n=12?",
+      status: "none",
+      threadId: "t9",
+    } as unknown as MarginComment;
+    const ai = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
+    expect(ai.querySelector(".marg-shut-button .marg-stamp")?.textContent).toBe("Comment + AI");
+  });
+
+  it("counts comments and questions apart, labels each opened row, and opens a question's conversation", () => {
+    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body: "mine", status: "none" } as unknown as MarginComment;
+    const opened: string[] = [];
+    const el = document.createElement("div");
+    host = el;
+    document.body.append(el);
+    const nextRoot = createRoot(el);
+    root = nextRoot;
+    act(() =>
+      nextRoot.render(
+        <MarginNotesSlot
+          viewer="owner"
+          onOpenAsked={(id) => opened.push(id)}
+          notes={[
+            {
+              kind: "comment",
+              items: [
+                { as: "comment", comment },
+                { as: "question", asked: { id: "t1", blockId: "spya-aaaaa1", createdAt: "t", quote: "the bound holds" } },
+              ],
+            },
+          ]}
+        />,
+      ),
+    );
+    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+    expect(button?.textContent).toContain("1 comment · 1 question");
+    act(() => button?.click());
+    const stamps = [...el.querySelectorAll(".marg-open .marg-stamp")].map((s) => s.textContent);
+    expect(stamps).toEqual(["Comment", "Question"]);
+    expect(el.querySelector(".marg-open")?.textContent).toContain("the bound holds");
+    const open = [...el.querySelectorAll<HTMLButtonElement>(".marg-open button")].find(
+      (b) => b.textContent === "Open the conversation",
+    );
+    act(() => open?.click());
+    expect(opened).toEqual(["t1"]);
   });
 
   it("shows the first lines of an AI answer under the reader's comment", () => {
@@ -124,7 +176,7 @@ describe("a shut line", () => {
       body: "Check this claim.",
       answer: "The article answers it in the next paragraph.",
     } as unknown as MarginComment;
-    const el = draw([{ kind: "comment", items: [comment] }]);
+    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
     act(() => button?.click());
     expect(el.querySelector(".marg-open-answer")?.textContent).toContain("The article answers it");

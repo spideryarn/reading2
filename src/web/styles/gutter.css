@@ -789,10 +789,12 @@ td.text.kind-heading .blk-gutter {
 
    `pointer-events: auto` because the container above is `none` and this is the
    one slot with no reveal rule to hand it back — it is always visible, so it was
-   the one that would have shipped un-clickable. */
-.blk-cmt { color: var(--highlight); opacity: 0.75; pointer-events: auto; }
-.blk-cmt:hover,
-.blk-cmt:focus-visible { opacity: 1; }
+   the one that would have shipped un-clickable.
+
+   **Full strength, and the glyph filled** (BlockGutter.tsx), since 2026-10-02:
+   it was an outline at 0.75, and Greg's report 9C was that a bookmark should be
+   "a bit more visible". Plan 261002j. */
+.blk-cmt { color: var(--highlight); pointer-events: auto; }
 .blk-n {
   font-family: var(--font-mono);
   font-size: 0.58rem;

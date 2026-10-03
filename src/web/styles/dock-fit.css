@@ -117,8 +117,8 @@
    in the bar — orange until 2026-10-02, white since — and any other colour
    would be a step *down* from it.
 
-   `padding` matches `.dock-btn`'s 0.6rem so it sits on the row's rhythm; rung 3
-   tightens it alongside the buttons (§ the bar's fit ladder). */
+   `padding` matches `.dock-btn`'s 0.6rem so it sits on the row's rhythm; rungs
+   3 and 4 tighten it alongside the buttons (§ the bar's fit ladder). */
 .dock-home {
   display: inline-flex;
   align-items: center;
@@ -180,6 +180,15 @@
    buttons a pressable width, and Greg chose scrolling over shrinking further
    (§ a coarse pointer).
 
+   **Rung 4 went in at the bottom on 2026-10-02**, so nothing renumbered: it is
+   rung 3 exactly, plus the bar's quick-search box turning into the ⚡
+   (styles/dock-quick-search.css). Rung 3 keeps a compact box. An owner's
+   reading view was already on rung 3 at 1440×900, so while the box went at
+   rung 3 a laptop never saw a search *bar* at all (plan 261002h). **Every
+   rung-3 selector below has a rung-4 twin in the same list** — a bar wears one
+   rung class, so a missing twin would put a word back on a narrower bar;
+   tests/dock-fit.test.ts checks it.
+
    **The rungs renumbered on 2026-09-06**, when the wordmark and the Feedback
    button moved off the top corners into this bar and a new rung went in *above*
    the old rung 1 to pay for them. What was rung 1 is rung 2 and what was rung 2
@@ -196,10 +205,10 @@
    of glyphs to keep two words that pay least. dock-fit.ts § the rungs has the
    table and the argument Fable got half right.
 
-   **Listed at all three rungs rather than at rung 1 alone**, because a bar
+   **Listed at every rung rather than at rung 1 alone**, because a bar
    wears exactly one rung class: a rule written only for rung 1 would let
    `Spideryarn` and `Feedback` reappear at rung 2, which is the opposite of what
-   this rung is for. Rung 3's `.dock-btn-label` sweep does catch `.dock-feedback`
+   this rung is for. Rungs 3 and 4's `.dock-btn-label` sweep does catch `.dock-feedback`
    (it is a `.dock-btn`) but not `.dock-home` (it is not), so both are spelled
    out at every rung and nothing depends on noticing that asymmetry.
 
@@ -220,7 +229,10 @@
 .dock.dock-fit-2 .dock-help .dock-btn-label,
 .dock.dock-fit-3 .dock-home .dock-btn-label,
 .dock.dock-fit-3 .dock-feedback .dock-btn-label,
-.dock.dock-fit-3 .dock-help .dock-btn-label { display: none; }
+.dock.dock-fit-3 .dock-help .dock-btn-label,
+.dock.dock-fit-4 .dock-home .dock-btn-label,
+.dock.dock-fit-4 .dock-feedback .dock-btn-label,
+.dock.dock-fit-4 .dock-help .dock-btn-label { display: none; }
 
 /* Rung 2 — the modes go to glyphs, and what is left with a word is Commands,
    Comments and Metadata (and Tweets until it became a mode, 2026-09-29). **Not "the other three":** the app cluster's
@@ -260,7 +272,8 @@
    where the room is free: there is no rung below it to fall to.
    docs/plans/261001j-….
 
-   Rung 3 — every button in the bar, not just the modes. The modes tighten by
+   Rung 3 — every button in the bar, not just the modes (and rung 4, which is
+   rung 3 plus the search box gone to the ⚡). The modes tighten by
    0.15rem from rung 2; loose non-mode buttons tighten by 0.05rem from their
    base padding, and their remaining labels disappear. It was written when 0.55rem brought thirteen icons to 401px against
    390 of bar and this rung was what made a phone fit; the modes have outgrown
@@ -274,9 +287,12 @@
    Biome's `noDescendingSpecificity` warns about. It cannot bite: a bar wears
    one rung class at a time, so the two blocks can never both match. */
 /* biome-ignore-start lint/style/noDescendingSpecificity: mutually exclusive rungs — see above */
-.dock.dock-fit-3 .dock-btn-label { display: none; }
+.dock.dock-fit-3 .dock-btn-label,
+.dock.dock-fit-4 .dock-btn-label { display: none; }
 .dock.dock-fit-3 .dock-btn,
-.dock.dock-fit-3 .dock-home { padding-inline: 0.55rem; }
+.dock.dock-fit-3 .dock-home,
+.dock.dock-fit-4 .dock-btn,
+.dock.dock-fit-4 .dock-home { padding-inline: 0.55rem; }
 /* biome-ignore-end lint/style/noDescendingSpecificity: mutually exclusive rungs */
 
 /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
@@ -296,7 +312,8 @@
    sibling. tests/dock-fit.test.ts checks exactly that. */
 .dock.dock-fit-1 .dock-btn-label.always,
 .dock.dock-fit-2 .dock-btn-label.always,
-.dock.dock-fit-3 .dock-btn-label.always { display: inline; }
+.dock.dock-fit-3 .dock-btn-label.always,
+.dock.dock-fit-4 .dock-btn-label.always { display: inline; }
 
 /* **And the mode you are actually in keeps its word, on every rung.**
    Greg, 2026-09-05: *"I think we can rely on the bottom bar to tell us what
