@@ -392,14 +392,16 @@ A spoken turn would also carry no digest. **No command buttons**, as Recall and 
 [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md). Two
 articles, three scripted readers each with fixture notes put through the production digest, five
 turns, Explore against Chat with the tool (a comparison of two products, not of two prompts), a
-blind judge, and nine numbers set before the run. After two prompt revisions Explore meets eight:
+blind judge, and nine numbers set before the run. After two prompt revisions Explore meets seven:
 the first reply names something the reader marked for every reader with notes (4 of 4), it
 searches when asked what others say (6 of 6) and links what it reports, the profile's reason is
 applied (10 of 10 replies), a reader with nothing marked is never told so, and the median reply is
-138 words. **It does not meet the ninth.** The judge called 93% of Explore's replies "about the
+138 words. **It does not meet two.** One quoted heading had its id only in the next sentence, where the
+rule is the same sentence. And the judge called 93% of Explore's replies "about the
 reader's thinking" and 87% of Chat's, 7 points apart where the bar was 25: asked to be a thinking
 partner, Chat is one. The difference a reader would see is the shape of a turn: half the length
-(138 words against 288), one question handed back, one note named and not a tour of all five.
+(138 words against 288), nearly always one question handed back (29 of 30 replies), usually one note named and not a tour
+of all five.
 Still wrong, found by reading: the article's words sometimes run into a sentence unmarked and
 uncited, and "actually", which the prompt bans, is in a third of replies. One sample of each
 arm's final state, one judge of the same family, and fixture notes that are not a real reader's.

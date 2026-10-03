@@ -296,3 +296,24 @@ describe("the sub-mode", () => {
     });
   });
 });
+
+describe("the profile reminder beside the question", () => {
+  /* GPT Sol, round two of 261003l (CR-18): EXPLORE_SYSTEM tells the model to
+     speak to the reader and use their reason for reading, and the shared
+     reminder in the final message said "Do not address the reader". */
+  const profile = "A product manager. Reading this to decide whether to build a companion app.";
+
+  it("does not tell Explore to keep away from the reader", () => {
+    const last = lastOf(build("explore", { profile }));
+    expect(last).toContain("=== WHO IS READING THIS ===");
+    expect(last).not.toContain("Do not address");
+    expect(last).toContain("You are talking with this reader");
+  });
+
+  it("is unchanged for the other kinds", () => {
+    for (const kind of ["chat", "remember", "tutorial", "candidates"] as const) {
+      const last = lastOf(build(kind, { profile }));
+      expect(last).toContain("Do not address\nthe reader and do not mention this.");
+    }
+  });
+});

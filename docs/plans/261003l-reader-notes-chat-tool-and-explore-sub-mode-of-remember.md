@@ -295,8 +295,8 @@ fixture, because the Entropy copy the Tutorial eval used is gone.
 
 **The headline, plainly: Explore does not beat Chat with the tool on the measure the plan's Pass
 line led with.** The judge called 93% of Explore's replies "about the reader's thinking" and 87%
-of Chat's; the bar was 25 points apart. The other eight thresholds are met after two prompt
-revisions: a first reply that names a mark for every reader with notes (4 of 4), no invented note
+of Chat's; the bar was 25 points apart. Seven of the other eight thresholds are met after two prompt
+revisions (the quotation rule is not: one quoted heading had its id a sentence late): a first reply that names a mark for every reader with notes (4 of 4), no invented note
 flagged, a search every time the reader asks what others say (6 of 6) with every outside claim
 linked, the profile's reason applied (10 of 10), no remark on an empty notes list, median 138
 words and none over 220. Chat's median was 288 words, and it called the tool in the first reply
@@ -339,3 +339,20 @@ over, and Chat running `reader_notes` for "What have I highlighted?" and not for
 claim?". It found the word "Remember" squeezed to one letter beside four chips in a narrow band;
 the heading is now read out and not drawn when the chips are there. Not checked: dictation, a
 model turn at iPad or phone width, and a bare colour highlight (the tester could not make one).
+
+### Stage 2, round two (narrow)
+
+[261003l-stage-2-round-2-review-sol.md](261003l-stage-2-round-2-review-sol.md), read-only, on
+`29a7ea2bb`: only what changed after the stage's review. *Land with the changes named.* It
+confirmed the widened spoken-turn guard (18 combinations of stored kind and request kind refused,
+12 valid chat and Recall paths still pass), that no route passes `runToolWith`, and the eval's
+headline numbers against the saved files.
+
+| | Finding | What was done |
+|---|---|---|
+| CR-18 (P2) | The profile reminder beside the question still said "Do not address the reader", against `EXPLORE_SYSTEM` | `profileSection` takes a stance; Explore's reminder says to speak to the reader and use their reason. Red first; every other caller's bytes are unchanged and a test holds that |
+| CR-19 (P2) | "Eight of nine thresholds met" overclaimed: one quoted heading had its id only in the next sentence, so T4 is not met | Corrected to seven of nine in the investigation, remember-mode.md and above |
+| CR-20 (P3) | "Ends on a question" and "names one note" are tendencies (29 of 30); six `search_library` calls, not seven | Corrected |
+
+The CR-18 fix came after this round and no reviewer has seen it. The Explore prompt was last
+measured before it: the reminder now agrees with what the measured prompt already said.

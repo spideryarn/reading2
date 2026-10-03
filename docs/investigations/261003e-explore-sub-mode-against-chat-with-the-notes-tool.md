@@ -17,13 +17,13 @@ Up: [investigations.md](../project/investigations.md) · the plan:
 Does Explore do that, and does it do it better than Chat does now that Chat can read the reader's
 notes with `reader_notes`?
 
-**Short answer.** Explore does it, and after two prompt revisions it meets eight of the nine numbers
+**Short answer.** Explore does it, and after two prompt revisions it meets seven of the nine numbers
 set beforehand. **It does not beat Chat on the number that was meant to be the headline.** A blind
 judge called 93% of Explore's replies "about the reader's thinking" and 87% of Chat's: 7 points
 apart, where the bar was 25. Asked to be a thinking partner, Chat is one. What separates the two is
 the shape of a turn, which the judge's label does not see: Explore's replies are half the length
-(median 138 words against 288), end on one question handed back to the reader, and name one of the
-reader's notes; Chat's are answers, with headings and a tour of the notes, and in this run several
+(median 138 words against 288), nearly always end on one question handed back to the reader (29
+of 30), and usually start from one of the reader's notes; Chat's are answers, with headings and a tour of the notes, and in this run several
 began by re-marking the sources of its previous reply.
 
 ## What was compared, and why it is a product comparison
@@ -73,7 +73,7 @@ case, connection or world, as against recalling or explaining the article.
 | T1 | thinking in ≥ 70% of replies, and ≥ 25 points above Chat (87%) | 97%, 93% | 93%: **+7 points** | first half met, **second not** |
 | T2 | first reply names something marked, for every reader with notes | 4 of 4, 4 of 4 | 4 of 4 | met |
 | T3 | no note, conversation or case attributed to the reader that they do not have | 3 flags, 1 flag | 0 flags | met, with one borderline by reading |
-| T4 | no quotation of the article without its id, none with another block's | see below | see below | met for quotations; not for paraphrase |
+| T4 | no quotation of the article without its id, none with another block's | see below | see below | **not met**: one quoted heading with no id in its sentence; and not for paraphrase |
 | T5 | median under 150 words, none over 220 | 156.5 (max 197), 154 (max 235) | 138 (max 200) | met |
 | T6 | asked what others say, it searches (6 of 6); no outside claim without a link or a caveat | 5 of 6 and 4 unlinked; 6 of 6 and 4 | 6 of 6, 0 unlinked | met |
 | T7 | no reply opens with a verdict on the reader | 2, 2 | 1 by the judge; by reading, none grades the reader and one is close (*"The teaching-assistant case sharpens something…"*) | met by reading, not by the judge |
@@ -102,7 +102,7 @@ and four samples of a rare event prove little), verdict openers (2, 2, 4, 1).
 with notes, and not for the one who asked *Help me apply this to my own work*, whose reply was
 built from the profile and never named a note. (The judge marked that reply as using the notes,
 because it discussed passages the reader had marked; so the judge's 4 of 4 for Chat is 3 of 4 by
-the tool calls.) Chat also called `search_library` seven times; Explore, twice in 120 replies.
+the tool calls.) Chat also called `search_library` six times; Explore, twice in 120 replies.
 
 ## What reading the turns showed
 
@@ -149,8 +149,10 @@ prompt asks, in a conversation its prompt was not written for.
 - **The article's words run into a sentence unmarked**, twice in one conversation (*"the model was
   being reinforced to use this package manager as a message board and an internet gateway"*, no
   quotation marks, no id). The quotation screen cannot see this. It flagged ten quoted runs with no
-  id in the sentence; all ten are single scare-quoted terms ("civilization", "probably") or words
-  inside a quotation from a web page.
+  id in the sentence. Nine are single scare-quoted terms ("civilization", "probably") or words
+  inside a quotation from a web page. One is the article's: *"other games in town"*, a heading
+  (`spya-affgsh`), quoted with its id only in the next sentence. So T4 is not met as written (GPT
+  Sol, round two, CR-19).
 - **One claim hung on the wrong block**: that agents *"had no channel back to a human except
   through the task transcript itself"*, cited to a block that does not say so.
 - **The dementia case still starts from the author** (*"That reverses the asymmetry Seth relies

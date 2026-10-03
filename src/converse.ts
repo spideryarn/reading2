@@ -1857,7 +1857,10 @@ export function buildConverseMessages(opts: {
     opts.visible && opts.visible.length > 0
       ? visibleBlocksLine(opts.visible)
       : readerPositionLine(opts.at);
-  const who = profileSection(opts.profile ?? null);
+  const who = profileSection(
+    opts.profile ?? null,
+    kind === "explore" ? "with-the-reader" : "about-the-article",
+  );
   const about = anchorSection(opts.anchor ?? null, opts.blocks);
   /* After the anchor: the reader is told *which* passage first, then how to
      explain it. Both are below the breakpoint, so the order is about how the
