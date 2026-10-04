@@ -23,7 +23,11 @@ import {
   buildSimpleSummary,
   emptyDropped,
   generateSimpleSummary,
+  inputFingerprint,
 } from "../src/simple-summary.js";
+import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
+import { memoryArtefacts } from "./helpers/memory-artefacts.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 import { whyUnusable } from "../src/store/artifacts.js";
 import { isUsableSimpleSummary, SIMPLE_LEVELS, SIMPLE_LIMITS, type Block, type BlockId } from "../src/types.js";
 
@@ -292,5 +296,36 @@ describe("Brief's and Fuller's prompts", () => {
     expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/8");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
     expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
+  });
+});
+
+describe("an unforced Summary preserves usable words for the same article", () => {
+  const ctx: StepContext = {
+    slug: "s", power: "standard", cacheArticle: false,
+    signal: new AbortController().signal, report: () => {}, preview: () => {},
+  };
+  function storedRow() {
+    const store = memoryArtefacts();
+    const tree = { ...ARTICLE.tree, nodes: {} };
+    const row = { ...oldRow(), generator: CAPABLE_MODEL, sourceHash: inputFingerprint(BLOCKS, tree, ARTICLE.meta) };
+    store.plant("s", "structure", "blocks", { blocks: BLOCKS });
+    store.plant("s", "structure", "tree", tree);
+    store.plant("s", "extract", "meta", { ...ARTICLE.meta, slug: "s" });
+    return { store, row };
+  }
+  it("skips a stored summary from a different model generation", async () => {
+    const { store, row } = storedRow();
+    row.generator = "anthropic/claude-sonnet-4";
+    store.plant("s", "simple", "simple", row);
+    expect(await store.has("s", "simple", ["simple"])).toBe(true);
+    expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
+    store.plant("s", "simple", "simple", { ...row, sourceHash: "article-moved" });
+    expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(false);
+  });
+  it("skips a legacy row without a promptVersion", async () => {
+    const { store, row } = storedRow();
+    const { promptVersion: _missing, ...legacy } = row;
+    store.plant("s", "simple", "simple", legacy);
+    expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
   });
 });

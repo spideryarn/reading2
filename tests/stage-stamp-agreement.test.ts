@@ -613,9 +613,15 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
  * `true`), so it is asked directly, as tests/quiz-step-registration.test.ts
  * does.
  *
- * **Mutation, watched red on 2026-10-04.** The stamp's `promptVersion` put back
+ * **Mutation.** Watched red on 2026-10-04. The stamp's `promptVersion` put back
  * to `SIMPLE_PROMPT_VERSION` alone: the first case goes red and the other three
  * stay green.
+ *
+ * **Blind to.** Postgres: these cases ask `stepIsDone` over the in-memory
+ * store. That the Postgres store's `stampFor` answers the same for a stored
+ * summary is tests/freshness-deciders-agree.test.ts's, which pins the queue
+ * saying *done* and Metadata saying *not current* for an older prompt or model.
+ * And a forced run, which never asks `stepIsDone`.
  */
 describe("an unforced simple run, with a summary already stored", () => {
   /** A fresh store over the fixture, holding the summary the real stage writes, edited by `change`. */

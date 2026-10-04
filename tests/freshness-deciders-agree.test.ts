@@ -220,9 +220,14 @@ const DISAGREEMENTS: Record<string, Pair> = {
  *   new one. docs/plans/261004f-stop-writing-the-simple-summary-level.md §
  *   Stage 2, GPT Sol's S1. Until 2026-10-04 both said no, and any unforced job
  *   naming `simple` rewrote every summary after a prompt bump.
+ * - **`simple:model`** — the same write-once rule for a usable summary from an
+ *   earlier model generation. The queue preserves it; Metadata still compares
+ *   its provenance against today's expected model. The article hash must
+ *   still match on both paths.
  */
 const BY_DESIGN: Record<string, Pair> = {
   "simple:promptVersion": { queue: true, page: false },
+  "simple:model": { queue: true, page: false },
 };
 
 /* -------------------------------------------------------------- fixture -- */

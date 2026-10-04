@@ -123,9 +123,10 @@ for both.
   Until then Brief rides on the owner's job row, on the `simple` step, as `preview`
   ([`JobStep.preview`](../../src/types.ts)). It is there only while the step is running: the
   runner takes it off when the step starts, succeeds or fails
-  ([`runStep`](../../src/jobs.ts)). So no part of a summary is kept on a job, a visitor is never
+  ([`runStep`](../../src/jobs.ts)); interrupted steps lose it through the store's shared
+  settlement ([`settledSteps`](../../src/store/pg-jobs.ts)). So no part of a summary is kept on a job, a visitor is never
   sent one, and an export is missing nothing. It is never logged.
-- **If Fuller fails**, after its one retry, the job fails and nothing is stored. The band keeps
+- **If Fuller fails**, after any retry it can make, the job fails and nothing is stored. The band keeps
   the Brief it was already showing, beside the failure and **Retry**. It keeps it in the page's
   memory only ([`useSimple`](../../src/web/useSimple.ts) § `keptPreview`), so after a reload the
   failure is shown without Brief. Retry writes both levels again, and the old Brief leaves the
@@ -133,8 +134,8 @@ for both.
   turns out to happen: the plan's § *Where this departs from the queue item's words*.
 - **A rewrite does not use it.** With a summary already stored, the stored one stays on screen
   until both new levels are stored. The preview is drawn only when nothing is.
-- **An unforced job never rewrites a stored summary for the prompt's age.** The `simple` step's
-  stamp expects the prompt version of the summary already stored
+- **An unforced job never rewrites a stored summary for the prompt's or model's age.** The `simple` step's
+  stamp expects the prompt version and model of the summary already stored
   ([`pipeline.ts`](../../src/pipeline.ts) § `simple`), so the add page's *Generate the main modes*
   box, which queues `simple` unforced, skips an article that has a summary however old its prompt.
   It still writes when the article itself has moved, and a forced run always writes. Metadata and
@@ -147,16 +148,17 @@ Opus with the guard on, timed from the start of the write to each level being fi
 
 | | Fuller asked for 350 | Fuller asked for 500 |
 |---|---:|---:|
-| wait to Brief, median of six (range) | 15.7 s (12.3 to 26.1) | 14.4 s (12.3 to 26.4) |
+| wait to Brief, median of six (range) | 15.6 s (12.3 to 26.1) | 14.3 s (12.3 to 26.4) |
 | wait to Fuller, median of six (range) | 35.6 s (23.7 to 63.5) | 34.7 s (28.4 to 36.8) |
 | Fuller's words, range | 334 to 481 | 438 to 513 |
 | a write, mean | $0.220 | $0.217 |
 
-- **A reader gets Brief in about a quarter of a minute**, where they used to get nothing until
-  Fuller was done.
-- **The longer Fuller did not take longer in these twelve writes.** That is not what 261004b saw
-  (55 s for about 500 words, with three levels). Fuller's wait varies a lot from one write to the
-  next at either length, so six a side cannot say the longer one is free.
+- **Brief was final in about a quarter of a minute at the median.** The job's start-up,
+  preview write and polling add to the reader's wait; previously nothing appeared until Fuller was done.
+- **The median wait to the longer Fuller was slightly lower in this sample.** That is not what
+  261004b saw (55 s for about 500 words, with three levels). The slowest 350 write retried after
+  a fidelity flag; none of the 500 writes did. The [plan's ledger](../plans/261004f-stop-writing-the-simple-summary-level.md#stage-2-cost-and-wait-measured)
+  explains why this does not isolate length or bound its effect on wait.
 - **Through the real job in a browser**, one write on a fourth article: Brief on screen at 26 s,
   Fuller stored at 56 s, 517 words in eight paragraphs. The job adds its own start-up and polling
   to both.

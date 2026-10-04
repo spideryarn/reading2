@@ -1155,6 +1155,72 @@ describe("Brief, before Fuller is written", () => {
     expect(paras()).toEqual([WHAT, WHY]);
   });
 
+  it("keeps Fuller legible while the completion read is pending, with a read-only retry", async () => {
+    await ownerBand("fuller");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(text()).toContain("The summary hasn't loaded yet.");
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(buttons()).toContain("Try again");
+    expect(buttons()).not.toContain("Write it");
+    const before = simpleGets().length;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(posts).toEqual([]);
+    await act(async () => land());
+    await settle();
+    expect(simpleGets().length).toBeGreaterThan(before);
+    expect(text()).toContain(FULLER_TEXT);
+  });
+
+  it("keeps Brief visible during a retry of a failed completion read", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    artefactFails = true;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    artefactFails = false;
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(paras()).toEqual([WHAT, WHY]);
+    await act(async () => land());
+    await settle();
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(posts).toEqual([]);
+  });
+
+  it("drops the remembered Brief when the same job is requeued for a new attempt", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    expect(paras()).toEqual([WHAT, WHY]);
+    const queued = { ...writing("job-a", null), status: "queued" as const, requeues: 1 };
+    await showJobs([queued]);
+    expect(paras()).toEqual([]);
+    await showJobs([{ ...writing("job-a", null), requeues: 1 }]);
+    expect(paras()).toEqual([]);
+  });
+
+  it("keeps Brief when a later step is paused and simple itself is already done", async () => {
+    await ownerBand("brief");
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    const paused = writing("job-a", null);
+    paused.steps[0]!.status = "done";
+    paused.status = "queued";
+    paused.requeues = 1;
+    await showJobs([paused]);
+    expect(paras(), "the new attempt will keep the finished simple step").toEqual([WHAT, WHY]);
+    await showJobs([{ ...paused, status: "running" }]);
+    expect(paras()).toEqual([WHAT, WHY]);
+  });
+
   it("keeps Brief beside the failure when the job fails, and drops it when a retry starts", async () => {
     await ownerBand("brief");
     const job = writing("job-a", artefact().levels.brief);

@@ -116,7 +116,7 @@ export function SimplePanel({
      alone, and only with nothing stored. `useSimple` answers null whenever a
      summary is, so a rewrite leaves the old one on screen until the new one
      has been stored whole. */
-  const early = owner?.status === "none" ? owner.preview : null;
+  const early = owner?.simple === null ? owner.preview : null;
 
   /**
    * @param again whether this is the button beside paragraphs already there.
@@ -146,7 +146,7 @@ export function SimplePanel({
   return (
     <div className="summ-scroll simple-scroll">
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
-      {owner?.status === "loading" && <p className="summ-quiet">Looking for the plain-words version…</p>}
+      {owner?.status === "loading" && !early && <p className="summ-quiet">Looking for the plain-words version…</p>}
       {owner && early && (
         <EarlyBrief
           owner={owner}
@@ -237,6 +237,9 @@ function EarlyBrief({
       <div className="gloss-empty">
         {busy && <p className="gloss-hint">{owner.failed ? SIMPLE_FULLER_NOT_WRITTEN : SIMPLE_FULLER_PENDING}</p>}
         {busy && progress}
+        {!busy && !owner.error && (
+          <RewriteWaiting line="The summary hasn't loaded yet." onRead={owner.refresh} />
+        )}
       </div>
     );
   }

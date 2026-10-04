@@ -416,18 +416,24 @@ Three articles, two cold writes each. `timed350a|b` is stage 1's prompt with per
 | entropy | 14.3, 12.3 | 27.2, 50.5 | 13.6, 12.3 | 28.6, 28.4 | 511, 490 |
 | scaling-hypothesis | 26.1, 13.4 | 33.3, 63.5 | 26.4, 23.6 | 35.1, 36.8 | 438, 481 |
 
-Median wait to Brief 15.7 s at 350 and 14.4 s at 500. Median wait to Fuller 35.6 s and 34.7 s;
+Median wait to Brief 15.6 s at 350 and 14.3 s at 500, computed from the unrounded milliseconds.
+Median wait to Fuller 35.6 s and 34.7 s;
 its range was 23.7 to 63.5 s at 350 and 28.4 to 36.8 s at 500. Mean cost $0.220 and $0.217.
 
 What this does and does not show:
 
-- Brief is final at 12 to 26 s in all twelve writes. That is the wait a reader now has.
+- Brief is final at 12.3 to 26.4 s in all twelve writes. These are generator timings;
+  the job's start-up, preview write and browser polling add to the reader's wait.
 - The slow writes are Fuller's: in every one of the twelve, Fuller was final last, and the two
   slowest (50.5 s and 63.5 s) had Brief at 12.3 s and 13.4 s. Stage 1's write-up could not say
   this.
-- The longer Fuller was not slower here. 261004b measured 55 s for it. The two slowest writes in
-  this table are both at 350, so six a side says only that the difference, if any, is smaller
-  than the write-to-write spread. It does not show the longer Fuller costs no wait.
+- The longer Fuller had a lower median and mean wait here (mean 39.4 s at 350, 33.1 s at 500).
+  261004b measured 55 s for it. The 63.5 s 350 write retried Fuller after a fidelity flag
+  (`timed350b/scaling-hypothesis.json`: two attempts, stored attempt 2); none of the six 500
+  writes retried. The 50.5 s 350 write records one attempt. Both slow writes belong in the
+  end-to-end comparison, because readers wait for retries too, but this is not a controlled
+  comparison of length alone. Six writes per arm do not bound the size of a latency effect
+  or show that the longer Fuller costs no wait.
 - One real press in a browser, a fourth article, through the job: Brief on screen at 26.3 s,
   Fuller stored at 55.9 s (517 words, eight paragraphs). The job's own start-up and one-second
   polling are in both numbers; one sample.
@@ -439,3 +445,33 @@ appeared with the progress row under it; Fuller's tab showed "Brief is ready. Fu
 written." and none of Brief's text; across completion, 186 samples at 300 ms saw no empty band and
 no change of wording; after a reload both levels loaded with no new job; no overflow at 390 px; no
 page errors. Not seen: the empty state's new hint, because the press started the job at once.
+
+### Stage 2: Sol's code review (approve), and its fixes
+
+[The review](261004f-stop-writing-the-simple-summary-level-stage-2-code-review-sol.md). Five P1s,
+all found and fixed by the reviewer inside the stage; I read the diff and ran the database-backed
+tests it could not.
+
+- **F8**: on Fuller, after the job ended and before the stored read landed, the band was empty.
+  It now says the summary has not loaded yet, with a read-only retry.
+- **F9**: retrying a failed read hid the remembered Brief while the status was `loading`.
+- **F10**: a deadline pause, an expiry, a requeue and a cancel rebuild `steps` in SQL from the
+  stored row, so a preview could outlive a settled step there. `settledSteps` in
+  `src/store/pg-jobs.ts` now removes it. Postmortem
+  [261004j](../postmortems/261004j-a-preview-spans-two-lifetimes-but-only-ordinary-endings-were-tested.md).
+- **F11**: a requeue of the same job kept the last attempt's Brief on screen. The hook now tells
+  attempts apart by `requeues` and takes a live preview only from a running step.
+- **F12**: S1's rule had a hole: an unforced job still rewrote a stored summary whose recorded
+  model differed from today's. The stamp now takes the stored model as well as the stored prompt
+  version. Only the article moving, or a forced run, writes again.
+- **F13 (P2)**: my measurement write-up claimed more than six writes a side can show, and left out
+  that the 63.5 s write at 350 words had retried Fuller after a fidelity flag. Corrected.
+
+Mine, after the review: a fixture uuid shared with another test file, and two header markers the
+store-migration registry requires on a converted test file. Both were red in the full suite.
+
+Gates at the end: typecheck clean; the 14 affected files, 669 tests, pass, Postgres ones included.
+The full `npm test` ran while the reviewer was editing: 1539 files passed and 11 failed. Two of
+the eleven files held the reviewer's own new tests, caught mid-fix, and one was a worktree test
+that passes alone; the two above are fixed; the last six are the five fresh-worktree build tests
+and `overseer-daemon-reports`, as in stage 1. It was not run again after the fixes.

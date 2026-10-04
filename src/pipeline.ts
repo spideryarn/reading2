@@ -4187,10 +4187,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * the profile-free user message, which is all this can compute.
      * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
      *
-     * **The prompt version expected is the stored summary's own, when one is
-     * stored.** So an unforced run never rewrites a summary because the prompt
-     * has moved on since; it still rewrites when the article moved, and a
-     * forced run never asks. Without this every bump of
+     * **The prompt version and model expected are the stored summary's own,
+     * when one is stored.** So an unforced run never rewrites a summary because
+     * the prompt or model has moved on since; it still rewrites when the
+     * article moved, and a forced run never asks. Without this every bump of
      * `SIMPLE_PROMPT_VERSION` made each stored summary eligible for a rewrite
      * by any unforced job that names `simple`, and the add page's *Generate
      * the main modes* queues one (GPT Sol's review of plan 261004f stage 2,
@@ -4208,7 +4208,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return {
         inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
-        model: CAPABLE_MODEL,
+        model: stored?.model ?? CAPABLE_MODEL,
       };
     },
     async run(ctx, store) {

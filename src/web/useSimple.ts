@@ -84,12 +84,15 @@ export interface UseSimple {
 interface KeptPreview {
   slug: string;
   jobId: string;
+  requeues: number;
   paragraphs: SimpleParagraph[];
 }
 
 /** Brief's paragraphs on a job's `simple` step, if the job is showing any that can be drawn. */
 function briefPreviewOf(job: Job | null): SimpleParagraph[] | null {
-  const preview = job?.steps.find((step) => step.name === "simple")?.preview;
+  const step = job?.steps.find((step) => step.name === "simple");
+  if (job?.status !== "running" || step?.status !== "running") return null;
+  const preview = step.preview;
   if (preview?.kind !== "simple-brief") return null;
   /* The stored summary's own guard: off the wire, so checked before it is drawn. */
   return isSimpleParagraphs(preview.paragraphs, "brief") ? preview.paragraphs : null;
@@ -106,8 +109,10 @@ function briefPreviewOf(job: Job | null): SimpleParagraph[] | null {
  * stage 2, S3). The last one seen is held instead, with the id of its job:
  *
  * - **dropped once the stored summary has loaded**, which is the same Brief;
- * - **dropped when a different job becomes current** for this article, since
- *   a retry writes both levels again and its Brief may differ;
+ * - **dropped when a different job or simple attempt becomes current** for
+ *   this article, since a retry writes both levels again and its Brief may
+ *   differ. A pause after simple finished keeps its words: only a later step
+ *   will run in the new claim, and the summary still awaits publication;
  * - **dropped when the hook moves to another article**;
  * - kept otherwise, so it survives the job finishing or failing.
  *
@@ -124,11 +129,16 @@ function keptPreview(
   if (stored) return null;
   const live = briefPreviewOf(job);
   if (job && live) {
-    const same = kept?.slug === slug && kept.jobId === job.id && kept.paragraphs === live;
-    return same ? kept : { slug, jobId: job.id, paragraphs: live };
+    const requeues = job.requeues ?? 0;
+    const same = kept?.slug === slug && kept.jobId === job.id && kept.requeues === requeues && kept.paragraphs === live;
+    return same ? kept : { slug, jobId: job.id, requeues, paragraphs: live };
   }
   if (!kept || kept.slug !== slug) return null;
-  if (job && job.id !== kept.jobId) return null;
+  if (job) {
+    if (job.id !== kept.jobId) return null;
+    const simpleFinished = job.steps.some((step) => step.name === "simple" && step.status === "done");
+    if ((job.requeues ?? 0) !== kept.requeues && !simpleFinished) return null;
+  }
   return kept;
 }
 
