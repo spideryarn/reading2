@@ -256,7 +256,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           again after that, or after a break, starts a new one. Its paragraphs are marked with a
           bar down the side and a mark in the spine, not a highlight over the words. Use it for a
           first look; <strong>thorough</strong> on a quick search runs the full meaning search on
-          the same words, in about half a minute, and replaces the quick one.
+          the same words, in about half a minute, and replaces the quick one. You do not have to
+          press it: once you stop typing, the thorough search starts by itself, the quick search
+          shows <strong>thorough…</strong> while it runs, and its results take the quick ones' place
+          when it finishes.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}

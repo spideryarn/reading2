@@ -188,6 +188,18 @@ export type SearchAccess =
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
       /**
+       * **Quick rows whose thorough search is out and will replace them**
+       * (plan 261004l). Such a row says so in place of its *thorough* button.
+       */
+      upgrading?: ReadonlySet<string>;
+      /**
+       * Those thorough searches' own rows, which are **not** in `runs` until
+       * they are complete. Here only so the "already running" keys include
+       * them: *find* on the meaning matcher for the same words is disabled
+       * rather than silently refused (plan 261004l, review F6).
+       */
+      hidden?: readonly SavedSearch[];
+      /**
        * Ask a question. `sourceId` is *thorough*'s: the quick row this
        * meaning search replaces, which the owner of the rows deletes.
        */
@@ -343,7 +355,7 @@ export function SearchPanel({
      be another process's work or an orphan, and this tab receives no event
      when either finishes. SearchMode owns the in-flight ids it started. */
   const running = new Set(
-    runs
+    [...runs, ...(own?.hidden ?? [])]
       .filter((r) => r.status === "pending" && own?.running.has(r.id))
       .map((r) => runningKey(r.criterion, r.kind)),
   );
@@ -853,6 +865,53 @@ function SavedLoading() {
   );
 }
 
+/**
+ * A finished quick row's *thorough* control: the button — **unless the
+ * thorough search is already out by itself** (plan 261004l). A settled quick
+ * answer starts it, and the row then says so, quietly, where the button was.
+ * Not a button in that state: there is nothing to press, and the row is
+ * replaced when the answer lands.
+ */
+function Thorough({
+  upgrading,
+  running,
+  onAsk,
+}: {
+  /** This row's own thorough search is out and will replace it. */
+  upgrading: boolean;
+  /** A thorough search for the same words is out from this tab, for any row. */
+  running: boolean;
+  onAsk(): void;
+}) {
+  if (upgrading) {
+    return (
+      <span
+        className="srch-upgrading"
+        title="A thorough search for these words is running. It will replace this quick search when it finishes."
+      >
+        <LoaderCircle size={11} className="srch-spin" aria-hidden /> thorough…
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="srch-thorough"
+      disabled={running}
+      title={
+        running
+          ? "Already running the thorough search for this"
+          : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
+      }
+      onClick={() => {
+        if (!running) onAsk();
+      }}
+    >
+      thorough
+    </button>
+  );
+}
+
 function retryTitle(run: SearchRun, alreadyRunning: boolean): string {
   if (alreadyRunning) return "Already searching for this question";
   return run.error ?? "This search failed. Try it again.";
@@ -1134,22 +1193,11 @@ function Saved({
                   A visitor has no way to ask anything, so no button (plan
                   261002e, review F6). */}
               {own && run.kind === "quick" && run.status === "done" && (
-                <button
-                  type="button"
-                  className="srch-thorough"
-                  disabled={thoroughRunning}
-                  title={
-                    thoroughRunning
-                      ? "Already running the thorough search for this"
-                      : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
-                  }
-                  onClick={() => {
-                    if (thoroughRunning) return;
-                    own.onAsk(run.criterion, "meaning", run.id);
-                  }}
-                >
-                  thorough
-                </button>
+                <Thorough
+                  upgrading={own.upgrading?.has(run.id) ?? false}
+                  running={thoroughRunning}
+                  onAsk={() => own.onAsk(run.criterion, "meaning", run.id)}
+                />
               )}
               {own && (
                 <>
