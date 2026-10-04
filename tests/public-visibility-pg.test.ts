@@ -49,6 +49,7 @@ import {
   searchRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { blockHashQuery } from "../src/store/pg.js";
@@ -2084,6 +2085,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     let race: Promise<[Reply, Reply]>;
     try {
       await client.query("begin");
+      const backend = await client.query<{ pid: number | string }>("select pg_backend_pid() as pid");
+      const holderPid = Number(backend.rows[0]?.pid);
       await client.query("select id from spideryarn.articles where id = $1 for update", [
         ARTICLE_ID,
       ]);
@@ -2093,11 +2096,18 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         call("PUT", `/api/article/${SLUG}/visibility`, { body, as: OWNER }),
       ]);
 
-      /* Long enough for both requests to have reached the database and be
-         waiting on the row. If either had *not* got that far, the release below
-         would simply let them run one after the other — which is the old,
-         useless version of this test, so the wait is what makes it the new one. */
-      await new Promise((r) => setTimeout(r, 300));
+      /* **Both requests are queued behind this transaction, on Postgres's word.**
+         If either had *not* got that far, the release below would simply let
+         them run one after the other — which is the old, useless version of
+         this test, so the wait is what makes it the new one. It slept 300 ms
+         here until 2026-10-04, and that passed with the lock above taken on a
+         row nobody wanted *and* `for update` deleted from the store.
+
+         Two distinct backends whose chains *reach* the holder, not two that
+         name it. Measured: the second request waits on the first — on the
+         billing row, which a visibility change locks before the article — and
+         only the first waits on this connection. */
+      await waitUntilBlockedBy(holderPid, { waiters: 2, what: "the two publishes" });
       await client.query("commit");
     } finally {
       client.release();

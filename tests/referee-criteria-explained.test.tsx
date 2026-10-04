@@ -136,6 +136,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function mount(): void {
@@ -339,9 +340,10 @@ describe("what the big number on a result is", () => {
     const rank = host.querySelector(".crit-rank");
     expect(rank, "the rank numeral is not drawn").not.toBeNull();
     expect((rank as Element).hasAttribute("title"), "it fell back to a title").toBe(false);
+    vi.useFakeTimers();
     (rank as Element).dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     expect(
       document.querySelectorAll('[role="tooltip"]'),

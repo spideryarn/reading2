@@ -50,6 +50,7 @@ import {
   parseVoucherPatch,
   updateVoucher,
 } from "../src/store/pg-vouchers.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -306,6 +307,12 @@ describe("the sum is a number, or the read refuses", () => {
 
 /* ------------------------------------------------------------ concurrency -- */
 
+/** The backend a held connection is, so a lock test can ask who waits behind it. */
+async function backendPid(client: { query: (text: string) => Promise<{ rows: unknown[] }> }): Promise<number> {
+  const found = await client.query("select pg_backend_pid() as pid");
+  return Number((found.rows[0] as { pid: number | string }).pid);
+}
+
 describe("concurrent admissions and revokes", () => {
   it("admits exactly five of twenty concurrent ingests on a 3 + 2 account", async () => {
     await givenVoucher(READER, 2);
@@ -339,7 +346,10 @@ describe("concurrent admissions and revokes", () => {
         settled = true;
         return r;
       });
-      await new Promise((r) => setTimeout(r, 400));
+      /* Postgres's word that the admission is queued behind *this* transaction,
+         not 400 ms of hoping: a sleep is as happy with an admission that is
+         merely slow, which then sees the revoke for the wrong reason. */
+      await waitUntilBlockedBy(await backendPid(a), { what: "the admission" });
       expect(settled).toBe(false);
 
       await a.query("commit");
@@ -369,7 +379,7 @@ describe("concurrent admissions and revokes", () => {
         settled = true;
         return r;
       });
-      await new Promise((r) => setTimeout(r, 400));
+      await waitUntilBlockedBy(await backendPid(a), { what: "the revoke" });
       expect(settled).toBe(false);
 
       await a.query("commit");
