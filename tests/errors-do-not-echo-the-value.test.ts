@@ -21,6 +21,8 @@ import type { GlossaryResponse } from "../src/types.js";
 /** Not a slug, and recognisable if it comes back. */
 const HOSTILE = "<img src=x onerror=alert(1)>";
 
+const allocationError = (source: string) => /new Error\(([`"'])Too many articles[^\n]*\1\s*\)/.exec(source)?.[0];
+
 function thrownBy(run: () => void): Error {
   try {
     run();
@@ -52,14 +54,22 @@ describe("a refusal does not echo the value it refused", () => {
       },
     } as unknown as Parameters<typeof makeLookUpTerm>[0]);
     const refusal = lookUp("some-article", HOSTILE);
-    await expect(refusal).rejects.toMatchObject({ message: "No such glossary term.", status: 404 });
+    await expect(refusal).rejects.toMatchObject({
+      message: "This entry is not in the current glossary. Reload the page to see the current list.",
+      status: 404,
+    });
   });
 
   it("slug allocation running out of tries does not name the slug", async () => {
     /* Twenty collisions on a random short id cannot be staged without rewriting
        the allocator, so the sentence is read where it is written. */
     const source = await readFile(new URL("../src/jobs.ts", import.meta.url), "utf8");
-    const sentence = /new Error\(([`"'])Too many articles[^\n]*\1/.exec(source)?.[0];
-    expect(sentence, "a literal, with nothing joined on").toBe('new Error("Too many articles already have that name."');
+    expect(allocationError(source), "a literal, with nothing joined on").toBe('new Error("Too many articles already have that name.")');
+  });
+
+  it("the source check refuses a value joined onto the fixed sentence", () => {
+    for (const join of [" + request.slug", "\n + request.slug"]) {
+      expect(allocationError(`new Error("Too many articles already have that name."${join})`)).toBeUndefined();
+    }
   });
 });

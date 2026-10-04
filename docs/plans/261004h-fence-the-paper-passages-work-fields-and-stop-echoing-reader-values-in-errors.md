@@ -48,7 +48,8 @@ plan review, finding 1; the first draft of this paragraph stopped at the labels.
 options:
 
 - **Bump to `/8`** (the queue item's instruction). Every stored *Dig deeper* answer detaches: the
-  rows stay in the database, no reader sees them, and each costs a paid press to get back.
+  rows stay in the database and in exports, but no longer attach in the reading view; each costs
+  a paid press to get back there.
 - **No bump.** Stored answers stay attached. A row whose stored passages were picked under the old
   layout, for a hostile title, keeps them until the next press.
 
@@ -72,7 +73,7 @@ value. Four more say the value back:
 | `src/store/require-slug.ts` | `Not a slug: "<value>"` | `Not a slug` |
 | `src/store/public-reader.ts` § `requireSlug` | the same | `Not a slug` |
 | `src/jobs.ts` (20 tries) | `Too many articles already called "<slug>".` | `Too many articles already have that name.` |
-| `src/term-lookup.ts` | `No glossary term "<id>" in "<slug>".` | `No such glossary term.` |
+| `src/term-lookup.ts` | `No glossary term "<id>" in "<slug>".` | `This entry is not in the current glossary. Reload the page to see the current list.` |
 
 Since cluster 8 the routes refuse a malformed slug before any of these run, so this is a second
 line, not a live hole. **Left alone, and said in the debrief:** `No article artefacts for "<slug>".`
@@ -97,8 +98,9 @@ in `src/store/contracts.ts`. The union is only ever an argument to `take`; no ro
 `RateBucket`, so historical rows cannot become a type lie.
 
 **The database CHECK stays** (`rate_limit_events_bucket` in `src/db/schema.ts`), with a comment
-saying the value is there for old rows and goes in the next migration on that table. Dropping it now
-would need production proved empty of that value; the route was live until today, so it is not.
+saying the value is there for old rows. Removing it in a migration needs that database proved empty
+of the value first. The route was live until today, and the per-bucket sweep no longer reaches its
+retired rows, so time alone does not make them disappear.
 
 **Red test.** A `@ts-expect-error` on `const b: RateBucket = "citation-find"`, which `npm run
 typecheck` fails while the member exists.
@@ -115,6 +117,10 @@ same string from the same untrusted party, and a second prompt change later is a
   understated (1), bump to `/8` and for that reason (2), the term 404 is reachable from a page (5),
   the union's comment said it matched the CHECK (4), the version test should prove detachment and
   the collision test should pin the literal (7). Findings 3 and 6 confirmed the plan's claims.
+- 2026-10-04: code review tightened the collision-message source check to include the closing
+  parenthesis, with a control for concatenated values; the glossary's 404 now explains the current
+  list and says to reload. The retired CHECK value needs absence proved before removal, and detached
+  investigation rows remain available in exports.
 
 ## Seen while here, not done
 

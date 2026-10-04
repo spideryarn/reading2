@@ -436,8 +436,9 @@ same row being pressed again. Since 2026-09-30 the bound is the press's own: the
 taken after the checks that refuse for free. `runCitationLookup` takes none itself, so any new
 caller must bring one. The step's first allowance policy (`FIND_RATE_POLICY`, added by the owed
 code review, GPT Sol F11) went with the `/find` route on 2026-10-04. Its `citation-find` bucket
-remains in the database's allowed values for historical rows, until the next migration on that
-table; it is out of the `RateBucket` type, so no caller can spend it.
+remains in the database's allowed values for historical rows; it is out of the `RateBucket` type,
+so no caller can spend it. The condition for removing it is in
+[`schema.ts`](../../src/db/schema.ts) beside `rate_limit_events_bucket`.
 
 ### It reads the search extract, never the work
 
