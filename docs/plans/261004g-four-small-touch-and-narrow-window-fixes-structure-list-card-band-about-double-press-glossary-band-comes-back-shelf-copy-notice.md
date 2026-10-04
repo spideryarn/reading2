@@ -4,7 +4,7 @@ Four queue items the Overseer handed over on 2026-10-04. Greg, the same day, on 
 list of small queued fixes: *"If you're confident, address all of the Q-queue-yeses"*. Each is a
 small client defect on a touch screen or a narrow window. One stage, one commit per item.
 
-Status: **built; code review and browser check under way.**
+Status: **built and landed, 2026-10-04.**
 
 ## 1. qi-fkyrdns3: Structure's list face opens a row's card off the screen on a phone
 
@@ -141,6 +141,32 @@ changes. All three findings checked against the code and accepted.
 - Item 4: the policy that any row's good copy clears any row's copy failure is now stated on
   `Shelf.copied`. The hook's tests cover a copy's notice, another button's notice, and the order
   of the two.
+
+**Code review, GPT Sol, 2026-10-04** (`261004g-code-review-by-gpt-sol.md`). Verdict: land it with
+the fixes above. No reader-visible defect found; it added the drawer regression (C1) and corrected
+three sentences (C2, C3). `?term=` and `?gate=` replace history, so *Open glossary* on the term
+already selected adds no Back step.
+
+**Browser check, Sonnet subagent with Playwright, 2026-10-04**, on `fowler-phrenology`, at
+1440, 820 (touch) and 390 (touch). All four pass.
+
+- **Item 1, before** (another worktree's server, still with `keepSide`), at 390: top row's card at
+  x 367..693 and the page widened from 390 to 706; a middle row moved up 42px; the last row's card
+  at x -325..1.
+- **Item 1, after**, at 390: card at x 23..349 for the top, middle and last row, above or below the
+  row; `scrollWidth` stayed 390; the tapped row moved 0px; the second tap jumped. At 820 and 1000
+  the card is to the right of the row. At 1440 it is to the right, except the last row, whose card
+  opened left and above (x 167..519) and did not cover the row.
+- **Item 2:** two clicks 60ms apart end closed; hover reopens it; the same on Referee's button; a
+  tap opens and a tap closes on touch. The unfixed server ended open.
+- **Item 3:** at 390 and 600 *Open glossary* from a prose term's card brought the band back on that
+  term. *Dig deeper* was not pressed, since it spends a model call; it goes through the same callback.
+- **Item 4:** a failed then a good copy clears the notice, on the same row and across rows; Tweets
+  draws the triangle.
+- **Not checked:** Structure's two-column face at 390, which does not exist there (it needs about
+  609px of band).
+
+Status at the end: **finished.**
 
 ## Not in scope
 
