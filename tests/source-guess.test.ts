@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { identityOf } from "../src/cited-in-spideryarn.js";
 import { isSamePaper, type PaperIdentityInput, paperIdentity, type SourceCandidate } from "../src/source-guess.js";
 
 const TITLE = "Sparse Mixtures of Reasoning Experts for Long Document Retrieval";
@@ -110,6 +111,22 @@ describe("isSamePaper", () => {
       candidate({ title: TITLE, meta: { doi: "10.1234/smre.2024.001", authors: ["Müller, Ana"] }, text: "Paywalled abstract only." }),
     );
     expect(verdict).toEqual({ same: true, matchedBy: "doi", canonicalUrl: "https://doi.org/10.1234/smre.2024.001" });
+  });
+
+  it("the canonical address names the DOI it was built from, whatever characters the DOI holds (qi-thwhkxxh)", () => {
+    /* A literal `%2f` and a backslash: pasted in unencoded, the first is read
+       back as a slash and a browser turns the second into one. */
+    for (const doi of ["10.1234/smre%2f2024", "10.1234/smre\\2024"]) {
+      const firstPagesText = `${TITLE}\nAna Müller, Wei Zhang\n${OPENING}`;
+      /* `identifiersIn` decodes its input once, so the literal `%` is written encoded here. */
+      const written = doi.replace("%", "%25");
+      const verdict = isSamePaper(
+        identity({ firstPagesText, uploadMeta: { doi: written } }),
+        candidate({ title: TITLE, meta: { doi: written, authors: ["Müller, Ana"] } }),
+      );
+      if (!verdict.same || verdict.canonicalUrl === null) throw new Error("expected a DOI match");
+      expect(identityOf(verdict.canonicalUrl).doi).toBe(doi);
+    }
   });
 
   it("arXiv agreement passes from the URL, with the abs address and no version", () => {

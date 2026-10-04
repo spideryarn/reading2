@@ -215,7 +215,7 @@ function readable(text: string): string {
 }
 
 /** What catalogue this address belongs to, and its key there. */
-function citationOf(host: string, segments: string[]): Citation | null {
+function citationOf(host: string, segments: string[], pathname: string): Citation | null {
   if (host === "arxiv.org") {
     /* **Two shapes, and only from the routes that name a paper.**
 
@@ -246,8 +246,13 @@ function citationOf(host: string, segments: string[]): Citation | null {
        and no paper. Same `there must be something after it` rule as the
        mid-path case below, and it needs saying twice because the two branches
        find the prefix in different places. */
-    if (segments.length < 2 || !DOI.test(segments[0] ?? "")) return null;
-    return { label: "DOI", id: readable(segments.join("/")) };
+    /* Decode before interpreting the prefix separator: doiUrl escapes that
+       slash for a leading dot suffix. Empty/trailing suffix segments are part
+       of the opaque identifier and cannot be discarded with the path trail. */
+    const id = readable(pathname.slice(1));
+    const slash = id.indexOf("/");
+    if (slash < 0 || slash === id.length - 1 || !DOI.test(id.slice(0, slash))) return null;
+    return { label: "DOI", id };
   }
   const at = segments.findIndex((seg) => DOI.test(seg));
   if (at >= 0 && segments.length > at + 1) {
@@ -355,7 +360,7 @@ export function describeLink(href: string, sourceUrl: string | null): LinkPrevie
     sameSite,
     trail,
     file,
-    citation: citationOf(host, segments),
+    citation: citationOf(host, segments, parsed.pathname),
     wiki: wikiOf(host, segments),
     url: trimmed,
   };
