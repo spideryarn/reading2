@@ -170,6 +170,10 @@ selection is how you copy, look up or share with the iPad's own menu.
 What would decide it: if on the iPad you only ever select in order to highlight, B saves a tap
 each time; if you also copy or look words up, A.
 
+**Decided, A — as built.** Greg, 2026-10-04:
+
+> it's fine as is for now
+
 Still open from 261004a, not changed here: `[Q-ask-ai-colour]` (should a word you only asked about
 also stay highlighted). With this plan the word is painted on selection, so it stays yellow unless
 *No colour* is picked.

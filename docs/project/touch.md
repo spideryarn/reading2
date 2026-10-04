@@ -810,8 +810,8 @@ The reader long-presses, then drags the two handles, and all iOS tells the page 
 selection changed. Acting when the selection first settles would highlight a word the reader was
 still extending, and the same long-press is how a reader copies, looks up or shares with the
 system's own menu. So we wait for the handles to stop, show the button, and leave the press to
-them. Whether to highlight with no press at all is an open question for Greg
-(`[Q-touch-auto-highlight]` in
+them. Highlighting with no press at all was asked and declined for now (Greg, 2026-10-04: *"it's fine
+as is for now"*; `[Q-touch-auto-highlight]` in
 [261004f](../plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md)).
 
 The rules it keeps:
