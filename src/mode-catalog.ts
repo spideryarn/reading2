@@ -359,7 +359,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Quiz's questions are one stored batch written from the article, and
        each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It
        describes the mode, not a press, so it is true for the Help page too. */
-    how: "Recall, Tutorial and Explore are conversations, and each waits on you: nothing runs until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
+    how: "Recall, Tutorial and Explore are conversations, and each waits on you: the AI does not reply until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 

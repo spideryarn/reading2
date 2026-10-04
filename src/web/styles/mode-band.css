@@ -1192,7 +1192,7 @@
    adds it to its right padding. `.band-head` does so below; a mode whose top
    row is its own does so in its own stylesheet. */
 /* **The corner holds one or two buttons of one size**: the (i), and, left of
-   it, the owner's *written for you* badge when `ModeSurface`'s `profile` drew
+   it, the owner's profile icon when `ModeSurface`'s `profile` drew
    one. Greg, 2026-10-02 (spya-hf4svm): *"their position/sizing/alignment looks
    a bit off, especially on a phone"* — the badge was a 40px ringed circle on a
    phone beside a 24px (i), on another centre line, and in a different place in

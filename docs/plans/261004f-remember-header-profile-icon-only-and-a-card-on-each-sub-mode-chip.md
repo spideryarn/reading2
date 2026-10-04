@@ -189,3 +189,39 @@ commit, push.
 6. **"Never both" was too strong.** The card starts closing when the panel opens. The Tooltip is
    **controlled**, which makes its hover `mouseOnly`, so a finger never opens it; tests assert one
    click opens the panel and that `aria-haspopup`, `aria-expanded` and Escape still work.
+
+## What landed (2026-10-04)
+
+Built as planned, in one stage (commit `1019c380d`, then the review fixes).
+
+**Browser check** (a Sonnet subagent, Playwright on the box, article `fowler-phrenology`): all five
+passed. Each chip opens its own card and none covers its neighbours, at 1440px and 390px; the (i) is
+a line, two sentences and four bullets, in light and dark; Quiz's header has the icon and no words,
+its card opens on hover and goes when the panel opens, and does not come back when Escape closes the
+panel; the bottom bar's Remember card has the short paragraph; a tap at 390px opens the panel and no
+card. Shots: `261004f-shot-1-chip-card.png` to `261004f-shot-5-touch-tap.png`. The *older profile*
+variant of the card was not seen in the browser, only in the test.
+
+**Code review (GPT Sol): approve with fixes applied.**
+[The review](261004f-remember-header-code-review-sol.md). What it changed, all read and kept:
+
+1. **A real bug**: closing the panel returns focus to the icon, and the card read that as a new
+   keyboard focus and reopened. Fixed in `ProfilePanel.tsx` with a one-event focus suppression, and a
+   test that was red before the fix.
+2. **Three sentences were stronger than the code.** "Nothing runs until…" became "the AI does not
+   reply until…" (opening Remember creates its empty thread); Recall's replies *are asked to* point
+   back to passages; the badge card says the AI used *About you, Why you're reading this one, or
+   both*, and that it *is told* never to change what the article says.
+3. **Help said every mode offers to rewrite.** Quotes' control adds to the list instead, and the
+   Help copy and the FAQ entry now say so and describe the icon rather than the old words.
+4. Dead word-pill CSS removed; comments and docs that called it the *written for you* badge now say
+   profile icon; the tests gained touch, ARIA, layout, arming and keyboard cases.
+
+Two small edits of mine on top: Recall's last sentence reworded, and reader-profile.md's table says
+Sketch's icon is in the picture's own bar.
+
+**Wider than this stage, reported by the review and left alone:** `every-mode-draws-its-surface`
+passes while logging an undefined `profileHash` exception from `useQuiz.ts` — a fixture or
+error-reporting problem that was there before this change.
+
+**Deferred:** the sweep of other modes' long cards, queue entry `qi-mw43dd2y`.

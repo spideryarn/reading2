@@ -117,7 +117,7 @@ export function SummaryBand({
 
 /**
  * The plain-words levels' owner half: the read, the job and the press — and
- * the *written for you* badge, which belongs in the band's corner and needs
+ * the profile icon, which belongs in the band's corner and needs
  * this hook's answer, so the band hands a `render` in rather than
  * the row reaching down.
  */
@@ -243,7 +243,7 @@ function SummarySurface({
    * `about`): for the owner, who wrote the paragraphs and when.
    */
   about?: ReactNode;
-  /** The owner's *written for you* badge, for the band's corner (ModeSurface.tsx § `profile`). */
+  /** The owner's profile icon, for the band's corner (ModeSurface.tsx § `profile`). */
   profile?: ReactNode;
   children: ReactNode;
 }) {

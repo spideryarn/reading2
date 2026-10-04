@@ -32,7 +32,7 @@ Code: [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) (the band
  │  ▇▇▇▇▇    │  [spya-tgnssb] [spya-sge6a2]     │  scrolls the article ┐  │
  │  ▇▇       │                                  │  to that passage.    ▼  │
  └───────────┴──────────────────────────────────┴─────────────────────────┘
-   ⓤ — the owner's "written for you" badge, in the band's corner
+   ⓤ — the owner's profile icon, in the band's corner
 ```
 
 ## Brief | Fuller | Thread (since 2026-10-03)
@@ -105,7 +105,7 @@ the paragraphs.
   (SPIDERYARN-READING2-7R, *"get rid of the "Simple" text - perhaps replace with an icon"*): a
   short-text icon at the left end and a long-text one at the right, each a press on that end's
   level; the tooltip names the three, and `aria-valuetext` names the current one for a screen
-  reader. ⓤ is the owner's *written for you* badge.
+  reader. ⓤ is the owner's profile icon.
 - **The reader's profile and goal shape all three**, through the shared `PROFILE_RULES` and
   `profileSection` ([src/profile.ts](../../src/profile.ts)): the goal decides what leads, and in
   Simple and Fuller what the reader says they know is not explained. **Brief ignores the claimed

@@ -161,11 +161,11 @@ function questionCount(n: number): string {
  * from a question that was kept.
  *
  * **It opens with Quiz's own sentence, not Remember's catalog words**: the
- * band is Remember's, but `MODE_CATALOG.remember.how` is about Recall ("waits
- * on you … nudges you to remember"), which is wrong on this half. So this band does not
- * pass `mode` to `ModeSurface`, and the card leads with the sub-mode's words
- * from `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every
- * state, as `mode` would have made it.
+ * catalog now describes the whole mode, so it would lead a Quiz card with the
+ * three conversation parts before reaching Quiz. This band therefore does not
+ * pass `mode` to `ModeSurface`; the card leads with Quiz's sub-mode words from
+ * `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every state,
+ * as `mode` would have made it.
  */
 function QuizAbout({ quiz }: { quiz: Quiz | null }) {
   const what = <p>{REMEMBER_SUB_MODES.quiz.description}.</p>;
@@ -235,7 +235,7 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  */
 export const REMEMBER_VIEW_HOW: Readonly<Record<RememberView, string>> = {
   recall:
-    "Nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use.",
+    "The AI does not reply until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. It is asked to point its replies back to the passages they use.",
   tutorial:
     "It waits on you too. It is about what the author says, and it works even if you have not read the piece yet.",
   explore:

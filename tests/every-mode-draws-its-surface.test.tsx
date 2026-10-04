@@ -687,7 +687,7 @@ let fixtures: Fixtures;
 /**
  * **Whether the populated artefacts were written for a profile** — off
  * everywhere but the corner-badge sweep below, which turns it on to make the
- * owner's *written for you* badge draw (every hook reads `profileHash != null`).
+ * owner's profile icon draw (every hook reads `profileHash != null`).
  * Plan 261002e.
  */
 let profiled = false;
@@ -1655,7 +1655,7 @@ describe("phase B — Summary's Thread view", () => {
 });
 
 /* ================================================= the badge in the corner ==
-   **The owner's *written for you* badge sits beside the (i), in every mode
+   **The owner's profile icon sits beside the (i), in every mode
    that draws one** — `ModeSurface`'s `profile`, since 2026-10-02. Greg
    (spya-hf4svm): *"their position/sizing/alignment looks a bit off … make this
    reusable/template as part of creating new modes"*. Each mode used to put it
@@ -1677,7 +1677,7 @@ const PROFILED_BANDS: readonly { name: string; search: string; where: string; sa
   { name: "summary's thread", search: THREAD_VIEW.search, where: THREAD_VIEW.where, says: TWEET_POST },
 ];
 
-describe("the written-for-you badge sits in the band's corner", () => {
+describe("the profile icon sits in the band's corner", () => {
   for (const { name: mode, search, where, says } of PROFILED_BANDS) {
     it(
       `${mode}: one badge, a direct child of the band, right after the (i)`,

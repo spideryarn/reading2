@@ -730,10 +730,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             Text written with your profile has a small <strong>person icon</strong> in the corner
             of its mode; point at it to see what it means, or press it to read and edit your
-            profile there. After you edit your profile, the icon on older text gains a pencil and
-            a warmer colour.{" "}
-            <strong>Nothing is rewritten by itself</strong>; each mode offers to rewrite when you
-            want. Even a one-letter fix counts as an edit.
+            profile there. When it marks text written for an older profile, the icon gains a pencil
+            and a warmer colour. <strong>Nothing is rewritten by itself</strong>. The panel offers
+            to replace the result where the mode can do that; Quotes is the exception, because its
+            control adds to the list instead. Even a one-letter fix counts as an edit.
           </li>
           <li>The article’s parts and sections are never personalised, so they are the same for everyone.</li>
           <li>To stop the AI using a profile at all, empty both boxes.</li>

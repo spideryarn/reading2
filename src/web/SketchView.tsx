@@ -281,7 +281,7 @@ function OwnerSketch({
     if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
   }
   /* A changed profile is no longer a caveat line here: since 2026-10-02 the
-     *written for you* badge in the bar says it, as it does in every other
+     profile icon in the bar says it, as it does in every other
      personalised mode, and its panel carries the redraw (plan 261002b). Two
      sentences for one fact would be one too many. */
   const badge = view.profiled ? (
@@ -421,7 +421,7 @@ function SketchBody({
   /** Owner-only caveats — staleness, lost boxes. Empty for a visitor. */
   notes: readonly string[];
   /**
-   * The owner's *written for you* badge, already rendered, or nothing — a node
+   * The owner's profile icon, already rendered, or nothing — a node
    * for the reason `progress` is one. It goes in the bar, before Enlarge.
    */
   badge?: ReactNode;

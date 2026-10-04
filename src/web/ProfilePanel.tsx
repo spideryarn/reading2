@@ -2,7 +2,7 @@
  * "What am I being written for?" — answered, and changed, where the question is
  * asked.
  *
- * A small popover, raised from the *written for you* badge (WrittenForYou.tsx)
+ * A small popover, raised from the profile icon (`WrittenForYou.tsx`)
  * — and, until 2026-09-13, from a button beside the *Use your profile*
  * checkbox, which went with the checkbox — that says what a profile does and
  * holds both boxes, **editable in place since 2026-10-02**, with a *Regenerate*
@@ -218,7 +218,7 @@ function pending(s: SaveState): boolean {
  * The panel, and the provenance badge that raises it.
  *
  * **The trigger's looks are the caller's, its behaviour is this component's.**
- * `WrittenForYou` supplies the `written for you` pill and its changed-profile
+ * `WrittenForYou` supplies the profile icon and its changed-profile
  * state; this component owns the shared act underneath — ask, and change, what
  * this was written for. `className` and `children` keep the trigger's
  * appearance out of the implementation of focus, dismissal and the fetch.
@@ -263,6 +263,26 @@ export function ProfilePanel({
   regenerate?: Regenerate | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  /* FloatingFocusManager returns focus to the badge when the panel closes.
+     That is the right place for focus, but `Tooltip` would read the return as
+     a fresh keyboard focus and immediately put the card back over the page.
+     Hold only that focus event. The passive effect runs after the focus
+     manager's layout cleanup has restored focus, then arms future keyboard
+     visits again. The suppression is focus-only, so a later pointer visit
+     still opens the card. */
+  const [suppressTipFocus, setSuppressTipFocus] = useState(false);
+  const setPanelOpen = useCallback((next: boolean) => {
+    setOpen(next);
+  }, []);
+  useEffect(() => {
+    if (open || !suppressTipFocus) return;
+    /* FloatingFocusManager restores focus in a microtask from its cleanup.
+       Clear this in the following task, after that focus event has been
+       consumed; clearing it directly in the effect races ahead of the
+       library's microtask and lets the card reopen. */
+    const id = window.setTimeout(() => setSuppressTipFocus(false), 0);
+    return () => window.clearTimeout(id);
+  }, [open, suppressTipFocus]);
   /**
    * The card's own open state, held here so the `Tooltip` is *controlled*.
    * That is what makes its hover `mouseOnly` (Tooltip.tsx): a finger's
@@ -281,12 +301,12 @@ export function ProfilePanel({
   useEffect(() => {
     const closeForAnother = (event: Event) => {
       if (!open) return;
-      if (mayClose.current()) setOpen(false);
+      if (mayClose.current()) setPanelOpen(false);
       else event.preventDefault();
     };
     document.addEventListener(OPEN_PROFILE_PANEL, closeForAnother);
     return () => document.removeEventListener(OPEN_PROFILE_PANEL, closeForAnother);
-  }, [open]);
+  }, [open, setPanelOpen]);
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: (next) => {
@@ -295,9 +315,12 @@ export function ProfilePanel({
            in the same React turn, so the page never carries two editors for the
            same profile. */
         const request = new Event(OPEN_PROFILE_PANEL, { cancelable: true });
-        if (document.dispatchEvent(request)) setOpen(true);
+        if (document.dispatchEvent(request)) {
+          setSuppressTipFocus(true);
+          setPanelOpen(true);
+        }
       }
-      else if (mayClose.current()) setOpen(false);
+      else if (mayClose.current()) setPanelOpen(false);
     },
     placement: "top-start",
     whileElementsMounted: autoUpdate,
@@ -336,6 +359,13 @@ export function ProfilePanel({
           ref={refs.setReference}
           className={`${className}${open ? " open" : ""}`}
           aria-label={label}
+          /* Tooltip's handler runs before the child's. On the focus restored
+             after dismissal it asks to open, then this puts the controlled
+             state back to false in the same React batch. The following task
+             arms ordinary keyboard focus again. */
+          onFocus={() => {
+            if (suppressTipFocus) setTipOpen(false);
+          }}
           {...getReferenceProps()}
         >
           {children}
@@ -365,7 +395,7 @@ export function ProfilePanel({
               <PanelBody
                 slug={slug}
                 mayClose={mayClose}
-                onClose={() => setOpen(false)}
+                onClose={() => setPanelOpen(false)}
                 changed={changed}
                 regenerate={regenerate}
               />

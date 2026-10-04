@@ -444,7 +444,7 @@ numbers and review conclusion:
   its own section and rules in [`src/quiz.ts`](../../src/quiz.ts).
 - **Recorded, but not in the stamp.** Changing your goal never rewrites a quiz on its own. Since
   2026-10-02 the quiz records which profile it was written for (`profileHash`), and the band's head
-  carries the same *written for you* badge as the other personalised modes (an icon with a card,
+  carries the same profile icon as the other personalised modes (with a card,
   no words, since 2026-10-04: [reader-profile.md](reader-profile.md)), opening the same
   panel: edit both boxes in place, and when the server says the profile has changed, **Regenerate**
   — the forced run *Write them again* makes. Greg, 2026-10-02:

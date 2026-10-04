@@ -869,9 +869,9 @@
     min-height: 2.5rem;
   }
 
-  /* Glossary's compact profile badge is a button in the same row, not a
-     decorative mark. Its 13px icon plus desktop padding makes an ~18px target,
-     so it shares the row's existing finger floor on both axes. */
+  /* The profile icon is a button, not a decorative mark. Its 13px icon plus
+     desktop padding makes an ~18px target, so it shares the row's existing
+     finger floor on both axes. */
   .prof-badge.icon-only {
     min-width: 2.5rem;
     min-height: 2.5rem;

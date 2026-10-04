@@ -105,7 +105,7 @@ export interface ProfileState {
 }
 
 /**
- * "Written for you", or "written for a profile you've changed".
+ * A profile provenance icon: current, or written for a profile since changed.
  *
  * Renders nothing when the artefact was written without a profile, which is the
  * common case and is not a state worth a line of interface. Absence here means
@@ -123,8 +123,6 @@ export function WrittenForYou({
 }) {
   if (!written) return null;
   const Icon = changed ? UserRoundPen : UserRound;
-  /* The boxes' own names, as the panel prints them (ProfilePanel.tsx). */
-  const boxes = "About you and Why you're reading this one";
   const shows = "Shows your profile, to read or edit here";
   return (
     <ProfilePanel
@@ -137,12 +135,12 @@ export function WrittenForYou({
       tip={{
         head: changed ? "Written for an older profile" : "Written for your profile",
         what: changed
-          ? `The AI used an earlier version of your profile when it wrote this: ${boxes}, as they were before you last changed them.`
-          : `The AI used both parts of your profile, ${boxes}, when it wrote this.`,
+          ? "The AI used an earlier version of what you had written under About you, Why you're reading this one, or both."
+          : "The AI used what you had written under About you, Why you're reading this one, or both, when it wrote this.",
         /* The half nobody could guess, as the Help page has it. */
         how: changed
           ? "Nothing is rewritten by itself when your profile changes."
-          : "A profile shapes what is chosen and how it is put to you. It never changes what the article says.",
+          : "A profile is used to shape what is chosen and how it is put to you. The AI is told never to change what the article says.",
         press: changed && regenerate ? `${shows}, and offers to write this again for it.` : `${shows}.`,
       }}
       label={
