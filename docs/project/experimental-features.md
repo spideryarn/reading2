@@ -56,6 +56,9 @@ their own), a read/write pair on `ReaderStore` in [`contracts.ts`](../../src/sto
 implemented in [`pg-reader.ts`](../../src/store/pg-reader.ts), one field on `GET`/`PATCH
 /api/reader`, and a client store with the three states below. The other value on that row is the
 profile text itself — [reader-profile.md § Where the pieces are](reader-profile.md#where-the-pieces-are).
+A second setting has the same shape since 2026-10-04: `auto_modes_off_at`, the add page's
+*generate the main modes* box, inverted because its default is on
+([ingest-queue.md § The add page](ingest-queue.md#the-add-page)).
 The shelf's browser-only preference instead skips the server and uses `localStorage`, guarded in
 [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
 

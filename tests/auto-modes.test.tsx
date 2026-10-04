@@ -1,19 +1,32 @@
 // @vitest-environment jsdom
 /**
- * **The add page's "generate the main modes" box** — src/web/auto-modes.ts,
- * docs/plans/260930c-auto-generate-the-main-modes-after-import.md.
+ * **The add page's "generate the main modes" box** — src/auto-mode-steps.ts,
+ * src/web/auto-modes.ts and src/web/auto-modes-setting.ts.
+ * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md
+ * (and 260930c before it).
  *
- * Three things are worth pinning. Which steps the box queues, since the list is
- * derived and a mode moving in or out of the experimental switch changes it
- * silently. That they are created **one after another**, because Skim
- * only waits for Quotes and Ideas if its job is younger than theirs. And that
- * the page queues them on `done` only when the box is ticked, and opens the
- * article either way.
+ * Four things are pinned.
+ *
+ * 1. **Which jobs.** The server queues from a written list, because the
+ *    derivation reads the browser's mode catalogue. This holds the written
+ *    list equal to the derived one, so a mode moved in or out of the
+ *    experimental switch fails here until the list follows.
+ * 2. **The page posts no mode job.** It did until 261004h; the server queues
+ *    them at the import's publication
+ *    (tests/publication-queues-the-main-modes.test.ts), so a job from here
+ *    would be a second set.
+ * 3. **The box is the reader's setting**: read from `GET /api/reader`, written
+ *    by `PATCH /api/reader { autoModes }` on each change.
+ * 4. **The one-time hand-over** of a browser's old `localStorage` "off", which
+ *    forgets the key only once the server has answered.
  */
+import { readFileSync } from "node:fs";
+
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AUTO_MODE_STEPS, STEP_READS, autoModePosts, autoModeRequests } from "../src/auto-mode-steps.js";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES } from "../src/modes.js";
 import { SHARING_STEPS, sharingPolicy } from "../src/sharing-steps.js";
@@ -71,24 +84,57 @@ vi.mock("../src/web/router.js", async (importActual) => ({
   navigate: (href: string) => navigations.push(href),
 }));
 
-const { STEP_READS, autoModeRequests, autoModeSteps, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } = await import(
-  "../src/web/auto-modes.js"
+/**
+ * **The server's half of the setting**, as far as the page can see it: what
+ * `GET /api/reader` answers, every `PATCH` body in order, and how the next
+ * `PATCH` answers.
+ */
+let serverAutoModes = true;
+const readerPatches: unknown[] = [];
+let patchAnswer: (body: { autoModes: boolean }) => Promise<Response>;
+const stores = async (body: { autoModes: boolean }): Promise<Response> => {
+  serverAutoModes = body.autoModes;
+  return new Response(JSON.stringify({ autoModes: serverAutoModes }), { status: 200 });
+};
+vi.mock("../src/web/lib/api.js", async (importActual) => {
+  const actual = await importActual<typeof import("../src/web/lib/api.js")>();
+  return {
+    ...actual,
+    apiFetch: async (input: string, init: RequestInit = {}) => {
+      if (input === "/api/reader" && init.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { autoModes: boolean };
+        readerPatches.push(body);
+        return patchAnswer(body);
+      }
+      if (input === "/api/reader") {
+        return new Response(JSON.stringify({ autoModes: serverAutoModes }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch ${init.method ?? "GET"} ${input}`);
+    },
+  };
+});
+
+const { autoModesDetail, derivedAutoModeSteps } = await import("../src/web/auto-modes.js");
+const { LEGACY_AUTO_MODES_KEY, handOverAutoModesChoice, resetAutoModesSettingForTests } = await import(
+  "../src/web/auto-modes-setting.js"
 );
 const { modeStep } = await import("../src/web/activation.js");
-
-/**
- * The order `queueAutoModes` posts in: the jobs that read nothing first, then
- * the rest. It was also `autoModeRequests()`'s own order until `crossrefs`
- * (plan 260930f) joined — last in `STEP_ORDER`, and reading nothing, so it is
- * posted before Skim though it sorts after it.
- */
-const postingOrder = (): StepName[][] => {
-  const requests = autoModeRequests();
-  return [...requests.filter((s) => s.length === 1), ...requests.filter((s) => s.length > 1)];
-};
 const { AddPage } = await import("../src/web/AddPage.js");
 
-describe("which steps the box queues", () => {
+beforeEach(() => {
+  window.localStorage.clear();
+  resetAutoModesSettingForTests();
+  serverAutoModes = true;
+  readerPatches.length = 0;
+  patchAnswer = stores;
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("which steps are queued", () => {
   it("is every step the main modes make, and the cross-references, in STEP_ORDER", () => {
     /* If this changes, a mode moved in or out of the experimental switch, or
        started or stopped making something. That may be right — then change
@@ -100,20 +146,34 @@ describe("which steps the box queues", () => {
        became delegated — and `modeStep` answers `null` for a delegated mode,
        so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
        watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
-    expect(autoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
+    expect(derivedAutoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
     expect(modeStep("summary")).toBeNull();
   });
 
+  it("the written list the server queues from equals the derived one", () => {
+    /* The server cannot run the derivation (`modeStep` imports the browser's
+       job engine), so src/auto-mode-steps.ts names the steps. This is what
+       stops the two drifting apart. */
+    expect([...AUTO_MODE_STEPS]).toEqual(derivedAutoModeSteps());
+  });
+
+  it("the shared list is a leaf: it imports the step order and types, nothing else", () => {
+    /* Both sides import it. One more import and the server pulls in whatever
+       that module reaches, or the browser reaches into src/store/. */
+    const source = readFileSync("src/auto-mode-steps.ts", "utf8");
+    const imported = [...source.matchAll(/^import .* from "(.+)";$/gm)].map((m) => m[1]);
+    expect(imported.sort()).toEqual(["./step-order.js", "./types.js"]);
+  });
+
   it("puts Skim after Quotes and Ideas, which it reads", () => {
-    const steps = autoModeSteps();
-    expect(steps.indexOf("skim")).toBeGreaterThan(steps.indexOf("quotes"));
-    expect(steps.indexOf("skim")).toBeGreaterThan(steps.indexOf("ideas"));
+    expect(AUTO_MODE_STEPS.indexOf("skim")).toBeGreaterThan(AUTO_MODE_STEPS.indexOf("quotes"));
+    expect(AUTO_MODE_STEPS.indexOf("skim")).toBeGreaterThan(AUTO_MODE_STEPS.indexOf("ideas"));
   });
 
   it("takes nothing from behind the experimental switch", () => {
     for (const mode of MODES) {
       const step = modeStep(mode);
-      if (step && MODE_CATALOG[mode].experimental) expect(autoModeSteps()).not.toContain(step);
+      if (step && MODE_CATALOG[mode].experimental) expect(AUTO_MODE_STEPS).not.toContain(step);
     }
   });
 
@@ -125,11 +185,7 @@ describe("which steps the box queues", () => {
   });
 });
 
-describe("queueAutoModes", () => {
-  beforeEach(() => {
-    runs.length = 0;
-  });
-
+describe("what each job asks for", () => {
   it("gives Skim's job the shape its panel posts when both prerequisites are absent", () => {
     /* The panel posts `[...precededBy, "skim"]` (useStepJob.ts). With
        neither prerequisite present this is the same work key; after one becomes
@@ -148,52 +204,20 @@ describe("queueAutoModes", () => {
     ]);
   });
 
+  it("queues the ones that read nothing first, and Skim's last", () => {
+    /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
+       goes before it. The publication stamps them in this order. */
+    const { together, after } = autoModePosts();
+    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["crossrefs"]]);
+    expect(after).toEqual([["quotes", "ideas", "skim"]]);
+  });
+
   it("knows the same dependencies as the server's queue", () => {
     /* `STEP_READS` is a copy of `STEP_SHARING`'s reads, because the browser
        may not import src/sharing-steps.ts. Watched red by adding a read there. */
     for (const step of SHARING_STEPS) {
       expect([...(STEP_READS[step] ?? [])], step).toEqual([...sharingPolicy(step).reads]);
     }
-  });
-
-  it("posts the ones that read nothing first, and Skim only after they have answered", async () => {
-    const answered: StepName[][] = [];
-    let skimPostedAfter: number | null = null;
-    const run: UseJobs["run"] = async (request) => {
-      if (request.steps.includes("skim")) skimPostedAfter = answered.length;
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      answered.push(request.steps);
-      return null;
-    };
-    await queueAutoModes(run, "an-article");
-    expect(answered).toHaveLength(7);
-    /* The five modes that read nothing, and `crossrefs`, which reads nothing either. */
-    expect(skimPostedAfter, "Skim was posted before the other six had answered").toBe(6);
-  });
-
-  it("carries on past one that throws", async () => {
-    const started: StepName[][] = [];
-    await queueAutoModes(async (request) => {
-      started.push(request.steps);
-      if (request.steps[0] === "glossary") throw new Error("network");
-      return null;
-    }, "an-article");
-    expect(started).toHaveLength(7);
-  });
-});
-
-describe("the choice is remembered", () => {
-  beforeEach(() => window.localStorage.clear());
-
-  it("is on for a reader who has never chosen", () => {
-    expect(readAutoModes()).toBe(true);
-  });
-
-  it("stays off once turned off", () => {
-    writeAutoModes(false);
-    expect(readAutoModes()).toBe(false);
-    writeAutoModes(true);
-    expect(readAutoModes()).toBe(true);
   });
 });
 
@@ -218,15 +242,16 @@ describe("the add page", () => {
   }
 
   async function settle(): Promise<void> {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
   }
 
   const box = (): HTMLInputElement | null => host.querySelector('input[type="checkbox"]');
 
   beforeEach(() => {
-    window.localStorage.clear();
     runs.length = 0;
     navigations.length = 0;
     jobs = [];
@@ -242,10 +267,12 @@ describe("the add page", () => {
     host.remove();
   });
 
-  it("offers the box, ticked, while the import runs", () => {
+  it("offers the box, ticked, while the import runs", async () => {
     render("running");
+    await settle();
     expect(box(), "no box while the import was running").not.toBeNull();
     expect(box()?.checked).toBe(true);
+    expect(readerPatches, "showing the box wrote the setting").toEqual([]);
   });
 
   it("offers the box while an upload is still transferring, before its job exists", () => {
@@ -259,26 +286,32 @@ describe("the add page", () => {
     expect(box(), "no box while the file was still transferring").not.toBeNull();
   });
 
-  it("queues the modes and opens the article when it is done", async () => {
+  it("shows the box unticked for a reader whose setting is off", async () => {
+    serverAutoModes = false;
+    render("running");
+    await settle();
+    expect(box()?.checked, "the box ignored the reader's setting").toBe(false);
+  });
+
+  it("opens the article when it is done, and posts no mode job", async () => {
     render("running");
     render("done");
     await settle();
     expect(navigations).toHaveLength(1);
-    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
-    expect(runs.every((r) => r.slug === "a-paper")).toBe(true);
+    expect(runs, "the page queued modes; the server does that at publication").toEqual([]);
   });
 
-  it("queues when the returned URL job is already done on the first render", async () => {
+  it("posts none when the returned URL job is already done on the first render", async () => {
     const finished = job("done");
     jobs = [finished];
     addResult = finished;
     renderSource({ kind: "url", url: "https://example.com/a-paper" });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
+    expect(runs).toEqual([]);
     expect(navigations).toEqual(["/read/a-paper"]);
   });
 
-  it("queues each mode only once under StrictMode's repeated effects", async () => {
+  it("posts none under StrictMode's repeated effects", async () => {
     const finished = job("done");
     jobs = [finished];
     transfer = {
@@ -297,10 +330,12 @@ describe("the add page", () => {
       );
     });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
+    expect(runs).toEqual([]);
   });
 
-  it("queues the modes when an engine-owned upload resolves to an existing article", async () => {
+  it("posts none when an engine-owned upload resolves to an existing article", async () => {
+    /* Re-adding something already on the shelf publishes nothing, so nothing
+       is queued anywhere: the modes it lacks are a press in the reading view. */
     transfer = {
       uploadId: UPLOAD_ID,
       filename: "p.pdf",
@@ -309,18 +344,119 @@ describe("the add page", () => {
     };
     renderSource({ kind: "upload", uploadId: UPLOAD_ID });
     await settle();
-    expect(runs.map((r) => r.steps)).toEqual(postingOrder());
+    expect(runs).toEqual([]);
     expect(navigations).toEqual(["/read/a-paper"]);
   });
 
-  it("opens the article and queues nothing when unticked", async () => {
+  it("writes the setting when the box is changed, each time", async () => {
     render("running");
+    await settle();
     act(() => box()?.click());
     expect(box()?.checked).toBe(false);
+    await settle();
+    expect(readerPatches).toEqual([{ autoModes: false }]);
+    expect(serverAutoModes, "the untick did not reach the server").toBe(false);
+
+    act(() => box()?.click());
+    await settle();
+    expect(box()?.checked).toBe(true);
+    expect(readerPatches).toEqual([{ autoModes: false }, { autoModes: true }]);
+
     render("done");
     await settle();
     expect(navigations).toHaveLength(1);
     expect(runs).toEqual([]);
-    expect(readAutoModes(), "the untick was not remembered").toBe(false);
+  });
+
+  it("a press made before the setting has loaded is not overwritten by it", async () => {
+    render("running");
+    /* No settle: the opening GET (which will say on) is still out. */
+    act(() => box()?.click());
+    await settle();
+    expect(box()?.checked, "the opening read undid the reader's untick").toBe(false);
+    expect(readerPatches).toEqual([{ autoModes: false }]);
+  });
+
+  it("puts the box back and says so when the save fails", async () => {
+    patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
+    render("running");
+    await settle();
+    act(() => box()?.click());
+    await settle();
+    expect(box()?.checked, "a choice the server never got was left showing").toBe(true);
+    expect(host.textContent).toContain("That choice was not saved.");
+  });
+});
+
+/**
+ * Until plan 261004h the choice was `localStorage["spideryarn.add.generate-main-modes"]`,
+ * `"off"` when unticked, and the page did the queueing. The server queues now
+ * and cannot see a browser's storage, so an old "off" is sent to it once — and
+ * the key is forgotten only when the server has answered (GPT Sol, F3). That
+ * `useJobSession` calls this at signed-in app start is held by
+ * tests/job-session-effect.test.tsx.
+ */
+describe("the one-time hand-over of a browser's old choice", () => {
+  const signal = () => new AbortController().signal;
+
+  it("sends an old off to the server, and forgets the key once it has answered", async () => {
+    stored.set(LEGACY_AUTO_MODES_KEY, "off");
+    let answer: () => void = () => {};
+    patchAnswer = (body) =>
+      new Promise((resolve) => {
+        answer = () => void stores(body).then(resolve);
+      });
+    const handed = handOverAutoModesChoice(signal());
+    await Promise.resolve();
+    expect(readerPatches).toEqual([{ autoModes: false }]);
+    expect(stored.get(LEGACY_AUTO_MODES_KEY), "the key was forgotten before the server answered").toBe("off");
+    answer();
+    await handed;
+    expect(stored.has(LEGACY_AUTO_MODES_KEY), "the key outlived the hand-over").toBe(false);
+    expect(serverAutoModes).toBe(false);
+  });
+
+  it("keeps the key when the server refuses, so the next start tries again", async () => {
+    stored.set(LEGACY_AUTO_MODES_KEY, "off");
+    patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
+    await handOverAutoModesChoice(signal());
+    expect(stored.get(LEGACY_AUTO_MODES_KEY)).toBe("off");
+    patchAnswer = stores;
+    await handOverAutoModesChoice(signal());
+    expect(stored.has(LEGACY_AUTO_MODES_KEY)).toBe(false);
+    expect(readerPatches).toEqual([{ autoModes: false }, { autoModes: false }]);
+  });
+
+  it("sends nothing for a browser that never chose, or that chose on", async () => {
+    await handOverAutoModesChoice(signal());
+    stored.set(LEGACY_AUTO_MODES_KEY, "on");
+    await handOverAutoModesChoice(signal());
+    expect(readerPatches).toEqual([]);
+  });
+
+  it("the box shows an off this browser has not managed to hand over", async () => {
+    stored.set(LEGACY_AUTO_MODES_KEY, "off");
+    patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
+    await handOverAutoModesChoice(signal());
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    jobs = [{ id: "job-1", slug: "a-paper", status: "running", steps: [] } as unknown as Job];
+    transfer = { uploadId: "up-1", filename: "p.pdf", bytes: 1, phase: { kind: "queued", job: jobs[0] as Job } };
+    act(() => {
+      root.render(createElement(AddPage, { source: { kind: "upload", uploadId: "up-1" } }));
+    });
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    /* The server still says on (it never heard), and the browser's own word
+       wins on screen until it has. */
+    expect(box?.checked).toBe(false);
+    act(() => root.unmount());
+    host.remove();
   });
 });

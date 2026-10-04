@@ -967,6 +967,13 @@
       "when": 1791073083443,
       "tag": "20261004001803_registry_published_day_only_on_found",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1791122141705,
+      "tag": "20261004135541_reader_auto_modes_off_at",
+      "breakpoints": true
     }
   ]
 }

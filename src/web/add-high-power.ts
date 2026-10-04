@@ -16,10 +16,14 @@
  *    `running` before its claim opens the draft that creates the article row,
  *    so a `404` while the job is still queued or running means *not yet* and
  *    is retried; once the job has ended it is a real answer.
- *  - **The main modes must not overtake it.** `settle` is what the page awaits
- *    before queueing them, and it sends a still-waiting intent there and then,
- *    against the completion's slug — which also covers a completion that never
- *    had a job.
+ *  - **The main modes should not overtake it, and the page no longer holds
+ *    them.** Since plan 261004h the server queues them at the import's
+ *    publication; what keeps them behind the switch is that each step reads
+ *    the article's power as it starts and none starts before the `labels` job
+ *    ahead of it has ended. A request still unanswered by then loses
+ *    (docs/project/high-powered-ai.md). `settle` is called at completion and
+ *    not awaited: it sends a still-waiting intent there and then, against the
+ *    completion's slug — which also covers a completion that never had a job.
  *  - **Whether it was late cannot be known exactly** from a polled job (power
  *    is read before a step is marked running), so `lateRisk` is a cautious
  *    *may*, captured when the switch answers.
@@ -135,9 +139,10 @@ export class HighPowerIntent {
   }
 
   /**
-   * **Before the main modes are queued.** The import has finished, so the row
-   * exists: a still-waiting intent is sent now against `slug`, and a `404` is
-   * final. Resolves when no request is in flight; never rejects.
+   * **At completion.** The import has finished, so the row exists: a
+   * still-waiting intent is sent now against `slug`, and a `404` is final.
+   * Resolves when no request is in flight; never rejects. The add page does
+   * not await it (AddPage.tsx § `openArticle`).
    */
   settle(slug: string): Promise<void> {
     this.slug = slug;
