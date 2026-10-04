@@ -168,8 +168,8 @@ function openArticle(completion: Completion, highPower: HighPowerIntent): void {
   /* **A High-powered tick in the last second is still sent**, and not waited
      for. Each mode step reads the article's power as it starts, and none
      starts until the `labels` job ahead of it has ended, so a switch that has
-     been committed by then is the one they run on. A request still unanswered
-     at that point loses, and those modes run on the standard model
+     been committed by then is the one they run on. A step starting before
+     the switch commits uses the standard model; later steps read it again
      (docs/project/high-powered-ai.md). `settle` never rejects. */
   void highPower.settle(completion.slug);
   navigate(readHref(completion.slug), { replace: true });
@@ -973,9 +973,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       )}
 
       {/* Offered for the whole add — including a file transfer before its job
-          exists. Each change is saved to the reader's setting at once, and the
-          server reads that when the import publishes, so it can be changed
-          right up to then. src/web/auto-modes-setting.ts. */}
+          exists. Each change is sent to the reader's setting, and the server
+          reads the committed choice when the import publishes.
+          src/web/auto-modes-setting.ts. */}
       {(showAutoModes || deciding) && (
         <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
           <input
@@ -987,9 +987,19 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           <span>
             {AUTO_MODES_LABEL}
             <span className="tw:block tw:text-muted-foreground">{autoModesDetail()}</span>
+            {autoModes.saving && (
+              <span role="status" className="tw:block tw:text-muted-foreground">
+                Saving your choice. The import uses the last saved choice when it finishes.
+              </span>
+            )}
+            {autoModes.loadError && (
+              <span role="alert" className="tw:block tw:text-muted-foreground">
+                Could not read your saved choice. Reload to try again.
+              </span>
+            )}
             {autoModes.error && (
               <span role="alert" className="tw:block tw:text-muted-foreground">
-                That choice was not saved. Try again.
+                The save request failed. Check the choice above and try again.
               </span>
             )}
           </span>
@@ -1027,9 +1037,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {deciding && (
         <div className="tw:mt-3">
           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            {autoModes.on
-              ? "Ready. The first modes are already being prepared without it; saving it now reaches chat and anything generated later."
-              : "Ready. Saving it first means anything generated from here on is written for it."}
+            Ready. Any first modes already queued use the purpose saved when the import finished.
+            Saving this now reaches chat and anything generated later.
           </p>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button type="button" size="sm" disabled={phase.kind === "saving"} onClick={saveAndOpen}>

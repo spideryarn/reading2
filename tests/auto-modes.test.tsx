@@ -90,7 +90,9 @@ vi.mock("../src/web/router.js", async (importActual) => ({
  * `PATCH` answers.
  */
 let serverAutoModes = true;
+let readerAnswer: (() => Promise<Response>) | undefined;
 const readerPatches: unknown[] = [];
+const patchSignals: (AbortSignal | null | undefined)[] = [];
 let patchAnswer: (body: { autoModes: boolean }) => Promise<Response>;
 const stores = async (body: { autoModes: boolean }): Promise<Response> => {
   serverAutoModes = body.autoModes;
@@ -104,9 +106,11 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
       if (input === "/api/reader" && init.method === "PATCH") {
         const body = JSON.parse(String(init.body)) as { autoModes: boolean };
         readerPatches.push(body);
+        patchSignals.push(init.signal);
         return patchAnswer(body);
       }
       if (input === "/api/reader") {
+        if (readerAnswer) return readerAnswer();
         return new Response(JSON.stringify({ autoModes: serverAutoModes }), { status: 200 });
       }
       throw new Error(`unexpected fetch ${init.method ?? "GET"} ${input}`);
@@ -125,7 +129,9 @@ beforeEach(() => {
   window.localStorage.clear();
   resetAutoModesSettingForTests();
   serverAutoModes = true;
+  readerAnswer = undefined;
   readerPatches.length = 0;
+  patchSignals.length = 0;
   patchAnswer = stores;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -377,6 +383,115 @@ describe("the add page", () => {
     expect(readerPatches).toEqual([{ autoModes: false }]);
   });
 
+  it("restores the confirmed server value when both rapid changes fail", async () => {
+    patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
+    render("running");
+    await settle();
+    act(() => {
+      box()?.click();
+      box()?.click();
+    });
+    await settle();
+    expect(readerPatches).toEqual([{ autoModes: false }, { autoModes: true }]);
+    expect(box()?.checked, "rollback invented an off the server never stored").toBe(serverAutoModes);
+  });
+
+  it("serializes a checkbox change after the legacy hand-over", async () => {
+    stored.set(LEGACY_AUTO_MODES_KEY, "off");
+    let answer: () => void = () => {};
+    patchAnswer = (body) => new Promise((resolve) => {
+      answer = () => void stores(body).then(resolve);
+    });
+    const handed = handOverAutoModesChoice(new AbortController().signal);
+    render("running");
+    await settle();
+    act(() => box()?.click());
+    await settle();
+    expect(readerPatches, "the new on raced the old off").toEqual([{ autoModes: false }]);
+    patchAnswer = stores;
+    answer();
+    await handed;
+    await settle();
+    expect(readerPatches).toEqual([{ autoModes: false }, { autoModes: true }]);
+    expect(serverAutoModes).toBe(true);
+    expect(box()?.checked).toBe(true);
+  });
+
+  it("ignores an older page's read that answers after the newer read", async () => {
+    let answer: (response: Response) => void = () => {};
+    readerAnswer = () => new Promise((resolve) => { answer = resolve; });
+    render("running");
+    await settle();
+    act(() => root.unmount());
+    readerAnswer = undefined;
+    serverAutoModes = false;
+    root = createRoot(host);
+    render("running");
+    await settle();
+    expect(box()?.checked).toBe(false);
+    answer(new Response(JSON.stringify({ autoModes: true }), { status: 200 }));
+    await settle();
+    expect(box()?.checked, "an old page's read replaced the newer server answer").toBe(false);
+  });
+
+  it("re-reads the server choice on the next page mount", async () => {
+    render("running");
+    await settle();
+    expect(box()?.checked).toBe(true);
+    act(() => root.unmount());
+    serverAutoModes = false; // another tab changed the account setting
+    root = createRoot(host);
+    render("running");
+    await settle();
+    expect(box()?.checked, "the next import showed the previous page's cached setting").toBe(false);
+  });
+
+  it("keeps the pending choice and write order across an add-page remount", async () => {
+    let answer: () => void = () => {};
+    render("running");
+    await settle();
+    patchAnswer = (body) => new Promise((resolve) => {
+      answer = () => void stores(body).then(resolve);
+    });
+    act(() => box()?.click());
+    await settle();
+    act(() => root.unmount());
+    root = createRoot(host);
+    render("running");
+    await settle();
+    expect(box()?.checked, "the next page forgot the pending untick").toBe(false);
+    act(() => box()?.click());
+    await settle();
+    expect(readerPatches).toEqual([{ autoModes: false }]);
+    patchAnswer = stores;
+    answer();
+    await settle();
+    expect(readerPatches).toEqual([{ autoModes: false }, { autoModes: true }]);
+    expect(serverAutoModes).toBe(true);
+  });
+
+  it("aborts a pending write and discards queued writes when the reader leaves", async () => {
+    const session = new AbortController();
+    await handOverAutoModesChoice(session.signal);
+    let answer: () => void = () => {};
+    render("running");
+    await settle();
+    patchAnswer = (body) => new Promise((resolve) => {
+      answer = () => void stores(body).then(resolve);
+    });
+    act(() => {
+      box()?.click();
+      box()?.click();
+    });
+    await settle();
+    session.abort();
+    expect(patchSignals[0]?.aborted, "the write can retry under the next reader").toBe(true);
+    patchAnswer = stores;
+    answer();
+    await settle();
+    expect(readerPatches, "a queued write was sent after sign-out").toEqual([{ autoModes: false }]);
+  });
+
   it("puts the box back and says so when the save fails", async () => {
     patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
     render("running");
@@ -384,7 +499,7 @@ describe("the add page", () => {
     act(() => box()?.click());
     await settle();
     expect(box()?.checked, "a choice the server never got was left showing").toBe(true);
-    expect(host.textContent).toContain("That choice was not saved.");
+    expect(host.textContent).toContain("The save request failed.");
   });
 });
 
@@ -434,7 +549,7 @@ describe("the one-time hand-over of a browser's old choice", () => {
     expect(readerPatches).toEqual([]);
   });
 
-  it("the box shows an off this browser has not managed to hand over", async () => {
+  it("a failed hand-over shows the actual server choice and a save error", async () => {
     stored.set(LEGACY_AUTO_MODES_KEY, "off");
     patchAnswer = async () => new Response(JSON.stringify({ error: "Unavailable." }), { status: 503 });
     await handOverAutoModesChoice(signal());
@@ -453,9 +568,9 @@ describe("the one-time hand-over of a browser's old choice", () => {
       });
     }
     const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
-    /* The server still says on (it never heard), and the browser's own word
-       wins on screen until it has. */
-    expect(box?.checked).toBe(false);
+    expect(box?.checked, "the failed hand-over hid the server's actual setting").toBe(true);
+    expect(host.textContent).toContain("The save request failed.");
+    expect(stored.get(LEGACY_AUTO_MODES_KEY)).toBe("off");
     act(() => root.unmount());
     host.remove();
   });

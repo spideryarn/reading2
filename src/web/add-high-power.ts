@@ -20,8 +20,8 @@
  *    them.** Since plan 261004h the server queues them at the import's
  *    publication; what keeps them behind the switch is that each step reads
  *    the article's power as it starts and none starts before the `labels` job
- *    ahead of it has ended. A request still unanswered by then loses
- *    (docs/project/high-powered-ai.md). `settle` is called at completion and
+ *    ahead of it has ended. A step starting before the switch commits uses
+ *    the standard model (docs/project/high-powered-ai.md). `settle` is called at completion and
  *    not awaited: it sends a still-waiting intent there and then, against the
  *    completion's slug — which also covers a completion that never had a job.
  *  - **Whether it was late cannot be known exactly** from a polled job (power

@@ -767,6 +767,32 @@ describe("an import's first full publication queues the main modes", () => {
     expect(line[0]?.id).toBe(holder);
   });
 
+  mine("moves an identical mode queued during import behind labels without duplicating it", async () => {
+    const slug = `${SLUG_PREFIX}mode-holder-before-labels`;
+    const draft = await fullDraft(slug);
+    const job = await runningJob(OWNER, slug, { reservesName: true });
+    const holder = mintId();
+    await db().insert(jobsTable).values({
+      id: holder,
+      ownerId: OWNER,
+      slug,
+      steps: stepsOf(["quotes"]),
+      status: "queued",
+      createdAt: new Date(Date.now() - 60_000),
+      workKey: workKeyFor(["quotes"], new Set()),
+    });
+
+    const published = await publishUnder(draft, job);
+    const line = await lineOf(slug, [job.id]);
+    expect(line.map(names), "the old holder overtook labels or changed the modes' order").toEqual([
+      ["labels"], ...EXPECTED,
+    ]);
+    expect(line.find((row) => names(row).join() === "quotes")?.id).toBe(holder);
+    expect(published.autoModes).toContainEqual({ kind: "alreadyQueued", jobId: holder });
+    const blocked = await pgJobStore.claim(holder, OWNER, mintAttempt(), LEASE_MS, 4);
+    expect(blocked.kind, "Quotes claimed before labels ended").toBe("busy");
+  });
+
   /* ----------------------------------------------------------------- 14 -- */
 
   /**

@@ -631,8 +631,9 @@ from any page, as it drives `labels`; with every tab closed the modes wait.
 
 The page's tick box, on by default, is the reader's setting rather than the page's:
 `reader_profiles.auto_modes_off_at`, read by the publication and written by
-`PATCH /api/reader { autoModes }` on each change. So it can be changed until the import finishes,
-and it follows the account, not the browser. The page itself posts no mode job. A purpose typed on
+`PATCH /api/reader { autoModes }` on each change. Publication uses the choice committed when it
+reads the setting; the box shows when a change is still being saved. It follows the account. The
+page itself posts no mode job. A purpose typed on
 the page and saved after the import ends reaches chat and anything generated later, not these first
 jobs.
 

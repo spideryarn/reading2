@@ -65,9 +65,10 @@ above are unchanged; only the moment is earlier. The build is
   exists, which is long before publication. **What is no longer promised**: until 2026-10-04 the
   page held the modes until the switch request *answered*, however long that took. The server queues
   them at publication now ([261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
-  so a request still unanswered when `labels` ends loses, and those modes run on the standard model.
-  That needs a request hung for the length of `structure` plus `labels`. A tick in the last second
-  is still sent at completion, and the navigation to the article does not wait for it.
+  so a mode step that starts before the switch commits uses the standard model; later steps read
+  the setting again. A late tick, or labels ending quickly after failure or cancellation, can leave
+  very little time for the switch to commit. A tick in the last second is still sent at completion,
+  and the navigation to the article does not wait for it.
 - **It is a page's intent**: a tab closed before the job is claimed
   sends nothing, and the article imports on Sonnet. (*Generate the main modes* was one too until
   2026-10-04; it is the reader's setting now.) An import that fails after the switch keeps the

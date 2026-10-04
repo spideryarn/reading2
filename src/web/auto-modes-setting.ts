@@ -5,7 +5,7 @@
  * `GET /api/reader` answers `autoModes`, `PATCH /api/reader { autoModes }`
  * writes it, and the server reads the same row when an import publishes
  * (src/store/pg-revisions.ts § `publishRevisionIn`). The page queues nothing:
- * the box is only a setting, so it can be changed until the import finishes.
+ * publication reads the last committed choice, which can lag a pending press.
  * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
  *
  * ## The choice used to live in this browser
@@ -16,13 +16,14 @@
  * `useJobSession`) — not only on the add page, because adding from a link's
  * hover card never visits it. **The key is forgotten only after the server has
  * answered**, so a request that failed is tried again on the next start (GPT
- * Sol, F3 of the plan review). Until then the box shows the stored "off".
+ * Sol, F3 of the plan review). A failed hand-over reports the failure and
+ * reads the server setting; the key remains for another attempt.
  *
  * What this cannot cover: a tab still running the old client sends nothing, and
  * a hand-over that keeps failing leaves the server at its default, on. The
  * server cannot see a browser's storage.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -57,117 +58,163 @@ function autoModesIn(body: unknown): boolean {
   return on;
 }
 
-function save(on: boolean, signal?: AbortSignal): Promise<boolean> {
+function save(on: boolean, signal: AbortSignal): Promise<boolean> {
   return apiFetch("/api/reader", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ autoModes: on }),
-    ...(signal ? { signal } : {}),
+    signal,
   })
     .then((r) => readJson<unknown>(r))
     .then(autoModesIn);
 }
 
 /**
- * The hand-over in flight, if there is one — so the box's first read waits for
- * it rather than racing it and showing "on" a moment before the server is told
- * "off".
+ * One queue and snapshot per signed-in session, shared across page mounts and
+ * the legacy hand-over. Navigation leaves the queue alive; sign-out aborts it.
+ * `useJobSession` supplies the signal even when there is no legacy choice.
  */
-let handingOver: Promise<void> = Promise.resolve();
-
-/**
- * **Carry an old "off" from this browser to the reader's row**, once.
- *
- * `signal` binds the request to the session that started it: `apiFetch`
- * retries a 401 with whichever session is current by then, and an abort is the
- * only thing that stops that (experimental-store.ts § `abortInFlight`).
- * Never rejects; a failure leaves the key for the next start.
- */
-export function handOverAutoModesChoice(signal: AbortSignal): Promise<void> {
-  if (!legacyChoiceIsOff()) return Promise.resolve();
-  const sent = save(false, signal).then(
-    () => forgetLegacyChoice(),
-    () => {
-      /* Not answered, or refused: the key stays, and so does the choice. */
-    },
-  );
-  handingOver = sent;
-  return sent;
-}
+let sessionSignal = new AbortController().signal;
+let epoch = 0;
+let writes: Promise<void> = Promise.resolve();
+let latest = 0;
+let readVersion = 0;
+let pending = 0;
+let confirmed: boolean | undefined;
+const listeners = new Set<() => void>();
 
 export interface AutoModesSetting {
-  /** What the box shows. On until the server, or this browser's old key, says otherwise. */
   on: boolean;
-  /** Change it. Optimistic; put back, with `error` set, if the save fails. */
   set(next: boolean): void;
-  /** Whether the last save failed. Cleared by the next change. */
   error: boolean;
+  /** The current saved choice could not be read. */
+  loadError: boolean;
+  /** A press is still being saved; publication reads the committed choice. */
+  saving: boolean;
+}
+
+let state: AutoModesSetting = { on: true, set, error: false, loadError: false, saving: false };
+function put(fields: Partial<Omit<AutoModesSetting, "set">>): void {
+  state = { ...state, ...fields };
+  for (const listener of listeners) listener();
+}
+
+function live(mine: number): boolean {
+  return mine === epoch && !sessionSignal.aborted;
+}
+
+function read(signal: AbortSignal): Promise<boolean> {
+  return apiFetch("/api/reader", { signal }).then(readJson<unknown>).then(autoModesIn);
+}
+
+/** A read cannot replace a choice pressed while that read was in flight. */
+function load(): void {
+  if (sessionSignal.aborted) return;
+  const mine = epoch;
+  const version = latest;
+  const ticket = ++readVersion;
+  const signal = sessionSignal;
+  void writes.then(async () => {
+    if (!live(mine)) return;
+    try {
+      const on = await read(signal);
+      if (!live(mine) || latest !== version || ticket !== readVersion || pending) return;
+      confirmed = on;
+      put({ on, loadError: false });
+    } catch {
+      if (live(mine) && latest === version && ticket === readVersion) put({ loadError: true });
+    }
+  });
 }
 
 /**
- * The setting, for the add page's box.
- *
- * Writes go out one after another in the order they were made: two requests
- * in flight together can reach the database in either order, and the later
- * press must be the one that stays. A write is not cancelled when the page
- * unmounts — the page leaves the moment an import finishes, and a choice made
- * a second earlier still counts.
+ * Serialized with every other write for this reader, including the hand-over.
+ * Replies confirm server state even if a later press is already displayed.
  */
-export function useAutoModesSetting(): AutoModesSetting {
-  const [on, setOn] = useState(() => !legacyChoiceIsOff());
-  const [error, setError] = useState(false);
-  /* Once the reader has pressed, the opening read no longer gets a say. */
-  const touched = useRef(false);
-  const writes = useRef<Promise<void>>(Promise.resolve());
-  const latest = useRef(0);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    const stop = new AbortController();
-    void handingOver
-      .then(() => apiFetch("/api/reader", { signal: stop.signal }))
-      .then((r) => readJson<unknown>(r))
-      .then((body) => {
-        if (stop.signal.aborted || touched.current) return;
-        /* An "off" this browser has not managed to hand over still shows. */
-        setOn(autoModesIn(body) && !legacyChoiceIsOff());
-      })
-      .catch(() => {
-        /* The box keeps its default. The server's row is what an import
-           reads, and the next press writes it. */
-      });
-    return () => {
-      mounted.current = false;
-      stop.abort();
-    };
-  }, []);
-
-  const set = useCallback((next: boolean): void => {
-    touched.current = true;
-    const mine = ++latest.current;
-    setOn(next);
-    setError(false);
-    writes.current = writes.current.then(() =>
-      save(next).then(
-        () => {
-          /* The server now holds a choice made here, so the old key has
-             nothing left to say. */
-          forgetLegacyChoice();
-        },
-        () => {
-          if (!mounted.current || mine !== latest.current) return;
-          setOn(!next);
-          setError(true);
-        },
-      ),
-    );
-  }, []);
-
-  return { on, set, error };
+function write(next: boolean): Promise<void> {
+  const mine = epoch;
+  const version = ++latest;
+  const signal = sessionSignal;
+  pending++;
+  put({ on: next, error: false, saving: true });
+  writes = writes.then(async () => {
+    if (!live(mine)) return;
+    try {
+      const on = await save(next, signal);
+      if (!live(mine)) return;
+      confirmed = on;
+      forgetLegacyChoice();
+      if (version === latest) put({ on, error: false, loadError: false });
+    } catch {
+      if (!live(mine)) return;
+      if (version === latest) {
+        await recoverChoice(mine, version, signal);
+      }
+    } finally {
+      if (live(mine)) {
+        pending--;
+        put({ saving: pending > 0 });
+      }
+    }
+  });
+  return writes;
 }
 
-/** For a test: forget a hand-over left in flight by the last case. */
+/** A rejected response can follow a committed PATCH; reconcile with the row. */
+async function recoverChoice(mine: number, version: number, signal: AbortSignal): Promise<void> {
+  try {
+    const on = await read(signal);
+    if (live(mine)) confirmed = on;
+  } catch {
+    // Retain the last confirmed answer if the read failed too, never !next.
+  }
+  if (live(mine) && version === latest) put({ on: confirmed ?? state.on, error: true });
+}
+
+function set(next: boolean): void {
+  if (!sessionSignal.aborted) void write(next);
+}
+
+/**
+ * Bind all setting work to this reader, and carry an old browser "off" once.
+ * A failed hand-over retains the key, reports the failure, and reads the actual
+ * server choice. A successful explicit press also retires the old key.
+ */
+export function handOverAutoModesChoice(signal: AbortSignal): Promise<void> {
+  if (sessionSignal !== signal) {
+    epoch++;
+    sessionSignal = signal;
+    writes = Promise.resolve();
+    latest = 0;
+    pending = 0;
+    confirmed = undefined;
+    put({ on: !legacyChoiceIsOff(), error: false, loadError: false, saving: false });
+  }
+  const handed = !signal.aborted && legacyChoiceIsOff() ? write(false) : Promise.resolve();
+  // Child effects can subscribe before App's session effect binds this signal.
+  if (listeners.size) load();
+  return handed;
+}
+
+/** Page mounts subscribe; they do not own the requests or their ordering. */
+export function useAutoModesSetting(): AutoModesSetting {
+  const setting = useSyncExternalStore(subscribe, () => state);
+  useEffect(load, []);
+  return setting;
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** For isolated component tests: begin a fresh session and snapshot. */
 export function resetAutoModesSettingForTests(): void {
-  handingOver = Promise.resolve();
+  epoch++;
+  sessionSignal = new AbortController().signal;
+  writes = Promise.resolve();
+  latest = 0;
+  pending = 0;
+  confirmed = undefined;
+  put({ on: !legacyChoiceIsOff(), error: false, loadError: false, saving: false });
 }

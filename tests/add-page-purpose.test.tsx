@@ -143,6 +143,7 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
 });
 
 const { AddPage } = await import("../src/web/AddPage.js");
+const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
 
 const SLUG = "a-paper";
 const UPLOAD_ID = "up-1";
@@ -257,6 +258,7 @@ const PRODUCERS: Producer[] = [
 ];
 
 beforeEach(() => {
+  resetAutoModesSettingForTests();
   window.localStorage.clear();
   session.clear();
   readerAutoModes = true;
@@ -496,15 +498,26 @@ describe("the shortcut and the tick box", () => {
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
-  it("says what a purpose saved now still reaches, by the reader's setting", async () => {
+  it("says what a purpose saved now still reaches", async () => {
     /* The modes were queued when the import published, with the profile as it
        stood. The sentence over the two buttons must not promise otherwise. */
     const producer = PRODUCERS[0] as Producer;
     await producer.start();
     type("the evidence");
     await producer.finish();
-    expect(host.textContent).toContain("The first modes are already being prepared without it");
+    expect(host.textContent).toContain("purpose saved when the import finished");
     expect(host.textContent).not.toContain("written for it from the start");
+  });
+
+  it("does not infer which modes were queued from a setting changed after completion", async () => {
+    const producer = PRODUCERS[0] as Producer;
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    act(() => host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+    await settle();
+    expect(host.textContent).not.toContain("anything generated from here on is written for it");
+    expect(host.textContent).toContain("purpose saved when the import finished");
   });
 
   it("saves the purpose even when the modes are not to be generated", async () => {
@@ -513,7 +526,7 @@ describe("the shortcut and the tick box", () => {
     await producer.start();
     type("the evidence");
     await producer.finish();
-    expect(host.textContent).toContain("anything generated from here on is written for it");
+    expect(host.textContent).toContain("Saving this now reaches chat and anything generated later");
     press("Save and open");
     await settle();
     expect(patches()).toHaveLength(1);

@@ -155,11 +155,18 @@ export async function enqueueSuccessorIn(
      * `now()`; a mode stamped from `now()` would then sort ahead of it and
      * could claim first (GPT Sol, F5 of the 261004h plan review). A job that
      * no longer exists contributes nothing: `greatest` ignores a null.
+     * An identical queued holder with no draft is moved to this slot too:
+     * joining earlier work must not bypass the predecessor or job ordering.
      */
     notBefore?: string;
   },
 ): Promise<SuccessorOutcome> {
   const { ownerId, slug, steps, profile, scope, after, notBefore } = successor;
+  const stamp = sql`${
+    notBefore === undefined
+      ? sql`now()`
+      : sql`greatest(now(), (select ${jobs.createdAt} from ${jobs} where ${jobs.id} = ${notBefore}))`
+  } + make_interval(secs => ${after ?? 0}::double precision / 1000000)`;
   /* **The canonical builder, not a second hashing of the same question.**
      `sameWork` (src/jobs.ts) is the prose specification it satisfies, and
      `tests/jobs.test.ts` holds the two together. With no profile and no scope —
@@ -215,11 +222,7 @@ export async function enqueueSuccessorIn(
         ingestEventId: null,
         ...(profile !== undefined && { profile }),
         ...((after !== undefined || notBefore !== undefined) && {
-          createdAt: sql`${
-            notBefore === undefined
-              ? sql`now()`
-              : sql`greatest(now(), (select ${jobs.createdAt} from ${jobs} where ${jobs.id} = ${notBefore}))`
-          } + make_interval(secs => ${after ?? 0}::double precision / 1000000)`,
+          createdAt: stamp,
         }),
       })
       /* Broad on purpose, and immediately narrowed by the read below. `on
@@ -233,6 +236,21 @@ export async function enqueueSuccessorIn(
 
     const holder = await activeHolder(tx, { ownerId, slug, workKey });
     if (holder) {
+      if (notBefore !== undefined && !holder.draftRevisionId) {
+        // A reader can queue this mode while the import is running. Joining
+        // that row must also give it this successor's place behind labels;
+        // otherwise its earlier timestamp makes labels wait for the mode.
+        // Only an unclaimed row can be moved: never retime a live attempt or
+        // a requeued draft bound to an earlier base.
+        await tx
+          .update(jobs)
+          .set({ createdAt: stamp })
+          .where(and(
+            eq(jobs.id, holder.id),
+            eq(jobs.status, "queued"),
+            sql`${jobs.draftRevisionId} is null`,
+          ));
+      }
       /**
        * **A holder that already owns a draft is working from an earlier base**,
        * and it can never finish this revision: its own publication will be

@@ -91,9 +91,10 @@ the default is on). One additive migration. `GET /api/reader` returns `autoModes
 `PATCH /api/reader { autoModes }` writes it. The publication reads it in its transaction.
 
 **The add page** keeps the tick box, same words, now reading and writing that setting: a PATCH on
-each change, so it can still be changed right up to the moment the import finishes. A browser whose
-old `localStorage` choice is `off` hands it over when the signed-in app starts (not only on the add
-page, since a hover-card add never visits it), and forgets the key only once the server has answered
+each change; publication uses whichever choice has committed when it reads the setting. The box
+shows when a change is still being saved. A browser whose old `localStorage` choice is `off` hands
+it over when the signed-in app starts (not only on the add page, since a hover-card add never visits
+it), and forgets the key only once the server has answered
 (Sol F3). **What this cannot cover:** a tab still running the old client across the deploy, with the
 box off, sends nothing, and the server then queues the modes for its next import. The server cannot
 see a browser's storage. Accepted: two accounts exist, and the cost is one article's modes. `openArticle` no longer queues anything; `read-this.ts` stops watching and queueing.
@@ -104,9 +105,9 @@ article's power as it starts (`readStepPower`), and no mode starts until the `la
 it has ended. So a switch **committed** before the first mode step starts is respected, and the add
 page sends it as soon as the article row exists, which is long before publication. What is given
 up: the page used to hold the modes until the switch request *answered*, however long that took. A
-request still unanswered when `labels` ends now loses, and those modes run on the standard model.
-That needs a request hung for the length of `structure` plus `labels`. A server-side hold for a
-pending intent would mean a route to mark a running job, which is the machinery this plan passed
+mode step starting before the switch commits uses the standard model; later steps read it again.
+A late tick, or labels ending quickly after failure or cancellation, can leave very little time
+for the switch to commit. A server-side hold for a pending intent would mean a route to mark a running job, which is the machinery this plan passed
 over; the weaker guarantee is stated here and in high-powered-ai.md instead. `settle` stays, so a
 tick in the last second is still sent at completion.
 
