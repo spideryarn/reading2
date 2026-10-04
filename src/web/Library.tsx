@@ -1181,6 +1181,12 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
     const el = input.current;
     if (el && takesFocusOnArrival(el, arrivingQuery.current)) el.focus({ preventScroll: true });
   }, []);
+  /* **Was the cross pressed with a finger or pen?** Read at the `pointerdown`,
+     never off the click: since iOS 18.2 a finger's click can say `mouse`
+     (docs/project/touch.md § The spine). The click still tells us when no
+     pointer made it, so an abandoned touch cannot poison a later keyboard,
+     voice or assistive-technology activation. */
+  const fingerOrPenOnCross = useRef(false);
   return (
     <div className="tw:mb-4">
       <div className="tw:relative">
@@ -1202,6 +1208,13 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
             if (e.key === "Enter") {
               e.preventDefault();
               e.currentTarget.blur();
+            } else if (e.key === "Escape" && value !== "") {
+              /* Only when there is something to clear, so an Escape in an empty
+                 box still reaches whatever else on the page listens for it —
+                 the same rule as PageContents.tsx's box. */
+              e.preventDefault();
+              e.stopPropagation();
+              onChange("");
             }
           }}
           placeholder="Search titles, authors, and article text"
@@ -1212,16 +1225,44 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              tabbed into — and this input suppresses the browser's own ring
              with `outline-none`, so nothing else was drawing one. Same
              treatment on the URL box in AddArticle.tsx. */
-          className="voice-reader tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
+          /* `own-clear` hides the browser's cross (styles/close.css): ours is
+             below, and two were being drawn whenever the box had the focus.
+             The right padding is fixed in px, like the cross: `pr-11` would
+             shrink to 33px at the supported 12px root and let text under its
+             40px finger target. */
+          className="own-clear voice-reader tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-[44px] tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
         />
         {value && (
+          /* **The house cross** — its size is styles/close.css § .close-x, so
+             **no `tw:size-*` here**: the utilities layer comes after the app's
+             CSS and would win, quietly putting back the 28px box and 14px grey
+             glyph this change replaces (GPT Sol, plan review).
+             docs/plans/261004f-shelf-search-clear-cross-that-can-be-seen.md. */
           <button
             type="button"
-            onClick={() => onChange("")}
+            onPointerDown={(e) => {
+              fingerOrPenOnCross.current = e.pointerType === "touch" || e.pointerType === "pen";
+            }}
+            onPointerCancel={() => {
+              fingerOrPenOnCross.current = false;
+            }}
+            onClick={(e) => {
+              onChange("");
+              /* The cursor goes back in the box, ready for the next search —
+                 but not after a finger or pen, where it could throw the
+                 on-screen keyboard up over the shelf the reader has just
+                 asked to see. */
+              const clickPointer = (e.nativeEvent as Partial<PointerEvent>).pointerType;
+              const noPointer = clickPointer === "" || (clickPointer === undefined && e.detail < 1);
+              if (noPointer || !fingerOrPenOnCross.current) {
+                input.current?.focus({ preventScroll: true });
+              }
+              fingerOrPenOnCross.current = false;
+            }}
             aria-label="Clear the search"
-            className="tw:absolute tw:right-2 tw:top-1/2 tw:inline-flex tw:size-7 tw:-translate-y-1/2 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
+            className="close-x tw:absolute tw:right-[6px] tw:top-1/2 tw:-translate-y-1/2 tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10"
           >
-            <X size={14} />
+            <X size={18} />
           </button>
         )}
       </div>
