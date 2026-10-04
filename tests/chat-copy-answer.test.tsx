@@ -131,13 +131,13 @@ describe("the copy button under an answer", () => {
     clipboard(() => Promise.reject(new Error("denied")));
     paint();
     await press();
-    expect(icon()).toContain("lucide-x");
+    expect(icon()).toContain("lucide-triangle-alert");
     expect(said()).toBe("Copy refused by the browser.");
     expect(copy().getAttribute("title")).toBe(
       "Your browser would not allow the copy — an insecure connection is the usual reason",
     );
     act(() => vi.advanceTimersByTime(1500));
-    expect(icon()).toContain("lucide-x");
+    expect(icon()).toContain("lucide-triangle-alert");
     act(() => vi.advanceTimersByTime(200));
     expect(icon()).toContain("lucide-copy");
     expect(said()).toBe("");
@@ -148,7 +148,7 @@ describe("the copy button under an answer", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
     paint();
     await press();
-    expect(icon()).toContain("lucide-x");
+    expect(icon()).toContain("lucide-triangle-alert");
     expect(said()).toBe("Copy refused by the browser.");
   });
 

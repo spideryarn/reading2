@@ -390,8 +390,8 @@ function CardRow({
 }) {
   const reveal = useTapReveal(true);
   return (
-        /* **`right`, and deliberately without `keepSide`** — where Structure's
-            other face uses it. The band is the strip *between the spine and the
+        /* **`right`, and deliberately without `keepSide`** — as Structure's
+            other face is too, since 2026-10-04 (OutlinePanel.tsx § `Row`). The band is the strip *between the spine and the
             prose* (layout.ts § the mode band), so a card thrown right lands on
             the article; thrown left it would land on a 12px rail and the window
             edge.

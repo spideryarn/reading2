@@ -11,7 +11,7 @@
  * and docs/project/referee-mode.md for the mode itself.
  */
 
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useQueryState } from "nuqs";
 import { Info, TriangleAlert } from "lucide-react";
 import type { Block, BlockId, Comment } from "../../../types.js";
@@ -27,6 +27,7 @@ import { armActivationForRefereeView } from "../../activation.js";
 import { REFEREE_SUB_MODES } from "../../sub-modes.js";
 import { useRenderCount } from "../../perf.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
+import { usePressToggle } from "../../usePressToggle.js";
 /* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
    the deterministic scan of the document's own source, inside Notices because
    a hidden instruction bears on all four panels. src/injection-scan.ts
@@ -320,11 +321,8 @@ const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
  * mode is, and two identical marks a few lines apart would mean two things.
  */
 function HowToRead({ view }: { view: RefereeView }) {
-  const [open, setOpen] = useState(false);
-  // A press can close before the pending hover-open timer fires. The child's
-  // click bypasses Floating UI's openchange emitter, so that timer survives.
-  // Keep the reader's dismissal until a fresh pointer entry or keyboard focus.
-  const dismissedByPress = useRef(false);
+  // usePressToggle.ts says why a press that closes has to be remembered.
+  const { open, onOpenChange, trigger } = usePressToggle();
   const sentences = REFEREE_HOW_TO_READ[view];
   if (sentences.length === 0) return null;
   return (
@@ -332,9 +330,7 @@ function HowToRead({ view }: { view: RefereeView }) {
       placement="bottom"
       keepSide
       open={open}
-      onOpenChange={(next) => {
-        if (!next || !dismissedByPress.current) setOpen(next);
-      }}
+      onOpenChange={onOpenChange}
       className="ref-rules-card"
       content={sentences.map((sentence) => (
         <p key={sentence}>{sentence}</p>
@@ -344,12 +340,7 @@ function HowToRead({ view }: { view: RefereeView }) {
         type="button"
         className={`ref-rules${open ? " on" : ""}`}
         aria-expanded={open}
-        onPointerEnter={() => { dismissedByPress.current = false; }}
-        onFocusCapture={() => { dismissedByPress.current = false; }}
-        onClick={() => {
-          dismissedByPress.current = open;
-          setOpen(!open);
-        }}
+        {...trigger}
       >
         <Info size={13} aria-hidden="true" /> How to read this
       </button>

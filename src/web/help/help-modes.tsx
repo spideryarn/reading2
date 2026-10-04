@@ -129,8 +129,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             <strong>The ? in a paragraph’s margin</strong> asks “Help me understand” straight away.
           </li>
           <li>
-            <strong>Select some words</strong> to get a comment box with an{" "}
-            <strong>Ask AI</strong> button.
+            <strong>Select some words</strong>: they are highlighted, and the box that opens has
+            an <strong>Ask the AI about this…</strong> field.
           </li>
         </ul>
         <p>Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.</p>
@@ -196,8 +196,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           If a word you need is missing, type it into <strong>Look up a term…</strong>: that explains
           the passage it is in, and adds it to your list, marked as added by you. <strong>Find more</strong>, at the top
-          of the panel, looks for quieter terms; it says <strong>Find terms again</strong> instead
-          when a new run would write a fresh list rather than add to this one.{" "}
+          of the panel, looks for quieter terms and adds them to your list. If a new run cannot
+          safely add to this list — because the article or your profile has changed, or because
+          this version of Spideryarn cannot add to the saved list — it says{" "}
+          <strong>Write a new list</strong> instead. That run replaces the list rather than adding
+          to it.{" "}
           <strong>Dig deeper</strong> on an entry searches the web. On someone
           else’s shared article you see the glossary already made, but cannot add to it.
         </p>
@@ -258,7 +261,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
           <strong>Quick search</strong> box in the bottom bar, tap the <strong>⚡</strong> button when
-          it is shown instead, or press <strong>/</strong>.
+          it is shown instead, or press <strong>/</strong>. The box keeps your words after a search,
+          so you can add to them; the <strong>×</strong> at its right-hand end empties it.
         </p>
       </>
     ),

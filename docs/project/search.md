@@ -353,6 +353,11 @@ pointer setting hides the focused bar box, focus transfers to the panel with scr
 While Search mode is open and the bar box is not focused it shows as a ⚡ button. Both boxes can
 be visible while the bar box has focus; they share the same words and typing session.
 
+- **A cross empties it**, shown while the box has words in it (Greg, 2026-10-04:
+  *"Can you add a little X to it so that after I've searched with it, I can easily wipe it?"*). It
+  is Escape's clear — one function, `clear`, for both — except that the cursor stays in the box.
+  The box does **not** wipe itself after a search: the words stay so they can be refined.
+  [261004g](../plans/261004g-quick-search-box-clear-cross.md).
 - **A coarse pointer gets the ⚡ at every width**, and so do a mouse at fit rung 4
   and a window under 732px. Rung 3 keeps a compact 7rem input after the button labels disappear.
   The ⚡ opens Search mode on quick with the panel's box focused. A text box in a fixed bar at the

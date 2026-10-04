@@ -93,7 +93,7 @@ import type { ArtifactKind } from "../src/store/artifacts.js";
 import { STEPS, STEP_ORDER, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
-import { mintId } from "../src/ids.js";
+import { mintId, mintUniqueId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import {
   NotTheLiveAttempt,
@@ -1280,6 +1280,48 @@ describe("writing artefacts into a draft", () => {
       expect(back?.blocks).toHaveLength(2);
     });
   });
+
+  it("writes an article of 4,000 blocks and reads every one back in order", async () => {
+    /* **More blocks than one statement can carry.** Postgres' wire protocol
+       allows 65,535 bound parameters, and a block row binds 17, so the single
+       insert `writeBlocks` used to make took 3,855 blocks and failed at 3,856
+       with `08P01: bind message has … parameter formats but 0 parameters` —
+       which the reader was told to retry (measured, 2026-10-04,
+       scripts/eval-big-imports.ts M2). Watched red on that error before the
+       insert was batched.
+
+       **The ids are random, so the order assertion is about `ordinal` and
+       nothing else** — the same reason the fixture's three sort backwards. It
+       was watched red a second time by writing the index *within a batch* as
+       the ordinal, which is the mistake batching invites: every batch then
+       starts again at 0. The schema refuses that before any assertion here
+       does (`revision_blocks_revision_ordinal`, 23505), and the id and ordinal
+       comparisons below are what would say so if that constraint ever went. */
+    const taken = new Set<string>();
+    const many: Block[] = Array.from({ length: 4000 }, (_, i) => ({
+      id: mintUniqueId(taken),
+      tag: "p",
+      kind: "text",
+      text: `paragraph ${i}`,
+      words: 2,
+      html: `<p>paragraph ${i}</p>`,
+      gistable: true,
+    }));
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "blocks");
+      await writeArtefacts(claimed, tx, SLUG, "blocks", { blocks: { blocks: many } }, {});
+      const back = (await readArtefact(claimed, tx, SLUG, "blocks", "blocks"))?.blocks ?? [];
+      expect(back).toHaveLength(4000);
+      expect(back.map((b) => b.id)).toEqual(many.map((b) => b.id));
+      for (const i of [0, 2000, 3999]) expect(back[i], `block ${i}`).toEqual(many[i]);
+      const ordinals = await tx
+        .select({ ordinal: revisionBlocks.ordinal })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId))
+        .orderBy(revisionBlocks.ordinal);
+      expect(ordinals.map((r) => r.ordinal)).toEqual(many.map((_, i) => i));
+    });
+  }, 60_000);
 
   it("deletes every block when it is handed none", async () => {
     /* **The decision, and it is the opposite of what the importer did.**

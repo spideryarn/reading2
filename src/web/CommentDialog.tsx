@@ -31,6 +31,9 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
+import { useCopy } from "./useCopy.js";
+import { isPristineHighlight } from "./fresh-highlight.js";
+import { readSelection, sameAnchor } from "./selection.js";
 import { keyboardInsetStyle, putKeyboardAway, useVisualViewport } from "./useVisualViewport.js";
 
 /**
@@ -69,6 +72,8 @@ export type CommentAccess =
       onDiscuss(question: string): void;
       /** Save the reader's own words, or `null` to clear them back to a bookmark. */
       onEdit(body: string | null): void;
+      /** The reader began changing this comment, before a blur can store it. */
+      onTouched?(): void;
       /** Offered only when the conversation is really there — App.tsx says why. */
       onOpenThread?: (() => void) | undefined;
       /** **Referee mode is open**, so a placement can be seen and changed. */
@@ -85,6 +90,52 @@ export type CommentAccess =
       error: string | null;
     }
   | { kind: "visitor" };
+
+/**
+ * **This box was opened by the selection that made its comment** — and what
+ * that changes, since 2026-10-04. Greg:
+ *
+ * > how about if selecting text automatically applies the highlight and also
+ * > pops up the fuller box to allow the user to customise (or remove) it, and
+ * > they can just click off if they're happy with the highlighting
+ *
+ * The highlight is already stored when this opens, so the box is there to
+ * change it or take it off, and leaving it alone is an answer. While it is
+ * fresh: a press anywhere outside closes it; Delete reads *Remove highlight*;
+ * a hint says the words are highlighted; and a Copy button is offered, which
+ * takes the highlight off again while the row is untouched (§ `pristine`
+ * below). A box opened any other way (a mark, the drawer, the margin, a link)
+ * is given no `fresh` and gains none of it.
+ * docs/project/comments.md § The box a selection opens; Reader.tsx § `fresh`.
+ */
+export interface FreshBox {
+  /**
+   * A press has landed outside the box and everything it portals, and the
+   * button is still down. **Record it and change nothing that renders**: Reader
+   * remembers the row for the rest of the gesture, since a selection the same
+   * press goes on to make may be a correction of it. Closing here rewrote the
+   * paragraph under the pointer and killed the drag (CommentDialog.tsx § The
+   * press outside is only recorded).
+   */
+  onPressOutside(): void;
+  /**
+   * That press has ended. Close the box, **if it still shows this highlight**;
+   * the highlight stays. Its own verb, not `onClose`, because of that
+   * condition.
+   */
+  onClickOff(): void;
+  /**
+   * The reader has done something to this highlight: typed, picked a colour,
+   * placed it, asked about it. Said at the press, because the stored row does
+   * not show a colour or an edit until the server has answered.
+   */
+  onTouched(): void;
+  /**
+   * The words are on the clipboard and that was all the reader wanted: take
+   * the highlight off and close. Called only while the row is untouched.
+   */
+  onCopiedOnly(): void;
+}
 
 interface Props {
   comment: ClientComment;
@@ -104,6 +155,8 @@ interface Props {
   hasPrev: boolean;
   hasNext: boolean;
   onClose(): void;
+  /** Present only on a fresh box, and only ever beside an owner's `access`. */
+  fresh?: FreshBox | undefined;
   /**
    * The reader typed a follow-up.
    *
@@ -125,6 +178,7 @@ export function CommentDialog({
   hasPrev,
   hasNext,
   onClose,
+  fresh,
 }: Props) {
   /* Narrowed once, so every guard below is the compiler checking one fact —
      the same move `Dock` makes with `own` and `TimelinePanel` with its owner
@@ -182,9 +236,187 @@ export function CommentDialog({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the id is the trigger; the effect reads nothing
   useEffect(() => {
     setFollowUp("");
+    setTouched(false);
+    resetCopy();
   }, [comment.id]);
 
   useEscapeToClose(onClose);
+
+  /**
+   * ## The fresh box
+   *
+   * `FreshBox` above says what it is. Three pieces of it live here.
+   *
+   * **`pristine`: the row is still exactly what the selection wrote.** Two
+   * halves, because the stored row lags the reader: a colour press and an edit
+   * write nothing to the list until the server answers, so `touched` is set at
+   * the press. Only a pristine row may be removed by a copy.
+   *
+   * **Click-off, and how "inside" is decided.** Not `aside.contains(target)`:
+   * a tooltip is a portal at the end of `<body>`, outside this element, and a
+   * press on it is a press on the box. React delivers a portal's events
+   * through the tree that rendered it, so the `onPointerDownCapture` on the
+   * `<aside>` below hears every press on the box *and on anything it portals*,
+   * and nothing else. The window sees each press three times in order: its own
+   * capture listener (forget the last answer), React's (inside, if it is), its
+   * own bubble listener (remember it, if it was not). The press is never
+   * prevented or stopped: the link still follows, the Dock button still opens,
+   * and a drag that starts in the prose still becomes the next selection.
+   * tests/selecting-applies-the-highlight.test.tsx presses a real tooltip.
+   * When the box then closes is § The press outside is only recorded, below.
+   *
+   * **Uncommitted words are committed before the box goes.** A textarea
+   * commits on blur (`CommentBody`), and React runs no `onBlur` for an element
+   * it has removed, so focus is taken off the field first, as the press ends.
+   */
+  const isFresh = fresh !== undefined && own !== null;
+  const [touched, setTouched] = useState(false);
+  const freshRef = useRef(fresh);
+  useLayoutEffect(() => {
+    freshRef.current = fresh;
+  }, [fresh]);
+  const touch = () => {
+    own?.onTouched?.();
+    if (!isFresh) return;
+    setTouched(true);
+    fresh.onTouched();
+  };
+  const pristine = isFresh && !touched && isPristineHighlight(comment);
+  const pristineRef = useRef(pristine);
+  useLayoutEffect(() => {
+    pristineRef.current = pristine;
+  }, [pristine]);
+
+  const pressedInside = useRef(false);
+  /**
+   * **Closed by a press somewhere else**, so focus must not be handed back.
+   *
+   * The unmount below returns focus to the opener, or to the paragraph's gutter
+   * mark — right for Escape and the ×, where the reader has gone nowhere. A
+   * click-away is the reader going somewhere: `focus()` scrolls its target into
+   * view, so mid-press the page jumped back to the highlight, a drag begun in
+   * the prose made no selection, and a gutter icon's click landed on another
+   * button. Browser check of plan 261004f, 2026-10-04. The press itself decides
+   * where focus goes.
+   */
+  const closedByPress = useRef(false);
+  /**
+   * **The press outside is only recorded; the box closes when the gesture
+   * ends.**
+   *
+   * It closed on `pointerdown` until the browser check of 2026-10-04. Closing
+   * takes the open ring off the mark, which rewrites that paragraph through
+   * `innerHTML` — between `pointerdown` and `mousedown`. A drag that began in
+   * the highlight's own paragraph was then anchored on nodes no longer in the
+   * document and made no selection at all, so neither a correction nor a
+   * second highlight there was possible with a real mouse. So nothing that
+   * can re-render the prose happens while the button is down: no close, and
+   * no blur either (the blur commits typed words, which is a write).
+   *
+   * **A mouse ends at `mouseup`, heard on the window after React has handled
+   * it**, so `TableView` has already read the new selection and `selectProse`
+   * has done the overlap rule and opened the new highlight's box. Not at
+   * `pointerup`, which comes first: closing there would repaint the paragraph
+   * and collapse the selection the `mouseup` is about to read. **A finger or
+   * a pen ends at `pointerup`**, since neither promises a `mouseup`. A
+   * `pointercancel` ends either.
+   *
+   * **The close is for the comment the press was made on.** If the same
+   * gesture opened another comment's box (a new selection, another mark),
+   * that one is left alone — checked here by id, and again in Reader, which
+   * clears `?note=` only while it still names this row.
+   *
+   * **A mouse press whose release never reaches the window closes nothing.**
+   * The box stays open and fresh; the next `pointerdown` forgets the old
+   * press and is judged on its own.
+   */
+  const pendingPress = useRef<{ id: string; mouse: boolean } | null>(null);
+  const idRef = useRef(comment.id);
+  useLayoutEffect(() => {
+    idRef.current = comment.id;
+    /* The box that stayed mounted for another comment was not closed by any
+       press. */
+    closedByPress.current = false;
+  }, [comment.id]);
+  useEffect(() => {
+    if (!isFresh) return;
+    const begin = () => {
+      pressedInside.current = false;
+      pendingPress.current = null;
+    };
+    const pressed = (event: PointerEvent) => {
+      if (pressedInside.current) return;
+      pendingPress.current = { id: idRef.current, mouse: event.pointerType === "mouse" };
+      freshRef.current?.onPressOutside();
+    };
+    const finish = () => {
+      const press = pendingPress.current;
+      pendingPress.current = null;
+      if (!press || press.id !== idRef.current) return;
+      /* Words typed and not committed: a mouse's own `mousedown` has usually
+         blurred the field already; a tap need not. */
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && dialogRef.current?.contains(active)) active.blur();
+      closedByPress.current = true;
+      freshRef.current?.onClickOff();
+    };
+    const mouseEnded = () => {
+      if (pendingPress.current?.mouse) finish();
+    };
+    const pointerEnded = (event: PointerEvent) => {
+      if (pendingPress.current && !pendingPress.current.mouse && event.pointerType !== "mouse") finish();
+    };
+    window.addEventListener("pointerdown", begin, true);
+    window.addEventListener("pointerdown", pressed);
+    window.addEventListener("mouseup", mouseEnded);
+    window.addEventListener("pointerup", pointerEnded);
+    window.addEventListener("pointercancel", finish);
+    return () => {
+      window.removeEventListener("pointerdown", begin, true);
+      window.removeEventListener("pointerdown", pressed);
+      window.removeEventListener("mouseup", mouseEnded);
+      window.removeEventListener("pointerup", pointerEnded);
+      window.removeEventListener("pointercancel", finish);
+    };
+  }, [isFresh]);
+
+  /* 1.6 seconds for a tick, as `AnnotateDialog`'s copy. A refusal stays until
+     the next press: it is the reason the highlight is still there. */
+  const { state: copySaid, copy, reset: resetCopy } = useCopy({ copiedMs: 1600, failedMs: null });
+
+  /**
+   * **A native copy of the still-selected words is the same wish as the Copy
+   * button**: the reader selected in order to copy, and the highlight is
+   * taken off. Only while pristine, and only when the selection is this
+   * passage, so copying the quote out of the box, other words, or text from one
+   * of the box's own editors removes nothing.
+   *
+   * **After the event, never during it.** The removal repaints the paragraph,
+   * which collapses the selection, and the browser reads the selection for
+   * the clipboard once the listeners have returned. A timer puts the removal
+   * behind that. The event itself is not touched.
+   */
+  const { blockId, quote, start } = comment;
+  useEffect(() => {
+    if (!pristine || quote === undefined || start === undefined) return;
+    let after: ReturnType<typeof setTimeout> | null = null;
+    const onCopy = (event: ClipboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, [contenteditable]")) return;
+      const read = readSelection(window.getSelection());
+      if (read.kind !== "anchor" || !sameAnchor(read.anchor, { blockId, quote, start })) return;
+      if (after !== null) clearTimeout(after);
+      after = setTimeout(() => {
+        after = null;
+        if (pristineRef.current) freshRef.current?.onCopiedOnly();
+      }, 0);
+    };
+    document.addEventListener("copy", onCopy);
+    return () => {
+      document.removeEventListener("copy", onCopy);
+      if (after !== null) clearTimeout(after);
+    };
+  }, [pristine, blockId, quote, start]);
 
   /**
    * ## The dialog takes focus, and gives it back
@@ -242,6 +474,7 @@ export function CommentDialog({
     return () => {
       const back = openerRef.current;
       openerRef.current = null;
+      if (closedByPress.current) return;
       if (back?.isConnected) {
         back.focus();
         return;
@@ -344,6 +577,11 @@ export function CommentDialog({
          wherever there is no `visualViewport`, and then the stylesheet's `0px`
          fallbacks leave the geometry alone. useVisualViewport.ts. */
       style={keyboardInsetStyle(visible)}
+      /* How the fresh box knows a press was inside it, portals included —
+         § The fresh box. */
+      onPointerDownCapture={() => {
+        pressedInside.current = true;
+      }}
       role="dialog"
       /* **Not always an explanation any more.** A comment with no answer is the
          reader's own mark on the passage, and calling that "Explanation" to a
@@ -422,7 +660,11 @@ export function CommentDialog({
         <CommentBody
           key={comment.id}
           body={comment.body ?? ""}
-          onSave={own.onEdit}
+          onSave={(next) => {
+            touch();
+            own.onEdit(next);
+          }}
+          onTyped={touch}
         />
       ) : (
         comment.body && <p className="cmt-body">{comment.body}</p>
@@ -447,7 +689,10 @@ export function CommentDialog({
             criterionId: comment.criterionId ?? null,
             valence: comment.valence ?? null,
           }}
-          onChange={own.onPlace}
+          onChange={(next) => {
+            touch();
+            own.onPlace(next);
+          }}
         />
       )}
 
@@ -457,8 +702,19 @@ export function CommentDialog({
           comment, as the placement above is and for its reason: `recolour`
           writes nothing to the list until the server has answered. */}
       {own && comment.quote !== undefined && (
-        <HighlightSwatches value={comment.colour ?? null} onChange={own.onRecolour} />
+        <HighlightSwatches
+          value={comment.colour ?? null}
+          onChange={(next) => {
+            touch();
+            own.onRecolour(next);
+          }}
+        />
       )}
+
+      {/* **What just happened, and the cheapest way to accept it.** Only on
+          the box the selection opened; Greg, 2026-10-04: "they can just click
+          off if they're happy with the highlighting". */}
+      {isFresh && <p className="cmt-fresh-hint">Highlighted. Click away to keep it.</p>}
 
       {/* Said out loud rather than swallowed. Every write this dialog makes —
           the note, the placement — reports its failure through one string on
@@ -580,6 +836,7 @@ export function CommentDialog({
             const q = followUp.trim();
             if (!q) return;
             setFollowUp("");
+            touch();
             own.onDiscuss(q);
             /* The question is in chat now; a soft keyboard has nothing left
                to do here (useVisualViewport.ts § `putKeyboardAway`). */
@@ -669,9 +926,59 @@ export function CommentDialog({
             {own.pending} still working
           </span>
         )}
+        {/* **Copy means copy.** A reader who selected in order to copy now has
+            a highlight they did not ask for, so while the row is untouched
+            this one press copies the words and takes it off again. **The
+            removal follows the clipboard's real answer, never the press**
+            (GPT Sol, E7 on plan 261004f): `useCopy` says which of the three
+            outcomes it was, a refusal is said in words below and the highlight
+            stays. Once the reader has changed the highlight it is a plain
+            Copy, because the row is now something they made.
+
+            The name is the visible text and changes with what the press will
+            do, which is the point of it; the outcome is the status region's. */}
+        {isFresh && own && comment.quote !== undefined && (
+          <>
+            <Tooltip
+              content={
+                pristine
+                  ? "Copies these words and takes the highlight off again."
+                  : "Copies these words. The highlight stays."
+              }
+            >
+              <button
+                type="button"
+                className="linky cmt-copy"
+                onClick={() => {
+                  if (comment.quote === undefined) return;
+                  /* Capture the fresh action because this instance can unmount
+                     before the clipboard answers. Reader owns the lasting
+                     pristine/touched check and the one-shot delete, so a box
+                     reopened and edited meanwhile is protected. */
+                  const currentFresh = pristineRef.current ? freshRef.current : undefined;
+                  copy(comment.quote, undefined, (outcome) => {
+                    if (outcome.result === "copied") currentFresh?.onCopiedOnly();
+                  });
+                }}
+              >
+                {pristine ? "Copy, don’t highlight" : "Copy"}
+              </button>
+            </Tooltip>
+            {/* In the document before its text changes, or nobody is told. */}
+            <span className="cmt-copy-said" role="status" aria-atomic="true">
+              {copySaid === "copied"
+                ? "Copied."
+                : copySaid === "failed"
+                  ? "Your browser would not allow the copy. The highlight is kept."
+                  : ""}
+            </span>
+          </>
+        )}
         {own && (
           <button type="button" className="linky cmt-delete" onClick={own.onDelete}>
-            Delete
+            {/* One press either way. On a fresh box the thing it destroys is
+                the highlight the selection just made, so it says that. */}
+            {isFresh ? "Remove highlight" : "Delete"}
           </button>
         )}
       </footer>
@@ -793,7 +1100,16 @@ function hostOf(url: string): string {
  * The empty string is sent as `null`: a cleared box is a comment becoming a
  * bare bookmark again, and `""` is not a value the store may hold.
  */
-function CommentBody({ body, onSave }: { body: string; onSave(next: string | null): void }) {
+function CommentBody({
+  body,
+  onSave,
+  onTyped,
+}: {
+  body: string;
+  onSave(next: string | null): void;
+  /** The reader changed the text, committed or not — the fresh box's `touch`. */
+  onTyped(): void;
+}) {
   const [draft, setDraft] = useState(body);
   /* What is actually stored, so a commit that changes nothing sends nothing. A
      PATCH per blur would rewrite `updatedAt` every time the reader clicked
@@ -812,7 +1128,10 @@ function CommentBody({ body, onSave }: { body: string; onSave(next: string | nul
     <textarea
       className="cmt-note"
       value={draft}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onTyped();
+      }}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {

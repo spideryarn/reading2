@@ -428,32 +428,23 @@
   50% { opacity: 0.65; }
 }
 
-/* --------------------------------------------- profile: the two controls --
-   A label that states what a piece of generated text was written with, and a
-   checkbox that decides what the next run uses. Two jobs, two controls, and
-   they deliberately do not look alike: one is a fact and the other is a
-   decision. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
+/* ------------------------------------------- profile: provenance icon --
+   States what a piece of generated text was written with and opens the profile
+   panel. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
 
-/* The label. Quiet — it is provenance, not a warning, which is the same call
+/* The icon. Quiet — it is provenance, not a warning, which is the same call
    the glossary already made when it chose "a label instead of a warning
    triangle". It must not compete with the heading it sits beside. */
 .prof-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.05rem 0.35rem;
-  /* A `<button>` since 2026-08-30, so the four things a button brings for free
-     and this pill does not want are turned off here: its own background, its
-     UA font, and the pointer that would make it look like the run button. It
+  /* A `<button>` since 2026-08-30, so the things a button brings for free and
+     this icon does not want are turned off here. It
      opens the profile panel — src/web/ProfilePanel.tsx. */
   background: none;
   border: 1px solid var(--rule);
   border-radius: 999px;
   color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
   cursor: pointer;
 }
 .prof-badge:hover,
@@ -472,11 +463,12 @@
   border-color: color-mix(in oklab, var(--highlight) 40%, transparent);
   color: var(--highlight-ink);
 }
-/* The icon alone — Glossary's, since 2026-09-29 (WrittenForYou.tsx § compact).
-   Even padding on all four sides: a round badge, not a pill with no words. */
+/* The icon alone — Glossary's since 2026-09-29, every mode's since 2026-10-04
+   (WrittenForYou.tsx § Always an icon). Even padding on all four sides: a
+   round badge, not a pill with no words. */
 .prof-badge.icon-only { padding: 0.15rem; }
 /* What the badge was saying, said again at the top of the panel it opens —
-   the only place a compact badge's reader can read it. */
+   where a finger reads it, since a tap never opens the badge's card. */
 .prof-panel-note {
   margin: 0 0 0.4rem;
   color: var(--ink);

@@ -1039,7 +1039,7 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
       recovery: evidenceWorld(),
       reports: {
         intervalMs: 10,
-        drain: () => {
+        drain: async () => {
           calls += 1;
           return QUIET_REPORTS;
         },

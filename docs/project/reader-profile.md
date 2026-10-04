@@ -321,18 +321,24 @@ extra you ask for, so absent means no; the profile is the default this app now w
 > — Greg, 2026-09-12, from an iPad, reading an article in summary mode
 
 **Every new run uses the profile, and nothing in a reading view offers to change that.** The one
-thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
-([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
-below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
-to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
-keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
-the per-article half, on the metadata page — and, since 2026-10-02, in the panel the label opens
+thing on screen about the profile is a provenance icon on the text
+([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)), and it opens the profile panel
+below. **It has no words, in every mode, since 2026-10-04**: a person, or a person with
+a pencil in a warmer colour for text written for a profile you have since changed. Glossary's went
+first, on 2026-09-29, to save a phone a row
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)); Quiz's was the last with
+the words *written for you* / *older profile*. Greg, 2026-10-04
+(`spya-pmjy40`): *"Just the little profile icon should be sufficient with a rich tooltip, and the
+same goes for any other modes."* So the icon has a card on hover and focus, while the panel is
+closed, saying which of the two it is; the panel says the same sentence at its top, which is where a
+finger reads it ([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+the per-article half, on the metadata page — and, since 2026-10-02, in the panel the icon opens
 (below). The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
 
 ```
-  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ─┐   ← the LABEL, which
-  │  Threshold ▁▂▃▅▇                                          │     opens THE PANEL
+  ┌─ GLOSSARY ──────────────────────────────────────── ⓤ ─┐   ← the ICON, which
+  │  Threshold ▁▂▃▅▇                                      │     opens THE PANEL
   │  ⚠ These terms describe an older version of the article.   │
   │                                   [ Find them again ]      │   ← nothing beside
   └────────────────────────────────────────────────────────────┘     the spend
@@ -372,32 +378,27 @@ was absent for a reader with no profile; the 👤 button beside it opened the pa
 that had started itself showed *Using your profile* in the checkbox's place (2026-08-31).
 
 **All of that row is gone**, not only the checkbox: an explanation of a choice nobody is offered is
-clutter, and Greg's reason was a tidier, more compact interface. The label's half of Fable's split
+clutter, and Greg's reason was a tidier, more compact interface. The provenance half of Fable's split
 still stands. What is lost with the row is the way into the panel for a reader with **no** profile —
 the badge appears only on text written for one — so a first profile is now found through `/profile`
 and the Command bar, not from beside a button. `useHasProfile`, the hook that asked whether to draw
 the checkbox, went with it.
 
-One thing the label does **not** do: it goes on describing an artefact that was written for a profile
+One thing the icon does **not** do: it goes on describing an artefact that was written for a profile
 after the reader clears theirs. That is deliberate — it *was* written for you, and the badge is about
-the text rather than about the current state of the world. The label stays until the artefact is
+the text rather than about the current state of the world. The icon stays until the artefact is
 rewritten.
 
-Where the label is:
+Where the icon is:
 
-| Surface | Label |
+| Surface | Mark |
 |---|---|
-| glossary | on the head line |
-| ideas | on the head line |
-| quotes | on the head line |
-| tweets | beside the counts |
-| sketch, summaries, chat, Remember, explain | — |
+| glossary, ideas, quotes, Summary (Thread included), Remember's Quiz | the person icon in the band's corner, beside the (i) |
+| sketch | the same icon, in the picture's own bar |
+| chat, Remember's conversations, explain | — |
 
-(The summaries panel lost its label and its checkbox before this; the table said otherwise until
-2026-09-13.)
-
-**Chat gets no label**, because an answer is not an artefact anybody rewrites, so there is nothing
-for a label to describe. Every answer uses the profile, except the reading-candidates list
+**Chat gets no icon**, because an answer is not an artefact anybody rewrites, so there is nothing
+for one to describe. Every answer uses the profile, except the reading-candidates list
 (`CandidatesPanel`), which asks for none on purpose.
 
 **Explain never had a control, deliberately.** It has no pre-flight moment — the call fires when you
@@ -424,7 +425,7 @@ accepted that loss — passed as the panel's optional `consequence`
 diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
 
 ```
-  ✓ written for you
+  ⓤ profile icon
           │ click
           ▼
   ┌─────────────────────────────────────────┐
@@ -518,7 +519,7 @@ One press must not buy two rewrites. A finished job leaves the queue before its 
 read, and until that read lands the old text is still on screen with its old `profileChanged` — so
 Regenerate would be offered again. From the press until the new artefact is read, **every forced
 control in that mode is held**: the panel's Regenerate, and *Write it again*, *Find them again*,
-*Find more* / *Find terms again* beside the text, on a stale or unprofiled artefact too. Quiz,
+*Find more* / *Write a new list* beside the text, on a stale or unprofiled artefact too. Quiz,
 Summary, Thread, Ideas, Glossary and Sketch.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose

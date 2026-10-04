@@ -210,7 +210,6 @@ export function IdeasPanel({
             written={owner.profiled}
             changed={owner.profileChanged}
             slug={owner.slug}
-            compact
             /* The forced run replaces the list (plan 261002b). */
             regenerate={{
               run: () => void owner.regenerate(),

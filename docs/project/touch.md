@@ -54,7 +54,11 @@ there are two more, both answering Greg's reports (spya-a868zs, spya-vskqfn):
 - **A Structure row, in both faces** — first tap opens the row's card ("Tap again to go here"),
   second goes there; a row with no card goes there at once. One `useTapReveal` per row, never a
   state shared across the grid
-  ([260828g](../postmortems/260828g-spine-hover-cards.md)).
+  ([260828g](../postmortems/260828g-spine-hover-cards.md)). **Neither face gives the card
+  `keepSide`**: on a phone it fits on neither side of the row and has to drop below it. With
+  `keepSide` the list face's card opened off the screen and widened the page, so the rows moved
+  between the first tap and the second (fixed 2026-10-04, plan 261004g; `StructurePanel.tsx` §
+  `CardRow` has the mechanism).
 - **The reading-time line** — a tap opens its card and there is no second step, since the line
   does nothing when pressed. Under a coarse pointer its target reaches 1.25rem back over the
   gutter column, under every control (gutter.css, the end).
@@ -714,6 +718,15 @@ exactly as it was — it was never unmounted, so a Chat draft, a half-typed Quiz
 query are all still there. Pressing the mode's own button in the Dock does the same. While the pill
 shows, the *back to ⟨section⟩* chip does not: "back" means the band.
 
+**So does anything outside the band that names it as a destination**: *Open glossary* and *Dig
+deeper* on a term's card in the prose, *Dig deeper* on a citation's, the command bar's glossary
+commands, a question opened from the Comments drawer while Chat is the mode. Each can name a band
+whose mode is already set, which on its own reveals nothing, so they all go through one callback,
+`showBand` in `Reader.tsx`, that brings the band back and writes the mode only when it changes.
+A new control that opens a band from the prose calls `showBand`, not `setMode`. The citation card
+(2026-10-04, plan 261004b) and the term card (plan 261004g) each shipped with the band left hidden
+before that callback existed.
+
 What it deliberately does not do:
 
 - **Close the mode.** `?mode=plain` would unmount the band and lose what lives only in its memory.
@@ -765,19 +778,41 @@ tooltip, it does not say on an iPad.**
 >
 > — Greg, 2026-10-03 (spya-ma5h9b)
 
-Selecting prose opens the comment box from `mouseup` (`TableView.tsx` § `onMouseUp`), and a
-long-press selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours appeared.
+Selecting prose highlights it from `mouseup` (`TableView.tsx` § `onMouseUp`), and a long-press
+selection on iOS and iPadOS fires no `mouseup`. So on an iPad nothing of ours appeared.
 
 **Now a touch selection in the prose, once it has settled, shows one button just below it:
-"Highlight or comment".** Pressing it opens the same box on the same words, through the same
-`onSelect` a mouseup calls. The code is
+"Highlight or comment".** The code is
 [`TouchSelectionChip.tsx`](../../src/web/TouchSelectionChip.tsx), mounted in `Reader.tsx` beside the
 boxes it opens; the tests are `tests/touch-selection-chip.test.tsx`.
 
-**Why a button, and not the box opening by itself.** A finger's selection has no "let go". The
-reader long-presses, then drags the two handles, and all iOS tells the page is that the selection
-changed. Opening the box when the selection first settles would open it on a word the reader was
-still extending. So we wait for the handles to stop, show the button, and leave the press to them.
+**The button applies the highlight, since 2026-10-04.** Greg:
+
+> how about if selecting text automatically applies the highlight and also pops up the fuller box to
+> allow the user to customise (or remove) it, and they can just click off if they're happy with the
+> highlighting
+>
+> — Greg, 2026-10-04
+
+With a mouse that happens on letting go of the drag. By touch the button press is that moment: it
+goes through the same `selectProse` a mouseup calls, saying it was a finger. The words are stored
+as a yellow highlight and painted, **the selection is cleared**, which puts the OS handles and
+callout away, and the comment's own box opens for a note, another colour or *Remove highlight*. A
+tap anywhere else keeps it. The box focuses its close button, not a text field, so no keyboard
+comes up over the passage. The whole rule is
+[comments.md § The box a selection opens](comments.md#the-selection-box); what differs by touch is
+only the clearing, and that a second selection never replaces the first (that rule is a mouse's
+one-gesture drag). In Referee mode the press opens the draft box as before and clears nothing.
+`tests/selecting-applies-the-highlight.test.tsx` § a finger's selection.
+
+**Why a button, and not the highlight applying by itself.** A finger's selection has no "let go".
+The reader long-presses, then drags the two handles, and all iOS tells the page is that the
+selection changed. Acting when the selection first settles would highlight a word the reader was
+still extending, and the same long-press is how a reader copies, looks up or shares with the
+system's own menu. So we wait for the handles to stop, show the button, and leave the press to
+them. Whether to highlight with no press at all is an open question for Greg
+(`[Q-touch-auto-highlight]` in
+[261004f](../plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md)).
 
 The rules it keeps:
 
@@ -797,7 +832,7 @@ The rules it keeps:
   `pointerdown` so the selection survives, and Playwright's WebKit then delivers no `click` at all,
   which made the button inert there (browser check and GPT Sol T2, 2026-10-03). `click` remains as
   a fallback and cannot fire the action twice.
-- **It cannot open the box on stale words.** iOS may collapse the selection as the tap lands, so the
+- **It cannot highlight stale words.** iOS may collapse the selection as the tap lands, so the
   button outlives the selection by 300ms and remembers its words for that long. A press reads the
   live selection first and uses the remembered words only inside that window, and only while their
   paragraph is still in the document.
@@ -824,8 +859,8 @@ The rules it keeps:
 the bottom bar, the clamp pushes the button up over those words. It hides them until the reader
 scrolls a little. Flipping it above the selection would put it under the iOS callout, so it is left.
 
-No colour dots and no copy button in it. The colours are in the box it opens; a copy button is a
-separate decision.
+No colour dots and no copy button in it. The colours are in the box it opens, and so, since
+2026-10-04, is *Copy, don't highlight*.
 
 ## What we deliberately did not build
 
