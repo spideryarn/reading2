@@ -8,10 +8,19 @@
  * change lives in `useState`). The key sources are a thread too, `key`, so the
  * box has one kind of button and the list one kind of filter.
  *
- * **The filter runs after both bars** (the identification bar and the
- * relevance bar), as a third narrowing. So a thread's count is the rows *on
- * screen* in it, and a thread the bars have emptied is drawn disabled rather
- * than offered as a button that empties the list.
+ * **The filter runs after the relevance bar**, as a second narrowing. So a
+ * thread's count is the rows *on screen* in it, and a thread the bar has
+ * emptied is drawn disabled rather than offered as a button that empties the
+ * list.
+ *
+ * **Scoped to the sub-mode on screen**, since 2026-10-03 (plan 261003o, step
+ * 6). Reception and Claims each draw one search's rows, and one synthesis spans
+ * both. So a thread is offered in a sub-mode only when it has a **stored** row
+ * there (`threadsWithin`), and one the address names that has none there
+ * narrows nothing and is not drawn as selected — Greg's `debatethread=key`
+ * link, whose key sources were all on one claim, must not empty Reception.
+ * *No stored row here* and *rows here hidden by the bar* are different facts
+ * and stay different: the second keeps its disabled button and its sentence.
  */
 import type { DebateKeyRole, DebateKeySource, DebateSynthesis } from "../types.js";
 /* The constant lives in params.ts, the eager file, so that file need not
@@ -68,9 +77,20 @@ export function threadsOf(synthesis: DebateSynthesis | null): Thread[] {
 }
 
 /**
+ * **The threads one sub-mode offers**: those with at least one row among
+ * `stored`, that sub-mode's rows **before** any bar. Asked of the stored rows
+ * and not the visible ones, so a thread the bar has emptied is still here to be
+ * drawn disabled.
+ */
+export function threadsWithin(threads: readonly Thread[], stored: readonly { id: string }[]): Thread[] {
+  return threads.filter((t) => stored.some((r) => t.rowIds.has(r.id)));
+}
+
+/**
  * The thread the address names, or `null` — including for an id this debate
  * does not have (a link from before a re-run), which reads as *no filter*
- * rather than as an empty list.
+ * rather than as an empty list. Handed a sub-mode's own threads
+ * (`threadsWithin`), it answers `null` for one with no stored row there too.
  */
 export function selectedThread(threads: readonly Thread[], param: string | null): Thread | null {
   if (param === null) return null;

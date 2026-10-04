@@ -1597,8 +1597,10 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
   return createElement(DebatePanel, {
     access: { kind: "owner", owner: debateOwner(debate, over) },
     onJump: noop,
-    level: null,
-    onLevel: noop,
+    /* What a reader who has never touched `?debate=` sends: Reception. */
+    view: "reception",
+    onView: noop,
+    articleTitle: null,
     /* What a reader who has never touched `?debateby=` sends. The fixture has
        one row, so no two orders differ and no order bar is drawn — which is why
        `DEBATE_SHAPE` has no `.gloss-sort`. */
@@ -1866,11 +1868,12 @@ const TWEETS_VISITOR: BandShape = {
  * attributes onto the `<svg>`. Recorded rather than trimmed — an icon that
  * stopped being `aria-hidden` is exactly the sort of change this file is for.
  *
- * `.dbt-bar` is the identification threshold, and it sits **above the scroller
- * and outside it**, where every other threshold in this app sits. It is drawn
- * only when group one has rows, which is why `DEBATE_LOADING` below has no
- * trace of it — a slider over an empty group is a control that cannot change
- * anything. See `NameBar` in `src/web/DebatePanel.tsx`.
+ * `.dbt-controls` is the Reception | Claims control, **above the scroller and
+ * outside it**, drawn only once a debate is stored — which is why
+ * `DEBATE_LOADING` below has no trace of it. Until 2026-10-03 a `p.dbt-frame`
+ * (the order's sentence) and `div.dbt-bar.dbt-name` (the identification
+ * threshold) sat here instead; both went with plan 261003o. The relevance bar
+ * (`.dbt-rel`) is Claims', so Reception, which this fixture opens on, has none.
  */
 const DEBATE_SHAPE: BandShape = {
   className: "mode-band gloss dbt has-about",
@@ -1879,10 +1882,7 @@ const DEBATE_SHAPE: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "p.dbt-frame",
-    /* `.dbt-name` since 2026-09-29, when the relevance bar (`.dbt-rel`, drawn
-       only in *prioritised*) joined it and one component draws both. */
-    "div.dbt-bar.dbt-name",
+    "div.summ-controls.dbt-controls",
     "div.dbt-scroll",
   ],
   headChildren: [

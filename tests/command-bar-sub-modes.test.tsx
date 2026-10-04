@@ -24,6 +24,7 @@ import {
 import { GENERATES_MARKER } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import {
+  debateParam,
   diagramParam,
   modeParam,
   refereeParam,
@@ -95,6 +96,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
+    debate: debateParam,
   });
   return createElement(Dock, {
     slug: "a-piece",
@@ -474,6 +476,75 @@ describe("Enter on Structure › Expanded, on the reading view", () => {
   });
 });
 
+/* Debate's Reception | Claims, since 2026-10-03 (plan 261003o; GPT Sol's F6):
+   the bar gets its sub-mode rows from `subModesOf`, so a sub-mode that lives
+   only in the panel is one the bar never offers; and Reader's batched setter
+   enumerates its keys, so one missing from it opens the mode and drops the
+   view. */
+describe("Debate's two sub-modes", () => {
+  const CLAIMS: SubMode = { mode: "debate", view: "claims" };
+  const RECEPTION: SubMode = { mode: "debate", view: "reception" };
+
+  it("lists both under Debate, in the control's order", () => {
+    reading();
+    openBar();
+    type("debate");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Debate");
+    /* The sub-mode rows only: *Debate › Run again* is a different kind of row. */
+    expect(subRows().map(fullName).filter((n) => n.startsWith("Debate ›"))).toEqual([
+      "Debate › Reception",
+      "Debate › Claims",
+    ]);
+  });
+
+  it("finds Debate's Claims by the compound a reader would say, beside Referee's", () => {
+    reading();
+    openBar();
+    type("debate claims");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Debate › Claims");
+    type("claims");
+    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Debate › Claims", "Referee › Claims"]));
+  });
+
+  /* **One search, never a second.** Either row arms the one `debate` run — the
+     mode row's own target — under one key, and the band that mounts claims
+     that one token. Two keys, or a second arm, would be two metered searches. */
+  it("arms the one `debate` run for either sub-mode, as the mode row does", () => {
+    for (const sub of [RECEPTION, CLAIMS]) {
+      expect(subModeTarget(sub), sub.view).toBe("debate");
+      expect(subModeGenerates(sub), sub.view).toBe(true);
+    }
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("debate claims");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("debate", CLAIMS);
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+  });
+
+  it("opens Debate on Claims through the Reader's setter, in one pushed entry", async () => {
+    readingThroughReader("?mode=plain&at=spya-k3m9qt");
+    const push = vi.spyOn(history, "pushState");
+    openBar();
+    type("debate claims");
+    press("Enter");
+    await until(() => {
+      const params = new URLSearchParams(location.search);
+      return params.get("mode") === "debate" && params.get("debate") === "claims";
+    });
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(location.search).get("at")).toBe("spya-k3m9qt");
+  });
+
+  it("leaves Reception, the default, out of the address", () => {
+    expect(subModeParams(RECEPTION)).toEqual({ mode: "debate", debate: null });
+    expect(subModeParams(CLAIMS)).toEqual({ mode: "debate", debate: "claims" });
+    expect(withSubMode("?mode=debate&debate=claims&at=spya-aaaaaa", RECEPTION)).toBe("?mode=debate&at=spya-aaaaaa");
+    expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=debate&debate=claims");
+  });
+});
+
 describe("Enter on a sub-mode row, on the metadata page", () => {
   it("goes to the article in that sub-mode and arms nothing, as the mode rows there do", () => {
     metadataPage();
@@ -547,6 +618,7 @@ describe("the registry's two answers agree", () => {
       /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
       { mode: "summary", view: "brief" },
       { mode: "structure", view: "fisheye" },
+      { mode: "debate", view: "reception" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

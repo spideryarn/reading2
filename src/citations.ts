@@ -68,6 +68,7 @@ import {
 import type { ArtifactStore } from "./store/artifacts.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { firstAuthor, scholarUrl } from "./scholar-search.js";
 import {
   type Block,
   type BlockId,
@@ -1100,19 +1101,10 @@ function arxivUrl(id: string): string {
   return `https://arxiv.org/abs/${id}`;
 }
 
-/** A search for the work, never its address. */
-export function scholarUrl(title: string, authors?: string): string {
-  const surname = firstAuthor(authors);
-  const q = `"${title}"${surname ? ` ${surname}` : ""}`;
-  return `https://scholar.google.com/scholar?q=${encodeURIComponent(q)}`;
-}
-
-/** The first author's name as the article gives it — "Sapede, D.; Seydel, T." → "Sapede". */
-export function firstAuthor(authors?: string): string {
-  if (!authors) return "";
-  const first = authors.split(/;|,|\s&\s|\band\b/)[0] ?? "";
-  return first.replace(/\bet al\.?/i, "").trim();
-}
+/* `scholarUrl` and `firstAuthor` moved to src/scholar-search.ts on 2026-10-03,
+   so Debate's panel can build the same search in the browser — this module is
+   server code. Re-exported, because the server's callers still reach them here. */
+export { firstAuthor, scholarUrl };
 
 /**
  * An anchor's own identifier, when it carries exactly one — gwern links the

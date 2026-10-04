@@ -1181,6 +1181,41 @@ rather than blanked, and if none survives the key comes off entirely.
   [an explicit anti-goal](vision.md#anti-goals).
 - **Comments are per-article, not per-reader.** There is one reader.
 
+## Where the chat panel sits <a id="chat-dock"></a>
+
+A question asked from a block opens the chat panel (`ChatDialog`), fixed to the bottom-right corner
+of the window, over the prose. From the report that changed that:
+
+> I think now that we have a right-hand column that we sometimes use for marginalia, why don't we
+> put the block-level chat comment in that right-hand column? … But at the moment, it kind of shows
+> up in this own panel that kind of occludes things, and I mean, it's okay, but I just feel like
+> it's more in the way than it would be if it was in the right-hand column.
+>
+> — Greg, 2026-10-03 (spya-nseuz2)
+
+So when the [Marginalia](marginalia.md) column is showing and there is room, the panel **docks**: it
+moves sideways to start just right of the prose, over the lower part of the column, and covers notes
+rather than the article. It is the same panel in the same place in the tree, with the class `docked`
+(`.chat-dialog.docked` in [`dialogs.css`](../../src/web/styles/dialogs.css)). Its bottom anchor and
+heights are untouched, because they are what keeps it above the iOS keyboard.
+
+`chatDock` in [`layout.ts`](../../src/web/layout.ts) decides, from the same fit the column is drawn
+from. The room is from the column's left edge to the window's right edge, less an 8px inset and an
+8px gutter, and the panel docks when a column is drawn and that room is at least 256px
+(`CHAT_DOCK_MIN`). It is then as wide as the room, up to its usual 26rem. Otherwise it floats as
+before: Marginalia off, a phone, any window with no room for the column.
+
+**A full column is enough room, and only just.** The column is at most 288px, so one pressed against
+the window's edge (the case with a band open) gives a 272px panel. A column that has shrunk below
+272px leaves too little and the panel floats; on a window wide enough that the centred prose leaves
+more than the column beside it, the panel is wider, up to 26rem.
+
+Docked or floating, the block the panel is about wears a 2px rule down its right edge
+(`td.text.chat-open`), because a panel fixed to the window does not otherwise say which paragraph it
+belongs to. A conversation about the whole piece marks nothing. The plan, and the option of a card
+level with the block that was passed over, is
+[261003p](../plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md).
+
 ## The other way to ask
 
 Since 2026-08-25 there are two. This one is scoped to a passage you selected and answers in a

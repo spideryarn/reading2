@@ -4573,8 +4573,8 @@ export const TIMELINE_THIN =
  * **It says *by name*, and that is the whole of the claim.** What a direct row
  * has to prove is that the page identifies *this* article — its address, its
  * words, or its title. A page that argues against the piece without ever having
- * heard of it is not missing from this answer; it is in the rest of the list,
- * which is what `DEBATE_CLAIMS_FOLLOW` goes on to say.
+ * heard of it is not missing from this answer; it is in the other search,
+ * which since 2026-10-03 is the Claims sub-mode (`debateClaimsHandoff`).
  */
 export const DEBATE_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
@@ -4617,18 +4617,6 @@ export function debateClaimsUnverified(pages: number): string {
 }
 
 /**
- * **What the reader is looking at instead.**
- *
- * Appended to whichever of the two sentences above fired for the *direct*
- * search, and only when there are claim rows below it to be looking at. Without
- * it the lead is a dead end — *no page responds to this piece* over a list of
- * rows, with nothing saying what the rows are. With it, the empty answer reads
- * as a finding and a hand-off rather than as a broken panel, which is what Greg
- * asked for.
- */
-export const DEBATE_CLAIMS_FOLLOW = "What follows takes up what it argues.";
-
-/**
  * **A visitor's empty search, said without the count the owner is told.**
  *
  * The owner's two sentences above tell *came back with nothing* from *came back
@@ -4665,44 +4653,40 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
 }
 
 /**
- * **What the order on screen is, said out loud — one sentence per order.**
+ * **The heading over Reception's title-only rows** — the pages that name this
+ * piece by its title and neither link nor quote it. Since 2026-10-03, when the
+ * identification slider that used to hide them went (src/web/debate-levels.ts).
  *
- * A reader looking at a list assumes its order carries a claim, so each order
- * says what it is, on the line over the list. Since 2026-09-29 these
- * replace `DEBATE_NO_RANKING` (*"no ranking … is applied"*), which became false
- * the day the list gained an order bar (SPIDERYARN-READING2-5P,
- * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F16).
- *
- * **None of them ranks by authority**, and that part of the old sentence still
- * stands: there is no honest way to rank it — any list we maintain is wrong per
- * domain, and on an ML paper the sharpest critique is routinely a pseudonymous
- * blog. The site is on every row for the reader to judge. The two orders that
- * rest on a model's judgment say so, because the order is then the model's
- * reading, not a fact about the page.
+ * A heading in our voice, so it states only what was checked: the title was
+ * found in the page's extract. It does not say the page is *not* about this
+ * piece — a paper that cites it, and a published reply, both look like this —
+ * and it does not say it is. That is the reader's call, from the row.
  */
-export const DEBATE_ORDER_BY_CLAIM =
-  "Grouped under the claim in the piece each one answers, in the order the piece makes them.";
-
-/** …stance: the lean is the model's reading of each page, so the order is too. */
-export const DEBATE_ORDER_STANCE = "Most critical first — the lean is the AI's reading of each page.";
+export const DEBATE_TITLE_ONLY = "Names this piece by its title only";
 
 /**
- * …prioritised: how directly a page bears on its claim is a model's judgment,
- * not a measure, and the sentence says whose. Whether the relevance bar is
- * hiding anything is said beside the bar, in every state (`hiddenNote`).
+ * **The button under Reception's empty sentence, when Claims has rows** — it
+ * switches sub-mode. It replaced *"What follows takes up what it argues."*,
+ * which handed over to rows below it on the one mixed list; since 2026-10-03
+ * those rows are a sub-mode away. Without it, *no page responds to this piece*
+ * is a dead end on a paper whose only findings are about its claims.
  */
-export const DEBATE_ORDER_PRIORITISED =
-  "Rows about this piece first, then the AI's judgment of how directly each bears on its claim.";
+export function debateClaimsHandoff(sources: number): string {
+  return `See the ${sources} ${sources === 1 ? "source" : "sources"} on what it claims`;
+}
 
 /**
- * …date: the year is what the AI read off each page (found in its extract, but
- * not proven to be that page's own date — the plan's F2), and the undated ones
- * go last.
+ * **What each of Debate's two searches is, said once before the button and
+ * once in the band's (i).** The sub-mode control's own cards say the same of
+ * each (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no sentence sits under the
+ * control, because docs/project/mode.md bans a description line there.
  */
-export const DEBATE_ORDER_DATE =
-  "Oldest first, by the year the AI read off each page; pages with no year come last.";
+export const DEBATE_BEFORE_SEARCH =
+  "Two searches of the open web. Reception: what others have written about this piece. " +
+  "Claims: what has been written about the claims it makes. It takes about a minute and " +
+  "costs real money. Many pieces have no reception at all. Searched once and kept.";
 
-/** The line over *prioritised*'s claim rows the AI gave no relevance to. Never hidden by the bar. */
+/** A claim row without `bears` survives every bar without clearing its judgment. */
 export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
 
 /**

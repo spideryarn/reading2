@@ -9,6 +9,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_DOCK_GUTTER,
+  CHAT_DOCK_INSET,
+  CHAT_DOCK_MIN,
+  chatDock,
   fitView,
   MARG_IDEAL,
   MARG_MIN,
@@ -176,5 +180,113 @@ describe("the marginalia column", () => {
     expect(fitView({ windowWidth: at - 1, modeBand: true, margin: true }).margW).toBe(0);
     expect(fitView({ windowWidth: 800, modeBand: true, margin: true }).modeW).toBeGreaterThan(0);
     expect(fitView({ windowWidth: 390, modeBand: true, margin: true }).margW).toBe(0);
+  });
+});
+
+/**
+ * `chatDock` — whether the block chat panel sits over the column instead of
+ * over the prose, and how much room it has there.
+ * docs/plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md
+ * § Stage 2.
+ */
+describe("the chat panel's dock in the marginalia column", () => {
+  /** A fit with a column whose left edge leaves exactly `room` for the panel. */
+  function withRoom(room: number, windowWidth = 1600) {
+    const fit = fitView({ windowWidth, margin: true });
+    expect(fit.margW).toBeGreaterThan(0);
+    return {
+      fit: { ...fit, margLeft: windowWidth - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER - room },
+      windowWidth,
+    };
+  }
+
+  it("is 256px at its narrowest, behind an 8px inset and an 8px gutter", () => {
+    expect(CHAT_DOCK_MIN).toBe(256);
+    expect(CHAT_DOCK_INSET).toBe(8);
+    expect(CHAT_DOCK_GUTTER).toBe(8);
+  });
+
+  /* The layout the report was filed from: a Structure band, the prose, and the
+     column pressed against the window's edge. The first constants left 266px
+     of a 272px minimum here, so the feature never showed where it was asked
+     for. */
+  it("docks in a full column beside a Structure band at 1440px", () => {
+    const windowWidth = 1440;
+    const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
+    expect(fit.margW).toBe(MARG_IDEAL);
+    expect(chatDock(fit, windowWidth)).toBe(MARG_IDEAL - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER);
+  });
+
+  it("does not dock without a column, however much room there is", () => {
+    for (const windowWidth of [390, 820, 1440, 2560]) {
+      const fit = fitView({ windowWidth });
+      expect(fit.margW).toBe(0);
+      expect(chatDock(fit, windowWidth)).toBeNull();
+    }
+    /* Asked for, and no room for it: a phone. */
+    expect(chatDock(fitView({ windowWidth: 390, margin: true }), 390)).toBeNull();
+    /* And `margW` is the gate, not `margLeft`: a fit with room to spare and no
+       column still floats. */
+    const { fit, windowWidth } = withRoom(400);
+    expect(chatDock({ ...fit, margW: 0 }, windowWidth)).toBeNull();
+  });
+
+  it("floats one pixel under the minimum and docks at it", () => {
+    const under = withRoom(CHAT_DOCK_MIN - 1);
+    expect(chatDock(under.fit, under.windowWidth)).toBeNull();
+    const at = withRoom(CHAT_DOCK_MIN);
+    expect(chatDock(at.fit, at.windowWidth)).toBe(CHAT_DOCK_MIN);
+  });
+
+  it("returns the whole room on a wide window — the 26rem cap is the stylesheet's", () => {
+    const windowWidth = 2560;
+    const room = chatDock(fitView({ windowWidth, margin: true }), windowWidth);
+    expect(room).not.toBeNull();
+    expect(room).toBeGreaterThan(26 * 16);
+  });
+
+  it("docks beside a band too, once the prose leaves the room", () => {
+    const windowWidth = 1920;
+    const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
+    expect(fit.modeW).toBeGreaterThan(0);
+    expect(fit.margW).toBeGreaterThan(0);
+    expect(chatDock(fit, windowWidth)).toBe(
+      windowWidth - fit.margLeft - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER,
+    );
+  });
+
+  /* GPT Sol's F3 on the plan: the inset CSS adds must come off before the
+     minimum is applied, or the panel runs into the window's edge. So wherever
+     the panel docks, room + inset + gutter is exactly the distance from the
+     column's left edge to the window's right — at every width, band or none. */
+  it("accounts for every pixel right of the column: room + inset + gutter", () => {
+    let docked = 0;
+    let floated = 0;
+    const SHAPES = ["standard", "structure", "wide", "roomy"] as const;
+    for (const c of CASES) {
+      const fits = [
+        fitView({ ...c, margin: true }),
+        ...SHAPES.map((bandShape) => fitView({ ...c, modeBand: true, bandShape, margin: true })),
+      ];
+      for (const fit of fits) {
+        const room = chatDock(fit, c.windowWidth);
+        const right = c.windowWidth - fit.margLeft;
+        if (room === null) {
+          floated += 1;
+          if (fit.margW > 0) {
+            expect(right - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER, JSON.stringify(c)).toBeLessThan(
+              CHAT_DOCK_MIN,
+            );
+          }
+          continue;
+        }
+        docked += 1;
+        expect(fit.margW, JSON.stringify(c)).toBeGreaterThan(0);
+        expect(room, JSON.stringify(c)).toBeGreaterThanOrEqual(CHAT_DOCK_MIN);
+        expect(room + CHAT_DOCK_INSET + CHAT_DOCK_GUTTER, JSON.stringify(c)).toBeCloseTo(right, 6);
+      }
+    }
+    expect(docked).toBeGreaterThan(500);
+    expect(floated).toBeGreaterThan(500);
   });
 });
