@@ -1073,6 +1073,7 @@ export function Conversation({
   draft,
   onDraft,
   kind,
+  visible = true,
   live,
   onStartLive,
 }: {
@@ -1104,6 +1105,9 @@ export function Conversation({
    * is rather than silently getting a chat.
    */
   kind: ThreadKind;
+  /** A collapsed dialog keeps its conversation mounted, but hidden geometry
+   * must not change whether the reader is following the latest answer. */
+  visible?: boolean | undefined;
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
@@ -1170,7 +1174,7 @@ export function Conversation({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
-    if (!el) return;
+    if (!el || !visible) return;
     /* **An empty conversation reads from the top.** There is no latest turn to
        follow, and what is in the scroller is the opening hint and the
        suggestions, read top down. Following "the bottom" here scrolled a
@@ -1201,7 +1205,7 @@ export function Conversation({
        ever cleared in here. That is the *same* bug the note above describes,
        surviving its own fix in the dependency array. Found by a GPT-5.6 review,
        2026-08-26. */
-  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase]);
+  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase, visible]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -1222,6 +1226,7 @@ export function Conversation({
            now. `away` is set beside it rather than derived later, so a button
            and a ref cannot end up disagreeing about where the reader is. */
         onScroll={(e) => {
+          if (!visible) return;
           const el = e.currentTarget;
           /* An empty conversation counts as following, wherever the reader
              has scrolled the suggestions to: there is no latest turn to be

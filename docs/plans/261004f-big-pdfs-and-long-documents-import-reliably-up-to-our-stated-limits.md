@@ -68,7 +68,8 @@ shape. Taken, finding by finding:
 - **F1, the 32 MB fetch cap. Taken as a measurement, not as a fix.** The size cap in `src/fetch.ts`
   is a defence listed in [security-map.md](../project/security-map.md), and this run may not edit
   one. Stage 1 measures it through the `fetchImpl` seam; the mismatch with the dialog's sentence
-  goes to Greg (see § Decisions).
+  goes to Greg (see § Decisions). **Answered and built the same day**:
+  [261004k](261004k-one-size-limit-for-an-upload-and-an-address.md).
 - **F2, M4 cannot reach the 30 MiB request check**, because that check is inside the real reader
   and M4 swaps the reader out. Taken: M4 says so rather than copying the arithmetic. Stage 2 makes
   the check reachable by a free test and builds A and B of
@@ -186,6 +187,14 @@ Filled in as they are made. Each is Greg's to overturn.
 - **The 32 MB cap on a document fetched by address stays, and is not ours to move here.** It is a
   listed defence. The dialog's "PDF or web page, up to 50 MB" is true of a file you choose and
   false of an address you paste. For Greg, in `awaiting-approval.md`.
+
+  **Greg overturned it, 2026-10-04**, answering [Q-url-size-cap]:
+
+  > make them consistent (and perhaps reuse the same protection-machinery)
+
+  So there is one limit, 50 MiB, from the one constant (`MAX_UPLOAD_BYTES`), and one streaming
+  size guard shared by the fetch and the store's read. Built in
+  [261004k](261004k-one-size-limit-for-an-upload-and-an-address.md).
 - **A chunk whose context page makes it too big is sent without that page** (260928b's B). What it
   costs: a paragraph that runs across that one page break comes out as two. What it buys: the
   article imports instead of failing whole.
@@ -250,7 +259,8 @@ database as `s3-doctorow-250p-spya-sw2jbz` (a failed draft) and `s3-gdl-45mb-spy
 
 - **The structure ceiling**, options A to E above. Greg's. `qi-kbkbw4rp`, and a line in
   `awaiting-approval.md`. Recommended: D, then E.
-- **The 32 MB fetch cap.** Greg's; a listed defence. `qi-bv9nbj5z`.
+- **The 32 MB fetch cap.** Greg's; a listed defence. `qi-bv9nbj5z`. Since built, on his answer
+  (§ Decisions): [261004k](261004k-one-size-limit-for-an-upload-and-an-address.md).
 - **The article response against 4.5 MB.** `qi-sbytr395`.
 - **Chunks asked twice, checkpoints on under half, figures not stored, the untried 40 MiB.**
   `qi-astc8qqs`.

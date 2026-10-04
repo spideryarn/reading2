@@ -98,7 +98,7 @@ export const QUOTE_OPEN_MS = 900;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
 import { worthRetrying } from "../messages.js";
-import { refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
@@ -425,8 +425,10 @@ function HoverCard({
          TableView's own link handler read it: the row is the block, and
          `data-block` is the id every feature here addresses text by
          (docs/project/block-ids.md). It is what tells the summary which of two
-         mentions of one destination the reader is actually looking at. */
-      const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+         mentions of one destination the reader is actually looking at.
+         link-facts.ts § `blockOfLink` has the rule, and the one place a row
+         is not the answer. */
+      const inBlock = blockOfLink(anchorEl);
 
       if (note) return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false };
 

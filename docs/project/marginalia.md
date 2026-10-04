@@ -42,7 +42,8 @@ one would otherwise be missed; it would not be, so it is not
   [§ Relation words](#relation-words).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
-  spya-rczgjb).
+  spya-rczgjb). While it is on screen the headings breadcrumb in the top bar is not drawn
+  ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
 - **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments
@@ -77,10 +78,16 @@ one would otherwise be missed; it would not be, so it is not
   written against an older version of the article"). A list written before a block changed could
   otherwise sit beside prose that no longer says what it quotes.
 
-**The block chat panel sits here too, while one is open.** When the column is showing and there is
-room for the panel and its inset and gutter (a full-width column is enough), the chat panel sits over the lower part of the column
-instead of over the article, and the notes under it are covered until it closes. With less room it
-floats in the corner as before. [comments.md § Where the chat panel sits](comments.md#chat-dock).
+**The block chat sits here too, while one is open**, as a card level with its block (on trial since
+2026-10-04). Its host is a `[data-marg-note]` like any note, first in its block's cell, so
+`useMarginLayout` pushes later notes below it. It is wider than the notes when the window has the
+room. The margin's *Question* line for that conversation is left out while its card is up. Without
+room for a card, or with the trial's switch off, the panel docks over the lower part of the column
+or floats in the corner. [comments.md § Where the chat panel sits](comments.md#chat-dock).
+
+**A lone question's line says its words once.** Opened, it shows only *Open the conversation*; the
+line itself un-truncates. Among several entries each keeps its own head, which is how they are told
+apart (report `spya-f6dpj5`).
 
 ## Relation words
 

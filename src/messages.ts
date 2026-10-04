@@ -521,6 +521,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the list it counts goes stale on the next line added, and no test can see
      it, so there is no count here now.) */
   "up-big": "blocked",
+  /* The same refusal for a document fetched by address. See FETCH_TOO_BIG. */
+  "fetch-big": "blocked",
   "up-pdf": "blocked",
   /* The page cap, as the *upload record* states it. The job card gets
      `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
@@ -2115,6 +2117,30 @@ export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
     `That file is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, which is the most ` +
     "this app can take. Sending it again will not help — it will be the same size. A smaller " +
     "file, or a shorter extract from this one, will. [up-big]",
+};
+
+/**
+ * **The same limit, met by an address rather than a file.** The fetch stopped
+ * at `MAX_UPLOAD_BYTES` (`DEFAULTS.maxBytes` in src/fetch.ts is that constant),
+ * so the number here and the number in the dialog are one number.
+ *
+ * `blocked` because this document cannot fit under the cap. A URL may change,
+ * but retrying the same document cannot make it fit. Until 2026-10-04 this
+ * failure had no sentence of its own, so the
+ * job card gave it the generic copy and a Retry that fetched up to the limit
+ * again and failed again
+ * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+ *
+ * Raised by the pipeline's fetch step and nowhere else. A link preview or a
+ * figure that is too big is refused under its own, smaller cap and never
+ * reaches a reader as this.
+ */
+export const FETCH_TOO_BIG: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    `The document at that address is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, ` +
+    "which is the most this app can take. Trying again with the same document will not help. " +
+    "Choose a smaller document, or save a shorter extract of this one as a file. [fetch-big]",
 };
 
 /**

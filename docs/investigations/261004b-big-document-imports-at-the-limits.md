@@ -67,7 +67,7 @@ Each row is a ceiling, in the order a growing document meets it.
 | Relations (a reading mode, after import) | about 2,930 paragraphs | the same sentence, on that mode | Open, same cause |
 | The article response, against Vercel's 4.5 MB | about 3,200 blocks of plain prose; lower with gists and labels | not measured on Vercel | Open, queued |
 | The block insert | 3,856 blocks exactly | "blocks did not finish… trying again is worth a go" (it was not) | **Fixed** |
-| A document fetched by address | 32 MiB, not the 50 MB stated | "That page is over the 32 MB limit." | Open; a listed defence, so Greg's |
+| A document fetched by address | 32 MiB, not the 50 MB stated | "That page is over the 32 MB limit." | **Fixed** later the same day: one 50 MiB limit for both, [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md) |
 | One PDF page too heavy for one request | 30 MiB encoded (about 22 MB raw), for a page plus the page before it | "[pdf-chunk-big]", no Retry | **Fixed** to 40 MiB, and the page before is dropped when it is the cause |
 | The page cap | 251 pages | refused in under two seconds, with both numbers | Works |
 | The byte cap on an upload | 50 MiB + 1 byte | refused in the browser | Works |
@@ -167,7 +167,8 @@ left. Either the cap goes to 50 MB or the dialog says two numbers.
 In the Overseer's queue, each naming this report:
 
 - `qi-kbkbw4rp`: the structure ceiling. Waiting on Greg.
-- `qi-bv9nbj5z`: the 32 MB cap on an address against the stated 50 MB. Waiting on Greg.
+- `qi-bv9nbj5z`: the 32 MB cap on an address against the stated 50 MB. Greg answered the same
+  day, and it is built: [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
 - `qi-sbytr395`: the article response against Vercel's 4.5 MB.
 - `qi-astc8qqs`: the transcription observations (chunks asked twice, checkpoints on under half,
   figures not stored, the untried 40 MiB allowance, the stale cost comment).

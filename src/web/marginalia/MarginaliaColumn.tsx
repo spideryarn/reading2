@@ -454,14 +454,21 @@ function CommentNote({
       {items.map((e) =>
         e.as === "question" ? (
           <div key={`q:${e.asked.id}`} className="marg-open-item">
-            <p className="marg-open-head">
-              <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
-              {e.asked.quote !== undefined ? (
-                <span className={voiceClass("author")}>“{e.asked.quote}”</span>
-              ) : (
-                "About this paragraph"
-              )}
-            </p>
+            {/* **Only among several**, as a comment's head is: that is how
+                they are told apart. A lone question's shut line is this same
+                stamp and line, and it un-truncates when it opens
+                (marginalia.css), so the head said it twice — report
+                spya-f6dpj5, plan 261004k § 7. */}
+            {!only && (
+              <p className="marg-open-head">
+                <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
+                {e.asked.quote !== undefined ? (
+                  <span className={voiceClass("author")}>“{e.asked.quote}”</span>
+                ) : (
+                  "About this paragraph"
+                )}
+              </p>
+            )}
             {onOpenAsked && (
               <button type="button" className="linky marg-open-asked" onClick={() => onOpenAsked(e.asked.id)}>
                 Open the conversation
