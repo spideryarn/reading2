@@ -700,9 +700,47 @@ DataCite about **the article's own identifier**, after the extractor and outside
   afresh for the rest, so a date a publisher removed is not carried forward.
 - **A PDF now has a publication date**, so Timeline has a year to read a year-less date against,
   and the Shelf's Published sort has something to sort.
-- **Nothing is backfilled yet.** An article imported before this has the facts only once its owner
-  reads it again. The backfill is stage 2 of
-  [261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md).
+- **An article imported before this has the facts only once its owner reads it again, or once the
+  backfill below has been run** against the database it lives in.
+
+### The backfill, for articles imported earlier
+
+[`scripts/backfill-registry-facts.ts`](../../scripts/backfill-registry-facts.ts) fills `doi`,
+`journal` and `published_at` or `published_year` on the current revision of articles that lack
+them. The logic is [`src/backfill-registry-facts.ts`](../../src/backfill-registry-facts.ts).
+
+```
+npx tsx scripts/backfill-registry-facts.ts                      # dry run, local
+npx tsx scripts/backfill-registry-facts.ts --prod               # dry run, production, read-only
+npx tsx scripts/backfill-registry-facts.ts --prod --apply <plan.json>
+```
+
+- **The dry run is the default and cannot write.** It runs inside `BEGIN READ ONLY` and never
+  commits. It finds each article's candidates without a model: a PDF's first two pages through
+  `frontPagesWithStamps` ([`src/pdf.ts`](../../src/pdf.ts)), which keeps arXiv's sideways margin
+  stamp where `firstPagesText` drops it; a web page's stored HTML through `ownIdsOfDocument`; and
+  the article's own address. It asks the registries through `lookupWork` with an in-memory store,
+  so the spacing and the cooldown are the shipped ones and the registry cache table is neither
+  read nor written. `withRegistryFacts` decides, unchanged. It prints a table and saves a plan
+  file with one row per article.
+- **A missing document is its own outcome.** `no-source` (the revision references none) and
+  `source-unreadable` (it references one that is missing, corrupt or not a PDF pdf.js can open)
+  are reported apart from `no-candidate`.
+- **Apply writes the plan file and asks no registry**, so what was read is what is written. It
+  refuses a plan made against another database, and a plan that fills a year on a database with
+  no `published_year` column. Then, in one transaction and per article, it locks the article row,
+  refuses if the plan's revision is no longer current, refuses if the article has an unfinished
+  draft (the draft would publish later without the facts), and fills only empty columns. A day or
+  a year is written only when both date columns are empty. Each row is `written`, `already`, or
+  `refused` with a reason; a refused row is left exactly as it was. It exits non-zero when nothing
+  was written and nothing was already there.
+- **Which database.** With no flag, the local one in `.env.local`, and a `DATABASE_URL` in the
+  shell is not read. `--prod` is the only way to production: it takes the database and the
+  bucket's credentials together from `.env.prod`. Read the `Target:` line
+  ([database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)).
+- **Nothing else needs refreshing.** The Shelf reads the publication date from the revision row.
+  An article that gains a `published_at` and has a Timeline shows that Timeline as out of date
+  until its owner regenerates it; the dry run counts these. A year causes none.
 
 The Metadata page prints both under the title, for the owner and, since 2026-10-04, for a visitor
 to a shared article: the journal and the publication date cross the public boundary, the DOI does

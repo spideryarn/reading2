@@ -2643,6 +2643,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      race the test is measuring the only race in it. No GoTrue and no bucket. */
   "tests/article-delete-pg.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
+  /* 261004h stage 2: the registry backfill's apply and dry run. It writes
+     revision columns under `ADMIN_USER_ID_LOCAL`, holds a row lock in a second
+     connection, and deletes its own slugs by prefix. No GoTrue and no bucket. */
+  "tests/backfill-registry-facts-pg.test.ts": "private-postgres",
   /* 261001a stage 1: the bibliographic cache and its politeness rows. Those
      tables are ownerless and this file resets all three between cases, which a
      shared database must never have done to it mid-run. */

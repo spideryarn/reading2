@@ -741,6 +741,78 @@ export async function firstPagesText(
   }
 }
 
+/**
+ * One page of `frontPagesWithStamps`, from pdf.js's items: the upright runs
+ * joined as `firstPagesText` joins them, then the sideways runs on a line of
+ * their own. **After, not in place**: pdf.js can hand a margin stamp over in
+ * the middle of a word (`isSideways` has the example), and an identifier
+ * spliced into "normalization" is two broken strings. Split out so the
+ * ordering can be tested without a PDF that happens to interleave them.
+ */
+export function frontPageRecord(page: number, items: readonly unknown[]): { page: number; text: string } {
+  let upright = "";
+  let sideways = "";
+  for (const item of items) {
+    if (typeof item !== "object" || item === null || !("str" in item) || typeof item.str !== "string") continue;
+    const transform = "transform" in item && Array.isArray(item.transform) ? (item.transform as number[]) : [];
+    const run = item.str + ("hasEOL" in item && item.hasEOL ? "\n" : "");
+    if (isSideways(transform)) sideways += run;
+    else upright += run;
+  }
+  const tidy = (text: string) => text.replace(/[ \t]+/g, " ").trim();
+  return { page, text: [tidy(upright), tidy(sideways)].filter((part) => part !== "").join("\n") };
+}
+
+/**
+ * **The text layer of the first few pages, a record a page, sideways runs
+ * kept** — the shape `ownIdsOfPdf` (src/article-registry.ts) reads, for a
+ * caller that has the stored PDF and no transcript: the registry backfill
+ * (src/backfill-registry-facts.ts).
+ *
+ * The opposite choice from `firstPagesText` about sideways text, on purpose.
+ * That one feeds a title to a model and must not have arXiv's margin stamp in
+ * it; this one is looking for the paper's own identifier, and the stamp is it.
+ *
+ * The same discipline otherwise: a copy of the bytes, the signal checked
+ * before and after loading, `destroy` on every path. A scan with no text
+ * layer gives pages of empty text, not an error.
+ */
+export async function frontPagesWithStamps(
+  source: Uint8Array,
+  opts: { pages: number; signal?: AbortSignal | undefined },
+): Promise<{ page: number; text: string }[]> {
+  const { signal } = opts;
+  signal?.throwIfAborted();
+  const data = new Uint8Array(source);
+  const pdfjs = await loadPdfjs();
+  signal?.throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  try {
+    const doc = await loadingTask.promise;
+    const records: { page: number; text: string }[] = [];
+    for (let n = 1; n <= Math.min(opts.pages, doc.numPages); n++) {
+      signal?.throwIfAborted();
+      const content = await (await doc.getPage(n)).getTextContent();
+      records.push(frontPageRecord(n, content.items));
+    }
+    return records;
+  } catch (err) {
+    signal?.throwIfAborted();
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", giveUp);
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway; see `countPdfPages`. */
+    }
+  }
+}
+
 export async function pass0(
   source: string | Uint8Array,
   opts: Pass0Options = {},
