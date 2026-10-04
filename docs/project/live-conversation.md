@@ -99,6 +99,7 @@ empty conversation — SPIDERYARN-READING2-70,
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | The state pill, connecting steps, input level, notices, errors with Try again, and the Advanced disclosure (device, noise reduction, Reconnect). |
 | [`src/web/live/LiveTail.tsx`](../../src/web/live/LiveTail.tsx), [`tail.ts`](../../src/web/live/tail.ts) | The unsaved words, in the thread after the saved turns, grouped by exchange. |
 | [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
+| [`src/web/live/tap.ts`](../../src/web/live/tap.ts) | `TalkMode`, and the pure rule for what a refused tap-to-talk event leaves behind: the mode, the microphone, whether the turn is forgotten, the sentence. A refusal can arrive late, after Done's commit has gone, and then must not undo that turn. The hook keeps the effects. |
 | [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | Realtime only. One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |

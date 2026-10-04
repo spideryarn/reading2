@@ -2363,6 +2363,69 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
+  /* GPT Sol, plan review of 261004e, F1. Talk's clear and Done's commit are
+     two events, and the refusal of the first can arrive after the second has
+     gone. Every tap refusal used to forget the pending commit, so the
+     acknowledgement that followed asked for no reply, with the detector off. */
+  it("a late refusal of Talk's clear does not strand a turn whose commit has already gone", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      sent = [];
+      act(() => h.get().talk());
+      const clear = sent.find((event) => event.type === "input_audio_buffer.clear");
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      expect(sentTypes()).toContain("input_audio_buffer.commit");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "late", event_id: clear?.event_id } });
+      });
+      expect(h.get().talkMode, "Talk reopened over a turn the service is still taking").toBe("tap-sending");
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.committed", item_id: "tap-u" }); });
+      expect(sentTypes(), "the committed turn was never answered").toContain("response.create");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("a late refusal of the entry update still answers a turn whose commit has already gone", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const update = sent.find((event) => event.type === "session.update" && isTap(event));
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "update refused", event_id: update?.event_id } });
+      });
+      expect(h.get().talkMode).toBe("hands-free");
+      expect(mic?.enabled).toBe(true);
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.committed", item_id: "tap-u" }); });
+      expect(sentTypes(), "the committed turn was never answered").toContain("response.create");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("a refused clear inside Done's tail cancels the tail, so Talk works as soon as it is offered", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      sent = [];
+      act(() => h.get().talk());
+      const clear = sent.find((event) => event.type === "input_audio_buffer.clear");
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "late", event_id: clear?.event_id } });
+      });
+      expect(h.get().talkMode).toBe("tap-idle");
+      act(() => h.get().talk());
+      expect(h.get().talkMode, "the button was enabled and the action refused").toBe("tap-talking");
+      await advance(400);
+      expect(sentTypes(), "the cancelled tail committed anyway").not.toContain("input_audio_buffer.commit");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
   it("stays hands-free when the entry update and its following clear are both refused", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {
