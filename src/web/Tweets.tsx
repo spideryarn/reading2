@@ -61,7 +61,7 @@
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, PenLine, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
@@ -74,6 +74,8 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
 /** How long a copy button says it worked before going back to normal. */
@@ -146,7 +148,7 @@ export function TweetsPanel({
             /* The forced run replaces the thread (plan 261002b). */
             regenerate={{
               run: () => void owner.regenerate(),
-              busy: owner.job !== null || owner.starting,
+              busy: owner.job !== null || owner.starting || owner.rewriting,
               refresh: () => owner.refresh(),
             }}
           />
@@ -160,21 +162,11 @@ export function TweetsPanel({
       {hasControls && <div className="summ-controls">{controls}</div>}
       {hasControls && head && <div className="band-head">{head}</div>}
       {owner?.error && (
-        <div className="tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3">
-          <p className="gloss-error tw:m-0" role="alert">
-            {owner.error}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="tw:mt-2"
-            onClick={() => void owner.retryRead()}
-          >
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
+        <ReadError
+          error={owner.error}
+          onRetry={owner.retryRead}
+          className="tw:m-0 tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3"
+        />
       )}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for a thread…</p>}
@@ -212,8 +204,20 @@ export function TweetsPanel({
   );
 }
 
+/**
+ * **A rewrite has finished and its thread is not here yet.** Every forced
+ * control gives way to a read, never to a second paid run — rewrite-hold.ts.
+ */
+const waitingForRewrite = (owner: UseTweets) =>
+  owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+
+function NewThreadWaiting({ owner }: { owner: UseTweets }) {
+  return <RewriteWaiting line="The new thread hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />;
+}
+
 /** The band's run button: the empty state's, and the stale banner's. */
 function Run({ owner, label, force = false }: { owner: UseTweets; label: string; force?: boolean }) {
+  if (force && waitingForRewrite(owner) && !owner.error) return <NewThreadWaiting owner={owner} />;
   return (
     <JobProgress
       job={owner.job}
@@ -223,6 +227,8 @@ function Run({ owner, label, force = false }: { owner: UseTweets; label: string;
       /* The empty state's must be `ensure` — the identical, unforced request
          the automatic run makes — or it buys a second model call. */
       onRun={() => (force ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={force && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="tweets"
@@ -412,9 +418,12 @@ export function ThreadPosts({
 function RunRow({ owner }: { owner: UseTweets }) {
   const running = !owner.stale && (owner.job || owner.starting);
   const failed = !running && !owner.stale && owner.failed;
-  if (!running && !failed) return null;
+  /* On a stale thread the banner's own control says it — `Run`. */
+  const waiting = !owner.stale && waitingForRewrite(owner) && !owner.error;
+  if (!running && !failed && !waiting) return null;
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-2">
+      {waiting && <NewThreadWaiting owner={owner} />}
       {running && <RunFoot job={owner.job} owner={owner} />}
       {failed && (
         <span className="tw:ml-auto tw:text-xs tw:text-destructive">{failed.message}</span>

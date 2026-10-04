@@ -14,15 +14,12 @@
 
 .faq-item { padding: 0.5rem 0; }
 
-.faq-read-error { margin: 0.4rem 0.7rem 0; }
-.faq-read-error .gloss-error { margin: 0 0 0.5rem; }
-
 /* FAQ has no head. In states without an order row, its first visible status,
    error or list therefore owns the corner (i)'s clearance. */
 .mode-band.faq.has-about > .gloss-quiet,
 .mode-band.faq.has-about > .gloss-empty,
 .mode-band.faq.has-about > .gloss-stale,
-.mode-band.faq.has-about > .faq-read-error {
+.mode-band.faq.has-about > .read-error {
   padding-right: calc(0.9rem + var(--band-about-room));
 }
 .mode-band.faq.has-about:not(:has(> .gloss-sort)) > .tl-scroll {

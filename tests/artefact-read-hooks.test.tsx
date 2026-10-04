@@ -93,7 +93,13 @@ vi.mock("../src/web/lib/api.js", async () => {
     asked.push({ url, method: init?.method ?? "GET" });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
     const kind = /^\/api\/(ideas|faq|debate|timeline)\//.exec(url)?.[1];
-    if (kind && failNext.delete(kind)) throw new Error(`${kind} read failed`);
+    /* A sentence the server wrote, as the real `readJson` throws one: the
+       read catches say anything else as the page's own fault
+       (src/web/lib/describe-failure.ts). */
+    if (kind && failNext.delete(kind)) {
+      const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+      throw new ReaderFacingError(`${kind} read failed`);
+    }
     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
     return new Response(null, { status: 404 });
   };

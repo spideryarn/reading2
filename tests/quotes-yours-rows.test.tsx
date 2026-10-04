@@ -109,6 +109,7 @@ function owner(quotes: Quotes | null, over: Partial<QuotesOwner> = {}): QuotesOw
     profileChanged: false,
     slug: "writes",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,

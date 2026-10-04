@@ -390,7 +390,7 @@ export interface QuizMarkResult {
  * question off. See the early return in `markAnswerStream`.
  *
  * **The client ticks a question
- * answered only on `done`** — `readMark` in src/web/useQuiz.ts is the one place
+ * answered only on `done`** — `mark` in src/web/useQuiz.ts is the one place
  * that decides, and tests/quiz-mark-stream.test.tsx is a stream that emits two
  * deltas and then closes with no terminal frame at all, because a stream that
  * stops cleanly without finishing looks exactly like one that finished.

@@ -34,6 +34,8 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type IdeasStatus = "loading" | "none" | "ready" | "error";
 
@@ -78,6 +80,11 @@ export interface UseIdeas {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
+  /**
+   * A forced run was pressed on the list still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /*
    * `automatic` — *the run in flight started itself* — lived here until
    * 2026-09-13, so the panel could say *Using your profile* instead of offering
@@ -109,6 +116,8 @@ export interface UseIdeas {
   regenerate(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -130,7 +139,11 @@ export interface IdeasRead {
   outdated: boolean;
   profiled: boolean;
   profileChanged: boolean;
+  /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Join a read in flight, or start one. `OrderedRead.reload`. */
   reload(): Promise<void>;
   /** Read again because the list has just changed. `OrderedRead.refresh`. */
@@ -145,6 +158,8 @@ export function useIdeasRead(slug: string): IdeasRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -153,6 +168,7 @@ export function useIdeasRead(slug: string): IdeasRead {
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/ideas/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -164,24 +180,29 @@ export function useIdeasRead(slug: string): IdeasRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
       }
       const loaded = await readJson<IdeasResponse>(res);
       if (!current()) return;
+      /* Read the fields that can throw before publishing any of this reply.
+         A malformed revalidation must leave the loaded artefact intact. */
+      const profiled = loaded.ideas.profileHash != null;
       setIdeas(loaded.ideas);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
          undefined` and only `null` and absent mean "written without one". */
-      setProfiled(loaded.ideas.profileHash != null);
+      setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
+      landed(started, res, loaded.ideas.generatedAt);
       setError(null);
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
          job finishes — and `IdeasPanel` renders the list only under
@@ -191,7 +212,7 @@ export function useIdeasRead(slug: string): IdeasRead {
          guard, same reason, as useGlossary.ts § `fetchNow`. */
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
@@ -200,11 +221,20 @@ export function useIdeasRead(slug: string): IdeasRead {
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Ideas already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (ideas === null) setStatus("loading");
+    await reload();
+  }, [ideas, reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { status, ideas, stale, outdated, profiled, profileChanged, error, reload, refresh };
+  return { status, ideas, stale, outdated, profiled, profileChanged, fresh, error, retryRead, reload, refresh };
 }
 
 export function useIdeas(slug: string): UseIdeas {
@@ -225,11 +255,22 @@ export function useIdeas(slug: string): UseIdeas {
     },
     [queue],
   );
+  /* The list's clock is its identity: a forced run replaces it and re-stamps
+     it. The hold is not this band's reader's — Marginalia makes a second. */
+  const hold = useRewriteHold({
+    slug,
+    step: "ideas",
+    identity: read.ideas?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(
     async () => {
-      await queue.start({ force: true });
+      await held(() => queue.start({ force: true }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* `reload`, not `ensure`, for the last argument: a read that failed is
@@ -249,12 +290,14 @@ export function useIdeas(slug: string): UseIdeas {
     slug,
     error: read.error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     refresh,
+    retryRead: read.retryRead,
     cancel: queue.cancel,
   };
 }

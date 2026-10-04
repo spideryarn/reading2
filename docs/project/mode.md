@@ -425,6 +425,17 @@ Then the residue nothing refuses at compile time:
       article in the fixture a query filtering on nothing returns the same rows as one filtering
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
+- **A read that failed, and a forced re-run** — signposts, both since 2026-10-04
+  ([261004c](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
+  The panel draws [`ReadError`](../../src/web/ReadError.tsx) with the hook's `retryRead`, and the
+  panel is a row in *[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx)*,
+  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion. A
+  forced verb goes through `useRewriteHold`
+  ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
+  [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),
+  every forced control in the panel honours `rewriting`, and the mode is a row in
+  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)* — which nothing checks you
+  added.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
   is nothing there**; arriving does not. (One view starts on arrival instead: the thread, since
   2026-10-03 Summary's Thread view rather than a mode, kept the rule Greg asked of its page on

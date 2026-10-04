@@ -1203,6 +1203,7 @@ const QUOTES_READ: QuotesRead = {
   profiled: false,
   profileChanged: false,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };
@@ -1283,7 +1284,9 @@ const GLOSSARY_READ: GlossaryRead = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
   patchEntry: () => {},

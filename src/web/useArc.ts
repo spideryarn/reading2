@@ -62,6 +62,7 @@ import type { Arc, ArcFound } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
  * `absent` is the state this hook exists for, and it is not an error: no arc
@@ -125,7 +126,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
       setStatus(found.stale ? "absent" : "ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* A failed revalidation must not take a good arc off the screen — `load`
          runs again every time a job finishes, not only on the first read. Only
          the opening read has nothing to fall back on. Same guard and same

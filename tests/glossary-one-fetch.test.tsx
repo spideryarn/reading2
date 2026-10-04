@@ -127,7 +127,12 @@ vi.mock("../src/web/lib/api.js", () => {
       const body = JSON.stringify(response(input.split("/").pop() ?? ""));
       const dead = fails;
       await new Promise<void>((go) => held.push(go));
-      if (dead) throw new TypeError("Failed to fetch");
+      /* Marked, as the real `apiFetch` marks what comes out of `fetch`: an
+         unmarked `TypeError` is a bug's, and is said as one. */
+      if (dead) {
+        const { markUnreachable } = await import("../src/web/lib/reader-facing.js");
+        throw markUnreachable(new TypeError("Failed to fetch"));
+      }
       return new Response(body, {
         status: 200,
         headers: { "content-type": "application/json" },

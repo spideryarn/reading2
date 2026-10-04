@@ -281,6 +281,7 @@ describe("the panel, rendered", () => {
       outdated: false,
       slug: "openai-huggingface",
       error: null,
+      retryRead: async () => {},
       job: null,
       failed: null,
       /* The tab can reach the server — src/job-state.ts § `driverStalled`. */

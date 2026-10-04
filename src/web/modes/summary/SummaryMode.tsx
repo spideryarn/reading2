@@ -149,7 +149,7 @@ function OwnerSimple({
         compact
         regenerate={{
           run: () => void owner.regenerate(),
-          busy: owner.job !== null || owner.starting,
+          busy: owner.job !== null || owner.starting || owner.rewriting,
           refresh: () => owner.refresh(),
         }}
       />

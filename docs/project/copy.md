@@ -436,7 +436,8 @@ working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
 
 The client has one place that turns a caught failure into the sentence a reader
 sees — `describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts),
-used by comments, chat, search, criteria, claims, the mirror and the source scan
+used by comments, chat, search, criteria, claims, the mirror, the source scan and,
+since 2026-10-04, the fourteen artefact read hooks (`tests/read-error-matrix.test.tsx`)
 — and until 2026-09-24 it had the pipeline's old shape: any `Error`'s message
 went through, on a comment's word that "an Error we threw ourselves already
 carries a real message from the server". On 2026-09-12 React's own *"Minified

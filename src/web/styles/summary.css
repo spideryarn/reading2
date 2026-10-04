@@ -99,8 +99,7 @@
    drop their own. */
 .simple-scroll .gloss-empty { padding: 0.4rem 0.2rem; }
 .simple-scroll .gloss-stale { margin: 0 0 0.8rem; }
-.simple-read-error { margin: 0 0 0.8rem; }
-.simple-read-error .gloss-error { margin: 0 0 0.5rem; }
+.simple-scroll .read-error { margin: 0 0 0.8rem; }
 
 .simple-para + .simple-para { margin-top: 0.9rem; }
 /* Prose, so it reads at the band's own size and leading rather than as a
