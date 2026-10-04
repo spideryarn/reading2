@@ -214,7 +214,7 @@ import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
 import { HighlightDot } from "./HighlightSwatches.js";
 import { armActivationForMode, armActivationForSubMode } from "./activation.js";
-import { withSubMode, type SubMode } from "./sub-modes.js";
+import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
@@ -251,6 +251,7 @@ import {
   marginInSearch,
   type Mode,
   type Panel,
+  rememberInSearch,
   summaryInSearch,
   type SummaryView,
 } from "./params.js";
@@ -1742,7 +1743,7 @@ function useActivateSubMode(
  * `DockModeLinks` draws and the command bar's mode rows follow there, one
  * function so the two doors cannot land in different places.
  */
-function modeLinkHref(slug: string, search: string, mode: Mode): string {
+export function modeLinkHref(slug: string, search: string, mode: Mode): string {
   /* A metadata URL can itself carry `mode=marginalia`, or the retired
      `mode=annotations` (`isMarginaliaModeWord`). Translate it before following
      either axis: choosing a band must keep the notes, and choosing Marginalia
@@ -1753,6 +1754,13 @@ function modeLinkHref(slug: string, search: string, mode: Mode): string {
   if (mode === "marginalia") {
     return readHref(slug, withMargin(canonical, true), "article");
   }
+  /* **`mode` alone, with one exception**, the same one the reading view's
+     button makes (sub-modes.ts § `returnToSubMode`). The carried string keeps
+     everything but `panel=` (router.ts § `carriedSearch`), so a reader who came
+     here from a Chat conversation with `remember=quiz` retained carries both,
+     and a plain Remember link would open the Quiz with that thread selected. */
+  const back = returnToSubMode(mode, { remember: rememberInSearch(canonical) });
+  if (back !== null) return readHref(slug, withSubModeParams(canonical, back), "article");
   return readHref(slug, withMode(canonical, mode), "article");
 }
 

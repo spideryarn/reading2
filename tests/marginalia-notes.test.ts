@@ -12,6 +12,7 @@ import {
   DRAWN_RELATIONS,
   marginaliaNotes,
   arcAt,
+  headBlock,
   headPath,
   layoutNotes,
   type MarginEntry,
@@ -219,6 +220,75 @@ describe("the head", () => {
     expect(arcAt(arc, index, "spya-aaaaa6")).toBe("Turning it round.");
     expect(arcAt(arc, index, "spya-zzzzzz")).toBe(null);
     expect(arcAt(null, index, "spya-aaaaa2")).toBe(null);
+  });
+});
+
+/**
+ * **The block the head speaks for** (qi-2ymfq3ek, plan 261004l § D): above the
+ * first part the head borrows the first part's first block, and nowhere else.
+ * The ids are deliberately out of string order against document order: block 1
+ * sorts *after* the first part's first block as a string, so a comparison of
+ * ids rather than of index positions answers wrongly here
+ * (docs/project/block-ids.md § the warning on range checks).
+ */
+describe("the block the head speaks for", () => {
+  const order = ["spya-zzzzz1", "spya-mmmmm2", "spya-aaaaa3", "spya-kkkkk4", "spya-bbbbb5", "spya-ccccc6"];
+  const at = new Map(order.map((id, i) => [id, i]));
+  /* Block 1 above every part; part A over 2–3; block 4 in a gap; part B over 5; block 6 after the last. */
+  const gapped = {
+    version: "t",
+    generator: "t",
+    slug: "s",
+    rootId: "root",
+    nodes: {
+      root: node({ id: "root", depth: 0, range: ["spya-zzzzz1", "spya-ccccc6"], title: "Article", children: ["a", "b"] }),
+      a: node({ id: "a", depth: 1, parent: "root", range: ["spya-mmmmm2", "spya-aaaaa3"], title: "Part A" }),
+      b: node({ id: "b", depth: 1, parent: "root", range: ["spya-bbbbb5", "spya-bbbbb5"], title: "Part B" }),
+    },
+  } as unknown as Tree;
+  const nodes = gapped.nodes as Record<string, TreeNode>;
+
+  it("a block above the first part answers with the first part's first block", () => {
+    expect(headBlock(gapped, at, "spya-zzzzz1")).toBe("spya-mmmmm2");
+    expect(headPath(gapped, at, headBlock(gapped, at, "spya-zzzzz1"))).toEqual([{ title: "Part A", voice: "ai" }]);
+  });
+
+  it("no block at all answers with the first part's first block", () => {
+    expect(headBlock(gapped, at, null)).toBe("spya-mmmmm2");
+  });
+
+  it("a block inside a part answers with itself, the first part's own first block included", () => {
+    expect(headBlock(gapped, at, "spya-mmmmm2")).toBe("spya-mmmmm2");
+    expect(headBlock(gapped, at, "spya-aaaaa3")).toBe("spya-aaaaa3");
+    expect(headBlock(gapped, at, "spya-bbbbb5")).toBe("spya-bbbbb5");
+  });
+
+  it("a block in a later gap, or after the last part, does not borrow a part", () => {
+    expect(headBlock(gapped, at, "spya-kkkkk4")).toBe("spya-kkkkk4");
+    expect(headBlock(gapped, at, "spya-ccccc6")).toBe("spya-ccccc6");
+    expect(headPath(gapped, at, headBlock(gapped, at, "spya-kkkkk4"))).toEqual([]);
+  });
+
+  it("a block id the index does not know is not the top", () => {
+    expect(headBlock(gapped, at, "spya-000000")).toBe("spya-000000");
+  });
+
+  it("a missing tree, an empty one, and one with no root answer with what they were given", () => {
+    const empty = { ...gapped, nodes: { root: { ...nodes.root, children: [] } } } as unknown as Tree;
+    const rootless = { ...gapped, nodes: {} } as unknown as Tree;
+    for (const t of [null, undefined, empty, rootless]) {
+      expect(headBlock(t, at, "spya-zzzzz1")).toBe("spya-zzzzz1");
+      expect(headBlock(t, at, null)).toBe(null);
+    }
+  });
+
+  it("a first part whose first block is not in the article answers with what it was given", () => {
+    const stale = {
+      ...gapped,
+      nodes: { ...nodes, a: { ...nodes.a, range: ["spya-gone00", "spya-aaaaa3"] } },
+    } as unknown as Tree;
+    expect(headBlock(stale, at, "spya-zzzzz1")).toBe("spya-zzzzz1");
+    expect(headBlock(stale, at, null)).toBe(null);
   });
 });
 

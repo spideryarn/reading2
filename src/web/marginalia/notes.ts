@@ -30,6 +30,7 @@ import type {
 import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
+import { isSupplementNode } from "../../supplement.js";
 import { titleVoice } from "../tree.js";
 import { type AskedQuestion, type CommentKind, commentKind } from "../comment-nav.js";
 import type { Voice } from "../voice.js";
@@ -394,11 +395,54 @@ export function layoutNotes(
 }
 
 /**
+ * **The block the head speaks for.** The reader's own block, with one
+ * exception: a block *above the first part* (a title, a byline, an abstract the
+ * tree does not cover), or no block at all, answers with the first part's first
+ * block. So the head names the first part from the very top of the article,
+ * where the headings breadcrumb is hidden while the column is drawn and nothing
+ * else would say where the reader is (qi-2ymfq3ek).
+ *
+ * The caller passes the one answer to both `headPath` and `arcAt`, so the path
+ * and the arc cannot name different parts.
+ *
+ * **Nothing else falls back**, each on purpose: a block in a gap further down
+ * (there is no part to borrow there without claiming the reader is somewhere
+ * they are not), a block id the index does not know (a stale `?at=` is not
+ * "the top"), and a missing or empty tree all answer with what was passed in.
+ *
+ * "Above" is a comparison of **positions in the index**, never of id strings:
+ * ids carry no order (docs/project/block-ids.md § the warning on range checks).
+ * docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § D
+ */
+export function headBlock(
+  tree: Tree | null | undefined,
+  index: ReadonlyMap<string, number>,
+  blockId: BlockId | null,
+): BlockId | null {
+  if (!tree) return blockId;
+  /* The first part: the root's first child that is not the apparatus —
+     src/tree-parts.ts § `partsOf`, which throws on a rootless tree where this
+     has nothing to say. */
+  const first = tree.nodes[tree.rootId]?.children
+    .map((id) => tree.nodes[id])
+    .find((node) => node !== undefined && !isSupplementNode(node));
+  if (!first) return blockId;
+  const start = index.get(first.range[0]);
+  if (start === undefined) return blockId;
+  if (blockId === null) return first.range[0];
+  const at = index.get(blockId);
+  if (at === undefined) return blockId;
+  return at < start ? first.range[0] : blockId;
+}
+
+/**
  * **The head's path**: the part and the section that hold `blockId`, at most
  * two titles — Sol's "current section title" plus the one ancestor that says
- * where it sits. `[]` above the first part, or where the tree does not cover
- * the block. Each title carries whose words it is, read off the node while we
- * have it — tree.ts § `titleVoice`.
+ * where it sits. `[]` where the tree does not cover the block: a gap between
+ * parts or after the last one. The rows above the first part are `[]` here too,
+ * and are the caller's to resolve first, through `headBlock` above. Each title
+ * carries whose words it is, read off the node while we have it — tree.ts §
+ * `titleVoice`.
  */
 export function headPath(
   tree: Tree | null | undefined,
