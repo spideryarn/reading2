@@ -30,8 +30,10 @@ import { useCallback, useEffect, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type SketchStatus = "loading" | "ready" | "none" | "error";
@@ -64,6 +66,11 @@ export interface UseSketch {
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
   /**
+   * A redraw was pressed on the picture still on screen, and has neither
+   * replaced it nor failed — the redraw waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /**
    * **Draw it if nobody has** — unforced, for the automatic run and for the
    * button in the empty state.
    *
@@ -84,6 +91,8 @@ export interface UseSketch {
   regenerate(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -96,6 +105,18 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * **Which stored picture is on screen**, for Regenerate's hold
+   * (rewrite-hold.ts). A sketch carries no clock of its own — `Sketch` has no
+   * `generatedAt` — so this is the stored `sketch` value itself, as the server
+   * sent it. **Never the response beside it**: `stale`, `outdated` and
+   * `profileChanged` change with no job having drawn anything, and would read
+   * as a replacement (GPT Sol's plan review of 261004c, F12). Nor the checked
+   * scene, which changes with the article's block order.
+   */
+  const [drawn, setDrawn] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * **Keyed on the ids, not on the array.** `blockOrder` is derived in the
@@ -113,6 +134,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -126,6 +148,8 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        setDrawn(null);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -144,29 +168,40 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       if (checked.scenes.length === 0) {
         setSketch(null);
         setFaults(report.faults);
+        setDrawn(null);
+        landed(started, res, null);
         setStatus("none");
         setError(null);
         return;
       }
 
+      const identity = JSON.stringify(loaded.sketch);
+      setDrawn(identity);
+      landed(started, res, identity);
       setSketch(checked);
       setFaults(report.faults);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "drawn without one". */
-      setProfiled(checked.profileHash != null);
+         undefined` and only `null` and absent mean "drawn without one".
+
+         **Off the stored value, not `checked`.** `readSketch` rebuilds the
+         scene and does not carry `profileHash` across, so reading it there was
+         always `false`: no picture ever drew its *written for you* badge, and
+         the redraw in that badge's panel could not be reached. Found by
+         tests/rewrite-hold.test.tsx, 2026-10-04. */
+      setProfiled((loaded.sketch as { profileHash?: unknown } | null)?.profileHash != null);
       setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug, order]);
+  }, [slug, order, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
@@ -179,6 +214,15 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     void reload();
   }, [reload]);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. A picture already on screen stays there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (sketch === null) setStatus("loading");
+    await reload();
+  }, [sketch, reload]);
+
   const queue = useStepJob(slug, "sketch", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. See the interface above, and useIdeas.ts. */
@@ -188,11 +232,13 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     },
     [queue],
   );
+  const hold = useRewriteHold({ slug, step: "sketch", identity: drawn, queue, fresh, refresh });
+  const held = hold.run;
   const regenerate = useCallback(
     async () => {
-      await queue.start({ force: true });
+      await held(() => queue.start({ force: true }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* **Armed by the Sketch chip, and since 2026-09-06 by the bar's Diagram
@@ -214,12 +260,14 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     refresh,
+    retryRead,
     cancel: queue.cancel,
   };
 }

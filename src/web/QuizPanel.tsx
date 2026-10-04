@@ -109,6 +109,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { ICON_BUTTON_CLASS, IconButton } from "./IconButton.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
 import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
@@ -962,7 +963,7 @@ export function QuizPanel({
       }
     >
 
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
 

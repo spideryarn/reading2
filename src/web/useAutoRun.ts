@@ -54,13 +54,23 @@
  * network cannot loop. If the second read comes back empty the press is still in
  * hand and the run starts, which is what pressing a mode means.
  *
- * This is the way out of a failed GET, and there has to be one: Ideas, Quotes
- * and Timeline draw no button at all in their error state, so the bar is the
- * only control the reader has. Before 2026-09-02 the press was retired on
- * `error` and pressing the same mode again did nothing whatever — GPT Sol's
- * second finding. Retiring it was defending against a kept press firing against
- * whatever mounted next, and `owner` now stops that structurally: the only mount
- * that can spend this press is the one still looking at the error.
+ * This is one way out of a failed GET, and until 2026-10-04 it was the only
+ * one in Ideas, Quotes and Timeline, which drew no button at all in their error
+ * state. Before 2026-09-02 the press was retired on `error` and pressing the
+ * same mode again did nothing whatever — GPT Sol's second finding. Retiring it
+ * was defending against a kept press firing against whatever mounted next, and
+ * `owner` now stops that structurally: the only mount that can spend this press
+ * is the one still looking at the error.
+ *
+ * **There are three routes to the answer, and the press is honoured by
+ * whichever arrives**: the opening read, this one automatic re-read, and the
+ * panel's own *Try again* (`retryRead`, drawn by src/web/ReadError.tsx in every
+ * band since 2026-10-04). *Try again* itself sends only a GET. If that GET says
+ * there is nothing and the press is still in hand, the run starts — unforced,
+ * and once per `(slug, target)` — exactly as it would have had the first read
+ * answered. Pressing the bar button again in the same state would start it
+ * too. tests/read-error-matrix.test.tsx § Try again answered by a 404 pins both
+ * halves: a press in hand runs once, a pasted link runs nothing.
  *
  * ## Unforced, and the empty-state button must be too
  *
@@ -202,8 +212,9 @@ export function useAutoRun(
  *    which records before it answers, so `<StrictMode>`'s double effect is
  *    refused and a failed job cannot loop;
  *  - **a failed read is not an answer** — read again, once per slug per mount,
- *    and run if that says there is nothing. The page's `error` branch draws no
- *    button, so without this a transient failure would leave it dead;
+ *    and run if that says there is nothing. The page's `error` branch drew no
+ *    button when this was written; it has *Try again* now, and that press is
+ *    honoured the same way — § A failed read is not an answer;
  *  - the callbacks in refs, so a caller that rebuilds them every render cannot
  *    re-fire the effect.
  *

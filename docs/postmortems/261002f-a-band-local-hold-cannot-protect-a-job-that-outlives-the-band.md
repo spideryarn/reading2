@@ -48,6 +48,12 @@ job that failed while Quiz was closed, which a fresh mount cannot otherwise tell
 being read. Two remount tests in `tests/quiz-regenerate-revalidation.test.tsx`, each seen red
 against a mutant. Plan [261002f § Code review](../plans/261002f-quiz-regenerate-for-my-profile.md).
 
+**Since 2026-10-04** the hold is in `src/web/rewrite-hold.ts`, shared by six modes, and the "a read
+has landed since" rule above is tightened in three ways it turned out to need: the read must have
+*started* after the job was seen over, an offline copy is not a read, and the job must be listed as
+over rather than merely absent
+([261004c § 2a](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
+
 ## Countermeasures ranked by cost and value
 
 1. **Exercise every paid entry point with a held replacement and a failed GET.** Small jsdom

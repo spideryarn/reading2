@@ -49,8 +49,7 @@
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BadgeQuestionMark, TriangleAlert } from "lucide-react";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
@@ -73,6 +72,7 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { ReadError } from "./ReadError.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
@@ -201,17 +201,7 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
          SPIDERYARN-READING2-62 (`FaqAbout`). */
       foot={showJob ? <div className="faq-foot">{run("Find them again", true)}</div> : null}
     >
-      {owner?.error && (
-        <div className="faq-read-error">
-          <p className="gloss-error" role="alert">
-            {owner.error}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
-      )}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
 

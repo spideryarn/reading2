@@ -36,7 +36,7 @@ import {
   ColourNeedsWords,
   CommentIdTaken,
   NotAnExplanation,
-  type AnswerPatch,
+  type AnswerFinish,
   type MarkPatch,
   type NewComment,
 } from "../comments.js";
@@ -626,16 +626,16 @@ const rawPgCommentStore: CommentStore = {
   async patch(
     slug: string,
     id: string,
-    patch: AnswerPatch,
-    attempt?: string,
+    patch: AnswerFinish,
+    attempt: string,
     opts: { quiet?: boolean } = {},
   ): Promise<Comment[] | undefined> {
     const db = getDb();
 
     /* **Refused without an attempt, rather than falling back to identity.**
-       The token is optional in the interface because the filesystem store has
-       none. Accepting `undefined` *here* would mean a caller that simply forgot
-       to carry it through got the whole race back, with nothing anywhere
+       The interface requires the token; this is the same rule for a caller the
+       compiler did not see. Accepting `undefined` *here* would mean one that
+       dropped it got the whole race back, with nothing anywhere
        reporting it — the reasoning `pgSearchStore.finish` sets out at length. */
     if (attempt === undefined) {
       throw new MissingAttempt("CommentStore.patch", "beginAnswer()");
@@ -644,7 +644,8 @@ const rawPgCommentStore: CommentStore = {
        released below whatever the patch says, so a patch leaving the comment
        `pending` would strip the fence off a row still waiting for an answer,
        after which anybody's late write can land on it. */
-    if (patch.status !== "done" && patch.status !== "error") {
+    const status: string | undefined = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -664,7 +665,7 @@ const rawPgCommentStore: CommentStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `CommentStore.patch must end an answer: status was ${JSON.stringify(patch.status)}, ` +
+          `CommentStore.patch must end an answer: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -680,10 +681,10 @@ const rawPgCommentStore: CommentStore = {
     const written = await db
       .update(commentsTable)
       .set({
-        /* The anchor is no longer settable here either. `AnswerPatch` is the
+        /* The anchor is no longer settable here either. `AnswerFinish` is the
            type-level half of the same rule; this is the half that survives a
            caller with an `as never` in it. */
-        ...(patch.status === undefined ? {} : { status: patch.status }),
+        status: patch.status,
         ...(patch.answer === undefined ? {} : { answer: patch.answer }),
         ...(patch.citations === undefined ? {} : { citations: patch.citations }),
         ...(patch.searches === undefined ? {} : { searches: patch.searches }),

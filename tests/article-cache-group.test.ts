@@ -102,7 +102,7 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("timeline", ["sketch"])).toBe(false);
   });
 
-  it("puts sketch in no group at all, since it thinks at `low` alone", () => {
+  it("puts sketch in no group at all, since it thinks at `low`", () => {
     /* **Same bytes as `ideas`, different effort, so no share** — the same rule
        that keeps glossary away from arc. Sketch was in the `ids` + `high` group
        until 2026-10-01, when the thinking-effort eval found no visible loss at

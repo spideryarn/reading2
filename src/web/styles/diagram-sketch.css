@@ -427,6 +427,9 @@ a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: 
   font-size: 0.81rem;
   color: var(--ink-faint);
 }
+/* The shared read-error markup belongs to both pictures in Diagram. Keep the
+   band's failure colour when its sentence also carries a retry button. */
+.mode-band.diag .read-error .gloss-error { color: var(--ink-faint); }
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }

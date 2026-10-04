@@ -508,6 +508,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* The same family: a panel's opening list read, given up on at its deadline.
      See LIST_LOAD_TIMED_OUT. */
   "rd-timeout": "retry",
+  /* And the Referee band's scan read, given up on at *its* deadline. See
+     SCAN_TIMED_OUT. */
+  "rd-scan-timeout": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
      they were in. **Their kinds are not uniform**, which is the whole reason
@@ -2388,6 +2391,29 @@ export const LIST_LOAD_TIMED_OUT: ReaderFacingFailure = {
     "Things you saved for this article took too long to arrive, so this app stopped waiting. " +
     "You can add something now; reload the page to try showing the earlier items again. " +
     "[rd-timeout]",
+};
+
+/**
+ * Referee's check of the source document for hidden instructions was given up
+ * on at its deadline — `useSourceScan` (src/web/useSourceScan.ts), sixty
+ * seconds, through the same finite read as the lists above.
+ *
+ * Its own sentence rather than `LIST_LOAD_TIMED_OUT`, because nothing here was
+ * saved by the reader and nothing is unlocked by the wait ending. Its own code
+ * so whoever is helping can tell the two reads apart.
+ *
+ * It says the check **did not finish**, not that it found nothing: the notice
+ * it lands in (`SourceScanNotice`) is at pains that a failed check is neither a
+ * warning nor a clean bill, and this must not undo that. And it says to reload,
+ * because the hook has no retry of its own, on purpose — its header says why.
+ * `retry` because another attempt can work; the attempt is the reload.
+ */
+export const SCAN_TIMED_OUT: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The check took too long to answer, so this app stopped waiting for it. It did not finish, " +
+    "so it says nothing either way about this document. Reload the page to run the check again. " +
+    "[rd-scan-timeout]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */

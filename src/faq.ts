@@ -664,7 +664,8 @@ export async function generateFaq(opts: {
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
 
   /* The body only, applied here at the call site as `ideas` does — the same
-     bytes, which is the cache share. And passages are verified against the
+     bytes, though not a shared cache: the two schemas differ
+     (`sharesArticleCache` in src/pipeline.ts). And passages are verified against the
      same set, so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
   const words = articleWordCounts(blocks).body;

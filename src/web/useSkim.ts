@@ -30,6 +30,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { IdeasRead } from "./useIdeas.js";
 import type { StepBefore } from "../step-order.js";
@@ -65,7 +66,7 @@ export interface UseSkim {
    * not be read, or they are stale. The long part of a first run (F64).
    */
   ideasFirst: boolean;
-  /** Repeat only the GET after a failed read. Never starts a model job. */
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   /**
    * **Write it if nobody has** — unforced, for the automatic run and the empty
@@ -125,7 +126,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the route away — useFaq.ts. */
         setStatus((was) => (was === "loading" ? "error" : was));
       }

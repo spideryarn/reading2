@@ -183,7 +183,7 @@ describe("the Postgres shelf and library search", () => {
       revisionId: string,
       ordinal: number,
       text: string,
-      opts: { gistable?: boolean; kind?: string } = {},
+      opts: { gistable?: boolean; kind?: "text" | "heading" } = {},
     ) => ({
       articleId: ARTICLE_ID,
       revisionId,

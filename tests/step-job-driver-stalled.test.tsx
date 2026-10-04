@@ -78,7 +78,7 @@ let root: Root;
 /** What the hook answered on the last render. */
 let seen: { stalled: boolean; job: Job | null; failed: StepFailure | null } | null = null;
 /** The last hook value, so a test can press the button. */
-let press: (() => Promise<void>) | null = null;
+let press: (() => Promise<unknown>) | null = null;
 
 beforeEach(() => {
   jobs = [];

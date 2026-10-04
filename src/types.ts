@@ -9,7 +9,10 @@
  * cost the one guarantee that matters: that the file writing blocks.json and
  * the thirty-five files reading it agree about its shape.
  *
- * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
+ * `TreeNode` below is the authority for a node's fields.
+ * docs/project/granularity-zoom.md § Node shape explains them — what a `gist`
+ * is and why a leaf has a `navLabel` instead — and is not a second copy to keep
+ * in step: one kept there drifted by a field within a month.
  *
  * Three imports. Two are types: `FailureKind` belongs to src/messages.ts,
  * where the four kinds are defined and where `canRetry` decides what each one
@@ -3236,47 +3239,40 @@ export type StepName =
   | "labels"
   | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
-     Beside `glossary` because the two send byte-identical article bytes at the
-     same effort and share one cached prefix. */
+
+     **Which steps share a cached article is not written in this union.** These
+     comments used to say, step by step, and every one of them went stale when
+     the output schema joined the cache key. `sharesArticleCache` in
+     src/pipeline.ts is the policy and tests/article-cache-group.test.ts pins
+     it; today no two steps share. */
   | "quotes"
   /* A route through the Quotes, at three depths —
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      Its input is another step's artefact, like `illustrated`: it reads the
-     stored Quotes and never the article's prose, so it is in no cached prefix
-     and is not an `ArticleStage`. */
+     stored Quotes and never the article's prose, so it is not an
+     `ArticleStage`. */
   | "skim"
   | "ideas"
   /* When the things the piece narrates happened, and how sure it is —
-     docs/project/timeline.md. Beside `ideas` because the two send byte-identical
-     article bytes at the same effort and share one cached prefix, the same
-     reason `quotes` sits beside `glossary`. */
+     docs/project/timeline.md. */
   | "timeline"
   /* The questions the piece can ask you back, the second sub-mode of Remember —
-     docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
-     for the third time and the same reason: `articleWithIds` at `high` effort,
-     so the group shares one cached article prefix. `STEP_ORDER` keeps its calls
-     close inside the provider's five-minute lifetime; cache lookup itself is
-     position-blind. */
+     docs/plans/260831al-review-quiz-sub-mode.md. */
   | "quiz"
   /* The questions a careful reader would put to this piece while reading it,
-     and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
-     Beside `quiz` for the same reason `quiz` is beside `timeline`:
-     `articleWithIds` over the body at `high` effort, so it joins the
-     `ideas`/`timeline`/`quiz` cached article prefix. */
+     and the passages where the piece responds — docs/plans/260916d-faq-mode.md. */
   | "faq"
   /* How each paragraph bears on the one before it, one word of ten —
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
-     Read only by Marginalia, and by the owner only. The same bytes as `faq`
-     at `low` effort, so in no cached prefix group. */
+     Read only by Marginalia, and by the owner only. */
   | "relations"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Nothing reads what it writes except the one below. The same bytes as
-     `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
-     (src/models.ts § STAGE_EFFORT). */
+     Nothing reads what it writes except the one below. `low` effort since
+     2026-10-01 (src/models.ts § STAGE_EFFORT). */
   | "sketch"
-  /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
-     step here whose input is another step's artefact rather than the article**,
-     so it is last in `STEP_ORDER` and it *refuses* rather than pulls: a request
+  /* The same argument painted, docs/project/diagram.md § Illustrated. **It reads
+     the Sketch as well as the article**,
+     so it follows `sketch` in `STEP_ORDER` and it *refuses* rather than pulls: a request
      for it alone arrives as `steps: ["illustrated"]` and nothing puts `sketch`
      in front of it. src/pipeline.ts § illustrated. */
   | "illustrated"
@@ -3286,8 +3282,8 @@ export type StepName =
      it makes.
 
      **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
-     the subset of these names that share a byte-exact cached article prefix on
-     the Messages wire; this step is on chat/completions, shares no such prefix,
+     the subset of these names that send the article bare on the Messages wire,
+     and so could share a cached copy of it; this step is on chat/completions,
      and therefore takes no row in `STAGE_EFFORT` or `ARTICLE_RENDERER` and none
      in `cacheArticleForStep`. Stated here because mode.md lists both tables
      among the ones the compiler asks for, and a reader will otherwise go
@@ -3301,14 +3297,12 @@ export type StepName =
      `debate`'s: it is on the Messages wire, but it sends `articleWithIds` over
      *every* block — the notes and the bibliography are the whole point — where
      `ideas`, `timeline`, `quiz`, `faq` and `sketch` send the body only. Different
-     bytes, so no shared cached prefix, so no row in `STAGE_EFFORT` or
+     bytes from every `ArticleStage`, so no row in `STAGE_EFFORT` or
      `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
   | "citations"
   /* **Links between the article's own blocks** — a phrase in one block that
      refers to what another shows in detail. Ideas' article block, byte for byte
-     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`, and it
-     shares a cached prefix with nothing, because no other `ids` stage thinks at
-     `medium`. Not a mode: the links sit in the prose in every mode.
+     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`. Not a mode: the links sit in the prose in every mode.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   | "crossrefs"
   /* **Simple** — a few short paragraphs in everyday words saying what the piece
@@ -3316,7 +3310,7 @@ export type StepName =
      came from: a sub-mode of Summary, made on a press.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Ideas' article block
      at `high` effort (measured against `medium` in stage 1), so an
-     `ArticleStage` in the `ideas` cached prefix group. */
+     `ArticleStage`. */
   | "simple";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";

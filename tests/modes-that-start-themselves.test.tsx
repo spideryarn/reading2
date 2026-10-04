@@ -346,7 +346,9 @@ const SETTLED_EMPTY_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
   clear: () => {},
@@ -384,6 +386,7 @@ const SETTLED_EMPTY_QUOTES_READ = {
   profiled: false,
   profileChanged: false,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };
@@ -396,7 +399,9 @@ const SETTLED_EMPTY_IDEAS_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };

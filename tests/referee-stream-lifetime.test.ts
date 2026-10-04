@@ -66,7 +66,7 @@
  * ## What this file does not do
  *
  * Nothing here reaches a model: all three generators are stubbed. It is about
- * plumbing — who awaits whom, and when a key leaves a `Set` — not about what a
+ * plumbing — who awaits whom, and when a live marker is released — not about what a
  * referee is told. The answers themselves are
  * tests/referee-criteria-run.test.ts and its siblings.
  */
@@ -125,6 +125,19 @@ const gates = vi.hoisted(() => {
         arrived = deferred();
         released = deferred();
       },
+      /**
+       * Make room for a **second** run through the same gate while the first is
+       * still parked in it, and hand back the first one's release.
+       *
+       * `release()` reads the variable, so after this it lets the *second* run
+       * go; the function returned here closed over the first run's promise.
+       */
+      handOver: (): (() => void) => {
+        const releaseFirst = released.resolve;
+        arrived = deferred();
+        released = deferred();
+        return releaseFirst;
+      },
     };
   }
   return { criterion: makeGate(), claims: makeGate(), mirror: makeGate() };
@@ -173,7 +186,7 @@ await pgReady({
 });
 
 const { handleApi, CRITERION_ORPHAN_GRACE_MS } = await import("../src/routes.js");
-const { refereeCriteriaStore } = await import("../src/store/index.js");
+const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
 const { CLAIMS_ORPHAN_GRACE_MS } = await import("../src/store/pg-referee-claims.js");
 
 /**
@@ -191,6 +204,13 @@ function begin(
   method: string,
   url: string,
   body?: unknown,
+  /**
+   * `brokenStream`: a response `sse()` cannot open. `res.on` is the first thing
+   * it calls, so throwing there is a failure *between* the pending row being
+   * written and the stream existing. The route's generic handler then answers
+   * 500 on the same fake, which has sent no header.
+   */
+  opts: { brokenStream?: boolean } = {},
 ): {
   promise: Promise<void>;
   settled: () => boolean;
@@ -214,7 +234,9 @@ function begin(
     setHeader() {},
     flushHeaders() {},
     writeHead() {},
-    on() {},
+    on() {
+      if (opts.brokenStream) throw new Error("the socket went away before the stream opened");
+    },
     write(chunk: string) {
       written += chunk;
       return true;
@@ -341,6 +363,32 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
   });
 
   describe("POST /api/referee/criteria/:slug", () => {
+    it("keeps carried writable fields on either terminal status", async () => {
+      await asTestOwner(async () => {
+        const failed = await refereeCriteriaStore.begin(SLUG, "Methods?", { kind: "single" });
+        const failure = {
+          status: "error" as const,
+          error: "failed",
+          model: "failure-model",
+          results: [{
+            kind: "single" as const,
+            blockId: "spya-k3m9qt",
+            quote: "methods",
+            confidence: 70,
+            reasoning: "Names the methods",
+          }],
+        };
+        const error = await refereeCriteriaStore.finish(SLUG, failed.row.id, failure, failed.attempt);
+        expect(error?.model).toBe("failure-model");
+        expect(error?.results).toEqual(failure.results);
+
+        const begun = await refereeCriteriaStore.begin(SLUG, "Controls?", { kind: "single" });
+        const answer = { status: "done" as const, results: [], error: "carried error" };
+        const done = await refereeCriteriaStore.finish(SLUG, begun.row.id, answer, begun.attempt);
+        expect(done?.error).toBe("carried error");
+      });
+    });
+
     it("holds the request open until the stream is finished, and only then answers", async () => {
       const call = begin("POST", `/api/referee/criteria/${SLUG}`, {
         criterion: "Are the methods reproducible?",
@@ -371,7 +419,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
       /* **The row is now older than the grace**, so the age guard cannot be
          what spares it. Only `keep` — `liveCriteria(slug)`, built from the
-         `refereeing` set — is left. Without this line the assertion below
+         `refereeing` map — is left. Without this line the assertion below
          passes with the lock deleted, which is what the first draft did. */
       await ageTheCriteria(article.articleId);
       const mid = await get(`/api/referee/criteria/${SLUG}`);
@@ -416,6 +464,99 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       const after = await get(`/api/referee/criteria/${SLUG}`);
       const rows = after.criteria as { status: string }[];
       expect(rows[0]?.status, "the key was never released, so the sweep spared it").toBe("error");
+    });
+
+    it("holds the lock until the answer is stored, not only until the model stops", async () => {
+      /* **The gap between the model's last word and `finish`.** The handler
+         used to drop its key in the model call's own `finally`, so a page load
+         landing in that gap swept a run whose answer was in hand — and `finish`
+         then matched no row and the answer was thrown away. Search had the same
+         shape until `1714d1aa3`.
+
+         The wrapped `finish` *is* that page load: it ages the row past the
+         grace, so only the key can spare it, asks the sweeping `GET`, and then
+         does the real write. A key already released means the row is `error`
+         by the time the write runs, and the write matches nothing. */
+      const real = refereeCriteriaStore.finish.bind(refereeCriteriaStore);
+      const spy = vi
+        .spyOn(refereeCriteriaStore, "finish")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          await ageTheCriteria(article.articleId);
+          await get(`/api/referee/criteria/${SLUG}`);
+          return real(...args);
+        });
+      try {
+        const call = begin("POST", `/api/referee/criteria/${SLUG}`, {
+          criterion: "Are the methods reproducible?",
+          kind: "single",
+        });
+        await reachedOrSettled(gates.criterion, call, "POST /api/referee/criteria/:slug");
+        gates.criterion.release();
+        await call.promise;
+
+        expect(spy, "the wrapped finish never ran, so nothing was tested").toHaveBeenCalledTimes(1);
+        const rows = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        expect(rows[0]?.status, "a sweep between the model and the store buried the answer").toBe(
+          "done",
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("a deleted run finishing does not release its replacement's lock", async () => {
+      const body = { criterion: "Are the methods reproducible?", kind: "single" };
+      const older = begin("POST", `/api/referee/criteria/${SLUG}`, body);
+      await reachedOrSettled(gates.criterion, older, "POST /api/referee/criteria/:slug (older)");
+      const releaseOlder = gates.criterion.handOver();
+      let newer: ReturnType<typeof begin> | undefined;
+      try {
+        const [row] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        if (!row) throw new Error("the older request never wrote its pending row");
+        const removed = begin("DELETE", `/api/referee/criteria/${SLUG}/${row.id}`);
+        await removed.promise;
+        expect(JSON.parse(removed.written()).criteria).toEqual([]);
+
+        // An absent supplied id is reusable, even while its deleted run is still answering.
+        newer = begin("POST", `/api/referee/criteria/${SLUG}`, { ...body, id: row.id });
+        await reachedOrSettled(gates.criterion, newer, "POST /api/referee/criteria/:slug (newer)");
+        const [replacement] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        expect(replacement?.id, "the requests did not share a marker key").toBe(row.id);
+
+        releaseOlder();
+        await older.promise;
+        expect(newer.settled(), "the replacement finished too, so nothing was tested").toBe(false);
+        await ageTheCriteria(article.articleId);
+        const mid = await get(`/api/referee/criteria/${SLUG}`);
+        expect(
+          (mid.criteria as { status: string }[])[0]?.status,
+          "the deleted run took its replacement's lock with it",
+        ).toBe("pending");
+      } finally {
+        releaseOlder();
+        gates.criterion.release();
+        await Promise.all([older.promise, newer?.promise]);
+      }
+    });
+
+    it("does not keep the lock when the stream could not be opened", async () => {
+      /* The other half of the same repair: the key was added *before*
+         `sse(res)` and released only inside what came after it, so a response
+         that could not be opened left the key in the set for the life of the
+         process, and its `pending` row could never be swept. */
+      const call = begin(
+        "POST",
+        `/api/referee/criteria/${SLUG}`,
+        { criterion: "Are the methods reproducible?", kind: "single" },
+        { brokenStream: true },
+      );
+      await call.promise;
+      expect(call.written(), "the request did not fail, so nothing was tested").toContain("error");
+
+      await ageTheCriteria(article.articleId);
+      const after = await get(`/api/referee/criteria/${SLUG}`);
+      const rows = after.criteria as { status: string }[];
+      expect(rows[0]?.status, "the key was pinned, so the sweep spared a dead run").toBe("error");
     });
 
     it("propagates a failure raised outside the handler's own catch", async () => {
@@ -494,6 +635,68 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       const after = await get(`/api/referee/claims/${SLUG}`);
       const run = after.run as { status: string } | null;
       expect(run?.status, "the slug was never released, so the sweep spared it").toBe("error");
+    });
+
+    it("holds its lock until the answer is stored, not only until the model stops", async () => {
+      /* The criteria case of the same name, against claims' own lock, sweep and
+         store method. */
+      const real = refereeClaimsStore.finish.bind(refereeClaimsStore);
+      const spy = vi
+        .spyOn(refereeClaimsStore, "finish")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          await ageTheClaimsRun(article.articleId);
+          await get(`/api/referee/claims/${SLUG}`);
+          return real(...args);
+        });
+      try {
+        const call = begin("POST", `/api/referee/claims/${SLUG}`);
+        await reachedOrSettled(gates.claims, call, "POST /api/referee/claims/:slug");
+        gates.claims.release();
+        await call.promise;
+
+        expect(spy, "the wrapped finish never ran, so nothing was tested").toHaveBeenCalledTimes(1);
+        const run = await asTestOwner(() => refereeClaimsStore.load(SLUG));
+        expect(run?.status, "a sweep between the model and the store buried the answer").toBe(
+          "done",
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("an older run finishing does not release the newer run's lock", async () => {
+      /* **Two tabs, one article, one key.** The key is the slug, so both runs
+         hold the same one, and with a `Set` the first to finish deleted it out
+         from under the second. Each request now releases the key only if it is
+         still the holder — `searching` in src/routes.ts, plan 261002h. */
+      const older = begin("POST", `/api/referee/claims/${SLUG}`);
+      await reachedOrSettled(gates.claims, older, "POST /api/referee/claims/:slug (older)");
+      const releaseOlder = gates.claims.handOver();
+      const newer = begin("POST", `/api/referee/claims/${SLUG}`);
+      await reachedOrSettled(gates.claims, newer, "POST /api/referee/claims/:slug (newer)");
+
+      releaseOlder();
+      await older.promise;
+      expect(newer.settled(), "the newer run finished too, so nothing was tested").toBe(false);
+
+      await ageTheClaimsRun(article.articleId);
+      const mid = await get(`/api/referee/claims/${SLUG}`);
+      const run = mid.run as { status: string } | null;
+      expect(run?.status, "the older run took the newer run's lock with it").toBe("pending");
+
+      gates.claims.release();
+      await newer.promise;
+    });
+
+    it("does not keep its lock when the stream could not be opened", async () => {
+      const call = begin("POST", `/api/referee/claims/${SLUG}`, undefined, { brokenStream: true });
+      await call.promise;
+      expect(call.written(), "the request did not fail, so nothing was tested").toContain("error");
+
+      await ageTheClaimsRun(article.articleId);
+      const after = await get(`/api/referee/claims/${SLUG}`);
+      const run = after.run as { status: string } | null;
+      expect(run?.status, "the slug was pinned, so the sweep spared a dead run").toBe("error");
     });
   });
 

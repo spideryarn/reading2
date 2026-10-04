@@ -73,6 +73,7 @@ import { apiFetch } from "./lib/api.js";
    keep quiet about. */
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
+import { ReadError } from "./ReadError.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
@@ -654,6 +655,9 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
       {/* And the spinner going away is not the same as the work succeeding. The
           server's own words, per copy.md. */}
       {!view.job && view.failed && <p className="ill-failed">{view.failed.message}</p>}
+      {/* A re-read that failed, beside the painting it could not replace —
+          SketchView.tsx § OwnerSketch has the same line and the reason. */}
+      {view.error && <ReadError error={view.error} onRetry={view.retryRead} />}
 
       {notes.length > 0 && <p className="ill-note">{notes.join(" ")}</p>}
 
@@ -887,8 +891,14 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
   const { sketch } = view;
 
-  if (view.status === "error") {
-    return <p>{view.error ?? "Could not ask for this painting."}</p>;
+  if (view.error) {
+    return (
+      <ReadError
+        error={view.error}
+        onRetry={view.retryRead}
+        className="tw:m-0"
+      />
+    );
   }
 
   /* **Before every other branch.** `JobProgress` draws the spinner, the step's
