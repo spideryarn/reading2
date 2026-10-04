@@ -1,0 +1,270 @@
+{
+  "arm": "high-none-nosimple2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/7",
+  "sourceSha256": "47354e59e368897c5b63c6030e6e2b60137c53458ba8c53f285f10f755eab59b",
+  "at": "2026-10-04T11:11:22.966Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "a517e085ff6f7ddcb776af033804dfa3c4a919138b87d1c52ad14cfb5ec6fa7c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 54853,
+  "costUsd": 0.1382256,
+  "tokens": {
+    "input": 15302,
+    "output": 5761,
+    "reasoning": 3560
+  },
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 397,
+  "briefWords": 98,
+  "fuller": [
+    {
+      "text": "This long essay by Gwern uses GPT-3, a text-predicting AI released by OpenAI in May 2020, to argue for the scaling hypothesis. That is the idea that simple neural networks, made huge and trained with vast data and computing power, will keep gaining new abilities. In its strong form, no special brain-like design is needed: bigger is enough.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-m3gtj6"
+      ],
+      "sentences": [
+        {
+          "text": "This long essay by Gwern uses GPT-3, a text-predicting AI released by OpenAI in May 2020, to argue for the scaling hypothesis.",
+          "id": "spya-suzdvz",
+          "key": "the scaling hypothesis"
+        },
+        {
+          "text": "That is the idea that simple neural networks, made huge and trained with vast data and computing power, will keep gaining new abilities.",
+          "id": "spya-m3gtj6"
+        },
+        {
+          "text": "In its strong form, no special brain-like design is needed: bigger is enough.",
+          "id": "spya-m3gtj6"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 has 175 billion parameters, the adjustable numbers inside the model, making it 117 times larger than GPT-2. Trained only to guess the next word, it can still do arithmetic, translation and analogies after seeing a few examples in its prompt. The author calls this meta-learning, or learning how to learn, and stresses that nobody designed it in. Its gains also kept following the predicted curve, with no sign of slowing.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-ewxv9q",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 has 175 billion parameters, the adjustable numbers inside the model, making it 117 times larger than GPT-2.",
+          "id": "spya-aqts9c",
+          "key": "175 billion parameters"
+        },
+        {
+          "text": "Trained only to guess the next word, it can still do arithmetic, translation and analogies after seeing a few examples in its prompt.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "The author calls this meta-learning, or learning how to learn, and stresses that nobody designed it in.",
+          "id": "spya-ewxv9q",
+          "key": "meta-learning"
+        },
+        {
+          "text": "Its gains also kept following the predicted curve, with no sign of slowing.",
+          "id": "spya-asr663"
+        }
+      ]
+    },
+    {
+      "text": "The evidence is the model's loss: its average error at predicting text, measured in bits per character, where lower is better. GPT-2's loss was about 3.3, and GPT-3 roughly halved it to about 1.73. If the curve holds for 100 to 1,000 times more computing, a GPT-4 might reach about 1.24. Humans score near 0.7, so much room remains.",
+      "ids": [
+        "spya-edr6mj",
+        "spya-rjwfkb"
+      ],
+      "sentences": [
+        {
+          "text": "The evidence is the model's loss: its average error at predicting text, measured in bits per character, where lower is better.",
+          "id": "spya-edr6mj"
+        },
+        {
+          "text": "GPT-2's loss was about 3.3, and GPT-3 roughly halved it to about 1.73.",
+          "id": "spya-edr6mj",
+          "key": "about 1.73"
+        },
+        {
+          "text": "If the curve holds for 100 to 1,000 times more computing, a GPT-4 might reach about 1.24.",
+          "id": "spya-edr6mj"
+        },
+        {
+          "text": "Humans score near 0.7, so much room remains.",
+          "id": "spya-rjwfkb"
+        }
+      ]
+    },
+    {
+      "text": "The essay traces what a model learns as its error falls, to show why better prediction demands deeper understanding. First it learns letter and space frequencies, cutting error from 8 bits to about 5. Next it learns real words, spelling and punctuation, reaching 3 to 4 bits. Around 1 to 2 bits, its writing sounds human for a few sentences but still slips into contradictions.",
+      "ids": [
+        "spya-r465ug",
+        "spya-hbr5sy",
+        "spya-s72gxn"
+      ],
+      "sentences": [
+        {
+          "text": "The essay traces what a model learns as its error falls, to show why better prediction demands deeper understanding.",
+          "id": null
+        },
+        {
+          "text": "First it learns letter and space frequencies, cutting error from 8 bits to about 5.",
+          "id": "spya-r465ug"
+        },
+        {
+          "text": "Next it learns real words, spelling and punctuation, reaching 3 to 4 bits.",
+          "id": "spya-hbr5sy"
+        },
+        {
+          "text": "Around 1 to 2 bits, its writing sounds human for a few sentences but still slips into contradictions.",
+          "id": "spya-s72gxn"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The author argues the last bits are deepest: they need cause-and-effect reasoning, common sense and understanding of other minds. Big networks may hold countless small sub-models, and with enough data, memorizing shortcuts lose out to real rules such as genuine arithmetic.",
+      "ids": [
+        "spya-g3b5y7",
+        "spya-vkkfzh"
+      ],
+      "sentences": [
+        {
+          "text": "The author argues the last bits are deepest: they need cause-and-effect reasoning, common sense and understanding of other minds.",
+          "id": "spya-g3b5y7",
+          "key": "the last bits are deepest"
+        },
+        {
+          "text": "Big networks may hold countless small sub-models, and with enough data, memorizing shortcuts lose out to real rules such as genuine arithmetic.",
+          "id": "spya-vkkfzh"
+        }
+      ]
+    },
+    {
+      "text": "The author admits this argument once struck him as a magic trick. It might have needed more text than exists, or models too flawed ever to grasp abstract ideas. He says he does not know what abilities further drops in error would bring.",
+      "ids": [
+        "spya-e5n86h",
+        "spya-faees7",
+        "spya-f6zupy"
+      ],
+      "sentences": [
+        {
+          "text": "The author admits this argument once struck him as a magic trick.",
+          "id": "spya-e5n86h"
+        },
+        {
+          "text": "It might have needed more text than exists, or models too flawed ever to grasp abstract ideas.",
+          "id": "spya-faees7"
+        },
+        {
+          "text": "He says he does not know what abilities further drops in error would bring.",
+          "id": "spya-f6zupy"
+        }
+      ]
+    },
+    {
+      "text": "He criticises experts who dismiss scaling yet make no numerical predictions that could prove them wrong. An appendix warns that tool AIs may become agents, systems that pursue goals, and that filtering their training data is no fix. His conclusion is that scaling works, and the 2020s may bring either a levelling off or a runaway leap: \"sigmoid or singularity\".",
+      "ids": [
+        "spya-zyncdd",
+        "spya-hjpau9",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "He criticises experts who dismiss scaling yet make no numerical predictions that could prove them wrong.",
+          "id": "spya-zyncdd"
+        },
+        {
+          "text": "An appendix warns that tool AIs may become agents, systems that pursue goals, and that filtering their training data is no fix.",
+          "id": "spya-hjpau9"
+        },
+        {
+          "text": "His conclusion is that scaling works, and the 2020s may bring either a levelling off or a runaway leap: \"sigmoid or singularity\".",
+          "id": "spya-ewxv9q",
+          "key": "sigmoid or singularity"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay looks at GPT-3, a huge computer program trained to guess the next word in internet text. Simply making it much bigger did not hit a wall, as many experts expected. Instead, it learned to pick up new tasks from just a few examples.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This essay looks at GPT-3, a huge computer program trained to guess the next word in internet text.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Simply making it much bigger did not hit a wall, as many experts expected.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Instead, it learned to pick up new tasks from just a few examples.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "The author argues for the \"scaling hypothesis\": smarter AI may come mostly from bigger programs, more data and more computing power. He says GPT-3 was cheap by government or business standards, so much larger versions are possible. He also says most experts predicted wrongly, and their warnings about AI risk tell us little.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-ewxv9q",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "The author argues for the \"scaling hypothesis\": smarter AI may come mostly from bigger programs, more data and more computing power.",
+          "id": "spya-m3gtj6",
+          "key": "scaling hypothesis"
+        },
+        {
+          "text": "He says GPT-3 was cheap by government or business standards, so much larger versions are possible.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "He also says most experts predicted wrongly, and their warnings about AI risk tell us little.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

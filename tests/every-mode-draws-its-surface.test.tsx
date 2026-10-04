@@ -417,7 +417,6 @@ const CITATIONS: Citations = {
  * different strings, so the row proves the band opened on `brief`.
  */
 const BRIEF_PARA = "A short one about the rig.";
-const SIMPLE_PARA = "The piece says the instrument was built before anyone knew what it measured.";
 
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
@@ -431,10 +430,6 @@ const SIMPLE: SimpleSummary = {
     brief: [
       { text: BRIEF_PARA, ids: ["spya-bbbbbb" as BlockId] },
       { text: "And why it matters.", ids: ["spya-cccccc" as BlockId] },
-    ],
-    simple: [
-      { text: SIMPLE_PARA, ids: ["spya-bbbbbb" as BlockId] },
-      { text: "It matters because the theory came later.", ids: ["spya-cccccc" as BlockId] },
     ],
     fuller: [
       { text: "The fuller one names the rig.", ids: ["spya-bbbbbb" as BlockId] },

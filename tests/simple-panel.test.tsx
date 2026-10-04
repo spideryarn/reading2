@@ -49,7 +49,6 @@ const LATER = "spya-r8z3nh" as BlockId;
 const WHAT = "This essay asks whether a machine could ever be conscious, and says probably not.";
 const WHY = "It matters because people are starting to treat chatbots as if they had feelings.";
 
-const BRIEF_TEXT = "A short one: could a machine feel? Probably not.";
 const FULLER_TEXT = "The fuller one keeps the essay's own term, the hard problem, and says what it means.";
 
 function artefact(): SimpleSummary {
@@ -63,10 +62,6 @@ function artefact(): SimpleSummary {
     profileHash: null,
     levels: {
       brief: [
-        { text: BRIEF_TEXT, ids: [EARLY] },
-        { text: "It matters for chatbots.", ids: [LATER] },
-      ],
-      simple: [
         { text: WHAT, ids: [EARLY, MIDDLE] },
         { text: WHY, ids: [LATER] },
       ],
@@ -192,7 +187,7 @@ const jumps: BlockId[] = [];
 
 async function draw(
   access: Parameters<typeof SimplePanel>[0]["access"],
-  level: SimpleLevel = "simple",
+  level: SimpleLevel = "brief",
 ): Promise<void> {
   jumps.length = 0;
   await act(async () =>
@@ -247,7 +242,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner() }}
-            level="simple"
+            level="brief"
             onJump={(id: BlockId) => void jumps.push(id)}
           />
         </BlockLinkProvider>,
@@ -266,7 +261,7 @@ describe("the Simple view", () => {
 
   it("renders a paragraph's markup as the characters, never as HTML", async () => {
     const simple = artefact();
-    simple.levels.simple[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
+    simple.levels.brief[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
     await draw({ kind: "owner", owner: owner({ simple }) });
     expect(host.querySelector(".simple-text b")).toBeNull();
     expect(host.querySelector(".simple-text")?.textContent).toBe("<b>bold</b> **stars**");
@@ -283,13 +278,15 @@ describe("the Simple view", () => {
 
   it("draws the level the slider has chosen, and only that one", async () => {
     await draw({ kind: "owner", owner: owner() }, "brief");
-    expect(text()).toContain(BRIEF_TEXT);
-    expect(text()).not.toContain(WHAT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     await draw({ kind: "owner", owner: owner() }, "fuller");
     expect(text()).toContain(FULLER_TEXT);
+    expect(text()).not.toContain(WHAT);
     expect(host.querySelectorAll(".simple-para")).toHaveLength(3);
     await draw({ kind: "visitor", simple: { levels: artefact().levels } }, "brief");
-    expect(text()).toContain(BRIEF_TEXT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
   });
 
   it("offers to write it again once the reader has changed their profile, without a notice line", async () => {
@@ -363,7 +360,7 @@ describe("the Simple view", () => {
   /** The panel with a handler, which `draw` does not pass. */
   async function drawAsking(
     access: Parameters<typeof SimplePanel>[0]["access"],
-    level: SimpleLevel = "simple",
+    level: SimpleLevel = "brief",
   ): Promise<string[]> {
     const asked: string[] = [];
     await act(async () =>
@@ -395,7 +392,7 @@ describe("the Simple view", () => {
 
   it("hands over the paragraph's whole text when it is drawn as sentences", async () => {
     const simple = artefact();
-    simple.levels.simple[0] = {
+    simple.levels.brief[0] = {
       text: WHAT,
       ids: [EARLY, MIDDLE],
       sentences: [
@@ -435,10 +432,10 @@ describe("the Simple view", () => {
   const ASKS = "This essay asks whether a machine could ever be conscious,";
   const SAYS = "and says probably not.";
   const ASKS_SAYS = `${ASKS} ${SAYS}`;
-  /** The first Simple paragraph, cut into a linked and an unlinked sentence. */
+  /** The first Brief paragraph, cut into a linked and an unlinked sentence. */
   function withSentences(sentences: unknown, text = ASKS_SAYS): SimpleSummary {
     const simple = artefact();
-    simple.levels.simple[0] = { text, ids: [EARLY, MIDDLE], sentences };
+    simple.levels.brief[0] = { text, ids: [EARLY, MIDDLE], sentences };
     return simple;
   }
   const LINKED = [
@@ -497,7 +494,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) }}
-            level="simple"
+            level="brief"
             onJump={(id: BlockId) => void jumps.push(id)}
           />
         </BlockLinkProvider>,
@@ -528,10 +525,10 @@ describe("the Simple view", () => {
     { text: ONE, id: MIDDLE, key: "alive" },
     { text: TWO, id: null },
   ];
-  /** The first Simple paragraph as a list: a lead-in and two bullets. */
+  /** The first Brief paragraph as a list: a lead-in and two bullets. */
   function withList(sentences: unknown = BULLETS, list: unknown = true): SimpleSummary {
     const simple = withSentences(sentences, (sentences as { text: string }[]).map((s) => s.text).join(" "));
-    simple.levels.simple[0] = { ...simple.levels.simple[0]!, list };
+    simple.levels.brief[0] = { ...simple.levels.brief[0]!, list };
     return simple;
   }
 
@@ -629,7 +626,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner({ simple: withSentences([{ text: ASKS, id }, { text: SAYS, id: null }]) }) }}
-            level="simple"
+            level="brief"
             onJump={(target: BlockId) => void jumps.push(target)}
           />
         </BlockLinkProvider>,
@@ -884,8 +881,8 @@ describe("Summary's band, arriving on an old link", () => {
     await band("visitor");
     noOutline();
     expect(chosen()).toBe("Brief");
-    expect(text()).toContain(BRIEF_TEXT);
-    expect(text()).not.toContain(WHAT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     expect(gets, "a visitor's band reads nothing").toEqual([]);
   });
 
@@ -900,7 +897,8 @@ describe("Summary's band, arriving on an old link", () => {
     });
     await settle();
     expect(chosen()).toBe("Brief");
-    expect(text()).toContain(BRIEF_TEXT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     await act(async () => {
       root.unmount();
     });
@@ -923,10 +921,10 @@ describe("Summary's band, arriving on an old link", () => {
     expect(new URLSearchParams(location.search).has("summary")).toBe(false);
   });
 
-  /* The Simple level was a view until 2026-10-03. It is still written and
-     stored (plan 261003l § 5) and no longer shown, so a link that names it
-     degrades to the default like any unknown value. */
-  it("reads an old ?summary=simple as Brief, and never draws the Simple level", async () => {
+  /* The Simple level was a view until 2026-10-03 and stopped being written on
+     2026-10-04 (plan 261004f). A link that names it degrades to the default
+     like any unknown value. */
+  it("reads an old ?summary=simple as Brief", async () => {
     const { NuqsAdapter } = await import("nuqs/adapters/react");
     history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
     await act(async () => {
@@ -934,8 +932,8 @@ describe("Summary's band, arriving on an old link", () => {
     });
     await settle();
     expect(chosen()).toBe("Brief");
-    expect(text()).toContain(BRIEF_TEXT);
-    expect(text()).not.toContain(WHAT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
   });
 
   it("names its three choices in words, in one row", async () => {

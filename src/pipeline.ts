@@ -4197,7 +4197,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         cacheArticle: ctx.cacheArticle,
         profile: ctx.profile ?? null,
       });
-      /* Paragraphs per level, in the slider's order: "2/4/5". */
+      /* Paragraphs per level, Brief then Fuller: "2/5". */
       const counts = SIMPLE_LEVELS.map((level) => run.simpleSummary.levels[level].length).join("/");
       const words = SIMPLE_LEVELS.map((level) => run.words[level]).join("/");
       plog.info(
@@ -4214,7 +4214,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           blocks: run.blocks,
           paragraphs: counts,
           words,
-          /* Three, or more when a level was asked twice (`LEVEL_ATTEMPTS`). A rise
+          /* Two, or more when a level was asked twice (`LEVEL_ATTEMPTS`). A rise
              here is a prompt that has started missing its own limits. */
           calls: run.calls,
           /* The profile's LENGTH, never the profile — it is the reader's own
@@ -4225,7 +4225,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ...run.dropped,
           /* The fidelity guard (plan 261001i): its calls and chat-wire tokens,
              kept apart from the writer's, and each level's outcome as
-             "passed/flagged/unchecked" in the slider's order. Never the
+             "passed/flagged", Brief then Fuller. Never the
              checker's reasons, which quote the article's claims. */
           checkCalls: run.checkCalls,
           checkInputTokens: run.checkInputTokens,

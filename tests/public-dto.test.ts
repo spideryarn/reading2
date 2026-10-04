@@ -40,6 +40,7 @@ import type {
   Debate,
   DirectDebateRow,
   Faq,
+  SimpleSentence,
   SimpleSummary,
   Glossary,
   Ideas,
@@ -51,6 +52,7 @@ import type {
   TreeNode,
   TweetThread,
 } from "../src/types.js";
+import { isUsableSimpleSummary } from "../src/types.js";
 
 /**
  * An article whose four slice-1b columns are all empty, for the cases that are
@@ -1083,7 +1085,8 @@ describe("the artefacts a shared link carries", () => {
           ids: ["spya-bbbbbb" as BlockId],
           list: true,
           sentences: [
-            { text: "It asks three things.", id: null, key: "three things" },
+            /* `stray` is not a field: each sentence is rebuilt, never copied. */
+            { text: "It asks three things.", id: null, key: "three things", stray: "x" } as SimpleSentence,
             { text: "What is carried?", id: "spya-bbbbbb", key: "key-not-in-its-sentence" },
             { text: "By what?", id: null, key: null },
             { text: "And why does a copy fail?", id: null },
@@ -1092,15 +1095,16 @@ describe("the artefacts a shared link carries", () => {
         /* `list` on a paragraph with no usable sentences draws nothing, and does not cross. */
         { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId], list: true },
       ],
+      /* **The middle level, which a row from before 2026-10-04 still has**
+         (plan 261004f). Nothing of it may reach a visitor. */
       simple: [
-        /* Sentences that are its text exactly (plan 261002e): they cross, rebuilt. */
         {
-          text: "This essay asks what a measurement has to carry.",
+          text: "middle-level-words-here asks what a measurement has to carry.",
           ids: ["spya-bbbbbb" as BlockId],
-          sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb", stray: "x" }],
+          sentences: [{ text: "middle-level-words-here asks what a measurement has to carry.", id: "spya-bbbbbb" }],
         },
         {
-          text: "It matters because a copy would not do.",
+          text: "It matters because a copy would not do, middle-level-words-here.",
           ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
         },
       ],
@@ -1114,7 +1118,7 @@ describe("the artefacts a shared link carries", () => {
         { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
       ],
-    },
+    } as SimpleSummary["levels"],
     /* The fidelity guard's audit record (plan 261001i) — the owner's, not a visitor's. */
     check: {
       checker: "simple-check/1",
@@ -1129,7 +1133,7 @@ describe("the artefacts a shared link carries", () => {
           stored: 2,
           flags: [{ paragraph: 1, why: "checker-why-sentence" }],
         },
-      },
+      } as NonNullable<SimpleSummary["check"]>["levels"],
     },
   };
 
@@ -1854,7 +1858,7 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
-  it("carries Simple's paragraphs and their ids at every level, and not the stamp", () => {
+  it("carries Simple's paragraphs and their ids at Brief and Fuller, and not the stamp or a stored middle level", () => {
     expect(pathsUnder("simpleSummary")).toEqual(
       [
         "levels",
@@ -1869,20 +1873,13 @@ describe("the artefacts a shared link carries", () => {
         "levels.fuller",
         "levels.fuller[].ids",
         "levels.fuller[].text",
-        "levels.simple",
-        "levels.simple[].ids",
-        "levels.simple[].sentences",
-        "levels.simple[].sentences[].id",
-        "levels.simple[].sentences[].text",
-        "levels.simple[].text",
       ].sort(),
     );
+    /* The stored row is usable with its middle level in it, and only the two
+       levels a reader is shown cross. */
+    expect(isUsableSimpleSummary(SIMPLE)).toBe(true);
+    expect(Object.keys(built.simpleSummary?.levels ?? {}).sort()).toEqual(["brief", "fuller"]);
     /* Through the one accessor: the usable list rebuilt, the unusable one gone. */
-    expect(built.simpleSummary?.levels.simple[0]).toEqual({
-      text: "This essay asks what a measurement has to carry.",
-      ids: ["spya-bbbbbb"],
-      sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb" }],
-    });
     const plain = ({ text, ids }: SimpleSummary["levels"]["brief"][number]) => ({ text, ids });
     expect(built.simpleSummary?.levels.fuller).toEqual(SIMPLE.levels.fuller.map(plain));
     /* Bold and bullets (plan 261004b): `list: true` and a valid key, and nothing else new. */
@@ -1900,7 +1897,6 @@ describe("the artefacts a shared link carries", () => {
       },
       { text: "A copy would not do.", ids: ["spya-cccccc"] },
     ]);
-    expect(built.simpleSummary?.levels.simple.slice(1)).toEqual(SIMPLE.levels.simple.slice(1));
     const json = JSON.stringify(built.simpleSummary);
     for (const provenance of [
       "simple/2",
@@ -1914,6 +1910,7 @@ describe("the artefacts a shared link carries", () => {
       "checker-model",
       "checker-why-sentence",
       "stray",
+      "middle-level-words-here",
       "unchecked-words-here",
       "key-not-in-its-sentence",
     ]) {
@@ -1951,7 +1948,7 @@ describe("the artefacts a shared link carries", () => {
   });
 
   it("does not publish a simple/1 row even when it has valid-looking levels", () => {
-    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
+    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.brief } as unknown as SimpleSummary;
     const invalid = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: v1 });
     expect("simpleSummary" in invalid).toBe(false);
   });

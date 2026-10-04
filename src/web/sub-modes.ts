@@ -153,8 +153,8 @@ export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
 /**
  * Summary's three views: two plain-words lengths and the thread. The band's
  * segmented control, SummaryMode.tsx § `SummaryControls`; the order is the
- * control's (`SUMMARY_VIEWS`, params.ts). The Simple level left on 2026-10-03
- * — still written, no longer shown.
+ * control's (`SUMMARY_VIEWS`, params.ts). The Simple level left on 2026-10-03,
+ * and stopped being written on 2026-10-04 (plan 261004f).
  * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  */
 export const SUMMARY_SUB_MODES: Readonly<Record<SummaryView, SubModeWords>> = {

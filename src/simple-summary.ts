@@ -2,7 +2,15 @@
  * Pipeline stage 5r — **Simple**: a few short paragraphs, in everyday words,
  * saying what the piece is about, why it matters and what its key ideas are,
  * each paragraph resting on the passages it came from. A sub-mode of Summary,
- * written at **three levels**, one call each, side by side: `brief`, `simple` and `fuller`.
+ * written at **two levels**, one call each, side by side: `brief` and `fuller`.
+ *
+ * **There was a third until 2026-10-04**, a middle level also called `simple`,
+ * hidden since 2026-10-03 and still written, so every press paid for a call
+ * nobody read and a failure in it lost the other two. Greg, 2026-10-04:
+ * *"we've removed that middle level of Summary, and we're not going to add it
+ * back"*. docs/plans/261004f-stop-writing-the-simple-summary-level.md. The
+ * step, the artefact and this file keep the name; only the level went. Greg's
+ * two quotes below are from when it was built.
  *
  * > explain it to me like I'm 12 or 15 … a summary of, at most, I suppose, a
  * > few short paragraphs using simple language, kind of minimizing jargon, or
@@ -44,10 +52,10 @@
  *
  * The shared profile machinery, as Glossary and Ideas use it: `PROFILE_RULES`
  * in the constant system prompt and `profileSection` after the breakpoint, in
- * the user message. In Simple and Fuller, **the profile moves the floor, not
- * the level**: a fifteen-year-old *who already knows what the reader says they
- * know*, so a reader who says they build AI systems is not told what a language
- * model is. Brief is the exception: the profile changes what leads, but never
+ * the user message. In Fuller, **the profile moves the floor, not the level**:
+ * an eighteen-year-old *who already knows what the reader says they know*, so
+ * a reader who says they build AI systems is not told what a language model
+ * is. Brief is the exception: the profile changes what leads, but never
  * licenses field terms. The goal changes emphasis, never what the piece says.
  *
  * The profile is recorded as `profileHash` and is **not in `sourceHash`**: a
@@ -65,11 +73,11 @@
  * prefix when a job holds both.
  *
  * **A call per level, not one asked for all.** The plan's first design was one
- * call writing two levels; measured, it made the model think five to twenty
+ * call writing both of the levels there were then; measured, it made the model think five to twenty
  * times as long (1–15k reasoning tokens against 150–800 for one level) and the
  * wait went from 9–18 s to 24–134 s. So each level is its own call, the shape
- * the first plan measured, and they run at once: the wait is the slowest of
- * three short calls. **All or none** — the first to fail aborts the others,
+ * the first plan measured, and they run at once: the wait is the slower of
+ * two short calls. **All or none** — the first to fail aborts the others,
  * and nothing is stored. Plan 261001b § Ledger has the tables.
  *
  * Its fingerprint hashes the exact rendered article it sends, as
@@ -132,8 +140,13 @@ export { SIMPLE_LEVELS } from "./types.js";
  * Bumped only when what is stored changes shape, because `isUsableSimpleSummary`
  * (src/types.ts) requires an exact match and reads anything else as absent.
  *
- * `simple/2` (2026-10-01) is three levels and the profile. A `simple/1` row has
+ * `simple/2` (2026-10-01) is `levels` and the profile. A `simple/1` row has
  * no `levels` and reads as absent.
+ *
+ * **Not bumped when the middle level went** (2026-10-04, plan 261004f): a row
+ * from before has one more key in `levels` and in `check.levels`, which no
+ * guard looks at, so it still reads. A bump would have made every stored
+ * summary read as absent and be written again.
  */
 export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
 
@@ -170,6 +183,10 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * sentence or two, and Fuller may write a paragraph as a list (Greg,
  * spya-azft06 and spya-qzsvx4; plan 261004b). The stored shape only gained two
  * optional fields, so `SIMPLE_VERSION` stays.
+ *
+ * **Not bumped when the middle level went** (2026-10-04, plan 261004f): Brief's
+ * and Fuller's prompts are the same bytes, pinned by
+ * tests/simple-two-levels.test.ts, so nothing stored is outdated.
  */
 export const SIMPLE_PROMPT_VERSION = "simple-prompt/7";
 
@@ -182,8 +199,8 @@ export function simplePromptVersion(simple: SimpleSummary): string {
 export const MAX_IDS = SIMPLE_MAX_IDS;
 
 /**
- * **The level asked first, with the others waiting until its stream has begun**
- * — so it writes the article's cache entry and they read it (plan 261001j).
+ * **The level asked first, with the other waiting until its stream has begun**
+ * — so it writes the article's cache entry and Brief reads it (plan 261001j).
  * Fuller, because it is the longest to write: starting it first keeps the
  * press's wait closest to the unstaggered one.
  */
@@ -245,11 +262,10 @@ export const ANSWER_TOKENS =
  * profiled Simple came back at up to 338 words, two runs in twelve over the
  * 320 ceiling; Fuller, asked for 300, reached 448 of its 450.
  *
- * **Three levels around the first version's length**, which came out at
+ * **Two levels either side of the first version's length**, which came out at
  * 240–273 words (Greg, SPIDERYARN-READING2-7J and -7F): Brief short and very
- * simple, at twelve; Simple fairly simple and just under that length, at
- * fifteen; Fuller moderately complex and just over it, at eighteen — Greg's
- * *"+3 or something"* above fifteen (7A).
+ * simple, at twelve; Fuller moderately complex and longer, at eighteen. The
+ * middle level, at fifteen and just under that length, went on 2026-10-04.
  *
  * **Fuller is about half as long again since 2026-10-04** (Greg, spya-azft06:
  * *"longer and more detailed still"*; plan 261004b). Asked for 220 it came
@@ -258,10 +274,10 @@ export const ANSWER_TOKENS =
  * because nothing is shown until the slowest level is written, so 350 is what
  * shipped and the longer one is a question for Greg. `never` is the "never
  * more than" the prompt states, a number of its own per level, so Fuller's can
- * sit 80 over its ask while the other two stay 50 over theirs.
+ * sit 80 over its ask while Brief's stays 50 over its own.
  */
 
-/** How LENGTH ends for Brief and Simple; `simpleSystem` supplies the line it finishes. */
+/** How LENGTH ends for Brief; `simpleSystem` supplies the line it finishes. */
 const ORIENTATION_NOT_DIGEST = `Shorter is fine; this is an
 orientation, not a digest, so leave detail to the article.`;
 
@@ -275,14 +291,6 @@ const PITCH: Record<
     words: 80,
     never: 130,
     sentence: 18,
-    shorter: ORIENTATION_NOT_DIGEST,
-  },
-  simple: {
-    reader: "A bright fifteen-year-old",
-    shape: "Two to four paragraphs, each two to four sentences",
-    words: 170,
-    never: 220,
-    sentence: 25,
     shorter: ORIENTATION_NOT_DIGEST,
   },
   fuller: {
@@ -319,7 +327,6 @@ most one other key idea.
 - Only the numbers the takeaway rests on.
 - Fewer facts, each one plain, rather than every fact squeezed in. Leave out
   anything a first-time reader could do without.`,
-  simple: "",
   fuller: `
 
 You may keep more of the piece's own terms than a beginner's version would (each
@@ -335,31 +342,19 @@ This version has room to go into the piece. Use it for:
 
 /**
  * What a level is told about `list`. Only Fuller is long enough for a list to
- * help; the other two are told to say false, and a `true` from them is still
- * drawn safely, since `paragraphShape` (src/types.ts) decides, not the prompt.
+ * help; Brief is told to say false, and a `true` from it is still drawn
+ * safely, since `paragraphShape` (src/types.ts) decides, not the prompt.
  */
 const NO_LISTS = `"list" on a paragraph says whether it is drawn as a bulleted list. This
 version has none. Always write "list": false.`;
-/**
- * The bold phrase. Brief and Fuller, the two levels a reader is shown; Simple
- * is written and not shown (plan 261003l), and asked for keys its first answer
- * was flagged by the fidelity guard in two presses of six, against none in six
- * before (plan 261004b § Ledger), so it is asked for none.
- */
+/** The bold phrase, asked of both levels. */
 const KEY_ASKED = `"key" on a sentence: a few words copied exactly from that sentence's "text",
 which the reader sees in bold. Pick the finding, the number or the term that a
 reader skimming the page should catch. At most ${SIMPLE_KEY_MAX_WORDS} words, and never the whole
 sentence. In a paragraph, at most two sentences have a "key". Most sentences
 have none: write null.`;
-const KEY_RULE: Record<SimpleLevel, string> = {
-  brief: KEY_ASKED,
-  simple: `"key" on a sentence says which of its words are drawn in bold. This version
-has none. Always write "key": null.`,
-  fuller: KEY_ASKED,
-};
 const LIST_RULE: Record<SimpleLevel, string> = {
   brief: NO_LISTS,
-  simple: NO_LISTS,
   fuller: `"list" on a paragraph: true when the reader should see it as a bulleted list,
 false for an ordinary paragraph. Use a list only where the piece itself gives
 parallel items: its findings, its steps, its reasons. At most two paragraphs
@@ -371,11 +366,11 @@ Every bullet is a full sentence with its own "id", like any other sentence.`,
 };
 
 /**
- * **What a reader's claimed background does to the words**, per level. Simple
- * and Fuller take what the reader says they know as everyday words. Brief does
+ * **What a reader's claimed background does to the words**, per level. Fuller
+ * takes what the reader says they know as everyday words. Brief does
  * not: it is for a reader in a hurry from outside the field, whatever the
  * profile claims (Greg, spya-rpqqxb — his own profiled Brief was denser in
- * jargon than the Simple beside it). Plan 261002h.
+ * jargon than the middle level then beside it). Plan 261002h.
  */
 const KNOWN_AS_EVERYDAY = `- If the request describes the reader, what they say they already know counts
   as everyday words for them: use it without explaining it. Everything else
@@ -384,7 +379,6 @@ const KNOWN_WORDS: Record<SimpleLevel, string> = {
   brief: `- If the request describes the reader, it may steer what you put first. It
   never changes the words: this version stays in everyday words even when the
   request below describes a reader who does know the field.`,
-  simple: KNOWN_AS_EVERYDAY,
   fuller: KNOWN_AS_EVERYDAY,
 };
 
@@ -405,7 +399,6 @@ request below describes a reader who does know it. Use the description only
 for what to put first. Where it conflicts with "Assume the background they
 claim" above, this paragraph wins: explain each technical term you keep as you
 would for an outsider, and keep as few as you can.`,
-  simple: "",
   fuller: "",
 };
 
@@ -480,7 +473,7 @@ WHAT A SKIMMING READER CATCHES
 Two more fields say how a paragraph is drawn. They are the only formatting
 there is.
 
-${KEY_RULE[level]}
+${KEY_ASKED}
 
 ${LIST_RULE[level]}
 
@@ -497,7 +490,7 @@ JSON only, no prose, no code fence:
 {"paragraphs": [
   {"ids": ["spya-k3m9qt", "spya-p7w2dn"], "list": false,
    "sentences": [
-     {"text": "...", "id": "spya-k3m9qt", "key": ${level === "simple" ? "null" : '"..."'}},
+     {"text": "...", "id": "spya-k3m9qt", "key": "..."},
      {"text": "...", "id": null, "key": null},
      {"text": "...", "id": "spya-p7w2dn", "key": null}]}
 ]}
@@ -916,7 +909,7 @@ export interface SimpleSummaryRun {
   cacheWriteTokens: number;
   maxTokens: number;
   elapsedMs: number;
-  /** Writer requests made, across every level and retry — three when nothing was asked twice. */
+  /** Writer requests made, across every level and retry — two when nothing was asked twice. */
   calls: number;
   /**
    * The fidelity guard's calls and chat-wire tokens, **beside** the writer's
@@ -941,7 +934,7 @@ export async function generateSimpleSummary(opts: {
   signal?: AbortSignal;
   /**
    * The pipeline's shared-article hint. Simple now marks every prefix its own
-   * three calls can cache, so this cannot override the selected model's floor.
+   * two calls can cache, so this cannot override the selected model's floor.
    */
   cacheArticle?: boolean;
   /**
@@ -975,19 +968,19 @@ export async function generateSimpleSummary(opts: {
   const maxTokens = budgetFor("simple", ANSWER_TOKENS);
   const article = articleWithIds(meta, evidence);
 
-  /* **One cache for the press's three calls** (plan 261001j). Fired together,
-     three calls each pay the article in full — or, if it is marked, each pay
-     the 1.25x cache write, because an entry cannot be read until the request
+  /* **One cache for the press's calls** (plan 261001j). Fired together, the
+     calls each pay the article in full — or, if it is marked, each pay the
+     1.25x cache write, because an entry cannot be read until the request
      writing it has begun (docs/project/prompt-caching.md § What breaks a
-     cache, 4). So the article is marked, `FIRST_LEVEL` goes first, and the
-     other two wait for its stream to begin: measured on three articles from
-     cold, $0.142 a press became $0.090, for about two seconds more wait (16.2 s
-     median against 14.2). Below the cache floor nothing can be cached, so
-     the three go together, unmarked, as before. */
+     cache, 4). So the article is marked, `FIRST_LEVEL` goes first, and Brief
+     waits for its stream to begin. Measured when there were three levels, on
+     three articles from cold: $0.142 a press became $0.090, for about two
+     seconds more wait (16.2 s median against 14.2). Below the cache floor
+     nothing can be cached, so they go together, unmarked, as before. */
   const cacheable = !underCacheFloor(article, modelFor("simple", opts.power));
   const stagger = cacheable;
   /* `cacheArticle` used to be the only reason Simple marked its one request.
-     Now the press itself supplies three readers, so every cacheable article is
+     Now the press itself supplies its own reader, Brief, so every cacheable article is
      marked regardless of that pipeline hint. Conversely the hint cannot lower
      the selected model's physical floor: below it a marker is accepted and
      silently does nothing. */
@@ -1103,16 +1096,16 @@ export async function generateSimpleSummary(opts: {
     const raw = messageText(message);
     /* A complete usable response is the fallback for a provider/SDK path that
        succeeds without exposing `message_start`: the cache write is finished,
-       so the other two calls cannot be stranded. */
+       so the waiting call cannot be stranded. */
     if (level === FIRST_LEVEL) begun(firstStarted ? "started" : "ended");
     return { raw, usage: message.usage };
   };
 
   /**
    * **One level, with one second chance when its answer fails validation.**
-   * All-or-none over three calls turns each level's small failure rate into a
-   * press that fails about one time in twelve (plan 261001b § Ledger: 22 of 24
-   * stored all three on the shipped settings; the losses there were a level one
+   * All-or-none turns each level's small failure rate into a press that fails
+   * more often: with three levels, about one time in twelve (plan 261001b §
+   * Ledger: 22 of 24 stored all three on the shipped settings; the losses there were a level one
    * word over its ceiling and a level whose ids matched no passage, and an
    * earlier run lost one to a stray character after the JSON).
    * Each is a fresh sample's problem, so that level alone is asked again —
@@ -1153,7 +1146,7 @@ export async function generateSimpleSummary(opts: {
     if (stagger && level !== FIRST_LEVEL) {
       /* A first call that failed before it began fails the press (its first
          attempt has no flagged fallback), and the abort follows a few ticks
-         later. Wait for it rather than opening two calls into it — they would
+         later. Wait for it rather than opening a call into it — it would
          be billed (Sol's plan review, P1). */
       const first = await Promise.race([
         firstBegun,
@@ -1266,7 +1259,7 @@ export async function generateSimpleSummary(opts: {
     words: Object.fromEntries(SIMPLE_LEVELS.map((l) => [l, paragraphWords(levels[l])])) as Record<SimpleLevel, number>,
     dropped,
     model: generatorFor(opts.power),
-    /* Summed over all three calls. */
+    /* Summed over every call. */
     inputTokens: sum((u) => u.input_tokens),
     outputTokens: sum((u) => u.output_tokens),
     cacheReadTokens: sum((u) => u.cache_read_input_tokens),

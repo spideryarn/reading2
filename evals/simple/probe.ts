@@ -61,8 +61,12 @@ interface ArmFile {
   bodyBlocks: number;
   ok: boolean;
   error?: string;
+  /**
+   * The `simple` level's words and paragraphs: the only level before
+   * `simple/2`, the middle of three until 2026-10-04, and **absent in results
+   * written since**, when it stopped being written (plan 261004f).
+   */
   words?: number;
-  /** The `simple` level — the only level before `simple/2`. */
   paragraphs?: { text: string; ids: string[] }[];
   /** `simple/2` arms: who it was written for, and the `fuller` level. */
   reader?: string;
@@ -224,10 +228,8 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             ...spent,
             ok: true,
             reader,
-            words: result.words.simple,
             fullerWords: result.words.fuller,
             briefWords: result.words.brief,
-            paragraphs: result.simpleSummary.levels.simple,
             fuller: result.simpleSummary.levels.fuller,
             brief: result.simpleSummary.levels.brief,
             dropped: { ...result.dropped },
@@ -246,7 +248,7 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
         }
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
         console.log(
-          `${arm} ${slug}: ${file.ok ? `${file.paragraphs?.length} paragraphs, ${file.words} words` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
+          `${arm} ${slug}: ${file.ok ? `Brief ${file.briefWords} words, Fuller ${file.fullerWords} words` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
         );
       }),
     );
@@ -309,7 +311,8 @@ function report(): void {
       }
       if (f.brief) lines.push("**brief**", "");
       for (const p of f.brief ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
-      if (f.fuller) lines.push("**simple**", "");
+      /* The middle level: only in a result written before 2026-10-04 (plan 261004f). */
+      if (f.fuller && f.paragraphs) lines.push("**simple**", "");
       for (const p of f.paragraphs ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
       if (f.fuller) lines.push("**fuller**", "");
       for (const p of f.fuller ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");

@@ -7,8 +7,10 @@
  *
  * Drawn inside the Summary band, below the one row of controls
  * (SummaryMode.tsx § `SummaryControls`), so there is no `ModeSurface` here —
- * this is the body. Three levels, `brief`, `simple` and `fuller`, one artefact:
- * the panel draws whichever the row has chosen.
+ * this is the body. Two levels, `brief` and `fuller`, one artefact: the panel
+ * draws whichever the row has chosen. (A middle level, `simple`, was drawn
+ * until 2026-10-03 and written until 2026-10-04; a row from before still
+ * carries it and nothing here reads it.)
  *
  * Two things keep it an orientation rather than a replacement for reading,
  * and the file must go on doing both:
