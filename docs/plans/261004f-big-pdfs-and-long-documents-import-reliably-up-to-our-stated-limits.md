@@ -56,6 +56,41 @@ evidence instead: `260903_1557` (142 pages against a 100-page cap), `260928b` (2
 `261001_1829` (*The Order of Time*, 1,041 blocks, structure answer thrown away), `261003_1903`
 (a transport blip).
 
+## The plan review, and what changed
+
+GPT Sol, read-only, 2026-10-04: [the review](261004f-big-pdfs-plan-review-sol.md), verdict
+**build with changes**. It confirmed items 2, 3, 4, 5 and 6 above against the code, with exact
+numbers: the structure call refuses at **2,890 headingless blocks** or **321 to 322 headings**, and
+the block insert at **3,856 rows**. It found no second statement on the import path with the same
+shape. Taken, finding by finding:
+
+- **F1, the 32 MB fetch cap. Taken as a measurement, not as a fix.** The size cap in `src/fetch.ts`
+  is a defence listed in [security-map.md](../project/security-map.md), and this run may not edit
+  one. Stage 1 measures it through the `fetchImpl` seam; the mismatch with the dialog's sentence
+  goes to Greg (see § Decisions).
+- **F2, M4 cannot reach the 30 MiB request check**, because that check is inside the real reader
+  and M4 swaps the reader out. Taken: M4 says so rather than copying the arithmetic. Stage 2 makes
+  the check reachable by a free test and builds A and B of
+  [260928b](260928b-pdf-chunk-too-big-for-one-request.md): raise the allowance to what the reader
+  model takes, and send a chunk without its context page when the context page is what makes it
+  too big. That plan asked Greg whether to build them; this report ("fix what fails" for big PDFs)
+  is taken as the yes, and its trade-off is written again under § Decisions so he can undo it.
+- **F3, "every confirmed failure gets a test that stage 2 turns green" cannot be met.** Taken.
+  Three kinds of outcome now: a **regression test** stage 2 turns green; a **characterisation
+  test** that pins a deliberate ceiling at its measured number, so moving it means facing the
+  stated limit; and a **decision** that blocks the claim "works up to the limits" until Greg makes
+  it.
+- **F4, the labels budget is private to the live call.** Taken: marked not measurable in stage 1.
+  Extracting it is stage 2 only if it is a pure move.
+- **F5, M5 needs a published revision and cannot use sizes the store refuses.** Taken: M5 runs the
+  whole write-and-publish lifecycle, and its large sizes are re-run after the batching fix.
+- **F6, the figure step on an image-heavy PDF.** Taken if the seam is as simple as the review
+  says; otherwise named as not measured.
+- **F7, an option the plan missed.** Taken: option E below. And D is smaller than the plan said,
+  because `src/heading-tree.ts` already builds a tree from a document's own headings.
+- **F8, the paid run.** Taken: staged, with a stop rule, and it ends with the article being loaded
+  through the real route, not at the last model step.
+
 ## The shape of the work
 
 Greg asked for evidence first. So: **measure, fix what the measurement shows is broken and is
@@ -105,6 +140,9 @@ blocks, structure, assets; then labels), not the ten modes.
   predicts will pass (to check the prediction), sized as near 250 pages as that allows.
 - **Spend cap: $10 in total for this plan**, stated in the write-up with the ledger's own figures.
   Kuhn's 142 pages cost about $3.50 end to end on 2026-09-04.
+- **Staged, with a stop rule.** Extract first, and stop if it fails. Then blocks and structure, and
+  stop if they fail. A second document of a different shape (heavy with images) only if the first
+  left money and a question. The run ends by loading the article through the real route.
 - If stage 1 predicts every 250-page document of ordinary density is refused, the run uses the
   largest size predicted to pass, and the write-up says the stated limit was not reached and why.
 
@@ -130,11 +168,26 @@ promised or costs real engineering:
   and it changes the structure prompt path every article uses or adds a second path beside it.
 - **D. A plainer tree for a too-long document.** When one pass will not fit, build the tree from
   the document's own headings with no model, and let the reader read. No gists at the top levels.
-  Small, but a new, lesser kind of article.
+  Small, because `src/heading-tree.ts` already builds that tree, but a new, lesser kind of article.
+- **E. D, then fill it in.** Start from the same headings-only tree and hand it to the cascade
+  that is already built and switched off (`SPIDERYARN_DEEPEN_STRUCTURE`), which asks for each
+  section in its own bounded call. More reuse than C. Turning the switch on alone does nothing for
+  this case, because today the cascade only starts after the one big call has succeeded.
 
-This plan builds none of A to D unless stage 1 shows one of them is a few lines and plainly right
+This plan builds none of A to E unless stage 1 shows one of them is a few lines and plainly right
 (B's refusal sentence, for instance, if the estimate turns out to be exact). Otherwise the options
 go to `docs/user-feedback/awaiting-approval.md` with the measured numbers, and a queue entry.
+
+## Decisions
+
+Filled in as they are made. Each is Greg's to overturn.
+
+- **The 32 MB cap on a document fetched by address stays, and is not ours to move here.** It is a
+  listed defence. The dialog's "PDF or web page, up to 50 MB" is true of a file you choose and
+  false of an address you paste. For Greg, in `awaiting-approval.md`.
+- **A chunk whose context page makes it too big is sent without that page** (260928b's B). What it
+  costs: a paragraph that runs across that one page break comes out as two. What it buys: the
+  article imports instead of failing whole.
 
 ## The simpler option passed over
 
