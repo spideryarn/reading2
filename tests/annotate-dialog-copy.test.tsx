@@ -224,8 +224,21 @@ describe("copying the selected passage", () => {
 describe("what the help page promises about closing the box", () => {
   it("says that a page-exit save is best effort, not certain", () => {
     const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
-    expect(copy).toContain("Leaving or reloading the page tries to save it too");
+    expect(copy).toContain("leaving or reloading the page tries to");
+    expect(copy).toContain("a failed connection can still lose that last-chance save");
     expect(copy).not.toContain("leaving the page all save it");
+  });
+
+  it("says what closing saves since 2026-10-04, and the two closes that keep nothing (spya-ur8kum)", () => {
+    /* The box opens on Yellow and the × and Escape save it; this section said
+       "a box you did not touch saves nothing", which the change made false.
+       Plan 261004a; the behaviour is tests/annotate-dialog-keeps-a-draft.test.tsx. */
+    const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
+    expect(copy).toContain("with yellow already picked");
+    expect(copy).toContain("The × and Escape save the highlight");
+    expect(copy).toContain("If you only pressed Copy, closing leaves no highlight");
+    expect(copy).toContain("is not saved by selecting something else or leaving the page");
+    expect(copy).not.toContain("did not touch saves nothing");
   });
 });
 

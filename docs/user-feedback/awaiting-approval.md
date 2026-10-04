@@ -13,6 +13,13 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-03 · spya-caue42 (the report itself shipped; this is its deferred half) · should Debate's
+  Claims let the reader choose which claim is checked: a box that runs one more search on a claim
+  they type or pick, a list of claims first with no search until one is picked, or as built (the
+  search chooses)? A quick eval says a chosen claim works with the search as it is; qi-k9deez4b ·
+  [261003o § Questions for Greg](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md#questions-for-greg-not-waited-on) ·
+  [note](261003_1016-debate-reception-and-claims-sub-modes.md)
+
 - 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
   reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
   try, a Debate started with a lens), and should Debate take a text box to steer it? Noted, nothing

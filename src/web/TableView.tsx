@@ -631,6 +631,15 @@ interface Props {
    */
   hitMarks?: ReadonlyMap<BlockId, readonly Mark[]> | undefined;
   hitStrength?: Map<BlockId, number> | undefined;
+  /**
+   * **The block the chat panel is open on**, if it is open on one — its cell
+   * wears `chat-open`, a rule down its right edge (dialogs.css). The panel is
+   * fixed to the window, so this is the only thing in the prose that says which
+   * paragraph it is about. `null` when no panel is open or the conversation has
+   * no anchor. A string, so `memo` holds across every render that does not
+   * change it.
+   */
+  chatOpenBlock?: BlockId | null | undefined;
   /** The palette slots of every search that matched in each block — `blockHues`. */
   hitHues?: Map<BlockId, number[]> | undefined;
   /**
@@ -762,6 +771,7 @@ function TableViewInner({
   openTerm,
   hitMarks,
   hitStrength,
+  chatOpenBlock,
   hitHues,
   linkBase,
   slug,
@@ -1533,7 +1543,9 @@ function TableViewInner({
                   hitStrength?.has(block.id) ? " has-hit" : ""
                 }${
                   notes?.noteOf.has(block.id) ? " note" : ""
-                }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
+                }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}${
+                  chatOpenBlock === block.id ? " chat-open" : ""
+                }`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the

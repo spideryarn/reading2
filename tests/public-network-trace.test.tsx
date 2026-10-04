@@ -1513,6 +1513,8 @@ describe("a signed-out browser on a shared document", () => {
         },
       },
     };
+    /* `name=quoted` is the retired identification threshold (plan 261003o): a
+       link carrying it opens Reception with every row on screen. */
     await open("?mode=debate&name=quoted");
 
     const band = host.querySelector(".mode-band");
@@ -1520,8 +1522,16 @@ describe("a signed-out browser on a shared document", () => {
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_DEBATE_QUOTE);
-    expect(text).toContain("Somebody else answers what it claims.");
+    /* Reception draws the search about the piece; the other search's row is in
+       Claims, a press away — and the press asks the server nothing. */
+    expect(text).not.toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
+    const claims = [...(band?.querySelectorAll<HTMLButtonElement>(".dbt-views [role='radio']") ?? [])][1];
+    expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
+    await act(async () => claims?.click());
+    await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
+    expect(new URLSearchParams(location.search).get("debate")).toBe("claims");
+    expect(readable(band as Element)).not.toContain(PUBLIC_DEBATE_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
        band's (i) since 2026-10-01, with Debate's other counts (plan 261001m). */
     expect(text).not.toContain("1 more result that is not shown on a shared link");
@@ -1588,7 +1598,9 @@ describe("a signed-out browser on a shared document", () => {
         },
       },
     };
-    await open("?mode=debate");
+    /* Both rows answer claims, so Claims is the sub-mode that draws them and
+       their threads (plan 261003o). */
+    await open("?mode=debate&debate=claims");
 
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);

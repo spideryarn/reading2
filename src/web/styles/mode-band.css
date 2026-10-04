@@ -594,11 +594,15 @@
   overflow-wrap: break-word;
 }
 
+/* The line that says a model turn is still coming — `waiting` in ChatPanel.tsx
+   § Turn. `--ink-soft`, not `--ink-faint`: for seconds at a time it is the only
+   thing on the turn, and in the faint ink it read as a footnote rather than as
+   the status. */
 .chat-thinking {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-family: var(--font-ui);
   font-size: 0.9rem;
 }

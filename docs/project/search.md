@@ -67,9 +67,7 @@ empty one:
  │  the spine —  │  3 passages [prioritised]│ ┃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂         │
  │  where you   │  confidence 30 · 3 of 3  │ ┃and the reason is not squeamish- │
  │  are, and it │  ●─────────────────────  │ ┃ness about carbon.               │
- │  never moves │  Nothing is hidden.      │                                   │
- │              │  ▐62▌how sure ▬▭ where   │                                   │
- │              │  ▐92▌ …mind is software  │                                   │
+ │  never moves │  ▐92▌ …mind is software  │                                   │
  │              │  ▬▭▭▭ running on wet…    │  Living things are self-maintain- │
  │              │       Answers the func-  │  ing in a way a chip is not.      │
  │              │       tionalist claim    │                                   │
@@ -84,7 +82,6 @@ empty one:
 
    ▐92▌ the model's confidence, printed as well as drawn
    ▬▬▭  where in the article the passage falls — on a literal result too
-   ▐62▌how sure ▬▭ where   the legend, so neither mark is hover-only
    ┃    the bar down a matched paragraph
    ▭    the outline, round the words the model actually quoted (a quick hit has none)
 ```
@@ -623,17 +620,22 @@ second thing wearing it would be a reader having to learn that this particular b
 something else. Two channels, two colours, and neither carries its meaning by colour alone: the
 confidence prints its number, the place bar has a name.
 
-**And a legend, so neither mark is hover-only.** One line under the sort bar with miniature specimens
-of both — *how sure the model is — its own guess, not a measurement*, and *where in the article*. A
-hover-only explanation is one that nobody on a touchscreen ever sees, because tapping a row navigates
-rather than hovering it; the reader who most needs to be told what a confidence number is is exactly
-the reader who would not think to hover it. The caveat is the half that matters, so it is in the
-legend and not only in the hover card — GPT Sol's point, and it is right.
+**There is no legend above the list, since 2026-10-03.** There was one: a line under the sort bar
+with miniature specimens of both marks, there because a hover-only explanation is one nobody on a
+touchscreen ever sees. On a landscape iPad it wrapped to three lines and, with the rest of the
+panel's furniture, left the results a window shorter than one result. Greg, 2026-10-03 (report
+`spya-eqcbay`):
 
-The legend is built from the same two components the rows use, so it cannot drift from what it
-describes. Its place-bar specimen is `aria-hidden`: it is a picture of the control rather than a
-reading of anything, and announcing "30% of the way through the article" there would be a screen
-reader stating a fact about the article that is not true.
+> And there's also a blurb explaining, you know, what the scoring and the visual bars are. Let's
+> rely on tooltips for that, so we can get rid of that as well.
+
+What made that safe is that the explanation is no longer hover-only. Since 2026-09-12 the gutter is
+a button of its own (below), so a tap opens the card that says, in words, what the number is and
+whose guess it is, and how far through the article the passage sits. The same report took the saved
+searches' window down from 40% of the panel to a quarter (with a floor of about two rows for a
+phone on its side), and the foot line under the threshold away when nothing is hidden. The
+measurements are in
+[261003p](../plans/261003p-search-results-get-the-room-on-a-landscape-ipad.md).
 
 What this deliberately is **not** is a map. A number per row says *where*, and it does it for one
 result at a time; seeing the shape of a whole search takes a picture of the article, which is the
@@ -1096,7 +1098,8 @@ then all hide.** This one was the odd one out and became the model the others fo
 [glossary.md § It hides what is below it](glossary.md#it-hides-what-is-below-it-since-2026-09-03)
 has Greg's words and the shared rule, [`src/web/threshold.ts`](../../src/web/threshold.ts). What
 changed with them is that this panel gained the **foot line** saying how many are hidden, which it
-did not have and which was the only thing Greg asked for that it was missing.
+did not have and which was the only thing Greg asked for that it was missing. (Since 2026-10-03 it
+is printed here only when something is hidden: § The four ways a filter lies.)
 
 **The reference-list argument this section used to make did not survive contact**, and it is worth
 naming rather than quietly deleting. It ran: a glossary shows every term and lifts the ones that
@@ -1134,7 +1137,10 @@ A threshold can swallow the reader's results and look like an ordinary empty lis
   and it has a test of its own.
 - **The count says `3 of 11`, never `3`**, and under the track a line says *"8 passages are hidden by
   this threshold. Drag the slider left to show them."* A filter that hides eight things must not look
-  like a search that found three. Both come out of one pass over the list (`applyConf` in
+  like a search that found three. When nothing is hidden there is no line, since 2026-10-03: `11 of
+  11` already says so (Greg, `spya-eqcbay`: *"We can get rid of that, I think, because the, you
+  know, n of m above kind of answers that."*). The other thresholds still print theirs in every
+  state. Both come out of one pass over the list (`applyConf` in
   [`search-hits.ts`](../../src/web/search-hits.ts)), because a count that disagrees with the list
   under it is the worst thing this feature can do.
 - **"Nothing matched" is not printed when the reader hid it all.** That empty state would have taken
@@ -1148,7 +1154,8 @@ A threshold can swallow the reader's results and look like an ordinary empty lis
   threshold in a different unit from the numbers it hides would be that bug wearing a slider.
 
 The slider is the glossary's `GateSlider` in every respect that can be shared: the number on screen,
-the count on screen, the foot line in every state including none and all, and a reset that only
+the count on screen, the foot line (in every state but *none hidden*, where this panel alone
+prints nothing), and a reset that only
 appears once there is something to reset. Its track is the exception — a fixed 0–100, because that
 is the unit the rows print, where the glossary's ends where its data does.
 

@@ -127,6 +127,7 @@ import {
   refereeParam,
   summaryParam,
   structureParam,
+  debateParam,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -138,7 +139,7 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, fitView, NARROW_WINDOW_MAX } from "../layout.js";
+import { bandCoversProse, bandShapeFor, chatDock, fitView, NARROW_WINDOW_MAX } from "../layout.js";
 import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -763,8 +764,9 @@ export function Reader({
 
 
   /**
-   * Comments: selecting prose asks a question of the model, and the answer
-   * arrives in a floating dialog. See docs/project/comments.md.
+   * Comments and highlights: selecting prose opens the free annotation box.
+   * Ask AI is an explicit second action, and its conversation arrives in the
+   * separate floating chat dialog. See docs/project/comments.md.
    *
    * Note what is *not* here — no column, no change to `fit`, nothing threaded
    * through the layout arithmetic. That was the point of choosing a dialog.
@@ -888,6 +890,7 @@ export function Reader({
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
+    debate: debateParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
@@ -978,6 +981,24 @@ export function Reader({
         (thread && chatSummaries.find((t) => t.id === thread)?.kind === "chat"
           ? { kind: "thread" as const, threadId: thread }
           : null));
+
+  /**
+   * **The block the floating panel is about**, for the prose to mark
+   * (`td.text.chat-open`) — the panel is fixed to the window, docked or not, so
+   * its position says nothing about which paragraph it belongs to.
+   *
+   * A draft carries its anchor. A thread's is on its summary, the same list
+   * `overlay` has just looked the thread up in, and a conversation about the
+   * whole piece has none: `null`, and no mark. Derived from `overlay`, so it
+   * is `null` in the two conversation modes and for a visitor without saying
+   * so again. A string, so `memo(TableView)` holds while it does not change.
+   */
+  const chatOpenBlock: BlockId | null =
+    overlay === null
+      ? null
+      : overlay.kind === "draft"
+        ? overlay.anchor.blockId
+        : (chatSummaries.find((t) => t.id === overlay.threadId)?.anchor?.blockId ?? null);
 
   /**
    * **Every** glossary term, so every one of them can be underlined in the
@@ -1586,6 +1607,13 @@ export function Reader({
       ? (owner.citations.citations?.citations ?? null)
       : null;
   const marginRoom = marginOpen && fit.margW > 0;
+  /* Whether the block chat panel sits over the column rather than over the
+     prose, and the room it has there — layout.ts § `chatDock`. From the same
+     `fit` the column is drawn from, so the two cannot disagree about whether
+     there is one. Computed whether or not a panel is open: it is two
+     subtractions, and the panel must get a new value on a resize without
+     being remounted. */
+  const chatDockRoom = chatDock(fit, windowWidth);
   /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
      questions the reader asked sit in the margin too and open through it
      (plan 261002j). */
@@ -1750,7 +1778,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Debate's *by claim* order puts
+   * **Each block's position in the article** — Debate's Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
@@ -2279,8 +2307,8 @@ export function Reader({
       setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
       /* **The browser's selection is deliberately left alone**, which is a
          reversal. It used to be cleared because it sat on top of the mark we had
-         just drawn and hid it. There is now no mark to reveal — nothing is
-         stored until the reader asks — so clearing it would leave them looking
+         just drawn and hid it. There is no stored mark yet — the reader still
+         has to close or save the box — so clearing it would leave them looking
          at a quote in a box with no idea which words on the page it came from. */
     },
     /* **`isOwner`, not `owner`.** The capability is a new object on every
@@ -2625,9 +2653,18 @@ export function Reader({
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}
+              articleTitle={article.meta.title}
             />
           ) : null;
-        return <DebateBand slug={slug} onJump={bandJump} blockOrder={blockOrder} publishedAt={publishedAt} />;
+        return (
+          <DebateBand
+            slug={slug}
+            onJump={bandJump}
+            blockOrder={blockOrder}
+            publishedAt={publishedAt}
+            articleTitle={article.meta.title}
+          />
+        );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Skim was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The
@@ -3088,6 +3125,7 @@ export function Reader({
            call them theirs — BlockGutter.tsx § `notesBy`. */
         notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
+        chatOpenBlock={chatOpenBlock}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
@@ -3281,6 +3319,7 @@ export function Reader({
                would find this very conversation and reopen it, so the button
                would do nothing. ChatDialog.tsx § `onNewConversation`. */
             onNewConversation={startChatAboutBlock}
+            dockRoom={chatDockRoom}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
           />

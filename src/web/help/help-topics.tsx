@@ -667,9 +667,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
     body: (
       <>
         <p>
-          <strong>Select a few words in the article</strong> and a box opens. Write a note, or write
-          nothing and press <strong>Save</strong> — an empty comment is a bookmark. Either way
-          it is free. The passage is underlined, and clicking it later opens your note again.
+          <strong>Select a few words in the article</strong> and a box opens, with yellow already
+          picked. Press <strong>Save</strong>, the × or Escape and the words are highlighted. You
+          can write a note first, pick another colour, or pick no colour for a plain underlined
+          bookmark. All of it is free. Clicking the passage later opens it again.
         </p>
         <ul>
           <li>
@@ -678,11 +679,12 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             ready to send. If the AI call fails, your words are still kept.
           </li>
           <li>
-            <strong>Closing the box keeps what you wrote.</strong> If you typed something or picked
-            a colour, the ×, Escape and selecting something else save it as a comment. Leaving or
-            reloading the page tries to save it too, but a failed connection can still lose that
-            last-chance save. Only <strong>Discard</strong> deliberately throws it away. A box you
-            did not touch saves nothing.
+            <strong>Closing the box saves it.</strong> The × and Escape save the highlight, with
+            whatever you wrote. <strong>Discard</strong> throws it away. If you only pressed
+            Copy, closing leaves no highlight. If you typed something or changed the colour,
+            selecting something else saves it too, and leaving or reloading the page tries to,
+            but a failed connection can still lose that last-chance save. A box you did nothing
+            in is not saved by selecting something else or leaving the page.
           </li>
           <li>
             <strong>To bookmark a whole paragraph</strong>, use the bookmark icon in its margin; you

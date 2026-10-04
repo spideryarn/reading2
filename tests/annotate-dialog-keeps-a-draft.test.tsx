@@ -11,12 +11,16 @@
  *
  * What is asked here, exit by exit:
  *
- * - a draft **with something in it** (words, a colour, or a Referee placement)
- *   is stored exactly once, with `ask: false`, against the passage it was
- *   written about;
- * - an **untouched** box stores nothing, by any exit — selecting a sentence to
- *   copy it must leave no trace (docs/project/comments.md § Copying the passage);
- * - **Discard** is the only thing that throws a draft away;
+ * - a draft **the reader did something to** (words, a changed colour, or a
+ *   Referee placement) is stored exactly once, with `ask: false`, against the
+ *   passage it was written about;
+ * - an **untouched** box opens with Yellow picked, and since 2026-10-04 the ×
+ *   and Escape store that yellow highlight (Greg, spya-ur8kum: *"default to the
+ *   yellow colour, and default to saving it"*). The exits nobody chose — another
+ *   selection, an unmount, `pagehide` — still store nothing from it, and nor
+ *   does a close after Copy: selecting a sentence to copy it must leave no trace
+ *   (docs/project/comments.md § Copying the passage);
+ * - **Discard** always throws the draft away;
  * - nothing is sent twice: Ask–Ask, Ask–Save, Save–Save, Save-then-unmount,
  *   pagehide-then-unmount.
  *
@@ -99,6 +103,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  Reflect.deleteProperty(navigator as object, "clipboard");
 });
 
 /** The box alone over passage A, keyed as every caller keys it. */
@@ -124,12 +129,14 @@ function unmount(): void {
 
 const textarea = () => host.querySelector("textarea") as HTMLTextAreaElement;
 
-function type(text: string): void {
+function enter(text: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-  act(() => {
-    setter?.call(textarea(), text);
-    textarea().dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  setter?.call(textarea(), text);
+  textarea().dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function type(text: string): void {
+  act(() => enter(text));
 }
 
 function button(words: string): HTMLButtonElement {
@@ -155,10 +162,27 @@ function pressEscape(): void {
   });
 }
 
-function pickAColour(): void {
-  const swatch = host.querySelector<HTMLElement>(".hl-swatch:not(.on)");
-  if (!swatch) throw new Error("no highlight swatch on screen");
-  act(() => swatch.click());
+/** Press one swatch of the colour row: a colour's name, or `none`. */
+function swatch(colour: "none" | "yellow" | "green" | "blue" | "pink"): HTMLElement {
+  const swatch = host.querySelector<HTMLElement>(`.hl-swatch[data-colour="${colour}"]`);
+  if (!swatch) throw new Error(`no ${colour} swatch on screen`);
+  return swatch;
+}
+
+function pick(colour: "none" | "yellow" | "green" | "blue" | "pink"): void {
+  act(() => swatch(colour).click());
+}
+
+/** The name of the swatch the row shows as picked. */
+const picked = () => host.querySelector('.hl-swatch[aria-checked="true"]')?.getAttribute("aria-label");
+const hint = () => host.querySelector(".annotate-hint")?.textContent ?? "";
+
+/** A clipboard whose write never settles, so only the press itself can count. */
+function clipboardThatNeverAnswers(): void {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: () => new Promise<void>(() => {}) },
+  });
 }
 
 function pagehide(): void {
@@ -265,6 +289,17 @@ describe("the box ends in Discard, Ask AI and Save", () => {
 });
 
 describe("every other way out stores a draft that has something in it", () => {
+  it("typing and the × in the same frame stores the words that were typed", () => {
+    mount();
+    const close = button("Close");
+    act(() => {
+      enter(WORDS);
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.body).toBe(WORDS);
+  });
+
   it("the ×: words are stored once with ask: false, and the box is closed", () => {
     mount();
     type(WORDS);
@@ -296,14 +331,33 @@ describe("every other way out stores a draft that has something in it", () => {
     expect(cancelled).toBe(0);
   });
 
-  it("a colour and no words is a draft: the × stores a wordless highlight", () => {
+  it("a changed colour and no words is a draft: an unmount stores a wordless highlight", () => {
     mount();
-    pickAColour();
-    press("Close");
+    pick("pink");
+    unmount();
     expect(saved).toHaveLength(1);
-    expect(saved[0]!.body).toBe("");
-    expect(saved[0]!.colour).not.toBeNull();
-    expect(saved[0]!.ask).toBe(false);
+    expect(saved[0]).toMatchObject({ body: "", colour: "pink", ask: false });
+  });
+
+  it("pink and back to yellow is still the reader's doing: an unmount stores it", () => {
+    mount();
+    pick("pink");
+    pick("yellow");
+    unmount();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("yellow");
+  });
+
+  it("a colour change and the × in the same frame stores the colour that was pressed", () => {
+    mount();
+    const green = swatch("green");
+    const close = button("Close");
+    act(() => {
+      green.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("green");
   });
 
   it("a Referee placement and nothing else is a draft", () => {
@@ -313,6 +367,18 @@ describe("every other way out stores a draft that has something in it", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]!.mark).toEqual({ criterionId: "spya-crt7pn", valence: 0 });
     expect(saved[0]!.body).toBe("");
+  });
+
+  it("a Referee placement and the × in the same frame stores the placement", () => {
+    mount({ placing: true });
+    const place = button("place it");
+    const close = button("Close");
+    act(() => {
+      place.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.mark).toEqual({ criterionId: "spya-crt7pn", valence: 0 });
   });
 
   it("unmounting for any reason stores it once", () => {
@@ -339,14 +405,224 @@ describe("every other way out stores a draft that has something in it", () => {
   });
 });
 
-describe("an untouched box stores nothing, and Discard is the one thing that throws a draft away", () => {
-  it("untouched: the ×, Escape and an unmount all store nothing", () => {
+describe("the box opens on Yellow, and closing it saves the highlight (spya-ur8kum)", () => {
+  it("opens with Yellow picked; in Referee mode, with no colour", () => {
+    mount();
+    expect(picked()).toBe("Yellow");
+    unmount();
+    mount({ placing: true });
+    expect(picked()).toBe("No colour");
+  });
+
+  it("chooses the default once at mount, rather than recolouring when Referee mode changes", () => {
+    mount();
+    mount({ placing: true });
+    expect(picked()).toBe("Yellow");
+
+    unmount();
+    mount({ placing: true });
+    mount({ placing: false });
+    expect(picked()).toBe("No colour");
+  });
+
+  it("the placeholder and hint describe Yellow, No colour, Referee, Copy and loading truthfully", () => {
+    mount();
+    expect(textarea().placeholder).toContain("save the highlight");
+    expect(hint()).toContain("Closing this saves the highlight");
+
+    pick("none");
+    expect(textarea().placeholder).toContain("save to bookmark");
+    expect(hint()).toContain("Closing this keeps what you wrote");
+    expect(hint()).not.toContain("saves the highlight");
+
+    clipboardThatNeverAnswers();
+    press("Copy the passage");
+    expect(hint()).not.toContain("saves the highlight");
+
+    unmount();
+    mount({ placing: true });
+    expect(textarea().placeholder).toContain("save to bookmark");
+    expect(hint()).toContain("Closing this keeps what you wrote");
+
+    unmount();
+    mount({ loaded: false });
+    expect(hint()).toContain("Save will be ready in a moment");
+    expect(button("Save").disabled).toBe(true);
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("yellow");
+  });
+
+  it("untouched, the ×: one wordless yellow highlight, not asked, and the box closes", () => {
     mount();
     press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ anchor: A, body: "", colour: "yellow", ask: false, leaving: false });
+    expect(cancelled).toBe(1);
+    unmount();
+    expect(saved, "the unmount after the × stored it again").toHaveLength(1);
+  });
+
+  it("untouched, Escape: the same", () => {
+    mount();
     pressEscape();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow", ask: false });
+    expect(cancelled).toBe(1);
+  });
+
+  it("untouched, Save stores yellow, and Ask AI stores yellow with ask: true", () => {
+    mount();
+    press("Save");
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow", ask: false });
+    unmount();
+    saved = [];
+    mount();
+    press("Ask AI");
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow", ask: true });
+  });
+
+  it("words typed and cleared by the first Escape: the second Escape stores yellow", () => {
+    mount();
+    type(WORDS);
+    act(() => {
+      textarea().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(saved, "the clearing Escape stored something").toHaveLength(0);
+    expect(textarea().value).toBe("");
+    pressEscape();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow" });
+  });
+
+  it("clearing words and closing in the same frame does not put the cleared words back", () => {
+    mount();
+    type(WORDS);
+    act(() => {
+      textarea().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow" });
+  });
+
+  it("No colour picked and nothing else: neither the × nor an unmount stores anything", () => {
+    mount();
+    pick("none");
+    press("Close");
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
+    unmount();
+    mount();
+    pick("none");
+    unmount();
+    expect(saved, "an empty uncoloured bookmark was stored by an exit nobody chose").toHaveLength(0);
+    /* The control: with words, the same No colour box is stored by the ×. */
+    mount();
+    pick("none");
+    type(WORDS);
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: WORDS, colour: null });
+  });
+
+  it("Referee mode, untouched: the × stores nothing, as before", () => {
+    mount({ placing: true });
+    press("Close");
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
+  });
+});
+
+describe("Copy, then close, leaves no highlight", () => {
+  it("Copy and the × in the same frame still leave no highlight", () => {
+    clipboardThatNeverAnswers();
+    mount();
+    const copy = button("Copy the passage");
+    const close = button("Close");
+    act(() => {
+      copy.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
+  });
+
+  it("Copy then the ×: nothing, even with the clipboard still to answer; and the hint says so", () => {
+    clipboardThatNeverAnswers();
+    mount();
+    press("Copy the passage");
+    expect(host.querySelector(".annotate-hint")?.textContent).toContain("Closing leaves no highlight");
+    press("Close");
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
+  });
+
+  it("Copy then Escape: nothing", () => {
+    mount();
+    press("Copy the passage");
+    pressEscape();
+    expect(saved).toHaveLength(0);
+  });
+
+  it("Copy then Save: the yellow highlight", () => {
+    mount();
+    press("Copy the passage");
+    press("Save");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("yellow");
+  });
+
+  it("Copy, then words, then the ×: stored", () => {
+    mount();
+    press("Copy the passage");
+    type(WORDS);
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: WORDS, colour: "yellow" });
+  });
+
+  it("Copy, then another colour, then the ×: stored", () => {
+    mount();
+    press("Copy the passage");
+    pick("green");
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("green");
+  });
+});
+
+describe("an untouched box is stored by no exit the reader did not choose, and Discard throws a draft away", () => {
+  it("untouched: an unmount stores nothing", () => {
+    mount();
     unmount();
     expect(saved).toHaveLength(0);
-    expect(cancelled, "the exits stopped closing the box").toBe(2);
+  });
+
+  it("a press on the Yellow that is already picked is not a change: an unmount stores nothing", () => {
+    mount();
+    pick("yellow");
+    unmount();
+    expect(saved).toHaveLength(0);
+  });
+
+  it("untouched pagehide, then pageshow: nothing sent, nothing closed, and the × still stores one highlight", () => {
+    mount();
+    pagehide();
+    pageshow();
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(0);
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ colour: "yellow", leaving: false });
+  });
+
+  it("untouched, Discard: nothing, then or at the unmount that follows", () => {
+    mount();
+    press("Discard");
+    unmount();
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
   });
 
   it("only spaces is untouched", () => {
@@ -365,7 +641,7 @@ describe("an untouched box stores nothing, and Discard is the one thing that thr
   it("Discard with words typed stores nothing, then or at the unmount that follows", () => {
     mount();
     type(WORDS);
-    pickAColour();
+    pick("pink");
     press("Discard");
     expect(cancelled).toBe(1);
     unmount();
@@ -429,7 +705,7 @@ interface Stored {
   ask: boolean;
 }
 let stored: Stored[];
-let select: (anchor: typeof A) => void;
+let select: (anchor: typeof A | null) => void;
 
 /**
  * `Reader.tsx` in miniature — the same key, the same conditional close. The two
@@ -470,8 +746,8 @@ describe("another selection while a draft is open", () => {
     );
     expect(textarea().value, "the old words rode along into the new box").toBe("");
 
-    /* And the new, untouched passage is not stored when it goes. */
-    press("Close");
+    /* And the new, untouched passage is not stored when it goes unasked. */
+    act(() => select(null));
     expect(host.querySelector(".annotate-dialog")).toBeNull();
     expect(stored).toHaveLength(1);
   });

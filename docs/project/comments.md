@@ -38,18 +38,60 @@ Three independent properties, and a comment may have any combination of them:
 
 ### The box a selection opens <a id="the-selection-box"></a>
 
-The quote, a Copy button, a place to write, a colour row, and three buttons:
+The quote, a Copy button, a place to write, a colour row **with Yellow already picked**, and three
+buttons:
 
 ```
    Discard                                  [ Ask AI ]  [ Save ]
 ```
 
-- **Save** stores the comment — a bookmark if nothing was written. It is the only submit button, so
-  ⌘/Ctrl+Enter is the free Save and plain Enter is a newline.
+- **Save** stores the comment — a yellow highlight if nothing was written or changed, a bare
+  bookmark if *No colour* was picked. It is the only submit button, so ⌘/Ctrl+Enter is the free Save
+  and plain Enter is a newline.
 - **Ask AI** stores it and then opens the chat composer on those words, pre-filled, for the reader
   to send ([§ Asking the model](#asking-the-model-and-the-link-back)). Pressing it spends nothing;
   the model is called when the reader sends.
-- **Discard** throws the draft away. It is the only thing that does.
+- **Discard** throws the draft away.
+
+**Yellow is the default, and closing the box saves it, since 2026-10-04.** Greg:
+
+> I like the new human highlights when I select text - can we default to the yellow colour, and
+> default to saving it, so that it requires fewer clicks?
+>
+> — Greg, 2026-10-03 (spya-ur8kum)
+
+So a highlight is the selection and one press: Save, the ×, or Escape. Before, it was the yellow
+dot and then Save. Two questions decide what an exit stores (`hasSomething` and `hasIntent` in
+[`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx)):
+
+```
+   something to store   words, a colour (Yellow counts), or a placement
+   the reader's intent  words, a placement, or the colour row CHANGED
+
+   Save, Ask AI         always store what the box shows
+   the ×, Escape        something to store — unless Copy was pressed and there is no intent
+   another selection,
+   unmount, pagehide    something to store AND intent
+   Discard              nothing
+```
+
+Three things keep "closing saves" from being "every selection is a highlight":
+
+- **An exit the reader did not choose stores nothing from an untouched box.** Letting go of a drag
+  opens the box, so a mis-drag followed by a second drag would otherwise leave a highlight per
+  attempt, and React StrictMode's simulated unmount would store one in development.
+- **Copy, then close, leaves no highlight** if nothing else was done
+  ([§ Copying the passage](#copying-the-passage)). The hint under the buttons says so as soon as
+  Copy is pressed, because it is the one close besides Discard that keeps nothing.
+- **Referee mode opens on No colour**, and behaves as it did. A selection there records evidence
+  against a criterion; a reading highlight nobody picked would mix two meanings.
+
+A press on the Yellow that is already picked is not a change: `HighlightSwatches` calls back only
+when the colour differs, and has to, because `CommentDialog` PATCHes on that callback. And Ask AI
+stores the yellow the box shows, so a word a reader asks about is also a highlight and a row in
+Quotes unless they pick *No colour* first. Both are open questions for Greg in the plan,
+[261004a](../plans/261004a-a-selection-s-highlight-is-yellow-by-default-and-closing-the-box-saves-it.md),
+with saving at the moment of selection.
 
 **Ask AI was a tick-box until 2026-10-03**, and the box kept everything as a draft until its one
 button was pressed. Greg:
@@ -64,9 +106,9 @@ button was pressed. Greg:
 A ticked box looks like an action taken, and it was not one. And five things threw the draft away
 without a word: Cancel, the ×, Escape, another selection in the prose, and leaving the page.
 
-**The rule now: no way out silently discards a draft.** A draft *with something in it* — words, a
-colour, or a Referee placement — is stored as a comment, exactly as Save would store it and never
-asking the AI, by each of:
+**The rule now: no way out silently discards a draft.** A draft *the reader did something to* —
+words, a changed colour, or a Referee placement — is stored as a comment, exactly as Save would
+store it and never asking the AI, by each of:
 
 | The way out | What stores it |
 |---|---|
@@ -75,9 +117,10 @@ asking the AI, by each of:
 | leaving the article inside the app | the same unmount |
 | a reload, a closed tab, a link out | a `pagehide` listener starts the best-effort keepalive write (`leavingFetch`); if the page returns from the back/forward cache, `pageshow` replays that frozen snapshot through ordinary `create` so the tab learns about it, then closes the old box |
 
-**An untouched box stores nothing**, by any of them. That is the one place this is narrower than
-"it should auto-save" read literally: storing a bookmark the moment the box opened would leave a
-mark behind every time a reader selects words to copy them
+**An untouched box is stored only by the first row of that table** (the × and Escape, since
+2026-10-04, above), never by the other three. That is the one place this is narrower than "it
+should auto-save" read literally: storing a mark the moment the box opened would leave one behind
+every time a reader selects words to copy them
 ([§ Copying the passage](#copying-the-passage)). The textarea's own first Escape still clears what
 was typed — that is the reader removing their words, not the box losing them.
 
@@ -344,7 +387,11 @@ box's header now, beside Close, and it puts `anchor.quote` on the clipboard: the
 with no id and no attribution attached. The block's citable address is a different thing and already
 has its own button in the gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)).
 
-It copies and does nothing else — it does not save, does not close, and buys nothing. Three states
+It copies and does nothing else — it does not save, does not close, and buys nothing. **And since
+2026-10-04 it tells the box the reader was after the sentence**: the × or Escape after Copy, with
+nothing else done, leaves no highlight, where it otherwise saves the default yellow one
+([§ The box a selection opens](#the-selection-box)). The press is what counts, not the clipboard's
+answer, which may still be out or be a refusal when the box closes. Three states
 rather than two, because a copy that quietly failed is
 [silent-success](../reusable/silent-success.md) with a clipboard on it, and `navigator.clipboard` is
 undefined in every insecure context.
@@ -1180,6 +1227,41 @@ rather than blanked, and if none survives the key comes off entirely.
   with the article in the context window, which is
   [an explicit anti-goal](vision.md#anti-goals).
 - **Comments are per-article, not per-reader.** There is one reader.
+
+## Where the chat panel sits <a id="chat-dock"></a>
+
+A question asked from a block opens the chat panel (`ChatDialog`), fixed to the bottom-right corner
+of the window, over the prose. From the report that changed that:
+
+> I think now that we have a right-hand column that we sometimes use for marginalia, why don't we
+> put the block-level chat comment in that right-hand column? … But at the moment, it kind of shows
+> up in this own panel that kind of occludes things, and I mean, it's okay, but I just feel like
+> it's more in the way than it would be if it was in the right-hand column.
+>
+> — Greg, 2026-10-03 (spya-nseuz2)
+
+So when the [Marginalia](marginalia.md) column is showing and there is room, the panel **docks**: it
+moves sideways to start just right of the prose, over the lower part of the column, and covers notes
+rather than the article. It is the same panel in the same place in the tree, with the class `docked`
+(`.chat-dialog.docked` in [`dialogs.css`](../../src/web/styles/dialogs.css)). Its bottom anchor and
+heights are untouched, because they are what keeps it above the iOS keyboard.
+
+`chatDock` in [`layout.ts`](../../src/web/layout.ts) decides, from the same fit the column is drawn
+from. The room is from the column's left edge to the window's right edge, less an 8px inset and an
+8px gutter, and the panel docks when a column is drawn and that room is at least 256px
+(`CHAT_DOCK_MIN`). It is then as wide as the room, up to its usual 26rem. Otherwise it floats as
+before: Marginalia off, a phone, any window with no room for the column.
+
+**A full column is enough room, and only just.** The column is at most 288px, so one pressed against
+the window's edge (the case with a band open) gives a 272px panel. A column that has shrunk below
+272px leaves too little and the panel floats; on a window wide enough that the centred prose leaves
+more than the column beside it, the panel is wider, up to 26rem.
+
+Docked or floating, the block the panel is about wears a 2px rule down its right edge
+(`td.text.chat-open`), because a panel fixed to the window does not otherwise say which paragraph it
+belongs to. A conversation about the whole piece marks nothing. The plan, and the option of a card
+level with the block that was passed over, is
+[261003p](../plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md).
 
 ## The other way to ask
 

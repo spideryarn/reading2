@@ -381,7 +381,7 @@ describe("voices.css", () => {
       ".gloss-ask-found",
       ".tip-cite-text",
       ".skim-words-tip",
-      ".dbt-claim-text",
+      ".dbt-group-quote",
       ".mir-quote:not(.mir-block-id)",
       ".ideas-quote:not(.ideas-quote-moved)",
       ".tl-quote:not(.tl-quote-moved)",

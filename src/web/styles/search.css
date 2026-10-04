@@ -117,14 +117,21 @@
    Since 2026-08-26 every one of them is on screen at once with a box beside it,
    rather than one being "open". The two halves of the panel therefore share the
    height: the list is capped and scrolls, the results below take what is left.
-   `40%` rather than a fixed height so that a reader with two saved searches is
-   not looking at an empty box the size of eight. */
+   A cap rather than a fixed height so that a reader with two saved searches is
+   not looking at an empty box the size of eight.
+
+   A quarter of the panel since 2026-10-03, down from 40%. On a landscape iPad
+   the panel is about 600px tall and 40% of it, with the box and the controls,
+   left the results a window shorter than one result (Greg's report
+   spya-eqcbay; docs/plans/261003p-…). The `7.5rem` floor is for a panel
+   shorter still, a phone on its side, where a quarter would be one row: there
+   the list keeps the header and about two rows, which is what 40% gave it. */
 
 .srch-saved-wrap {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 40%;
+  max-height: max(25%, 7.5rem);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -286,12 +293,9 @@
 
 /* ---------------------------------------------------------------------------
    The colour picker — sixteen swatches and "Automatic", in a floating panel.
-   `srch-picker-*`, NOT `srch-swatches`: that name was already taken, by the
-   three-hue specimen strip in the results legend a few hundred lines up. The
-   first version of this block used it and the two silently merged — the legend
-   picked up a border, a background and a drop shadow, and the picker picked up
-   the legend's `display: inline-flex` and 1px gap. Both still rendered.
-   GPT Sol's review, 2026-08-27.
+   `srch-picker-*`, NOT `srch-swatches`: that name was taken at the time, by a
+   three-hue specimen strip in a legend above the results (removed 2026-10-03),
+   and the two silently merged. GPT Sol's review, 2026-08-27.
    SearchPanel.tsx § ColourPicker says why there is no library behind it.
 
    Portalled, so none of this is inside the 288px band: the panel is a sibling
@@ -615,7 +619,8 @@
    "a match" everywhere in this mode (the wash in the prose, the selected
    matcher), so place gets neutral grey rather than a second reading of the same
    blue. Neither carries its meaning by colour alone — the confidence prints its
-   number, the place bar has an accessible name and a legend above the list. */
+   number, the place bar has an accessible name, and the card behind the gutter
+   says both in words. */
 
 .srch-gutter {
   flex: none;
@@ -690,33 +695,6 @@
   background: var(--ink-soft);
 }
 
-/* One line saying what the two gutter marks are, so neither is hover-only —
-   a hover-only explanation is one nobody on a touchscreen ever sees. Built from
-   the same components as the rows, so it cannot drift from what it describes. */
-.srch-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 0.7rem;
-  margin: 0;
-  padding: 0.3rem 0.7rem 0.35rem;
-  border-bottom: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.4;
-}
-.srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
-/* Three of the palette's hues as a specimen, drawn from the same tokens the
-   marks use so the legend cannot show a colour the article does not. Which
-   three is arbitrary — it is a picture of "there are colours and they mean
-   something", not a key, because a key to eight hues in a 0.7rem line would be
-   unreadable and the answer for any one row is in its hover card. */
-.srch-swatches { display: inline-flex; gap: 1px; flex: none; }
-.srch-swatches i {
-  width: 0.3rem;
-  height: 0.7rem;
-  border-radius: 1px;
-  background: rgb(var(--cat-rgb));
-}
 /* The dot on a result row, in the colour of the search that found it. */
 .srch-hit-dot {
   flex: none;
@@ -727,11 +705,6 @@
 }
 /* "2 still searching", beside a count that is real but not final. */
 .srch-count-more { font-style: italic; }
-/* Sized down and pinned to a width, so the two specimens sit on the text
-   baseline rather than stretching to whatever the flex row is. */
-.srch-legend .srch-conf { flex: none; opacity: 0.75; }
-.srch-legend .srch-place { width: 1.6rem; margin: 0; flex: none; }
-
 .srch-hit-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
 .srch-hit-quote {
   /* Three lines, then cut. Enough to recognise a passage, never enough to read

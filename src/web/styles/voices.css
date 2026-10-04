@@ -70,8 +70,7 @@
     .cite-entry,
     /* Marginalia's opened citation: the article's own reference entry */
     .marg-cite-entry,
-    .dbt-claim-text,
-    /* the by-claim heading: the same verbatim quote as .dbt-claim-text */
+    /* Debate's claim heading: the article's own words for the claim */
     .dbt-group-quote,
     /* "first cited" — the words the article cites the work with */
     .cite-at,

@@ -82,9 +82,9 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "name", // debate's identification threshold
-  "debateby", // debate order
-  "bears", // debate's relevance threshold
+  "debate", // reception or claims — a restore draws what is stored; only a press searches
+  "debateby", // reception's order
+  "bears", // claims' relevance threshold
   "debatethread", // which of debate's threads narrows its list
   "citeby", // citations order
   "citebar", // citations threshold
@@ -154,6 +154,9 @@ export const NEVER_REMEMBERED = [
      remembered view would be restored over a link somebody had just opened.
      GPT Sol's plan review of 261001p, P1. */
   "deep",
+  /* Debate's retired identification threshold still marks an explicit old
+     link. As with `deep`, do not restore another view over it. */
+  "name",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

@@ -898,3 +898,52 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
 function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
   return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
 }
+
+/**
+ * **The block chat panel, docked over the marginalia column** rather than
+ * floating over the prose.
+ * docs/plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md.
+ *
+ * `CHAT_DOCK_MIN` is the narrowest the panel is worth docking at: below it the
+ * panel floats in the corner exactly as it always has, because a 200px chat is
+ * worse than an overlapping one. `CHAT_DOCK_INSET` is how far right of the
+ * column's edge the panel starts, so the prose's gutter icons stay clear; the
+ * stylesheet adds it to `left`, and ChatDialog.tsx hands it over as
+ * `--chat-dock-inset` so that this is the only copy. `CHAT_DOCK_GUTTER` is the
+ * page kept between the panel and the window's right edge.
+ */
+/* **Sized so that a full column is enough room.** The column is at most
+   `MARG_IDEAL` (288px), and with a band open it is pressed against the
+   window's edge, so the room there is 288 less the inset and the gutter. The
+   first numbers (272, 10, 12) left 266 and the panel never docked beside a
+   band below 1658px, which is the layout the report was filed from. With
+   these a full column gives 272px. A column narrower than `CHAT_DOCK_MIN`
+   plus the two still floats. */
+export const CHAT_DOCK_MIN = 256; // 16rem
+export const CHAT_DOCK_INSET = 8;
+export const CHAT_DOCK_GUTTER = 8;
+
+/**
+ * **How much room a docked chat panel has, in px — or `null` for "do not dock,
+ * float".** Pure: the live `Fit` and the window width it was fitted to.
+ *
+ * `fit.margLeft` is the table's right edge, which is where the column starts
+ * (`fitMargin`, `fitBoth`); `windowWidth` is the same number both were given,
+ * with the notch and the scrollbar already out of it, so the difference is
+ * everything right of the prose. The inset and the gutter come off **before**
+ * the minimum is applied — GPT Sol on the plan, F3: taken off afterwards, a
+ * panel that just qualified would run into the window's edge.
+ *
+ * **Gated on `margW`, not on the room.** With no column `margLeft` is `0` and
+ * the arithmetic would report the whole window; and a column that was asked
+ * for but has no room (`margW` 0 — a phone, a narrow iPad) is not showing.
+ *
+ * **The room, not the width.** The panel is `min(26rem, the room)` and the
+ * `26rem` is the stylesheet's (dialogs.css § `.chat-dialog.docked`), which is
+ * the one place that knows the root font size without being told.
+ */
+export function chatDock(fit: Fit, windowWidth: number): number | null {
+  if (fit.margW <= 0) return null;
+  const room = windowWidth - fit.margLeft - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER;
+  return room >= CHAT_DOCK_MIN ? room : null;
+}
