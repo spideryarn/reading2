@@ -53,7 +53,6 @@ import {
   type WorkAuthor,
   type WorkId,
   coolAfter,
-  doiPath,
   inServiceTurn,
   list,
   parseWorkId,
@@ -62,6 +61,7 @@ import {
   record,
 } from "./bibliographic.js";
 import { OPENALEX_WORK_ID } from "./citer-link.js";
+import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
 import { CONTACT_EMAIL } from "./site-text.js";

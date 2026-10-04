@@ -1,15 +1,24 @@
 // @vitest-environment jsdom
 /**
- * **The Dock's Help link: on every bar, and it opens at the part about where
- * you are.** docs/plans/261002b-help-page.md § After GPT Sol's plan review, R5
- * and R8 — one labelled link in the Dock, for owners and visitors, contextual:
- * the current mode's section, or the reading view's in Plain.
+ * **The Dock's Help link: on a visitor's bar only, and it opens at the part
+ * about where you are.** It was on every bar from 2026-10-02
+ * (docs/plans/261002b-help-page.md § After GPT Sol's plan review, R5 and R8).
+ * Greg, 2026-10-04 (spya-dev7pf): *"We don't need to show the help icon in the
+ * bottom bar of reading view … I'm trying to avoid cluttering that bottom bar,
+ * but of course we also want to make sure that if people need help, they can
+ * get to it."* So it left the bar of anyone who has the command bar, whose
+ * Help row opens the same section, and stayed for a visitor, who has none —
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
  *
- * Three claims, each of which a plausible refactor could break silently:
+ * Four claims, each of which a plausible refactor could break silently:
  *
- *  - **Everybody gets it.** The bar has three gates already (visitor, signed
- *    in, a drawer) and a link placed inside the wrong one vanishes for exactly
- *    the reader who most needs it — a stranger on a shared link.
+ *  - **The owner's bar has no Help control, and still has Commands.** The two
+ *    are one trade: the link may go only where the command bar is.
+ *  - **Every visitor gets it**, signed in or not, on the reading view and on
+ *    the Metadata page. The bar has three gates already (visitor, signed in, a
+ *    drawer) and a link placed inside the wrong one vanishes for exactly the
+ *    reader who most needs it — a stranger on a shared link, who has no
+ *    command bar and, in Plain or a mode that is not shared, no (i) either.
  *  - **It follows the band.** The href is computed from `mode`, so a link
  *    computed once, or from somewhere other than the prop, would go on opening
  *    the section for the mode you were in before.
@@ -64,27 +73,77 @@ function bar(props: Record<string, unknown>): void {
   });
 }
 
+/** Every control in the bar with this accessible name. */
+function named(label: string): HTMLElement[] {
+  return [...host.querySelectorAll<HTMLElement>(".dock .dock-btn")].filter(
+    (el) => el.getAttribute("aria-label") === label,
+  );
+}
+
 /** The one control in the bar named Help. */
 function helpLink(): HTMLAnchorElement {
-  const hits = [...host.querySelectorAll<HTMLElement>(".dock .dock-btn")].filter(
-    (el) => el.getAttribute("aria-label") === "Help",
-  );
+  const hits = named("Help");
   expect(hits, "no single bar control named Help").toHaveLength(1);
   const el = hits[0] as HTMLElement;
   expect(el.tagName, "Help is not a link").toBe("A");
   return el as HTMLAnchorElement;
 }
 
+/** The bar off the reading view, where there is no band and no `mode`. */
+function metadataBar(props: Record<string, unknown>): void {
+  history.replaceState(null, "", "/read/a-piece/metadata");
+  act(() => {
+    root.render(
+      // biome-ignore lint/suspicious/noExplicitAny: as above
+      createElement(Dock as any, {
+        slug: "a-piece",
+        view: "metadata",
+        experimental: EXPERIMENTAL_ON,
+        ...props,
+      }),
+    );
+  });
+}
+
+/** The props of a drawer, which is how the real reading view says *visitor*. */
+function drawer(visitor: boolean): Record<string, unknown> {
+  return {
+    comments: [],
+    loaded: true,
+    loadError: null,
+    panel: null,
+    onPanel: () => {},
+    onOpenComment: () => {},
+    visitor,
+  };
+}
+
 describe("the Help link in the Dock", () => {
+  /* The trade, both halves in one case: no Help control, and the Commands
+     button whose Help row replaces it. */
+  it("is not drawn for the owner, who has the command bar instead", () => {
+    for (const mode of ["plain", "chat"]) {
+      bar({ mode });
+      expect(named("Help"), `an owner's bar in ${mode} draws Help`).toHaveLength(0);
+      expect(named("Commands"), "the owner's bar has no Commands button").toHaveLength(1);
+    }
+    bar({ mode: "chat", drawer: drawer(false) });
+    expect(named("Help")).toHaveLength(0);
+    expect(named("Commands")).toHaveLength(1);
+    metadataBar({});
+    expect(named("Help"), "an owner's Metadata bar draws Help").toHaveLength(0);
+    expect(named("Commands")).toHaveLength(1);
+  });
+
   it("opens at the section for the mode the band is in", () => {
-    bar({ mode: "chat" });
+    bar({ mode: "chat", visitor: true });
     expect(helpLink().getAttribute("href")).toBe("/help#mode-chat");
   });
 
   it("follows the band when the mode changes", () => {
-    bar({ mode: "glossary" });
+    bar({ mode: "glossary", visitor: true });
     expect(helpLink().getAttribute("href")).toBe("/help#mode-glossary");
-    bar({ mode: "structure" });
+    bar({ mode: "structure", visitor: true });
     expect(helpLink().getAttribute("href")).toBe("/help#mode-structure");
   });
 
@@ -93,30 +152,35 @@ describe("the Help link in the Dock", () => {
      The same with Marginalia's column on and no band: it is a column beside
      the prose, not a mode the band is in. */
   it("opens at the reading view in Plain, with or without the margin column", () => {
-    bar({ mode: "plain" });
+    bar({ mode: "plain", visitor: true });
     expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
-    bar({ mode: "plain", margin: true });
+    bar({ mode: "plain", margin: true, visitor: true });
     expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
   });
 
-  it("is drawn for a signed-out visitor too, pointing at the same section", () => {
+  it("is drawn for a signed-out visitor", () => {
     bar({ mode: "summary", visitor: true, experimental: EXPERIMENTAL_SIGNED_OUT });
     expect(helpLink().getAttribute("href")).toBe("/help#mode-summary");
+    expect(named("Commands")).toHaveLength(0);
   });
 
-  it("is drawn off the reading view, where there is no band", () => {
-    history.replaceState(null, "", "/read/a-piece/metadata");
-    act(() => {
-      root.render(
-        // biome-ignore lint/suspicious/noExplicitAny: as above
-        createElement(Dock as any, {
-          slug: "a-piece",
-          view: "metadata",
-          experimental: EXPERIMENTAL_ON,
-        }),
-      );
-    });
-    expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
+  /* Somebody signed in, reading another person's shared article: still a
+     visitor, so no command bar, though their bar has the switch and Feedback.
+     Said through the drawer, which is how the real reading view says it. */
+  it("is drawn for a signed-in visitor, who has no command bar either", () => {
+    bar({ mode: "summary", drawer: drawer(true), experimental: EXPERIMENTAL_ON });
+    expect(helpLink().getAttribute("href")).toBe("/help#mode-summary");
+    expect(named("Commands"), "a visitor's bar draws Commands").toHaveLength(0);
+  });
+
+  /* No `mode` reaches the bar there, so it is the reading view's section
+     whatever `?mode=` the address carries. */
+  it("is drawn for a visitor off the reading view, where there is no band", () => {
+    for (const experimental of [EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT]) {
+      metadataBar({ visitor: true, experimental });
+      expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
+      expect(named("Commands"), "a visitor's Metadata bar draws Commands").toHaveLength(0);
+    }
   });
 
   /**
@@ -136,7 +200,7 @@ describe("the Help link in the Dock", () => {
       events.push(`section:${this.id}`);
     };
     try {
-      bar({ mode: "chat" });
+      bar({ mode: "chat", visitor: true });
       act(() => {
         helpLink().dispatchEvent(
           new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }),

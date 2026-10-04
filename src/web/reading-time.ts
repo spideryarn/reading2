@@ -18,6 +18,9 @@ export type ReadLevel = 0 | 1 | 2 | 3 | 4;
 /** Words per minute a block's expected reading time is measured at. */
 export const READING_WPM = 230;
 
+/** The share of a block's reading time at which both the gutter and rail start to draw. */
+export const READ_REACH_FROM = 0.35;
+
 /**
  * Seconds it takes to read a block of `words` words, and never under one.
  *
@@ -37,7 +40,7 @@ export function expectedSeconds(words: number): number {
  * that would answer "where did I spend most time", and one paragraph stared at
  * for ten minutes would make the rest of the piece look unread. Four steps
  * rather than a width in pixels, so that the gutter's style sheet changes only
- * when a block crosses one. The spine draws the finer `readReach` below.
+ * when a block crosses one. The spine draws `readReach` below, on a longer scale of its own.
  *
  * **Each level's elapsed-time threshold is twice the preceding threshold**
  * (0.35, 0.7, 1.4, 2.8 of the reading time), so the later levels grow
@@ -56,7 +59,7 @@ export function expectedSeconds(words: number): number {
 export function readLevel(seconds: number, words: number): ReadLevel {
   if (!(seconds > 0)) return 0;
   const ratio = seconds / expectedSeconds(words);
-  if (ratio < 0.35) return 0;
+  if (ratio < READ_REACH_FROM) return 0;
   if (ratio < 0.7) return 1;
   if (ratio < 1.4) return 2;
   if (ratio < 2.8) return 3;
@@ -70,8 +73,24 @@ export function readLevel(seconds: number, words: number): ReadLevel {
 export type ReadReach = number;
 
 /**
- * `readLevel`, four times finer: the width of the spine's area chart at one
- * block. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ * The share of a block's reading time at which the rail is full: seven
+ * doublings of `READ_REACH_FROM`, about 45 times the reading time.
+ *
+ * Chosen to leave only a few percent of the measured drawn blocks full.
+ * The sample, results and limits of that inference are in
+ * docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
+ */
+export const READ_REACH_FULL = READ_REACH_FROM * 2 ** 7;
+
+/** The ratio at which each sixteenth from 5 to 16 starts: twelve equal steps of the logarithm. */
+const REACH_STEPS: readonly number[] = Array.from({ length: 12 }, (_, i) =>
+  i === 11 ? READ_REACH_FULL : READ_REACH_FROM * (READ_REACH_FULL / READ_REACH_FROM) ** ((i + 1) / 12),
+);
+
+/**
+ * **The spine chart's width scale, and the only place it is defined**: the
+ * width of the area chart at one block.
+ * docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
  *
  * > the distance from the left-hand margin would be an indication of how much
  * > time I've spent reading it […] So I could just look at a glance and see
@@ -79,24 +98,33 @@ export type ReadReach = number;
  * >
  * > — Greg, 2026-10-03 (spya-jhe9mc)
  *
- * The same doubling scale, so the level boundaries do not move: 0.35 of the
- * reading time is 4, 0.7 is 8, 1.4 is 12, 2.8 and over is 16, and each
- * sixteenth between is a quarter of a doubling — `floor(4 × log2(ratio / 0.175))`.
+ * Logarithmic from `READ_REACH_FROM` (4, a quarter of the rail) to
+ * `READ_REACH_FULL` (16), so each sixteenth is the same multiple of time,
+ * about one and a half times the step before. One read at the expected pace is
+ * 6; three reads at the expected pace are 9.
  *
- * **The level is taken from `readLevel` and the logarithm only places the reach
- * inside it.** On its own the formula runs a step ahead at the representable
- * value just under 1.4 and 2.8 (12 at 1.3999999999999997), and the rail would
- * then disagree with the gutter line about the same block. So
- * `Math.floor(readReach / 4) === readLevel` for every input, by the clamp
- * rather than by an epsilon. GPT Sol's F1 on the plan;
- * tests/reading-time.test.ts walks the doubles either side of each boundary.
+ * > make it a bit logarithmic so it's rarer that the reading-time fills up
+ * > completely all the way to the right
+ * >
+ * > — Greg, 2026-10-04
+ *
+ * **It shares `readLevel`'s start and nothing else.** Until 2026-10-04 the
+ * reach was the level four times finer and filled at 2.8, the gutter line's
+ * full strength. Now the rail draws exactly when the gutter line does (the
+ * zero is taken from `readLevel`, not from a logarithm that could disagree at
+ * the double just under 0.35), but a full-strength line no longer means a full
+ * rail. The steps are a table rather than `floor(log2)`, so a boundary is a
+ * comparison and cannot round a step ahead.
  */
 export function readReach(seconds: number, words: number): ReadReach {
-  const level = readLevel(seconds, words);
-  if (level === 0) return 0;
-  if (level === 4) return 16;
-  const raw = Math.floor(4 * Math.log2(seconds / expectedSeconds(words) / 0.175));
-  return Math.min(4 * level + 3, Math.max(4 * level, raw));
+  if (readLevel(seconds, words) === 0) return 0;
+  const ratio = seconds / expectedSeconds(words);
+  let reach = 4;
+  for (const step of REACH_STEPS) {
+    if (ratio < step) break;
+    reach += 1;
+  }
+  return reach;
 }
 
 /**
