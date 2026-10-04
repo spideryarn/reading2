@@ -57,16 +57,82 @@ A trial, built so that going back is a client-only revert
 - **Brief and Fuller arm the plain-words run; Thread arms nothing.** The thread writes when its
   owner opens it, however they arrived — Greg's 2026-09-12 rule, kept ([tweets.md](tweets.md)). So
   a press that lands on the thread mints no token, and a last-view restore never opens it.
-- **The Simple level is still written and stored, and not shown.** Nothing in the `simple` step, its
-  prompt, its stored shape or the public payload changed. `?summary=simple` reads as Brief.
-  Whether to stop writing it is a question for Greg.
+- **The Simple level is gone** (since 2026-10-04). It was hidden here and still written for a day;
+  [§ Two levels](#two-levels-brief-and-fuller-since-2026-10-04) has what replaced that.
+  `?summary=simple` reads as Brief.
 - **The band is the wide one while the thread shows**, and the roomy one otherwise
   ([§ The band is a touch wider](#the-band-is-a-touch-wider-since-2026-10-01)).
 - **A visitor** gets a stored thread off the payload, or a line saying nobody has built one, under
   the same control.
 
 **What follows describes the plain-words levels as they were built**, slider and all three levels;
-read *Brief and Fuller* for *the three* wherever it is about what the reader is shown.
+read *Brief and Fuller* for *the three* wherever it is about what the reader is shown, and since
+2026-10-04 wherever it is about what is written.
+
+## Two levels, Brief and Fuller (since 2026-10-04)
+
+> we've removed that middle level of Summary, and we're not going to add it back
+>
+> — Greg, 2026-10-04 (answering Q-simple-level, relayed by the Overseer)
+
+The `simple` step writes **Brief and Fuller, and nothing else**. From 2026-10-03 to 2026-10-04 it
+still wrote the middle level, Simple, which no reader was shown: every write paid for a model call
+and a fidelity check nobody read, and because the step stores every level or none, a Simple that
+failed took Brief and Fuller with it.
+
+- **One write, two calls.** Fuller is asked first with the article marked for the cache, and Brief
+  starts once Fuller's stream has begun, so it reads the cache. All or none, one retry a level, and
+  the fidelity guard on each, as before.
+- **Brief's and Fuller's prompts did not change by a byte**
+  ([`simple-two-levels.test.ts`](../../tests/simple-two-levels.test.ts) pins them), so the prompt
+  version is still `simple-prompt/7` and nothing stored is outdated.
+- **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
+  when Summary is written:
+
+  > we only want to write it once, i.e. when we first open the mode (or perhaps before that if it's
+  > part of the import process). the only time we'd rewrite it is if we click Rerun in Metadata.
+
+  That is [the door rule](#three-levels-one-row-shaped-by-the-reader-since-2026-10-01) below,
+  unchanged.
+- **A row written before then still has the middle level in it**, in `levels.simple` and in the
+  guard's `check.levels.simple`. The reader ignores both: the guards in
+  [`types.ts`](../../src/types.ts) ask about Brief and Fuller only, so such a row is usable exactly
+  when those two are. A visitor is never sent it, the owner's read returns it and draws nothing
+  from it, and an export still carries it. The stored shape's version stays `simple/2`: a new one
+  would have made every stored summary read as absent and be written again. The historical
+  [`simple-check-report.ts`](../../scripts/simple-check-report.ts) still counts valid middle checks.
+- **The names stayed.** The step is `simple`, the artefact `SimpleSummary`, the column
+  `simple_summary`. Only the level went.
+- **What it saved** is in [§ Cost of a write](#cost-of-a-write-since-2026-10-04).
+
+The plan, with the option passed over and what a rollback would do, is
+[261004f](../plans/261004f-stop-writing-the-simple-summary-level.md).
+
+### Cost of a write (since 2026-10-04)
+
+Measured on three local articles of 8.6k to 12.6k words, on Opus with the guard on, two writes each
+from a cold cache, before and after the middle level went (`evals/simple/probe.ts`; the result
+files are `evals/results/simple/high-none-fbazc1|c2` and `high-none-nosimple1|3`):
+
+| | three levels | two levels |
+|---|---:|---:|
+| a write, cold cache, mean of six | $0.256 | $0.216 |
+| the same, range | $0.236 to $0.275 | $0.175 to $0.257 |
+| the wait, median of six | 30.9 s | 31.3 s |
+| the wait, range | 29.3 to 41.2 s | 27.9 to 51.1 s |
+
+- **About 16% cheaper in these six cold writes.** A cold write still pays for the first call putting the
+  article in the cache at Opus's price, which both shapes pay once. The removed call was a cache
+  read and about a thousand tokens of answer.
+- **The median wait barely changed; the tail grew.** Mean wait rose from 33.7 s to 35.8 s,
+  and the maximum from 41.2 s to 51.1 s. The files record total reasoning tokens across calls,
+  not each level's timing, so they cannot establish which call caused the slow writes or rule
+  out a latency effect from this change. Six writes a side are too few to settle that.
+- **What it does remove is a way to fail or stall.** In the six writes before, one waited on a
+  retry of the middle level; none can now.
+- A third pass of two-level writes ran inside the cache's five minutes and cost $0.084 to $0.213.
+  It is kept apart because its cache state differs. One of those three waited 87 s,
+  on a Fuller the guard flagged and asked for again.
 
 ## Simple — a plain-words orientation
 
@@ -98,17 +164,18 @@ the paragraphs.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-7A)
 
-- **One row, no labels.** The slider is the whole control: **Brief** (short, very simple, pitched at
-  twelve), **Simple** (fairly simple, just under the first version's length, at fifteen), **Fuller**
+- **One row, no labels.** The slider was the whole control: **Brief** (short, very simple, pitched at
+  twelve), **Simple** (fairly simple, just under the first version's length, at fifteen; removed
+  2026-10-04), **Fuller**
   (moderately complex, at eighteen; just over that length until 2026-10-04, and
   [about half as long again since](#a-longer-fuller-since-2026-10-04)). Since 2026-10-01 there is no level name beside it
   (SPIDERYARN-READING2-7R, *"get rid of the "Simple" text - perhaps replace with an icon"*): a
   short-text icon at the left end and a long-text one at the right, each a press on that end's
   level; the tooltip names the three, and `aria-valuetext` names the current one for a screen
   reader. ⓤ is the owner's *written for you* badge.
-- **The reader's profile and goal shape all three**, through the shared `PROFILE_RULES` and
+- **The reader's profile and goal shape every level**, through the shared `PROFILE_RULES` and
   `profileSection` ([src/profile.ts](../../src/profile.ts)): the goal decides what leads, and in
-  Simple and Fuller what the reader says they know is not explained. **Brief ignores the claimed
+  Fuller what the reader says they know is not explained. **Brief ignores the claimed
   background**: it is for a reader in a hurry from outside the field, with at most two technical
   terms, each explained, and one plain phrase of method. Greg, 2026-10-02 (`spya-rpqqxb`): *"assume
   it's for someone with less expertise or in more of a hurry"* — his own profiled Brief had more
@@ -118,14 +185,14 @@ the paragraphs.
   profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
   for the owner's profile.
-- **One press writes all three**: one model call per level, all or none stored; a level whose answer
-  fails validation is asked once more on its own. A `simple/1` row reads as absent and the next press
-  replaces it.
-- **The three share one cached copy of the article** (since 2026-10-01): Fuller is asked first with
-  the article marked, and Brief and Simple start once its stream has begun, so they read the cache
-  instead of paying for the article again. About 37% cheaper a press for about 2 s more wait; one
-  call for all three was measured and is far slower. Below the cache floor they run together, as
-  before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
+- **One press writes every level**, two since 2026-10-04: one model call per level, all or none
+  stored; a level whose answer fails validation is asked once more on its own. A `simple/1` row
+  reads as absent and the next press replaces it.
+- **The levels share one cached copy of the article** (since 2026-10-01): Fuller is asked first with
+  the article marked, and Brief starts once its stream has begun, so it reads the cache instead of
+  paying for the article again. Measured with three levels: about 37% cheaper a press for about 2 s
+  more wait; one call for all three was measured and is far slower. Below the cache floor they run
+  together, as before. [261001j](../plans/261001j-simple-press-cost-and-latency.md), which also holds the
   streaming question for Greg.
 - **The door rule.** Pressing Summary — the bar button, or any of its command-bar rows — writes the
   plain-words levels when none are stored, and shows the job's progress; with them stored it only
@@ -137,8 +204,8 @@ the paragraphs.
   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
   with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
   main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
-  Q-summary-on-add), and it writes what the press writes: all three plain-words levels — Brief,
-  Simple and Fuller, all or none — through the `simple` step. A visitor on a public article gets the
+  Q-summary-on-add), and it writes what the press writes: both plain-words levels, Brief and
+  Fuller, all or none, through the `simple` step. A visitor on a public article gets the
   stored paragraphs off the payload, or a line saying none has been made.
 - **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
   waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
@@ -158,13 +225,13 @@ Fuller is asked for about 350 words in four to seven paragraphs of two to five s
 never more than 430; it was asked for about 220 in three to five. Measured, it comes back at
 338–412 words where it came back at 221–261, and the press takes about 31 s where it took 26.
 **About 500 words was tried first and not shipped**: the text was good, but the press took 55 s,
-because nothing is shown until the slowest of the three levels is written. Whether to take that
+because nothing is shown until the slowest level is written. Whether to take that
 wait, or to show Brief as soon as Brief is ready, is with Greg
 ([261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md)). Its prompt says what the room is
 for: how the work was done, the evidence and numbers behind each main finding, the limits the piece
 itself names, and how the steps of the argument connect. The stored limit is 3 to 8 paragraphs and
 850 words (`SIMPLE_LIMITS` in [`types.ts`](../../src/types.ts)); the minimum stayed at 3 so every
-Fuller stored before still reads. Brief and Simple are asked for what they were. No stored summary
+Fuller stored before still reads. Brief is asked for what it was. No stored summary
 was rewritten: *Write it again* picks up the new prompt (`simple-prompt/7`).
 [261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md) has the measurements.
 
@@ -394,8 +461,8 @@ The thread's two old addresses, `?mode=tweets` and `/read/<slug>/tweets`, land o
 
 **The expertise axis.** The previous version crossed three lengths with three reading levels behind
 two sliders, and there is no evidence anyone used it
-([original-version/summaries.md](original-version/summaries.md)). Simple's three levels are one
-slider that moves length and plainness together.
+([original-version/summaries.md](original-version/summaries.md)). Brief and Fuller move length
+and plainness together.
 
 **Anything generated as you move around.** The one thing here that spends is the press, once per
 article, and kept. Their heading tooltips fetched summaries for headings the granularity filter had

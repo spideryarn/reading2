@@ -271,7 +271,6 @@ const SIMPLE_BODY: { simpleSummary: SimpleSummary; stale: false; outdated: false
     profileHash: null,
     levels: {
       brief: [{ text: "It starts with a plain point.", ids: [BAND_TARGET as BlockId] }],
-      simple: [{ text: "It starts with a plain point, then builds on it.", ids: [BAND_TARGET as BlockId] }],
       fuller: [{ text: "It starts with a plain point, and the rest follows from it.", ids: [BAND_TARGET as BlockId] }],
     },
   },
