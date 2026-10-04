@@ -68,10 +68,12 @@ import {
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
+import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
-import { NOT_CONFIGURED } from "./messages.js";
+import { MODEL_REFUSED, NOT_CONFIGURED } from "./messages.js";
 import { isHighPowerModel, type ModelPower, type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
+import { truncationFailure } from "./token-budget.js";
 
 /** Where the Anthropic Messages protocol is served from. Not `api.anthropic.com`. */
 /* Not exported — see `OPENROUTER_BASE` in ai-call.ts for the same reasoning:
@@ -358,6 +360,74 @@ export function wasRefused(message: Anthropic.Message): boolean {
   if (message.stop_reason === "refusal") return true;
   const details = message.stop_details as { type?: unknown } | null | undefined;
   return details?.type === "refusal";
+}
+
+/**
+ * Every text block of an answer, joined in order. A thinking block is not text.
+ *
+ * For the three stages whose ending is their own (`simple-summary`, `labels`,
+ * `structure-deepen`). Everything else wants `finishedText`.
+ */
+export function messageText(message: Anthropic.Message): string {
+  return message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+}
+
+/**
+ * **The ordinary ending of a stage's call: a refusal throws, a truncation
+ * throws, and otherwise this is the answer's text.**
+ *
+ * Until 2026-10-04 each stage wrote these three steps out itself, copied from a
+ * neighbour: 32 copies of the text-block filter in 18 files. The copies drifted
+ * the way copies do. `src/illustrated.ts` threw its refusal as a plain `Error`
+ * for a month, so the reader got the generic sentence rather than the refusal
+ * one, while two comments said every site was declared. With one copy there is
+ * nowhere to write that. docs/plans/261004d-fifth-sweep-cluster-19-one-helper-for-reading-a-messages-result.md.
+ *
+ * **The refusal is judged first**, as every copy did. The other order would tag
+ * a refused answer that also ran out of room as `bug` and tell the reader a
+ * setting of ours is wrong.
+ *
+ * **`stop_details` is neither thrown nor logged.** It is the provider's own
+ * words about a request that carried the whole article, and this error is
+ * copied onto the job and shown on the progress card. See `MODEL_REFUSED` in
+ * src/messages.ts and `wasRefused` above.
+ *
+ * `stage`, `maxTokens`, `answerTokens` and `headroom` are `truncationFailure`'s
+ * own arguments, and exist only for its sentence. Pass `headroom` where the
+ * call was sized with something other than the default (src/structure.ts), or
+ * the sentence quotes a number the call was never sized with.
+ *
+ * Not for a stage that answers a truncation itself rather than failing on it.
+ * `src/labels.ts` retries the batch and `src/structure-deepen.ts` shrinks it;
+ * `src/simple-summary.ts` returns its failures with the call's usage. Those
+ * three keep their own checks and take `messageText`.
+ */
+export function finishedText(
+  message: Anthropic.Message,
+  stage: string,
+  maxTokens: number,
+  answerTokens: number,
+  headroom?: number,
+): string {
+  if (wasRefused(message)) {
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
+  }
+  const text = messageText(message);
+  if (message.stop_reason === "max_tokens") {
+    throw truncationFailure(
+      stage,
+      maxTokens,
+      answerTokens,
+      { outputTokens: message.usage.output_tokens, answerChars: text.length },
+      headroom,
+    );
+  }
+  return text;
 }
 
 /**
