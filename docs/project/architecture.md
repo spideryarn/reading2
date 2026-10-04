@@ -419,6 +419,9 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   the content hash a step caches on ([§ Conventions](#conventions)).
 - **`src/html.ts` § `escapeHtml`, `plainTitle`** — untrusted text becoming markup. `src/pdf-read.ts`
   still has a private `escapeHtml` that misses `'`.
+- **`src/doi-url.ts` § `doiUrl`, `doiOfUrl`, `doiPath`** — a DOI becoming a doi.org link or a
+  registry API path, and a link read back to its DOI. Never paste a DOI into an address by hand
+  ([postmortem 261004m](../postmortems/261004m-an-encoder-is-not-reversible-until-every-consumer-agrees-on-the-boundary.md)).
 - **`src/after-response.ts` § `afterResponse`** — work that must outlive the response on a
   serverless host.
 - **`src/process-state.ts` § `processSingleton`** — process-wide state that must survive Vite
