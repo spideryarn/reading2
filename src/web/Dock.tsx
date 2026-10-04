@@ -1073,7 +1073,7 @@ export type ModesMissingFromDock<
  * exactly one button must be checked, so `?mode=timeline` with the switch off
  * and no Timeline button would leave a group announcing *one of these* with
  * none of them on — and the reader stranded in a mode with no way back that the
- * bar could show them. It holds on the loose-link arm too (the metadata page; tweets too until 2026-09-29),
+ * bar could show them. It holds on the links arm too (the metadata page; tweets too until 2026-09-29),
  * which is where a first draft of the plan stopped short: `carriedSearch`
  * strips only `?panel=`, so `?mode=` is still in the string those links are
  * built from, and the bar there can read it back. GPT Sol, finding 9.
@@ -1139,7 +1139,7 @@ export function groupStarts(visible: readonly ModeUi[]): ReadonlySet<Mode> {
  * for.
  *
  * Off the reading view there is no `mode` prop — the band is elsewhere — so this
- * is how the loose-link arm knows which mode the reader came from. Matched
+ * is how the links arm knows which mode the reader came from. Matched
  * against `MODES_UI` rather than against `MODES` so that an unrecognised word in
  * the URL simply draws nothing extra, the same way `modeParam` falls back to the
  * default rather than throwing (params.ts § modeParam).
@@ -1257,9 +1257,9 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
  * row's width could have changed and not on every render of the page it sits on.
  *
- * The five things that vary: the modes are one segment on the reading view and
- * loose links elsewhere; Comments is a drawer trigger here and a link
- * elsewhere; its count grows a digit; the bar's own experimental switch is
+ * The five things that vary: the modes are buttons on the reading view and
+ * links in the same frames elsewhere; Comments is a drawer trigger here and a
+ * link elsewhere; its count grows a digit; the bar's own experimental switch is
  * absent, or drawn in one of six appearances; and the Feedback trigger at the
  * end of the row is there for a signed-in reader and not for a stranger.
  *
@@ -1363,18 +1363,18 @@ export function fitSignature(
    *
    * **No `shape` guard on it, and the guard was written and then removed.**
    * The obvious version was `shape === "seg" ? mode : ""`, on the reasoning
-   * that a loose link is never `.on` so its mode cannot change the row. That is
-   * true and the guard is still dead code: `shape` is `"links"` exactly when
-   * `mode` is absent in every arrangement `Dock`'s four mount sites produce, so
-   * both spellings return the same string for every bar that exists. The test
-   * written to defend it could not be made to fail — which is the tell this
+   * that a link in the links arm is never `.on` so its mode cannot change the
+   * row. That is true and the guard is still dead code: `shape` is `"links"`
+   * exactly when `mode` is absent in every arrangement `Dock`'s four mount sites
+   * produce, so both spellings return the same string for every bar that exists.
+   * The test written to defend it could not be made to fail — which is the tell this
    * repo keeps meeting (docs/reusable/silent-success.md) — so the branch went
    * rather than the test being contorted into an unreachable arrangement to
    * justify it. GPT Sol, S1, reviewing the built code.
    *
    * **And the guard would have been actively wrong later**, which is the
-   * argument that settles it rather than merely permits it. If the loose links
-   * ever gain an `.on` state of their own, the term this string wants is the
+   * argument that settles it rather than merely permits it. If the links arm
+   * ever gains an `.on` state of its own, the term this string wants is the
    * bar's *effective* mode — `mode ?? modeInSearch(search)` — on both shapes,
    * and a `shape === "seg"` guard would be the thing standing in the way. GPT
    * Sol, second pass.
@@ -2808,7 +2808,7 @@ function DockModes({
   /**
    * The rows to draw, already filtered — `visibleModes` above, which is where
    * the two rules live. Handed in rather than read from `MODES_UI` here so that
-   * the segment and the loose links cannot disagree about what is in the bar,
+   * the buttons arm and the links arm cannot disagree about what is in the bar,
    * and so that `fitSignature` is measuring the same set that is drawn.
    */
   modes: readonly ModeUi[];
@@ -2873,12 +2873,14 @@ function DockModes({
      `MarginToggle` and dock-fit.css.
      docs/plans/261001i-annotations-column-beside-a-band-mode.md.
 
-     **Plain, the bands and Marginalia are three frames**, since 2026-10-02 —
+     **Up to three non-empty frames: Plain, the bands and Marginalia**, since
+     2026-10-02 —
      Greg: *"move the Plain and Marginalia modes into their own icon-groups"*
      (spya-ba8kqp). Plain is still a radio in the same radiogroup (exactly one
-     of Plain and the bands is on), so the radiogroup holds two frames. The
-     lines between runs (`groupStarts`) are drawn inside the bands' frame
-     only: a frame's edge already separates the other two.
+     of Plain and the bands is on), so the radiogroup holds two frames.
+     Marginalia's third frame is absent when Experimental is off and the notes
+     are closed. The lines between runs (`groupStarts`) are drawn inside the
+     bands' frame only: a frame's edge already separates the other two.
      docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
   const radios = modes.filter((m) => m.mode !== "marginalia");
   const exits = radios.filter((m) => m.group === "exit");
@@ -3058,8 +3060,9 @@ function MarginToggle({
 
 /**
  * **The same modes, off the reading view** — the metadata
- * page, where there is no band to switch, so the segment degrades to loose
- * links back to the article.
+ * page, where there is no band to switch, so each button of the segment is a
+ * link back to the article instead. Drawn in the segment's own frames since
+ * 2026-10-04 (see inside); loose links with no frame before that.
  *
  * A component of its own since 2026-09-07, and it is the arm this bar keeps
  * forgetting. It has now twice been the half left behind: `keepLabel` was not
@@ -3085,56 +3088,75 @@ function DockModeLinks({
   modes: readonly ModeUi[];
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
-  /* The same runs, and the same line between them, as the segment draws —
-     `groupStarts`. */
-  const starts = groupStarts(modes);
-  return (
-    /* **One group, so these scrub like the segment does.** Fourteen independent
-       300ms waits is what a row of tooltips feels like without it —
-       Tooltip.tsx § grouping. Only the modes are in it; the three buttons after
-       this block are not modes and have a group of their own, for the reason
-       given where it is opened (`Dock` § the three that are not modes). */
-    <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-      {modes.map((m) => (
-        <DockLink
-          key={m.mode}
-          href={modeLinkHref(slug, search, m.mode)}
-          current={false}
-          icon={m.icon}
-          label={MODE_LABEL[m.mode]}
-          /* `dock-mode` says *this is one of the modes* on a page where they are
-             one loose link per mode rather than one segment, so § the bar's fit
-             ladder can take their labels at the mode rung the way it takes the
-             segment's. Without it that rung does nothing on the metadata
-             page, and the bar there skips straight from every label to
-             none. GPT Sol, reviewing the design. */
-          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
-          keepLabel={m.keepLabel}
-          /* **The same card the segment draws, plus where the press lands.** A
-             reader who learned what Quotes costs by hovering it on the reading
-             view should not meet a one-line OS box for it on the metadata page.
-             The trailing clause on `what` is the only difference in the *words*.
+  /* **The segment's non-empty frames, and its lines between runs** — the same
+     split `DockModes` makes (Plain; the bands; Marginalia), from the same
+     list. Until 2026-10-04 these were loose links with no frame, and Greg
+     asked why the bar looked different here (spya-qerga4). What differs is
+     what a press does, not what the row is, so the row is drawn the same and
+     dock-fit.css styles both arms with one set of `.dock-modes` selectors.
 
-             It is not the only difference in the behaviour, and that distinction
-             is why `how` is written the way it is: this link navigates and arms
-             nothing, where the segment's button calls `armActivationForMode`. So
-             a card saying *"opening it runs a model pass"* would be false here —
-             arriving at `?mode=glossary` from this link generates nothing
-             (activation.ts § arriving is not a press). Four of them said
-             that in first draft; the rule that replaced it is
-             src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
-             docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
-          hover={
-            <ControlTip
-              head={MODE_LABEL[m.mode]}
-              state={marked?.get(m.mode)}
-              what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
-              how={MODE_CATALOG[m.mode].how}
-            />
-          }
-        />
-      ))}
-    </TooltipGroup>
+     **Links in plain `div`s: no radiogroup, no radio, nothing checked.** No
+     mode is open on this page, so nothing here may say it is the selected one.
+     docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md. */
+  const toggles = modes.filter((m) => m.mode === "marginalia");
+  const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
+  const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
+  const starts = groupStarts(bands);
+  const frame = (ms: readonly ModeUi[]) =>
+    ms.length > 0 && (
+      <div className="dock-frame" style={{ "--dock-frame-count": ms.length } as CSSProperties}>
+        {ms.map(link)}
+      </div>
+    );
+  function link(m: ModeUi) {
+    return (
+      <DockLink
+        key={m.mode}
+        href={modeLinkHref(slug, search, m.mode)}
+        current={false}
+        icon={m.icon}
+        label={MODE_LABEL[m.mode]}
+        className={`${marked?.has(m.mode) ? MARKED : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+        keepLabel={m.keepLabel}
+        /* **The same card the segment draws, plus where the press lands.** A
+           reader who learned what Quotes costs by hovering it on the reading
+           view should not meet a one-line OS box for it on the metadata page.
+           The trailing clause on `what` is the only difference in the *words*.
+
+           It is not the only difference in the behaviour, and that distinction
+           is why `how` is written the way it is: this link navigates and arms
+           nothing, where the segment's button calls `armActivationForMode`. So
+           a card saying *"opening it runs a model pass"* would be false here —
+           arriving at `?mode=glossary` from this link generates nothing
+           (activation.ts § arriving is not a press). Four of them said
+           that in first draft; the rule that replaced it is
+           src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
+           docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
+        hover={
+          <ControlTip
+            head={MODE_LABEL[m.mode]}
+            state={marked?.get(m.mode)}
+            what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
+            how={MODE_CATALOG[m.mode].how}
+          />
+        }
+      />
+    );
+  }
+  return (
+    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
+      {/* **One group, so these scrub like the segment does.** Fourteen
+          independent 300ms waits is what a row of tooltips feels like without
+          it — Tooltip.tsx § grouping. Only the modes are in it; the three
+          buttons after this block are not modes and have a group of their own,
+          for the reason given where it is opened (`Dock` § the three that are
+          not modes). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {frame(exits)}
+        {frame(bands)}
+        {frame(toggles)}
+      </TooltipGroup>
+    </div>
   );
 }
 
@@ -3590,14 +3612,14 @@ function DockLink({
    */
   hover: ReactNode;
   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
-   *  `dock-mode` for the loose mode links off the reading view. */
+   *  `dock-group-start` on a mode link that begins a run. */
   className?: string | undefined;
   /**
    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
    * `MODES_UI`, which is Plain, the way out.
    *
-   * It only reaches here off the reading view, where the modes are
-   * loose links rather than a segment. Passing it was missed until GPT Sol
+   * It only reaches here off the reading view, where the framed controls are
+   * links rather than buttons. Passing it was missed until GPT Sol
    * found it: the word survived every narrow window on the reading view and
    * vanished on the metadata page, which is the page you are *most* likely to
    * be looking for the way back from.
@@ -3906,8 +3928,7 @@ function DockExperimentalSwitch({
         /* `dock-experimental` styles nothing. It is how a test and a browser
            pass find this one button among eighteen that are all `dock-btn` —
            the alternative is matching on the label, which is copy and is allowed
-           to change. `dock-mode` next door is the same idea doing real work for
-           the fit ladder.
+           to change.
 
            **Never `.on`.** That is the bar's *selected* look — wash, top rule,
            orange ink — and this button is a toggle, not a place you are; the

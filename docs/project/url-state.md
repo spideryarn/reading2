@@ -19,7 +19,7 @@ rather than to the view, and only sparingly and for a stated reason:
 What it holds today: the address you last left an article at
 ([§ Reopening an article where you left it](#reopening-an-article-where-you-left-it)), and
 per-browser preferences and dismissals — hidden shelf
-columns (`src/web/shelf-hidden-columns.ts`), the add page's tick box (`src/web/auto-modes.ts`), the
+columns (`src/web/shelf-hidden-columns.ts`), the
 install and small-screen hints, the chosen microphone and its placement, the offline cache's
 partition, the `spya-perf` flag and the auth SDK's session (by `grep -rln localStorage src/web`,
 2026-10-01). Every direct access in our code is wrapped because a private window can throw; the auth

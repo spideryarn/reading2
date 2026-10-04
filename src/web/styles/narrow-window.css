@@ -795,7 +795,7 @@
      an element is bigger than its content.
 
      `.dock-modes` grows as as many buttons as it draws (`--dock-mode-count`,
-     set by `DockModes`; it was a fixed eight until 2026-10-02) against each
+     set by `DockModes` and `DockModeLinks`; it was a fixed eight until 2026-10-02) against each
      loose button's one, so a bar with room to spare spreads it in proportion
      to what is inside rather than handing the segment the same share as a
      single icon. Inside it each `.dock-frame` takes its own count

@@ -4660,6 +4660,18 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
    * docs/project/experimental-features.md.
    */
   experimentalSince: timestamp("experimental_since", { withTimezone: true }),
+  /**
+   * **Generate the main modes after an import: null is on, a timestamp is when
+   * the reader switched it off.**
+   *
+   * The shape `experimental_since` has, inverted because the default is on: a
+   * reader with no row, and every row from before this column, gets the modes.
+   * Read by the publication that queues them, inside its transaction
+   * (src/store/pg-revisions.ts § `publishRevisionIn`), and written by
+   * `PATCH /api/reader { autoModes }` from the add page's tick box.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  autoModesOffAt: timestamp("auto_modes_off_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   /**
    * **When the row was first written** — the reader's first profile text or
@@ -6347,6 +6359,10 @@ export const rateLimitEvents = spideryarn.table(
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
   },
   (t) => [
+    /* `citation-find` is not in `RateBucket` (src/store/contracts.ts): its only
+       spender went with POST …/find on 2026-10-04. It stays here for the rows
+       already written. Removing it needs a migration that first proves no such
+       rows remain; the per-bucket sweep no longer reaches them (plan 261004h). */
     check(
       "rate_limit_events_bucket",
       sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice')`,

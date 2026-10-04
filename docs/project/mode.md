@@ -43,10 +43,12 @@ For things this checklist does not hold:
   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
   below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
 - **A mode can start without being opened.** Besides the first press
-  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), the add page queues every
-  main mode once an import finishes — derived from `MODE_CATALOG`'s `experimental` flag, so a new
-  non-experimental mode joins it with no edit, and is paid for on every import that keeps the box
-  ticked. [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and
+  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), an import's publication
+  queues every main mode — the modes outside `MODE_CATALOG`'s `experimental` flag. The server
+  queues from a written list ([`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts)), and
+  `tests/auto-modes.test.tsx` fails until that list matches the one derived from the catalogue
+  ([`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)): a new non-experimental mode is one
+  line there, and is paid for on every import by a reader who has not switched it off.
   [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 - **Checking it in a browser**: [browser-control.md](browser-control.md), then
   [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.
@@ -66,8 +68,8 @@ Two existing shapes borrow half this page:
   profile row:
   [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (View
   choices carried in a shared link are URL parameters — [url-state.md](url-state.md). The add
-  page's browser-only tick box instead uses `localStorage` —
-  [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) § `readAutoModes`, which says why.)
+  page's *generate the main modes* box is a second column on that row since 2026-10-04,
+  `auto_modes_off_at` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page).)
 
 ## The client
 
@@ -308,7 +310,7 @@ one and generates nothing at all.
 Five things to get right, and the first is the one that cost this field a whole review round:
 
 - **Write about the mode, not about pressing the button.** The same string is read on four surfaces
-  at least — the segment on the reading view, the loose links on the metadata page
+  at least — the segment on the reading view, the links on the metadata page
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
   Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
@@ -336,7 +338,7 @@ Five things to get right, and the first is the one that cost this field a whole 
 
 *[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
 that the second is not a copy of the first, that no price crept in, and that every mode's card opens
-in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata
+in **both** arms of the bar: the segment on the reading view, and the links on the metadata
 page, which are a different component and were the arm left carrying a `title` attribute.*
 
 ## Moving a mode in or out of the switch

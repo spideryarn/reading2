@@ -71,7 +71,8 @@ Summary, and why writing on arrival was kept). The rule that writing on arrival 
   summary` never does.
 - **Sharing**: the owner's *make public* list names the thread once one is stored. A visitor reads
   a stored thread, or is told under the control that nobody has built one.
-- **The add page** still queues the thread with the main modes.
+- **An import** still queues the thread with the main modes
+  ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)).
 
 ## Where the code is
 

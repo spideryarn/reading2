@@ -298,7 +298,10 @@ export function makeLookUpTerm(
     const { glossary } = await deps.reader.loadGlossary(slug);
     const entry = glossary.entries.find((e) => e.id === termId);
     if (!entry) {
-      throw Object.assign(new Error(`No glossary term "${termId}" in "${slug}".`), { status: 404 });
+      throw Object.assign(
+        new Error("This entry is not in the current glossary. Reload the page to see the current list."),
+        { status: 404 },
+      );
     }
 
     /* The whole article, for its blocks and its meta. Both stores answer this

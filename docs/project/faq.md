@@ -126,7 +126,7 @@ switch off too, as Timeline's and Debate's are. Why it is safe to offer is in
 
 Asking for one is owner-only, and behind the [experimental switch](experimental-features.md) — which
 is also why the add page's *generate the main modes* box does not make one after an import: that
-list is every mode outside the switch that makes something, derived in [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)
+list is every mode outside the switch that makes something, derived in [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and written out for the server in [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts)
 ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)). **Since
 2026-09-29 a visitor to a public article sees a stored FAQ**, drawn from the page's own payload with
 no way to ask for another; with none stored they are told nobody has built one (SPIDERYARN-READING2-56,
