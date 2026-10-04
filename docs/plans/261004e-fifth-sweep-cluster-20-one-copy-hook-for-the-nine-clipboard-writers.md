@@ -292,6 +292,19 @@ the seven call sites had drifted and the hook was "Greg's call" is replaced by w
 One thing from stage 2 changed that no reader can see: `AnnotateDialog` had no mounted flag, so a write settling
 after the box closed set state on a component that was gone, which React ignores. The hook drops it.
 
+### The browser check, 2026-10-04
+
+A Sonnet subagent, Playwright against system Chrome, on the tree at `0f9b7c48b` plus Sol's comment
+fixes. All eight controls (Tweets' two buttons counted once) at 1280×800 and at 390×844 with touch,
+clipboard permission granted and the clipboard read back: the right text landed, the feedback
+showed, and the timed ones went away again. Pressed twice 250 ms apart, the tick was still up a
+second after the second press. With `writeText` made to reject, each said so in its own way and
+none showed a tick. No console error on any press.
+
+What it did not do: on the phone it opened the annotate box with a synthetic `mouseup` rather than
+through the selection chip, so only the Copy button inside the box was exercised there; and the
+shelf's "⋯" menu was not repeated under refusal.
+
 ### Stages 2 and 3 review, 2026-10-04
 
 Candidate: `a0d6876a0` and `0f9b7c48b`. No new P0 or P1 established.
