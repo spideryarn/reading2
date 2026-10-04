@@ -2,8 +2,12 @@
  * **Simple's cost spike: how should one press's three levels share the
  * article?** — docs/plans/261001j-simple-press-cost-and-latency.md.
  *
- *   npx tsx evals/simple/fanout-spike.ts <arm> <runs> <slug>...     # paid
  *   npx tsx evals/simple/fanout-spike.ts report                      # free
+ *
+ * **`report` only, since 2026-10-04.** The arms below were measured while a
+ * press wrote three levels. The middle one is gone
+ * (docs/plans/261004f-stop-writing-the-simple-summary-level.md), so an arm
+ * refuses to run; what follows describes what was measured.
  *
  * Arms, each a whole press of three levels at `high` effort, no profile:
  *
@@ -30,12 +34,10 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
-
-import { loadEnvLocal } from "../../src/env.js";
 
 const REPO = path.join(import.meta.dirname, "..", "..");
 const OUT = path.join(REPO, "evals", "results", "simple-fanout");
+/** The levels the results on disk recorded: three, as a press then wrote. */
 const LEVELS = ["brief", "simple", "fuller"] as const;
 type Level = (typeof LEVELS)[number];
 const ARMS = ["parallel", "parallel-marked", "stagger-text", "stagger-start", "one-call"] as const;
@@ -77,257 +79,19 @@ interface RunFile {
   text: Partial<Record<Level, unknown>>;
 }
 
-async function runArm(arm: Arm, runs: number, slugs: string[], cold: boolean): Promise<void> {
-  /* `--cold`: every press opens with its own marker, so no press can read a
-     cache an earlier one left (the first batch's marked arms mostly did). */
-  const dirName = cold ? `cold-${arm}` : arm;
-  loadEnvLocal();
-  const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
-  const { loadArticle } = await import("../../src/store/index.js");
-  const simple = await import("../../src/simple-summary.js");
-  const { articleWithIds } = await import("../../src/article-prompt.js");
-  const { isBodyEvidence } = await import("../../src/block-policy.js");
-  const { streamMessage } = await import("../../src/messages-stream.js");
-  const { effortFor } = await import("../../src/models.js");
-  const { budgetFor } = await import("../../src/token-budget.js");
-  const { parseJsonAnswer } = await import("../../src/parse-json.js");
-  const { checkLevel } = await import("../../src/simple-check.js");
-  const { collectSpend } = await import("../../src/ai-spend.js");
-  const { costStore } = await import("../../src/store/ai-calls.js");
-  const { closeDb } = await import("../../src/db/client.js");
-  fs.mkdirSync(path.join(OUT, dirName), { recursive: true });
-
-  await runAsOwner(environmentOwnerId(), async () => {
-    for (const slug of slugs) {
-      const article = await loadArticle(slug);
-      const evidence = article.blocks.filter(isBodyEvidence);
-      const evidenceIds = new Set(evidence.map((b) => b.id as string));
-      const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
-      const meta = article.meta ?? ({ title: slug } as never);
-      const articleText = articleWithIds(meta, evidence);
-      const user = simple.renderPrompt(null);
-      const marked = arm !== "parallel";
-
-      for (let n = 1; n <= runs; n++) {
-        const out = path.join(OUT, dirName, `${slug}-${n}.json`);
-        if (fs.existsSync(out)) {
-          console.log(`skip ${path.relative(REPO, out)}`);
-          continue;
-        }
-        const nonce = `press ${randomUUID()}`;
-        const t0 = Date.now();
-        const at = () => Date.now() - t0;
-        const calls: CallTiming[] = [];
-        const raws: Partial<Record<Level, string>> = {};
-        const ready: Partial<Record<Level, number>> = {};
-        let reasoning: number | null = 0;
-        let costUsd: number | null = null;
-
-        const ask = (system: string, levels: Level[], maxTokens: number, onDelta?: (all: string) => void) => {
-          const timing: CallTiming = { levels, startMs: at(), firstTextMs: null, doneMs: 0, input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
-          calls.push(timing);
-          const call = streamMessage(
-            "simple",
-            {
-              max_tokens: maxTokens,
-              thinking: { type: "adaptive" },
-              output_config: { effort: effortFor("simple") },
-              system: [
-                ...(cold ? [{ type: "text" as const, text: nonce }] : []),
-                { type: "text" as const, text: articleText, ...(marked ? { cache_control: { type: "ephemeral" as const } } : {}) },
-                { type: "text" as const, text: system },
-              ],
-              messages: [{ role: "user", content: user }],
-            },
-            { power: "standard" },
-          );
-          let all = "";
-          type StartState = "started" | "ended" | "failed";
-          let markStarted: (state: StartState) => void = () => {};
-          const started = new Promise<StartState>((resolve) => {
-            markStarted = resolve;
-            const withStart = call as unknown as { onStart?: (l: () => void) => void };
-            if (arm === "stagger-start") {
-              if (!withStart.onStart) throw new Error("stagger-start needs MeteredCall.onStart");
-              withStart.onStart(() => markStarted("started"));
-            }
-            call.onText((d) => {
-              if (timing.firstTextMs === null) {
-                timing.firstTextMs = at();
-                if (arm !== "stagger-start") markStarted("started");
-              }
-              all += d;
-              onDelta?.(all);
-            });
-          });
-          const done = call.finalMessage().then((m) => {
-            timing.doneMs = at();
-            timing.input = m.usage.input_tokens;
-            timing.cacheRead = m.usage.cache_read_input_tokens ?? 0;
-            timing.cacheWrite = m.usage.cache_creation_input_tokens ?? 0;
-            timing.output = m.usage.output_tokens;
-            return m.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-          });
-          /* Production releases its gate when a successful call ends without
-             the expected raw event. The spike must not hang on that same path;
-             a rejection also releases the timing gate so `press` can report
-             the actual call failure. */
-          void done.then(
-            () => markStarted("ended"),
-            () => markStarted("failed"),
-          );
-          return { started, done };
-        };
-
-        const perLevelBudget = budgetFor("simple", simple.ANSWER_TOKENS);
-        const press = async () => {
-          if (arm === "one-call") {
-            const order: Level[] = ["fuller", "simple", "brief"];
-            const system = oneCallSystem(simple.SIMPLE_SYSTEMS);
-            const { done } = ask(system, order, budgetFor("simple", simple.ANSWER_TOKENS * 3), (all) => {
-              /* A level is ready when the next level's key has begun, or the answer has ended. */
-              for (let i = 0; i < order.length - 1; i++) {
-                const lvl = order[i]!;
-                if (ready[lvl] === undefined && all.includes(`"${order[i + 1]}"`)) ready[lvl] = at();
-              }
-            });
-            const raw = await done;
-            ready.brief ??= at();
-            for (const l of order) ready[l] ??= at();
-            let parsed: Record<string, unknown> = {};
-            try {
-              parsed = parseJsonAnswer<Record<string, unknown>>(raw, "one-call answer");
-            } catch {
-              /* left empty: every level fails validation below */
-            }
-            for (const l of order) raws[l] = JSON.stringify(parsed[l] ?? null);
-            return;
-          }
-          const one = (level: Level) =>
-            ask(simple.SIMPLE_SYSTEMS[level], [level], perLevelBudget).done.then((raw) => {
-              raws[level] = raw;
-              ready[level] = at();
-            });
-          if (arm === "parallel" || arm === "parallel-marked") {
-            await Promise.all(LEVELS.map(one));
-            return;
-          }
-          /* Staggered: Fuller (the slowest) first; the others when it has begun. */
-          const first = ask(simple.SIMPLE_SYSTEMS.fuller, ["fuller"], perLevelBudget);
-          const fullerDone = first.done.then((raw) => {
-            raws.fuller = raw;
-            ready.fuller = at();
-          });
-          const firstState = await first.started;
-          /* Do not turn a failed first request into two more paid calls. */
-          if (firstState === "failed") await fullerDone;
-          await Promise.all([fullerDone, one("simple"), one("brief")]);
-        };
-
-        let levels: RunFile["levels"] = {};
-        const text: RunFile["text"] = {};
-        try {
-          await collectSpend(press, {
-            attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
-            sink: (row) => costStore.record(row),
-            onDone: (report) => {
-              let nanos = 0;
-              let priced = true;
-              for (const c of report.calls) {
-                const cost = c.cost as { source: string; costNanos?: number; computedCostNanos?: number };
-                const v = cost.source === "provider" ? cost.costNanos : cost.source === "computed" ? cost.computedCostNanos : undefined;
-                if (v === undefined) priced = false;
-                else nanos += v;
-                reasoning = c.reasoningTokens === null || reasoning === null ? null : reasoning + c.reasoningTokens;
-              }
-              costUsd = priced ? nanos / 1e9 : null;
-            },
-          });
-        } catch (err) {
-          levels = { brief: { ok: false, error: `press: ${String(err).slice(0, 200)}`, readyMs: null } };
-        }
-        const wallMs = at();
-
-        /* Validate and check each level, outside the timed press (the guard's own
-           latency is measured in 261001h and 261001i). */
-        /* A separate collector keeps quick-tier checker cost out of the writer
-           arm comparison while still putting every paid check in `ai_calls`.
-           The original spike called these after the writer collector closed,
-           so they were paid but explicitly dropped as unscoped. */
-        await collectSpend(
-          async () => {
-            await Promise.all(
-              LEVELS.map(async (level) => {
-                if (levels[level]) return;
-                const raw = raws[level];
-                if (raw === undefined) {
-                  levels[level] = { ok: false, error: "no answer", readyMs: null };
-                  return;
-                }
-                try {
-                  const paragraphs = simple.buildLevel(parseJsonAnswer<unknown>(raw, level), level, evidenceIds, simple.emptyDropped());
-                  text[level] = paragraphs;
-                  const checked = await checkLevel(paragraphs, textOf);
-                  levels[level] = {
-                    ok: true,
-                    words: simple.paragraphWords(paragraphs),
-                    paragraphs: paragraphs.length,
-                    readyMs: ready[level] ?? null,
-                    check: checked.outcome.kind === "failed" ? `failed:${checked.outcome.failure}` : checked.outcome.kind,
-                    flags: checked.outcome.kind === "flagged" ? checked.outcome.flags.length : 0,
-                  };
-                } catch (err) {
-                  levels[level] = { ok: false, error: String(err).slice(0, 200), readyMs: ready[level] ?? null };
-                }
-              }),
-            );
-          },
-          {
-            attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
-            sink: (row) => costStore.record(row),
-          },
-        );
-        const file: RunFile = { arm, cold, slug, run: n, at: new Date(t0).toISOString(), wallMs, costUsd, calls, levels, reasoningTokens: reasoning, text };
-        fs.writeFileSync(out, `${JSON.stringify(file, null, 1)}\n`);
-        const firstReady = Math.min(...LEVELS.map((l) => levels[l]?.readyMs ?? Infinity));
-        console.log(
-          `${arm} ${slug} #${n}: $${(costUsd as number | null)?.toFixed(4) ?? "?"}, first level ${(firstReady / 1000).toFixed(1)}s, all ${(wallMs / 1000).toFixed(1)}s, ` +
-            `cache read ${calls.map((c) => c.cacheRead).join("/")}, write ${calls.map((c) => c.cacheWrite).join("/")}, ` +
-            LEVELS.map((l) => `${l}:${levels[l]?.ok ? levels[l]?.check : "FAIL"}`).join(" "),
-        );
-      }
-    }
-  });
-  await closeDb();
-}
-
-/** The three level prompts as one, each version's spec under its name, and one JSON shape out. */
-function oneCallSystem(systems: Record<Level, string>): string {
-  const spec = (level: Level) => (systems[level].split("\n\nOUTPUT\n\n")[0] ?? "").trim();
-  return `You will write THREE versions of the same orientation, each to its own specification below, in this order: "fuller", then "simple", then "brief". Each version stands alone: none refers to another.
-
-=== VERSION "fuller" ===
-
-${spec("fuller")}
-
-=== VERSION "simple" ===
-
-${spec("simple")}
-
-=== VERSION "brief" ===
-
-${spec("brief")}
-
-OUTPUT
-
-JSON only, no prose, no code fence, the three versions in this order:
-
-{"fuller": {"paragraphs": [{"text": "...", "ids": ["spya-k3m9qt"]}]},
- "simple": {"paragraphs": [...]},
- "brief": {"paragraphs": [...]}}
-
-Plain text in "text": no markdown, no bullet points, no headings. Never put a
-real line break inside a string, and escape any straight double quote as \\".`;
+/**
+ * **The paid half is gone** (2026-10-04,
+ * docs/plans/261004f-stop-writing-the-simple-summary-level.md). Every arm was a
+ * press of three levels built from production's own level prompts, and the
+ * middle one no longer exists, so no arm can be run as it was measured. The
+ * code is in git: `git show 1698c6448:evals/simple/fanout-spike.ts`. `report`
+ * still reads the results it wrote.
+ */
+function runArm(arm: Arm): never {
+  throw new Error(
+    `fanout-spike: the "${arm}" arm was a press of three levels, and the middle level was removed on 2026-10-04 ` +
+      "(docs/plans/261004f-stop-writing-the-simple-summary-level.md). It cannot be re-run; `report` still works.",
+  );
 }
 
 function report(): void {
@@ -359,10 +123,9 @@ function report(): void {
 const [cmd, runsArg, ...slugs] = process.argv.slice(2);
 if (cmd === "report") report();
 else if ((ARMS as readonly string[]).includes(cmd ?? "") && Number(runsArg) > 0 && slugs.length > 0) {
-  const cold = slugs.includes("--cold");
-  await runArm(cmd as Arm, Number(runsArg), slugs.filter((x) => x !== "--cold"), cold);
+  runArm(cmd as Arm);
 }
 else {
-  console.error(`usage: fanout-spike.ts <${ARMS.join("|")}> <runs> <slug>... | report`);
+  console.error("usage: fanout-spike.ts report");
   process.exit(1);
 }

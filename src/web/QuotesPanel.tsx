@@ -709,7 +709,7 @@ export function QuotesPanel({
      261002b § Deferred. */
   const badge =
     quotes && owner?.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} />
     ) : null;
   /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
      compute the same list from the same three lines. The prose marks this list

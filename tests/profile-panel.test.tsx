@@ -12,7 +12,7 @@
  * first, against a mutation aimed at it or against the read-only panel this
  * replaced.
  *
- * Opened through the real *written for you* badge (`WrittenForYou`), which has
+ * Opened through the real profile icon (`WrittenForYou`), which has
  * been the only way into it from a reading view since 2026-09-13, when the
  * *Use your profile* row beside every paid button — checkbox, and a *Your
  * profile* button — was removed on Greg's request

@@ -936,9 +936,10 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)
-       counts nothing, which is what every other read makes of it. */
+       counts nothing, which is what every other read makes of it. The middle
+       level a row from before 2026-10-04 still carries is in the bundle's
+       file and not in this count, as no read shows it (plan 261004f). */
     { label: "plain-words paragraphs (brief)", n: countOf(levelsOf(revision.simpleSummary), "brief") },
-    { label: "plain-words paragraphs (simple)", n: countOf(levelsOf(revision.simpleSummary), "simple") },
     { label: "plain-words paragraphs (fuller)", n: countOf(levelsOf(revision.simpleSummary), "fuller") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the

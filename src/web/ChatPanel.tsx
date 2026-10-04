@@ -91,6 +91,7 @@ import { CitedMarkdown } from "./Cited.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { RememberSubModesAbout } from "./RememberAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
@@ -484,6 +485,8 @@ export function ChatPanel({
       feature={`chat${remember ? " remember" : ""}`}
       /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
       mode={remember ? "remember" : "chat"}
+      /* …and then its four parts, a line each (spya-usyhwy). */
+      about={remember ? <RememberSubModesAbout /> : undefined}
       label={
         kind === "tutorial"
           ? "A tutorial on this article"

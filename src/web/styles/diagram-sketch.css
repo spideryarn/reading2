@@ -70,7 +70,7 @@
   font-family: inherit; font-size: inherit;
 }
 .sk-zoom { margin-left: auto; }
-/* The owner's *written for you* badge (since 2026-10-02, plan 261002b) sits
+/* The owner's profile icon (since 2026-10-02, plan 261002b) sits
    beside Enlarge at the bar's end, so it takes the push and Enlarge follows. */
 .sk-bar > .prof-badge { margin-left: auto; flex: none; }
 .sk-bar > .prof-badge + .sk-zoom { margin-left: 0; }

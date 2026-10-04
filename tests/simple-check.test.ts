@@ -258,12 +258,12 @@ describe("the store boundary", () => {
     generatedAt: "2026-10-01T00:00:00.000Z",
     elapsedMs: 1,
     profileHash: null,
-    levels: { brief: [p("a"), p("b")], simple: [p("a"), p("b")], fuller: [p("a"), p("b"), p("c")] },
+    levels: { brief: [p("a"), p("b")], fuller: [p("a"), p("b"), p("c")] },
   };
   const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored: 1 };
   const withCheck = (fuller: unknown) => ({
     ...BASE,
-    check: { checker: "simple-check/1", requestedModel: "q", levels: { brief: passed, simple: passed, fuller } },
+    check: { checker: "simple-check/1", requestedModel: "q", levels: { brief: passed, fuller } },
   });
 
   it("reads a row with no record, and one with a whole record", () => {

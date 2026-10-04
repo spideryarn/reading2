@@ -315,9 +315,8 @@ export function ProfilePage() {
             save={profile.state}
           />
           <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-ink-faint">
-            Changing this marks everything already written as{" "}
-            <em className="tw:not-italic tw:text-muted-foreground">written for an older profile</em>
-            . Nothing is regenerated on its own — each panel offers to rewrite when you want it.
+            Changing this can give existing personalised text the person-and-pencil icon. Nothing
+            is regenerated on its own — where a mode can replace its result, its panel offers to.
           </p>
         </div>
       </Section>

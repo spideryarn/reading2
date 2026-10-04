@@ -83,8 +83,12 @@ test("the drain is called on its interval with the store's live register", async
       seen.push(register);
       return QUIET;
     },
-    "three drains",
-    () => seen.length > 2,
+    // Both halves, because both are asserted below: the drain's timer starts
+    // before the source's first payload is applied, so three drains can all
+    // land on a register that is still empty (measured 2026-10-04: filled at
+    // the fourth). Stopping on the count alone was a race the daemon lost.
+    "three drains, the last on a register holding the fixture's sessions",
+    () => seen.length > 2 && (seen.at(-1)?.size ?? 0) > 0,
   );
   expect(seen.length).toBeGreaterThan(2);
   // One live map, the store's own — not a copy per call.

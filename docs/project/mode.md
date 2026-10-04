@@ -210,8 +210,8 @@ Then the residue, which is why this page exists:
   ([design-css-overview.md](design-css-overview.md) § The band's (i)). Plan
   [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
 
-  **If your mode's output is written for the reader's profile**, hand its `<WrittenForYou compact
-  … />` to `ModeSurface` as `profile`, not into a row of your own: it goes in the corner beside the
+  **If your mode's output is written for the reader's profile**, hand its `<WrittenForYou … />`
+  to `ModeSurface` as `profile`, not into a row of your own: it goes in the corner beside the
   (i), the same size and in the same place in every mode, and the room your top row keeps clear
   grows by itself when it renders. Plan
   [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).

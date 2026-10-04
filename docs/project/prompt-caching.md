@@ -52,10 +52,11 @@ matching before the article is even reached.
 All three are OpenRouter's caches now, and were not always — see
 [§ Every cache now goes through OpenRouter](#every-cache-now-goes-through-openrouter).
 
-Note what the pipeline row does **not** mean. Apart from Simple's three-call fan-out below, an article
+Note what the pipeline row does **not** mean. Apart from Simple's fan-out below (two calls since
+2026-10-04, three before), an article
 stage makes one call per run, so it caches nothing for itself. The ordinary stage marker is enabled
 only when another member of its group is in the **same job**; merely running two mode jobs inside the
-5-minute TTL does not mark either one. Simple is the exception: it owns all three calls and their
+5-minute TTL does not mark either one. Simple is the exception: it owns all of its calls and their
 `MeteredCall.onStart` coordination inside one call site.
 
 The labels row reads as the reliable one — its four batches run together by construction — and on the
@@ -275,12 +276,14 @@ options, waiting on Greg, are in
 [261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md).
 
 **Where caching does pay, it is inside one call site that fans out over one article** — and there
-the coordination is in-process and exact. Simple's three levels are the worked example
-([261001j](../plans/261001j-simple-press-cost-and-latency.md)): the slowest level goes first with the
-article marked, the other two start once its stream has begun (`MeteredCall.onStart` in
+the coordination is in-process and exact. Simple's levels are the worked example
+([261001j](../plans/261001j-simple-press-cost-and-latency.md), measured when there were three; two
+since 2026-10-04): the slowest level goes first with the article marked, the rest start once its
+stream has begun (`MeteredCall.onStart` in
 [`src/messages-stream.ts`](../../src/messages-stream.ts)), and a press fell from $0.142 to $0.090.
 **A new call site that fans out over one article should reuse that, not build a second one** — and
-should measure it cold, the way `evals/simple/fanout-spike.ts --cold` does, or a cache left warm by
+should measure it cold, the way the historical `evals/simple/fanout-spike.ts` paid arms did with
+`--cold` (since 2026-10-04 it supports only `report`; the paid arms are at `1698c6448`), or a cache left warm by
 an earlier run fakes the saving.
 
 **An open question, not chased:** Debate shows cache reads in production with no breakpoint of its

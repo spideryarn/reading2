@@ -559,10 +559,11 @@ function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
         ...(shape.kind === "list" ? { list: true } : {}),
       };
     });
+  /* Named one by one, so a row stored before 2026-10-04, which still has the
+     removed middle level, sends a visitor only these two (plan 261004f). */
   return {
     levels: {
       brief: level(simple.levels.brief),
-      simple: level(simple.levels.simple),
       fuller: level(simple.levels.fuller),
     },
   };
