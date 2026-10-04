@@ -60,7 +60,7 @@
  * No identity check of its own: that needs a structured URL pick, which breaks
  * streamed prose. **Since plan 260930d the press runs *Look it up* first**
  * (`runCitationLookup`, src/citation-find.ts — code's two-gate identity rule
- * and verified quotes, stored as `/find` stores them) unless the row already
+ * and verified quotes, stored before it answers) unless the row already
  * has a current `assessed` lookup; then it reads the list again and builds the
  * reading from what is stored now. When that lookup identified a page, the
  * page goes in as *the result we matched to this work*; otherwise the prompt
@@ -721,7 +721,7 @@ export function withSearchStep(findings: DigFindings, own: readonly SearchEviden
  */
 export type InvestigateEvent =
   | { type: "stage"; stage: InvestigateStage }
-  /** The first step's answer — the very body `POST …/find` answers. */
+  /** The first step's answer — `runCitationLookup`'s, handed on unchanged. */
   | { type: "lookup"; response: FindCitationResponse }
   | { type: "delta"; text: string }
   | { type: "done"; investigation: CitationInvestigation };
@@ -932,11 +932,11 @@ export function makeInvestigateCitation(
     let lookupRan = false;
 
     /**
-     * ***Look it up*, as the first step** — `runCitationLookup`, the very
-     * code `POST …/find` runs, saved before its answer is yielded. A no-match
-     * is an answer and the press goes on unconfirmed (P-5). A failed call
-     * stops the press, so nothing more is spent; a failed save, or anything
-     * else, is the press's failure as it is `/find`'s.
+     * ***Look it up*, as the first step** — `runCitationLookup`, the code
+     * the retired `POST …/find` route ran, saved before its answer is yielded.
+     * A no-match is an answer and the press goes on unconfirmed (P-5). A
+     * failed call stops the press, so nothing more is spent; a failed save,
+     * or anything else, is the press's failure.
      */
     async function* findTheWork(listed: CitedWork, article: Article): AsyncGenerator<InvestigateEvent> {
       yield { type: "stage", stage: "finding" };

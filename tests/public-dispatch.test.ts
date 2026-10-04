@@ -521,7 +521,8 @@ describe("the closed public namespace", () => {
   it("400s a slug that is not one, before it reaches any store", async () => {
     const r = await call("GET", "/api/public/article/..%2F..%2Fetc");
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Not a slug/);
+    /* Fixed words: the value is not echoed into the log line this becomes. */
+    expect(r.body.error).toBe("Not a slug");
   });
 
   /**

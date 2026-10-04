@@ -100,7 +100,7 @@ import {
   runUnderBillingLock,
   switchOnHighPower,
 } from "../store/pg-billing.js";
-import type { HighPowerSwitch, InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
+import type { InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
@@ -486,7 +486,7 @@ export async function refuseUploadWithoutQuota(ownerId: OwnerId): Promise<void> 
  * throw what the reader should see — docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * `switchOnHighPower` (src/store/pg-billing.ts) is the transaction; this is the
- * policy around it, shaped like `admitIngest`: a stale entitlement resyncs from
+ * policy around it, `admitOrResync` like `admitIngest`: a stale entitlement resyncs from
  * Stripe once, *after* the transaction has committed, and asks again; still
  * stale is a 503 rather than a guess. A refusal is a 402 of its own
  * (`highPowerNoRoom`), with no sharing offer — see that function.
@@ -505,16 +505,12 @@ export async function chargeAndSwitchOnHighPower(
       "the administrator's High-powered AI is never charged; use the store's switchOnForAdmin",
     );
   }
-  let answer: HighPowerSwitch = await switchOnHighPower(ownerId, slug);
-  if (answer.kind === "stale") {
-    answer =
-      (await resyncAndRetry(
-        ownerId,
-        answer.customerId,
-        deps.sync ?? syncSubscriptionFromStripe,
-        () => switchOnHighPower(ownerId, slug),
-      )) ?? answer;
-  }
+  const answer = await admitOrResync(
+    ownerId,
+    () => switchOnHighPower(ownerId, slug),
+    deps,
+    "High-powered AI",
+  );
   switch (answer.kind) {
     case "on":
       if (answer.charged) {
@@ -534,12 +530,6 @@ export async function chargeAndSwitchOnHighPower(
           answer.entitlement.tier === "paid" ? { resetAt: answer.entitlement.periodEnd } : {},
         ).message,
       );
-    case "stale":
-      logger.error(
-        { ownerId, subscriptionId: answer.subscriptionId },
-        "refusing High-powered AI: the stored subscription period does not contain now, after a resync",
-      );
-      throw httpError(503, BILLING_NOT_AVAILABLE.message);
     default: {
       const never: never = answer;
       throw new Error(`unhandled High-powered AI answer ${JSON.stringify(never)}`);

@@ -386,8 +386,10 @@ Feedback button (SPIDERYARN-READING2-75):
 > both worlds?
 
 Everything below still describes that step — the call, its identity rule, its checked quotes, its
-store — and `POST …/find` still answers it on its own for a tab opened before the change. Where this
-section says *Look it up*, read *the quick check*.
+store. Its own route, `POST /api/citations/:slug/:id/find`, stayed for a tab opened before the
+change and was deleted on 2026-10-04; the step is `runCitationLookup` in
+[`src/citation-find.ts`](../../src/citation-find.ts), called by the press. Where this section says
+*Look it up*, read *the quick check*.
 
 Every owner row offered **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
 it*, offered only on a row with no link, until 2026-09-29, when it also began reading what it
@@ -399,10 +401,11 @@ own page*, since `namesTitle` / `pageNamesTitle` accept a result whose title **o
 the work's title. What it adds over the `title` it replaced is the effect: it costs money, a press
 that finds nothing stores nothing and leaves the Scholar search where it was.
 [tooltips.md](tooltips.md) is why a `title` was not a small version of this — it does not exist at
-all on a touch device, which is the device the report came from. `POST /api/citations/:slug/:id/find` makes one chat-wire call with
+all on a touch device, which is the device the report came from. The step makes one chat-wire call with
 `openrouter:web_search` (Exa, `max_total_results: 5`) and a short prompt asking for one search for
 this one work and a JSON answer naming which result, if any, is its own page
-([`src/citation-find.ts`](../../src/citation-find.ts)). JSON, not streamed: the answer is a link.
+([`src/citation-find.ts`](../../src/citation-find.ts)). The model returns JSON; Investigate sends
+the checked link and reading to the browser in its `lookup` SSE frame.
 
 **What is kept is decided by code, and the model is only a pointer into the result set** — the
 plan's [§ Stage 3](../plans/260911g-citations-mode.md#stage-3-find-it-on-the-web) and review
@@ -427,10 +430,13 @@ result cap and a 60-second deadline; the count is the alarm — `webSearches` on
 `searches` / `searchesFrom` on the `citation find` log line.
 
 **And the presses are bounded**, since each one is billed and a no-match stores nothing to stop the
-same row being pressed again: the `citation-find` bucket of the shared per-owner allowance
-(`FIND_RATE_POLICY` — two at once, twenty an hour, sixty a day, and a global daily fuse), taken
-after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
-code review, GPT Sol F11.
+same row being pressed again. Since 2026-09-30 the bound is the press's own: the
+`citation-investigate` bucket of the shared per-owner allowance (`INVESTIGATE_RATE_POLICY` in
+[`src/citation-investigate.ts`](../../src/citation-investigate.ts)), one fill for the whole press,
+taken after the checks that refuse for free. `runCitationLookup` takes none itself, so any new
+caller must bring one. The step's first allowance policy (`FIND_RATE_POLICY`, added by the owed
+code review, GPT Sol F11) went with the `/find` route on 2026-10-04. Its `citation-find` bucket
+remains in the database's allowed values for historical rows; no caller spends it.
 
 ### It reads the search extract, never the work
 

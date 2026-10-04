@@ -2682,19 +2682,21 @@ export type PreviewClaim =
  * things: `link-preview-fetch` bounds how much of somebody else's server a
  * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
  * may spend. A reader who has hovered a hundred cold links has done nothing
- * wrong by the second measure. `citation-find` is money too — Citations mode's
- * *Find it*, a billed web search per press (src/citation-find.ts) — and its own
- * bucket because a reader summarising links has not spent any of it.
+ * wrong by the second measure. Citations' `citation-investigate` bounds its
+ * whole press, including the lookup (src/citation-investigate.ts), separately
+ * from a reader summarising links.
  * `shelf-topics` is the model scoring a reader's candidate topics
  * (src/shelf-topics.ts): money, spent when the shelf changes rather than when
  * anybody presses anything, and bounded so a shelf that changes on every load
  * cannot spend on every load. `upload-source-guess` is the same billed web
- * search as `citation-find`, spent when an owner opens an upload rather than
+ * search for a work's page, spent when an owner opens an upload rather than
  * when they press anything (src/source-guess-run.ts), so it is bounded apart.
  */
 export type RateBucket =
   | "link-preview-fetch"
   | "link-summary-fill"
+  /* Retired with POST …/find on 2026-10-04. Kept to match the database CHECK
+     and its historical rows; removing it needs a migration. */
   | "citation-find"
   | "shelf-topics"
   | "upload-source-guess"

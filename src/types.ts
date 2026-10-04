@@ -4560,8 +4560,8 @@ export interface InvestigateCitationDone {
  * paper itself fetched and checked, and when read, its passages asked for;
  * and beside it, since plan 261003m stage 2, the influence call),
  * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
- * a `lookup` frame after `finding` carries the lookup's answer, the same
- * `FindCitationResponse` `POST …/find` answers.
+ * a `lookup` frame after `finding` carries the lookup's answer, a
+ * `FindCitationResponse`.
  */
 export type InvestigateStage = "searching" | "finding" | "reading-paper" | "reading";
 
@@ -4653,10 +4653,13 @@ export type CitationLookup =
     });
 
 /**
- * `POST /api/citations/:slug/:id/find`. **Two outcomes, and neither is an
- * error**: a page that matched and was kept, or nothing that matched — stored
- * nowhere, and the row stays as it was. A failed call is an HTTP error, not a
- * third outcome.
+ * What *Look it up* answers — `runCitationLookup` (src/citation-find.ts), sent
+ * to the browser as the `lookup` frame of
+ * `POST /api/citations/:slug/:id/investigate`. It was the body of
+ * `POST /api/citations/:slug/:id/find` until that route was deleted on
+ * 2026-10-04. **Two outcomes, and neither is an error**: a page that matched
+ * and was kept, or nothing that matched — stored nowhere, and the row stays as
+ * it was. A failed call fails the press, not a third outcome.
  *
  * On `found`, **the link and the lookup are separate** (plan 260929g R-3):
  * `work` is the row's link half — upgraded to `linkFrom: "web"` only when it

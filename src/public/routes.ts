@@ -334,12 +334,12 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = PUBLIC_ROUTE_NAMES.map((rou
  * line in the error tracker — `captureFailure` fires at status >= 500 — so a
  * crawler walking malformed URLs would fill Sentry with reports of itself.
  *
- * The same fixed 400, and deliberately **not** interpolating the offending
+ * A fixed 400, and deliberately **not** interpolating the offending
  * value on this path: `JSON.stringify` of an undecodable string is safe enough,
  * but every `httpError` message here is written to a log, and the rule in
  * docs/project/logging.md is that a message contains nothing but words we chose.
- * The valid-but-not-a-slug case above already interpolates, which is a
- * pre-existing choice this is not the place to revisit.
+ * The valid-but-not-a-slug case below says fixed words too, since 2026-10-04
+ * (it used to append the value).
  */
 function slugFrom(match: RegExpExecArray): string {
   let value: string;
@@ -348,7 +348,7 @@ function slugFrom(match: RegExpExecArray): string {
   } catch {
     throw httpError(400, "That is not a slug we can read.");
   }
-  if (!isSlug(value)) throw httpError(400, `Not a slug: ${JSON.stringify(value)}`);
+  if (!isSlug(value)) throw httpError(400, "Not a slug");
   return value;
 }
 

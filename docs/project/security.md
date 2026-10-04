@@ -1054,8 +1054,8 @@ for a referee to find out that somebody tried.
 Since 2026-08-27 there is a gate. [auth.md](auth.md) says where the pieces are; two facts belong
 here because they are properties of this system rather than of that feature.
 
-**The gate admits anyone with a Google account.** There is no allowlist — `isAllowed` in
-[`src/auth.ts`](../../src/auth.ts) returns true — and that is Greg's explicit decision, made twice
+**The gate admits anyone with a Google account.** There is no allowlist — `requireUser` in
+[`src/auth.ts`](../../src/auth.ts) admits whoever Supabase vouches for — and that is Greg's explicit decision, made twice
 and in writing ([260826w-auth-supabase.md § Who gets in](../plans/260826w-auth-supabase.md#who-gets-in)). A security
 doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
 `OPENROUTER_API_KEY` at two model calls per article — every paid call in the app is on that one key

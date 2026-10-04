@@ -1897,17 +1897,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step and the spend ledger, as for " +
       "`tests/glossary-asked-term-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
-  "tests/citation-find-route.test.ts": {
+  "tests/citation-finds-read-back-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     evidence: "static-only",
     reason:
-      "Arrived after the witness ran, with Citations mode's stage 3 (2026-09-12). It seeds one " +
-      "article with `scratchArticleInPg`, writes a citations artefact onto its revision, and " +
-      "drives `POST /api/citations/:slug/:id/find` through `handleApi` against a stubbed " +
-      "provider, reading the stored find back through the citations GET — entirely Postgres. " +
-      "Its reach into the condemned modules is the seeder's copy step and the spend ledger, as " +
-      "for `tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
+      "Arrived after the witness ran, with Citations mode's stage 3 (2026-09-12), as " +
+      "`tests/citation-find-route.test.ts`; renamed on 2026-10-04 when the `/find` route it drove " +
+      "was deleted. It seeds one article with `scratchArticleInPg`, writes a citations artefact " +
+      "onto its revision, runs `runCitationLookup` against the real find store with the model " +
+      "call injected, and reads the stored find back through the citations GET on `handleApi` — " +
+      "entirely Postgres. Its reach into the condemned modules is the seeder's copy step and the " +
+      "spend ledger (reached through the routes import; no call is made), as for " +
+      "`tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/citation-investigate-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1919,7 +1921,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "drives `POST /api/citations/:slug/:id/investigate` through `handleApi` against a stubbed, " +
       "streamed provider, reading the stored answer back through the citations GET — entirely " +
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
-      "ledger, as for `tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "ledger, as for `tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/dig-deeper-comment.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1943,7 +1945,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "with `scratchArticleInPg` to read the owner's and the visitor's payloads, and drives " +
       "`POST /api/source-guess/:slug` through `handleApi` to its 409 — no model is called. Its " +
       "reach into the condemned modules is the seeder's copy step, as for " +
-      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/reading-time-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1954,7 +1956,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "articles with `scratchArticleInPg` and drives `GET` and `POST /api/reading-time/:slug` " +
       "through `handleApi`, reading rows back out of `reading_time` — entirely Postgres. Its " +
       "reach into the condemned modules is the seeder's copy step, as for " +
-      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/glossary-hidden-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -2820,9 +2822,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds two articles, writes lookups and deletes one article mid-stream;
      the provider is a stubbed `fetch`. */
   "tests/glossary-lookup-stream-route.test.ts": "private-postgres",
-  /* Seeds one article, writes a citations artefact and one find row, and
-     drives *Find it* through the route; the provider is a stubbed `fetch`. */
-  "tests/citation-find-route.test.ts": "private-postgres",
+  /* Seeds one article, writes a citations artefact and one find row, runs the
+     citation lookup against the real find store with the model call injected,
+     and reads the finds back through the citations GET. */
+  "tests/citation-finds-read-back-pg.test.ts": "private-postgres",
   /* Seeds one article, writes a citations artefact, and drives *Investigate*
      through the route; the provider is a stubbed, streamed `fetch`. */
   "tests/citation-investigate-route.test.ts": "private-postgres",

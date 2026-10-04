@@ -599,15 +599,6 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   {
     match: {
       kind: "regex",
-      source: "^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$",
-      flags: "",
-    },
-    methods: ["POST"],
-    witnesses: ["/api/citations/w1/w2/find"],
-  },
-  {
-    match: {
-      kind: "regex",
       source: "^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$",
       flags: "",
     },
@@ -910,8 +901,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 90;
-const EXPECTED_GUARD_COUNT = 110;
+const EXPECTED_MATCHER_COUNT = 89;
+const EXPECTED_GUARD_COUNT = 109;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1365,6 +1356,9 @@ const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
  * `"first-capture"` on an exact row, which has no capture. The type says the
  * same; this says it about the literal the table actually holds.
  */
+/** The one function that attributes spend: src/ai-spend.ts. */
+const SPEND_WRAPPER = "withSpendAttribution";
+
 const ARTICLE_VALUES: Record<"exact" | "pattern", string[]> = {
   exact: ["handler", "none"],
   pattern: ["first-capture", "handler", "none"],
@@ -1498,6 +1492,22 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
     (nodeType(handler) !== "ArrowFunctionExpression" && nodeType(handler) !== "FunctionExpression")
   ) {
     refuse(element, `an ${ROUTE_TABLE} entry whose \`handler\` is not written out here`);
+  }
+  /* **A `first-capture` row is attributed by the dispatcher, and only there.**
+     Sixteen rows wrapped their own body in `withSpendAttribution` as well, with
+     the same slug: two ways to say one thing, left over from before the
+     `article` field existed (docs/plans/261004e-fifth-sweep-cluster-8-routes-deletions.md
+     § R4). A row whose slug arrives some other way says `"handler"` and wraps
+     its own call; a row that says `"first-capture"` may not. */
+  if (article === "first-capture") {
+    for (const node of descend(handler)) {
+      if (nodeType(node) !== "CallExpression") continue;
+      if (identName(node.callee) !== SPEND_WRAPPER) continue;
+      refuse(
+        node,
+        `an ${ROUTE_TABLE} \`first-capture\` entry whose handler calls ${SPEND_WRAPPER} itself — ${TABLE_DISPATCHER} already attributes it`,
+      );
+    }
   }
 
   const method = stringValue(byKey.get("method"));
@@ -2104,8 +2114,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
-        "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$/",
-        // Citations' Investigate, 260930a — beside Find it, its sibling POST
+        // Citations' Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
         "POST regex /^\\/api\\/source-guess\\/([\\w.%-]+)$/",
         // reading time, 260916c
@@ -2316,6 +2325,16 @@ describe("the authenticated API's route contract", () => {
       );
     });
 
+    it("lets a `handler` row attribute its own spend", () => {
+      /* The positive half of the `first-capture` refusal below: the same body
+         under `article: "handler"` is the documented shape, so the refusal is
+         about the pairing and not about the call. */
+      const body = "async (_c, captures) => { await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () => work()); }";
+      expect(
+        read(`{ kind: "pattern", method: "POST", pattern: /^\\/api\\/x\\/(\\w+)$/, article: "handler", handler: ${body} }`),
+      ).toHaveLength(1);
+    });
+
     /**
      * The other positive half, and the shape jobs needed: a matcher two rows
      * share is a module-scope `const` they both name.
@@ -2353,6 +2372,9 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       ["a row says nothing about its article", `{ kind: "exact", method: "GET", path: "/api/x", handler: async () => {} }`],
       ["an exact row claims a capture it cannot have", `{ kind: "exact", method: "GET", path: "/api/x", article: "first-capture", handler: async () => {} }`],
       ["the article is not a literal", `{ kind: "pattern", method: "GET", pattern: /^\\/api\\/x$/, article: WHERE, handler: async () => {} }`],
+      /* The dispatcher wraps a `first-capture` row; a second wrap inside it is
+         the duplicate cluster 8 deleted sixteen of. */
+      ["a first-capture row attributes its own spend as well", `{ kind: "pattern", method: "POST", pattern: /^\\/api\\/x\\/(\\w+)$/, article: "first-capture", handler: async (_c, captures) => { await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () => work()); } }`],
       /* An identifier is resolved only against a module-scope `const` holding a
          string or regex literal, so one this file does not declare — or one
          holding anything a call could have built — is still a refusal. */

@@ -255,9 +255,10 @@ existed and they contradicted each other; GPT Sol's review of the built code nam
 on 2026-08-27. What is actually true:
 
 **There is no allowlist.** Greg's call, twice — *"We can get rid of the allowlist once we've added
-authentication. I'll accept the risk."* `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) returns
-`true` for anybody Supabase will vouch for, and it is a function rather than an inline `true` so that
-narrowing it later is an edit in one place.
+authentication. I'll accept the risk."* `requireUser` in [`src/auth.ts`](../../src/auth.ts) admits
+anybody Supabase will vouch for, and a comment there marks the one place a narrower check would go.
+(Until 2026-10-04 that place held an `isAllowed()` that returned `true`, in front of a 403 nothing
+could reach.)
 
 **And every reader gets their own shelf**, which is the part that had not been built when that
 decision was made. The gate proved a person existed and then dropped the identity on the floor, so
@@ -472,7 +473,7 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   reader who does get in from reading your
   library; nothing stops them making an account and spending your model budget on their own. A spend
   limit is the control for that, and it is the next bullet. If it turns out to be needed sooner,
-  `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) is the one line to change.
+  `requireUser` in [`src/auth.ts`](../../src/auth.ts) is the one place to add the check.
 - **Whether to put Cloudflare Access in front** as an outer, code-free gate. Free to 50 users, and it
   cannot be opened by a bug in a route handler. Optional, not required; the trade is a second piece of
   infrastructure. See

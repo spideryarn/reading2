@@ -310,7 +310,6 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      end in this code, or it would read as authored. */
   "live-upstream": "retry",
   "jb-slot-held": "bug",
-  "cite-resting": "blocked",
   /* Citations' *Investigate* — src/citation-investigate.ts. */
   "cite-quoted": "retry",
   "cite-no-extract": "retry",
@@ -5534,29 +5533,6 @@ export const CITATION_NO_MATCH =
 export const CITATION_LOOKUP_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
-/**
- * *Find it* refused by its allowance (src/citation-find.ts § `FIND_RATE_POLICY`)
- * — one sentence per reason, because each tells the reader something different
- * to do. Each press is a billed web search, which is why there is a limit.
- */
-export const CITATION_FIND_BUSY =
-  "Another Find it is still running. Wait for it to finish, then try this one.";
-export const CITATION_FIND_LIMITED =
-  "You have looked up a lot of works recently. Try again in a while — the Scholar search is still there.";
-/**
- * The one of the three answered with a 5xx (503 — the allowance is everyone's,
- * not this reader's), so the one that carries a code: `handleApi` lets a 5xx's
- * message reach the reader only when it is declared or coded (plan 260924a
- * § Stage 2c). The two 429s pass as they are.
- */
-export const CITATION_FIND_RESTING: ReaderFacingFailure = {
-  kind: "blocked",
-  message:
-    "Find it has done as many searches as it can for today, so asking again today will get the " +
-    "same answer. Try again tomorrow — the Scholar " +
-    "search is still there. [cite-resting]",
-};
-
 /* --------------------------------------------- Citations' *Investigate* --
    src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    Every one of these reaches the reader as the whole of what they see in place
@@ -5637,7 +5613,7 @@ export const CITATION_INVESTIGATE_BUSY =
   "Another Dig deeper on a cited work is still running. Wait for it to finish, then try this one.";
 export const CITATION_INVESTIGATE_LIMITED =
   "You have dug deeper into a lot of works recently. Try again in a while — the row's link is still there.";
-/** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
+/** The 503 of the three, so it carries a code; the two 429s pass as they are. */
 export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:

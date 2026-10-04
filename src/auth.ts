@@ -293,29 +293,6 @@ function isUnavailable(error: { name: string; status?: number } | null | undefin
 }
 
 /**
- * Is this signed-in person allowed in?
- *
- * **Today: yes, anyone Supabase will vouch for.** Greg, 2026-08-26, twice:
- *
- * > We can get rid of the allowlist once we've added authentication. I'll
- * > accept the risk
- *
- * A function rather than an inline `true` so that narrowing it later is an edit
- * here and nowhere else.
- *
- * **What that decision was made about was model spend**, and there is a second
- * consequence nobody had raised at the time: `currentOwnerId()` in src/owner.ts
- * is still process-wide and the reads do not filter by owner, so every admitted
- * person sees the *same* shelf rather than their own. That is written up in
- * docs/plans/260826ae-auth-ui-and-production.md § The gate says who you are, and it is
- * Greg's call rather than this file's. Until he has made it, this stays as he
- * left it — and the one line that changes it is right here.
- */
-function isAllowed(_claims: { sub: string; email: string }): boolean {
-  return true;
-}
-
-/**
  * The person making this request, or a thrown `httpError`.
  *
  * Never returns a user it is not sure about, and has no branch that returns
@@ -372,14 +349,13 @@ export async function requireUser(
     throw httpError(401, "That account has no email address on it. [auth-noemail]");
   }
 
+  /* **Anyone Supabase will vouch for is in: there is no allowlist.** Greg,
+     2026-08-26, twice: *"We can get rid of the allowlist once we've added
+     authentication. I'll accept the risk."* — docs/project/auth.md. A check on
+     *who* may come in would go here, after the claims and before the mark. An
+     `isAllowed()` that returned `true` stood here until 2026-10-04, in front
+     of a 403 nothing could reach. */
   const user: AuthedUser = { id: claims.sub as OwnerId, email: claims.email };
-
-  if (!isAllowed({ sub: user.id, email: user.email })) {
-    throw httpError(
-      403,
-      "Spideryarn is still in private beta, and this account isn't on the list yet. [auth-beta]",
-    );
-  }
 
   /* **Frozen first, then remembered, and both last.** Not at the top of the
      function and not on the claims: the whole content of the mark is
