@@ -49,7 +49,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { RememberSubModeToggle, REMEMBER_VIEW_HOW } = await import("../src/web/QuizPanel.js");
-const { RememberSubModesAbout } = await import("../src/web/BandAbout.js");
+const { RememberSubModesAbout } = await import("../src/web/RememberAbout.js");
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
 const { REMEMBER_SUB_MODES } = await import("../src/web/sub-modes.js");

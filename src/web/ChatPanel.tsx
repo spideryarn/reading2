@@ -90,7 +90,7 @@ import { CitedMarkdown } from "./Cited.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
-import { RememberSubModesAbout } from "./BandAbout.js";
+import { RememberSubModesAbout } from "./RememberAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";

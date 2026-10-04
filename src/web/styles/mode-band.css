@@ -1273,7 +1273,7 @@
 .band-about-card { max-width: min(28rem, calc(100vw - 1.75rem)); }
 .band-about-card p { margin: 0; }
 .band-about-card p + p { margin-top: 0.4rem; }
-/* A list in the card: Remember's four parts, a line each (BandAbout.tsx §
+/* A list in the card: Remember's four parts, a line each (RememberAbout.tsx §
    `RememberSubModesAbout`). Hung from a small indent so the bullets sit inside
    the card's own padding, and spaced a little tighter than paragraphs so the
    four read as one list. */

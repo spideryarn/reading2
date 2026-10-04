@@ -225,3 +225,10 @@ passes while logging an undefined `profileHash` exception from `useQuiz.ts` — 
 error-reporting problem that was there before this change.
 
 **Deferred:** the sweep of other modes' long cards, queue entry `qi-mw43dd2y`.
+
+**The full suite, after merging dev: one failure that was mine.** `eager-client-graph` went red
+because the list component sat in `BandAbout.tsx`, which the lazy /admin and /design routes also
+reach, and its import put `sub-modes.ts` in both graphs. It moved to its own file,
+`src/web/RememberAbout.tsx`. The other five red files (`cold-start-lazy-imports`,
+`pdf-bundle-trace` and three `fleet-*` routes) were the fresh worktree's missing builds; after
+`npm run build` and `npm run build:fleet` all six pass. 1542 other files passed on the first run.

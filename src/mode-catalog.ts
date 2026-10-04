@@ -354,7 +354,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        *"it's like one big paragraph. Prefer smaller paragraphs or bullet
        points"*, and *"each submode button should have its own tooltip"*. So
        what each part does is on its chip (QuizPanel.tsx § `REMEMBER_VIEW_HOW`)
-       and listed in the band's (i) (BandAbout.tsx § `RememberSubModesAbout`).
+       and listed in the band's (i) (RememberAbout.tsx).
        Claims: no conversation turn runs before the reader's first message;
        Quiz's questions are one stored batch written from the article, and
        each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It

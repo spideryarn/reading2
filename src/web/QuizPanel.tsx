@@ -270,7 +270,7 @@ export function RememberSubModeToggle({
           reading along the row is one gesture, `keepSide` so a card is not
           thrown onto the chips beside it. The card is for a pointer and for
           keyboard focus; a finger's tap presses the chip, which is why the
-          band's (i) lists the four as well (BandAbout.tsx §
+          band's (i) lists the four as well (RememberAbout.tsx §
           `RememberSubModesAbout`). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {REMEMBER_VIEWS.map((view) => (
