@@ -97,7 +97,7 @@ describe("the prompts", () => {
     expect(text).not.toContain("\n99. Injected");
   });
 
-  it("filing shows the tree indented, with the ids it must answer in", () => {
+  it("filing shows a flat topic list with the ids it must answer in", () => {
     const text = fileMessages(
       [
         { ref: "t1", label: "Neuroscience", depth: 0 },
@@ -119,6 +119,19 @@ describe("the prompts", () => {
     expect(text).toContain("there is something of substance, include it");
     expect(text).toContain("Not for a passing mention, an analogy or general background");
     expect(text).toContain("Do not pad a topic");
+  });
+
+  it("tells filing how to handle the same visible label under two parents", () => {
+    const text = fileMessages(
+      [
+        { ref: "t1", label: "Methods", depth: 1 },
+        { ref: "t2", label: "Methods", depth: 1 },
+      ],
+      works(2),
+      null,
+    )[1]!.content;
+    expect(text).toContain("list every id that has it");
+    expect(text).toContain("Choosing a broader pill as well");
   });
 });
 
@@ -237,7 +250,7 @@ describe("the tree's helpers", () => {
     expect(treeLines(topics).map((t) => `${t.depth}${t.ref}`)).toEqual(["0t1", "1t3", "2t4", "0t2"]);
   });
 
-  it("a work in a finer topic is in every topic above it", () => {
+  it("withAncestors adds every topic above a finer one", () => {
     expect(withAncestors(["t4"], topics)).toEqual(["t1", "t3", "t4"]);
     expect(withAncestors(["t2", "nope"], topics)).toEqual(["t2"]);
     expect(withAncestors([], topics)).toEqual([]);
@@ -633,13 +646,17 @@ describe("fileWorks", () => {
   });
 
   it("takes the answer as it stands when it names a broad topic: a finer topic does not bring its parent", () => {
-    const tree: TopicNode[] = [...topics, { id: "t3", key: "psychology", label: "Psychology", parent: null, depth: 0 }];
-    /* Vision (inside Neuroscience) and Psychology: not Neuroscience. */
-    expect(filedInto(["t2", "t3"], tree)).toEqual(["t2", "t3"]);
+    const tree: TopicNode[] = [
+      ...topics,
+      { id: "t3", key: "psychology", label: "Psychology", parent: null, depth: 0 },
+      { id: "t4", key: "visual cortex", label: "Visual Cortex", parent: "t2", depth: 2 },
+    ];
+    /* A depth-2 topic under Neuroscience, and Psychology: neither ancestor is added. */
+    expect(filedInto(["t4", "t3"], tree)).toEqual(["t3", "t4"]);
     /* No broad topic named, and none held: the parent comes too. */
-    expect(filedInto(["t2"], tree)).toEqual(["t1", "t2"]);
+    expect(filedInto(["t4"], tree)).toEqual(["t1", "t2", "t4"]);
     /* Already under a broad topic: only what was named. */
-    expect(filedInto(["t2"], tree, true)).toEqual(["t2"]);
-    expect(filedInto(["nope", "t2", "t2"], tree, true)).toEqual(["t2"]);
+    expect(filedInto(["t4"], tree, true)).toEqual(["t4"]);
+    expect(filedInto(["nope", "t4", "t4"], tree, true)).toEqual(["t4"]);
   });
 });

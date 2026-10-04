@@ -138,6 +138,29 @@ Then the measurements changed the design twice more (all in the investigation):
    the client uses the tree only for order and indent, and every count is an intersection
    (`src/web/shelf-narrow.ts`).
 
+### GPT Sol's code review
+
+`261004j-shelf-topic-pills-code-review-sol.md`: no P0; verdict *ship with the fixes I made*. It found
+nothing else that relied on a finer topic's articles all being in its parent. It fixed, and I read
+and kept:
+
+- The pass's deadline was counted from when the work started, not from when the claim was taken.
+  Now from the claim.
+- With a flat list, two finer topics of one name under different parents (*Methods* in two
+  subjects) could not be told apart. When a name repeats, the prompt now says to list every id
+  with it. **This sentence was added after the measurements and is not itself measured.**
+- Two hover cards still implied a finer pill's articles are all inside the broader one. They now
+  say a finer topic can take matching articles from outside it. This is reader-facing wording,
+  changed by the reviewer: Greg may want to reword it.
+- A test for a depth-2 topic named beside a broad topic that is not its ancestor.
+
+Not fixed, and known: **a shelf over 150 works is not re-thought**, so it keeps its version 1 tree
+and memberships; only its new arrivals are filed by the new rules. That is the existing cap
+([shelf-terms.md § The 150-work cap](../project/shelf-terms.md#the-150-work-cap)), already queued.
+
+On the conclusion, Sol's words are the fair summary: this is *"a substantial, measured loss of
+sharpness that matches Greg's stated preference"*, not a free improvement.
+
 ### How it is measured
 
 Per [prompting-guide.md § Measuring a prompt change](../project/prompting-guide.md#measuring-a-prompt-change):

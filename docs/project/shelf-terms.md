@@ -80,7 +80,9 @@ with 160. The row arrives broad first, then by how many articles.
 topic is already called *Consciousness*: two pills of one name at different levels cannot be told
 apart, and choosing the two existing pills together already narrows to those articles. When two
 subjects each have a finer topic of one name (*Methods* inside *Neuroscience* and inside *AI*), both
-are kept, the second with its parent's key in front of its own.
+are kept, the second with its parent's key in front of its own. Whole-tree filing judges both by
+their shared visible name and is told to choose both ids; choosing the different parent alongside
+each is what gives the two routes different results.
 
 ### A pill means its own name, and takes in generously
 
@@ -108,7 +110,8 @@ it there, and the pill does not say it is scoped to AI. Since prompt version 2 (
   in both, because a count is an intersection ([§ The count](#the-count-one-formula)). The one
   exception: a work under **no** broad topic that lands in a finer one takes that topic's parents,
   so it is never missing from every broad pill. A new arrival is filed by the same rule
-  (`filedInto`).
+  (`filedInto`). The `›`, indentation and card describe where a finer label was **grouped in the
+  tree**, not a promise that all of its articles are in the parent; the cards say this explicitly.
 - **Both prompts lean towards including.** An article belongs in a topic it discusses, gives
   evidence about or makes a claim about, even when that is not its main subject; not for a passing
   mention, an analogy, general background, or merely sharing a broad field. Borderline with
@@ -355,7 +358,9 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
   topic in none. Its label is in the model's face ([fonts.md](fonts.md)), on the pill, in the card
   and in the paper card. A **finer** one (`granularity > 0`) has a faint `›` before its label —
   a mark rather than a smaller or paler pill, so the height, the hue dot and the label's ink stay as
-  they are in both themes — and its card says *"Inside Neuroscience"*, the label of its `within`.
+  they are in both themes — and its card says *"Inside Neuroscience"*, the label of its `within`,
+  then says that this is the label's place in the tree and the topic can also take matching articles
+  from outside that broader one.
   In More detail a finer row's chip is also indented, a step per level (`topicDepth`). Its members
   have no phrase count, so the card and the row name them in the order sent (newest first) and
   **nothing says *"used N times"***. And the card on the word **Topics** says a model named them,

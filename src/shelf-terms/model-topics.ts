@@ -291,6 +291,12 @@ export interface TreeLine {
  * that; the flat list did, twice in two (docs/investigations/261004d).
  */
 export function fileMessages(tree: readonly TreeLine[], works: readonly TopicWork[], within: string | null): Message[] {
+  const labels = new Map<string, number>();
+  for (const t of tree) {
+    const key = keyOf(t.label);
+    labels.set(key, (labels.get(key) ?? 0) + 1);
+  }
+  const repeats = [...labels.values()].some((n) => n > 1);
   const system = [
     "A reader's shelf has topic pills, some broad and some fine, and each pill shows only its name. Decide which of the existing topics each article belongs in.",
     DATA_NOT_INSTRUCTIONS,
@@ -303,6 +309,11 @@ export function fileMessages(tree: readonly TreeLine[], works: readonly TopicWor
     ...workLines(works),
     "",
     `For each article, list the ids of every topic it belongs in. ${BELONGS} An empty list only if none fits.`,
+    ...(repeats
+      ? [
+          "The same label can appear under different broader topics. Each is a separate pill, but the pill means its visible name: when an article belongs in that name, list every id that has it. Choosing a broader pill as well is what narrows the shared name to that branch.",
+        ]
+      : []),
   ].join("\n");
   return [
     { role: "system", content: system },
