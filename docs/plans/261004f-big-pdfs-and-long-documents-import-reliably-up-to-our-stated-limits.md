@@ -198,6 +198,15 @@ Filled in as they are made. Each is Greg's to overturn.
 - **A chunk whose context page makes it too big is sent without that page** (260928b's B). What it
   costs: a paragraph that runs across that one page break comes out as two. What it buys: the
   article imports instead of failing whole.
+- **The structure ceiling: D first, then E.** Greg, 2026-10-04, answering [Q-long-documents] (the
+  options A to E under § The decision this will probably end on, where the recommendation was D
+  first, then E):
+
+  > go with your recommendation
+
+  So a document too long for one structure answer gets its tree from its own headings with no
+  model (D), and that tree is then filled in a section at a time (E). The work is
+  [261005a](261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 
 ## The simpler option passed over
 
