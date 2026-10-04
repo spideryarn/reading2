@@ -1103,6 +1103,20 @@ hand, and `diff` is the whole of the verification:
 diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
 ```
 
+**What actually runs, as of 2026-10-04: the dashboard is under systemd, the Overseer daemon is
+not.** `overseer.service` is installed but **disabled**, and the unit sets no `OPENROUTER_API_KEY`,
+so a daemon it started would run with attention off. The live daemon is a tmux session
+(`overseer-daemon<N>-<HHMM>`) started from a launch script that reads the key out of `.env.local`
+and execs `npx tsx scripts/overseer.ts run` in the primary checkout. That script lives in the
+Overseer's scratchpad under `/tmp`, so **a reboot loses both the daemon and the script.** Only one
+daemon can run: a second start, from systemd or anywhere else, prints *"An Overseer is already
+running … Refusing to start a second one"*, and under `Restart=always` the unit retries every five
+seconds until stopped. That happened on 2026-10-04, when `sudo systemctl restart overseer` was run
+while the tmux daemon held the lock; `sudo systemctl stop overseer` ended it. Check which one is
+live with `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
+`systemctl is-active overseer`. Moving the daemon back under the unit needs the key supplied to it
+(for example an `EnvironmentFile=`), which is a box change for Greg.
+
 At 3am:
 
 ```
