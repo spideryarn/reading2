@@ -97,10 +97,15 @@ The brief for step 3, and for anyone else updating the page:
 
 - The footer, on every page that has one ([website-text.md](website-text.md)).
 - The command bar's **Help** row (⌘K / Ctrl-K, then *help*).
-- The **Help** link in the dock, which opens the section for the mode you are in.
-- **Every band's (i)**, whose card ends in *More in Help →* to that mode's section, since
+- The **Help** link in the dock, which opens the section for the mode you are in. **On a
+  visitor's bar only** since 2026-10-04: Greg asked for it out of the bottom bar (`spya-dev7pf`),
+  and a visitor has no command bar, so theirs is the one bar that keeps it —
+  [261004j](../plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
+- **A mode's (i)**, whose card ends in *More in Help →* to that mode's section, since
   2026-10-02 — the first `Tooltip` card the pointer can enter
-  ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)).
+  ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)). Not
+  every panel has one: a visitor's panel for a mode that is not shared, a panel that failed, and
+  Marginalia's column do not.
 
 **Why not an (i) beside every mark.** Greg suggested more (i) icons linking into Help. The two
 obvious places for a new icon have no room: the spine is 12px wide and clips, and a band's corner
