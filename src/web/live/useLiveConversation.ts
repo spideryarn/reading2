@@ -1199,7 +1199,8 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         if (tapEvent) {
           tapEvents.current.delete(refused);
           const mode = talkModeRef.current;
-          /* Done's tail has run, so its commit has gone. */
+          /* Waiting on a sent turn, rather than still in Done's tail. This
+             can also be a reply already owed when entering tap mode. */
           const submitted = mode === "tap-sending" && doneTimer.current === null;
           const after = tapRefusal(tapEvent, { mode, submitted }, detail?.message);
           if (after.keep) return;
@@ -2329,8 +2330,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   const enterTapToTalk = useCallback(() => {
     if (!isLive() || talkModeRef.current !== "hands-free") return;
-    talkModeRef.current = "tap-idle";
-    setTalkModeState("tap-idle");
+    /* Dropping the open buffer cannot settle an earlier submitted turn.
+       Keep Talk closed until that reply starts (or Reconnect recovers it),
+       without asking for a manual reply to a detector-owned turn. */
+    const mode: TalkMode = owedSince.current === null ? "tap-idle" : "tap-sending";
+    talkModeRef.current = mode;
+    setTalkModeState(mode);
     detectorOff();
     /* **The turn the noise was holding open is dropped, not answered.** The
        reader has just been told that sound is holding it open; answering half

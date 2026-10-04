@@ -40,8 +40,9 @@ export type TalkMode =
   /** Between Talk and Done. */
   | "tap-talking"
   /**
-   * From Done until the reply begins. Nothing else says the companion is busy
-   * in that gap, and Talk in it would start a turn over the one being sent.
+   * From Done until the reply begins, or entered with a reply already owed.
+   * Nothing else says the companion is busy in that gap, and Talk in it would
+   * start a turn over the one being sent.
    */
   | "tap-sending";
 
@@ -79,8 +80,9 @@ export type TapRefusal =
  * over an empty buffer, a `session.update` the service will not take. Hanging
  * up on the reader for either would be worse than the noise was.
  *
- * `submitted`: the mode is `tap-sending` and Done's tail has run, so its
- * commit has gone. **A refusal can be late.** Talk's clear is sent long before
+ * `submitted`: the mode is `tap-sending` with no Done tail pending, so a
+ * sent turn is awaiting a reply (possibly owed before tap entry).
+ * **A refusal can be late.** Talk's clear is sent long before
  * the commit and its error can arrive after it; that must not undo a turn the
  * service is taking. GPT Sol, plan review of 261004e, F1: it used to forget
  * the awaited commit, and the acknowledgement that followed asked for no reply.

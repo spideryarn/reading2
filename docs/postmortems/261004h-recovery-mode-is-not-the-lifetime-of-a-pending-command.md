@@ -51,10 +51,34 @@ entry refusal is left visibly owed (`no-reply`, with Reconnect) instead of answe
 the reviewer's corrections are kept: a commit refused in hands-free drops that debt, and every
 refusal that changes anything cancels Done's tail. Both of its red-first tests pass unchanged.
 
+### Round two: reply debt also survives the change of mode
+
+**F5, established P1 against `677a2e1f6`; fixed uncommitted in round two.** A sent tap turn's late
+entry refusal restores hands-free; its commit is acknowledged without our asking for a reply.
+Another `speech_started`, held open for thirty seconds, offers Tap to talk again in the current
+UI. Re-entry selects Ready, Talk sends a fresh clear, and that clear's refusal erases the earlier
+accepted turn's reply debt. The hook test observed `stall: null` where `no-reply` was required.
+
+This is not intrinsically a two-refusal or delayed-command problem: an unanswered hands-free
+commit, followed by another open turn, first tap entry and a refused entry clear loses the same
+debt. The unconditional Ready entry originated in `815f9dc3a`; `677a2e1f6` restores another way
+to reach it. **The class is still interaction mode mistaken for outstanding work**, but the work
+here is reply debt, not an awaited manual acknowledgement. A fresh buffer clear cannot reject a
+conversation item that the service already accepted.
+
+The narrow correction in `enterTapToTalk` chooses Sending when a reply is already owed. It adds
+no manual acknowledgement or response owner. Talk waits; a clear refusal preserves debt;
+`response.created` releases the wait, and commit rejection still settles a rejected manual turn.
+Both new [hook tests](../../tests/live-session-flow.test.tsx) were seen red before this change:
+the late-recovery retry and ordinary first-entry cases. The latter also verifies that a response
+releases Talk. The two permitted files passed 128 tests afterward. Earlier entry tests began
+without debt, and the late-recovery test ended before another entry. A read-only root-cause
+subagent independently confirmed both paths and reviewed the correction.
+
 Still open, and written down in the plan: provider error ids name a command kind, not the turn
-that sent it, so a refusal that arrives a whole turn late is read against the wrong turn. That
-needs a turn number on each tap event. Not built, because it takes two refusals of different kinds
-plus seconds of delay, and no refused clear has ever been observed.
+that sent it, so a genuinely stale commit or response refusal can affect a later turn's debt.
+Explicit turn ownership is the complete long-term fix; it is outside this stage. The entry guard
+closes F5 without claiming to close that wider limitation.
 
 ## Countermeasures, ranked by ease against value
 
@@ -66,7 +90,8 @@ plus seconds of delay, and no refused clear has ever been observed.
 3. **Do not let the command outlive the mode that owns it.** Taken: recovery
    to hands-free abandons the awaited commit, so there is one fact, not two to
    keep in step. Cheaper than separating turn ownership from mode, and it
-   gives up answering that one turn automatically.
+   gives up answering that one turn automatically. The reply debt still
+   survives; round two makes tap entry respect it before offering Ready.
 4. **A complete effect-language reducer for the whole hook.** Rejected for this
    stage. A bigger dispatch system does not establish ownership by itself, and
    adds machinery where explicit lifecycle facts and sequence tests suffice.

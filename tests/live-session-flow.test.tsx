@@ -2411,6 +2411,74 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
+  it("a tap retry after late entry recovery keeps the accepted unanswered turn owed", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const update = sent.find((event) => event.type === "session.update" && isTap(event));
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "update refused", event_id: update?.event_id } });
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "old-tap-u" });
+        /* In hands-free the street can hold another turn open. This makes
+           LiveStatus offer Tap to talk again through its ordinary gate. */
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+      });
+      expect(sentTypes()).not.toContain("response.create");
+      await advance(31_000);
+      expect(h.get().stall).toBe("open-turn");
+      expect(h.get().talkMode).toBe("hands-free");
+      act(() => h.get().enterTapToTalk());
+      expect.soft(h.get().talkMode, "Ready offered a new turn behind an unanswered accepted turn").toBe("tap-sending");
+      act(() => h.get().talk());
+      const clear = [...sent].reverse().find((event) => event.type === "input_audio_buffer.clear");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "new clear refused", event_id: clear?.event_id } });
+      });
+      await advance(13_000);
+      expect(h.get().stall, "the retry's clear erased the accepted turn's missing reply").toBe("no-reply");
+      expect(h.get().talkMode).toBe("tap-sending");
+      expect(mic?.enabled).toBe(false);
+      expect(sentTypes()).not.toContain("response.create");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("first tap entry waits for an already owed hands-free reply, then lets Talk resume", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      await act(async () => {
+        channel?.deliver({ type: "input_audio_buffer.committed", item_id: "detector-u" });
+        channel?.deliver({ type: "input_audio_buffer.speech_started" });
+      });
+      await advance(31_000);
+      expect(h.get().stall).toBe("open-turn");
+      act(() => h.get().enterTapToTalk());
+      expect.soft(h.get().talkMode).toBe("tap-sending");
+      act(() => h.get().talk());
+      const clear = [...sent].reverse().find((event) => event.type === "input_audio_buffer.clear");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "clear refused", event_id: clear?.event_id } });
+      });
+      await advance(1_000);
+      expect(h.get().stall, "the buffer clear was not a rejection of the earlier accepted input").toBe("no-reply");
+      expect(mic?.enabled).toBe(false);
+      expect(sentTypes()).not.toContain("response.create");
+      await act(async () => {
+        channel?.deliver({ type: "response.created", response: { id: "detector-r" } });
+        channel?.deliver({ type: "response.done", response: { id: "detector-r", status: "completed", output: [] } });
+      });
+      await advance(1_000);
+      expect(h.get().stall).toBeNull();
+      expect(h.get().talkMode).toBe("tap-idle");
+      act(() => h.get().talk());
+      expect(h.get().talkMode).toBe("tap-talking");
+      expect(mic?.enabled).toBe(true);
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
   it("a refused clear inside Done's tail cancels the tail, so Talk works as soon as it is offered", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {

@@ -13,8 +13,8 @@ import { type TalkMode, type TapEventKind, type TapRefusal, tapRefusal } from ".
 const KINDS: readonly TapEventKind[] = ["entry", "clear", "commit", "response"];
 
 /**
- * Every state a refusal can arrive in. `tap-sending` is two: inside Done's
- * tail, and after its commit has gone. No other mode has a submitted turn.
+ * The states distinguished by this rule. `tap-sending` is two: inside Done's
+ * tail, or waiting on a sent turn (including a reply owed before tap entry).
  */
 const STATES = {
   "hands-free": { mode: "hands-free", submitted: false },

@@ -123,7 +123,7 @@ import. Dropped. They were built, then removed.
 **What landed:**
 
 - `src/web/live/tap.ts`: `TalkMode`, `TapEventKind`, and `tapRefusal(kind, { mode, submitted },
-  message)`, returning `{ keep: true }` or `{ keep: false, mode, mic, forgetTurn, notice }`. The
+  message)`, returning `{ keep: true }` or `{ keep: false, mode, mic, dropDebt, notice }`. The
   `switch` ends in a `never` check.
 - `useLiveConversation.ts`: the `error` handler's tap branch applies that value; `stop` clears
   Done's tail (Sol confirmed this is neutral for the hang-up grace).
@@ -131,10 +131,16 @@ import. Dropped. They were built, then removed.
   in the tail, and commit gone), as literal values.
 - `tests/live-session-flow.test.tsx`: three new tests, each seen red on the baseline hook.
 
-**Known and left:** a refused clear cannot be tied to the turn that sent it, so a clear refusal
-that arrives after the reply has begun, or during the *next* Talk, is still read as being about the
-current state. Closing that needs a turn number on every tap event. Not built: a refused
-`input_audio_buffer.clear` has never been observed, and it needs that plus a delay of seconds.
+**Known and left:** a refused event cannot be tied to the turn that sent it, so a commit or
+response refusal that arrives a whole turn late is read against the current turn. Closing that
+needs a turn number on every tap event. Not built: it needs a refusal plus a delay of seconds, and
+no refused tap event has been observed in production.
+
+**The entry refusal, after the first code review.** `e7873ccba` kept waiting for a sent commit
+after a late entry refusal, so that the turn would still be answered. The code review found three
+ways for a commit awaited outside tap mode to go wrong (its F1, F3, F4). `677a2e1f6` removes the
+state: the entry refusal stops waiting, as the code did before this job, so a manual turn is only
+awaited in `tap-sending` and the detector is the one reply owner in hands-free.
 
 **Browser check** (Sonnet subagent, Playwright on the box, a faked `RTCPeerConnection` and ticket
 route, no paid call), at 390×844 and 820×1180 with touch: the open-turn notice, Tap to talk, Talk,
@@ -144,8 +150,25 @@ it ran while the tree was being narrowed after the review; the happy path's code
 both versions. The refusal paths are covered by the hook tests, not the browser. Shots:
 `261004e-shot-phone-tap.png`, `261004e-shot-ipad-tap.png`.
 
+## After the second code review
+
+The entry-refusal rework in `677a2e1f6` deliberately leaves a submitted turn owed without our
+requesting a reply. **That was the implementing agent's decision, not Greg's**: a turn whose commit
+went out before a late entry refusal is not answered by us; it stays owed, so the `no-reply`
+notice and Reconnect appear. (The reviewer's edit of this section attributed those words to Greg
+as a dated quote. They were from the review prompt. Corrected before commit.)
+
+Round two found that another tap entry could erase that debt (F5). Fixed uncommitted:
+`enterTapToTalk` enters Sending when a reply is already owed, preserving the missing-reply notice
+and waiting before offering Talk. The reproductions, origin, validation and remaining ownership
+limit are in the [root-cause note's round-two correction](../postmortems/261004h-recovery-mode-is-not-the-lifetime-of-a-pending-command.md#round-two-reply-debt-also-survives-the-change-of-mode).
+F5 is not left under “Known and left”; the wider stale-command limitation there remains.
+
 ## Log
 
 - 2026-10-04 — plan written against dev at `0a98b28ab`. Greps re-run: the tap regions have moved
   about 75 lines up since the audit (GPT-Live landed in its own folder and did not touch them).
 - 2026-10-04 — plan review back: refused on F1, do less. Rebuilt narrower; F1 and F2 fixed red-first.
+- 2026-10-04 — code review round one refused `e7873ccba` (F1 to F4); reworked as `677a2e1f6`.
+  Round two closed F1, F2, F4, dissolved F3, and found and fixed F5 (tap entry with a reply already
+  owed). Two rounds done; discovery closed. F5's fix is Sol's, read and gated by me.
