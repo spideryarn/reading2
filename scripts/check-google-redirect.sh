@@ -18,6 +18,12 @@
 #     reported PASS for a URI that a real browser refused.
 #   * A known-bad URI is checked on every run. A column of ACCEPTEDs proves
 #     nothing unless something in the same run says REJECTED.
+#   * The URI goes to curl as data (`-G --data-urlencode`), never pasted into
+#     the query string. Pasted, a callback carrying `?next=a&x=b` is cut at its
+#     first `&`: Google is asked about a shorter address plus a stray `x`, and
+#     the verdict printed beside the full one is about something else. Only a
+#     URI named by hand carries a query, which is exactly when you are asking
+#     about one you are unsure of.
 #
 # See docs/reusable/silent-success.md.
 
@@ -25,7 +31,11 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 export LC_ALL=C
 
-CID=$(grep '^SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=' .env.local 2>/dev/null | cut -d= -f2- | tr -d '"')
+# The one env-file reader the shell checks share; its header says what the
+# `grep | cut | tr` it replaced got wrong.
+. scripts/env-value.sh || exit 2
+
+CID=$(env_value .env.local SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)
 if [ -z "${CID:-}" ]; then
   echo "No SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID in .env.local — see docs/plans/260826w-auth-supabase.md" >&2
   exit 2
@@ -43,8 +53,8 @@ else
   # after we move, so the check would pass while naming the wrong thing. This is
   # the same class as the admin account id read off a laptop —
   # docs/postmortems/260828f-admin-id-was-the-local-one.md. GPT Sol, 2026-08-28.
-  LOCAL_URL=$(grep '^SUPABASE_URL=' .env.local 2>/dev/null | cut -d= -f2- | tr -d '"')
-  PROD_URL=$(grep '^SUPABASE_URL=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"')
+  LOCAL_URL=$(env_value .env.local SUPABASE_URL)
+  PROD_URL=$(env_value .env.prod SUPABASE_URL)
   if [ -z "${PROD_URL:-}" ]; then
     echo "No SUPABASE_URL in .env.prod — cannot check the remote callback" >&2
     exit 2
@@ -57,8 +67,12 @@ fi
 
 probe () {
   local uri="$1" final reason
-  final=$(curl -s -L -o /dev/null -w "%{url_effective}" \
-    "https://accounts.google.com/o/oauth2/v2/auth?client_id=${CID}&redirect_uri=${uri}&response_type=code&scope=email")
+  final=$(curl -s -L -o /dev/null -w "%{url_effective}" -G \
+    --data-urlencode "client_id=${CID}" \
+    --data-urlencode "redirect_uri=${uri}" \
+    --data-urlencode "response_type=code" \
+    --data-urlencode "scope=email" \
+    "https://accounts.google.com/o/oauth2/v2/auth")
   case "$final" in
     */signin/oauth/error*)
       reason=$(printf '%s' "$final" \

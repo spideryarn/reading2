@@ -650,6 +650,13 @@ const summaryPartial = new Map<string, string>();
 const summaryPending = new Map<string, Promise<void>>();
 
 /**
+ * How many times the summaries have been thrown away. A `loadSummary` run
+ * remembers the number it started under, and one that has been overtaken is
+ * answering a question nobody is asking any more.
+ */
+let summaryGeneration = 0;
+
+/**
  * Told on every token, so a card that is on screen grows as the answer does.
  *
  * A bare listener set rather than a store, for `shelfWatchers`' reason: the
@@ -698,12 +705,26 @@ function summaryKey(slug: string, url: string, blockId: string | null): string {
  * profile is true of every article — and because a map of a few dozen strings is
  * not worth a selective delete and the risk of getting the selection wrong.
  *
- * It is deliberately not a subscription to anything: the two places a reader
- * can change these call it directly, which is a line a reviewer sees at the
- * write, where the alternative is a listener somebody has to know exists.
+ * It is deliberately not a subscription to anything: the places a reader can
+ * change these call it directly, which is a line a reviewer sees at the write,
+ * where the alternative is a listener somebody has to know exists. Those are
+ * the ordinary saves and the `keepalive` ones beside them — `saveProfile` and
+ * `leaveProfile` in useProfile.ts, `savePurpose` and `leavePurpose` in
+ * purpose.ts.
+ *
+ * **And it is a fence, not only a clear** (2026-10-04). Emptying the finished
+ * answers left a stream already in flight free to write its answer back in a
+ * second later, and left its partial text and its pending entry where a
+ * re-hovered card would join them — old words arriving on a card opened after
+ * the save. So this bumps `summaryGeneration` and drops all three maps, and
+ * `loadSummary` writes nothing once the generation it started under has
+ * passed. tests/link-summary-forget.test.tsx.
  */
 export function forgetSummaries(): void {
+  summaryGeneration += 1;
   summaryCache.clear();
+  summaryPartial.clear();
+  summaryPending.clear();
   wakeSummaryWatchers();
 }
 
@@ -747,6 +768,12 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
   const existing = summaryPending.get(key);
   if (existing) return existing;
 
+  /* Every write below is behind `current()`: after a `forgetSummaries` the maps
+     belong to whoever asked since, and that may be a newer run under this very
+     key. */
+  const mine = summaryGeneration;
+  const current = () => mine === summaryGeneration;
+
   const run = (async () => {
     /* **No `deadline()` here**, and it is the one lookup in this file without
        one. The eight-second clock is right for a metadata lookup that either
@@ -782,6 +809,8 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
       let text = "";
       let settled = false;
       for await (const event of readEvents(res.body, { stallMs: STREAM_STALL_MS })) {
+        /* Overtaken: stop reading. Leaving the loop releases the stream. */
+        if (!current()) return;
         if (event.name === "delta") {
           const piece = (event.data as { text?: unknown }).text;
           if (typeof piece === "string" && piece !== "") {
@@ -815,15 +844,19 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
       }
       /* No terminal frame: the route hit an error and framed nothing rather
          than manufacturing a fact about this link. Cached as nothing. */
-      if (!settled) summaryCache.set(key, null);
+      if (!settled && current()) summaryCache.set(key, null);
     } catch {
       /* A transport failure, a stall, an offline moment. `apiFetch` has already
          put it in the console. */
-      summaryCache.set(key, null);
+      if (current()) summaryCache.set(key, null);
     } finally {
-      summaryPartial.delete(key);
-      summaryPending.delete(key);
-      wakeSummaryWatchers();
+      /* Only its own entries. An overtaken run's were dropped by
+         `forgetSummaries`, and what is under this key now is a newer run's. */
+      if (current()) {
+        summaryPartial.delete(key);
+        summaryPending.delete(key);
+        wakeSummaryWatchers();
+      }
     }
   })();
 
@@ -877,6 +910,10 @@ export function useLinkFacts(
   // the effect on every mouse move across the same link.
   const lang = wiki?.lang ?? null;
   const title = wiki?.title ?? null;
+  /* A save can settle while this card is still open (the profile panel's
+     autosave). The watcher schedules a render; this dependency then restarts
+     its lookup under the new generation instead of leaving the card empty. */
+  const generation = summaryGeneration;
 
   /* **Derived during render, not held in state**, and that is the fix for a
      real bug rather than a preference.
@@ -894,6 +931,7 @@ export function useLinkFacts(
      it carries nothing. */
   const [, bump] = useReducer((n: number) => n + 1, 0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `generation` restarts the lookup after a save clears the shared summary maps.
   useEffect(() => {
     if (!url) return;
     let live = true;
@@ -1003,7 +1041,7 @@ export function useLinkFacts(
       unwatch();
       unwatchSummaries();
     };
-  }, [url, lang, title, slug, sourceUrl, inBlock]);
+  }, [url, lang, title, slug, sourceUrl, inBlock, generation]);
 
   if (!url) return NOTHING;
   const asked = lang && title ? wikiCacheKey({ lang, title }) : null;

@@ -114,6 +114,7 @@ import {
   platedScenes,
   readModelBrief,
 } from "./illustrated-plate.js";
+import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
@@ -1208,7 +1209,14 @@ export async function generateIllustrated(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) throw new Error(MODEL_REFUSED.message);
+  /* Declared, so the reader gets the refusal sentence rather than the generic
+     one — a plain `new Error(MODEL_REFUSED.message)` here lost it until
+     2026-10-04. See MODEL_REFUSED in src/messages.ts. */
+  if (wasRefused(message)) {
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
+  }
   if (message.stop_reason === "max_tokens") {
     throw truncationFailure("illustrated", maxTokens, answerTokens, {
       outputTokens: message.usage.output_tokens,

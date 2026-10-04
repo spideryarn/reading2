@@ -743,6 +743,20 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "(SPIDERYARN-READING2-6Q). The purpose and the job both live only in Postgres; the " +
       "seeder is the whole of its filesystem contact.",
   },
+  /**
+   * **`evidence: "static-only"`, because this file arrived after the stored
+   * witness ran** (2026-10-04), as its two neighbours above did.
+   */
+  "tests/freshness-deciders-agree.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Holds `stepIsDone` (src/pipeline.ts) and `articleMetadata(...).stages[].done` " +
+      "(src/store/pg.ts) to one answer per step, by rewriting one published revision's artefact " +
+      "columns and `revision_step_runs` rows and asking both. Both deciders, and every state it " +
+      "seeds, exist only in Postgres; the seeder is the whole of its filesystem contact.",
+  },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2794,6 +2808,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      owners over SQL and needs neither GoTrue nor a bucket. */
   "tests/fetch-allowance.test.ts": "private-postgres",
   "tests/find-article.test.ts": "private-postgres",
+  /* Seeds one corpus article under a per-run slug, owned by `DEV_OWNER_ID` (a
+     row the private clone already seeds), then rewrites that revision's
+     artefact columns and `revision_step_runs` rows over SQL and asks
+     `stepIsDone` and `articleMetadata` about them. No model, no GoTrue, no
+     bucket. */
+  "tests/freshness-deciders-agree.test.ts": "private-postgres",
   /* Seeds one article and reads it; the provider is a stubbed `fetch`, so the
      only Postgres writes are the seed and the spend ledger's row per call. */
   "tests/glossary-asked-term-stream-route.test.ts": "private-postgres",

@@ -15,6 +15,7 @@
  * label on the commit whose prompt it measures.
  */
 
+import type Anthropic from "@anthropic-ai/sdk";
 import fs from "node:fs";
 import path from "node:path";
 import { loadEnvLocal } from "../../src/env.js";
@@ -22,9 +23,13 @@ import { appendSupplement, splitBlocks } from "../../src/supplement.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import {
   buildTree,
+  estimateStructureTokens,
   parseWholeDocumentAnswer,
+  STRUCTURE_HEADROOM,
   type BuildReport,
 } from "../../src/structure.js";
+import { wasRefused } from "../../src/messages-stream.js";
+import { truncationFailure } from "../../src/token-budget.js";
 import { MalformedJson } from "../../src/parse-json.js";
 import type { Block } from "../../src/types.js";
 
@@ -84,6 +89,28 @@ export function wholeDocumentAnswerFields(
       error: message,
     };
   }
+}
+
+/**
+ * The text of a whole-document answer, for the two harnesses that hand it straight
+ * to production's parser (evals/paperwork/run.ts, evals/plain-words/run.ts) — after
+ * the two checks production makes first (src/structure.ts, around its own
+ * `wasRefused` call). A refusal or an answer cut off at `max_tokens` can still be
+ * text the parser accepts, and would be scored as an ordinary answer.
+ */
+export function acceptedStructureAnswer(message: Anthropic.Message, body: Block[], maxTokens: number): string {
+  const answer = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  if (wasRefused(message)) throw new Error("the model refused the structure call");
+  if (message.stop_reason === "max_tokens") {
+    throw truncationFailure(
+      "table of contents",
+      maxTokens,
+      estimateStructureTokens(body),
+      { outputTokens: message.usage.output_tokens, answerChars: answer.length },
+      STRUCTURE_HEADROOM,
+    );
+  }
+  return answer;
 }
 
 async function run(label: string, draws: number, slugs: string[]): Promise<void> {

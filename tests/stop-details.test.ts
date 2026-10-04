@@ -500,6 +500,71 @@ describe("the source itself", () => {
     expect(code).toContain("export function wasRefused(message: Anthropic.Message): boolean");
   });
 
+  /**
+   * **Every refusal is thrown through `stageFailure`, so the reader's sentence
+   * is declared.** `new Error(MODEL_REFUSED.message)` looks equivalent and is
+   * not: the bracketed code still marks the job `blocked`, and the sentence is
+   * dropped for the generic one (src/job-failure.ts § `readerFailureOf`).
+   * src/illustrated.ts did exactly that from 2026-09-03 to 2026-10-04 while two
+   * comments in job-failure.ts said every site was declared.
+   * docs/plans/261004b-sweep-clusters-7-and-10-link-summary-fence-and-illustrated-refusal.md.
+   */
+  it("uses MODEL_REFUSED only as the failure stageFailure declares", async () => {
+    /* **The rule is about the name, not about one spelling of the mistake.**
+       Banning `new Error(MODEL_REFUSED.message)` would miss `Error(…)` without
+       `new`, another error class, an alias, and `stageFailure(MODEL_REFUSED, {
+       generic })`, which drops the sentence just as well. So: outside its
+       definition and the imports, every mention of the name is the first
+       argument of an `authored` `stageFailure`. GPT Sol, 2026-10-04, PL-4. */
+    const stray = (code: string): number => {
+      /* Match the import clause's syntax, including side-effect imports.
+         An arbitrary span up to `from` can swallow executable code between
+         a side-effect import and the next named import. */
+      const body = code.replace(
+        /^\s*import\s+(?:(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[\w$]+))?)\s+from\s*)?["'][^"']+["'];?/gm,
+        /* Keep a stray mention for an aliased import: otherwise its uses
+           under the alias evade this name-based checker altogether. */
+        (statement) => /\bMODEL_REFUSED\s+as\b/.test(statement) ? "MODEL_REFUSED" : "",
+      );
+      const all = body.match(/\bMODEL_REFUSED\b/g) ?? [];
+      const declared = body.match(/stageFailure\(\s*MODEL_REFUSED\s*,\s*\{\s*authored\b/g) ?? [];
+      return all.length - declared.length;
+    };
+    /* The checker against the forms it has to tell apart, or a clean result
+       below is a checker that sees nothing. */
+    const imported = 'import {\n  MODEL_REFUSED,\n} from "./messages.js";\n';
+    expect(stray(`${imported}throw stageFailure(MODEL_REFUSED, { authored: "x" });`)).toBe(0);
+    expect(stray(`${imported}throw stageFailure(\n  MODEL_REFUSED,\n  {\n    authored: "x" });`)).toBe(0);
+    expect(stray(`${imported}throw new Error(MODEL_REFUSED.message);`)).toBe(1);
+    expect(stray(`${imported}throw Error(MODEL_REFUSED.message);`)).toBe(1);
+    expect(stray(`${imported}throw stageFailure(MODEL_REFUSED, { generic: "x" });`)).toBe(1);
+    expect(stray(`${imported}const refusal = MODEL_REFUSED;`)).toBe(1);
+    expect(stray(
+      'import { MODEL_REFUSED as refusal } from "./messages.js";\nthrow new Error(refusal.message);',
+    )).toBe(1);
+    expect(stray(`import "./setup.js";
+throw new Error(MODEL_REFUSED.message);
+${imported}`)).toBe(1);
+    expect(stray(`import "./setup.js";
+throw stageFailure(MODEL_REFUSED, { authored: "x" });
+${imported}`)).toBe(0);
+
+    const files = await sourceFiles();
+    const offenders: string[] = [];
+    let sites = 0;
+    for (const file of files) {
+      const rel = path.relative(ROOT, file);
+      /* Where it is defined. */
+      if (rel === path.join("src", "messages.ts")) continue;
+      const code = stripComments(await readFile(file, "utf8"));
+      sites += (code.match(/stageFailure\(\s*MODEL_REFUSED\b/g) ?? []).length;
+      if (stray(code) !== 0) offenders.push(rel);
+    }
+    /* Non-vacuity: eighteen sites on the day this was written. */
+    expect(sites).toBeGreaterThan(10);
+    expect(offenders).toEqual([]);
+  });
+
   it("reads no stop_details anywhere in src/", async () => {
     const files = await sourceFiles();
     /* Non-vacuity, twice over: the scan has to have found files, and it has to

@@ -71,7 +71,7 @@
  * saying it wrote every character of a diagnostic, one word, greppable, and
  * refused to anything interpolating text from outside. So the split costs
  * nothing at the two places where the sentence was worth having:
- * `anthropicCallFailed` and the ten `MODEL_REFUSED` throw sites still reach
+ * `anthropicCallFailed` and every `MODEL_REFUSED` throw site still reach
  * Sentry, and still carry the code that
  * [tests/stop-details.test.ts](../tests/stop-details.test.ts) reads off the
  * **log** line to tell a refusal apart from a stage that died before it ever
@@ -381,7 +381,11 @@ export function undeclaredBlocked(err: unknown, failure: ReaderFacingFailure): b
  * Two sources, in order. The **field** is the real one and the one a stage
  * should set, and since 2026-09-03 every failure in the pipeline that had a
  * kind worth knowing sets it: `stageFailure` writes the field, and
- * `anthropicCallFailed` and the ten `MODEL_REFUSED` throw sites go through it.
+ * `anthropicCallFailed` and every `MODEL_REFUSED` throw site go through it.
+ * (This said "the ten" until 2026-10-04, when there were eighteen and
+ * src/illustrated.ts was not one of them. It carries no count now, and
+ * tests/stop-details.test.ts § "uses MODEL_REFUSED only as the failure
+ * stageFailure declares" is what makes "every" true.)
  *
  * The **bracketed code** is the fallback, and it is now a fallback for history
  * rather than for a live mechanism. This paragraph described the live one until

@@ -95,7 +95,7 @@ import { paperwork } from "./paperwork.js";
  */
 export { PRODUCTION_EFFORT, PROMPT_VERSION, renderBlocks } from "./structure-prompt.js";
 
-export const TOC10_SYSTEM = `You are building a nested table of contents for an article. It goes all the
+export const STRUCTURE_BASE_SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
@@ -255,7 +255,7 @@ function replacePromptBlock(prompt: string, before: string, after: string): stri
 
 /** Every block outside STRUCTURE and OUTPUT is inherited byte-for-byte from toc/10. */
 export const SYSTEM = replacePromptBlock(
-  replacePromptBlock(TOC10_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
+  replacePromptBlock(STRUCTURE_BASE_SYSTEM, TOC10_STRUCTURE, TOC11_STRUCTURE),
   TOC10_OUTPUT,
   TOC11_OUTPUT,
 );

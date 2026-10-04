@@ -18,8 +18,9 @@
  * of either prompt in here to drift. `before-2` is a second sample of the same
  * prompt, so a before/after gap can be read against the gap between two runs of
  * one prompt.
- * New arms also record SHA-256 hashes of the two source files containing those
- * prompts. The first eight arms predate that guard, so their exact intermediate
+ * New arms also record a source fingerprint (source-fingerprint.ts): SHA-256
+ * hashes of the two source files containing those prompts and, since 2026-10-04,
+ * of the shared prompt modules they import. The first eight arms predate that guard, so their exact intermediate
  * prompt bytes are not recoverable from the result JSON alone.
  *
  * **What it reads and writes.** It reads articles from the local database,
@@ -41,9 +42,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../../src/env.js";
 import { COMMON_WORDS } from "./common-words.js";
+import { sourceFingerprint } from "./source-fingerprint.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "plain-words");
 
@@ -330,23 +331,20 @@ function pairs(a: string, b: string): void {
 
 /* ------------------------------------------------------------ generate -- */
 
+/** The prompt source files; source-fingerprint.ts adds the shared prompt modules they import. */
+export const SOURCES = ["structure.ts", "glossary.ts"];
+
 async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
+  const sourceSha256 = sourceFingerprint(SOURCES);
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { parseWholeDocumentAnswer, questionFor, wholeDocumentRequest } = await import("../../src/structure.js");
   const { PROMPT_VERSION: TOC_VERSION } = await import("../../src/structure-prompt.js");
   const { splitBlocks } = await import("../../src/supplement.js");
   const { streamMessage } = await import("../../src/messages-stream.js");
+  const { acceptedStructureAnswer } = await import("../paperwork/structure-parse.js");
   const { generateGlossary, PROMPT_VERSION: GLOSSARY_VERSION } = await import("../../src/glossary.js");
-  const sourceSha256 = Object.fromEntries(
-    ["structure.ts", "glossary.ts"].map((file) => [
-      file,
-      createHash("sha256")
-        .update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file)))
-        .digest("hex"),
-    ]),
-  );
 
   function flatten(node: ModelNode, depth: number, out: Line[]): Line[] {
     /* The question through production's own filter, so a line production would
@@ -374,9 +372,9 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
       const article = await loadArticle(slug);
       const summaries = async (): Promise<Line[]> => {
         const { body } = splitBlocks(article.blocks);
-        const { params } = wholeDocumentRequest(body);
+        const { params, maxTokens } = wholeDocumentRequest(body);
         const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
-        const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+        const raw = acceptedStructureAnswer(message, body, maxTokens);
         const { root } = parseWholeDocumentAnswer(raw, body); // production's own parse and starts converter
         return flatten(root, 0, []);
       };

@@ -101,6 +101,8 @@ vi.mock("../src/web/lib/api.js", async () => {
     },
     leavingFetch: (input: string, init?: RequestInit) => {
       left.push({ url: input, body: JSON.parse(String(init?.body)) });
+      /* Settles like the real one: `leaveProfile` and `leavePurpose` chain on it. */
+      return Promise.resolve();
     },
   };
 });

@@ -11,12 +11,17 @@
  * npx tsx evals/paperwork/run.ts pairs --a before --b after          # free: a blind side-by-side, and its key
  * ```
  *
+ * `pairs` refuses when an article is missing from either arm or an output failed
+ * in either. `--partial` compares what is left, and writes what it left out to
+ * `exclusions.json` beside the pairs.
+ *
  * **The arms are separated in time, not in code**, as in
  * evals/plain-words/run.ts: `generate` sends what production sends now — the
  * structure call (`wholeDocumentRequest`, its gists and questions, not assembled into a tree),
  * `generateSimpleSummary` (all three levels, no profile) and `generateTweets`
- * (no profile) — and records a hash of each prompt's source file beside the
- * answer. There is no copy of a prompt in here to drift.
+ * (no profile) — and records a source fingerprint beside the answer
+ * (evals/plain-words/source-fingerprint.ts: the files, not the request). There
+ * is no copy of a prompt in here to drift.
  *
  * Reads the local database, writes nothing there beyond the `ai_calls` rows
  * every call records. Output under `evals/results/paperwork/<arm>/`.
@@ -29,9 +34,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../../src/env.js";
 import { blindCoin } from "../plain-words/run.js";
+import { sourceFingerprint } from "../plain-words/source-fingerprint.js";
+import { acceptedStructureAnswer } from "./structure-parse.js";
 
 const REPO = path.join(import.meta.dirname, "..", "..");
 /** Results folder. `--set front-matter` keeps 261003c's arms apart from 261001p's. */
@@ -55,7 +61,8 @@ const ABSTRACT: Record<string, [string, string]> = {
 
 /** Node titles that name front or back matter. A screen, printed so it can be read. */
 const FRONT_OR_BACK = /\b(abstract|title|byline|keywords?|references?|bibliograph\w*|works cited|backlinks?)\b/i;
-const SOURCES = ["structure.ts", "simple-summary.ts", "tweets.ts", "paperwork.ts"];
+/** The prompt source files; source-fingerprint.ts adds the shared prompt modules they import. */
+export const SOURCES = ["structure.ts", "simple-summary.ts", "tweets.ts"];
 
 /** Words that mark a line as being about the paperwork rather than the piece. A screen. */
 export const PAPERWORK =
@@ -77,7 +84,7 @@ interface ModelNode {
   children?: ModelNode[];
 }
 
-interface ArmFile {
+export interface ArmFile {
   arm: string;
   slug: string;
   at: string;
@@ -102,6 +109,7 @@ function failed(x: unknown): x is { error: string } {
 
 async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
+  const sourceSha256 = sourceFingerprint(SOURCES);
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { parseWholeDocumentAnswer, wholeDocumentRequest } = await import("../../src/structure.js");
@@ -113,13 +121,6 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   const { collectSpend } = await import("../../src/ai-spend.js");
   const { costStore } = await import("../../src/store/ai-calls.js");
   const { closeDb } = await import("../../src/db/client.js");
-
-  const sourceSha256 = Object.fromEntries(
-    SOURCES.filter((f) => fs.existsSync(path.join(REPO, "src", f))).map((f) => [
-      f,
-      createHash("sha256").update(fs.readFileSync(path.join(REPO, "src", f))).digest("hex"),
-    ]),
-  );
 
   function flatten(node: ModelNode, depth: number, out: Line[]): Line[] {
     out.push({
@@ -155,9 +156,9 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
             const [gists, summary, thread] = await Promise.all([
               attempt(async () => {
                 const { body } = splitBlocks(article.blocks);
-                const { params } = wholeDocumentRequest(body);
+                const { params, maxTokens } = wholeDocumentRequest(body);
                 const message = await streamMessage("structure", params, { power: "standard" }).finalMessage();
-                const raw = message.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+                const raw = acceptedStructureAnswer(message, body, maxTokens);
                 /* Production's own parse (src/structure.ts § `parseJson`), not the
                    strict one evals/plain-words uses: the first `after` run lost two
                    structure answers to a parse production might have mended, and
@@ -310,50 +311,107 @@ function report(): void {
   }
 }
 
+export interface Exclusion {
+  slug: string;
+  /** Absent when the whole article is missing from an arm. */
+  field?: string;
+  reason: string;
+}
+
+/**
+ * **What `pairs` will compare, and what it will not.** Pure, so the second half can
+ * be tested: every article either arm holds, every field of it, lands in `pairs` or
+ * in `exclusions` with the reason.
+ */
+export function pairUp(
+  a: string,
+  b: string,
+  filesA: ArmFile[],
+  filesB: ArmFile[],
+): { pairs: { slug: string; label: string; a: string; b: string }[]; exclusions: Exclusion[] } {
+  const B = new Map(filesB.map((r) => [r.slug, r]));
+  const structure = (r: ArmFile): string | null => {
+    if (failed(r.gists)) return null;
+    return r.gists
+      .map((line) => {
+        const indent = "  ".repeat(line.depth);
+        return [
+          `${indent}${line.title} [${line.range}]`,
+          ...(line.gist ? [`${indent}  Gist: ${line.gist}`] : []),
+          ...(line.question ? [`${indent}  Question: ${line.question}`] : []),
+        ].join("\n");
+      })
+      .join("\n");
+  };
+  const fields: [string, (r: ArmFile) => string | null][] = [
+    ["Structure", structure],
+    ["Brief summary", (r) => (failed(r.simple) ? null : r.simple.brief.join("\n\n"))],
+    ["Simple summary", (r) => (failed(r.simple) ? null : r.simple.simple.join("\n\n"))],
+    ["Fuller summary", (r) => (failed(r.simple) ? null : r.simple.fuller.join("\n\n"))],
+    ["Thread", (r) => (failed(r.tweets) ? null : r.tweets.map((t, i) => `${i + 1}. ${t}`).join("\n"))],
+  ];
+  const pairs: { slug: string; label: string; a: string; b: string }[] = [];
+  const exclusions: Exclusion[] = [];
+  /** Why a field has no text: the error of the output it is read from. */
+  const failure = (arm: string, r: ArmFile, label: string): string[] => {
+    const from = label === "Structure" ? r.gists : label === "Thread" ? r.tweets : r.simple;
+    return failed(from) ? [`failed in ${arm}: ${from.error}`] : [];
+  };
+  for (const ra of filesA) {
+    const rb = B.get(ra.slug);
+    if (!rb) {
+      exclusions.push({ slug: ra.slug, reason: `no file in ${b}` });
+      continue;
+    }
+    for (const [label, get] of fields) {
+      const xa = get(ra);
+      const xb = get(rb);
+      if (xa === null || xb === null) {
+        exclusions.push({
+          slug: ra.slug,
+          field: label,
+          reason: [...failure(a, ra, label), ...failure(b, rb, label)].join("; "),
+        });
+        continue;
+      }
+      pairs.push({ slug: ra.slug, label, a: xa, b: xb });
+    }
+  }
+  const inA = new Set(filesA.map((r) => r.slug));
+  for (const rb of filesB) if (!inA.has(rb.slug)) exclusions.push({ slug: rb.slug, reason: `no file in ${a}` });
+  return { pairs, exclusions };
+}
+
+/** Refuse a comparison that leaves something out, unless `--partial` asked for one. Returns the list it printed. */
+export function admitExclusions(exclusions: Exclusion[], partial: boolean): string {
+  if (exclusions.length === 0) return "";
+  const list = exclusions.map((e) => `  ${e.slug}${e.field ? ` — ${e.field}` : ""}: ${e.reason}`).join("\n");
+  if (!partial) {
+    throw new Error(
+      `refusing a comparison that leaves ${exclusions.length} out:\n${list}\npass --partial to compare what is left`,
+    );
+  }
+  console.log(`--partial: ${exclusions.length} left out of the comparison:\n${list}`);
+  return list;
+}
+
 /** Every changed output against its peer, per article, with sides chosen by a tested coin. */
-function pairs(a: string, b: string): void {
+function pairs(a: string, b: string, partial: boolean): void {
   const coin = blindCoin(261001);
-  const A = new Map(readArm(a).map((r) => [r.slug, r]));
-  const B = new Map(readArm(b).map((r) => [r.slug, r]));
+  const { pairs: kept, exclusions } = pairUp(a, b, readArm(a), readArm(b));
+  admitExclusions(exclusions, partial);
   const lines: string[] = [
     "# Blind pairs\n",
     "For each pair, judge which side (a) spends less on publication paperwork, (b) makes the piece's conclusion or final landing clearer, and (c) better preserves every claim and caveat. For Structure, also check that paperwork-only nodes are neutral labels with no question, while substantive disclosures survive. Record ties and any lost, bent or invented claim.\n",
   ];
   const key: { id: string; left: string; right: string }[] = [];
   let n = 0;
-  for (const [slug, ra] of A) {
-    const rb = B.get(slug);
-    if (!rb) continue;
-    const structure = (r: ArmFile): string | null => {
-      if (failed(r.gists)) return null;
-      return r.gists
-        .map((line) => {
-          const indent = "  ".repeat(line.depth);
-          return [
-            `${indent}${line.title} [${line.range}]`,
-            ...(line.gist ? [`${indent}  Gist: ${line.gist}`] : []),
-            ...(line.question ? [`${indent}  Question: ${line.question}`] : []),
-          ].join("\n");
-        })
-        .join("\n");
-    };
-    const fields: [string, (r: ArmFile) => string | null][] = [
-      ["Structure", structure],
-      ["Brief summary", (r) => (failed(r.simple) ? null : r.simple.brief.join("\n\n"))],
-      ["Simple summary", (r) => (failed(r.simple) ? null : r.simple.simple.join("\n\n"))],
-      ["Fuller summary", (r) => (failed(r.simple) ? null : r.simple.fuller.join("\n\n"))],
-      ["Thread", (r) => (failed(r.tweets) ? null : r.tweets.map((t, i) => `${i + 1}. ${t}`).join("\n"))],
-    ];
-    for (const [label, get] of fields) {
-      const xa = get(ra);
-      const xb = get(rb);
-      if (xa === null || xb === null) continue;
-      n++;
-      const aLeft = coin();
-      const id = `P${n}`;
-      key.push({ id, left: aLeft ? a : b, right: aLeft ? b : a });
-      lines.push(`## ${id} — ${label} of \`${slug}\`\n\n### Left\n\n${aLeft ? xa : xb}\n\n### Right\n\n${aLeft ? xb : xa}\n`);
-    }
+  for (const { slug, label, a: xa, b: xb } of kept) {
+    n++;
+    const aLeft = coin();
+    const id = `P${n}`;
+    key.push({ id, left: aLeft ? a : b, right: aLeft ? b : a });
+    lines.push(`## ${id} — ${label} of \`${slug}\`\n\n### Left\n\n${aLeft ? xa : xb}\n\n### Right\n\n${aLeft ? xb : xa}\n`);
   }
   const dir = path.join(OUT, `pairs-${a}-vs-${b}`);
   const pairFile = path.join(dir, "pairs.md");
@@ -367,6 +425,7 @@ function pairs(a: string, b: string): void {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(pairFile, lines.join("\n"));
   fs.writeFileSync(keyFile, `${JSON.stringify(key, null, 2)}\n`);
+  if (exclusions.length > 0) fs.writeFileSync(path.join(dir, "exclusions.json"), `${JSON.stringify(exclusions, null, 2)}\n`);
   const leftA = key.filter((k) => k.left === a).length;
   console.log(`${n} pairs in ${path.relative(REPO, dir)}; ${a} on the left in ${leftA}, on the right in ${n - leftA}`);
 }
@@ -392,8 +451,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (cmd === "pairs") {
     const a = flag("--a");
     const b = flag("--b");
-    if (!a || !b) throw new Error("pairs --a <arm> --b <arm>");
-    pairs(a, b);
+    if (!a || !b) throw new Error("pairs --a <arm> --b <arm> [--partial]");
+    pairs(a, b, rest.includes("--partial"));
   } else {
     throw new Error("usage: generate | report | pairs (see the header)");
   }
