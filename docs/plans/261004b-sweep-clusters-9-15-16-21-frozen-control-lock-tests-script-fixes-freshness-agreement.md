@@ -233,3 +233,62 @@ disagree, the correction wins**, and each builder is handed the review itself.
   on correct code. The visibility test waits for two distinct backends whose blocking chains
   *reach* the holder. Verified on Postgres here, both ways, and recorded.
 - A3: guard `stop_reason === "max_tokens"` explicitly before throwing `truncationFailure`.
+
+### 2026-10-04 — all four stages landed
+
+| Stage | Cluster | Commit | Tests I re-ran |
+|---|---|---|---|
+| A | 9 | `32ed6903c` | 8 files, 73 |
+| C | 16 | `616208526` | 3 files, 83 |
+| D | 21 | `782563861` | 144 (62 s) |
+| B | 15 | `4e6184fde` | 5 Postgres files, 103; 21 tooltip files, 531 |
+| review fixes | — | `3e2da25fe` | 6 files, 73 |
+
+Built by four Opus subagents in parallel on disjoint files; every fix was red first and mutated
+afterwards. What changed against the plan:
+
+- **A.** A4's helper follows imports one hop against a hand-kept set of shared prompt modules
+  (`evals/plain-words/source-fingerprint.ts`); Sol's review made it parse imports rather than
+  match text (CF1). `evals/paperwork/modes.ts` had the same silent drop in its own `pairs` and got
+  the same refusal. A5 needed one line out of `src/plain-words.ts` § `PLAIN_WORDS_EXEMPT`.
+- **B.** The three `waitUntilBlockedBy` copies were the same function, so all five files import
+  one helper. PF9 was right: measured on Postgres, the two publishes queue as request 2 → request
+  1 → holder. Many cards open on a `TooltipGroup` delay written as an inline `300`, not on
+  `DELAY`, so some converted tests advance by `Math.max(DELAY.open, 300)` or by their old number.
+  The audit's "heaviest files" were not: it counted source lines, not loop passes.
+- **C.** As corrected by PF2, PF5, PF6, PF7. Sol's review moved the argv refusal ahead of the
+  runtime load (CF3).
+- **D.** The count rule was widened from "stamp or arm" to "stamp, `isDone` or arm", which is what
+  brought `blocks` in and found its disagreement. 20 steps covered, none excluded. The file needed
+  a lane entry in `tests/store-migration-registry.ts`.
+
+**GPT Sol's code review: land.** [The review](261004b-sweep-clusters-9-15-16-21-code-review-sol.md).
+CF1–CF4 (P2) and CF5 (P3) fixed by the reviewer, red first, with a postmortem each for CF1–CF4;
+I read the diff and re-ran the tests. One round only: the fixes are small, in evals, tests and one
+dev script, and nothing was overruled. **CF6 (reasoned P2) is not built**: the smoke script's
+failed-navigation cleanup test fails both clients, so it cannot show the surviving one is closed.
+Sol read the `finally` as correct.
+
+**Not verified.** `scripts/check-remote-auth.sh` and `scripts/check-google-redirect.sh` were not run
+against the real services with the new code: a worktree has no `.env.prod`. The auth check now
+exits 2 if `github` is missing from the real settings body, and nobody has confirmed that key is
+always there. Run both once from the primary checkout.
+
+**Found, not fixed (each outside its cluster's file set):**
+
+1. `blocks` freshness: the queue says not done, the reader's page says current, when stage 2's
+   HTML has moved. `src/store/pg.ts` § `isCurrent`'s `default: true` comment says there is nothing
+   to compare for `blocks`; there is (`blocksMatchTheirHtml`). And
+   `tests/store-revision-columns.test.ts` requires an arm only for steps with a `stamp`, not an
+   `isDone`. Small fix: an arm for `blocks`, and widen that guard.
+2. The visibility race test (`tests/public-visibility-pg.test.ts`) passes with the article row's
+   `for update` deleted, because `lockBillingAccount` already serialises two publishes by one
+   owner. Its comment and `src/store/pg-visibility.ts`'s header both say otherwise. Either the
+   article lock is redundant, or the test needs two owners.
+3. `src/structure.ts`: `TOC10_STRUCTURE`, `TOC10_OUTPUT`, the comment "inherited byte-for-byte from
+   toc/10" and the error "no longer matches toc/10" all describe the live base under toc/10's
+   name. The cluster allowed one rename there.
+4. About twenty `<TooltipGroup delay={{ open: 300 … }}>` literals; naming them would let the tests
+   follow them.
+5. Five shelf test files sleep past a hover through a `wait(ms)` helper they also use for network
+   settles; the audit's grep cannot see them.
