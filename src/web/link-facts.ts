@@ -79,7 +79,29 @@ import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
+import { CHAT_CARD_HOST_ATTR } from "./layout.js";
 import type { LinkPreview } from "./link-preview.js";
+
+/**
+ * **Which paragraph a link is in, for `useLinkFacts`' `inBlock`** — read the
+ * way `onFollowNote` and TableView's own link handler read it: the row is the
+ * block, and `data-block` is the id every feature here addresses text by
+ * (docs/project/block-ids.md). `null` for a link that is in no paragraph.
+ *
+ * **A row is not always the answer.** Since plan 261004k the block chat can be
+ * drawn as a card in a host inside its anchor block's own cell, so a link in a
+ * chat answer has that row for an ancestor and is still not the paragraph's:
+ * read as one, it would be handed the paragraph-relative summary of a passage
+ * it is not in — the wrong answer the `inBlock === null` rule below exists to
+ * withhold. Inside the host it is `null`, as it is for the floating panel.
+ * **Only the provenance changes**: the card's links keep their hover cards
+ * (GPT Sol on the plan, F7). tests/no-block-no-summary.test.tsx.
+ */
+export function blockOfLink(anchorEl: Element | null | undefined): string | null {
+  if (!anchorEl) return null;
+  if (anchorEl.closest(`[${CHAT_CARD_HOST_ATTR}]`)) return null;
+  return anchorEl.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+}
 
 /** The fields of Wikipedia's summary response this card actually uses. */
 export interface WikiSummary {

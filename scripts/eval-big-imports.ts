@@ -12,7 +12,7 @@
  * - M3  does the `blocks` step scale
  * - M4  does the PDF front half cope at the caps (one child process per case)
  * - M5  how big is the body `GET /api/article/:slug` returns
- * - fetch  what a PDF fetched by address is told at 32 MiB + 1 and at 50 MiB
+ * - fetch  what a PDF fetched by address is told at 50 MiB and at 50 MiB + 1
  *
  * **It makes no paid call and reaches no network.** `fetch` is replaced before
  * anything else runs and refuses every host but this machine, and PDF
@@ -1219,9 +1219,11 @@ async function measureFigures(which: PdfCase): Promise<Record<string, unknown>> 
  */
 async function fetchCap() {
   const sizes = [
-    { name: "32 MiB exactly", bytes: 32 * 1024 * 1024 },
-    { name: "32 MiB + 1", bytes: 32 * 1024 * 1024 + 1 },
+    /* 32 MiB was the fetch's own cap until 2026-10-04; kept as a size that
+       used to be the boundary and must now simply be accepted. */
+    { name: "32 MiB + 1 (over the old cap)", bytes: 32 * 1024 * 1024 + 1 },
     { name: "50 MiB (the stated limit)", bytes: MAX_UPLOAD_BYTES },
+    { name: "50 MiB + 1", bytes: MAX_UPLOAD_BYTES + 1 },
   ];
   const rows: Record<string, unknown>[] = [];
   for (const declared of [true, false]) {

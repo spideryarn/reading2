@@ -1,0 +1,362 @@
+{
+ "agreement": {
+  "both": 86,
+  "agree": 70,
+  "earlier y, judge 3 n": 8,
+  "earlier n, judge 3 y": 8
+ },
+ "decoysMarkedRight": "0 of 97",
+ "bands": [
+  {
+   "group": "working",
+   "mode": "any run",
+   "band": "0.7 to 1",
+   "right": 473,
+   "wrong": 74,
+   "unjudged": 0,
+   "% right": 86
+  },
+  {
+   "group": "working",
+   "mode": "any run",
+   "band": "0.65 to 0.7",
+   "right": 44,
+   "wrong": 27,
+   "unjudged": 0,
+   "% right": 62
+  },
+  {
+   "group": "working",
+   "mode": "any run",
+   "band": "0.6 to 0.65",
+   "right": 25,
+   "wrong": 41,
+   "unjudged": 0,
+   "% right": 38
+  },
+  {
+   "group": "working",
+   "mode": "any run",
+   "band": "0.55 to 0.6",
+   "right": 18,
+   "wrong": 48,
+   "unjudged": 0,
+   "% right": 27
+  },
+  {
+   "group": "working",
+   "mode": "any run",
+   "band": "0.5 to 0.55",
+   "right": 9,
+   "wrong": 60,
+   "unjudged": 0,
+   "% right": 13
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.7 to 1",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.65 to 0.7",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.6 to 0.65",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.55 to 0.6",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.5 to 0.55",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.45 to 0.5",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.4 to 0.45",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "working",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.35 to 0.4",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "bare",
+   "mode": "any run",
+   "band": "0.7 to 1",
+   "right": 77,
+   "wrong": 53,
+   "unjudged": 0,
+   "% right": 59
+  },
+  {
+   "group": "bare",
+   "mode": "any run",
+   "band": "0.65 to 0.7",
+   "right": 24,
+   "wrong": 20,
+   "unjudged": 0,
+   "% right": 55
+  },
+  {
+   "group": "bare",
+   "mode": "any run",
+   "band": "0.6 to 0.65",
+   "right": 34,
+   "wrong": 22,
+   "unjudged": 0,
+   "% right": 61
+  },
+  {
+   "group": "bare",
+   "mode": "any run",
+   "band": "0.55 to 0.6",
+   "right": 43,
+   "wrong": 49,
+   "unjudged": 0,
+   "% right": 47
+  },
+  {
+   "group": "bare",
+   "mode": "any run",
+   "band": "0.5 to 0.55",
+   "right": 75,
+   "wrong": 86,
+   "unjudged": 0,
+   "% right": 47
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.7 to 1",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.65 to 0.7",
+   "right": 7,
+   "wrong": 1,
+   "unjudged": 0,
+   "% right": 88
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.6 to 0.65",
+   "right": 18,
+   "wrong": 5,
+   "unjudged": 0,
+   "% right": 78
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.55 to 0.6",
+   "right": 19,
+   "wrong": 13,
+   "unjudged": 0,
+   "% right": 59
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.5 to 0.55",
+   "right": 41,
+   "wrong": 33,
+   "unjudged": 0,
+   "% right": 55
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.45 to 0.5",
+   "right": 26,
+   "wrong": 35,
+   "unjudged": 0,
+   "% right": 43
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.4 to 0.45",
+   "right": 29,
+   "wrong": 16,
+   "unjudged": 0,
+   "% right": 64
+  },
+  {
+   "group": "bare",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.35 to 0.4",
+   "right": 26,
+   "wrong": 29,
+   "unjudged": 0,
+   "% right": 47
+  },
+  {
+   "group": "request",
+   "mode": "any run",
+   "band": "0.7 to 1",
+   "right": 65,
+   "wrong": 45,
+   "unjudged": 0,
+   "% right": 59
+  },
+  {
+   "group": "request",
+   "mode": "any run",
+   "band": "0.65 to 0.7",
+   "right": 28,
+   "wrong": 22,
+   "unjudged": 0,
+   "% right": 56
+  },
+  {
+   "group": "request",
+   "mode": "any run",
+   "band": "0.6 to 0.65",
+   "right": 9,
+   "wrong": 35,
+   "unjudged": 0,
+   "% right": 20
+  },
+  {
+   "group": "request",
+   "mode": "any run",
+   "band": "0.55 to 0.6",
+   "right": 3,
+   "wrong": 26,
+   "unjudged": 0,
+   "% right": 10
+  },
+  {
+   "group": "request",
+   "mode": "any run",
+   "band": "0.5 to 0.55",
+   "right": 7,
+   "wrong": 15,
+   "unjudged": 0,
+   "% right": 32
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.7 to 1",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.65 to 0.7",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.6 to 0.65",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.55 to 0.6",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.5 to 0.55",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.45 to 0.5",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.4 to 0.45",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  },
+  {
+   "group": "request",
+   "mode": "runs with nothing at 0.7 (best 8)",
+   "band": "0.35 to 0.4",
+   "right": 0,
+   "wrong": 0,
+   "unjudged": 0,
+   "% right": null
+  }
+ ]
+}

@@ -452,7 +452,7 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
  * a typical article, against 5–16 s for the meaning search.
  *
  * **Requests the versioned id, not `-latest`**, because the floor the hits are cut
- * at (`QUICK_FLOOR`, 0.7) was measured on this model and means nothing on the
+ * at (`QUICK_FLOOR`) was measured on this model and means nothing on the
  * next one. The provider may return a dated id, which is stored as the model
  * that answered; the request itself names `typesafe/jev-1.13`.
  * docs/investigations/261002o-quick-search-spike.md.

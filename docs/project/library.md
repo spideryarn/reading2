@@ -1073,7 +1073,7 @@ address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest
 
 **Nobody is signed in, so the shelf has three ceilings rather than one.** 200 rows, a `left()` cap on
 every text column it returns (`PUBLIC_CARD_CHARS`) because nothing bounds a title or an `<h1>` and a
-fetched document may be 32 MB, and a partial index on `(public_at desc nulls last, slug) where
+fetched document may be 50 MB, and a partial index on `(public_at desc nulls last, slug) where
 visibility = 'public'` so the row cap bounds the database's work and not only the reply. All three
 came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
