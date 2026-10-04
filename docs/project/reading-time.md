@@ -28,8 +28,8 @@ and the drawing.
 - **The amount is per block and absolute**: the time spent over the time the block takes to read at
   230 words a minute, never under a second. Not relative to the most-read block, which would make
   everything else look unread. The gutter reads it as four levels, `readLevel`; the spine reads it
-  as a **reach in sixteenths of the rail**, `readReach`, on the same scale, so a level is always the
-  reach's quarter and the boundaries below are where they were.
+  as a **reach in sixteenths of the rail**, `readReach`, on a longer scale of its own (below). The
+  two start together, at 0.35 of the reading time, and share nothing else.
 - **On the spine it is an area chart on its side**, since 2026-10-03: a semi-opaque area in a colour
   of its own (`--read-time`) from the left edge out to each block's reach, and a translucent line down
   its right-hand edge. An unread stretch has neither. Before that it was four widths of a faint
@@ -62,9 +62,22 @@ and the drawing.
   > — Greg, 2026-10-03 (spya-bguwsn)
 
   [261003o](../plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md).
-- **Each level's elapsed-time threshold doubles**: 0.35, 0.7, 1.4 and 2.8 of the reading time. A
-  glance draws nothing, one brisk read is faint, and full strength takes a slow read or nearly
-  three. 0.7 is a boundary because it is the quiz's "read".
+- **The rail uses a longer logarithmic scale and fainter paint**, chosen to leave only a few percent
+  of measured drawn blocks at full width. A full-strength gutter line no longer means a full rail.
+  The sample, results and limits of that inference are in the plan below; the thresholds live in
+  `readReach`, and the opacities in spine.css § reading time.
+
+  > Spine reading chart make the cyan horizontal-reading-level slightly fainter. and also somehow
+  > make it a bit logarithmic so it's rarer that the reading-time fills up completely all the way to
+  > the right
+  >
+  > — Greg, 2026-10-04
+
+  [261004j](../plans/261004j-spine-reading-chart-fainter-and-rarely-full.md).
+  [`reading-time.ts`](../../src/web/reading-time.ts) § `readReach` is the scale's one definition.
+- **Each gutter level's elapsed-time threshold doubles**: 0.35, 0.7, 1.4 and 2.8 of the reading
+  time. A glance draws nothing, one brisk read is faint, and full strength takes a slow read or
+  nearly three. 0.7 is a boundary because it is the quiz's "read".
 
   > It seems to get brighter too fast. There's lots of blocks that have lines next to them that I
   > think I haven't spent that much time on. So maybe increase the threshold or basically slow down
