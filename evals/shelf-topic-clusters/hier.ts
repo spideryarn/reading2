@@ -41,22 +41,21 @@ import path from "node:path";
 import { openRouterJson } from "../../src/ai-call.js";
 import { withLedger } from "../../src/cli-ledger.js";
 import { loadEnvLocal } from "../../src/env.js";
-import {
-  fileBatch,
-  fileWorks,
-  granularityOf,
-  type JsonGateway,
-  nameTopics,
-  rethink,
-  type TopicCalls,
-  type TopicSet,
-  type TopicWork,
-} from "../../src/shelf-terms/model-topics.js";
+import type { JsonGateway, TopicCalls, TopicSet, TopicWork } from "../../src/shelf-terms/model-topics.js";
 import { EVAL_DIR as TOPICS_EVAL_DIR } from "../shelf-topics/case.js";
 
 loadEnvLocal();
 
 const HERE = import.meta.dirname;
+
+/* **What is measured is the shipped module**, unless `--impl <file>` names
+   another: the *before* arm of a prompt change, when the old module is kept
+   beside this file for the length of the comparison (`git show
+   <commit>:src/shelf-terms/model-topics.ts`, its imports repointed). */
+const implAt = process.argv.indexOf("--impl");
+const { fileBatch, fileWorks, granularityOf, nameTopics, rethink } = (await import(
+  implAt >= 0 && process.argv[implAt + 1] ? path.resolve(process.argv[implAt + 1]!) : "../../src/shelf-terms/model-topics.js"
+)) as typeof import("../../src/shelf-terms/model-topics.js");
 
 interface Article extends TopicWork {
   /** The categories it was written for. */
@@ -191,6 +190,47 @@ async function runShelf(id: string): Promise<void> {
   const scores = [...best.values()].map((b) => b.f1);
   out.push("", `Mean F1 ${(sum(scores) / scores.length).toFixed(2)}; ${scores.filter((s) => s >= 0.6).length} of ${scores.length} categories matched at F1 ≥ 0.6.`, "");
 
+  /* **How inclusive, and whether too inclusive** (plan 261004j; GPT Sol's
+     plan review). The filing score below forgives any topic inside a right
+     broad one, so an article put in every finer topic of its field would look
+     fine there. Here nothing is forgiven: an article's *specific* topics are
+     the ones it is in with no finer topic of its own beneath them, and one is
+     right only if it is the best topic of a category the article was written
+     for. */
+  {
+    const parentOf = new Map(set.topics.map((t) => [t.id, t.parent]));
+    const targetOf = new Map([...best].filter(([, b]) => b.f1 >= 0.6).map(([cat, b]) => [cat, b.topic]));
+    let specific = 0;
+    let specificRight = 0;
+    let want = 0;
+    let got = 0;
+    let total = 0;
+    for (const a of shelf.articles) {
+      const has = set.members.get(a.id) ?? [];
+      total += has.length;
+      const targets = new Set(a.truth.map((c) => targetOf.get(c)).filter((t): t is string => Boolean(t)));
+      const parents = new Set(has.map((id) => parentOf.get(id)).filter(Boolean));
+      for (const id of has) {
+        if (parents.has(id)) continue;
+        specific++;
+        if (targets.has(id)) specificRight++;
+      }
+      want += targets.size;
+      got += [...targets].filter((t) => has.includes(t)).length;
+    }
+    const members = topicMembers(set);
+    const ratios = set.topics.filter((t) => t.parent).map((t) => (members.get(t.id)?.size ?? 0) / Math.max(1, members.get(t.parent!)?.size ?? 0));
+    out.push(
+      "## How inclusive",
+      "",
+      `Topics per article: ${(total / shelf.articles.length).toFixed(2)}. ` +
+        `Share of each article's intended topics it is in: ${(want ? got / want : 0).toFixed(2)}. ` +
+        `Share of its specific placements that are an intended topic (nothing forgiven): ${(specific ? specificRight / specific : 0).toFixed(2)} of ${specific}. ` +
+        `Largest finer topic as a share of its parent: ${ratios.length ? Math.max(...ratios).toFixed(2) : "none"}.`,
+      "",
+    );
+  }
+
   /* ── 2. hold out every fifth, re-think the rest, file the held-out ── */
   const held = shelf.articles.filter((_, i) => i % 5 === 4);
   const kept = shelf.articles.filter((_, i) => i % 5 !== 4);
@@ -258,7 +298,11 @@ async function runShelf(id: string): Promise<void> {
     "",
   );
 
-  writeFileSync(path.join(HERE, "results", `hier-${id}.md`), `${out.join("\n")}\n`);
+  /* `--tag v2` writes hier-<shelf>-v2.md, so one arm never overwrites another
+     (docs/project/prompting-guide.md § Measuring a prompt change). */
+  const tagAt = process.argv.indexOf("--tag");
+  const tag = tagAt >= 0 && process.argv[tagAt + 1] ? `-${process.argv[tagAt + 1]}` : "";
+  writeFileSync(path.join(HERE, "results", `hier-${id}${tag}.md`), `${out.join("\n")}\n`);
   console.log(out.join("\n"));
 }
 

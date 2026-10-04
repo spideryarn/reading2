@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-04 · SPIDERYARN-READING2-BX (spya-mdp0em) · topic pills on the public shelf
+  (`/read/public`): not built, because every way of showing them edits a listed security defence,
+  and that shelf has 6 articles, under the 8 the pills need. Four options, A to D. Recommended:
+  nothing until the public shelf is bigger (C), then a model-named tree stored for it, paid by the
+  owner whose share changed it (A). Or did you mean the *Include public* section of your own
+  shelf (D)? · qi-8a52pdxh ·
+  [261004j § Part 2](../plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md#part-2-pills-on-the-public-shelf-spya-mdp0em-not-built-a-question-for-greg) ·
+  [note](261004_1000-topic-pills-on-the-public-shelf.md)
+
 - 2026-10-04 · SPIDERYARN-READING2-C6 (spya-bac46a; the report itself shipped as measurements and
   two fixes, this is what they found and could not fix) · a PDF of 250 pages is promised and most
   are refused: the structure step stops any document over about 2,890 blocks, after transcription

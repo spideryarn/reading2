@@ -235,6 +235,12 @@ The differences that matter to a reader:
   not by the prompt, so no import pays for it; a note whose marker it cannot pin down is listed
   unlinked, and an uncited note on page 1 (an affiliation, mostly) is left out —
   [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
+  **A page of endnotes the model typed as paragraphs is given back to the notes** (2026-10-04,
+  `endnotesTypedAsProse`): inside a `Notes` or `Endnotes` section, following an adjacent notes page
+  with no body prose. Every paragraph, quote and list item must carry the next note number or
+  continue the preceding note; other content leaves the page alone. A fresh import had fifteen notes come out
+  as body paragraphs with their markers bare —
+  [261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all

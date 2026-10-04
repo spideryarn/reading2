@@ -60,13 +60,14 @@ in plan [261003f](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not
   fields a librarian would make top-level sections, as many as the shelf really has, where a field
   most of the shelf belongs to is still one topic. Then every topic with twelve works or more is
   asked about again by itself for the finer topics inside it, and those again, to three levels. How
-  many at each level follows how many works are there (about √n, between 3 and 20). It is due when
+  many at each level follows how many works are there (about √n, between 3 and 20). It ends with a
+  **widening pass** ([§ below](#a-pill-means-its-own-name-and-takes-in-generously)). It is due when
   there is no tree yet; when the prompt version, the model or the reader's profile changes; when
   the shelf has grown or shrunk by a quarter (and at least five works) since the last one; or when
   the works that fit no topic have grown by five and a tenth of the shelf since then.
   **Only up to 150 works** ([§ below](#the-150-work-cap)).
 - **Filing** puts works that arrived since the last re-think into the existing tree: one small call,
-  shown only the topic names. This is what makes a new article appear under its topics without
+  shown only the topic names, as one flat list. This is what makes a new article appear under its topics without
   anybody doing anything, and without paying for a re-think. A work that fits nothing is recorded as
   seen, and counts towards the next re-think. Until an article is sorted it is missing under a
   chosen topic, so the row says *Sorting N new articles into topics…* (`sorting` in the response).
@@ -79,7 +80,48 @@ with 160. The row arrives broad first, then by how many articles.
 topic is already called *Consciousness*: two pills of one name at different levels cannot be told
 apart, and choosing the two existing pills together already narrows to those articles. When two
 subjects each have a finer topic of one name (*Methods* inside *Neuroscience* and inside *AI*), both
-are kept, the second with its parent's key in front of its own.
+are kept, the second with its parent's key in front of its own. Whole-tree filing judges both by
+their shared visible name and is told to choose both ids; choosing the different parent alongside
+each is what gives the two routes different results.
+
+### A pill means its own name, and takes in generously
+
+> The new topic pills are great. The only thing is they seem slightly too tight. So, for example, I
+> think there was a topic pill on learning and memory or something, and it didn't include the Levin
+> article about self-improving something something. […] I think it's better if these topic pills are
+> quite inclusive, sort of err on the side of inclusiveness, because you can always use a tabula to
+> focus it down. Whereas if one is too tightly bound, then there's a risk that it'll exclude stuff
+> that actually I think should have been included.
+>
+> — Greg, 2026-10-04 (`spya-d4tp0y`)
+
+On his shelf *Memory & Learning* had been made inside *AI & Computing*, by a call shown only AI &
+Computing's articles. Levin's memory paper was under *Cognitive Science*, so nothing could have put
+it there, and the pill does not say it is scoped to AI. Since prompt version 2 (2026-10-04, plan
+[261004j](../plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md)):
+
+- **A re-think ends with a widening pass.** Every work is shown every topic, broad and fine, as
+  **one flat list**, and asked which it belongs in. The answer is added to what the naming calls
+  said; nothing is taken away. Flat, because drawn as a tree the model read *Memory & Learning*
+  under *AI* as "memory, in AI" and still left the paper out.
+- **So a finer topic can hold an article its parent does not.** The paper joins *Memory &
+  Learning* and does not join *AI*. Adding the parent too was tried: it took *AI & Computing* from
+  23 of 45 articles to 36. Choosing *AI* and then *Memory & Learning* still narrows to the articles
+  in both, because a count is an intersection ([§ The count](#the-count-one-formula)). The one
+  exception: a work under **no** broad topic that lands in a finer one takes that topic's parents,
+  so it is never missing from every broad pill. A new arrival is filed by the same rule
+  (`filedInto`). The `›`, indentation and card describe where a finer label was **grouped in the
+  tree**, not a promise that all of its articles are in the parent; the cards say this explicitly.
+- **Both prompts lean towards including.** An article belongs in a topic it discusses, gives
+  evidence about or makes a claim about, even when that is not its main subject; not for a passing
+  mention, an analogy, general background, or merely sharing a broad field. Borderline with
+  something of substance: in. Before, both said *"substantially about"*.
+- **The pass may not make a finer pill that narrows nothing.** If it would put nine tenths of a
+  parent's articles in one finer topic, that topic keeps only what naming gave it.
+- **A batch that fails twice fails the re-think**, and so does running out of the claim's ten
+  minutes: a narrow tree stored under the new version would look finished and never be widened.
+
+What it costs in sharpness, measured: [investigation 261004d](../investigations/261004d-shelf-topics-inclusive-filing.md).
 
 ### The 150-work cap
 
@@ -316,7 +358,9 @@ is still read to a screen reader). [261001j](../plans/261001j-five-small-feedbac
   topic in none. Its label is in the model's face ([fonts.md](fonts.md)), on the pill, in the card
   and in the paper card. A **finer** one (`granularity > 0`) has a faint `›` before its label —
   a mark rather than a smaller or paler pill, so the height, the hue dot and the label's ink stay as
-  they are in both themes — and its card says *"Inside Neuroscience"*, the label of its `within`.
+  they are in both themes — and its card says *"Inside Neuroscience"*, the label of its `within`,
+  then says that this is the label's place in the tree and the topic can also take matching articles
+  from outside that broader one.
   In More detail a finer row's chip is also indented, a step per level (`topicDepth`). Its members
   have no phrase count, so the card and the row name them in the order sent (newest first) and
   **nothing says *"used N times"***. And the card on the word **Topics** says a model named them,

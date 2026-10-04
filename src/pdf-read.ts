@@ -1858,11 +1858,15 @@ export function mendSeamHyphens(
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
-  records: PdfRecord[],
+  transcribed: PdfRecord[],
   title: string,
   rawSha256: string,
-  targets: readonly (number | null)[] = continuationTargets(records),
+  targets: readonly (number | null)[] = continuationTargets(transcribed),
 ): string {
+  /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
+     records from here down, so a mistyped endnote leaves the body and joins the
+     notes in the same step. Indexes do not move, so `targets` still lines up. */
+  const records = endnotesTypedAsProse(transcribed);
   /* **Whole blocks first, HTML second.** A continuation's text is added to its
      block before anything is written, so a caption continued onto the next page
      is inside its `<figcaption>` and the figure's ref is minted from the whole
@@ -2102,6 +2106,101 @@ const NOTE_LABEL = /^([1-9]\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶
 /** The prose a marker may sit in. Captions and headings are left alone. */
 const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);
 
+/** A note's leading label as a number, or null: no label, a symbol, or a label with nothing after it. */
+function numericLabel(text: string): number | null {
+  const label = NOTE_LABEL.exec(text);
+  if (!label || !text.slice(label[0].length).trim()) return null;
+  const plain = markerSpellings(label[1]!)[0]!;
+  return /^\d+$/.test(plain) ? Number(plain) : null;
+}
+
+/**
+ * **A page of endnotes the model typed as `paragraph`, given back to the notes.**
+ *
+ * Measured on a fresh import of the MDPI *Entropy* paper, 2026-10-04: its 62
+ * endnotes run over four "Notes" pages, and the model typed the second page —
+ * notes 18 to 32, fifteen records — as `paragraph`, each opening with the next
+ * label, between `footnote` records for 17 and 33. They came out as fifteen body
+ * paragraphs at the end of the article, and their markers in the prose
+ * (`remarkable28 is`) stayed bare digits with no note to link to.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ *
+ * Found in code, like the markers, and for the same reason: no prompt or schema
+ * change, so no import pays and no cached chunk goes stale. The copy returned
+ * has those records typed `footnote`; nothing else about them, and no index,
+ * changes.
+ *
+ * **Deliberately narrow**, because the wrong direction here moves the author's
+ * prose out of the article and into a note. A page is retyped only when:
+ *
+ * 1. **every** `paragraph`, `quote` and `listitem` on it opens with the next
+ *    numeric label, or is an unlabelled `continues` of the preceding note;
+ * 2. a `Notes` or `Endnotes` heading established the section, and the adjacent
+ *    preceding page ends in a numbered note and contains no body prose. Page
+ *    footnotes and title-page affiliations cannot anchor the repair;
+ * 3. the candidate page contains only notes, their prose and `publisher`
+ *    furniture. A heading, a reference or a figure leaves the page alone.
+ *
+ * The next `footnote` record is not required: notes may end on the mistyped
+ * page. Each accepted page can anchor the next; a failed trial changes nothing.
+ * A continuation may carry on a typed or recovered note, across a page turn.
+ */
+function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
+  const out = [...records];
+  let last: number | null = null;
+  let previousPage: number | null = null;
+  let previousWasNotes = false;
+  let inNotes = false;
+
+  for (let start = 0; start < out.length;) {
+    const page = out[start]!.page;
+    let end = start + 1;
+    while (end < out.length && out[end]!.page === page) end++;
+    const original = out.slice(start, end);
+    const candidate = [...original];
+    let number = last;
+    let fits: boolean = inNotes && previousWasNotes && previousPage === page - 1 && number !== null;
+    for (let j = 0; j < candidate.length && fits; j++) {
+      const r = candidate[j]!;
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues) number = numericLabel(r.text.trim());
+      } else if (CITING.has(r.type)) {
+        const n = numericLabel(r.text.trim());
+        if (number !== null && n === number + 1) {
+          number = n;
+          // A new label starts a note even when the model says `continues`.
+          candidate[j] = { ...r, type: "footnote", continues: false };
+        } else if (number !== null && n === null && r.continues) {
+          candidate[j] = { ...r, type: "footnote" };
+        } else {
+          fits = false;
+        }
+      } else {
+        fits = false;
+      }
+    }
+    // Commit a whole page, or none of it. A failed trial cannot affect later pages.
+    const accepted: PdfRecord[] = fits ? candidate : original;
+    out.splice(start, accepted.length, ...accepted);
+    previousWasNotes = accepted.some((r) => r.type === "footnote" && r.text.trim()) &&
+      !accepted.some((r) => CITING.has(r.type) && r.text.trim());
+    if (previousPage !== page - 1) last = null;
+    for (const r of accepted) {
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues || last === null) last = numericLabel(r.text.trim());
+      } else {
+        last = null;
+        if (r.type.startsWith("heading")) inNotes = /^(?:end)?notes$/i.test(r.text.trim());
+      }
+    }
+    previousPage = page;
+    start = end;
+  }
+  return out;
+}
+
 /** The footnote records, as notes. A record marked `continues` joins the note before it. */
 function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
   const notes: Omit<PdfNote, "id">[] = [];
@@ -2270,7 +2369,19 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
   return markers;
 }
 
-/** A block's text, escaped, with its markers written in as links to their notes. */
+/**
+ * A block's text, escaped, with its markers written in as links to their notes.
+ *
+ * **The space the model leaves after a marker stays** — `stories9 . This`,
+ * `memories29 , and` — though once the digits are raised it is a full stop
+ * adrift of its sentence. Taking it out changes the block's text, and stage 3
+ * carries an id from an article split before its notes were linked only when
+ * the whole text is unchanged (`legacyKey`, src/blocks.ts). Measured on the
+ * *Entropy* paper's stored transcription, 2026-10-04: tidying it cost 10 of 77
+ * block ids, one of them under a reader's comment. The place to close the gap
+ * is where the block is drawn, not here.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ */
 function withMarkers(text: string, markers: readonly Marker[]): string {
   let out = "";
   let at = 0;
