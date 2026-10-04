@@ -48,6 +48,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DELAY } from "../src/web/Tooltip.js";
 
 import { readerCssNoComments } from "./helpers/stylesheets.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
@@ -136,6 +137,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function mount(): void {
@@ -339,9 +341,10 @@ describe("what the big number on a result is", () => {
     const rank = host.querySelector(".crit-rank");
     expect(rank, "the rank numeral is not drawn").not.toBeNull();
     expect((rank as Element).hasAttribute("title"), "it fell back to a title").toBe(false);
+    vi.useFakeTimers();
     (rank as Element).dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(
       document.querySelectorAll('[role="tooltip"]'),

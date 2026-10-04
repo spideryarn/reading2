@@ -47,6 +47,7 @@ import {
   EXPERIMENTAL_SIGNED_OUT,
   experimental,
 } from "./helpers/experimental-fixtures.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -61,6 +62,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 /** The bar on the reading view, told whatever this case is about. */
@@ -453,9 +455,10 @@ describe("what it says, and what a press does", () => {
 describe("the tooltip", () => {
   /** Open the switch's card and read its paragraphs. */
   async function card(): Promise<{ head: string; paras: string[] }> {
+    vi.useFakeTimers();
     theSwitch().dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const cards = document.querySelectorAll('[role="tooltip"]');
     expect(cards, "hovering the switch opened no card, or more than one").toHaveLength(1);

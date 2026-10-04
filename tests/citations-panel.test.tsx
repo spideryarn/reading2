@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HELP_MODES } from "../src/web/help/help-modes.js";
 import { HELP_FAQ } from "../src/web/help/help-faq.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
 import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
@@ -17,6 +17,7 @@ import type { UseCitations } from "../src/web/useCitations.js";
 import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 const {
   CAPPED_NOTE,
@@ -35,6 +36,7 @@ const {
   INFLUENCE_UNKNOWN_NOTE,
   barTop,
   barMax,
+  barToReveal,
   citingWordsOf,
   quotedCitingWords,
   byLineOf,
@@ -365,6 +367,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function artefact(citations: CitedWork[], capped = false): Citations {
@@ -489,9 +492,12 @@ function investigateButton(id: string): HTMLButtonElement {
  *    queued state update is not applied until the block exits.
  */
 async function cardFor(el: Element): Promise<Card> {
+  /* A faked clock from the first card to the end of the case (2026-10-04: a
+     real second a card, until then); `afterEach` hands it back. */
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -509,7 +515,7 @@ async function cardFor(el: Element): Promise<Card> {
   el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
   for (const _ of [0, 1]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(
@@ -973,7 +979,7 @@ describe("a by-line that repeats the title", () => {
        cannot check that because the visually drawn duplicate stays in the DOM. */
     link.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const accessibleText = (el: Element): string => {
       const copy = el.cloneNode(true) as Element;
@@ -993,7 +999,7 @@ describe("a by-line that repeats the title", () => {
     link.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
     for (const _ of [0, 1]) {
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 300));
+        vi.advanceTimersByTime(300);
       });
     }
     /* A titled row's link keeps its native title and has no card. */
@@ -2266,5 +2272,164 @@ describe("an influence Dig deeper found on the web", () => {
     await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
     expect(row(DUG_KNOWN.id).querySelector(".cite-influence-web")).toBeNull();
     expect(row(DUG_KNOWN.id).querySelector(".score-bars")?.getAttribute("aria-label")).toContain("(the model's memory) 10 out of 100");
+  });
+});
+
+/* Report `spya-c2qmbg`, plan 261004b: the prose card's *Dig deeper* opens this
+   band on the work's row. The row has to be drawn before it can be scrolled to,
+   and the prioritised order may be hiding it. */
+describe("opening the band on one work", () => {
+  it("barToReveal lowers the bar to a hidden work's priority, floored to the step", () => {
+    /* PASSING is 0.20, under the default bar. */
+    expect(visibleWorks(WORKS, CITATION_BAR_DEFAULT).visible).not.toContain(PASSING);
+    expect(barToReveal(WORKS, PASSING.id, "prioritised", CITATION_BAR_DEFAULT)).toBe(0.2);
+    /* Off the grid: (2·0.2 + 0.1)/3 = 0.1667, and 0.17 would hide it again. */
+    const off = work({ id: "spya-q2w3e4", title: "Off the grid", relevance: 0.2, influence: 0.1 });
+    const lowered = barToReveal([...WORKS, off], off.id, "prioritised", CITATION_BAR_DEFAULT);
+    expect(lowered).toBe(0.16);
+    expect(visibleWorks([...WORKS, off], lowered ?? 1).visible).toContain(off);
+  });
+
+  it("barToReveal leaves the bar alone when nothing is hiding the work", () => {
+    expect(barToReveal(WORKS, CENTRAL.id, "prioritised", CITATION_BAR_DEFAULT)).toBeNull();
+    /* Another order draws every row, so a dormant bar must not move. */
+    expect(barToReveal(WORKS, PASSING.id, "document", CITATION_BAR_DEFAULT)).toBeNull();
+    /* No priority: shown regardless of the bar. */
+    expect(barToReveal([...WORKS, BARE], BARE.id, "prioritised", CITATION_BAR_DEFAULT)).toBeNull();
+    expect(barToReveal(WORKS, "spya-zzzzzz", "prioritised", CITATION_BAR_DEFAULT)).toBeNull();
+  });
+
+  async function drawFocused(id: string, bar: number | null) {
+    const bars: (number | null)[] = [];
+    let taken = 0;
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.getAttribute("data-citation-id") ?? "?");
+    };
+    try {
+      await act(async () =>
+        root.render(
+          createElement(CitationsPanel, {
+            access: { kind: "owner", owner: owner() },
+            order: "prioritised",
+            onOrder: () => {},
+            bar,
+            onBar: (b: number | null) => bars.push(b),
+            onJump: () => {},
+            focus: { id, n: 1 },
+            onFocusTaken: () => {
+              taken += 1;
+            },
+          }),
+        ),
+      );
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+    return { bars, taken: () => taken, scrolled };
+  }
+
+  it("scrolls to a drawn row and says the focus is taken", async () => {
+    const seen = await drawFocused(CENTRAL.id, null);
+    expect(seen.scrolled).toEqual([CENTRAL.id]);
+    expect(seen.taken()).toBe(1);
+    expect(seen.bars).toEqual([]);
+  });
+
+  it("lowers the bar for a hidden row, and keeps the focus until the row is drawn", async () => {
+    const seen = await drawFocused(PASSING.id, null);
+    expect(seen.bars).toEqual([0.2]);
+    expect(seen.scrolled).toEqual([]);
+    expect(seen.taken()).toBe(0);
+    /* The URL has caught up on the same mounted panel: now the row is there
+       to scroll to. Remounting here would miss a broken effect retry. */
+    const after = await drawFocused(PASSING.id, 0.2);
+    expect(after.bars).toEqual([]);
+    expect(after.scrolled).toEqual([PASSING.id]);
+    expect(after.taken()).toBe(1);
+  });
+
+  it("drops a focus on a work the list does not have", async () => {
+    const seen = await drawFocused("spya-zzzzzz", null);
+    expect(seen.scrolled).toEqual([]);
+    expect(seen.taken()).toBe(1);
+  });
+
+  it("takes nothing while the list is still loading", async () => {
+    let taken = 0;
+    await act(async () =>
+      root.render(
+        createElement(CitationsPanel, {
+          access: { kind: "owner", owner: owner({ status: "loading", citations: null }) },
+          order: "prioritised",
+          onOrder: () => {},
+          bar: null,
+          onBar: () => {},
+          onJump: () => {},
+          focus: { id: CENTRAL.id, n: 1 },
+          onFocusTaken: () => {
+            taken += 1;
+          },
+        }),
+      ),
+    );
+    expect(taken).toBe(0);
+  });
+
+  /* GPT Sol's plan review, F1. FAMOUS is 0.50 on the list's own numbers; with a
+     web influence of 0.9 kept by an earlier dig… it is the same here, so the
+     fixture drops the *list's* influence instead: the row is held above a 0.40
+     bar only by what the dig found, and `finding` takes that away. */
+  it("lowers the bar when a dig drops the row it is running on below it", async () => {
+    const held = work({ id: "spya-h2e3d4", title: "Held up", relevance: 0.2, influence: 0.9 });
+    const dropped = { ...held, influence: 0.1 };
+    const bars: (number | null)[] = [];
+    const paint = (w: CitedWork, digging: string | null) =>
+      act(async () =>
+        root.render(
+          createElement(CitationsPanel, {
+            access: {
+              kind: "owner",
+              owner: owner({ citations: artefact([CENTRAL, w]), investigating: digging }),
+            },
+            order: "prioritised",
+            onOrder: () => {},
+            bar: 0.4,
+            onBar: (b: number | null) => bars.push(b),
+            onJump: () => {},
+          }),
+        ),
+      );
+    await paint(held, null);
+    await paint(held, held.id);
+    expect(bars, "a visible row moved the bar").toEqual([]);
+    await paint(dropped, held.id);
+    expect(bars).toEqual([0.16]);
+    /* And once more when the answer lands with the dig over. */
+    bars.length = 0;
+    await paint({ ...dropped, influence: 0.05 }, null);
+    expect(bars).toEqual([0.15]);
+  });
+
+  it("does not fight a reader who raises the bar over a row after its dig", async () => {
+    const bars: (number | null)[] = [];
+    const paint = (bar: number, digging: string | null) =>
+      act(async () =>
+        root.render(
+          createElement(CitationsPanel, {
+            access: { kind: "owner", owner: owner({ investigating: digging }) },
+            order: "prioritised",
+            onOrder: () => {},
+            bar,
+            onBar: (b: number | null) => bars.push(b),
+            onJump: () => {},
+          }),
+        ),
+      );
+    await paint(0.1, PASSING.id);
+    await paint(0.1, null);
+    await paint(0.6, null);
+    expect(bars).toEqual([]);
   });
 });

@@ -80,7 +80,8 @@ read *Brief and Fuller* for *the three* wherever it is about what the reader is 
 
 It is the feature closest to [vision.md](vision.md)'s anti-goal, so it is kept an **orientation,
 not a digest**: a few paragraphs, capped by code; **every paragraph is a door** (below), and a
-paragraph that cites no passage is dropped when it is written. Plain text, never markdown. What it
+paragraph that cites no passage is dropped when it is written. The words are plain text, never
+markdown; bold and bullets are [two fields beside them](#bold-and-bullets-since-2026-10-04). What it
 is — written by AI, the article says it better — is said in the slider's card, not in a line under
 the paragraphs.
 
@@ -99,7 +100,8 @@ the paragraphs.
 
 - **One row, no labels.** The slider is the whole control: **Brief** (short, very simple, pitched at
   twelve), **Simple** (fairly simple, just under the first version's length, at fifteen), **Fuller**
-  (moderately complex, just over it, at eighteen). Since 2026-10-01 there is no level name beside it
+  (moderately complex, at eighteen; just over that length until 2026-10-04, and
+  [about half as long again since](#a-longer-fuller-since-2026-10-04)). Since 2026-10-01 there is no level name beside it
   (SPIDERYARN-READING2-7R, *"get rid of the "Simple" text - perhaps replace with an icon"*): a
   short-text icon at the left end and a long-text one at the right, each a press on that end's
   level; the tooltip names the three, and `aria-valuetext` names the current one for a screen
@@ -144,6 +146,53 @@ the paragraphs.
 
 The design, the measurements and the review are
 [261001b](../plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
+
+### A longer Fuller (since 2026-10-04)
+
+> I think we want the most detailed submode of Summary to be longer and more detailed still. (I
+> think it's called fuller.)
+>
+> — Greg, 2026-10-03 (`spya-azft06`, SPIDERYARN-READING2-BC)
+
+Fuller is asked for about 350 words in four to seven paragraphs of two to five sentences, and told
+never more than 430; it was asked for about 220 in three to five. Measured, it comes back at
+338–412 words where it came back at 221–261, and the press takes about 31 s where it took 26.
+**About 500 words was tried first and not shipped**: the text was good, but the press took 55 s,
+because nothing is shown until the slowest of the three levels is written. Whether to take that
+wait, or to show Brief as soon as Brief is ready, is with Greg
+([261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md)). Its prompt says what the room is
+for: how the work was done, the evidence and numbers behind each main finding, the limits the piece
+itself names, and how the steps of the argument connect. The stored limit is 3 to 8 paragraphs and
+850 words (`SIMPLE_LIMITS` in [`types.ts`](../../src/types.ts)); the minimum stayed at 3 so every
+Fuller stored before still reads. Brief and Simple are asked for what they were. No stored summary
+was rewritten: *Write it again* picks up the new prompt (`simple-prompt/7`).
+[261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md) has the measurements.
+
+### Bold and bullets (since 2026-10-04)
+
+> Maybe, maybe the summary submodes could make use of Markdown, like bold or bullet points, to make
+> it easier to skim the summary. I suppose it's possible they could use headings, but that might be
+> overkill. That could be interesting. Experiment with it.
+>
+> — Greg, 2026-10-03 (`spya-qzsvx4`, SPIDERYARN-READING2-BD)
+
+Built as **two fields beside the text, not Markdown in it**, so `text` stays the plain words the
+fidelity guard, the word limits and the public payload read:
+
+- **`key` on a sentence**: a few of that sentence's own words, drawn as `<strong>` at their first
+  occurrence, inside the sentence's link. Brief and Fuller, the two levels shown; the prompt asks for at most two in a
+  paragraph. Kept only when `simpleKey` ([`types.ts`](../../src/types.ts)) accepts it: found in the
+  sentence exactly, at most `SIMPLE_KEY_MAX_WORDS` words, and shorter than the sentence. One it
+  refuses is left off and counted, never a failed level.
+- **`list` on a paragraph**: the first sentence is a lead-in and each later one a bullet. Only
+  Fuller is asked for lists, two at most. `paragraphShape` decides what is drawn, for the owner and
+  a visitor alike: a list needs `list: true` and three usable sentences, and anything less is prose.
+
+A bullet is one sentence, so it is still the hover-and-press link above and still lights up while
+its passage is on screen. Both fields are stored only when they say something, so a paragraph from
+before has neither and draws as it did. No headings, no italics, no nested lists. Why fields rather
+than Markdown, and how it is measured:
+[261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md).
 
 ### A summary is a door
 
@@ -352,8 +401,9 @@ slider that moves length and plainness together.
 article, and kept. Their heading tooltips fetched summaries for headings the granularity filter had
 already hidden — real money spent generating text nobody could see.
 
-**Markdown.** Paragraphs are plain text. Rendering arbitrary model output as HTML is what
-[security.md](security.md) is about.
+**Markdown.** A paragraph's words are plain text, and no parser runs over them: rendering arbitrary
+model output as HTML is what [security.md](security.md) is about. The bold phrase and the bullets
+are [two fields](#bold-and-bullets-since-2026-10-04) whose elements the panel makes itself.
 
 ## What is still open
 

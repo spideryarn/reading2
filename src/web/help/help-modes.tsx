@@ -376,7 +376,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
       <>
         <p>
           Three buttons at the top choose what you see: <strong>Brief</strong>, <strong>Fuller</strong>,
-          which is a little longer and keeps more of the piece’s own terms, and <strong>Thread</strong>.
+          which is several times longer and goes into the method, the evidence and the limits, and{" "}
+          <strong>Thread</strong>. The phrases in bold are the ones to catch if you are skimming.
         </p>
         <p>
           When a sentence surprises you, follow the code after its paragraph and read what the author

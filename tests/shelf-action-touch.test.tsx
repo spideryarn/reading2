@@ -47,6 +47,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 import type { LibraryEntry } from "../src/types.js";
 import { Actions, type Shelf } from "../src/web/ShelfEntry.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* --------------------------------------------------------------- fixtures -- */
 
@@ -96,6 +97,9 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  /* The hover cases fake the clock (2026-10-04: they slept the open delay for
+     real); this hands it back to the ones that tick with a real timer. */
+  vi.useRealTimers();
 });
 
 function render(entry: LibraryEntry): void {
@@ -338,11 +342,12 @@ describe("a mouse", () => {
    * now. GPT Sol, 2026-09-05.
    */
   it("keeps a hovered card open through a click", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const el = control("Copy link");
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(isOpen(el)).toBe(true);
     press(el, "mouse");
@@ -362,14 +367,15 @@ describe("a mouse", () => {
    * it still there a moment later**.
    */
   it("opens a card that is still there a moment later", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     control("Edit title").dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(openCardHead()).toBe("Edit title");
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
     expect(openCardHead(), "the card was gone 300ms later — the group closed it").toBe("Edit title");
   });
@@ -380,11 +386,12 @@ describe("a mouse", () => {
    * pointer has just *arrived* at — the opposite of what the group is for.
    */
   it("hands the card over when the pointer moves along the row", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const first = control("Edit title");
     first.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     first.dispatchEvent(new MouseEvent("mouseleave"));
     first.dispatchEvent(
@@ -392,7 +399,7 @@ describe("a mouse", () => {
     );
     control("Archive").dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
     expect(openCardHead(), "the previous control's close timer took the new card").toBe("Archive");
   });
@@ -405,11 +412,12 @@ describe("a mouse", () => {
    * reason.
    */
   it("still closes the card when the pointer leaves the row", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const el = control("Edit title");
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(openTriggers()).toHaveLength(1);
     el.dispatchEvent(new MouseEvent("mouseleave"));
@@ -419,7 +427,7 @@ describe("a mouse", () => {
        `act` the queued update is not applied until the block exits. */
     for (const _ of [0, 1]) {
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 300));
+        vi.advanceTimersByTime(300);
       });
     }
     expect(openTriggers()).toHaveLength(0);
@@ -464,6 +472,7 @@ describe("a finger on the card's row", () => {
      synthetic mouseenter is the compatibility event that must not leave a
      hover card behind after the direct press. */
   it("presses on the first iOS tap without leaving a card open", async () => {
+    vi.useFakeTimers();
     coarse(true);
     renderCard(FETCHED);
     const copy = control("Copy link");
@@ -475,7 +484,7 @@ describe("a finger on the card's row", () => {
     press(archive, "mouse");
     expect(shelf.archive).toHaveBeenCalledTimes(1);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     expect(openTriggers(), "a card opened on a direct press").toHaveLength(0);
   });

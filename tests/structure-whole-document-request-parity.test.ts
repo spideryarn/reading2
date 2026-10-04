@@ -58,8 +58,15 @@
  * block and the reference list, and Structure's abstract paragraph follows it
  * (Greg, spya-abs6bj; plan 261003c).
  * docs/plans/260926a-plainer-summaries-and-glossary.md.
+ *
+ * **SPLIT 2026-10-04**: until then the production expectation was the toc/10
+ * literal with two blocks `.replace`d, so each re-pin above also rewrote the
+ * "frozen" arm's expectation — twice on 2026-10-03. The frozen text is now a
+ * literal of its own in the eval folder, pinned here by digest, and the
+ * production literal stands alone (plan 261004b § A1).
  */
 
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import type { Block } from "../src/types.js";
@@ -92,8 +99,15 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => ({
 const { generateStructure, wholeDocumentRequest, STRUCTURE_OUTPUT_SCHEMA } = await import("../src/structure.js");
 const { toc10FrozenRequest } = await import("../evals/structure-whole-document/toc10-frozen.js");
 
-/** The system prompt production sends, byte for byte. THE pin — do not "tidy" it. */
-const EXPECTED_TOC10_SYSTEM = `You are building a nested table of contents for an article. It goes all the
+/** sha256 of the toc/10 system prompt (evals/structure-whole-document/toc10-system.ts),
+    held as a digest so this file has no second copy to edit alongside it. It never
+    moves: a production wording change re-pins EXPECTED_SYSTEM below, not this. */
+const TOC10_SYSTEM_SHA256 = "532c3dc4208f19bbe0415ac6f653107619cc2135364eb5cdd97a9064e522998d";
+
+/** The system prompt production sends, byte for byte. THE pin — do not "tidy" it.
+    Its own literal, not the frozen toc/10 text with today's blocks swapped in: a
+    production wording change is made here and cannot reach the historical pin. */
+const EXPECTED_SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
@@ -101,10 +115,13 @@ You receive the article as a numbered list of blocks. Each block has an id
 
 STRUCTURE
 
-Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
-blocks, and a node's children exactly partition its range — no gaps, no
-overlaps, no reordering. The first child starts where its parent starts; the
-last child ends where its parent ends.
+Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
+"start". Give each child one "start": the id of the first block it covers. Do
+not give an end — ends are computed from the next child's start, and the last
+child ends where its parent ends. The first child must start where its parent
+starts. List children in document order; after the first child, each "start"
+must occur strictly later than the previous child's start. Do not write a range
+anywhere.
 
 - The article's own headings are HARD boundaries. A node must begin at a
   heading block wherever one exists. Never merge across a heading.
@@ -214,8 +231,10 @@ OUTPUT
 JSON only, no prose, no code fence:
 
 {"root": {"title": "...", "gist": "...", "question": "...",
-          "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]}}
+          "sourceHeading": "...", "children": [
+            {"title": "...", "gist": "...", "question": "...",
+             "start": "<firstBlockId>", "children": [ ... ]}
+          ]}}
 
 Use only block ids that appear in the input. Do not invent ids.
 
@@ -269,31 +288,6 @@ only where the body goes on to make each of its claims; where it says something
 the body does not, it is content. A "Summary" or "Conclusions" section after
 the body has begun is content, and the usual rules apply.`;
 
-const EXPECTED_SYSTEM = EXPECTED_TOC10_SYSTEM
-  .replace(
-    `Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
-blocks, and a node's children exactly partition its range — no gaps, no
-overlaps, no reordering. The first child starts where its parent starts; the
-last child ends where its parent ends.`,
-    `Produce a tree of INTERNAL nodes only. The root covers the whole input and has no
-"start". Give each child one "start": the id of the first block it covers. Do
-not give an end — ends are computed from the next child's start, and the last
-child ends where its parent ends. The first child must start where its parent
-starts. List children in document order; after the first child, each "start"
-must occur strictly later than the previous child's start. Do not write a range
-anywhere.`,
-  )
-  .replace(
-    `{"root": {"title": "...", "gist": "...", "question": "...",
-          "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]}}`,
-    `{"root": {"title": "...", "gist": "...", "question": "...",
-          "sourceHeading": "...", "children": [
-            {"title": "...", "gist": "...", "question": "...",
-             "start": "<firstBlockId>", "children": [ ... ]}
-          ]}}`,
-  );
-
 const BLOCKS: Block[] = [
   { id: "spya-par001", tag: "h2", kind: "heading", level: 2, text: "First Part", words: 2, html: "<h2>First Part</h2>", gistable: true },
   { id: "spya-par002", tag: "p", kind: "text", text: "Some prose about turnips.", words: 4, html: "<p>Some prose about turnips.</p>", gistable: true },
@@ -323,16 +317,16 @@ const EXPECTED_MAX_TOKENS = 80_425;
    so the fixture is the array above and the pinned bytes are unaffected. */
 
 describe("the structure call's request", () => {
-  it("keeps the frozen arm on toc/10's exact request bytes", () => {
+  it("keeps the frozen arm on toc/10's system prompt, with today's rendering and budget", () => {
     const frozen = toc10FrozenRequest(BLOCKS);
-    expect(frozen.system).toBe(EXPECTED_TOC10_SYSTEM);
+    expect(createHash("sha256").update(frozen.system, "utf8").digest("hex")).toBe(TOC10_SYSTEM_SHA256);
     expect(frozen.user).toBe(EXPECTED_USER);
     expect(frozen.maxTokens).toBe(EXPECTED_MAX_TOKENS);
     expect(frozen.params).toEqual({
       max_tokens: EXPECTED_MAX_TOKENS,
       thinking: { type: "adaptive" },
       output_config: { effort: "low" },
-      system: EXPECTED_TOC10_SYSTEM,
+      system: frozen.system,
       messages: [{ role: "user", content: EXPECTED_USER }],
     });
   });

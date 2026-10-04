@@ -130,8 +130,6 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
   "scripts/probes/260930d-quote-stop-repro.ts":
     "a one-off reproduction; it sends production's own INVESTIGATE_SYSTEM, which carries plainWords(\"explain\")",
-  "scripts/probes/260930a-investigate-probe.ts":
-    "a one-off probe; its prompt, in scripts/probes/260930a-investigate-prompt.ts, carries plainWords(\"explain\")",
   "scripts/probes/261001a-paper-read-probe.ts":
     "a one-off probe; it runs production's own Investigate press, whose prompts are production's (INVESTIGATE_SYSTEM carries plainWords(\"explain\"); the passages call is exempt above)",
   "scripts/probes/261001h-fidelity-guard-probe.ts":

@@ -49,6 +49,7 @@ import type { Claim } from "../src/referee-claims.js";
 import type { MirrorInput, MirrorRemark, MirrorResult } from "../src/referee-mirror-types.js";
 import type { RefereeView } from "../src/web/referee-views.js";
 import type { Block, BlockId } from "../src/types.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /** One reply, decided by the test that is running — tests/referee-criteria-panel.test.tsx. */
 let answer: (url: string, init: RequestInit) => Promise<Response>;
@@ -118,6 +119,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function json(body: unknown, status = 200): Response {
@@ -126,6 +128,13 @@ function json(body: unknown, status = 200): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+/**
+ * Past whichever open delay applies to the card being hovered: `Tooltip.tsx`'s
+ * own, or the 300ms a `TooltipGroup` on this surface sets instead. Both kinds
+ * of card go through the one helper below.
+ */
+const PAST_THE_OPEN_DELAY = Math.max(DELAY.open, 300);
 
 /** Let the fetch chains settle — tests/referee-criteria-panel.test.tsx § `flush`. */
 async function flush(times = 4): Promise<void> {
@@ -151,14 +160,15 @@ async function flush(times = 4): Promise<void> {
  *    the node being removed: the card is React's, and tearing it out from under
  *    React takes the next render down with it.
  *
- * 400ms to open — the grouped delay is 300 — and two waits of 300 to close, for
- * the reason written where the close is dispatched. Shortening either trades a
- * slow test for a flaky one.
+ * Past the open delay to open, and two waits of 300 to close, for the reason
+ * written where the close is dispatched. **On a faked clock since 2026-10-04**,
+ * from the hover to the end of the case: they were real sleeps, a second a card.
  */
 async function cardFor(el: Element): Promise<Card> {
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(PAST_THE_OPEN_DELAY);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -190,7 +200,7 @@ async function cardFor(el: Element): Promise<Card> {
      500ms wait failed here; two 300ms waits pass. */
   for (const _ of [0, 1]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(
@@ -624,9 +634,10 @@ describe("Mirror's rows say what they mean by evidence, and where they go", () =
     /* Hovering it must open nothing at all. The card, if it came back, would be
        portalled to `<body>` rather than into `host`, so it is looked for in the
        document — tests/diagram-panel-hover.test.tsx. */
+    vi.useFakeTimers();
     (badge as Element).dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(PAST_THE_OPEN_DELAY);
     });
     expect(
       document.querySelectorAll('[role="tooltip"]'),

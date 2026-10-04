@@ -47,6 +47,7 @@ import {
 } from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
 import type { ArchiveControl } from "../src/web/useArchive.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -122,6 +123,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 /** The masthead, as the owner sees it (`onRenamed`) or as a visitor does. */
@@ -155,8 +157,9 @@ async function cardOf(trigger: Element): Promise<HTMLElement> {
   /* A native `mouseenter` opens it — tooltips.md § Three things about testing
      a card in jsdom. The card is portalled to `<body>`, not into `host`. */
   await act(async () => {
+    vi.useFakeTimers();
     trigger.dispatchEvent(new MouseEvent("mouseenter"));
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll(".tip-soon");
   expect(cards).toHaveLength(1);

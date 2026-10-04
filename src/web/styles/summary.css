@@ -138,6 +138,24 @@
   text-decoration-color: var(--highlight);
   text-underline-offset: 2px;
 }
+/* **A key phrase** (plan 261004b): the few words of a sentence a skimming
+   reader should catch. 700 because the model's face, IBM Plex Mono, is static
+   and ships 400 and 700 only (fonts.md); anything between is drawn as one of
+   them, or faked. Ink and face are the sentence's, linked or not. */
+.simple-text strong { font-weight: 700; }
+/* **A paragraph that is a list**: the lead-in is a `.simple-text` paragraph and
+   this is the `<ul>` after it, which wears `.simple-text` too for the face and
+   the sentence rules above. The indent is small because the band can be 18rem
+   on a phone: just room for the bullet, which hangs outside the text so a
+   wrapped line starts under the first. A bullet is a sentence, so the gap
+   between two is a line's worth of air and no more. */
+.simple-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  list-style: disc outside;
+}
+.simple-list > li + li { margin-top: 0.25rem; }
+.simple-list > li::marker { color: var(--ink-faint); }
 /* The doors, in the key the gists' ranges wear. */
 .simple-refs {
   display: flex;

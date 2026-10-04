@@ -50,6 +50,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ArticleSharing, PublicArtefacts } from "../src/types.js";
 import { sharedInventory } from "../src/web/shared-inventory.js";
 import { SHARING_COPY_TIP, SHARING_OPEN_TIP, SHARING_STOP_TIP } from "../src/messages.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -110,6 +111,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function mount(sharing: ArticleSharing): Promise<void> {
@@ -128,6 +130,13 @@ function button(text: string): HTMLButtonElement {
 }
 
 /**
+ * Past whichever open delay applies to the card being hovered: `Tooltip.tsx`'s
+ * own, or the 300ms a `TooltipGroup` on this surface sets instead. Both kinds
+ * of card go through the one helper below.
+ */
+const PAST_THE_OPEN_DELAY = Math.max(DELAY.open, 300);
+
+/**
  * **Open one card on `el` and read it**, then shut it again.
  *
  * The mechanics — and every one of them was found the hard way in
@@ -142,10 +151,11 @@ function button(text: string): HTMLButtonElement {
  *    out twice rather than once for longer.
  */
 async function openOn(el: Element, how: "hover" | "focus"): Promise<string> {
+  vi.useFakeTimers();
   if (how === "hover") el.dispatchEvent(new MouseEvent("mouseenter"));
   else (el as HTMLElement).focus();
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(PAST_THE_OPEN_DELAY);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, `${how} on this control opened no card, or more than one`).toHaveLength(1);
@@ -170,7 +180,7 @@ async function openOn(el: Element, how: "hover" | "focus"): Promise<string> {
   }
   for (const _ of [0, 1]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(

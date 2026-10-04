@@ -79,9 +79,9 @@ import type { Sketch } from "../../src/sketch-scene.js";
 import type { QuizEvidence } from "../../src/types.js";
 import { prose } from "./answers.js";
 import { blindCoin, hardShare, isCommon, wordsIn } from "./run.js";
+import { sourceFingerprint } from "./source-fingerprint.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "plain-words", "artefacts");
-const SRC = path.join(import.meta.dirname, "..", "..", "src");
 
 /** The one article: a consciousness essay, with a bibliography, dates and a long argument. */
 const SLUG = "noema-mythology-of-conscious-ai";
@@ -112,8 +112,8 @@ const BY_POSITION: ReadonlySet<Generator> = new Set(["arc", "tweets", "ideas", "
 /** The generators whose words should keep the author's own key term. */
 const KEY_TERM: ReadonlySet<Generator> = new Set(["labels", "sketch", "timeline"]);
 
-/** The source files whose prompt each generator sends; `plain-words.ts` is added to every one when it exists. */
-const PROMPT_FILES: Record<Generator, string[]> = {
+/** The source files whose prompt each generator sends; source-fingerprint.ts adds the shared prompt modules they import. */
+export const PROMPT_FILES: Record<Generator, string[]> = {
   arc: ["arc.ts"],
   tweets: ["tweets.ts"],
   ideas: ["ideas.ts"],
@@ -263,12 +263,6 @@ function usageOf(run: { inputTokens: number; outputTokens: number; cacheReadToke
 
 const sha256 = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 
-function sourceShaFor(g: Generator): Record<string, string> {
-  const files = [...PROMPT_FILES[g]];
-  if (fs.existsSync(path.join(SRC, "plain-words.ts"))) files.push("plain-words.ts");
-  return Object.fromEntries(files.map((f) => [f, sha256(fs.readFileSync(path.join(SRC, f)))]));
-}
-
 const clip = (s: string, n = 400) => (s.length > n ? `${s.slice(0, n)}…` : s);
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -315,6 +309,12 @@ async function plan(): Promise<void> {
 
 async function generate(arm: string, only: Set<Generator> | null): Promise<void> {
   if (MARK_CASES.length !== 3) throw new Error(`MARK_CASES has ${MARK_CASES.length} cases; write three before a paid run`);
+  /* Before the generators are imported and run, not in `write()` after them: a
+     file edited during a long call would otherwise be recorded as what was sent. */
+  const sourceSha256 = Object.fromEntries(GENERATORS.map((g) => [g, sourceFingerprint(PROMPT_FILES[g])])) as Record<
+    Generator,
+    Record<string, string>
+  >;
   const { owner, runAsOwner, article } = await loadTheArticle();
   const { nullCheckpointStore } = await import("../../src/store/checkpoints.js");
   const { generateArc } = await import("../../src/arc.js");
@@ -354,7 +354,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
     if (items.length === 0) throw new Error(`${g}: the generator returned nothing to read`);
     const out = fileOf(g);
     if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(process.cwd(), out)}`);
-    const file: ArmFile = { arm, generator: g, slug: SLUG, sourceSha256: sourceShaFor(g), blocksSha256, at: new Date().toISOString(), ...extra, items };
+    const file: ArmFile = { arm, generator: g, slug: SLUG, sourceSha256: sourceSha256[g], blocksSha256, at: new Date().toISOString(), ...extra, items };
     fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
     console.log(`${arm}: wrote ${path.relative(process.cwd(), out)} (${items.length} items)`);
   }

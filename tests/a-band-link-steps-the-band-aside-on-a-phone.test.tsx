@@ -587,3 +587,53 @@ describe("Skim, which jumps on opening", () => {
     expect(document.activeElement, "focus did not come back to the Skim stop").toBe(stop);
   });
 });
+
+
+/* Plan 261004b: a card can start another dig while its own mode is already
+   open but stepped aside. Changing the URL to the same mode must reveal it. */
+describe("the citation card brings its band back", () => {
+  it.each([PHONE, 600])("reveals a stepped-aside Citations band at %ipx", async (width) => {
+    const id = "spya-c2qmbg";
+    const citation = {
+      id, key: "work:plain", title: "The plain point", why: "Where the point comes from.",
+      mentions: [{ blockId: FIRST, quote: "The first point", start: 0 }],
+      citedAt: [FIRST], firstCited: FIRST, citedInBody: true,
+      url: "https://example.com/point", linkFrom: "article", relevance: 0.8,
+    };
+    let digs = 0;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/citations/${SLUG}`) return Promise.resolve(json({
+        citations: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash",
+          generatedAt: "2026-10-04T00:00:00.000Z", elapsedMs: 1, capped: false,
+          citations: [citation] }, stale: false, outdated: false,
+      }));
+      if (url === `/api/citations/${SLUG}/${id}/investigate`) {
+        digs += 1;
+        return Promise.resolve(json({ error: "Test refusal" }, 429));
+      }
+      return Promise.resolve(reply(url, init?.method ?? "GET"));
+    });
+    await open(width, "?mode=citations");
+    expect(reader().classList.contains("band-covers")).toBe(true);
+    const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
+    expect(link, "the citation row must provide its passage jump").not.toBeNull();
+    await act(async () => link?.click());
+    await until(() => reader().classList.contains("band-away"), "the citation jump did not step aside");
+
+    const mark = host.querySelector("mark.cite");
+    expect(mark, "the prose must carry the citation mark").not.toBeNull();
+    await act(async () => {
+      const event = new MouseEvent("pointerover", { bubbles: true, clientX: 10, clientY: 10 });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      mark?.dispatchEvent(event);
+    });
+    await until(() => document.querySelector(".prose-card-cite-dig") !== null, "the citation card did not open");
+    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-dig")?.click());
+    await settle();
+    expect(digs, "the card must start the same row verb").toBe(1);
+    expect(document.querySelector(".prose-card")).toBeNull();
+    expect(param("mode")).toBe("citations");
+    expect(reader().classList.contains("band-away"), "Dig deeper left the answer in a hidden band").toBe(false);
+  });
+});
