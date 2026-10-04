@@ -243,6 +243,40 @@ What the reviewer says stays true and is accepted: a hand-edited plan file can p
 value in the four columns. Validation stops other columns and SQL; it does not prove the registry
 agreed. The plan file is what a person reads before applying, so this is the design.
 
+## Checks
+
+- **Browser**, a Sonnet subagent with Playwright at 1440 and 390 wide, against a private database
+  (the shared local one would not take the migration: it holds a peer's unlanded one). Three
+  articles: a day, a year with an 82-character journal name, and neither.
+  - Owner's Metadata page: `… · Journal of Careful Reading · … · Published May 31, 2024 · en`, and
+    `Published 2011` for the year. The article with neither is unchanged. On the phone the long
+    journal wraps and no separator starts a line.
+  - Visitor's Metadata page, signed out: the same two facts. No DOI or abstract on the page. The
+    public payload held `journal` with `published` or `publishedYear`, and no `doi`, `abstract` or
+    `publishedAt`, though the database row had a DOI and an abstract.
+  - Shelf, Published sort: newest first is the 2024 day, then 2011, then the undated one; oldest
+    first is 2011, the 2024 day, then the undated one.
+  - No console errors. Screenshots: `261004h-shot-year-*.png`.
+  - Not checked: the Published table column, which is hidden unless asked for.
+- **The production dry run**, read-only, 2026-10-04 16:00 UTC, 46 articles with a current
+  revision: 13 would be written (DOI 9, journal 13, a day 7, a year 6), 7 had a registry record
+  whose title or author did not agree, 21 had no identifier, 5 have no stored source. One article
+  gains a day and has a Timeline. Production has no `published_year` column yet, so apply refuses
+  this plan until the deploy.
+- **What the dry run found.** A PDF's text layer printed a DOI with the journal's address run onto
+  it, so the registry did not know it. Fixed in `ownIdsOfPdf`, test red first. That article then
+  reached the registry and its author did not agree, which is the next thing below.
+
+## Left for later
+
+- **Seven articles reached the right registry record and were refused** on title or author. The
+  check fails closed on purpose, but seven of twenty is a lot. Worth a look at which half refuses
+  them, with the real records.
+- **Debate's publication marker** (F8).
+- **The Shelf's Published hint** still says "When the publisher says it was published", which is
+  loose for a registry's day or year.
+
 ## Log
 
-- 2026-10-04: plan written, reviewed, built in two stages, each code-reviewed.
+- 2026-10-04: plan written, reviewed, built in two stages, each code-reviewed, browser-checked,
+  dry-run against production.
