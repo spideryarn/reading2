@@ -1,6 +1,6 @@
 # Post-import modes, decided on the server for every import path
 
-Status: plan, under review. Parent: [plans.md](../project/plans.md). Follows
+Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 is a question for Greg, not built. Parent: [plans.md](../project/plans.md). Follows
 [260930c](260930c-auto-generate-the-main-modes-after-import.md), whose Deferred 2 this is.
 
 > We should automatically run Glossary mode generation as part of every import process
@@ -211,3 +211,30 @@ hand-over), F4 (work-key wording) and F5 (a labels holder stamped later) are tak
 F2 (waiting behind labels is not awaiting the switch) is taken as the stated weaker guarantee, which
 Sol offered as the alternative to a mechanism. Its two closing notes, the wider rollback and that
 queued is not run, are in § Stage 1.
+
+**GPT Sol on the code** (commit 0d4e273b3, `workspace-write`, exit 0, answer file fresh):
+[code-review-sol](261004h-post-import-modes-decided-on-the-server-for-every-import-path-code-review-sol.md).
+Six findings fixed in its own diff, read and committed as 12bc13a92: F6 to F8 (the tick box's writes
+were owned by a page mount: no session signal, a failure restored the wrong value, and an old
+hand-over could land after a newer press), F9 (a mode the reader queued during the import kept its
+place ahead of `labels` when the publication joined it), F10 and F11 (wording). Its postmortem for
+F6 to F8 is [261004j](../postmortems/261004j-a-page-mount-cannot-own-writes-to-a-reader-setting.md).
+F9's test needed Postgres, which Sol does not have; run afterwards, 16 of 16.
+
+**F12, reported and left open.** Three server tests prove the primitive and not the wiring: the
+settlement rollback shares a transaction by hand and does not go through `settleIn`; the
+administrator's import is a name-reserving job with no reservation, not the admin id; the
+High-powered case calls the store and `readStepPower` directly and does not advance the real runner.
+The browser check below covers the ordinary wiring end to end; the rollback and High-powered wiring
+are not covered by anything.
+
+**Browser check** (Sonnet subagents, Playwright on the box, local stack). The first ran while Sol was
+editing the tree, so it was repeated on 12bc13a92 with a clean tree, sha the same at start and end.
+On the stable tree, five imports at 390px and 1280px: the browser sent the import POST once and no
+mode POST; each article had its mode jobs queued by the server; Glossary opened showing 7 terms with
+no Generate button; with a purpose typed, the page waited on *Save and open* and did not open by
+itself. From the first run, which still holds for the parts Sol did not touch: unticking sent one
+`PATCH /api/reader {"autoModes":false}`, no mode job followed, and a fresh add page showed the box
+unticked; *add to Spideryarn* on a hover card got its modes with no add page; nothing scrolls
+sideways at 390px. A duplicate import POST and a self-opening page seen in the first run did not
+recur on the stable tree and coincided with hot reloads.
