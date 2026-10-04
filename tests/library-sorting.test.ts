@@ -33,7 +33,7 @@ import { sortingFromUrl } from "../src/web/lib/table-sort.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 import { sinkLast } from "../src/web/lib/table-sort.js";
 import { naturalDirections, toggleSort } from "../src/web/lib/DataTable.js";
-import { calendarDay } from "../src/web/relative-time.js";
+import { calendarDay, publishedOf } from "../src/web/relative-time.js";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
 
@@ -346,6 +346,46 @@ describe("the shelf's order", () => {
     }).format(new Date("2024-03-11T00:00:00Z"));
     expect(said).toBe(`published ${expected}`);
     expect(note(entry({ slug: "b" }), NOW)).toBe("no publication date");
+  });
+
+  /* ---- A paper the registry dates only to a year (plan 261004h) ---- */
+
+  it("reads a day, a year, or neither, through one function", () => {
+    expect(publishedOf({ publishedAt: "2024-03-11T23:30:00-05:00" })).toEqual({
+      ...calendarDay("2024-03-11"),
+      precision: "day",
+    });
+    expect(publishedOf({ publishedYear: 2011 })).toEqual({
+      t: Date.UTC(2011, 0, 1),
+      label: "2011",
+      precision: "year",
+    });
+    expect(publishedOf({})).toBeUndefined();
+    /* A stored day wins: it is the finer statement. A day that is not one
+       falls through to the year. */
+    expect(publishedOf({ publishedAt: "2024-03-11", publishedYear: 2011 })?.precision).toBe("day");
+    expect(publishedOf({ publishedAt: "soon", publishedYear: 2011 })?.label).toBe("2011");
+    /* The column's own bounds; anything else is no date. */
+    for (const year of [999, 3000, 2011.5, Number.NaN]) {
+      expect(publishedOf({ publishedYear: year })).toBeUndefined();
+    }
+  });
+
+  it("sorts a year-only paper among the dated ones, at the start of its year", () => {
+    const list = [
+      entry({ slug: "undated" }),
+      entry({ slug: "dec-2010", publishedAt: "2010-12-31" }),
+      entry({ slug: "year-2011", publishedYear: 2011 }),
+      entry({ slug: "mar-2011", publishedAt: "2011-03-01" }),
+    ];
+    expect(order(list, asc("published"))).toEqual(["dec-2010", "year-2011", "mar-2011", "undated"]);
+    expect(order(list, desc("published"))).toEqual(["mar-2011", "year-2011", "dec-2010", "undated"]);
+  });
+
+  it("says the year alone on a card sorted by it, with no made-up day", () => {
+    const note = CARD_NOTES.published;
+    if (!note) throw new Error("no card note for published");
+    expect(note(entry({ slug: "a", publishedYear: 2011 }), NOW)).toBe("published 2011");
   });
 
   it("counts zero as a value, not as absent", () => {

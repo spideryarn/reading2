@@ -72,7 +72,8 @@ const STORED: Debate = {
 function publish(debate: Debate): PublicDebate {
   const payload = publicArticle({
     slug: SLUG, title: "The shared piece", byline: null, siteName: null, lang: null,
-    excerpt: null, headingTitle: null, finalUrl: "https://example.org/piece",
+    excerpt: null, journal: null, publishedAt: null, publishedYear: null,
+    headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
     timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate,

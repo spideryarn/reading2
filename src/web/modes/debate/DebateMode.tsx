@@ -22,6 +22,12 @@
  * the piece, and Claims, the search about what it claims. Both draw the one
  * stored debate, so switching between them fetches and spends nothing.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ *
+ * **And a second read for the owner since 2026-10-04**, `useCiters`: the papers
+ * that cite the piece, from OpenAlex, for Reception's *Cited by*. Not the
+ * stored debate's, free, and with no job: it is asked for on arrival and can
+ * start nothing.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  */
 
 import { useQueryState } from "nuqs";
@@ -30,6 +36,7 @@ import type { PublicDebate } from "../../../public-types.js";
 import { bearsParam, debateOrderParam, debateParam, debateThreadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
+import { useCiters } from "../../useCiters.js";
 import { DebatePanel } from "../../DebatePanel.js";
 import { yearOf } from "../../debate-order.js";
 
@@ -89,9 +96,14 @@ export function DebateBand({
   const [relevance, setRelevance] = useQueryState("bears", bearsParam);
   /* `?debatethread=`, the thread narrowing the list — plan 260930j. */
   const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
+  /* **Who cites the piece**, Reception's *Cited by* — a second read with no job
+     under it, so it can never start the search above. Wanted when the panel
+     draws the section: with Reception, and before any search is stored
+     (DebatePanel.tsx § `citedBy`). Plan 261004h. */
+  const citers = useCiters(slug, view === "reception" || debate.status === "none");
   return (
     <DebatePanel
-      access={{ kind: "owner", owner: debate }}
+      access={{ kind: "owner", owner: debate, citers }}
       onJump={onJump}
       view={view}
       onView={setView}

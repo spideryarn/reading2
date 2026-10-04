@@ -1867,6 +1867,26 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **Where and when it was published, on the visitor's Metadata page** — the
+   * journal and the publication date, out of the one payload and with no
+   * request of their own (plan 261004h). A fixture with a day and one with a
+   * year, because a paper has one or the other.
+   */
+  it.each([
+    ["a day", { published: "2024-05-31" }, /Published (31 May|May 31),? 2024/],
+    ["a year alone", { publishedYear: 2011 }, /Published 2011/],
+  ] as const)("prints the journal and %s on the metadata page, from the payload alone", async (_k, when, printed) => {
+    served = { ...ARTICLE, meta: { ...ARTICLE.meta, journal: "Entropy", ...when } };
+    await open("", "/metadata");
+
+    const facts = host.querySelector("[data-public-facts]")?.textContent ?? "";
+    expect(facts).toContain("Entropy");
+    expect(facts).toMatch(printed);
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  /**
    * **The Tweets band reads the flag rather than asserting one.**
    *
    * `TWEETS_GAP` was a constant saying `not-yet-public`, so this page told a

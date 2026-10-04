@@ -700,6 +700,11 @@ const REVISION_READ_POLICY: Record<
   abstract: { article: "value", library: "value" },
   doi: { article: "value", library: "value" },
   journal: { article: "value", library: "value" },
+  /* A `Meta` field, so `article`; and the shelf sorts and prints it beside
+     `publishedAt`, so `library`. **Not `timeline` or `metadata`**, which
+     `publishedAt` is on: no fingerprint reads the year, because a year is too
+     coarse a frame to resolve "last March" against (plan 261004h). */
+  publishedYear: { article: "value", library: "value" },
   /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
      is the one stage whose freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
@@ -1076,6 +1081,7 @@ const META_COLUMNS = {
   abstract: articleRevisions.abstract,
   doi: articleRevisions.doi,
   journal: articleRevisions.journal,
+  publishedYear: articleRevisions.publishedYear,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
@@ -1860,6 +1866,7 @@ function metaFrom(
     ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
     ...(revision.doi === null ? {} : { doi: revision.doi }),
     ...(revision.journal === null ? {} : { journal: revision.journal }),
+    ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of
        `source === "pdf"` — which is the media kind and stopped being a proxy
@@ -4027,6 +4034,26 @@ const rawPgArticleReader: ArticleReader = {
    * the reader to a POST that pays up to $0.27 for the same answer on every
    * open. `SHAPE.debate` (src/store/artifacts.ts) makes the same call.
    */
+  /**
+   * The Postgres half of `loadArticleIdentity`: the `article` read's own
+   * columns, with `titleFor` deliberately not applied (the contract says why).
+   * The heading query runs only for a revision with no stored title.
+   */
+  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "article");
+    if (!found) throw notFound(slug);
+    const { revision } = found;
+    const title = revision.title ?? (await firstHeadingTitle(revision.id)) ?? slug;
+    const authors = decodeAuthors(revision.authors);
+    return {
+      title,
+      ...(revision.byline === null ? {} : { byline: revision.byline }),
+      ...(authors ? { authors } : {}),
+      ...(revision.doi === null ? {} : { doi: revision.doi }),
+    };
+  },
+
   async loadDebate(slug: string): Promise<DebateFound> {
     requireSlug(slug);
     const found = await currentRevision(slug, "debate");

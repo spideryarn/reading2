@@ -384,6 +384,35 @@ does not repair it. In the one file where a mis-named field means "this silently
 the compiler was blind to exactly that mistake. `opt<T, K extends keyof T>` makes the name a checked
 literal. Do not reintroduce the spread form.
 
+**`PublicMeta` has ten fields, and three of them were added on 2026-10-04.** It had seven: `slug`,
+`title`, `byline`, `siteName`, `lang`, `excerpt` and `url`. (The type's own comment said six; `url`
+arrived on 2026-08-30 and the count was not moved.) The three are where and when the piece was
+published:
+
+> Q-visitor-page yes
+>
+> — Greg, 2026-10-04
+
+The question was whether a visitor's Metadata page should show the journal and the publication
+date, those two facts only
+([261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md)).
+What crosses, and what does not:
+
+- `journal`, copied from `article_revisions.journal` through `optNull`, which is `opt` for a row
+  whose empty columns are `null`.
+- `published`, **the calendar day and not the stored string**. The owner's `publishedAt` is the
+  publisher's own text and may carry a time of day and an offset. `publicMeta` sends its first ten
+  characters when they are a real day, and nothing otherwise. It has a different name from the
+  owner's field so neither is mistaken for the other.
+- `publishedYear`, for a paper whose registry record states a year and no whole day. It is the
+  publication date at the precision we hold it, so it was treated as inside the same yes. It is
+  sent only when there is no day.
+- **`doi` and `abstract` do not cross.** They sit in the same row and were not asked for. The public
+  projection in [`public-reader.ts`](../../src/store/public-reader.ts) does not select them, and
+  `tests/public-visibility-pg.test.ts` reads the real response for both.
+
+The public shelf's eight columns (`/read/public`) are a separate allowlist and were not changed.
+
 ## The fleet dashboard, which is a different product on the same box
 
 `tools/fleet/` is the agent dashboard on port 8787, not Spideryarn, and its threat model is its own:

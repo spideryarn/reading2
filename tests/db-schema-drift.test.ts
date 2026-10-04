@@ -273,6 +273,8 @@ describe("declaredTables", () => {
       "chat_threads",
       "checkpoints",
       "citation_finds",
+      "citation_index_citers",
+      "citation_index_lookups",
       "citation_investigations",
       "comments",
       "feedback",
@@ -381,8 +383,10 @@ describe("against a real database", () => {
          a second copy of the list above and it is deliberate: it is what makes a
          table that reaches the *schema* and not the *database* say so, which is
          the whole of the drift guard. */
-      /* Forty-five since `shelf_topic_sets`, 2026-10-03 (plan 261003f). */
-      expect(report.declaredTables).toBe(45);
+      /* Forty-five since `shelf_topic_sets`, 2026-10-03 (plan 261003f); forty-seven
+         since `citation_index_lookups` and `citation_index_citers`, 2026-10-04
+         (plan 261004h). */
+      expect(report.declaredTables).toBe(47);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

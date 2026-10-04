@@ -1604,7 +1604,7 @@ function mountVisitorTweets(): ReactNode {
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over) },
+    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} } },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",
@@ -1902,12 +1902,22 @@ const DEBATE_SHAPE: BandShape = {
 
 /** The same header, which no longer has a count either (the (i) since 2026-10-01,
  *  plan 261001m) — not empty, which is what makes Debate the
- *  control for the five bands whose headers do empty out. */
+ *  control for the five bands whose headers do empty out.
+ *
+ *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
+ *  screen before a search is stored (plan 261004h) — a deliberate change to
+ *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
+ *  Reception's list, so that shape did not move. */
 const DEBATE_LOADING: BandShape = {
   className: "mode-band gloss dbt has-about",
   label: "Debate",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.band-head",
+    "p.gloss-quiet",
+    "div.dbt-scroll",
+  ],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",

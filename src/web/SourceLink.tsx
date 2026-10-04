@@ -115,6 +115,16 @@ export function cameOffADisk(meta: Meta): boolean {
   return meta.filename !== undefined || meta.source === "pdf";
 }
 
+/**
+ * The journal to print beside the site name: the registry's name for where
+ * the piece appeared, or `undefined` when the site name already says it. One
+ * function for the owner's Metadata page and the visitor's, so the two agree
+ * on what counts as a repeat.
+ */
+export function journalBesideSite(journal: string | undefined, siteName: string | undefined): string | undefined {
+  return journal?.trim().toLowerCase() === siteName?.trim().toLowerCase() ? undefined : journal;
+}
+
 export function SourceLink({
   slug,
   children,

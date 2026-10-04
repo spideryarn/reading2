@@ -350,6 +350,9 @@ describe("no Postgres store is selected without a guard", () => {
       "pgBibliographicStore",
       "pgChatStore",
       "pgCitationFindStore",
+      /* Reception's *Cited by* cache, 2026-10-04 (261004h): public bibliographic
+         rows, guarded because every adapter is. */
+      "pgCitationIndexStore",
       /* Citations' *Investigate*, 2026-09-30: its parameters are an answer
          about what somebody's article cites. */
       "pgCitationInvestigationStore",

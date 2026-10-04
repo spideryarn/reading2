@@ -592,6 +592,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/debate/w1"],
   },
   {
+    /* Who cites the article, from OpenAlex — plan 261004h. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/citers\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/citers/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/citations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/citations/w1"],
@@ -911,8 +917,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 90;
-const EXPECTED_GUARD_COUNT = 110;
+const EXPECTED_MATCHER_COUNT = 91;
+const EXPECTED_GUARD_COUNT = 111;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2123,6 +2129,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
         // Citations' Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",

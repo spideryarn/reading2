@@ -267,14 +267,14 @@ import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
-import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { calendarDay, howLong, relativeAgo, timeAgo } from "./relative-time.js";
+import { howLong, publishedOf, relativeAgo, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -728,10 +728,11 @@ export function Metadata({
   /* **Where and when it was published** (Greg, 2026-10-03, spya-pcz6a3). The
      journal is the registry's name for where the piece appeared, left out when
      the site already says it; the day is the publisher's own calendar day,
-     printed by the same `calendarDay` the shelf sorts on, so the two cannot
-     disagree about what counts as a date. */
-  const journal = meta.journal?.trim().toLowerCase() === meta.siteName?.trim().toLowerCase() ? undefined : meta.journal;
-  const published = calendarDay(meta.publishedAt)?.label;
+     printed by the same `publishedOf` the shelf sorts on, so the two cannot
+     disagree about what counts as a date. A paper the registry dates only to
+     a year prints the year alone, `Published 2011` (plan 261004h). */
+  const journal = journalBesideSite(meta.journal, meta.siteName);
+  const published = publishedOf(meta)?.label;
   const facts = [
     ["byline", meta.authors ? undefined : meta.byline],
     ["journal", journal],
