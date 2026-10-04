@@ -46,6 +46,12 @@ export interface PaperTopic {
    * is nobody's sentence and stays in the UI face (fonts.md).
    */
   voice?: Voice;
+  /**
+   * A topic inside a broader subject (`granularity > 0`). The pills on a shelf
+   * card mark it with the Topics row's `›` (ShelfRowTopics.tsx); this card's
+   * list does not.
+   */
+  finer?: boolean;
 }
 
 /** How many topics the card names before it says how many more. */

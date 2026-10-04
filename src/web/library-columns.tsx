@@ -40,6 +40,7 @@ import { exactly, publishedOf, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import type { ComponentType } from "react";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -145,10 +146,21 @@ export const CHIP_ORDER = ["opened", "added", "published", "title", "length", "o
  * `archivedShown` is `?archived=1`: archived articles are rows too, and
  * Archive's card must not promise the row leaves (plan 260929a).
  */
+/**
+ * **What draws an article’s topic pills under its title**, handed in by the
+ * shelf page (ShelfRowTopics.tsx) rather than imported: this file is shared
+ * with the lazy /admin and /design routes, and the pills bring the topic
+ * colours behind them (tests/eager-client-graph.test.ts). A component rather
+ * than the topics themselves, so it can be one stable reference and the
+ * columns are not rebuilt when the topics answer lands. Plan 261005a.
+ */
+export type RowTopicsSlot = ComponentType<{ slug: string; className?: string }>;
+
 export function libraryColumns(
   shelf: Shelf,
   now: number,
   archivedShown = false,
+  Topics?: RowTopicsSlot,
 ): SortableColumn<LibraryEntry>[] {
   return [
     {
@@ -169,7 +181,7 @@ export function libraryColumns(
       /* `table` from the cell's context, so the row card can carry back the
          value of every column the reader has hidden. */
       cell: ({ row, table }) => (
-        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} />
+        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} Topics={Topics} />
       ),
     },
     {
@@ -328,9 +340,11 @@ function TitleCell({
   entry,
   shelf,
   hidden,
+  Topics,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  Topics: RowTopicsSlot | undefined;
   /** The ids of the columns the reader has hidden — `rowCardFacts`. */
   hidden: readonly string[];
 }) {
@@ -458,6 +472,7 @@ function TitleCell({
           <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
+      {Topics && <Topics slug={entry.slug} className="tw:mt-1" />}
     </>
   );
 }

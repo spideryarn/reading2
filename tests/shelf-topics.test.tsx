@@ -864,6 +864,126 @@ describe("topics a model named", () => {
   });
 });
 
+/* **The pills on each card and table row** (plan 261005a, Greg's report
+   `spya-mtajjy`): an article's own topics, the first three, then how many
+   more. Labels, not buttons. */
+describe("an article's topics on its card and its table row", () => {
+  const named = (label: string, granularity: number, ...slugs: string[]) => ({
+    key: label.toLowerCase(),
+    label,
+    articles: slugs.map((slug) => ({ slug })),
+    granularity,
+  });
+  /* mem-brain is in five; palaces in four; neurons in one; startups in none. */
+  const ROW_TERMS: LibraryTermsResponse = {
+    terms: [
+      named("Neuroscience", 0, "mem-brain", "neurons", "palaces"),
+      named("Business", 0, "mem-brain"),
+      named("Memory", 0.5, "palaces", "mem-brain"),
+      named("Learning", 0.5, "mem-brain", "palaces"),
+      named("Agents", 0.5, "mem-brain", "palaces"),
+    ],
+    scope: { articles: 4, works: 4, skipped: 0 },
+    pending: 0,
+    chosenBy: "model",
+    refreshing: false,
+  };
+  /** What a card or row says its article's topics are: the pills, then `+N`. */
+  const pillsIn = (within: Element | undefined) =>
+    [...(within?.querySelectorAll("[data-row-topics] > li") ?? [])].map((li) =>
+      (li.hasAttribute("data-row-topics-more") ? li.firstElementChild : li)?.textContent?.trim(),
+    );
+  const card = (title: string) => cardItems().find((li) => li.querySelector("h2")?.textContent?.trim() === title);
+  const tableRow = (title: string) =>
+    [...host.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(title));
+  const OF_FIVE = ["Neuroscience", "Business", "›Memory", "+2"];
+
+  beforeEach(() => {
+    answer = async () => ROW_TERMS;
+  });
+
+  it("shows the first three of five in the row's order, then how many more; and all of four", async () => {
+    await show("/");
+    expect(pillsIn(card("Memory and the brain"))).toEqual(OF_FIVE);
+    expect(pillsIn(card("Memory palaces"))).toEqual(["Neuroscience", "›Memory", "›Learning", "›Agents"]);
+    expect(pillsIn(card("Neurons firing"))).toEqual(["Neuroscience"]);
+  });
+
+  it("draws no topics line for an article in no topic", async () => {
+    await show("/");
+    expect(card("Startups and founders")).toBeDefined();
+    expect(card("Startups and founders")?.querySelector("[data-row-topics]")).toBeNull();
+  });
+
+  it("says the +N in words to a screen reader, as part of the list named Topics", async () => {
+    await show("/");
+    const line = card("Memory and the brain")?.querySelector("[data-row-topics]");
+    expect(line?.tagName).toBe("UL");
+    expect(line?.getAttribute("aria-label")).toBe("Topics");
+    const more = line?.querySelector("[data-row-topics-more]");
+    expect(more?.querySelector("[aria-hidden]")?.textContent).toBe("+2");
+    expect(more?.querySelector(".tw\\:sr-only")?.textContent).toBe("and 2 more");
+  });
+
+  it("wears the Topics row's marks, and is not a control", async () => {
+    await show("/");
+    const line = card("Memory and the brain")?.querySelector("[data-row-topics]");
+    expect(line).not.toBeNull();
+    /* Nothing in it is pressable or focusable, and nothing is lifted above the
+       card's stretched title link, so a press anywhere on it opens the article. */
+    expect(line?.querySelectorAll("button, a, [tabindex]")).toHaveLength(0);
+    expect(line?.outerHTML).not.toContain("tw:relative");
+    expect(line?.querySelectorAll("[data-topic-slot]")).toHaveLength(3);
+    expect([...(line?.querySelectorAll(".voice-ai") ?? [])].map((s) => s.textContent)).toEqual([
+      "Neuroscience",
+      "Business",
+      "Memory",
+    ]);
+    /* The same hue as the pill above it. */
+    const above = chip("Business").querySelector("[data-topic-slot]")?.getAttribute("data-topic-slot");
+    const here = [...(line?.querySelectorAll("li") ?? [])]
+      .find((li) => li.textContent?.includes("Business"))
+      ?.querySelector("[data-topic-slot]")
+      ?.getAttribute("data-topic-slot");
+    expect(here).toBe(above);
+  });
+
+  it("keeps a card's pills however the view is narrowed", async () => {
+    await show("/?topics=business");
+    expect(cards()).toEqual(["Memory and the brain"]);
+    expect(pillsIn(card("Memory and the brain"))).toEqual(OF_FIVE);
+  });
+
+  it("shows the same in the table", async () => {
+    await show("/?view=table");
+    expect(pillsIn(tableRow("Memory and the brain"))).toEqual(OF_FIVE);
+    expect(tableRow("Startups and founders")).toBeDefined();
+    expect(tableRow("Startups and founders")?.querySelector("[data-row-topics]")).toBeNull();
+  });
+
+  it("draws none before the topics answer lands, and all of them after, without a reload", async () => {
+    let land: (body: LibraryTermsResponse) => void = () => {};
+    answer = () => new Promise((resolve) => (land = resolve));
+    await show("/");
+    expect(cards()).toHaveLength(4);
+    expect(host.querySelector("[data-row-topics]")).toBeNull();
+    await act(async () => land(ROW_TERMS));
+    await settle();
+    expect(pillsIn(card("Neurons firing"))).toEqual(["Neuroscience"]);
+  });
+
+  it("lands in the table's cells too when the answer arrives after the rows", async () => {
+    let land: (body: LibraryTermsResponse) => void = () => {};
+    answer = () => new Promise((resolve) => (land = resolve));
+    await show("/?view=table");
+    expect(host.querySelectorAll("tbody tr")).toHaveLength(4);
+    expect(host.querySelector("[data-row-topics]")).toBeNull();
+    await act(async () => land(ROW_TERMS));
+    await settle();
+    expect(pillsIn(tableRow("Neurons firing"))).toEqual(["Neuroscience"]);
+  });
+});
+
 /* `?topics=` while a model refresh is under way. A refresh can bring a topic
    back, so a key missing from a `refreshing` answer is neither applied nor
    dropped; it goes on the settled answer, or when the asking gives up. */

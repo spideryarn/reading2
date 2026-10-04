@@ -169,9 +169,16 @@ export function ShelfCard({
   note,
   archivedShown = false,
   readThis,
+  topics,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  /**
+   * **The article’s topic pills**, drawn by the caller (ShelfRowTopics.tsx)
+   * for `readThis`’s reason: this file is shared with lazy routes, and the
+   * pills bring the topic colours behind them. Plan 261005a.
+   */
+  topics?: ReactNode;
   /**
    * ***Read this* for a paper not read through yet**, drawn by the caller
    * (`ReadThisButton`, ReadThis.tsx). A slot rather than an import because this
@@ -277,6 +284,7 @@ export function ShelfCard({
         {/* The reader's own tags, and the way to add one — plan 261003d. */}
         <ShelfTags entry={entry} shelf={shelf} />
       </p>
+      {topics}
 
       {/* The whole piece in one sentence: a model's gist, or the article's own
           excerpt where there is none, each in its voice's face (voice.ts). */}

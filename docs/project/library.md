@@ -1001,6 +1001,11 @@ so using it here would put a sentence about the opening where the reader expects
 article — and it would look completely right. The fallbacks are `summary` and then Readability's
 `excerpt`, both of which at least mean the whole thing; failing those, no blurb at all.
 
+**Under the meta line, the topics the article is in**: up to four pills, or three and `+N`. They
+are labels, and part of the card's link —
+[shelf-terms.md § On each card and table row](shelf-terms.md#on-each-card-and-table-row). The table
+has the same line under each title.
+
 The reading time comes from [`src/reading-time.ts`](../../src/reading-time.ts), which exists so that
 the card and the masthead cannot drift. They run on opposite sides of the wire, so nothing would ever
 have told us the card said 47 minutes and the masthead 54 — see
