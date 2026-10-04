@@ -647,3 +647,74 @@ describe("investigate", () => {
     expect(signal?.aborted).toBe(true);
   });
 });
+
+/* Plan 261004b: the state moved onto the read so the prose's hover card can
+   start a dig from any mode. So the band is no longer what holds the stream —
+   GPT Sol's plan review, F3: the test above unmounts both hooks together and
+   cannot tell the two apart. */
+describe("the band going does not stop a dig", () => {
+  let read: ReturnType<typeof useCitationsRead> | null = null;
+
+  function Band(props: { read: ReturnType<typeof useCitationsRead> }): ReactElement | null {
+    hook = useCitations(SLUG, props.read);
+    return null;
+  }
+  function Article({ band }: { band: boolean }): ReactElement | null {
+    read = useCitationsRead(SLUG);
+    return band ? createElement(Band, { read }) : null;
+  }
+  const paint = (band: boolean) => act(async () => root.render(createElement(Article, { band })));
+
+  it("carries on reading with the band closed, and the band finds the answer when it is back", async () => {
+    await paint(true);
+    mounted = true;
+    await flush();
+    let pressed: Promise<void> | undefined;
+    await act(async () => {
+      pressed = hook?.investigate(ID);
+    });
+    await flush();
+    expect(hook?.investigating).toBe(ID);
+
+    await paint(false);
+    await flush();
+    expect(signal?.aborted, "closing the band aborted the stream").toBe(false);
+    await act(async () => push?.("delta", { text: "Still reading." }));
+    await flush();
+    expect(read?.investigateDraft).toEqual({ id: ID, text: "Still reading." });
+
+    /* The band back mid-stream draws the same run, and does not start another. */
+    await paint(true);
+    await flush();
+    expect(hook?.investigating).toBe(ID);
+    expect(hook?.investigateDraft?.text).toBe("Still reading.");
+    await paint(false);
+
+    const kept = investigation("2026-10-04T10:00:00.000Z");
+    listed = { ...WORK, investigation: kept };
+    await act(async () => {
+      push?.("done", { investigation: kept });
+      end?.();
+    });
+    await act(async () => {
+      await pressed;
+    });
+    await flush();
+    expect(read?.investigating).toBeNull();
+    expect(read?.citations?.citations[0]?.investigation).toEqual(kept);
+    expect(posts, "a second dig was started").toBe(1);
+  });
+
+  it("starts from the read alone, with no band mounted — the card's press", async () => {
+    await paint(false);
+    mounted = true;
+    await flush();
+    expect(read?.status).toBe("ready");
+    await act(async () => {
+      void read?.investigate(ID);
+    });
+    await flush();
+    expect(read?.investigating).toBe(ID);
+    expect(posts).toBe(1);
+  });
+});

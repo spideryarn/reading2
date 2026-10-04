@@ -94,7 +94,8 @@ import { CommentDialog } from "../CommentDialog.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
@@ -1127,6 +1128,44 @@ export function Reader({
    * owner-only part of the card.
    */
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
+
+  /**
+   * **Point at a citation in the prose and press *Dig deeper*** — Greg,
+   * 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it would
+   * have a button for dig deeper in the tooltip."* Plan 261004b.
+   *
+   * Starts the row's own *Dig deeper* and opens Citations on that row, where
+   * the answer streams — `openTermInGlossary`'s shape, one feature over. The
+   * verb and its state are on the citations read since the same plan, because
+   * the band that used to hold them is not mounted in the mode the reader
+   * pressed from. `citeFocus` is a one-shot the band hands back once the row is
+   * in view (CitationsPanel.tsx § `Props.focus`); it is state rather than a URL
+   * parameter because nothing about it should survive a reload.
+   *
+   * `null` for a visitor, whose arm has no read: no button is drawn.
+   */
+  const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
+  /* Only the request that was served: a second press may have replaced it. */
+  const citeFocusTaken = useCallback(
+    (taken: CiteFocus) => setCiteFocus((now) => (now?.n === taken.n ? null : now)),
+    [],
+  );
+  const investigateCitation = owner?.citations.investigate ?? null;
+  const citationDigging = owner?.citations.investigating ?? null;
+  const citeActions = useMemo<CiteActions | null>(
+    () =>
+      investigateCitation === null
+        ? null
+        : {
+            digging: citationDigging,
+            dig: (id) => {
+              void investigateCitation(id);
+              setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
+              void setMode("citations");
+            },
+          },
+    [investigateCitation, citationDigging, setMode],
+  );
 
   const citeSelections = useMemo<CiteSelection[]>(
     () =>
@@ -2680,7 +2719,15 @@ export function Reader({
           return artefacts?.citations ? (
             <VisitorCitationsBand citations={artefacts.citations} onJump={bandJump} />
           ) : null;
-        return <CitationsBand slug={slug} read={owner.citations} onJump={bandJump} />;
+        return (
+          <CitationsBand
+            slug={slug}
+            read={owner.citations}
+            onJump={bandJump}
+            focus={citeFocus}
+            onFocusTaken={citeFocusTaken}
+          />
+        );
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason
          above. No passages: each passage under a question is a jump, not a
          selection. docs/plans/260916d-faq-mode.md,
@@ -3465,6 +3512,9 @@ export function Reader({
            both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
            read to pass — the enforcement is that there is nothing here. */
         termActions={glossaryRead}
+        /* *Dig deeper* on a cited work: built over the owner's citations read
+           (plan 261004b). Null for a visitor, for `termActions`' reason. */
+        citeActions={citeActions}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}

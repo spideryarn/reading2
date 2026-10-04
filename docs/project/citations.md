@@ -346,8 +346,23 @@ the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
-numbers), *Look it up* (billed, and a surface that opens on a hover is the wrong place for it), and a
-foot button into the mode (it needs `?cite=`).
+numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
+needs `?cite=`).
+
+**The owner's card has *Dig deeper* in its foot**, since 2026-10-04. Greg, 2026-10-03 (report
+`spya-c2qmbg`):
+
+> I clicked search Scholar and it took me to another page. It's just a Google Scholar search. That
+> wasn't that interesting. What I was hoping is that it would have a button for dig deeper in the
+> tooltip.
+
+One press starts the row's own *Dig deeper*
+(§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), closes the card, and opens
+Citations with that row scrolled into view, where the answer streams. If the prioritised order's bar
+was hiding the row, the bar is lowered to it, visibly, as *Open glossary* does for a term. The button
+is disabled while any dig runs. *search Scholar* stays beside it on a row with no link. The glossary
+card's *Dig deeper* is the same shape
+([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away
@@ -479,7 +494,18 @@ footer reads *Researched <date> · Dig deeper again*. It was **Investigate** unt
 it became the same action as the glossary's and a comment's: always a web search, and always the
 bigger model ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term) has
 Greg's words and the shared half). The code and the route keep the old name
-(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`). One press, in order:
+(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`).
+
+**A dig outlives the band, and its row stays drawn** (2026-10-04, plan 261004b). The press's state
+lives on the article's citations read, not in the band, so the prose card can start one from any
+mode; leaving Citations mid-answer no longer stops the reading, and the draft, a failure or the
+answer is on the row when the reader comes back. Leaving the article still stops the reading; the
+server finishes and stores the answer either way. And a dig can change its own row's priority (it
+detaches the last answer's web influence while it looks again), so whenever that priority changes
+the bar is lowered if it would now hide the row. A reader who raises the bar afterwards is not
+fought.
+
+One press, in order:
 
 1. **The forced web search** — `searchFirst` from [`src/dig-deeper.ts`](../../src/dig-deeper.ts),
    aimed with the work's title, authors, year and its own link when the article gave one, and the
@@ -727,11 +753,11 @@ behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-5
 
 ## Deferred
 
-Selecting a work to mark every passage that cites it (`?cite=`), and with it the *In Citations* foot
-button on the hover card and the threshold reveal it would need; marking every occurrence of a
+Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Citations* foot
+button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; a real citation count from a registry (*Dig deeper*'s influence is an AI estimate from a web page, not a count; Crossref's `is-referenced-by-count` for a row with a DOI is still deferred, [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a real citation count from a registry (*Dig deeper*'s influence is an AI estimate from a web page, not a count; Crossref's `is-referenced-by-count` for a row with a DOI is still deferred, [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; folding Citations into Debate as a sub-mode, and placing a cited work in the debate's threads (a proposal awaiting Greg, [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

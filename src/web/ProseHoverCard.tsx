@@ -42,6 +42,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Microscope,
   LoaderCircle,
   Plus,
   Quote as QuoteIcon,
@@ -190,6 +191,7 @@ function HoverCard({
   canAddToShelf,
   showInSpideryarn,
   termActions,
+  citeActions = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -324,6 +326,16 @@ function HoverCard({
    * of the capability (reader-capability.ts), so a visitor has nothing to pass.
    */
   termActions: TermActions | null;
+  /**
+   * **What an owner may do to a cited work from the card** — *Dig deeper*.
+   * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
+   * would have a button for dig deeper in the tooltip."* Plan 261004b.
+   *
+   * `null` or absent for a visitor, and then no button is drawn: a dig is a
+   * model call the owner pays for. Reader builds it from the owner's citations
+   * read, which a visitor's arm does not have (reader-capability.ts).
+   */
+  citeActions?: CiteActions | null;
   /**
    * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
@@ -690,7 +702,13 @@ function HoverCard({
               "belong" to is not a thing the mark records, so picking one would
               be picking for the reader. */}
           {cited.map((w) => (
-            <CiteCard key={w.id} work={w} showInSpideryarn={showInSpideryarn} />
+            <CiteCard
+              key={w.id}
+              work={w}
+              showInSpideryarn={showInSpideryarn}
+              actions={citeActions}
+              onClose={close}
+            />
           ))}
           {/* The quote half, under the term and the citation and above the
               link: what the words mean and whom they lean on come first, then
@@ -1897,13 +1915,19 @@ function clip(text: string, max: number): string {
  * - **The two score bars.** Glossary parity: the card says what a thing means,
  *   the band says what we scored it. A relevance bar in a hover panel is a
  *   number with nothing to compare it against.
- * - **Look it up** (was *Find it on the web*). Its result is here
- *   (`CiteCardReading`); the press is not. It is billed, rate-limited and owner-only, and a
- *   surface that opens because a pointer rested somewhere is the wrong place for
- *   a press that spends money.
- * - **A foot button into Citations mode.** It would need `?cite=` and a
- *   threshold reveal, both deferred — see the plan. The link out is the action,
- *   and it is the one a reader came for.
+ * - **A kept *Dig deeper* answer.** The verdict's short version is here
+ *   (`CiteCardReading`); the long reading stays on the row, which has the room.
+ * - **A selected row in Citations mode.** There is no `?cite=`; the card's
+ *   button scrolls the row into view once and that is all (plan 261004b).
+ *
+ * ## And one thing that was not here until 2026-10-04: *Dig deeper*
+ *
+ * This list used to say a card that opens because a pointer rested somewhere is
+ * the wrong place for a press that spends money. Greg asked for it by name
+ * (report `spya-c2qmbg`), the glossary's card has had the same button since
+ * 261002c, and the press is a deliberate one on a labelled button, not the
+ * hover. It starts the row's own *Dig deeper* and opens Citations on that row,
+ * where the answer streams: `CiteActions`.
  *
  * ## And a count instead of more marks
  *
@@ -1913,7 +1937,18 @@ function clip(text: string, max: number): string {
  * answer. The honest close is words — *cited in 7 paragraphs* — which is Fable's
  * call and costs nothing.
  */
-function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryarn: boolean }) {
+function CiteCard({
+  work,
+  showInSpideryarn,
+  actions,
+  onClose,
+}: {
+  work: CitedWork;
+  showInSpideryarn: boolean;
+  /** `null` for a visitor: no Dig deeper. */
+  actions: CiteActions | null;
+  onClose(): void;
+}) {
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
@@ -1990,7 +2025,7 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
       </div>
       <CiteCardReading work={work} />
 
-      <p className="prose-card-foot">
+      <p className="prose-card-foot prose-card-cite-foot">
         {source.kind === "address" ? (
           <span className="prose-card-cite-source">
             {source.host} · {source.how}
@@ -2017,10 +2052,53 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
             ? `cited in ${where} ${where === 1 ? "paragraph" : "paragraphs"}`
             : "only in the references"}
         </span>
+        {/* The owner's one verb, last and pushed right. The card closes on the
+            press for `TermCard`'s reason: it is 18rem and goes when the pointer
+            leaves, and the answer needs somewhere that stays put — the row,
+            which `actions.dig` opens. One at a time, as on the rows. */}
+        {actions && (
+          <button
+            type="button"
+            className="prose-card-act prose-card-cite-dig"
+            disabled={actions.digging !== null}
+            title={CITE_CARD_DIG_SAYS}
+            onClick={() => {
+              actions.dig(work.id);
+              onClose();
+            }}
+          >
+            {actions.digging === work.id ? (
+              <LoaderCircle size={10} className="cmt-spinner" />
+            ) : (
+              <Microscope size={10} />
+            )}
+            {actions.digging === work.id
+              ? "Digging deeper…"
+              : work.investigation
+                ? "Dig deeper again"
+                : "Dig deeper"}
+          </button>
+        )}
       </p>
     </div>
   );
 }
+
+/**
+ * **The owner's one verb on a cited work**, as the card needs it. Reader builds
+ * it over the citations read, where *Dig deeper*'s state has lived since
+ * 2026-10-04 so that a card in any mode can start one (plan 261004b).
+ */
+export interface CiteActions {
+  /** Start *Dig deeper* for this work and open Citations on its row. */
+  dig(id: string): void;
+  /** The work a dig is running for, or null — one at a time, across the band and the card. */
+  digging: string | null;
+}
+
+/** The card button's `title`. Each clause is something the row's own press does (CitationInvestigation.tsx § InvestigateButton). */
+export const CITE_CARD_DIG_SAYS =
+  "Searches the web for this work and asks a stronger model how it bears on this article. It costs money. The answer appears on its row in Citations.";
 
 /**
  * **After *Look it up*, the short version of the band's reading** — plan
