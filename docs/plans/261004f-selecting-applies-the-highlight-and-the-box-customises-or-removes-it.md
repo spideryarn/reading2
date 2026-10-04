@@ -173,3 +173,65 @@ each time; if you also copy or look words up, A.
 Still open from 261004a, not changed here: `[Q-ask-ai-colour]` (should a word you only asked about
 also stay highlighted). With this plan the word is painted on selection, so it stays yellow unless
 *No colour* is picked.
+
+## GPT Sol's plan review, 2026-10-04: build with changes — and the design changed
+
+[261004f-apply-on-select-plan-review-sol.md](261004f-apply-on-select-plan-review-sol.md). Six P1s,
+two P2s. **This section replaces "The design decision" and "How" above.** "What changes for the
+reader", the touch section and the question stand.
+
+Four of the P1s (E1 a closed box no longer protects an unsent create; E2 a tick-deferred unmount
+flush races page exit; E5 the paint vanishes while the create is held; E6 the provisional mark
+needs a real representation) are all costs of *painted now, stored later*. Sol's closing note was
+that the design this plan passed over is cheaper than it claimed, and on checking, it is:
+
+**The row is written on selection, and the box that opens is `CommentDialog`**, the box a click on
+any highlight already opens. It has the words field (`onEdit`), the colour row (`onRecolour`),
+*Ask the AI about this…*, and Delete; it focuses its close button, not a text field, so it raises
+no keyboard on an iPad. This is the gutter bookmark's pattern (`bookmarkBlock` in `Reader.tsx`:
+create, then open the box on the row), applied to a selection. My reasons for passing it over were
+wrong on two counts: the box does not need three new PATCH paths, because `CommentDialog` already
+has them and they already share one write queue; and the create/delete race is the one 261003i's
+reviews made safe, with tests. What it costs is a create and a delete for a mis-drag or a copy.
+
+So:
+
+- **`selectProse`, outside Referee mode**: `create({ …anchor, colour: "yellow" })` and open the
+  comment's box as soon as its row exists (at once when the list has loaded; after the opening read
+  when it has not, which is the first seconds of a page, and named in the docs). The paint is the
+  ordinary mark of an ordinary row. No provisional mark, no unmount flush.
+- **Referee mode keeps `AnnotateDialog`** exactly as it is: a draft, no default colour, placement.
+- **A fresh box** is one opened by the selection that made its comment. While fresh:
+  - **click off closes it** (a `pointerdown` outside the box and anything it portals; never
+    swallowed). An ordinary comment box, opened from a mark or the drawer, does not gain this.
+  - Delete is labelled **Remove highlight**.
+  - A hint: *"Highlighted. Click away to keep it."*
+  - **Copy.** A button, *Copy, don't highlight*: copies the words and deletes the row. The same
+    happens on a native copy (⌘C) of the still-live selection. Only while the row is **pristine**
+    (yellow, no words, no conversation, no placement); once the reader has changed it, Copy just
+    copies. The removal follows the clipboard write's real outcome, not the press (E7).
+- **Overlap means correction** (E3), decided in `selectProse` where both anchors are known: the
+  fresh row is remembered for the gesture that closes its box (set on the click-off `pointerdown`,
+  cleared by the next `pointerdown`), and a selection completed in that gesture, in the same block
+  with an overlapping range, removes the fresh row if it is still pristine. Mouse only; by touch a
+  second selection needs the first box closed, and both are kept.
+- **E4**: the mouse's selection is left alone, as now (the click that ends a drag reads it to avoid
+  following a link). Touch clears it on the button press.
+- **E1**, the part that survives the redesign: a create that has not yet been sent (held behind the
+  opening read, or waiting on a token) is replayed with the keepalive writer on `pagehide`, from
+  `useComments`, with the same id. This is general, not specific to the box.
+- **E8**: the fresh flag carries `input: "mouse" | "touch"` only if something needs it; with
+  `CommentDialog`'s focus on its close button nothing does. Portals inside the box count as inside.
+- A create that fails removes its row, and with it the paint and the box; the Dock says the write
+  failed, as for any comment. Nothing is shown as highlighted that is not stored or being stored.
+
+**What `AnnotateDialog`'s draft machinery (261003i, 261004a) is now for:** Referee mode only. It is
+not deleted here; whether Referee should follow is a separate question, and removing a working path
+in the same change as replacing it is how regressions hide.
+
+Tests follow the new design: selection creates a yellow row and opens `CommentDialog` on it
+(mounted, Reader-shaped harness, plus source assertions on `Reader.tsx` as the other tests do);
+click-off closes a fresh box and not an ordinary one; Remove highlight; Copy on pristine deletes
+after a successful write and not after a refused one; ⌘C the same; overlap correction keeps a
+touched row and removes a pristine one; Referee still opens `AnnotateDialog`; the held-create
+`pagehide` replay in `useComments`; a failed create leaves no box.
