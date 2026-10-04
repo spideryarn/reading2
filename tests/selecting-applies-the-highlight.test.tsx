@@ -447,10 +447,17 @@ function up(el: Element): void {
 /**
  * A whole press on one element: pointerdown, and the click after it, as two
  * turns — a `.click()` alone would miss the order the box depends on.
+ *
+ * **A press in the prose takes the selection with it**, as a browser's
+ * mousedown on text does; a press on a button leaves it. That is said here
+ * since the box stopped closing at `pointerdown`: until then the repaint that
+ * close caused had collapsed the selection, and no case could tell. (A click on
+ * the selected words themselves is the exception, and has its own case.)
  */
 async function press(el: Element): Promise<void> {
   await act(async () => {
     down(el);
+    if (el.closest("td.text .prose")) window.getSelection()?.removeAllRanges();
   });
   await act(async () => {
     up(el);
@@ -714,6 +721,30 @@ describe("the fresh box: click away to keep it", () => {
     expect(commentPosts()).toHaveLength(1);
   });
 
+  /* A click on selected text does not collapse the selection until after its
+     mouseup, and a mouse's words are still selected while the box is open. So
+     the mouseup reads the highlight's own anchor again. */
+  it("nor a request for a second highlight, when its words are still selected at the mouseup", async () => {
+    await open();
+    const quote = await drag(4, 19);
+    const id = sentId();
+    await until(() => param("note") === id);
+    expect(window.getSelection()?.toString(), "the words are still selected").toBe(quote);
+    const mark = host.querySelector<HTMLElement>(`tr[data-block="${PARA}"] mark.cmt`)!;
+    await act(async () => {
+      down(mark);
+    });
+    await act(async () => {
+      up(mark);
+    });
+    await until(() => param("note") === null);
+    await settle(12);
+    expect(commentPosts(), "one highlight").toHaveLength(1);
+    expect(deletes()).toEqual([]);
+    expect(dialog(), "closed, and not reopened").toBeNull();
+    expect(painted()).toContain(id);
+  });
+
   it("the press that closes it is not swallowed: a Dock button still does its job", async () => {
     await open();
     await drag(4, 19);
@@ -855,16 +886,186 @@ describe("the fresh box: click away to keep it", () => {
       set.call(note, "worth a second look");
       note.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    /* Only the pointerdown: in a browser the blur comes after it, and by then
-       the box has gone. */
-    await act(async () => {
-      prose(OTHER).dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType: "mouse" }),
-      );
-    });
+    /* The dispatched press moves no focus, so nothing here blurs the field: the
+       words are committed by the box itself, as its press ends. (Until the
+       close moved to the end of the gesture this case sent only a pointerdown.) */
+    await press(prose(OTHER));
     await until(() => stored.find((c) => c.id === id)?.body !== undefined);
     expect(stored.find((c) => c.id === id)?.body).toBe("worth a second look");
     expect(dialog()).toBeNull();
+  });
+});
+
+/**
+ * **The press that closes the fresh box changes nothing until it ends.**
+ *
+ * Found in real Chrome, 2026-10-04: with the box open, a mouse drag that began
+ * in the highlight's own paragraph made no selection at all. The box closed on
+ * `pointerdown`; closing takes the open ring off the mark, which rewrites that
+ * paragraph through `innerHTML`; and that happened between `pointerdown` and
+ * `mousedown`, so the browser anchored its drag on nodes that were no longer in
+ * the document. "Overlap means correction" could not happen with a real mouse,
+ * and nor could a second highlight in the same paragraph.
+ *
+ * jsdom starts no drag, so what is asked is the thing the browser needs: **a
+ * text node of that paragraph, held from before the press, is still in the
+ * document when the button comes up**, and the box is still open until then.
+ */
+describe("the press that closes the fresh box does nothing until it ends", () => {
+  const firstText = (block = PARA): Text => {
+    const node = document.createTreeWalker(prose(block), NodeFilter.SHOW_TEXT).nextNode();
+    if (!node) throw new Error("the paragraph has no text");
+    return node as Text;
+  };
+  const pointer = (type: string, pointerType: "mouse" | "touch") =>
+    new PointerEvent(type, { bubbles: true, cancelable: true, pointerType });
+
+  /** `drag`, checking at the press what a browser's drag depends on. */
+  async function dragInTheSameParagraph(start: number, end: number): Promise<string> {
+    const held = firstText();
+    const open = sentId(commentPosts().length - 1);
+    await act(async () => {
+      down(prose());
+      window.getSelection()?.removeAllRanges();
+    });
+    await settle();
+    expect(held.isConnected, "the press rewrote the paragraph under the pointer").toBe(true);
+    expect(dialog(), "the box is still open while the button is down").not.toBeNull();
+    expect(param("note")).toBe(open);
+    await act(async () => {
+      setSelection(start, end);
+      up(prose());
+    });
+    await settle();
+    return PARAGRAPH.slice(start, end);
+  }
+
+  it("a drag begun in the highlight's own paragraph still has its nodes, and makes the next highlight", async () => {
+    await open();
+    await drag(4, 19);
+    const first = sentId(0);
+    await until(() => param("note") === first);
+    /* 41, not 40: the drag begins on a word, so nothing is trimmed. */
+    const quote = await dragInTheSameParagraph(41, 55);
+    expect(commentPosts()).toHaveLength(2);
+    const second = sentId(1);
+    expect(commentPosts()[1]?.body).toMatchObject({ quote, start: 41, colour: "yellow" });
+    await until(() => param("note") === second);
+    expect(dialog(), "the new highlight's box is open").not.toBeNull();
+    expect(dialog()?.querySelector(".cmt-quote")?.textContent).toBe(quote);
+    expect(dialog()?.textContent, "and it is the fresh one").toContain("Click away to keep it");
+    expect(deletes(), "they do not overlap, so both are kept").toEqual([]);
+    expect(painted()).toContain(first);
+    expect(painted()).toContain(second);
+  });
+
+  it("an overlapping drag in that paragraph replaces the untouched highlight: one row left, the new one", async () => {
+    await open();
+    await drag(4, 19);
+    const first = sentId(0);
+    await until(() => param("note") === first);
+    const quote = await dragInTheSameParagraph(10, 30);
+    await until(() => deletes().length > 0);
+    const second = sentId(1);
+    expect(deletes()).toEqual([`${LIST}/${first}`]);
+    expect(stored.map((c) => c.id), "exactly one row").toEqual([second]);
+    expect(painted()).not.toContain(first);
+    await until(() => param("note") === second);
+    expect(dialog()?.querySelector(".cmt-quote")?.textContent).toBe(quote);
+  });
+
+  it("an overlapping drag keeps a highlight the reader had recoloured", async () => {
+    await open();
+    await drag(4, 19);
+    const first = sentId(0);
+    await act(async () => swatch("Green")?.click());
+    await until(() => stored.find((c) => c.id === first)?.colour === "green");
+    await dragInTheSameParagraph(10, 30);
+    await settle(12);
+    expect(deletes()).toEqual([]);
+    expect(stored.map((c) => c.id)).toEqual([first, sentId(1)]);
+  });
+
+  it("a plain press elsewhere closes the box when the button comes up, not before", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await until(() => param("note") === id);
+    const held = firstText();
+    await act(async () => {
+      down(prose(OTHER));
+      window.getSelection()?.removeAllRanges();
+    });
+    await settle();
+    expect(dialog(), "still open at the press").not.toBeNull();
+    expect(held.isConnected).toBe(true);
+    await act(async () => {
+      up(prose(OTHER));
+    });
+    await until(() => param("note") === null);
+    expect(dialog(), "closed at the release").toBeNull();
+    expect(painted(), "and the highlight is kept").toContain(id);
+    expect(deletes()).toEqual([]);
+  });
+
+  it("a finger's tap elsewhere closes it when the finger lifts", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await until(() => param("note") === id);
+    await act(async () => {
+      prose(OTHER).dispatchEvent(pointer("pointerdown", "touch"));
+    });
+    await settle();
+    expect(dialog(), "still open while the finger is down").not.toBeNull();
+    await act(async () => {
+      prose(OTHER).dispatchEvent(pointer("pointerup", "touch"));
+    });
+    await until(() => param("note") === null);
+    expect(dialog()).toBeNull();
+    expect(painted()).toContain(id);
+  });
+
+  it("a press the browser cancels closes it too", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await until(() => param("note") === id);
+    await act(async () => {
+      prose(OTHER).dispatchEvent(pointer("pointerdown", "touch"));
+    });
+    await act(async () => {
+      prose(OTHER).dispatchEvent(pointer("pointercancel", "touch"));
+    });
+    await until(() => param("note") === null);
+    expect(dialog()).toBeNull();
+    expect(painted()).toContain(id);
+  });
+
+  /* The choice for a mouse press whose `mouseup` never reaches the window:
+     nothing was closed, so nothing is half closed. The box stays open and
+     fresh, and the next press is judged on its own. */
+  it("a mouse press whose release never arrives leaves the box open and fresh, and the next press decides", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await until(() => param("note") === id);
+    await act(async () => {
+      down(prose(OTHER));
+    });
+    await settle(12);
+    expect(dialog(), "no release, no close").not.toBeNull();
+    expect(dialog()?.textContent).toContain("Click away to keep it");
+
+    /* A press inside the box does not inherit the abandoned one. */
+    await press(dialog()!.querySelector<HTMLTextAreaElement>("textarea.cmt-note")!);
+    expect(dialog(), "a press inside is still a press inside").not.toBeNull();
+    expect(param("note")).toBe(id);
+
+    await press(prose(OTHER));
+    await until(() => param("note") === null);
+    expect(dialog(), "and a whole press outside still closes it").toBeNull();
+    expect(painted()).toContain(id);
   });
 });
 

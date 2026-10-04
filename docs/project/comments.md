@@ -79,8 +79,20 @@ later from its mark, the drawer or a link is an ordinary box. Only a fresh box h
   still follows, a Dock button still opens, and a drag that begins in the prose becomes the next
   selection. "Inside" means the box and anything it portals (a tooltip is at the end of `<body>`),
   decided by React's own event path through the portal and not by `contains`. Words typed and not
-  yet committed are committed first, because the press arrives before the blur it causes. A click
-  on the words just highlighted is a click away too: it does not open the box straight back up.
+  yet committed are committed before the box goes. A click on the words just highlighted is a click
+  away too: it does not open the box straight back up, and it does not make a second highlight
+  (its `mouseup` finds those words still selected).
+- **It closes when the press ends, not when it begins.** The `pointerdown` outside is only
+  recorded. A mouse's box closes at `mouseup`, after `TableView` has read the selection that press
+  made; a finger's or a pen's at `pointerup`; either at `pointercancel`. It closed at `pointerdown`
+  until a check in real Chrome on 2026-10-04: closing takes the open ring off the mark, which
+  rewrites that paragraph through `innerHTML` between `pointerdown` and `mousedown`, so a drag
+  begun in the highlight's own paragraph was anchored on nodes no longer in the document and
+  selected nothing. The rule that follows: **nothing that re-renders the prose may happen while the
+  button is down.** The close is also conditional. If the same press made a new highlight or
+  landed on another mark, that comment's box is now open and is left alone. And a mouse press
+  whose release never reaches the window closes nothing: the box stays open and fresh, and the
+  next press is judged on its own.
 - **Delete reads *Remove highlight***, still one press, and closes the box instead of stepping to a
   neighbour.
 - **A hint**: *Highlighted. Click away to keep it.*
@@ -94,7 +106,8 @@ server answers, so the box and `Reader` also keep a *touched* flag set at the pr
 
 **Overlap means correction.** A reader who drags again over some of the same words straight away
 is fixing which words, not asking for two highlights. The fresh row is remembered for the one
-gesture that closes its box (set by that `pointerdown`, cleared by the next), and a selection that
+gesture that closes its box (set by that `pointerdown`, cleared when the gesture ends and again by
+the next `pointerdown`), and a selection that
 gesture goes on to make, in the same paragraph and sharing at least one character, removes the
 first if it is still pristine. Then the new one is created as usual. A mouse only: by touch the
 second selection is a new long-press, and both are kept.

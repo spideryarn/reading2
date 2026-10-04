@@ -82,7 +82,7 @@ import { questionsByAnchor } from "../quiz-anchors.js";
 import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
-import { selectAnchor, type SelectionAnchor } from "../selection.js";
+import { sameAnchor, selectAnchor, type SelectionAnchor } from "../selection.js";
 import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
@@ -2383,7 +2383,9 @@ export function Reader({
    * must not remove a highlight the reader had just changed.
    *
    * **`closedFresh` is the fresh row, remembered for one gesture.** Set by the
-   * `pointerdown` that closes its box by clicking away, held until that mouse
+   * `pointerdown` outside its box — which closes nothing yet: the box goes
+   * when that press ends, and only if it still shows this row (CommentDialog.tsx
+   * § The press outside is only recorded) — held until that mouse
    * gesture's `mouseup`, and also cleared by the next `pointerdown` as a stale
    * guard (the capture listener below runs before the dialog's own). A mouse
    * drag is one gesture, so a selection whose `mouseup` finds this set is the
@@ -2399,6 +2401,16 @@ export function Reader({
   } | null>(null);
   const freshTouched = useRef(false);
   const closedFresh = useRef<{ id: string; anchor: SelectionAnchor; touched: boolean } | null>(null);
+  /**
+   * **Has this gesture already opened a comment's box?** The fresh box closes
+   * when the press outside it ends, and by then the same press may have made a
+   * new highlight or landed on another mark, whose box is the one now wanted.
+   * The dialog checks the id it is showing and the close itself is conditional
+   * on `?note=`, but neither is enough alone: both read state that a commit not
+   * yet flushed has not reached. This is set in the handler, so it is always
+   * current. Forgotten at the next `pointerdown`.
+   */
+  const openedThisGesture = useRef(false);
   /* A clipboard answer can arrive after its fresh box has closed. Every
      reader change protects the row here, above any one dialog instance, and a
      successful answer claims the id before deleting so two pending copies
@@ -2432,6 +2444,7 @@ export function Reader({
   useEffect(() => {
     const nextGesture = () => {
       closedFresh.current = null;
+      openedThisGesture.current = false;
     };
     const gestureEnded = () => {
       closedFresh.current = null;
@@ -2522,6 +2535,16 @@ export function Reader({
          `touched` for anything the store has not answered yet. A mouse only:
          by touch the second selection is a new long-press, a new gesture. */
       const closed = closedFresh.current;
+      /* **The very words of the fresh highlight are not a new selection.** A
+         mouse keeps them selected while the box is open (§ A mouse keeps its
+         words selected), and a click on selected text does not collapse the
+         selection until after its `mouseup` — so a click on the highlight
+         arrives here as its own anchor again. It is a click away: leave the
+         row alone, leave `closedFresh` for `openCommentDialog`, and let the
+         box close as the press ends. Before the close moved to the end of the
+         gesture, the repaint at `pointerdown` had collapsed the selection and
+         this could not arise. */
+      if (input === "mouse" && closed && sameAnchor(closed.anchor, anchor)) return;
       closedFresh.current = null;
       if (input === "mouse" && closed && !closed.touched && spansOverlap(closed.anchor, anchor)) {
         const row = api.comments.find((c) => c.id === closed.id);
@@ -2542,6 +2565,7 @@ export function Reader({
         colour: DEFAULT_HIGHLIGHT,
       });
       const openFreshBox = (rowId: string) => {
+        openedThisGesture.current = true;
         freshTouched.current = false;
         setFresh({ id: rowId, anchor, input });
         /* One panel in the slot, and the box is drawn only when no chat is. */
@@ -2614,11 +2638,14 @@ export function Reader({
   const openCommentDialog = useCallback(
     (id: string) => {
       /* **A click on the words just highlighted is a click away**, not a
-         request to open them. Its `pointerdown` has closed the fresh box
-         (`closedFresh`), and without this its `mouseup`, landing on that
-         highlight's own mark, would open the same comment straight back up.
+         request to open them. Its `pointerdown` marked the fresh box to close
+         when the press ends (`closedFresh`); this `mouseup`, landing on that
+         highlight's own mark, comes just before that close, and without this
+         it would name the same comment again and the box would open straight
+         back up as an ordinary one.
          The next press on the mark is a new gesture and opens it as usual. */
       if (closedFresh.current?.id === id) return;
+      openedThisGesture.current = true;
       void setNote(id);
     },
     [setNote],
@@ -3665,13 +3692,22 @@ export function Reader({
           fresh={
             fresh?.id === openComment.id
               ? {
-                  onClickOff: () => {
+                  /* Two halves since the browser check of 2026-10-04: the
+                     press is remembered while the button is down, and the box
+                     closes when it comes up — and only if `?note=` still names
+                     this row, because the same gesture may have opened the
+                     next highlight's box. */
+                  onPressOutside: () => {
                     closedFresh.current = {
                       id: fresh.id,
                       anchor: fresh.anchor,
                       touched: freshTouched.current,
                     };
-                    void setNote(null);
+                  },
+                  onClickOff: () => {
+                    if (openedThisGesture.current) return;
+                    const id = fresh.id;
+                    void setNote((current) => (current === id ? null : current));
                   },
                   onTouched: () => {
                     freshTouched.current = true;

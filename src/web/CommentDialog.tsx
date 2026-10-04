@@ -110,10 +110,18 @@ export type CommentAccess =
  */
 export interface FreshBox {
   /**
-   * A press landed outside the box and everything it portals. The box closes
-   * and the highlight stays. Its own verb, not `onClose`, because Reader
-   * remembers the row for the rest of that gesture: a selection the same press
-   * goes on to make may be a correction of it.
+   * A press has landed outside the box and everything it portals, and the
+   * button is still down. **Record it and change nothing that renders**: Reader
+   * remembers the row for the rest of the gesture, since a selection the same
+   * press goes on to make may be a correction of it. Closing here rewrote the
+   * paragraph under the pointer and killed the drag (CommentDialog.tsx § The
+   * press outside is only recorded).
+   */
+  onPressOutside(): void;
+  /**
+   * That press has ended. Close the box, **if it still shows this highlight**;
+   * the highlight stays. Its own verb, not `onClose`, because of that
+   * condition.
    */
   onClickOff(): void;
   /**
@@ -251,15 +259,15 @@ export function CommentDialog({
    * `<aside>` below hears every press on the box *and on anything it portals*,
    * and nothing else. The window sees each press three times in order: its own
    * capture listener (forget the last answer), React's (inside, if it is), its
-   * own bubble listener (close, if it was not). The press is never prevented
-   * or stopped: the link still follows, the Dock button still opens, and a
-   * drag that starts in the prose still becomes the next selection.
+   * own bubble listener (remember it, if it was not). The press is never
+   * prevented or stopped: the link still follows, the Dock button still opens,
+   * and a drag that starts in the prose still becomes the next selection.
    * tests/selecting-applies-the-highlight.test.tsx presses a real tooltip.
+   * When the box then closes is § The press outside is only recorded, below.
    *
-   * **The press comes before the blur.** A textarea holding uncommitted words
-   * commits on blur (`CommentBody`), and a `pointerdown` arrives before the
-   * blur it causes; by then this box would be gone and React runs no `onBlur`
-   * for an element it has removed. So focus is taken off first, which commits.
+   * **Uncommitted words are committed before the box goes.** A textarea
+   * commits on blur (`CommentBody`), and React runs no `onBlur` for an element
+   * it has removed, so focus is taken off the field first, as the press ends.
    */
   const isFresh = fresh !== undefined && own !== null;
   const [touched, setTouched] = useState(false);
@@ -292,23 +300,83 @@ export function CommentDialog({
    * where focus goes.
    */
   const closedByPress = useRef(false);
+  /**
+   * **The press outside is only recorded; the box closes when the gesture
+   * ends.**
+   *
+   * It closed on `pointerdown` until the browser check of 2026-10-04. Closing
+   * takes the open ring off the mark, which rewrites that paragraph through
+   * `innerHTML` — between `pointerdown` and `mousedown`. A drag that began in
+   * the highlight's own paragraph was then anchored on nodes no longer in the
+   * document and made no selection at all, so neither a correction nor a
+   * second highlight there was possible with a real mouse. So nothing that
+   * can re-render the prose happens while the button is down: no close, and
+   * no blur either (the blur commits typed words, which is a write).
+   *
+   * **A mouse ends at `mouseup`, heard on the window after React has handled
+   * it**, so `TableView` has already read the new selection and `selectProse`
+   * has done the overlap rule and opened the new highlight's box. Not at
+   * `pointerup`, which comes first: closing there would repaint the paragraph
+   * and collapse the selection the `mouseup` is about to read. **A finger or
+   * a pen ends at `pointerup`**, since neither promises a `mouseup`. A
+   * `pointercancel` ends either.
+   *
+   * **The close is for the comment the press was made on.** If the same
+   * gesture opened another comment's box (a new selection, another mark),
+   * that one is left alone — checked here by id, and again in Reader, which
+   * clears `?note=` only while it still names this row.
+   *
+   * **A mouse press whose release never reaches the window closes nothing.**
+   * The box stays open and fresh; the next `pointerdown` forgets the old
+   * press and is judged on its own.
+   */
+  const pendingPress = useRef<{ id: string; mouse: boolean } | null>(null);
+  const idRef = useRef(comment.id);
+  useLayoutEffect(() => {
+    idRef.current = comment.id;
+    /* The box that stayed mounted for another comment was not closed by any
+       press. */
+    closedByPress.current = false;
+  }, [comment.id]);
   useEffect(() => {
     if (!isFresh) return;
     const begin = () => {
       pressedInside.current = false;
+      pendingPress.current = null;
     };
-    const end = () => {
+    const pressed = (event: PointerEvent) => {
       if (pressedInside.current) return;
+      pendingPress.current = { id: idRef.current, mouse: event.pointerType === "mouse" };
+      freshRef.current?.onPressOutside();
+    };
+    const finish = () => {
+      const press = pendingPress.current;
+      pendingPress.current = null;
+      if (!press || press.id !== idRef.current) return;
+      /* Words typed and not committed: a mouse's own `mousedown` has usually
+         blurred the field already; a tap need not. */
       const active = document.activeElement;
       if (active instanceof HTMLElement && dialogRef.current?.contains(active)) active.blur();
       closedByPress.current = true;
       freshRef.current?.onClickOff();
     };
+    const mouseEnded = () => {
+      if (pendingPress.current?.mouse) finish();
+    };
+    const pointerEnded = (event: PointerEvent) => {
+      if (pendingPress.current && !pendingPress.current.mouse && event.pointerType !== "mouse") finish();
+    };
     window.addEventListener("pointerdown", begin, true);
-    window.addEventListener("pointerdown", end);
+    window.addEventListener("pointerdown", pressed);
+    window.addEventListener("mouseup", mouseEnded);
+    window.addEventListener("pointerup", pointerEnded);
+    window.addEventListener("pointercancel", finish);
     return () => {
       window.removeEventListener("pointerdown", begin, true);
-      window.removeEventListener("pointerdown", end);
+      window.removeEventListener("pointerdown", pressed);
+      window.removeEventListener("mouseup", mouseEnded);
+      window.removeEventListener("pointerup", pointerEnded);
+      window.removeEventListener("pointercancel", finish);
     };
   }, [isFresh]);
 
