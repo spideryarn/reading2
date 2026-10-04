@@ -104,7 +104,8 @@ import {
   type SourceOrdering,
 } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
-import { probeProcessTable } from "./work-probe.js";
+import { processProbeOwner } from "../fleet/child.js";
+import { probeProcessTableAsync } from "./work-probe.js";
 import { scanPaneWork } from "./work-reading.js";
 import type { ProcessTableReading } from "./work.js";
 import {
@@ -386,13 +387,20 @@ export type DaemonOptions = {
   attention?: { intervalMs?: number; run: () => Promise<AttentionList> };
   /**
    * Read the process table. Injected so the fold can be driven without a box;
-   * defaults to the real `probeProcessTable`.
+   * defaults to the owned asynchronous `probeProcessTableAsync`, on the one
+   * owner this process shares.
    *
-   * Unlike the attention and usage passes, this is cheap (~40 ms measured) and
-   * synchronous, so it runs inline on the inventory path rather than owning a
-   * timer and a second freshness policy.
+   * Unlike the attention and usage passes, this is cheap (~40 ms measured), so
+   * it runs on the inventory path rather than owning a timer and a second
+   * freshness policy. It is AWAITED, and was not always: a synchronous `ps`
+   * with a timeout is signalled at the timeout and then waited for without
+   * limit, which on this one thread stops the heartbeat and recovery with it
+   * (docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+   * Where the wait sits, and why it may not sit anywhere else, is at
+   * `takeProbed()`. A plain value is still accepted, which is what a test
+   * with a canned table returns.
    */
-  probe?: () => ProcessTableReading;
+  probe?: () => ProcessTableReading | Promise<ProcessTableReading>;
   /**
    * THIS HOST'S BOOT ID, or null when it cannot be read. Defaults to
    * `readHostBootId`; injected so a test can drive one boot into the next.
@@ -710,7 +718,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
-  const probe = options.probe ?? probeProcessTable;
+  const probe = options.probe ?? (() => probeProcessTableAsync(processProbeOwner()));
   const readBootId = options.bootId ?? readHostBootId;
 
   const opened = openStore({ root, now });
@@ -1706,8 +1714,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           // Its `false` means the lock is gone and `halted()` is set, which the
           // guard after this switch acts on — a `break` here would only leave
           // the switch, which is the kind of thing that reads as a loop exit
-          // and is not one.
-          take(message.json, message.via, at);
+          // and is not one. AWAITED, so two payloads' folds can never overlap:
+          // the next message is not asked for until this one is finished.
+          await takeProbed(message.json, message.via, at);
           break;
         default: {
           const never: never = message;
@@ -1737,6 +1746,61 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   }
 
   /**
+   * **THE PROBE, AND THEN THE FOLD — never the probe inside the fold.**
+   *
+   * `take()` publishes as it goes: it moves `accepted` and `refreshMs`, then
+   * diffs, and only at its end moves the register, the baseline and the trusted
+   * inventory. That is safe because it is one synchronous stretch, so no timer
+   * callback can run in the middle of it. The probe is now an awaited child,
+   * and an await where the synchronous `probe()` used to sit would open exactly
+   * that middle: the heartbeat and the recovery tick would run with `accepted`
+   * from the new collection and the inventory and register from the previous
+   * one (the resume observer reads both). GPT Sol's F3 on plan 261004c.
+   *
+   * So the invariant is: **THE ONLY AWAIT ON THIS PATH IS HERE, BEFORE `take()`
+   * HAS CHANGED ANYTHING.** While it is pending every timer sees the previous
+   * collection, whole. After it, `take()` runs start to finish as it always
+   * has, with the reading handed in.
+   *
+   * **WHICH PAYLOADS ARE PROBED** is decided by asking, without changing
+   * anything, the two questions `take()` asks before it would have probed: is
+   * the payload admissible, and can `diff()` place it. A duplicate, a refused
+   * payload and a held collection therefore still cost no `ps`, as before.
+   * `diff()` is called with no baseline and no known executions because its
+   * `held` arm is decided from the new snapshot alone, before it looks at
+   * either; `admissible()` and `diff()` are both pure, and nothing but `take()`
+   * writes `accepted` or `retired`, so `take()` gets the same two answers a
+   * moment later. `parseObservation` runs twice for a payload that is probed,
+   * which is the price of leaving `take()` itself unchanged.
+   *
+   * **AFTER THE AWAIT, BEFORE ANYTHING IS TOUCHED:** a daemon that lost its
+   * lock or was told to stop while the probe was out does not fold. The loop's
+   * own checks would catch both, but only after `take()` had published. An
+   * inventory dropped here is not lost: nothing recorded it, so the next start
+   * diffs the next collection against the same baseline.
+   *
+   * The wait is bounded by the owner (`timeout + grace`), so this cannot hold a
+   * shutdown open the way the synchronous call could hold everything.
+   */
+  async function takeProbed(json: unknown, via: Transport, at: string): Promise<boolean> {
+    let reading: ProcessTableReading | null = null;
+    const preview = admissible(accepted, parseObservation(json), retired);
+    if (preview.verdict === "accept" && diff(null, preview.snapshot, new Map()).kind !== "held") {
+      try {
+        reading = await probe();
+      } catch (cause) {
+        reading = {
+          read: false,
+          why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+        };
+      }
+      if (halted() !== null) return false;
+      if (options.signal.aborted) return true;
+    }
+    return take(json, via, at, reading);
+  }
+
+  /**
    * One payload, all the way through. Returns false when the daemon must stop.
    *
    * Declared after the loop that uses it only because it closes over the
@@ -1744,7 +1808,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * `runOverseer` is what keeps the state out of module scope where a second
    * daemon in one process would share it.
    */
-  function take(json: unknown, via: Transport, at: string): boolean {
+  function take(json: unknown, via: Transport, at: string, probed: ProcessTableReading | null): boolean {
     lastPayloadAtMs = now().getTime();
     const parsed = parseObservation(json);
     // BEFORE THE GATE, and from every payload including the ones it refuses: a
@@ -1925,15 +1989,16 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // on the accept arm would spend a process-table read and throw its answer
     // away because that path writes no checkpoint. The proven-boot-change arm
     // above is the exception: it checkpoints the old world's close-out only.
-    let reading: ProcessTableReading;
-    try {
-      reading = probe();
-    } catch (cause) {
-      reading = {
-        read: false,
-        why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
-      };
-    }
+    //
+    // THE READING WAS TAKEN BEFORE THIS FUNCTION STARTED, by `takeProbed()`,
+    // which asks the same two questions this fold has just answered — the gate,
+    // and whether `diff()` can place the collection. Null therefore means the
+    // two disagreed, which nothing here can make happen; if it ever does it is
+    // "cannot tell", never a reason to stop the fold and never `no work`.
+    const reading: ProcessTableReading = probed ?? {
+      read: false,
+      why: "no process table was read for this collection: the check made before the fold did not expect it to be placed",
+    };
     try {
       work = scanPaneWork({
         rows: observed.rows,

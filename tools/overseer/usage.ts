@@ -51,13 +51,13 @@
  * because wire.ts may hold none: a `const` there would be bundled into the
  * browser.
  */
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, type Dirent } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
+import { processProbeOwner, type ProbeOwner } from "../fleet/child.js";
 import type {
   ConversationRateLimit,
   KnownUsageWindow,
@@ -1176,6 +1176,24 @@ export type CollectUsageOptions = {
   nowMs?: number;
   /** Skip `claude auth status` (it spawns a process). Default false. */
   skipAuthStatus?: boolean;
+  /** How `claude auth status` is run. Production passes nothing. */
+  authStatus?: AuthStatusProbe;
+};
+
+/**
+ * The seam for `claude auth status`. Every field is optional; a test passes a
+ * stand-in for `claude` that will not die, and a deadline short enough to wait
+ * for.
+ */
+export type AuthStatusProbe = {
+  /** Default `processProbeOwner()` — the one registry this process shares. */
+  owner?: ProbeOwner;
+  /** Default `claude`, found on PATH. */
+  claudeBin?: string;
+  /** Default 20 s. */
+  timeoutMs?: number;
+  /** The gap between SIGTERM and SIGKILL. Default: the owner's. */
+  graceMs?: number;
 };
 
 /**
@@ -1336,19 +1354,27 @@ async function readClaudeJson(p: string): Promise<{ ok: true; value: unknown } |
   }
 }
 
-/** Run `claude auth status`. Never throws; a failure becomes an `unknown` account. */
-function runAuthStatus(): { ok: true; out: string } | { ok: false; why: string } {
-  try {
-    const out = execFileSync("claude", ["auth", "status"], {
-      encoding: "utf8",
-      timeout: 20_000,
-      maxBuffer: 1024 * 1024,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return { ok: true, out };
-  } catch (err) {
-    return { ok: false, why: err instanceof Error ? err.message : String(err) };
-  }
+/**
+ * Run `claude auth status`. Never throws; a failure becomes an `unknown` account.
+ *
+ * OWNED, NOT `execFileSync`. A synchronous call's `timeout` signals at the
+ * deadline and then goes on waiting, and this runs inside the Overseer daemon:
+ * a `claude` that would not die stopped every other job it has.
+ * docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md
+ *
+ * A `refused` here means an earlier `claude auth status` is still unaccounted
+ * for. No second one is started, and this pass's account is `unknown`.
+ */
+async function runAuthStatus(probe: AuthStatusProbe = {}): Promise<{ ok: true; out: string } | { ok: false; why: string }> {
+  const outcome = await (probe.owner ?? processProbeOwner()).run({
+    key: "usage:claude-auth-status",
+    cmd: probe.claudeBin ?? "claude",
+    args: ["auth", "status"],
+    timeoutMs: probe.timeoutMs ?? 20_000,
+    maxBytes: 1024 * 1024,
+    ...(probe.graceMs === undefined ? {} : { graceMs: probe.graceMs }),
+  });
+  return outcome.kind === "ok" ? { ok: true, out: outcome.stdout } : { ok: false, why: outcome.why };
 }
 
 /**
@@ -1377,7 +1403,7 @@ export async function collectUsage(options: CollectUsageOptions = {}): Promise<U
   if (options.skipAuthStatus === true) {
     account = { kind: "unknown", why: "claude auth status was skipped by the caller" };
   } else {
-    const auth = runAuthStatus();
+    const auth = await runAuthStatus(options.authStatus);
     account = auth.ok ? parseAuthStatus(auth.out, claudeJson) : { kind: "unknown", why: `claude auth status failed: ${auth.why}` };
   }
 

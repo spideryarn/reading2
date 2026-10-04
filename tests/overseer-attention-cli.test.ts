@@ -69,9 +69,9 @@ function seams(proposals: boolean): { seams: AttentionSeams; systems: string[] }
     seams: {
       apiKey: () => "not-a-real-key",
       proposals: () => proposals,
-      listSessions: () => [{ sessionId: "$1", sessionName: "asks", paneId: "%1" }],
+      listSessions: async () => [{ sessionId: "$1", sessionName: "asks", paneId: "%1" }],
       capture: () => PANE,
-      tmuxGeneration: () => 7,
+      tmuxGeneration: async () => 7,
       fetchImpl,
     },
   };
@@ -182,5 +182,83 @@ describe("the hand run's words for a proposal (GPT Sol's F16)", () => {
     expect(text).toContain("Greg");
     expect(text).not.toMatch(/by greg/i);
     expect(text.match(/Greg/g)?.length).toBe(text.match(/model: Greg/g)?.length);
+  });
+});
+
+/**
+ * The generation and the listing are separate awaited children now, so a tmux
+ * restart can land between them: the generation of the OLD server beside a
+ * listing from the NEW one, whose `$1` is a different session. The runner
+ * therefore reads the generation on both sides of the listing, and a pass that
+ * cannot show they agree runs as "generation unknown", which carries no wait in
+ * from a real generation.
+ */
+describe("the daemon's runner brackets the listing with the tmux generation", () => {
+  function epochOf(root: string): string | null {
+    const read = readAttentionMemory(root);
+    if (read.kind !== "memory") throw new Error(`expected memory, got ${read.kind}`);
+    return read.memory.epoch;
+  }
+
+  /** Seams whose generation answers come from a script, recording the order of the two reads. */
+  function bracketed(generations: (number | null)[]): { seams: AttentionSeams; order: string[] } {
+    const order: string[] = [];
+    const base = seams(false).seams;
+    return {
+      order,
+      seams: {
+        ...base,
+        tmuxGeneration: async () => {
+          order.push("generation");
+          return generations.shift() ?? null;
+        },
+        listSessions: async () => {
+          order.push("list");
+          return [{ sessionId: "$1", sessionName: "asks", paneId: "%1" }];
+        },
+      },
+    };
+  }
+
+  it("a generation that is the same before and after the listing is the pass's epoch", async () => {
+    const root = tempRoot();
+    const { seams: s, order } = bracketed([7, 7]);
+    const run = attentionRunner(root, "test-instance", s);
+    if (run === null) throw new Error("expected a runner");
+    await run();
+    expect(order).toEqual(["generation", "list", "generation"]);
+    expect(epochOf(root)).toBe("test-instance:tmux-7");
+  });
+
+  it("a generation that moved across the listing is unknown, so no wait is carried onto it", async () => {
+    const root = tempRoot();
+    const first = attentionRunner(root, "test-instance", bracketed([7, 7]).seams);
+    if (first === null) throw new Error("expected a runner");
+    await first();
+    const before = readAttentionMemory(root);
+    if (before.kind !== "memory") throw new Error("expected memory");
+    const waitsBefore = [...before.memory.waits.values()];
+    expect(waitsBefore.length).toBeGreaterThan(0);
+
+    const { seams: s, order } = bracketed([7, 8]);
+    const second = attentionRunner(root, "test-instance", s);
+    if (second === null) throw new Error("expected a runner");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await second();
+    expect(order).toEqual(["generation", "list", "generation"]);
+    expect(epochOf(root)).toBe("test-instance:tmux-unknown");
+    // The same `$1`, asking the same thing — and its wait starts again, because
+    // nothing shows it is the session the first pass was timing.
+    const after = readAttentionMemory(root);
+    if (after.kind !== "memory") throw new Error("expected memory");
+    expect([...after.memory.waits.values()]).not.toEqual(waitsBefore);
+  });
+
+  it("a generation tmux could not give on either side is unknown too", async () => {
+    const root = tempRoot();
+    const run = attentionRunner(root, "test-instance", bracketed([7, null]).seams);
+    if (run === null) throw new Error("expected a runner");
+    await run();
+    expect(epochOf(root)).toBe("test-instance:tmux-unknown");
   });
 });

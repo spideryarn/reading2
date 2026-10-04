@@ -153,6 +153,18 @@ Only if it stays small. Otherwise `report-artefacts.ts` stays on the list and th
 - 2026-10-04 — GPT Sol's plan review: build with changes; all nine findings accepted (above).
 - 2026-10-04 — stage 1 built: the guard (seen red both ways by swapping one list entry), KN-G2
   (red: "could not be run: … ETIMEDOUT" with no clock), four false comments, `processProbeOwner()`.
+- 2026-10-04 — stages 2–4 built by four Opus subagents on disjoint files, each site red first
+  against a child that ignores TERM (the old calls held 3–12 s against 200 ms timeouts):
+  `routes-actions.ts`, `usage.ts`, `routes-rename.ts` (plus one rename at a time), `routes-new.ts`
+  (reads the server's snapshot), `readiness-wiring.ts`, `readiness-git.ts` (`snapshotDevAsync`,
+  counts from pinned shas; the sync functions stay for the two scripts, so the file stays listed),
+  `attention-probe.ts`, and the daemon's process-table probe. The guard's list went from 15 to 10.
+  - The daemon probe did not need to stop: the await sits in a new `takeProbed`, before `take` has
+    changed anything, and `take` itself is still one synchronous stretch.
+  - The health snapshot's "too old" is the loop's own longest gap (the failure backoff plus two
+    intervals), not a flat three intervals, which would have refused launches during every backoff.
+  - **Left, and known:** the daemon's attention pass still calls the synchronous `capturePane` once
+    per session (`pane.ts`, cluster 23), so that pass can still wedge the daemon.
 
 ---
 

@@ -30,9 +30,9 @@
  * NO IMPORT SIDE EFFECTS — nothing at module scope runs a command or reads the
  * environment, the same rule every other module here follows.
  */
-import { execFileSync } from "node:child_process";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 
+import { processProbeOwner, type OwnedOutcome, type ProbeOwner } from "./child.js";
 import { addressableHost } from "./origin.js";
 
 /**
@@ -91,28 +91,72 @@ export const RENAME_STATUS: Record<RenameErrorCode, number> = {
 
 export type RenameIo = {
   /** `tmux list-sessions -F "#{session_id} #{session_name}"`. Throws when tmux cannot be asked. */
-  listSessions(): string;
-  /** Renames and clears the provisional flag, in one invocation. Throws when tmux refuses. */
-  rename(sessionId: string, name: string): void;
+  listSessions(): Promise<string>;
+  /**
+   * Renames and clears the provisional flag, in one invocation. Throws when
+   * tmux refuses, and a `RenameUnsettled` when what happened is not known.
+   */
+  rename(sessionId: string, name: string): Promise<void>;
 };
 
-export function realIo(): RenameIo {
+/**
+ * A rename that did not end with tmux's own answer. `message` is a sentence
+ * written here, with no argv in it, so the route may show it as it stands.
+ */
+export class RenameUnsettled extends Error {}
+
+/** The sentence for a child this owner would not start. Shared by both calls. */
+function notStarted(outcome: Extract<OwnedOutcome, { kind: "refused" }>): string {
+  return (
+    `an earlier tmux command from this page (pid ${outcome.pid}) has still not exited after ` +
+    `${Math.round(outcome.liveForMs / 1000)} s, so a second one was not started`
+  );
+}
+
+/**
+ * Both calls go through the process's one child owner rather than
+ * `execFileSync`, whose `timeout` only signals and then goes on waiting — with
+ * every other request to this single-threaded server waiting behind it
+ * (docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+ * The owner stops waiting at the deadline plus one grace, and refuses to start
+ * a second child under a key whose first is still unaccounted for.
+ */
+export function realIo(owner: ProbeOwner = processProbeOwner(), timeoutMs = 10_000): RenameIo {
   return {
-    listSessions: () =>
-      execFileSync("tmux", ["list-sessions", "-F", "#{session_id} #{session_name}"], {
-        encoding: "utf8",
-        timeout: 10_000,
-      }),
-    rename: (sessionId, name) => {
-      execFileSync(
-        "tmux",
+    listSessions: async () => {
+      const outcome = await owner.run({
+        key: "rename:tmux-list-sessions",
+        cmd: "tmux",
+        args: ["list-sessions", "-F", "#{session_id} #{session_name}"],
+        timeoutMs,
+      });
+      if (outcome.kind === "ok") return outcome.stdout;
+      throw new Error(outcome.kind === "refused" ? notStarted(outcome) : outcome.why);
+    },
+    rename: async (sessionId, name) => {
+      const outcome = await owner.run({
+        key: "rename:tmux-rename-session",
+        cmd: "tmux",
         // `;` is tmux's own command separator, passed as its own argument — no
         // shell is involved anywhere, so neither the handle nor the name can
         // become a command however they are spelled. Both have already been
         // checked against a regex, and this is the belt to that's braces.
-        ["rename-session", "-t", sessionId, name, ";", "set-environment", "-t", sessionId, "GJD_PROVISIONAL", "0"],
-        { encoding: "utf8", timeout: 10_000 },
-      );
+        args: ["rename-session", "-t", sessionId, name, ";", "set-environment", "-t", sessionId, "GJD_PROVISIONAL", "0"],
+        timeoutMs,
+      });
+      if (outcome.kind === "ok") return;
+      if (outcome.kind === "refused") {
+        throw new RenameUnsettled(`${notStarted(outcome)}: nothing was renamed — try again in a moment`);
+      }
+      if (outcome.kind === "timed-out" || outcome.kind === "overflowed") {
+        // Signalled, and no longer waited for. Whether tmux renamed first is
+        // not known here, and saying it failed would be a guess.
+        throw new RenameUnsettled(
+          `tmux did not finish within ${Math.round(timeoutMs / 1000)} s and I stopped waiting: ` +
+            "the rename MAY have happened — look at the session's name before trying again",
+        );
+      }
+      throw new Error(outcome.why);
     },
   };
 }
@@ -223,6 +267,10 @@ export function makeRenameRoute(over: Partial<RenameDeps> = {}): {
   handle(req: IncomingMessage, res: ServerResponse): boolean;
 } {
   const deps: RenameDeps = { io: over.io ?? realIo(), log: over.log ?? ((l) => console.log(l)) };
+  // One rename at a time. list → check → rename was one synchronous stretch
+  // until the tmux calls became awaited; without this, two requests can both
+  // be told a name is free. A flag and a refusal, not a queue.
+  let inFlight = false;
 
   return {
     handle(req, res) {
@@ -240,6 +288,7 @@ export function makeRenameRoute(over: Partial<RenameDeps> = {}): {
       }
 
       void (async () => {
+        let mine = false;
         try {
           const raw = await readBody(req);
           if (raw === null) {
@@ -264,9 +313,21 @@ export function makeRenameRoute(over: Partial<RenameDeps> = {}): {
             return;
           }
 
+          // Checked and set with no await between, and before the first tmux
+          // call; cleared in the `finally` below, whichever way this ends.
+          if (inFlight) {
+            respond(res, 409, {
+              ok: false,
+              code: "rename-failed",
+              why: "another rename is in flight on this dashboard, so this one was not started — try again in a moment",
+            });
+            return;
+          }
+          inFlight = mine = true;
+
           let names: Map<string, string>;
           try {
-            names = parseSessionNames(deps.io.listSessions());
+            names = parseSessionNames(await deps.io.listSessions());
           } catch (err) {
             respond(res, 409, {
               ok: false,
@@ -286,15 +347,20 @@ export function makeRenameRoute(over: Partial<RenameDeps> = {}): {
           const was = names.get(sessionId) ?? null;
 
           try {
-            deps.io.rename(sessionId, want);
+            await deps.io.rename(sessionId, want);
           } catch (err) {
             respond(res, 409, {
               ok: false,
               code: "rename-failed",
               // Sanitised: tmux's own message, not the thrown Error's, which
               // carries argv. The argv here is not secret, but the habit is —
-              // see routes-steer.ts, where it was a privacy hole.
-              why: `tmux refused the rename${err instanceof Error && err.message.includes("can't find session") ? ": that session is gone" : ""}`,
+              // see routes-steer.ts, where it was a privacy hole. A
+              // `RenameUnsettled` is our own sentence, and "refused" would be
+              // false of it: tmux was not asked, or was not waited for.
+              why:
+                err instanceof RenameUnsettled
+                  ? err.message
+                  : `tmux refused the rename${err instanceof Error && err.message.includes("can't find session") ? ": that session is gone" : ""}`,
             });
             return;
           }
@@ -307,6 +373,8 @@ export function makeRenameRoute(over: Partial<RenameDeps> = {}): {
             code: "internal",
             why: `the rename route threw: ${err instanceof Error ? err.message : String(err)}`,
           });
+        } finally {
+          if (mine) inFlight = false;
         }
       })();
       return true;

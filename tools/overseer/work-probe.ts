@@ -26,6 +26,7 @@
  */
 import { spawnSync } from "node:child_process";
 
+import type { ProbeOwner } from "../fleet/child.js";
 import { parseProcessTable, type ProcessTableReading } from "./work.js";
 
 /**
@@ -153,4 +154,45 @@ export function probeProcessTable(opts: { bin?: string; selfPid?: number; timeou
   }
 
   return readingFromPs(run.stdout ?? "", atMs, { bin, selfPid });
+}
+
+/**
+ * Read one process table without blocking the thread that asked.
+ *
+ * The owned asynchronous twin of `probeProcessTable`, and what a long-running
+ * process uses: the fleet dashboard's collector, and the Overseer daemon on
+ * every inventory it folds. It lives beside the synchronous one so both sit
+ * next to the parse and the positive control they share (`readingFromPs`).
+ *
+ * The caller stops waiting at the owner's `timeout + grace` whether or not
+ * `ps` died, and a `ps` still unaccounted for refuses the next one under the
+ * same key rather than starting a sibling. Either is a `read: false` with the
+ * owner's sentence, never a throw.
+ */
+export async function probeProcessTableAsync(owner: ProbeOwner): Promise<ProcessTableReading> {
+  try {
+    const outcome = await owner.run({
+      // Both ends of the dashboard's bracket (collect.ts § `readExecutions`)
+      // deliberately share one key and are awaited sequentially. If the first `ps` is still unaccounted for, starting a
+      // second cannot produce a usable bracket and would multiply stuck
+      // children; the owner's refusal instead carries that first child's pid.
+      key: "process-table",
+      cmd: "ps",
+      args: PS_ARGV,
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: 32 * 1024 * 1024,
+    });
+    if (outcome.kind !== "ok") return { read: false, why: outcome.why };
+
+    // TIMED AFTER ps RETURNS. `etimes` is relative to when ps read /proc, so a
+    // stamp from before the await would make every derived start time early by
+    // the entire probe duration — worst on the swapping box this watches.
+    const atMs = Date.now();
+    return readingFromPs(outcome.stdout, atMs, { bin: "ps", selfPid: process.pid });
+  } catch (cause) {
+    return {
+      read: false,
+      why: `the owned process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
 }

@@ -77,7 +77,7 @@ describe("the readiness composition", () => {
       liveSessions: over.liveSessions ?? (() => ({ names: new Set<string>() })),
     });
 
-  it("reads back a record written through the very store it opened", () => {
+  it("reads back a record written through the very store it opened", async () => {
     /* The join `health-wiring.ts` exists for: a route mounted against a
        different store instance, or a different directory, would pass every unit
        test and show nothing. */
@@ -85,31 +85,31 @@ describe("the readiness composition", () => {
     if (opened.kind !== "open") throw new Error(opened.why);
     opened.store.put(record());
 
-    const snapshot = retention().collect();
+    const snapshot = await retention().collect();
     expect(snapshot.readings).toHaveLength(1);
     expect(snapshot.readings[0]?.state).toBe("pass");
     expect(snapshot.diagnostics.storeRefused).toBeNull();
   });
 
-  it("counts a store that would not open as unreadable, not as a quiet day", () => {
+  it("counts a store that would not open as unreadable, not as a quiet day", async () => {
     /* The one state where NOTHING is being recorded must not render like a day
        on which nothing happened. */
     const broken = makeReadinessRetention({ primary, dir: "relative/nope" });
-    const snapshot = broken.collect();
+    const snapshot = await broken.collect();
     expect(snapshot.diagnostics.storeRefused).not.toBeNull();
     expect(snapshot.verdict.kind).toBe("unknown");
     expect(snapshot.verdict.kind === "unknown" && snapshot.verdict.why).toContain("could not be read");
   });
 
-  it("says why liveness is unknown rather than calling every scanned run void", () => {
+  it("says why liveness is unknown rather than calling every scanned run void", async () => {
     /* An empty session set would say every session is gone, which turns the
        whole board void in one stroke on a box where tmux happened to be busy. */
-    const snapshot = retention({ liveSessions: () => ({ why: "tmux said no" }) }).collect();
+    const snapshot = await retention({ liveSessions: () => ({ why: "tmux said no" }) }).collect();
     expect(snapshot.diagnostics.tmuxWhy).toBe("tmux said no");
   });
 
-  it("carries its diagnostics whether or not anything went wrong", () => {
-    const snapshot = retention().collect();
+  it("carries its diagnostics whether or not anything went wrong", async () => {
+    const snapshot = await retention().collect();
     expect(snapshot.diagnostics.checkoutsScanned).toBeGreaterThanOrEqual(1);
     expect(snapshot.diagnostics.scanTruncated).toBe(false);
     expect(snapshot.diagnostics.unreadableLogs).toEqual([]);
@@ -120,7 +120,7 @@ describe("the readiness composition", () => {
     expect(sessionNameForLog("bare")).toBe("bare");
   });
 
-  it("merges store records and scanned logs into one list, oldest first", () => {
+  it("merges store records and scanned logs into one list, oldest first", async () => {
     const opened = openReadinessStore(dir);
     if (opened.kind !== "open") throw new Error(opened.why);
     opened.store.put(record());
@@ -131,7 +131,7 @@ describe("the readiness composition", () => {
     utimesSync(log, when, when);
     writeFileSync(join(primary, "package.json"), JSON.stringify({ scripts: { typecheck: "tsx scripts/typecheck.ts" } }));
 
-    const snapshot = retention().collect();
+    const snapshot = await retention().collect();
     const kinds = snapshot.readings.map((r) => `${r.record.check}/${r.record.source}`);
     expect(kinds).toContain("test/wrapper");
     expect(kinds).toContain("typecheck/tmux-log");

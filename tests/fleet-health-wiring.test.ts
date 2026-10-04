@@ -313,8 +313,8 @@ describe("server.ts", () => {
        the collection began using it too (plan 260910c, Stage 3a); the rename
        broke this guard, and this guard was the only test in the fleet suite
        that noticed — so it now pins both users of the owner, not just one. */
-    expect(source.match(/probeOwner\(\)/g) ?? []).toHaveLength(1);
-    expect(source).toMatch(/const fleetProbeOwner = probeOwner\(\);/);
+    expect(source.match(/\b(?:probeOwner|processProbeOwner)\(\)/g) ?? []).toHaveLength(1);
+    expect(source).toMatch(/const fleetProbeOwner = processProbeOwner\(\);/);
     expect(source).toMatch(/async function refreshHealth\(\): Promise<HealthTurn>/);
     expect(source).toMatch(/await collectHealthAsync\(\{/);
     expect(source).toMatch(/collectHealthAsync\(\{\s*owner: fleetProbeOwner,/);

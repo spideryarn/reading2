@@ -679,7 +679,7 @@ describe("one at a time, then a cooldown", () => {
     f.health.level = "unknown";
     const out = await f.post({ prompt: "p" });
     expect(out.status).toBe(503);
-    expect(out.json().error).toMatch(/could not read this box's load, memory OR swap/i);
+    expect(out.json().error).toMatch(/load, memory and swap could all not be read/i);
     expect(f.runs).toHaveLength(0);
 
     // PAIRED: the same request goes through the moment the box can answer, so

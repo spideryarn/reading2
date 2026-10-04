@@ -12,6 +12,7 @@ import { CHECKPOINT_FILE, LOCK_FILE } from "../tools/overseer/store.js";
 import { parseProcessTable, type ProcessTableReading } from "../tools/overseer/work.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { editableFixture, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
+import { heldOpen, tickAfter, until } from "./helpers/overseer-until.js";
 
 const roots: string[] = [];
 const TREE = join(import.meta.dirname, "fixtures", "overseer-process-trees", "codex-review-under-pane.txt");
@@ -275,6 +276,110 @@ describe("published work evidence", () => {
     expect(current(root)).toMatchObject({
       lastGoodSnapshotAt: first.value.clock.at,
       work: { sourceCollectedAt: first.value.clock.at },
+    });
+  });
+});
+
+/**
+ * The default probe is an owned asynchronous child, so the daemon waits for it.
+ * What must stay true is that the wait sits in FRONT of the fold and never
+ * inside it: a heartbeat that runs meanwhile sees the previous collection in
+ * every published field, not the new one in some and the old one in others.
+ */
+describe("an asynchronous probe", () => {
+  function collectedAt(json: JsonValue): string {
+    const parsed = parseObservation(json);
+    if (!parsed.ok || !parsed.value.clock.collected) throw new Error("fixture has no collection clock");
+    return parsed.value.clock.at;
+  }
+
+  /** A daemon fed two inventories, whose second probe stays out until the test settles it. */
+  function withPendingSecondProbe(root: string, clock: ReturnType<typeof fakeClock>, second: JsonValue) {
+    const controller = new AbortController();
+    let calls = 0;
+    let settle: ((reading: ProcessTableReading) => void) | null = null;
+    const done = runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: controller.signal,
+      now: clock.now,
+      tickMs: 5,
+      log: () => undefined,
+      source: async function* () {
+        yield payload(rawFixture("session-new-before"));
+        yield payload(second);
+        await heldOpen(controller.signal);
+      },
+      probe: () => {
+        calls += 1;
+        if (calls === 1) return capturedReading(clock.ms());
+        return new Promise<ProcessTableReading>((resolve) => {
+          settle = resolve;
+        });
+      },
+    });
+    return {
+      controller,
+      done,
+      pending: (): boolean => settle !== null,
+      settle: (reading: ProcessTableReading): void => settle?.(reading),
+    };
+  }
+
+  test("a pending probe leaves the heartbeat running over the old world, and then the fold completes whole", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const firstAt = collectedAt(rawFixture("session-new-before"));
+    // A different cadence, because `refreshMs` is a field the fold moves BEFORE
+    // the place it used to probe: 60 s publishes a 300 s deadline, 120 s a
+    // 600 s one. A wait put back inside the fold shows here as 600 000 beside
+    // the first collection's `lastGoodSnapshotAt`.
+    const second = fixtureWith("session-new-after", { refreshMs: 120_000 });
+    const secondAt = collectedAt(second);
+    const daemon = withPendingSecondProbe(root, clock, second);
+    try {
+      await until("the second inventory's probe to be asked for", daemon.pending);
+      // Two heartbeats written while the probe is still out: not wedged.
+      await tickAfter(root);
+      await tickAfter(root);
+      expect(current(root)).toMatchObject({
+        lastGoodSnapshotAt: firstAt,
+        snapshotStaleAfterMs: 300_000,
+        work: { kind: "scan", sourceCollectedAt: firstAt },
+      });
+
+      daemon.settle(capturedReading(clock.ms()));
+      await until("the second inventory to be folded", () => current(root)["lastGoodSnapshotAt"] === secondAt);
+      expect(current(root)).toMatchObject({
+        snapshotStaleAfterMs: 600_000,
+        work: { kind: "scan", sourceCollectedAt: secondAt },
+      });
+    } finally {
+      daemon.controller.abort();
+      daemon.settle({ read: false, why: "the test ended" });
+    }
+    expect((await daemon.done).kind).toBe("stopped");
+  });
+
+  test("a daemon stopped while its probe is out does not fold that inventory", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const firstAt = collectedAt(rawFixture("session-new-before"));
+    const second = fixtureWith("session-new-after", { refreshMs: 120_000 });
+    const daemon = withPendingSecondProbe(root, clock, second);
+    try {
+      await until("the second inventory's probe to be asked for", daemon.pending);
+      daemon.controller.abort();
+      daemon.settle(capturedReading(clock.ms()));
+    } finally {
+      daemon.controller.abort();
+      daemon.settle({ read: false, why: "the test ended" });
+    }
+    expect((await daemon.done).kind).toBe("stopped");
+    expect(current(root)).toMatchObject({
+      lastGoodSnapshotAt: firstAt,
+      snapshotStaleAfterMs: 300_000,
+      work: { kind: "scan", sourceCollectedAt: firstAt },
     });
   });
 });
