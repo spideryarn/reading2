@@ -507,8 +507,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             <strong>Talk</strong> for the microphone, or <strong>Live conversation</strong> to talk it
             through out loud. Each reply is short: it corrects one thing if something comes apart from
             the article, links the passage, and usually nudges you to remember a little more — often
-            offering two directions to choose from. Say you don’t remember and it fills the gap
-            instead. It does not praise or grade you, and disagreeing with the author is not counted as
+            offering two directions to choose from. When it asks what you remember, the question links
+            the passage that answers it, and the <strong>Hint</strong> button under it opens a clue if
+            you want one. Say you don’t
+            remember and it fills the gap instead. It does not praise or grade you, and disagreeing with the author is not counted as
             misunderstanding. There is one Recall conversation per article; the bin icon starts it
             over.
           </li>
@@ -542,7 +544,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
     reading: (
       <>
         <p>
-          In Recall, a hint is never a test you can fail twice: if a nudge gets nothing, the next reply
+          In Recall, a question is never a test you can fail twice: if a nudge gets nothing, the next reply
           tells you. Saying “just tell me”, or asking a direct question, always gets a plain answer.
           Whenever a reply says what the article says, it links the passage, so you can go and look
           instead. A question that only asks what you meant needs no link.

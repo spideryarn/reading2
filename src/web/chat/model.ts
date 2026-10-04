@@ -452,6 +452,28 @@ export interface DeleteOperation extends Registered, Held {
 }
 
 /**
+ * **The reader opened a Recall answer's hint, and the server is being told.**
+ *
+ * The hint is on screen from the panel's own state the moment it is pressed;
+ * this exists only to admit the write's answer. A success patches the server's
+ * time onto the message in `base` — so the hint is still open after the reader
+ * leaves the conversation and comes back — and a failure writes nothing at
+ * all. Nothing is drawn while it is out: there is nothing to withdraw.
+ *
+ * `hint` is the hint's text, and it is what the answer is matched on. A retry
+ * reuses the message id, so by the time this answers the row may hold another
+ * answer; the time is patched only onto a message that still carries this hint.
+ * The server makes the same check (`markHintOpened` in src/store/pg-chat.ts).
+ * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+ */
+export interface HintOperation extends Registered {
+  kind: "hint";
+  threadId: string;
+  messageId: string;
+  hint: string;
+}
+
+/**
  * Everything asynchronous this hook can be doing.
  *
  * **One map holds every kind, and that is a correction.** An earlier draft had
@@ -470,7 +492,8 @@ export type Operation =
   | RecoveryOperation
   | RenameOperation
   | DeleteOperation
-  | IntentOperation;
+  | IntentOperation
+  | HintOperation;
 
 /**
  * An operation as its caller hands it over: the reducer adds the rest.
@@ -613,6 +636,8 @@ export type ChatInput =
       type: "intent.started";
       op: { id: OpId; intent: Intent; threadId: string; messageId: string };
     }
+  /** The reader opened a Recall answer's hint. See `HintOperation`. */
+  | { type: "hint.started"; op: Registering<HintOperation> }
   /** A new, empty conversation. Local: nothing is stored until you send. */
   | { type: "thread.begun"; thread: ChatThread }
   /** Forgetting one. A no-op on anything with a message in it. */
@@ -744,7 +769,14 @@ export type ChatResult =
    * written — one decision, so there is no moment where the conversation is back
    * with nothing said about it.
    */
-  | { type: "intent.failed"; opId: OpId; error: string };
+  | { type: "intent.failed"; opId: OpId; error: string }
+  /** The press is stored, and this is the time the server gave it. */
+  | { type: "hint.succeeded"; opId: OpId; hintOpenedAt: string }
+  /**
+   * It is not. Nothing is written and nothing is said: the hint is open on
+   * screen either way, and the next press on a fresh mount tries again.
+   */
+  | { type: "hint.failed"; opId: OpId; error: string };
 
 /** What the `done` frame carries — the finished answer, and its receipts. */
 export interface TurnDone {
@@ -879,6 +911,15 @@ export type ChatCommand =
       messageId: string;
       attempt: string | null;
     }
+  /** Record that the reader opened this answer's hint. One request. */
+  | {
+      type: "hint";
+      opId: OpId;
+      slug: string;
+      threadId: string;
+      messageId: string;
+      hint: string;
+    }
   /**
    * The server has overruled a turn's thread id, and the panel's `?thread=` has
    * to follow or a reload lands on a conversation that is not there.
@@ -905,6 +946,9 @@ export type ThreadsOutcome =
 
 /** Either the write stuck, or why it did not. */
 export type WriteOutcome = { ok: true } | { ok: false; error: string };
+
+/** Either the press is stored, with the time the server gave it, or why not. */
+export type HintOutcome = { ok: true; hintOpenedAt: string } | { ok: false; error: string };
 
 /**
  * Drop a conversation that never had anything said in it.

@@ -84,7 +84,8 @@ import type {
   ToolRun,
 } from "../types.js";
 import { isThreadKind } from "../types.js";
-import { MissingAttempt, type ChatStore, type SweepOptions } from "./contracts.js";
+import { splitHint } from "../recall-hint.js";
+import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
@@ -147,6 +148,9 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
        the filesystem store has no key on an ordinary question and
        tests/store-roundtrip.test.ts compares the two byte for byte. */
     ...(row.help ? { help: true as const } : {}),
+    /* The reader's press on Hint. Named here or it does not exist on the way
+       out — the rule the note above `passages` gives. */
+    ...(row.hintOpenedAt === null ? {} : { hintOpenedAt: row.hintOpenedAt.toISOString() }),
   };
 }
 
@@ -287,6 +291,10 @@ function messageRow(
        press loses its metadata between the route and the database. Same class of
        silent loss as `tools`, which is how that column came to exist. */
     help: message.help ?? false,
+    /* The write half of the mapping. Every path that builds a message for
+       insert builds a fresh one, so this writes null there; it is named so a
+       message that does carry the time is not silently stripped of it. */
+    hintOpenedAt: message.hintOpenedAt ? new Date(message.hintOpenedAt) : null,
     createdAt: new Date(message.createdAt),
     /* **One rule for every insert: a row that is not `pending` was finished
        when it was written.** That is the reader's question, and both halves of
@@ -551,6 +559,9 @@ const rawPgChatStore: ChatStore = {
              carried over would label an answer nobody has interrupted yet. */
           passages: null,
           interrupted: false,
+          /* The reader opened the LAST answer's hint. The row is about to hold
+             a different answer with a different hint, and that one is closed. */
+          hintOpenedAt: null,
           // A new attempt on the same row. This is what stops the previous
           // one's late answer landing here.
           attemptId: attempt,
@@ -691,6 +702,57 @@ const rawPgChatStore: ChatStore = {
     const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
+  },
+
+  /**
+   * The reader's first press on Hint, kept.
+   *
+   * **Checked and written under the article lock, in one transaction**, like
+   * every other write here: `retry` takes the same lock, so the answer read
+   * below cannot be replaced between the check and the stamp.
+   *
+   * **The hint's text is the fence.** A retry keeps the message id, so identity
+   * cannot say which answer a late press belongs to; the stored answer's own
+   * hint can. A retried row is empty, or says something else.
+   *
+   * `coalesce` makes it set-once, and `clock_timestamp()` is the moment of the
+   * write (see `DB_NOW`).
+   */
+  async markHintOpened(slug, threadId, messageId, hint): Promise<HintOpened> {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    const thisMessage = and(
+      eq(chatMessages.articleId, articleId),
+      eq(chatMessages.threadId, threadId),
+      eq(chatMessages.id, messageId),
+    );
+
+    const out = await db.transaction(async (tx): Promise<HintOpened> => {
+      await lockArticleRow(tx, articleId);
+      const [row] = await tx
+        .select({ role: chatMessages.role, text: chatMessages.text, kind: chatThreads.kind })
+        .from(chatMessages)
+        .innerJoin(
+          chatThreads,
+          and(eq(chatThreads.articleId, chatMessages.articleId), eq(chatThreads.id, chatMessages.threadId)),
+        )
+        .where(thisMessage);
+      if (!row) return { ok: false, reason: "no-such-message" };
+      if (row.kind !== "remember" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
+      if (splitHint(row.text).hint !== hint) return { ok: false, reason: "hint-changed" };
+
+      const [stamped] = await tx
+        .update(chatMessages)
+        .set({ hintOpenedAt: sql`coalesce(${chatMessages.hintOpenedAt}, clock_timestamp())` })
+        .where(thisMessage)
+        .returning({ hintOpenedAt: chatMessages.hintOpenedAt });
+      if (!stamped?.hintOpenedAt) return { ok: false, reason: "no-such-message" };
+      return { ok: true, hintOpenedAt: stamped.hintOpenedAt.toISOString() };
+    }, READ_COMMITTED);
+
+    // Ids and the outcome only. Never the hint's text.
+    logger.info({ slug, threadId, messageId, ok: out.ok }, "recall hint opened");
+    return out;
   },
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]> {

@@ -1089,6 +1089,15 @@ export interface Turn extends StoredExchange {
   readonly attempt: string;
 }
 
+/**
+ * What `ChatStore.markHintOpened` answers. The three refusals are different
+ * facts for the route: the message is not there, it is not an answer in a
+ * Recall thread, or the answer no longer carries the hint that was pressed.
+ */
+export type HintOpened =
+  | { ok: true; hintOpenedAt: string }
+  | { ok: false; reason: "no-such-message" | "not-a-recall-answer" | "hint-changed" };
+
 export interface ChatStore {
   load(slug: string): Promise<ChatThread[]>;
 
@@ -1189,6 +1198,17 @@ export interface ChatStore {
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /**
+   * **The reader pressed Hint under a Recall answer.** Stamps
+   * `hint_opened_at` once; a second press answers with the first time.
+   *
+   * `hint` is the hint's own text as the reader's browser split it, and it is
+   * the fence: a retry reuses the answer's row, so a press still in flight
+   * could otherwise mark the replacement answer as opened. The store stamps
+   * only when the stored answer, split by `splitHint`, carries that same hint.
+   */
+  markHintOpened(slug: string, threadId: string, messageId: string, hint: string): Promise<HintOpened>;
 
   /** Turn abandoned `pending` answers into `error`. See `SweepOptions`. */
   sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]>;

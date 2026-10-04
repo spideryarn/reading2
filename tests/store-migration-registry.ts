@@ -521,6 +521,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the stubbed model call records.",
   },
   /**
+   * **Written 2026-10-04 (plan 261004h), after the witness ran**, so
+   * `static-only` for the ordinary reason the header gives. Born on Postgres;
+   * it makes no model call, so the seeder's copy step is the one door.
+   */
+  "tests/chat-hint-opened-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.hint_opened_at` at the route: that a press on a Recall hint is recorded " +
+      "once, and refused for a hint the stored answer no longer carries or for somebody else's " +
+      "article. It seeds through `scratchArticleInPg`; what it still reaches is the seeder's " +
+      "copy step.",
+  },
+  /**
    * **Written 2026-09-12 (fb30 stage 1b), after the witness ran**, so
    * `static-only` for the ordinary reason the header gives. Its request harness
    * is `chat-anchor-route.test.ts`'s and it reaches what that file reaches, by
@@ -2717,6 +2732,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      than through the Auth service — nothing here talks to GoTrue — so
      `shared-services` would buy nothing while the clone keeps a growing journal
      of stub sessions out of the shared stack's own. */
+  "tests/chat-hint-opened-route.test.ts": "private-postgres",
   "tests/chat-live-ticket-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane is decided by what the cases do
      rather than by what they seed: each one leaves a model call hanging open

@@ -48,6 +48,7 @@ async function opened(): Promise<{ c: ChatController; sink: TurnSink }> {
     settledAnswer: async () => null,
     stopAnswer: async () => ({ ok: true }),
     cancelThread: async () => ({ ok: true }),
+    markHintOpened: async () => ({ ok: false, error: "not in this test" }),
   };
   const c = new ChatController(SLUG, effects);
   const at = "2026-09-15T11:00:00.000Z";

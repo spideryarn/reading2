@@ -451,11 +451,24 @@ a coincidence:
 
 - **Auto-repeat is ignored** ([§ auto-repeat](#auto-repeat-is-ignored)). Holding the chord would
   otherwise reopen the bar every few milliseconds under whatever you had already typed.
-- **It does not fire while focus is in an input, a textarea, a select or anything contenteditable**,
-  which is the same list the arrows respect — and it matters more here, because ⌘-K is a
-  text-editing chord in several editors. The list is one function, `isTyping` in
-  [`key-chord.ts`](../../src/web/key-chord.ts), shared by the arrows, G and both chords; so is
-  `isModChord`, the ⌘-or-Ctrl test with Shift, Alt, auto-repeat and IME composition refused.
+- **It fires while focus is in a text field, since 2026-10-04**, the one chord here that does.
+  Greg, spya-szdjek:
+
+  > I want to be able to hit Command-K at more or less any time from within the reading view.
+
+  Until then it stood down wherever the arrows do (`isTyping` in
+  [`key-chord.ts`](../../src/web/key-chord.ts), still shared by the arrows, G, ⌘-Enter and Escape on
+  Metadata), on the grounds that ⌘-K is a text-editing chord in several editors. None of our fields
+  binds it. The bar is a modal `<dialog>`, so the field keeps its text and gets its focus back when
+  the bar closes. **The listener is on `window` in the capture phase and a claimed press goes no
+  further** (`stopPropagation`), so the field it was typed in never sees it, and a container that
+  stops its own keydowns from bubbling, as the live conversation's do, cannot hide the press. The
+  test is `isModChord`: ⌘ or Ctrl, with Shift, Alt, auto-repeat and IME composition refused.
+  **Two presses in a text field are still the field's** (`keepsItsOwnModK`): Ctrl-K without ⌘ on a
+  Mac, where it deletes to the end of the line, and any press in a field marked
+  `data-command-bar="off"`, which today is the title editor, because it saves on blur and a modal
+  opening is a blur
+  ([261004h](../plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md)).
 - **`preventDefault()` only when the press is claimed.** Firefox focuses the address bar on ⌘-K; a
   listener that suppressed that without opening anything would be a chord that quietly breaks a
   browser feature.
@@ -505,6 +518,20 @@ claimed — and adds two where it does not fire:
 
 The Metadata button's card says the chord opens it and a second press returns to the article.
 Tests: `tests/metadata-chord.test.tsx`.
+
+**Escape on the Metadata page goes back to the article too, since 2026-10-04**, by the same href as
+the button and the chord (`useMetadataEscape` in [`Dock.tsx`](../../src/web/Dock.tsx)):
+
+> If I hit escape while in metadata mode, sort of hide the metadata mode, as if I'd clicked on the
+> metadata mode button to take me back to wherever I was before.
+>
+> — Greg, 2026-10-04, spya-ynx97n
+
+The page is the last surface to hear the key: a bubble-phase `window` listener, T3 in
+[the escape inventory](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md).
+A card or popover in front stops the press before it arrives, an open `<dialog>` owns it, and **a
+text field keeps its Escape**, so a reader in the tag editor or the page search is not thrown off a
+page they were editing. Same test file.
 
 ### ⌘⌥T folds or unfolds every section
 

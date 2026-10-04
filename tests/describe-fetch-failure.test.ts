@@ -303,6 +303,7 @@ describe("the chat controller's own catches", () => {
       settledAnswer: async () => null,
       stopAnswer: never,
       cancelThread: never,
+      markHintOpened: never,
       ...overrides,
     });
   }

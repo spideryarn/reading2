@@ -48,6 +48,7 @@ function paint(over: Partial<ChatMessage>, recovering = false): void {
     root.render(
       createElement(Turn, {
         message,
+        kind: "chat",
         onJump: () => {},
         recovering,
         blocks: new Map<string, string>(),

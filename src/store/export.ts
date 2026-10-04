@@ -663,6 +663,10 @@ export async function exportArticle(
                absent key via `compact`, which is what the filesystem store
                writes for a question nobody pressed "?" for. */
             help: row.help ? true : null,
+            /* The reader's press on Hint under a Recall answer. Named for the
+               reason `stance` gives above: a column not named here is not
+               exported, and nothing says so. */
+            hintOpenedAt: row.hintOpenedAt?.toISOString() ?? null,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,
         ),

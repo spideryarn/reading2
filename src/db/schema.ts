@@ -3902,6 +3902,15 @@ export const chatMessages = spideryarn.table(
      * shown (plan 261003j).
      */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /**
+     * **When the reader first pressed Hint under this answer.** Assistant rows
+     * of Recall threads only; see `ChatMessage.hintOpenedAt` in src/types.ts.
+     *
+     * Set once, by `markHintOpened` in src/store/pg-chat.ts, and only while the
+     * stored answer still carries the hint the reader pressed. A retry reuses
+     * the row for a new answer, so it nulls this.
+     */
+    hintOpenedAt: timestamp("hint_opened_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.threadId, t.id] }),
@@ -3931,6 +3940,12 @@ export const chatMessages = spideryarn.table(
        one. Without this a bug that wrote it onto the answer would be invisible —
        nothing reads it there, and the transcript would look right. */
     check("chat_messages_help_user_only", sql`${t.help} = false or ${t.role} = 'user'`),
+    /* A hint sits under an answer, so only an assistant row can have had one
+       opened. Same shape as the stance check above. */
+    check(
+      "chat_messages_hint_opened_assistant_only",
+      sql`${t.hintOpenedAt} is null or ${t.role} = 'assistant'`,
+    ),
     foreignKey({
       name: "chat_messages_thread_fk",
       columns: [t.articleId, t.threadId],

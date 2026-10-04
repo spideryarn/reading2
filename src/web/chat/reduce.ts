@@ -29,6 +29,7 @@
  *   answer. Two of the three shipped once and surfaced weeks later as "That
  *   message is not in this conversation."
  */
+import { splitHint } from "../../recall-hint.js";
 import type { ChatMessage, ChatThread } from "../../types.js";
 import type {
   ChatCommand,
@@ -37,6 +38,7 @@ import type {
   ChatResult,
   ChatState,
   DeleteOperation,
+  HintOperation,
   IntentOperation,
   LoadOperation,
   Operation,
@@ -139,6 +141,9 @@ function accepts(op: Operation, event: ChatResult): boolean {
     case "intent.succeeded":
     case "intent.failed":
       return op.kind === "intent";
+    case "hint.succeeded":
+    case "hint.failed":
+      return op.kind === "hint";
   }
 }
 
@@ -286,6 +291,30 @@ function commit(state: ChatState, op: TurnOperation): ChatState {
   return { ...cleared, base, operations: withoutOp(cleared, op.id) };
 }
 
+/**
+ * The reader opened a Recall answer's hint: register the write that records it.
+ *
+ * **One write at a time, and none for a press already stored.** The panel asks
+ * again when the reader reopens a hint whose first write failed, but a second
+ * press while the first request is still out — or after its time reached
+ * `base` — gets the same state object back: there is nothing to ask.
+ */
+function startHint(state: ChatState, op: Registering<HintOperation>): Outcome {
+  const { threadId, messageId, hint } = op;
+  const stored = state.base.find((t) => t.id === threadId)?.messages.find((m) => m.id === messageId);
+  if (stored?.hintOpenedAt !== undefined) return unchanged(state);
+  for (const other of state.operations.values()) {
+    if (other.kind === "hint" && other.threadId === threadId && other.messageId === messageId && other.hint === hint) {
+      return unchanged(state);
+    }
+  }
+  return {
+    /* Supersedes nothing and draws nothing — see `HintOperation`. */
+    state: register<HintOperation>(state, op, () => false),
+    commands: [{ type: "hint", opId: op.id, slug: state.slug, threadId, messageId, hint }],
+  };
+}
+
 function applyInput(state: ChatState, event: ChatInput): Outcome {
   switch (event.type) {
     case "load.started": {
@@ -397,6 +426,8 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
       return startSpoken(state, event.op);
     case "recovery.started":
       return startRecovery(state, event.op);
+    case "hint.started":
+      return startHint(state, event.op);
     case "thread.begun":
       /* One of the two places this tab invents a conversation, so one of the two
          places `unnamed` grows. Nothing is written to disk until the reader
@@ -1451,6 +1482,28 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       tombstones.delete(op.threadId);
       return { state: { ...retired, tombstones, error }, commands: NOTHING };
     }
+    case "hint.succeeded": {
+      const retired = { ...state, operations: withoutOp(state, op.id) };
+      if (op.kind !== "hint") return { state: retired, commands: NOTHING };
+      /* **Only onto the answer whose hint was pressed.** A retry keeps the
+         message id, so the row may hold a different answer by now; its hint is
+         closed and nobody opened it. Matching on the hint's own text is the
+         same fence the server applies before it stamps. A retry still in
+         flight draws over `base` and replaces the row whole when it commits,
+         so a time patched under it goes with the old answer. */
+      const base = rewriteMessage(retired.base, op.threadId, op.messageId, (m) =>
+        m.role === "assistant" && m.hintOpenedAt === undefined && splitHint(m.text).hint === op.hint
+          ? { ...m, hintOpenedAt: event.hintOpenedAt }
+          : m,
+      );
+      return { state: { ...retired, base }, commands: NOTHING };
+    }
+    case "hint.failed":
+      /* Nothing written and nothing said. The hint is open on screen from the
+         panel's own state; what failed is the record of it, and a line of error
+         above the conversation about a hint the reader is reading would be
+         noise. What matters is that nothing here claims it was saved. */
+      return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
     default:
       return applyTurn(state, event, op as TurnOperation);
   }

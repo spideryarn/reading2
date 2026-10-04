@@ -149,6 +149,7 @@ function seam() {
     settledAnswer: async () => null,
     stopAnswer: async () => ({ ok: true }),
     cancelThread: async () => ({ ok: true }),
+    markHintOpened: async () => ({ ok: false, error: "not in this test" }),
   };
   const controller = new ChatController("a-slug", effects);
   const empty: ChatThread = { id: THREAD, kind: "chat", title: "New chat", createdAt: AT, updatedAt: AT, messages: [] };

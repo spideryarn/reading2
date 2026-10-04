@@ -197,8 +197,8 @@ Built as planned, in commit `698c9052d`. What differs from the text above:
   holds, and a year outside 1000 to 2999 sends nothing.
 - A year is also taken when the registry's day is not a real calendar day.
 - `optNull` in `src/public/dto.ts` is `opt` for a row whose empty columns are `null`.
-- The migration is `20261004155857_article_published_year`. It was first generated as
-  `20261004143816`, lost a fork to a peer's migration on `dev`, and was regenerated on top of it
+- The migration is `20261004165310_article_published_year`. It was first generated as
+  `20261004143816`, twice lost a fork to a peer's migration on `dev`, and was regenerated on top
   with the same three statements. The review prompt names the first one.
 
 [The review](261004h-year-visitor-backfill-code-review-1-sol.md): approve, with one P1 it fixed.
