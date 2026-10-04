@@ -650,6 +650,18 @@ else already has the focus, or when the box is not on screen (Back can mount the
 `takesFocusOnArrival` in `Library.tsx` has the reasons;
 [260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
 
+**One cross clears it, and so does Escape.**
+
+> Little cross button to clear the search on the logged in homepage shelf.
+>
+> — Greg, 2026-10-04, SPIDERYARN-READING2-C7 (`spya-wzmvva`)
+
+There had been one since August, a 14px grey glyph, with the browser's own bolder cross beside it
+whenever the box had the focus. It is now the house cross (`styles/close.css` § `.close-x`) with the
+browser's hidden (`.own-clear`), and pressing it puts the cursor back in the box unless a finger or
+pen pressed it. Plan
+[261004f](../plans/261004f-shelf-search-clear-cross-that-can-be-seen.md).
+
 1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
    `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching
    something invisible looks like a bug from the outside. Free, instant, no request.
