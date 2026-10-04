@@ -54,7 +54,11 @@ there are two more, both answering Greg's reports (spya-a868zs, spya-vskqfn):
 - **A Structure row, in both faces** — first tap opens the row's card ("Tap again to go here"),
   second goes there; a row with no card goes there at once. One `useTapReveal` per row, never a
   state shared across the grid
-  ([260828g](../postmortems/260828g-spine-hover-cards.md)).
+  ([260828g](../postmortems/260828g-spine-hover-cards.md)). **Neither face gives the card
+  `keepSide`**: on a phone it fits on neither side of the row and has to drop below it. With
+  `keepSide` the list face's card opened off the screen and widened the page, so the rows moved
+  between the first tap and the second (fixed 2026-10-04, plan 261004g; `StructurePanel.tsx` §
+  `CardRow` has the mechanism).
 - **The reading-time line** — a tap opens its card and there is no second step, since the line
   does nothing when pressed. Under a coarse pointer its target reaches 1.25rem back over the
   gutter column, under every control (gutter.css, the end).
@@ -713,6 +717,15 @@ paragraph is in front of the reader and its flash plays once it is uncovered. A 
 exactly as it was — it was never unmounted, so a Chat draft, a half-typed Quiz answer and a Search
 query are all still there. Pressing the mode's own button in the Dock does the same. While the pill
 shows, the *back to ⟨section⟩* chip does not: "back" means the band.
+
+**So does anything outside the band that names it as a destination**: *Open glossary* and *Dig
+deeper* on a term's card in the prose, *Dig deeper* on a citation's, the command bar's glossary
+commands, a question opened from the Comments drawer while Chat is the mode. Each of those sets a
+mode that is already set, which on its own reveals nothing, so they all go through one callback,
+`showBand` in `Reader.tsx`, that brings the band back and writes the mode only when it changes.
+A new control that opens a band from the prose calls `showBand`, not `setMode`. The citation card
+(2026-10-04, plan 261004b) and the term card (plan 261004g) each shipped with the band left hidden
+before that callback existed.
 
 What it deliberately does not do:
 

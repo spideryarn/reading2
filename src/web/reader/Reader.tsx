@@ -129,6 +129,7 @@ import {
   summaryParam,
   structureParam,
   debateParam,
+  type BandMode,
   type Mode,
 } from "../params.js";
 import { subModeParams } from "../sub-modes.js";
@@ -432,6 +433,26 @@ export function Reader({
   useEffect(() => {
     setBandAway(false);
   }, [mode]);
+  /**
+   * **Open a band from somewhere that is not the Dock** — a card in the prose,
+   * the command bar, a hand-off to Chat. The band asked for may be the one
+   * already open and stepped aside, and then the effect above never runs:
+   * the mode has not changed. So anything that names a band as its
+   * destination calls this rather than `setMode`, and the two lines cannot be
+   * written apart. The citation card had only the second (plan 261004b), then
+   * the term card (qi-fs4qzzfm, plan 261004g).
+   *
+   * No write when the mode is already there: `nuqs` does not elide a
+   * same-value push, so it would add a history entry that changes nothing
+   * (the Dock's press says the same, below).
+   */
+  const showBand = useCallback(
+    (target: BandMode) => {
+      setBandAway(false);
+      if (target !== mode) void setMode(target);
+    },
+    [mode, setMode],
+  );
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
      reader can make further pushes of their own (a footnote jump, a Skim
@@ -845,9 +866,9 @@ export function Reader({
   const handToChat = useCallback(
     (question: string) => {
       setChatHandoff({ slug, question });
-      void setMode("chat");
+      showBand("chat");
     },
-    [slug, setMode],
+    [slug, showBand],
   );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
   const askAboutSummary = useCallback(
@@ -1183,12 +1204,11 @@ export function Reader({
               void investigateCitation(id);
               setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
               /* A passage jump can leave this very mode mounted but hidden
-                 on a narrow window. Setting the same mode cannot reveal it. */
-              setBandAway(false);
-              void setMode("citations");
+                 on a narrow window: `showBand`. */
+              showBand("citations");
             },
           },
-    [investigateCitation, citationDigging, setMode],
+    [investigateCitation, citationDigging, showBand],
   );
 
   const citeSelections = useMemo<CiteSelection[]>(
@@ -1247,9 +1267,9 @@ export function Reader({
       void setTermId(id);
       const lowered = gateToReveal(terms, id, sort, gate ?? PRIORITY_GATE);
       if (lowered !== null) void setGate(lowered);
-      void setMode("glossary");
+      showBand("glossary");
     },
-    [setTermId, setMode, setGate, gate, sort, terms],
+    [setTermId, showBand, setGate, gate, sort, terms],
   );
 
   /**
@@ -1981,10 +2001,14 @@ export function Reader({
   );
   const openAskedFromDrawer = useCallback(
     (id: string) => {
-      if (mode === "remember") void setMode("chat");
+      /* In Chat the mode does not change, but its band may have stepped aside
+         on a narrow window, and the floating panel is suppressed there: the
+         thread would open where nobody can see it (GPT Sol, plan review
+         261004g F1). In any other mode the floating panel takes it. */
+      if (mode === "remember" || mode === "chat") showBand("chat");
       jumpToComment(askedList, id, openChatThread, jumpTo);
     },
-    [askedList, openChatThread, jumpTo, mode, setMode],
+    [askedList, openChatThread, jumpTo, mode, showBand],
   );
 
   /**
@@ -2314,12 +2338,12 @@ export function Reader({
               ready: glossaryReady,
               terms,
               openTerm: openTermInGlossary,
-              openGlossary: () => void setMode("glossary"),
+              openGlossary: () => showBand("glossary"),
             }
           : undefined,
         bookmark: canBookmark ? bookmarkBlock : undefined,
       }),
-    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, setMode, canBookmark, bookmarkBlock],
+    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, showBand, canBookmark, bookmarkBlock],
   );
   /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
