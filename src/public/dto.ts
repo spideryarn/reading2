@@ -98,10 +98,12 @@ import {
   identifiesOf,
   isUsableSimpleSummary,
   paragraphShape,
+  publishedYearOf,
   readStoredBears,
   readStoredLean,
 } from "../types.js";
 import type { DebateSynthesis } from "../types.js";
+import { dayFrame } from "../timeline-time.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
@@ -152,6 +154,14 @@ function publicMeta(row: {
   siteName: string | null;
   lang: string | null;
   excerpt: string | null;
+  journal: string | null;
+  /**
+   * The owner's `Meta.publishedAt`, **not the thing that goes out**: it may
+   * carry a time of day and an offset. Named for the column, like `finalUrl`
+   * below, and cut to the calendar day here.
+   */
+  publishedAt: string | null;
+  publishedYear: number | null;
   headingTitle: string | null;
   /**
    * Stage 1's post-redirect address, **still not the thing that goes out**.
@@ -168,6 +178,12 @@ function publicMeta(row: {
      a field, and this computes one — and the spread it saves you from is the one
      that compiles clean with the key misspelled. */
   const url = row.finalUrl === null ? null : publicSourceUrl(row.finalUrl);
+  /* **The day, not the stored string**, and a day or a year, never both
+     (plan 261004h). Computed like `url`, so named consts and shorthand keys
+     for its reason. A stored string that does not start with a real day sends
+     nothing; a year is sent only when there is no day to send. */
+  const published = dayFrame(row.publishedAt);
+  const publishedYear = published === null ? publishedYearOf(row.publishedYear) : undefined;
   return {
     slug: row.slug,
     title: row.title ?? row.headingTitle ?? row.slug,
@@ -178,6 +194,13 @@ function publicMeta(row: {
     ...(row.siteName === null ? {} : { siteName: row.siteName }),
     ...(row.lang === null ? {} : { lang: row.lang }),
     ...(row.excerpt === null ? {} : { excerpt: row.excerpt }),
+    /* Where and when it was published. Greg, 2026-10-04: "Q-visitor-page yes".
+       The journal is copied, so its name is a checked literal (`optNull`); the
+       other two are computed, so shorthand keys. A DOI is not named and must
+       not be. */
+    ...optNull(row, "journal"),
+    ...(published === null ? {} : { published }),
+    ...(publishedYear === undefined ? {} : { publishedYear }),
     /* **Two ways to get no key**, and they collapse on purpose: no address at
        all, and an address the policy will not publish. A visitor is told the
        same thing by both — nothing — because there is nothing they could do
@@ -215,6 +238,15 @@ function publicMeta(row: {
  */
 function opt<T, K extends keyof T>(source: T, key: K): Partial<Pick<T, K>> {
   return source[key] === undefined ? {} : ({ [key]: source[key] } as Partial<Pick<T, K>>);
+}
+
+/**
+ * `opt`, for a database row: a column Postgres had nothing in is `null`, and
+ * crosses as an absent key. The same checked name, for the same reason.
+ */
+function optNull<T, K extends keyof T>(source: T, key: K): { [P in K]?: NonNullable<T[P]> } {
+  const value = source[key];
+  return value == null ? {} : ({ [key]: value } as { [P in K]?: NonNullable<T[P]> });
 }
 
 /**
@@ -1188,6 +1220,10 @@ export function publicArticle(row: {
   siteName: string | null;
   lang: string | null;
   excerpt: string | null;
+  journal: string | null;
+  /** The owner's string — `publicMeta` sends the calendar day of it, or the year, never this. */
+  publishedAt: string | null;
+  publishedYear: number | null;
   headingTitle: string | null;
   /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
   finalUrl: string | null;

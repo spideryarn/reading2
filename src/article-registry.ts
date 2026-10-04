@@ -20,7 +20,7 @@
 import { parseWorkId, realIsoDay, type LookupResult, type WorkId } from "./bibliographic.js";
 import { registryTitleIsDistinctive, safeLookup, titlesDifferByObjectQualifier } from "./citation-registry.js";
 import { tokens } from "./citation-lookup.js";
-import type { Meta } from "./types.js";
+import { publishedYearOf, type Meta } from "./types.js";
 
 /** Candidates asked about for one article. Each is a bounded request; three is a first page's worth. */
 export const MAX_OWN_IDS = 3;
@@ -54,7 +54,10 @@ export function ownIdsOfPdf(records: readonly { page: number; text: string }[]):
   for (const r of records) {
     if (r.page < first + FRONT_PAGES) {
       for (const m of r.text.matchAll(DOI_IN_TEXT)) {
-        found.push({ at: base + m.index, id: parseWorkId(unwrappedIdentifier(m[0])) });
+        /* A text layer can print the journal's address straight after the
+           DOI with no space, and a DOI's own suffix never starts a new one. */
+        const doi = m[0].replace(/(?:www\.|https?:).*$/i, "");
+        found.push({ at: base + m.index, id: parseWorkId(unwrappedIdentifier(doi)) });
       }
       for (const m of r.text.matchAll(ARXIV_IN_TEXT)) {
         found.push({ at: base + m.index, id: m[1] ? parseWorkId(`arxiv:${m[1]}`) : null });
@@ -190,7 +193,8 @@ export interface RegistryFacts {
  * `meta` with the journal, the DOI and the publication day of the first
  * candidate whose record is this article. The article's own DOI, when it has
  * one, is asked about first. The page's own `publishedAt` is never replaced:
- * it is the publisher's claim and may carry a time.
+ * it is the publisher's claim and may carry a time. A record that states no
+ * whole day gives its year instead (`publishedYear`), and never a made-up day.
  */
 export async function withRegistryFacts(
   meta: Meta,
@@ -219,14 +223,24 @@ export async function withRegistryFacts(
        venue falls back to the depositing publisher, which is a repository's
        name and not a journal — except for arXiv, where it is the answer. */
     const journal = record.source === "crossref" || id.startsWith("arxiv:") ? record.venue : undefined;
+    /* **A day or a year, never both** (plan 261004h). The year is kept only
+       when the article ends up with no day, its own or the registry's; a year
+       and a month is kept as the year. A carried minimal-paper year survives
+       an agreeing record with no usable date, just as a carried day does.
+       Ordinary re-extraction does not carry either date into this function. */
+    const { publishedYear: carried, ...rest } = meta;
+    const year = rest.publishedAt === undefined && day === undefined
+      ? publishedYearOf(record.year) ?? publishedYearOf(carried)
+      : undefined;
     return {
       outcome: "agreed",
       asked,
       meta: {
-        ...meta,
+        ...rest,
         ...(meta.doi === undefined && id.startsWith("doi:") ? { doi: record.doi } : {}),
         ...(journal !== undefined ? { journal } : {}),
         ...(day !== undefined ? { publishedAt: day } : {}),
+        ...(year !== undefined ? { publishedYear: year } : {}),
       },
     };
   }

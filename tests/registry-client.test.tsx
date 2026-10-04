@@ -302,7 +302,7 @@ describe("a Debate row on screen", () => {
     await act(async () =>
       root.render(
         createElement(DebatePanel, {
-          access: { kind: "owner", owner: debateOwner(row) },
+          access: { kind: "owner", owner: debateOwner(row), citers: { result: { kind: "no-doi" }, retry: () => {} } },
           onJump: () => {},
           /* The fixture is a claim row, so Claims is the sub-mode that draws it. */
           view: "claims",

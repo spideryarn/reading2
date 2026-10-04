@@ -31,6 +31,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { BIBLIOGRAPHIC_HOSTS } from "../src/fetch.js";
 import { DISPLAY_NAME } from "../src/models.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -180,6 +181,30 @@ describe("the privacy page", () => {
     );
     /* And the bug-report section, which lists where a report goes. */
     expect(prose).toContain("It goes to our database, to Sentry and, as an email, to our own inbox");
+  });
+
+  it("names the three indexes a DOI is sent to, and says what is not sent", () => {
+    /* Plan 261004h. src/fetch.ts § `BIBLIOGRAPHIC_HOSTS` is the list of hosts
+       the server asks about a DOI: Crossref and DataCite since 2026-10-01
+       (src/bibliographic.ts), which the page did not name until now, and
+       OpenAlex since 2026-10-04 (src/citation-index.ts). Read from that list,
+       so a fourth host turns this red until the page names it. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    const NAME: Record<string, string> = {
+      "api.crossref.org": "Crossref",
+      "api.datacite.org": "DataCite",
+      "api.openalex.org": "OpenAlex",
+    };
+    expect(BIBLIOGRAPHIC_HOSTS.length).toBeGreaterThanOrEqual(3);
+    for (const host of BIBLIOGRAPHIC_HOSTS) {
+      const name = NAME[host];
+      expect(name, `${host} has no name on the privacy page yet`).toBeDefined();
+      expect(prose, host).toContain(name);
+    }
+    expect(prose).toContain("its DOI");
+    expect(prose).toContain("when you look up the works it cites");
+    expect(prose).toContain("when you open Reception in Debate");
+    expect(prose).toContain("never the article’s text, and nothing about who you are");
   });
 
   it("gives the one contact address rather than spelling one of its own", () => {

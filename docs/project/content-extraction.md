@@ -685,8 +685,14 @@ DataCite about **the article's own identifier**, after the extractor and outside
   word can belong to a cited work. With no author evidence, nothing is kept.
 - **What is kept**: `Meta.doi`; `Meta.journal`, from Crossref's `container-title` (and `arXiv` for
   an arXiv id; a DataCite repository's name is not a journal); and `Meta.publishedAt`, only when
-  the page stated none and the registry states a whole day. A year alone is not stored: every
-  reader of that field wants a calendar day, and a made-up `-01-01` would be a date nobody stated.
+  the page stated none and the registry states a whole day.
+- **A year alone goes in its own field**, `Meta.publishedYear` (`article_revisions.published_year`),
+  since 2026-10-04. Older print papers and DataCite records often state only a year, or a year
+  and a month, which is kept as the year. It is never put in `publishedAt`: every reader of that
+  field wants a calendar day, and a made-up `-01-01` would be a date nobody stated. An article has
+  a day or a year, never both, and the table refuses a row with both. The page prints
+  `Published 2011`. Read the pair with [`publishedOf`](../../src/web/relative-time.ts). Timeline
+  does not read the year: it is too coarse a frame for "last March".
 - **It never fails an import.** No candidate, a miss, a disagreement and an unreachable registry
   all leave `meta` as the extractor made it. The step logs the outcome and counts.
 - **Read this keeps a minimal paper's confirmed facts** when the registry is unavailable: it
@@ -694,11 +700,59 @@ DataCite about **the article's own identifier**, after the extractor and outside
   afresh for the rest, so a date a publisher removed is not carried forward.
 - **A PDF now has a publication date**, so Timeline has a year to read a year-less date against,
   and the Shelf's Published sort has something to sort.
-- **Nothing is backfilled.** An article imported before this has the facts only once its owner
-  reads it again.
+- **An article imported before this has the facts only once its owner reads it again, or once the
+  backfill below has been run** against the database it lives in.
 
-The Metadata page prints both under the title. The plan, with what was deferred, is
-[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md).
+### The backfill, for articles imported earlier
+
+[`scripts/backfill-registry-facts.ts`](../../scripts/backfill-registry-facts.ts) fills `doi`,
+`journal` and `published_at` or `published_year` on the current revision of articles that lack
+them. The logic is [`src/backfill-registry-facts.ts`](../../src/backfill-registry-facts.ts).
+
+```
+npx tsx scripts/backfill-registry-facts.ts                      # dry run, local
+npx tsx scripts/backfill-registry-facts.ts --prod               # dry run, production, read-only
+npx tsx scripts/backfill-registry-facts.ts --prod --apply <plan.json>
+```
+
+- **The dry run is the default and cannot write.** It runs inside `BEGIN READ ONLY` and never
+  commits. It finds each article's candidates without a model: a PDF's first two pages through
+  `frontPagesWithStamps` ([`src/pdf.ts`](../../src/pdf.ts)), which keeps arXiv's sideways margin
+  stamp where `firstPagesText` drops it; a web page's stored HTML through `ownIdsOfDocument`; and
+  the article's own address. It asks the registries through `lookupWork` with an in-memory store,
+  so the spacing and the cooldown are the shipped ones and the registry cache table is neither
+  read nor written. `withRegistryFacts` decides, unchanged. It prints a table and saves a plan
+  file with one row per article. A fatal idle connection error while the registries are being asked
+  is handled, so it does not discard that in-memory plan; the rollback can fail on a dead session
+  without losing the plan. The transaction pins a pooler backend until it ends.
+- **A missing document is its own outcome.** `no-source` (the revision references none) and
+  `source-unreadable` (it references one that is missing, corrupt or not a PDF pdf.js can open)
+  are reported apart from `no-candidate`.
+- **Apply writes the plan file and asks no registry**, so what was read is what is written. It
+  refuses a plan made against another database, and a plan that fills a year on a database with
+  no `published_year` column. In one transaction, it first locks the articles by their actual
+  database slugs in the app's `C` order, then per article refuses if the plan's revision is no longer
+  current, refuses if the article has an unfinished
+  draft (the draft would publish later without the facts), and fills only empty columns. A day or
+  a year is written only when both date columns are empty. Each row is `written`, `already`, or
+  `refused` with a reason; a refused row is left exactly as it was. It exits non-zero when nothing
+  was written and nothing was already there.
+- **Which database.** With no flag, the local one in `.env.local`, and a `DATABASE_URL` in the
+  shell is not read. `--prod` is the only way to production: it takes the database and the
+  bucket's credentials together from `.env.prod`. The plan identifies host, port, database and
+  username: the username distinguishes projects sharing a Supabase pooler. All four must be explicit
+  in the database URL; plans without a username must be regenerated. Read the `Target:` line
+  ([database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)).
+- **Nothing else needs refreshing.** The Shelf reads the publication date from the revision row.
+  An article that gains a `published_at` and has a Timeline shows that Timeline as out of date
+  until its owner regenerates it; the dry run counts these. A year causes none.
+
+The Metadata page prints both under the title, for the owner and, since 2026-10-04, for a visitor
+to a shared article: the journal and the publication date cross the public boundary, the DOI does
+not ([security-map.md](security-map.md#the-allowlist-has-two-failure-directions-and-only-one-of-them-is-loud)).
+The plans are
+[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md)
+and [261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md).
 
 ## A title from outside is plain text
 
