@@ -746,8 +746,10 @@ characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wr
 
 **An article with no publication date sorts last, both ways**, like any missing value
 ([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
-a PDF never has a date, and nor does a paper added with only its metadata
-([`paperMeta`](../../src/paper-metadata.ts)). A web page has one only if its publisher states it
+a PDF, or a paper added with only its metadata, has a date only if it was imported on or after
+2026-10-04 and a registry confirmed its DOI and states a whole day
+([content-extraction.md](content-extraction.md#the-journal-and-the-publication-day-from-a-registry)).
+A web page has one only if its publisher states it
 and it was extracted on or after 2026-08-31; that includes a DOI URL that resolves to a web page.
 Falling back to the Added date was passed
 over, because a 1990 paper fetched yesterday would then lead "newest first". Giving papers a year

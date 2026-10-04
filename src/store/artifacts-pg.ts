@@ -221,6 +221,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     note: row.note,
     abstract: row.abstract,
     doi: row.doi,
+    journal: row.journal,
     /* **The reader's own name for a file they uploaded**, and it is here so that
        the two `Meta`s agree. `metaFrom` in src/store/pg.ts — the owner-facing
        read — surfaces `raw_filename` as `Meta.filename`, and this rebuild did
@@ -815,6 +816,7 @@ const META_COLUMNS = [
   "note",
   "abstract",
   "doi",
+  "journal",
   "source",
   "extractMethod",
   "pages",
@@ -859,6 +861,7 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
        re-extraction that clears them has decided to. */
     abstract: meta.abstract ?? null,
     doi: meta.doi ?? null,
+    journal: meta.journal ?? null,
     source: meta.source ?? null,
     extractMethod: meta.method ?? null,
     pages: meta.pages ?? null,

@@ -1,0 +1,67 @@
+/** Registry facts through the real extract step, with source bytes and lookups held in process. */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Meta } from "../src/types.js";
+import type { RawManifest } from "../src/fetch.js";
+
+vi.mock("../src/fetch.js", async (original) => ({
+  ...(await original<typeof import("../src/fetch.js")>()),
+  readRawBytes: vi.fn(),
+}));
+
+const { readRawBytes } = await import("../src/fetch.js");
+const { STEPS, articleRegistryDeps } = await import("../src/pipeline.js");
+const { memoryArtefacts } = await import("./helpers/memory-artefacts.js");
+const { nullCheckpointStore } = await import("../src/store/checkpoints.js");
+
+const TITLE = "Entropy and the arrow of time in open quantum systems";
+const previous: Meta = {
+  slug: "s", title: TITLE, byline: "Taylor Beck", doi: "10.1000/old",
+  journal: "Old Journal", publishedAt: "2024-05-31", abstract: "An abstract.",
+};
+
+afterEach(() => vi.restoreAllMocks());
+
+async function extract(old: Meta, full: boolean, title = TITLE) {
+  const store = memoryArtefacts();
+  store.plant("s", "fetch", "raw", {
+    kind: "html", file: "raw.html", requestedUrl: "https://example.org/paper", url: "https://example.org/paper",
+    contentType: "text/html", encoding: "utf-8", bytes: 100, sha256: "a".repeat(64),
+    storedSha256: "a".repeat(64), storedBytes: 100, fetchedAt: "2024-05-31T00:00:00Z",
+  } satisfies RawManifest);
+  store.plant("s", "extract", "meta", old);
+  if (full) store.plant("s", "extract", "extractedHtml", "<p>Previously read in full.</p>");
+  /* Production's has() is false after beginStep marks extract running, even
+     though read() still sees the copied HTML. Completion is not presence. */
+  vi.spyOn(store, "has").mockResolvedValue(false);
+  vi.mocked(readRawBytes).mockResolvedValue(new TextEncoder().encode(
+    `<html><head><title>${title}</title><meta name="author" content="Taylor Beck"></head>` +
+    `<body><article><h1>${title}</h1>${"<p>A careful discussion of entropy and the arrow of time in open quantum systems. We measure the system and consider what this means for time and physics.</p>".repeat(30)}</article></body></html>`,
+  ));
+  const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
+  const result = await STEPS.extract.run({
+    slug: "s", url: "https://example.org/paper", report: () => {},
+    signal: new AbortController().signal, cacheArticle: false, power: "standard",
+  }, store, nullCheckpointStore());
+  return { meta: result.parts?.meta, lookup };
+}
+
+describe("registry metadata retained during extraction", () => {
+  it("does not carry a removed publisher date or old registry facts into a full re-extraction", async () => {
+    const { meta, lookup } = await extract(previous, true);
+    expect(meta?.publishedAt).toBeUndefined();
+    expect(meta?.journal).toBeUndefined();
+    /* The DOI itself is kept, as it was before 261004a, and it is what gets asked about. */
+    expect(meta?.doi).toBe(previous.doi);
+    expect(lookup).toHaveBeenCalledWith("doi:10.1000/old");
+  });
+
+  it("keeps confirmed minimal-paper facts during Read this when the registry is unavailable", async () => {
+    const { meta } = await extract(previous, false);
+    expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedAt: previous.publishedAt });
+  });
+
+  it("keeps them whatever title the fuller reading gives: Read this re-reads the same bytes", async () => {
+    const { meta } = await extract(previous, false, "A different article about the mechanics of fluid flow");
+    expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedAt: previous.publishedAt });
+  });
+});

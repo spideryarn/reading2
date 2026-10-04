@@ -128,6 +128,8 @@ import {
   PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
   previousCitationsFrom,
 } from "./citations.js";
+import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
+import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
@@ -2064,15 +2066,59 @@ export const metadataReaders = {
  * null` — so without this the abstract the reader saw on the shelf would vanish
  * the moment they asked to read the paper. Only those two fields: everything
  * else stage 2 says about the piece is its own, and better.
+ *
+ * **And, during the minimal-to-full transition, what a registry said about
+ * the kept DOI.** An ordinary re-extraction must use fresh evidence: an old
+ * publisher date may have been removed. A minimal paper has metadata but no
+ * extracted HTML yet, and that is how the transition is recognised.
  */
 async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: Meta): Promise<Meta> {
   if (next.abstract !== undefined && next.doi !== undefined) return next;
   const previous = await store.read(ctx.slug, "extract", "meta");
+  /* **The DOI is kept as it always was**, on any re-extraction that finds
+     none. What a registry said about it is kept only while the paper has never
+     been read in full: *Read this* re-reads the same bytes, so the facts are
+     still that document's whatever title the fuller reading gives it. */
+  const keptDoi =
+    next.doi === undefined && previous?.doi && (await store.read(ctx.slug, "extract", "extractedHtml")) === null
+      ? previous
+      : null;
   return {
     ...next,
     ...(next.abstract === undefined && previous?.abstract ? { abstract: previous.abstract } : {}),
     ...(next.doi === undefined && previous?.doi ? { doi: previous.doi } : {}),
+    ...(keptDoi?.journal ? { journal: keptDoi.journal } : {}),
+    ...(keptDoi?.publishedAt && next.publishedAt === undefined ? { publishedAt: keptDoi.publishedAt } : {}),
   };
+}
+
+/** The real registry. An object, so a test of a step can hand it a lookup that never leaves the process. */
+export const articleRegistryDeps: { lookup: (id: WorkId) => Promise<LookupResult> } = { lookup: lookupWork };
+
+/**
+ * **`meta` with what a registry says about the article itself** — its journal,
+ * its DOI and, when the page stated no date, the day it was published
+ * (src/article-registry.ts). After the extractor, outside any model call, and
+ * it never fails the step: an unreachable registry leaves `meta` as it was.
+ */
+async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata", meta: Meta, ownIds: readonly WorkId[]): Promise<Meta> {
+  const started = Date.now();
+  const facts = await withRegistryFacts(meta, ownIds, { lookup: (id) => articleRegistryDeps.lookup(id), signal: ctx.signal });
+  /* Counts and the outcome, never a title or an identifier's record. */
+  plog.info(
+    {
+      slug: ctx.slug,
+      step,
+      registryOutcome: facts.outcome,
+      registryCandidates: ownIds.length,
+      registryAsked: facts.asked,
+      registryJournal: facts.meta.journal !== undefined,
+      registryDay: facts.meta.publishedAt !== meta.publishedAt,
+      registryMs: Date.now() - started,
+    },
+    `${step} ${ctx.slug}: registry ${facts.outcome}`,
+  );
+  return facts.meta;
 }
 
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
@@ -2181,12 +2227,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         manifest.kind === "pdf"
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
-      const meta = paperMeta({
-        slug: ctx.slug,
-        kind: manifest.kind,
-        ...(manifest.filename ? { filename: manifest.filename } : {}),
-        found,
-      });
+      const meta = await withArticleRegistry(
+        ctx,
+        "metadata",
+        paperMeta({
+          slug: ctx.slug,
+          kind: manifest.kind,
+          ...(manifest.filename ? { filename: manifest.filename } : {}),
+          found,
+        }),
+        [],
+      );
       /* Counts and the branch, never a word of the paper (docs/project/logging.md). */
       plog.info(
         {
@@ -2357,8 +2408,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
               `extract ${ctx.slug}: kept ${stamps.map(([rule, n]) => `${n}× ${rule}`).join(", ")}`,
             );
           }
+          const kept = await keptPaperMetadata(ctx, store, result.meta);
           return {
-            parts: { extractedHtml: result.extractedHtml, meta: await keptPaperMetadata(ctx, store, result.meta) },
+            parts: { extractedHtml: result.extractedHtml, meta: await withArticleRegistry(ctx, "extract", kept, result.ownIds) },
             detail: result.meta.title,
           };
         } catch (err) {
@@ -2472,8 +2524,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
       );
+      const kept = await keptPaperMetadata(ctx, store, result.meta);
       return {
-        parts: { extractedHtml: result.extractedHtml, meta: await keptPaperMetadata(ctx, store, result.meta) },
+        parts: {
+          extractedHtml: result.extractedHtml,
+          meta: await withArticleRegistry(ctx, "extract", kept, ownIdsOfPdf(result.transcript)),
+        },
         detail: result.meta.title,
       };
     },

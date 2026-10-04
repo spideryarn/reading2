@@ -329,6 +329,60 @@ describe("the headings breadcrumb", () => {
     expect(nav?.closest("[aria-live]"), "never announced on scroll").toBeNull();
   });
 
+  /**
+   * **The stuck-bar watcher is wired, and only for a bar with the breadcrumb.**
+   * tests/bar-stuck.test.ts covers the watcher alone; an exported helper
+   * nobody calls would pass it. Here: the sentinel is the element directly
+   * before the bar, it is what is observed, the observer's answer reaches the
+   * root, and all of it goes when the breadcrumb does. GPT Sol, plan review
+   * of 261004a.
+   */
+  it("watches a sentinel directly before the bar, while the bar holds the breadcrumb", async () => {
+    type Entry = { isIntersecting: boolean; boundingClientRect: { top: number } };
+    const seen: { callback: (e: Entry[]) => void; observed: Element[]; live: boolean }[] = [];
+    class FakeObserver {
+      private readonly record: (typeof seen)[number];
+      constructor(callback: (e: Entry[]) => void) {
+        this.record = { callback, observed: [], live: true };
+        seen.push(this.record);
+      }
+      observe(el: Element) {
+        this.record.observed.push(el);
+      }
+      disconnect() {
+        this.record.live = false;
+      }
+    }
+    vi.stubGlobal("IntersectionObserver", FakeObserver);
+
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    await open();
+    const bar = host.querySelector(".reader > .controls");
+    const sentinel = bar?.previousElementSibling;
+    expect(sentinel?.className).toBe("bar-sentinel");
+    const live = seen.filter((o) => o.live);
+    expect(live.length, "one live watcher (StrictMode's first is torn down)").toBe(1);
+    expect(live[0]?.observed).toEqual([sentinel]);
+
+    await act(async () => live[0]?.callback([{ isIntersecting: false, boundingClientRect: { top: -1 } }]));
+    expect(document.documentElement.dataset.barStuck).toBe("");
+
+    await act(async () => root.unmount());
+    expect(document.documentElement.dataset.barStuck, "cleared with the bar").toBeUndefined();
+    expect(seen.some((o) => o.live)).toBe(false);
+    root = createRoot(host);
+
+    /* A chip-only bar: nothing reads the answer, so nothing asks. */
+    const before = seen.length;
+    owns = false;
+    resetExperimental();
+    experimentalSince = null;
+    await open();
+    expect(host.querySelector(".reader > .controls"), "the View-only chip's bar").not.toBeNull();
+    expect(host.querySelector(".bar-sentinel")).toBeNull();
+    expect(seen.length).toBe(before);
+  });
+
   it("a press on a crumb is wired to the reader's jump", async () => {
     experimentalSince = "2026-10-02T00:00:00.000Z";
     await open();
