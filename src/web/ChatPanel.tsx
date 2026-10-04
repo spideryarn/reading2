@@ -1828,7 +1828,7 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
  * claim vision.md names as an anti-goal. Stripping them would make the pasted
  * version *less* checkable than the one on screen.
  *
- * The tick is not decoration either. `navigator.clipboard` is a promise that
+ * The tick is not decoration either. A clipboard write returns a promise that
  * can reject — no permission, a browser that will not do it from this event —
  * and a copy button that has visibly done nothing is the silent-success shape
  * (docs/reusable/silent-success.md). So the state has three values, not two,

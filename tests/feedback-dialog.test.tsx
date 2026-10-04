@@ -855,6 +855,30 @@ describe("the feedback dialog", () => {
       expect(host.textContent).toContain(REFUSED);
       expect(copyButton().textContent).toBe("Copy the report");
     });
+
+    it.each(["copied", "refused"] as const)("keeps %s feedback without timing out", async (outcome) => {
+      mount();
+      await failToSend("It broke.");
+      const writes = clipboard();
+      vi.useFakeTimers();
+      try {
+        pressCopy();
+        expect(writes).toHaveLength(1);
+        await settle(() => outcome === "copied" ? writes[0]?.resolve() : writes[0]?.reject(new Error("denied")));
+        const label = outcome === "copied" ? "Copied" : "Copy the report";
+        expect(copyButton().textContent).toBe(label);
+        expect(host.textContent?.includes(REFUSED)).toBe(outcome === "refused");
+
+        /* Unlike the short ticks elsewhere, this panel keeps the outcome
+           until a later copy settles or the report is reset. A migration
+           using the hook's usual 1.6 seconds would lose it. */
+        act(() => vi.advanceTimersByTime(60_000));
+        expect(copyButton().textContent).toBe(label);
+        expect(host.textContent?.includes(REFUSED)).toBe(outcome === "refused");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   /* ---- one address on the site, and it is not a person's ---------------- */

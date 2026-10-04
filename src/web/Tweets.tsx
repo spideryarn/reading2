@@ -461,9 +461,9 @@ function RunFoot({ job, owner }: { job: Job | null; owner: UseTweets }) {
  * don't think we need the text copy. Maybe there's a tooltip. Perhaps the same
  * for copy the thread."* — docs/project/icons.md, every icon has a tooltip.
  *
- * `navigator.clipboard` needs a secure context, and an iframe or an http origin
- * that is not localhost will reject the write. Saying so is the point: a copy
- * button that silently does nothing is docs/reusable/silent-success.md. So
+ * Clipboard access can be unavailable, or the browser can refuse a write.
+ * Saying so is the point: a copy button that silently does nothing is
+ * docs/reusable/silent-success.md. So
  * **a refused copy keeps its words**, visibly, for as long as the state lasts;
  * a tick is enough for one that worked. The status is a sibling of the button,
  * not inside it, so the button stays square, and it is always mounted so a

@@ -25,7 +25,7 @@
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { ViewportProbe } = await import("../src/web/ViewportProbe.js");
 
@@ -440,8 +440,8 @@ describe("what it survives", () => {
     /**
      * **The line above the box is about the newest press, and Show and Clear
      * both wipe it.** A write still out when either is pressed used to settle
-     * afterwards and say "copied" over an emptied box; and the older of two
-     * presses, settling last, used to have the last word. Red against the
+     * afterwards and say "copied" over a cleared or refreshed trace; and the
+     * older of two presses, settling last, used to have the last word. Red against the
      * hand-written handler, 2026-10-04; `useCopy` now (src/web/useCopy.ts).
      */
     describe("with a write still out", () => {
@@ -473,6 +473,26 @@ describe("what it survives", () => {
         expect(said()).toBe("");
         return writes;
       }
+
+      it.each(["copied", "refused"] as const)("keeps %s feedback without timing out", async (outcome) => {
+        const writes = open();
+        vi.useFakeTimers();
+        try {
+          press("copy");
+          expect(writes).toHaveLength(1);
+          await settle(() => outcome === "copied" ? writes[0]?.resolve() : writes[0]?.reject(new Error("denied")));
+          const message = outcome === "copied" ? "copied" : "copy refused — select the box";
+          expect(said()).toBe(message);
+
+          /* The trace and its copy outcome remain available until Show,
+             Clear or another copy changes them. A short tick duration
+             copied from another caller would erase this message. */
+          act(() => vi.advanceTimersByTime(60_000));
+          expect(said()).toBe(message);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
 
       it("says nothing when the trace was cleared before the write settled", async () => {
         const writes = open();

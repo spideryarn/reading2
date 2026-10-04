@@ -125,8 +125,8 @@ says and where.
 
 ### What a reader sees differently
 
-Beyond the two defects in the census, three changes follow from one state replacing two. Each is
-the truthful reading: the newest press is what the button reports.
+Beyond the two defects in the census, these changes follow from one state replacing two and from
+safely reporting any rejection value. The newest press is what the button reports.
 
 - **FeedbackDialog**: a failed copy after a successful one used to leave "Copied" on the button
   beside the sentence saying the clipboard could not be reached. The button now goes back to "Copy
@@ -137,6 +137,9 @@ the truthful reading: the newest press is what the button reports.
   link" in the shelf's notice over a clipboard holding the link. It is now dropped. So is one that
   arrives after the row has gone from the shelf: the reader has moved on, and `BlockGutter` already
   says nothing after unmount for the same reason.
+- **ShelfEntry**: a refusal without a nonempty `Error.message` now uses a nonempty string rejection
+  as the reason, or says "the browser refused." Otherwise these values could leave an empty or
+  "undefined" reason, or throw inside the refusal handler. Ordinary error messages stay as they were.
 
 ## Stages
 
@@ -288,3 +291,30 @@ the seven call sites had drifted and the hook was "Greg's call" is replaced by w
 
 One thing from stage 2 changed that no reader can see: `AnnotateDialog` had no mounted flag, so a write settling
 after the box closed set state on a component that was gone, which React ignores. The hook drops it.
+
+### Stages 2 and 3 review, 2026-10-04
+
+Candidate: `a0d6876a0` and `0f9b7c48b`. No new P0 or P1 established.
+
+- **C20-S3-1 (P2, fixed):** FeedbackDialog and ViewportProbe's caller tests did not hold their
+  feedback's no-timeout rule. Changing both timings to 1600 ms left all 120 tests green. Added four
+  outcome-persistence cases: the same mutation then failed exactly those four; restoring the
+  candidate's timings passed all 124. No production timing changed.
+- **C20-S3-2 (P3, fixed):** corrected five stale statements: ShelfEntry's notice has no dismiss
+  control; a clipboard write, not its API object, returns a promise; AccessSharing keeps a failure
+  until the next press settles; Tweets conflated unavailable access with rejected writes; Show
+  refreshes the probe's trace whereas Clear empties it. A scoped text audit went from five hits to
+  zero; the behavioural checks remain the evidence for the implementation.
+- **C20-S3-3 (P3, fixed):** § What a reader sees differently now names ShelfEntry's fallback
+  wording for unusual rejection values, beyond preventing the handler from throwing.
+- **C20-S3-4 (P1, reported; pre-existing and outside scope):** a successful shelf copy retry leaves
+  the earlier failure notice up. This is P-3 above: `useShelf.report` can set its shared actionError
+  but cannot safely clear only the copy failure. No wider files were changed.
+
+Calibration against the six original components at `453599ea6^`: exactly the 18 claimed
+behavioural tests failed, the other 186 passed, and the undefined shelf rejection raised the
+expected unhandled TypeError. Each original component was then replaced with its saved candidate
+bytes. Final scoped run: 12 files, 401 tests passed; typecheck passed; lint had only seven existing
+informational findings. The graph's shared edge was traced through `params.ts` → `library-columns`
+→ `ShelfEntry` from `/admin`; the hook adds only a React import. No clipboard writer outside the
+hook was found. P-3's existing shelf-notice issue remains outside these stages, as recorded above.

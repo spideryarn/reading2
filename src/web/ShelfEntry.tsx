@@ -609,8 +609,8 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
      newest-press-wins token and the timer are explained once, in useCopy.ts.
      The tick shows for 1.5 seconds. **A failure is never drawn on the button**
      (`failedMs: null` costs nothing, because `failed` is not read here): it is
-     a sentence in the shelf's notice, which stays until the reader dismisses
-     it. */
+     a sentence in the shelf's notice; `useShelf` owns when that notice is
+     cleared. */
   const { state: copyState, copy: write } = useCopy({ copiedMs: 1500, failedMs: null });
   const copied = copyState === "copied";
   const [rerunning, setRerunning] = useState(false);

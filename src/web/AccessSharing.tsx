@@ -854,9 +854,9 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
  * returned, a refusal set `copied` to the `false`
  * it already was, and an owner pasted whatever they had copied before. A
  * failure now says so beside the button, in words, and names the way round —
- * the link is in the box and selects itself on focus. It stays until the next
- * press rather than timing out: it is an instruction, and a reader is part-way
- * through following it. GPT Sol, fifth sweep; plan 261003g § 5.
+ * the link is in the box and selects itself on focus. It stays until a later
+ * press settles rather than timing out: it is an instruction, and a reader is
+ * part-way through following it. GPT Sol, fifth sweep; plan 261003g § 5.
  *
  * The status line is the live region too, and is always mounted, so assistive
  * technology can observe its text changing. The success glyph alone does not
