@@ -597,14 +597,15 @@ export function Reader({
    * taller bar, while this is true (crumbs.css § a narrow window) — which is
    * why it is in `layoutKey` below.
    *
-   * **Not while something else on screen already says where you are** — Greg,
+   * **Not while Structure or Marginalia's head is on screen** — Greg,
    * 2026-10-04 (spya-rx43ku): *"We don't need to show that horizontal rail when
    * either structure or annotations mode are on, because they both provide
    * that information too."* Structure's band has its own "you are here";
-   * Annotations is Marginalia, whose head names the part and the section. For
+   * Annotations is Marginalia, whose head ordinarily names the part and the section. For
    * Marginalia "on" means *drawn*: `?margin=1` on a window with no room for the
    * column shows no head, so the breadcrumb stays there. For an owner the bar
-   * goes with it (`showBar` below), which `layoutKey` already hears.
+   * goes with it (`showBar` below), which `layoutKey` already hears. The plan
+   * records the empty-head and contained-failure exceptions.
    * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
    *
    * The tree itself is not built while the switch is off. `Reader` renders for

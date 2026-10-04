@@ -78,7 +78,8 @@ hidden by `!bandCovers`, and where it is beside the prose it is showing.
   above the first part, but the code does not bound it to those (GPT Sol, ALT-ABSENT). There neither
   says where you are. That is how Marginalia has behaved since it shipped, and making the bar come
   and go as the reader scrolls past the first heading would move the prose by 44px mid-read. Not
-  built, not queued. Sol's suggestion, also not built: start the head from the first section rather
+  built here; **queued as `qi-2ymfq3ek`** (a proposal, for Greg to authorise). Sol's suggestion, which
+  is what that entry proposes: start the head from the first section rather
   than the first block, so it names the first part at the very top as the breadcrumb does.
 - **A contained failure.** If Structure's band or Marginalia's boundary has thrown, what is drawn in
   its place is an error line with no location in it, and the breadcrumb is still hidden. The way out
@@ -143,6 +144,14 @@ and green after, and Sol's review is in.
   (y≈100 to 437, then 481 on the way back). Opening a wider band rewraps the prose and the position
   is restored to the `?at=` block's top, so most of that is not this change; only the 44px of the
   bar is. It was not compared against a build without the change.
+- **GPT Sol's code review**: [approve with changes](261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on-code-review-sol.md),
+  no P0 or P1. DOC-ORIENTATION, fixed by Sol: the doc sentence, the `showCrumbs` comment and the
+  test's comment said the other two *always* say where you are; they now say ordinarily, and point
+  here for the exceptions. I reworded its "orientation surface" into plain words. QUEUE-EMPTY-HEAD,
+  taken: the empty-head gap was written down as known and left unqueued, which is a sentence and
+  not a fix; it is `qi-2ymfq3ek` now. Sol agreed the contained failure and the one-frame alias
+  flash need no entry. It also confirmed nothing shadows `marginRoom`, that scroll, keyboard, CSS,
+  tooltips and the herald tolerate an absent bar, and that the fixture mutation is safe.
 
 ## Questions and decisions
 

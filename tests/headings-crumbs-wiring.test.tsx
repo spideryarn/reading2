@@ -461,7 +461,7 @@ describe("the headings breadcrumb", () => {
   });
 
   /**
-   * **Not while something else on screen already says where you are.** Greg,
+   * **Not while Structure or Marginalia's head is on screen.** Greg,
    * 2026-10-04 (spya-rx43ku): *"We don't need to show that horizontal rail when
    * either structure or annotations mode are on, because they both provide
    * that information too."* Annotations is Marginalia. The Summary case is the
