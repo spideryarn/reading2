@@ -1921,6 +1921,26 @@ describe("the artefacts a shared link carries", () => {
     }
   });
 
+  it("does not publish list formatting when a stored list has no two bullet sentences", () => {
+    const malformedList = {
+      text: "These are the findings. It read faster.",
+      ids: ["spya-bbbbbb" as BlockId],
+      list: true,
+      sentences: [
+        { text: "These are the findings.", id: null },
+        { text: "It read faster.", id: "spya-bbbbbb" as BlockId },
+      ],
+    };
+    const summary: SimpleSummary = {
+      ...SIMPLE,
+      levels: { ...SIMPLE.levels, brief: [malformedList, SIMPLE.levels.brief[1]!] },
+    };
+    const shared = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: summary });
+    const paragraph = shared.simpleSummary?.levels.brief[0];
+    expect(paragraph?.sentences).toEqual(malformedList.sentences);
+    expect(paragraph).not.toHaveProperty("list");
+  });
+
   it("does not publish a stored Simple artefact outside either level's contract", () => {
     const invalid = publicArticle({
       ...ARTICLE_BASE,

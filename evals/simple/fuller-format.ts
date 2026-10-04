@@ -11,8 +11,11 @@
  *   npx tsx evals/simple/fuller-format.ts show                      # free: before and after, for the write-up
  *
  * Reads the arms `evals/simple/probe.ts` wrote under evals/results/simple/:
- * `high-none-fbazb1|b2` (the old prompt, twice) and `high-none-fbaza1|a2` (the
- * new). Calls no model: the judge is a separate GPT Sol run over the files
+ * `high-none-fbazb1|b2` (the old prompt, twice), `high-none-fbaza1|a2` (the
+ * first new prompt: Fuller asked for about 500 words, bold at every level; it
+ * failed the wait and guard rules) and `high-none-fbazc1|c2` (the fallback that
+ * ships: about 350 words, no bold in Simple). `after` below is the `c` arms; the
+ * `a` arms are `long`, kept and judged so the longer option has numbers. Calls no model: the judge is a separate GPT Sol run over the files
  * this writes.
  *
  * **fidelity** lists every Fuller in a shuffled order with no arm named, each
@@ -35,8 +38,10 @@ const RESULTS = path.join(import.meta.dirname, "..", "results", "simple");
 const OUT = path.join(RESULTS, "fuller-format-261004b");
 const SLUGS = ["s41598-023-33209-9-spya-s0qydm", "entropy-24-00930-spya-pywwkq", "scaling-hypothesis"];
 const BEFORE = ["fbazb1", "fbazb2"] as const;
-const AFTER = ["fbaza1", "fbaza2"] as const;
-const ARMS = [...BEFORE, ...AFTER] as const;
+const LONG = ["fbaza1", "fbaza2"] as const;
+const AFTER = ["fbazc1", "fbazc2"] as const;
+const ARMS = [...BEFORE, ...LONG, ...AFTER] as const;
+const groupOf = (arm: Arm) => (arm.startsWith("fbazb") ? "before" : arm.startsWith("fbaza") ? "long" : "after");
 type Arm = (typeof ARMS)[number];
 const LABELS = ["supported", "repeated", "filler", "unsupported-minor", "unsupported-serious"] as const;
 type Label = (typeof LABELS)[number];
@@ -53,7 +58,16 @@ interface Run {
   paragraphs?: SimpleParagraph[];
   fuller?: SimpleParagraph[];
   dropped?: Record<string, number>;
-  check?: { levels: Record<string, { result: string; attempts: number; stored: number }> };
+  check?: {
+    levels: Record<string, { result: string; attempts: number; stored: number; retriedAfterFlag: boolean }>;
+  };
+}
+
+type GuardResult = NonNullable<Run["check"]>["levels"][string];
+
+/** One level's guard result, including a first answer that the final result replaced. */
+export function guardCell(level: string, check: GuardResult): string {
+  return `${level[0]}:${check.result}${check.attempts > 1 ? `/${check.attempts}` : ""}${check.retriedAfterFlag ? " after flag" : ""}`;
 }
 
 function load(arm: Arm, slug: string): Run {
@@ -98,7 +112,7 @@ function screen(): void {
   ];
   const by = new Map<string, { fuller: number[]; wall: number[]; brief: number[]; simple: number[] }>();
   for (const arm of ARMS) {
-    const group = arm.startsWith("fbazb") ? "before" : "after";
+    const group = groupOf(arm);
     const g = by.get(group) ?? { fuller: [], wall: [], brief: [], simple: [] };
     by.set(group, g);
     for (const slug of SLUGS) {
@@ -109,7 +123,7 @@ function screen(): void {
       }
       const f = [r.brief!, r.paragraphs!, r.fuller!].map(formatCounts);
       const guard = Object.entries(r.check?.levels ?? {})
-        .map(([level, c]) => `${level[0]}:${c.result}${c.attempts > 1 ? `/${c.attempts}` : ""}`)
+        .map(([level, c]) => guardCell(level, c))
         .join(" ");
       g.fuller.push(r.fullerWords!);
       g.brief.push(r.briefWords!);
@@ -317,6 +331,9 @@ function tallyFidelity(file: string): void {
     ["before", BEFORE],
     ["fbaza1", ["fbaza1"]],
     ["fbaza2", ["fbaza2"]],
+    ["long", LONG],
+    ["fbazc1", ["fbazc1"]],
+    ["fbazc2", ["fbazc2"]],
     ["after", AFTER],
   ];
   for (const [name, arms] of groups) {
@@ -344,14 +361,32 @@ function tallyFidelity(file: string): void {
   for (const note of notes) console.log(`  ${note}`);
 }
 
+/**
+ * Read exactly one verdict for every pair in the key. Cardinality alone is not
+ * enough: one missing id and one unexpected id have the same count, and a Map
+ * otherwise hides duplicate ids by overwriting them.
+ */
+export function parseFormatVerdicts(
+  content: string,
+  expectedNumbers: readonly number[],
+): Map<number, "X" | "Y" | "SAME"> {
+  const expected = new Set(expectedNumbers);
+  const got = new Map<number, "X" | "Y" | "SAME">();
+  for (const line of content.split("\n")) {
+    const m = /^\s*(\d+)\s*:\s*`?(X|Y|SAME)\b/i.exec(line);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (got.has(n)) throw new Error(`pair ${n} judged twice`);
+    if (!expected.has(n)) throw new Error(`unexpected pair ${n}`);
+    got.set(n, m[2]!.toUpperCase() as "X" | "Y" | "SAME");
+  }
+  for (const n of expectedNumbers) if (!got.has(n)) throw new Error(`no verdict for pair ${n}`);
+  return got;
+}
+
 function tallyFormat(file: string): void {
   const keys = readKey<{ n: number; level: string; arm: Arm; slug: string; formatted: "X" | "Y" }>("format-key.jsonl");
-  const got = new Map<number, string>();
-  for (const line of fs.readFileSync(file, "utf8").split("\n")) {
-    const m = /^\s*(\d+)\s*:\s*`?(X|Y|SAME)\b/i.exec(line);
-    if (m) got.set(Number(m[1]), m[2]!.toUpperCase());
-  }
-  if (got.size !== keys.length) throw new Error(`${got.size} verdicts for ${keys.length} pairs`);
+  const got = parseFormatVerdicts(fs.readFileSync(file, "utf8"), keys.map((k) => k.n));
   for (const level of ["brief", "fuller", "all"]) {
     const ks = keys.filter((k) => level === "all" || k.level === level);
     let f = 0;
@@ -370,7 +405,7 @@ function tallyFormat(file: string): void {
 /** Before and after for the write-up: the first draw of each arm, Fuller and Brief, as drawn. */
 function show(): void {
   for (const slug of SLUGS) {
-    for (const arm of ["fbazb1", "fbaza1"] as const) {
+    for (const arm of ["fbazb1", "fbazc1", "fbaza1"] as const) {
       const r = load(arm, slug);
       console.log(`\n===== ${slug} · ${arm} · Fuller, ${r.fullerWords} words =====\n`);
       console.log(formatted(r.fuller ?? []));

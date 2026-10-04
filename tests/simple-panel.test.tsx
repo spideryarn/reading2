@@ -315,7 +315,8 @@ describe("the Simple view", () => {
        "Writing it in plain words" read as a contradiction in the browser check. */
     await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
     expect(text()).not.toContain(SIMPLE_NONE_OWNER);
-    expect(text()).toContain("Brief and Fuller are written together");
+    expect(text()).toContain("Brief and Fuller are written together, usually in about half a minute");
+    expect(text()).not.toContain("under half a minute");
   });
 
   it("offers to write it when there is none, and shows why a run failed", async () => {

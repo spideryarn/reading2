@@ -234,3 +234,27 @@ asked for.
   identical-words formatting pairs. F3: the guard rule covers all three levels. F4: the fidelity
   arithmetic and the substance rubric are spelled out, and the judge is Sol, not Opus. F5: an empty
   key is refused in the schema and in code.
+- 2026-10-04: stages 1 and 2 built by an Opus subagent, tests red first, committed as `b56d949ce`.
+- 2026-10-04: **the plan as written failed its own ship rule.** The first after arm (`fbaza1`,
+  `fbaza2`, Fuller asked for about 500) gave a Fuller median of 490 words and well-formed bold and
+  bullets, but a press took a median of 55.1 s against a ceiling of 38.3 s, and two first answers
+  were flagged by the guard, both in Simple, against a ceiling of one.
+- 2026-10-04: GPT Sol's code review
+  ([answer](261004b-summary-fuller-longer-and-bold-and-bullets-code-review-sol.md)), F6 to F12. It
+  fixed F6 (the public payload sent `list: true` for a two-sentence list the owner draws as prose),
+  F7 and F8 (the eval's tallies could hide a missing verdict and a flag-then-pass), F9 (the wait
+  hint). F10 and F11 are the two failures above. **F12 taken:** the flags were in Simple, which a
+  shorter Fuller cannot touch, so Simple is asked for no bold; it is shown to nobody.
+- 2026-10-04: **the fallback shipped.** Fuller asked for about 350 words in four to seven paragraphs
+  (never more than 430); bold in Brief and Fuller only. Arm `fbazc1`, `fbazc2`: Fuller median 374
+  (1.48 × before, under rule 1's 1.6 by design), a press 30.9 s, one Simple flag in 18 levels,
+  fidelity 0.92 unsupported sentences per 100 words against 1.76 and 1.33 before, formatting
+  preferred 12 to 0 on identical words. The limits stay at 8 paragraphs and 850 words, so going to
+  500 later is two numbers in the prompt. Write-up, with the before and after text:
+  [261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md).
+- 2026-10-04: browser check by a Sonnet subagent at desktop, iPad portrait and phone portrait, on a
+  summary regenerated through the app's own job route: all passed. Screenshots
+  `261004b-shot-*.png` beside this file.
+- **Deferred, and queued with the Overseer:** store and show each level as it is written, so Brief
+  no longer waits for Fuller and Fuller can be twice as long. It waits on Greg's answer to
+  Q-summary-fuller-length in the investigation, which replaces the same-named question above.

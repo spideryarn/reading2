@@ -97,9 +97,9 @@ import {
   anchorFields,
   identifiesOf,
   isUsableSimpleSummary,
+  paragraphShape,
   readStoredBears,
   readStoredLean,
-  usableSentences,
 } from "../types.js";
 import type { DebateSynthesis } from "../types.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
@@ -549,12 +549,14 @@ function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
      goes only with them: without usable sentences there is no list to draw. */
   const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
     paragraphs.map((p): SimpleParagraph => {
-      const sentences = usableSentences(p);
+      const shape = paragraphShape(p);
+      const sentences =
+        shape.kind === "text" ? null : shape.kind === "prose" ? shape.sentences : [shape.lead, ...shape.items];
       return {
         text: p.text,
         ids: [...p.ids],
         ...(sentences ? { sentences } : {}),
-        ...(sentences && p.list === true ? { list: true } : {}),
+        ...(shape.kind === "list" ? { list: true } : {}),
       };
     });
   return {

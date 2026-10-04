@@ -101,7 +101,7 @@ the paragraphs.
 - **One row, no labels.** The slider is the whole control: **Brief** (short, very simple, pitched at
   twelve), **Simple** (fairly simple, just under the first version's length, at fifteen), **Fuller**
   (moderately complex, at eighteen; just over that length until 2026-10-04, and
-  [about twice it since](#a-longer-fuller-since-2026-10-04)). Since 2026-10-01 there is no level name beside it
+  [about half as long again since](#a-longer-fuller-since-2026-10-04)). Since 2026-10-01 there is no level name beside it
   (SPIDERYARN-READING2-7R, *"get rid of the "Simple" text - perhaps replace with an icon"*): a
   short-text icon at the left end and a long-text one at the right, each a press on that end's
   level; the tooltip names the three, and `aria-valuetext` names the current one for a screen
@@ -154,8 +154,13 @@ The design, the measurements and the review are
 >
 > — Greg, 2026-10-03 (`spya-azft06`, SPIDERYARN-READING2-BC)
 
-Fuller is asked for about 500 words in five to eight paragraphs of two to five sentences, and told
-never more than 600; it was asked for about 220 in three to five. Its prompt says what the room is
+Fuller is asked for about 350 words in four to seven paragraphs of two to five sentences, and told
+never more than 430; it was asked for about 220 in three to five. Measured, it comes back at
+338–412 words where it came back at 221–261, and the press takes about 31 s where it took 26.
+**About 500 words was tried first and not shipped**: the text was good, but the press took 55 s,
+because nothing is shown until the slowest of the three levels is written. Whether to take that
+wait, or to show Brief as soon as Brief is ready, is with Greg
+([261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md)). Its prompt says what the room is
 for: how the work was done, the evidence and numbers behind each main finding, the limits the piece
 itself names, and how the steps of the argument connect. The stored limit is 3 to 8 paragraphs and
 850 words (`SIMPLE_LIMITS` in [`types.ts`](../../src/types.ts)); the minimum stayed at 3 so every
@@ -175,7 +180,7 @@ Built as **two fields beside the text, not Markdown in it**, so `text` stays the
 fidelity guard, the word limits and the public payload read:
 
 - **`key` on a sentence**: a few of that sentence's own words, drawn as `<strong>` at their first
-  occurrence, inside the sentence's link. Every level; the prompt asks for at most two in a
+  occurrence, inside the sentence's link. Brief and Fuller, the two levels shown; the prompt asks for at most two in a
   paragraph. Kept only when `simpleKey` ([`types.ts`](../../src/types.ts)) accepts it: found in the
   sentence exactly, at most `SIMPLE_KEY_MAX_WORDS` words, and shorter than the sentence. One it
   refuses is left off and counted, never a failed level.

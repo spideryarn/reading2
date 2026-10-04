@@ -251,11 +251,14 @@ export const ANSWER_TOKENS =
  * fifteen; Fuller moderately complex and just over it, at eighteen — Greg's
  * *"+3 or something"* above fifteen (7A).
  *
- * **Fuller is about twice that since 2026-10-04** (Greg, spya-azft06: *"longer
- * and more detailed still"*; plan 261004b). Asked for 220 it came back at
- * 221–261; it is now asked for about 500. `never` is the "never more than" the
- * prompt states, a number of its own per level, so Fuller's can sit 100 over
- * its ask while the other two stay 50 over theirs.
+ * **Fuller is about half as long again since 2026-10-04** (Greg, spya-azft06:
+ * *"longer and more detailed still"*; plan 261004b). Asked for 220 it came
+ * back at 221–261; asked for 350 it comes back at 338–412. Asked for 500 it
+ * came back at 464–520 and the press took twice as long (55 s against 26 s),
+ * because nothing is shown until the slowest level is written, so 350 is what
+ * shipped and the longer one is a question for Greg. `never` is the "never
+ * more than" the prompt states, a number of its own per level, so Fuller's can
+ * sit 80 over its ask while the other two stay 50 over theirs.
  */
 
 /** How LENGTH ends for Brief and Simple; `simpleSystem` supplies the line it finishes. */
@@ -284,9 +287,9 @@ const PITCH: Record<
   },
   fuller: {
     reader: "A bright eighteen-year-old in their first year at university",
-    shape: "Five to eight paragraphs, each two to five sentences",
-    words: 500,
-    never: 600,
+    shape: "Four to seven paragraphs, each two to five sentences",
+    words: 350,
+    never: 430,
     sentence: 30,
     /* Not the line above: detail is what this level is for, so it is not told
        to leave it out. It is still not a replacement for the article. */
@@ -337,6 +340,23 @@ This version has room to go into the piece. Use it for:
  */
 const NO_LISTS = `"list" on a paragraph says whether it is drawn as a bulleted list. This
 version has none. Always write "list": false.`;
+/**
+ * The bold phrase. Brief and Fuller, the two levels a reader is shown; Simple
+ * is written and not shown (plan 261003l), and asked for keys its first answer
+ * was flagged by the fidelity guard in two presses of six, against none in six
+ * before (plan 261004b § Ledger), so it is asked for none.
+ */
+const KEY_ASKED = `"key" on a sentence: a few words copied exactly from that sentence's "text",
+which the reader sees in bold. Pick the finding, the number or the term that a
+reader skimming the page should catch. At most ${SIMPLE_KEY_MAX_WORDS} words, and never the whole
+sentence. In a paragraph, at most two sentences have a "key". Most sentences
+have none: write null.`;
+const KEY_RULE: Record<SimpleLevel, string> = {
+  brief: KEY_ASKED,
+  simple: `"key" on a sentence says which of its words are drawn in bold. This version
+has none. Always write "key": null.`,
+  fuller: KEY_ASKED,
+};
 const LIST_RULE: Record<SimpleLevel, string> = {
   brief: NO_LISTS,
   simple: NO_LISTS,
@@ -460,11 +480,7 @@ WHAT A SKIMMING READER CATCHES
 Two more fields say how a paragraph is drawn. They are the only formatting
 there is.
 
-"key" on a sentence: a few words copied exactly from that sentence's "text",
-which the reader sees in bold. Pick the finding, the number or the term that a
-reader skimming the page should catch. At most ${SIMPLE_KEY_MAX_WORDS} words, and never the whole
-sentence. In a paragraph, at most two sentences have a "key". Most sentences
-have none: write null.
+${KEY_RULE[level]}
 
 ${LIST_RULE[level]}
 
@@ -481,7 +497,7 @@ JSON only, no prose, no code fence:
 {"paragraphs": [
   {"ids": ["spya-k3m9qt", "spya-p7w2dn"], "list": false,
    "sentences": [
-     {"text": "...", "id": "spya-k3m9qt", "key": "..."},
+     {"text": "...", "id": "spya-k3m9qt", "key": ${level === "simple" ? "null" : '"..."'}},
      {"text": "...", "id": null, "key": null},
      {"text": "...", "id": "spya-p7w2dn", "key": null}]}
 ]}

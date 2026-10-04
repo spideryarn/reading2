@@ -655,11 +655,19 @@ describe("a key phrase and a list are two fields, never markup in the text (plan
     ]);
   });
 
-  it("asks every level for the key, and only Fuller for lists", () => {
+  it("asks Brief and Fuller for the key, only Fuller for lists, and Simple for neither", () => {
+    for (const level of ["brief", "fuller"] as const) {
+      expect(flat(SIMPLE_SYSTEMS[level])).toContain('at most two sentences have a "key"');
+      expect(flat(SIMPLE_SYSTEMS[level])).toContain("never the whole sentence");
+      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain('Always write "key": null');
+    }
+    /* Simple is written and not shown (plan 261003l), and its first answers
+       were flagged twice in six once it was asked for keys (plan 261004b). */
+    expect(flat(SIMPLE_SYSTEMS.simple)).toContain('Always write "key": null');
+    expect(flat(SIMPLE_SYSTEMS.simple)).not.toContain('at most two sentences have a "key"');
+    expect(SIMPLE_SYSTEMS.simple).not.toContain('"key": "..."');
     for (const level of ["brief", "simple", "fuller"] as const) {
       const system = flat(SIMPLE_SYSTEMS[level]);
-      expect(system).toContain('at most two sentences have a "key"');
-      expect(system).toContain("never the whole sentence");
       expect(system).toContain('"list": false');
       /* The text itself stays free of markup: the two fields are the only formatting. */
       expect(system).toContain("no markdown");
@@ -675,10 +683,10 @@ describe("a key phrase and a list are two fields, never markup in the text (plan
     expect(fuller).toContain("lead-in");
   });
 
-  it("asks Fuller for about 500 words and never more than 600, and leaves the other two as they were", () => {
+  it("asks Fuller for about 350 words and never more than 430, and leaves the other two as they were", () => {
     const fuller = flat(SIMPLE_SYSTEMS.fuller);
-    expect(fuller).toContain("Five to eight paragraphs, each two to five sentences. Every sentence under 30 words.");
-    expect(fuller).toContain("About 500 words in all, and never more than 600.");
+    expect(fuller).toContain("Four to seven paragraphs, each two to five sentences. Every sentence under 30 words.");
+    expect(fuller).toContain("About 350 words in all, and never more than 430.");
     expect(fuller).not.toContain("leave detail to the article");
     expect(fuller).toContain("the limits the piece itself names");
     expect(flat(SIMPLE_SYSTEMS.brief)).toContain("About 80 words in all, and never more than 130.");
