@@ -34,14 +34,12 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import {
+  finishedText,
   messagesWireBody,
   streamMessage,
-  wasRefused,
   type MessagesBody,
 } from "./messages-stream.js";
 import { CAPABLE_MODEL, type Effort, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
@@ -52,7 +50,7 @@ import type { CheckpointStore } from "./store/checkpoints.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { PRODUCTION_EFFORT as EFFORT, PROMPT_VERSION, renderBlocks } from "./structure-prompt.js";
@@ -2769,32 +2767,16 @@ export async function generateStructure(opts: {
     } catch (err) {
       throw anthropicCallFailed(err);
     }
-    const answer = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-
-    if (wasRefused(message)) {
-      /* `stop_details` is deliberately neither thrown nor logged — it is the
-         provider's own words about a request that carried the whole article,
-         and this error is copied onto the job and shown on the progress card.
-         See MODEL_REFUSED in src/messages.ts. */
-      throw stageFailure(MODEL_REFUSED, {
-        authored: "the model answered with stop_reason: refusal",
-      });
-    }
-    if (message.stop_reason === "max_tokens") {
-      throw truncationFailure(
-        "table of contents",
-        maxTokens,
-        answerTokens,
-        { outputTokens: message.usage.output_tokens, answerChars: answer.length },
-        /* This stage's own reservation, not the general one — otherwise the
-           sentence that exists to say which half overran quotes a number the call
-           was never sized with. */
-        STRUCTURE_HEADROOM,
-      );
-    }
+    const answer = finishedText(
+      message,
+      "table of contents",
+      maxTokens,
+      answerTokens,
+      /* This stage's own reservation, not the general one — otherwise the
+         sentence that exists to say which half overran quotes a number the call
+         was never sized with. */
+      STRUCTURE_HEADROOM,
+    );
     return { answer, usage: message.usage, ms: Date.now() - began };
   };
 
