@@ -29,7 +29,7 @@
  * `JobCard` is the real one here: the Retry tests are about what pressing its
  * button does to the page around it.
  */
-import { act, createElement, StrictMode } from "react";
+import { act, createElement, startTransition, StrictMode, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -1239,5 +1239,139 @@ describe("High-powered AI add-page wiring", () => {
 
     expect(powerBox().checked, "a refused switch-off was drawn as off").toBe(true);
     expect(host.textContent).toContain("Not switched off — The article could not be changed.");
+  });
+});
+
+
+describe("committed purpose ownership", () => {
+  const never = new Promise<void>(() => {});
+  function Gate({ blocked }: { blocked: boolean }) {
+    if (blocked) throw never;
+    return null;
+  }
+  const screen = (next: typeof source, blocked: boolean) =>
+    createElement(Suspense, { fallback: "Waiting" },
+      createElement(AddPage, { source: next }), createElement(Gate, { blocked }));
+
+  it("keeps the visible session editable when a new-address render suspends", async () => {
+    addResult = makeJob("job-1", "running");
+    jobs = [addResult];
+    act(() => root.render(screen(URL_SOURCE, false)));
+    await settle();
+    focus();
+    const visible = box();
+    await act(async () => {
+      startTransition(() => root.render(screen({ kind: "url", url: "https://example.com/other" }, true)));
+    });
+    expect(box()).toBe(visible);
+    expect(document.activeElement).toBe(visible);
+    type("words on the still-visible page");
+    expect(leaving(), "the visible unsaved session lost its leave warning").toBe(true);
+    await pause(ADD_PURPOSE_IDLE_MS);
+    expect(patches(), "a discarded render retired the session still on screen").toEqual([
+      patch("words on the still-visible page"),
+    ]);
+    expect(purposes.get(SLUG)).toBe("words on the still-visible page");
+    // Abandon the transition: the original address remains the committed page.
+    act(() => root.render(screen(URL_SOURCE, false)));
+    await settle();
+    expect(box().value).toBe("words on the still-visible page");
+  });
+
+  it("does not open a new address while the reused textarea still has focus", async () => {
+    await JOB.start();
+    focus();
+    const visible = box();
+    const other = makeJob("job-2", "running", "other-paper");
+    addResult = other;
+    jobs = [other];
+    render({ kind: "url", url: "https://example.com/other-paper" });
+    await settle();
+    expect(box()).toBe(visible);
+    expect(document.activeElement).toBe(box());
+    jobs = [makeJob("job-2", "done", "other-paper")];
+    render();
+    await settle();
+    expect(navigations, "opened with the caret still in the box").toEqual([]);
+    expect(button(OPEN)).toBeDefined();
+  });
+});
+
+
+it("the visible ready page can open while a new-address render is suspended", async () => {
+  const never = new Promise<void>(() => {});
+  function Gate({ blocked }: { blocked: boolean }) {
+    if (blocked) throw never;
+    return null;
+  }
+  const screen = (next: typeof source, blocked: boolean) =>
+    createElement(Suspense, { fallback: "Waiting" },
+      createElement(AddPage, { source: next }), createElement(Gate, { blocked }));
+  addResult = makeJob("job-1", "running");
+  jobs = [addResult];
+  act(() => root.render(screen(URL_SOURCE, false)));
+  await settle();
+  focus();
+  jobs = [makeJob("job-1", "done")];
+  act(() => root.render(screen(URL_SOURCE, false)));
+  await settle();
+  expect(navigations).toEqual([]);
+  await act(async () => {
+    startTransition(() => root.render(screen({ kind: "url", url: "https://example.com/other" }, true)));
+  });
+  press(OPEN);
+  expect(navigations, "a speculative completion fenced off the button still on screen").toEqual([`/read/${SLUG}`]);
+});
+
+
+describe("same-slug retirement across page lifetimes (F9)", () => {
+  it.each(["unmount and later mount", "three rapid sessions"])("orders A, B and the latest words through %s", async (path) => {
+    const first = heldResponse();
+    const lastOld = heldResponse();
+    const lastNew = heldResponse();
+    const answers = [first, lastOld, lastNew];
+    patchAnswer = () => (answers.shift() as ReturnType<typeof heldResponse>).promise;
+    await JOB.start();
+    type("A");
+    await pause(ADD_PURPOSE_IDLE_MS);
+    type("B");
+    const before = reads.length;
+
+    if (path === "unmount and later mount") {
+      unmount();
+      await settle();
+      root = createRoot(host);
+      mounted = true;
+      render(URL_SOURCE);
+      await settle();
+    } else {
+      addResult = makeJob("job-2", "running", SLUG);
+      jobs = [addResult];
+      render({ kind: "url", url: "https://example.com/a-paper/" });
+      await settle();
+      type("C");
+      addResult = makeJob("job-3", "running", SLUG);
+      jobs = [addResult];
+      render({ kind: "url", url: "https://example.com/a-paper?third=1" });
+      await settle();
+    }
+    const latest = path === "unmount and later mount" ? "C" : "D";
+    type(latest);
+    await pause(ADD_PURPOSE_IDLE_MS * 2);
+    expect(reads, "a successor read before every predecessor finished").toHaveLength(before);
+    expect(patches()).toEqual([patch("A")]);
+
+    first.answer(storePurpose(SLUG, { purpose: "A" }));
+    await settle();
+    expect(patches()).toEqual([patch("A"), patch("B")]);
+    expect(reads).toHaveLength(before);
+    lastOld.answer(storePurpose(SLUG, { purpose: "B" }));
+    await settle();
+    expect(patches()).toEqual([patch("A"), patch("B"), patch(latest)]);
+    lastNew.answer(storePurpose(SLUG, { purpose: latest }));
+    await settle();
+    expect(purposes.get(SLUG)).toBe(latest);
+    expect(statusLine()).toBe("Saved");
+    expect(leaving()).toBe(false);
   });
 });

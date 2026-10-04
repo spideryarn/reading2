@@ -1,6 +1,6 @@
 # The add page's purpose box saves as you type
 
-Status: plan reviewed twice, being built. Parent: [plans.md](../project/plans.md). Follows
+Status: built and on `dev` 2026-10-05, not deployed. No migration. Parent: [plans.md](../project/plans.md). Follows
 [261004h](261004h-post-import-modes-decided-on-the-server-for-every-import-path.md) § The purpose
 box, whose [Q-purpose-first-modes] this answers.
 
@@ -107,10 +107,11 @@ blank before the seed erases nothing: it adopts the stored text instead.
   retires the session (ordered, since the page lives on);
 - overlapping saves: one PATCH in flight, the newest text sent when it answers.
 
-The idle timer and the unsaved-words warning are lifted out of `ProfileBox` as two small exported
-hooks (`useIdleCommit`, `useUnsavedWarning`) and its status line is exported (`SaveStatus`), so the
-add page uses the same three things rather than copies. Each takes the fact it acts on rather than
-deriving it from `SaveState`:
+`AddPurposeSession` owns the add page's 700 ms timer, so saving goes on while React is rendering a
+replacement it has not committed (the code review's F14). `ProfileBox`'s own timer and its
+unsaved-words warning are lifted out as two small exported hooks (`useIdleCommit`,
+`useUnsavedWarning`) and its status line is exported (`SaveStatus`); the add page uses the warning
+and the status line. Both timers keep the same two rules:
 
 - **the idle timer also re-arms when a write lands** (Sol's F2, a bug the three shipped boxes have
   today). Load S, type A, its PATCH goes, type back to S: the box says *clean* and no timer is
@@ -268,6 +269,27 @@ type) as written; F11 (text in the parent, draft in the child) by dropping the c
 with one copy of the text; F12 (a refusal re-arming the timer) by arming only on `dirty`; F13 (the
 stopped sentence) reworded. F9's fix was not in the round-two snapshot, so the code review is asked
 to check it specifically.
+
+**GPT Sol on the code** (commit 57fa1e553, `workspace-write`, exit 0, answer file fresh):
+[code-review-sol](261004l-purpose-autosave-code-review-sol.md). Four findings fixed in its own
+diff, each red first, read and committed after it: F14 (P0: the session was replaced during render,
+so a render React suspended and never committed retired the session still on screen; replacement
+and retirement now happen at layout commit, and the session owns its pause), F15 (a new address
+cleared the focus flag while the reused textarea kept focus, so the page could open by itself under
+a reader typing), F16 (`completed()` after the read had given up allowed one more try, not five),
+F17 (a suspended render overwrote the navigation fences). It confirmed F9's hand-off holds across a
+replacement, an unmount followed by a later mount, and three quick sessions, with tests that go red
+when the barrier is bypassed.
+
+**F18, reported and left open** (P1, reasoned, older than this plan): High-powered AI's intent is
+still disposed during render (`highPowerRef` in `AddPage.tsx`), so a suspended address change could
+leave the visible tick box calling a disposed intent. The fix is the one F14 got: publish the
+replacement and dispose the old one at layout commit.
+
+**Found by the builder and fixed before review:** a read that gave up while the job sat queued for
+more than five minutes never restarted at completion (`completed()`), and `useAutosavedText` showed
+a refusal over words that were no longer the refused ones, which with the timer armed only on
+`dirty` would have left them unsent until the next keystroke.
 
 ## Stages
 

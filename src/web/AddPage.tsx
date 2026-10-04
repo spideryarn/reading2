@@ -47,7 +47,7 @@
  *
  * See docs/project/ingest-queue.md and docs/project/library.md.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
@@ -73,12 +73,11 @@ import { useAutoModesSetting } from "./auto-modes-setting.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import {
-  ADD_PURPOSE_IDLE_MS,
   type AddPurposeIo,
   AddPurposeSession,
   type AddPurposeSnapshot,
 } from "./add-purpose.js";
-import { SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
+import { SaveStatus, useUnsavedWarning } from "./ProfileBox.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
 import { withVoice } from "./voice.js";
@@ -231,11 +230,6 @@ function retirePurpose(session: AddPurposeSession): void {
   });
 }
 
-function openPurpose(slug: string | null, text: string): AddPurposeSession {
-  const after = slug === null ? undefined : retiringPurposes.get(slug);
-  return new AddPurposeSession(slug, purposeIo, after ? { after, text } : { text });
-}
-
 /** For a test that left a write unanswered: later tests must not wait behind it. */
 export function resetAddPurposeForTests(): void {
   retiringPurposes.clear();
@@ -245,6 +239,8 @@ export function resetAddPurposeForTests(): void {
 interface PurposeHeld {
   source: string;
   session: AddPurposeSession;
+  /** Release the read barrier only after this session's render commits. */
+  activate(): void;
 }
 
 /**
@@ -263,13 +259,27 @@ interface PurposeHeld {
  *    unmount-and-mount-again, or a page restored: succeeded like any other.
  */
 function purposeFor(held: PurposeHeld | null, source: string, slug: string | null): PurposeHeld {
-  if (held === null) return { source, session: openPurpose(slug, "") };
+  if (held === null) return prospectivePurpose(source, slug, "");
   const same = held.source === source;
   const target = slug ?? (same ? held.session.slug : null);
   if (same && target === held.session.slug && !held.session.isRetired) return held;
   const text = same ? held.session.carried() : "";
-  retirePurpose(held.session);
-  return { source, session: openPurpose(target, text) };
+  return prospectivePurpose(source, target, text);
+}
+
+/** Creating a candidate during render must neither retire nor start a session. */
+function prospectivePurpose(source: string, slug: string | null, text: string): PurposeHeld {
+  let release: () => void = () => {};
+  const after = new Promise<void>((resolve) => { release = resolve; });
+  return {
+    source,
+    session: new AddPurposeSession(slug, purposeIo, { after, text }),
+    activate() {
+      const previous = slug === null ? undefined : retiringPurposes.get(slug);
+      if (previous) void previous.then(release);
+      else release();
+    },
+  };
 }
 
 /** Whether the file-owning tab still has a live add rather than an outcome. */
@@ -477,15 +487,15 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      the source, not `attempt`: Retry is still the same add and deliberately
      keeps the draft. */
   const sourceRef = useRef(wanted);
-  sourceRef.current = wanted;
+  useLayoutEffect(() => { sourceRef.current = wanted; }, [wanted]);
   const draftSource = useRef(wanted);
   useEffect(() => {
     /* StrictMode repeats effect setup for the same mount; that is not a new
        address and must not release the terminal once-guard. */
     if (draftSource.current === wanted) return;
     draftSource.current = wanted;
-    focusedRef.current = false;
-    purposeTouchedRef.current = false;
+    focusedRef.current = document.activeElement?.id === "add-purpose";
+    purposeTouchedRef.current = focusedRef.current;
     setPhase({ kind: "running" });
     claimed.current = null;
   }, [wanted]);
@@ -678,11 +688,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           : null;
   const completionKey = completion?.key ?? null;
   const completionSlug = completion?.slug ?? null;
-  /* Written during render so a press still waiting on its save is fenced as
-     soon as a new completion (or no completion for a new address) is on
-     screen, before the deciding effect below has had a chance to run. */
+  /* Published with the committed screen. A prospective completion in a
+     suspended render must not disable the old screen's Open button. */
   const activeCompletionKey = useRef<string | null>(completionKey);
-  activeCompletionKey.current = completionKey;
+  useLayoutEffect(() => { activeCompletionKey.current = completionKey; }, [completionKey]);
 
   /* **What High-powered AI may send to, and whether a 404 is *not yet*.** The
      job's own slug, or the completion's — never one derived from the address.
@@ -698,13 +707,19 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   /**
    * **The purpose session for this address and this article** (plan 261004l
    * § 1). The job's own slug, or the completion's, never one derived from the
-   * address: the same rule as High-powered AI above. Replaced during render,
-   * as that intent is, so the box and every decision below read the session
-   * for the article now on screen.
+   * address: the same rule as High-powered AI above. Render selects a candidate;
+   * only a committed render retires the previous session and releases the
+   * candidate's read barrier. A suspended render may leave the old box in use.
    */
   const purposeRef = useRef<PurposeHeld | null>(null);
-  purposeRef.current = purposeFor(purposeRef.current, wanted, job?.slug ?? completion?.slug ?? null);
-  const purpose = purposeRef.current.session;
+  const purposeHeld = purposeFor(purposeRef.current, wanted, job?.slug ?? completion?.slug ?? null);
+  const purpose = purposeHeld.session;
+  useLayoutEffect(() => {
+    if (purposeRef.current === purposeHeld) return;
+    if (purposeRef.current) retirePurpose(purposeRef.current.session);
+    purposeRef.current = purposeHeld;
+    purposeHeld.activate();
+  }, [purposeHeld]);
   const purposeNow = useSyncExternalStore(purpose.subscribe, purpose.get);
 
   /* The read of the stored purpose runs while the add is alive: a job queued
@@ -721,16 +736,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     if (completionKey !== null) purpose.completed();
   }, [purpose, completionKey]);
 
-  /* **Saved after a short pause**, with the timer the other purpose boxes use
-     and a shorter wait: this one is racing the import. */
-  useIdleCommit({
-    text: purposeNow.text,
-    dirty: purposeNow.state.kind === "dirty",
-    inFlight: purposeNow.inFlight,
-    paused: false,
-    ms: ADD_PURPOSE_IDLE_MS,
-    commit: purpose.commit,
-  });
+  /* The session owns its pause, including edits while React is rendering a
+     replacement that has not committed. */
   /* The browser's own question on closing the tab. It covers words typed
      before there is an article to save them to. A click on *Back to the shelf*
      is not stopped; unmounting sends what can be sent. */
@@ -1214,8 +1221,8 @@ function cannotSave(now: AddPurposeSnapshot): boolean {
  * Not `ProfileBox` itself: that brings dictation, which the add page has never
  * loaded, and a microphone running while the page opens the article by itself
  * is a new way to lose words (the plan's § The simpler option passed over).
- * It uses the same idle timer, leave warning and status line, exported from
- * there, with the session in add-purpose.ts doing the saving.
+ * It uses the leave warning and status line exported from there. The session
+ * in add-purpose.ts owns the save timer so it also runs during suspended renders.
  *
  * Capped rather than counted past: the server refuses more than
  * `MAX_PURPOSE_CHARS`, and the box is a better place to learn that than a

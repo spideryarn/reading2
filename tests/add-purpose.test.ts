@@ -12,6 +12,7 @@ import {
   AddPurposeSession,
   PURPOSE_READ_DEADLINE_MS,
   PURPOSE_READ_MAX_TRIES,
+  PURPOSE_READ_FINAL_TRIES,
   PURPOSE_READ_RETRY_MS,
   type PurposeAnswer,
 } from "../src/web/add-purpose.js";
@@ -618,4 +619,24 @@ describe("what the page reads", () => {
     session.setText("again", true);
     expect(told).toBe(1);
   });
+});
+
+
+it("completion gives an exhausted probe a full short run, including transient failures", async () => {
+  const s = server({ exists: false });
+  const session = new AddPurposeSession(SLUG, s.io);
+  session.setText("the evidence", true);
+  session.observe(true);
+  await vi.advanceTimersByTimeAsync(PURPOSE_READ_RETRY_MS * PURPOSE_READ_MAX_TRIES);
+  expect(session.get().gaveUp).toBe(true);
+  const before = s.reads().length;
+  session.completed();
+  await tick();
+  expect(session.get().gaveUp, "completion allowed only one try after exhaustion").toBe(false);
+  await vi.advanceTimersByTimeAsync(PURPOSE_READ_RETRY_MS * (PURPOSE_READ_FINAL_TRIES - 2));
+  s.world.exists = true;
+  await vi.advanceTimersByTimeAsync(PURPOSE_READ_RETRY_MS);
+  expect(s.reads()).toHaveLength(before + PURPOSE_READ_FINAL_TRIES);
+  expect(session.get().seeded).toBe(true);
+  expect(s.stored()).toBe("the evidence");
 });

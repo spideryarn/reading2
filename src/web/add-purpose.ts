@@ -149,6 +149,7 @@ export class AddPurposeSession {
   private gaveUp = false;
   private asking: Attempt | null = null;
   private wait: unknown = null;
+  private idle: unknown = null;
 
   private readonly timers: PurposeTimers;
   private readonly listeners = new Set<() => void>();
@@ -284,7 +285,7 @@ export class AddPurposeSession {
     /* A short run: with the row there, a read that still fails is a real
        failure, and the reader pressing *Open the article* should not wait
        five minutes to be offered *Open without saving*. */
-    this.tries = Math.max(this.tries, PURPOSE_READ_MAX_TRIES - PURPOSE_READ_FINAL_TRIES);
+    this.tries = PURPOSE_READ_MAX_TRIES - PURPOSE_READ_FINAL_TRIES;
     if (this.gaveUp) {
       this.gaveUp = false;
       this.changed();
@@ -301,6 +302,10 @@ export class AddPurposeSession {
   retire(): Promise<void> {
     if (this.done) return this.done;
     this.listeners.clear();
+    if (this.idle !== null) {
+      this.timers.clear(this.idle);
+      this.idle = null;
+    }
     if (this.asking) {
       this.timers.clear(this.asking.deadline);
       this.asking.controller.abort();
@@ -470,8 +475,24 @@ export class AddPurposeSession {
   }
 
   private changed(): void {
+    const previous = this.snapshot;
     this.snapshot = this.snap();
     if (this.done) return;
+    /* The visible session can still receive keystrokes while a prospective
+       React render is suspended. Its pause must not depend on that render
+       committing an effect. A refusal never arms a new attempt. */
+    if (this.abandoned || previous.text !== this.snapshot.text ||
+        previous.inFlight !== this.snapshot.inFlight ||
+        (previous.state.kind === "dirty") !== (this.snapshot.state.kind === "dirty")) {
+      if (this.idle !== null) this.timers.clear(this.idle);
+      this.idle = null;
+      if (!this.abandoned && this.snapshot.state.kind === "dirty") {
+        this.idle = this.timers.set(() => {
+          this.idle = null;
+          if (!this.abandoned && this.snapshot.state.kind === "dirty") this.commit();
+        }, ADD_PURPOSE_IDLE_MS);
+      }
+    }
     for (const listener of [...this.listeners]) listener();
   }
 }

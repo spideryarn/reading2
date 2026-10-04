@@ -67,9 +67,8 @@ function pending(s: SaveState): boolean {
 /**
  * **Saved after a pause.** Calls `commit` once the text has sat still for `ms`.
  *
- * Lifted out of `ProfileBox` so the add page's plain textarea runs the same
- * timer rather than a copy (plan 261004l § 3). It takes the facts it acts on
- * rather than a `SaveState`, because two of them cannot be read off one:
+ * It takes the facts it acts on rather than a `SaveState`, because two of
+ * them cannot be read off one:
  *
  * - **Armed only while `dirty`.** Never over a refusal: a timer re-armed by
  *   `error` would retry a refused save for as long as the page stayed open. A
