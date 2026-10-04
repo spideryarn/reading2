@@ -62,69 +62,75 @@ Each ends green and committed. Each defect gets a failing test first, seen red.
   timeout", `work-probe.ts` "short enough that a tick does not wedge": each reworded to say the
   timeout is when the signal is sent, not a bound, with a pointer to the postmortem. Comment only.
 
-### Stage 2 — the conversions whose caller already awaits
+### After GPT Sol's plan review (2026-10-04) — what changed
 
-One site at a time, each with a test that injects a `ProbeOwner` whose child ignores TERM (the
-`tests/fleet-child.test.ts` template) or a fake owner, and asserts the outcome mapping.
+[The review](261004c-review-1-gpt-sol-on-the-plan.md) said BUILD WITH CHANGES, nine findings. Each
+was checked against the code; all nine are accepted.
 
-- `routes-actions.ts` `listProcesses`: already returns a promise; the two `ps` calls go through an
-  owner (keys `actions-ps-args`, `actions-ps-comm`). Refused / timed-out / overflowed all become
-  `{ ok: false, why }`, as a thrown error does today.
-- `usage.ts` `runAuthStatus`: `collectUsage` is already async.
-- `routes-new.ts` `healthLevel`: the dependency becomes `() => Promise<HealthLevel>` and the real one
-  calls `collectHealthAsync` without the vmstat sample. A collection that throws or is refused must
-  read as `unknown`, which the gate already refuses.
-- `routes-rename.ts` `RenameIo`: both methods return promises; the handler is already async.
-  `rename-session` changes state, so on `timed-out` the answer is the existing `rename-failed` with
-  a sentence that says the rename **may** have happened — the page re-reads names on its next
-  refresh. (Today a timeout says the same thing less honestly.)
+- **F1** (reordering does not fix KN-G2): confirmed by my own red test before the review landed. A
+  child that ignores TERM comes back with `signal: null`, so the fix keys on `ETIMEDOUT` and quotes
+  the measured clock in both cases.
+- **F2, F7** (health admission): a partly refused survey reads `ok`, and separate owners are not
+  equivalent because the keys are shared. **So new-session admission stops collecting at all.** It
+  reads the server's own per-minute health snapshot, and answers `unknown` when there is none or it
+  is older than three refresh intervals. No child in the request, no key collision, and one owner
+  per process: `processProbeOwner()` in `child.ts`, which `server.ts` now uses.
+  *Trade-off, named:* the gate sees a reading up to a minute old instead of a fresh one.
+- **F3** (work-probe in the daemon): the probe moves to the **front** of `take`, before anything is
+  published, so the fold after it stays one synchronous stretch.
+- **F4** (report drain): more than an adapter — the drain's promise must be held and settled on
+  both exit paths, and ownership rechecked after each await. Its own stage, last, and dropped to the
+  exception list if it cannot be made small.
+- **F5** (daemon tests): heartbeat ticks are not scheduler opportunities. Negative assertions count
+  the callback they are about.
+- **F6** (guard): the scan already covers `require`, dynamic `import()` and re-exports; its header
+  now says what a file list cannot prove.
+- **F8**: no async `relate` — nothing on the dashboard calls it.
+- **F9**: the async `snapshotDev` resolves refs to shas first and counts from the shas.
+- `attention-probe.ts`'s "the daemon does not use this" is false (`attentionRunner` in
+  `scripts/overseer.ts`). It is converted, and the header corrected.
 
-**Where the owner comes from.** `server.ts` already makes one (`fleetProbeOwner`). Rather than thread
-it through four composition functions, each converted module takes an optional `owner` in its
-existing `real…()` factory and defaults to a module-level `probeOwner()`. Keys are distinct per
-probe, so separate owners refuse exactly what one shared owner would. *Named trade-off:* several
-owners each attach a SIGINT/SIGTERM forwarder while a child is live; that is already how
-`fleet-collect-bench.ts` uses it. If Sol prefers one shared owner, the cost is a small edit to
-`server.ts` at each composition.
+### Stage 2 — dashboard request paths
 
-### Stage 3 — the daemon
+One site at a time, each red first. Every converted site uses `processProbeOwner()` by default,
+takes an injectable owner for tests, and says what `refused` means there.
 
-- **work-probe.** `daemon.ts` `probe` option becomes `() => ProcessTableReading |
-  Promise<ProcessTableReading>`, awaited; the default becomes the owned async probe. This needs the
-  call site (`take`, a sync function called per snapshot) to be able to await — **to be sized before
-  building**: if `take` cannot become async without reordering the fold, this item stops at the
-  guard's exception line and is reported, not forced. `probeProcessTableAsync` lives in
-  `tools/fleet/collect.ts` today; it moves beside the parser in `work-probe.ts` (the invariant's
-  home) and `collect.ts` imports it.
-- **report-artefacts.** `ArtefactChecker` becomes async, `drainReports` becomes async, and the
-  daemon's `reportsTicker` gets an in-flight flag so a slow pass is skipped over, not overlapped.
-  Same caveat: sized first; reported rather than forced if the ripple is wide.
-- **attention-probe**, if the verification above says the daemon reaches it.
+- `routes-actions.ts` `listProcesses`: the two `ps` calls through the owner. Refused, timed-out and
+  overflowed all become `{ ok: false, why }`, as a thrown error does today.
+- `routes-new.ts` `healthLevel`: as F2/F7 above. The dependency becomes a read of a snapshot the
+  server supplies (`configureNewSessionHealth`, beside the existing `configureNewSessionNotifier`);
+  unconfigured answers `unknown`, which the gate refuses — loud, not open.
+- `routes-rename.ts`: both tmux calls through the owner, and **one rename at a time** (a second
+  request while one is in flight gets the existing 409), because list → check → rename is no longer
+  one synchronous stretch. A timed-out `rename-session` says the rename may have happened.
+- `usage.ts` `runAuthStatus`: `collectUsage` is already async and the daemon already prevents
+  overlapping passes.
 
-Files outside the umbrella's list that this stage must touch, minimally: `tools/overseer/daemon.ts`,
-`tools/overseer/reports.ts`, `scripts/overseer.ts`, `tools/fleet/collect.ts`. No other cluster in the
-umbrella names them.
+### Stage 3 — the daemon's probes
+
+- **work-probe** (F3). `probeProcessTableAsync` moves from `collect.ts` to `work-probe.ts`.
+- **attention-probe**: `listSessions` and `tmuxServerGeneration` async; the generation is read
+  before and after the listing, and a pass whose generation moved carries no old waits forward.
 
 ### Stage 4 — the readiness timer
 
-`liveSessionNames` becomes async through the owner, `ReadinessRetention.collect()` becomes async,
-and `server.ts`'s `refreshReadiness` awaits it with an in-flight flag. **Open call for
-`readiness-git.ts`:** its `git()` is shared with two scripts that are short-lived or block only
-themselves. Converting it for the dashboard means an async twin beside the sync one — two ways to
-do one thing. Proposal: add `snapshotDevAsync` and an async `relate` built on one shared
-argument-and-parse layer, so only the spawn differs; if that comes to more than ~100 lines, leave
-`readiness-git.ts` on the exception list with the reason and say so in the umbrella.
+`liveSessionNames` and `snapshotDev` (F9) async; `collect()` async; `server.ts` latches before the
+first await and clears in `finally`, publishing only a completed snapshot. It does not run inside
+the main refresh turn, so it cannot delay a fleet refresh. `readiness-git.ts` keeps its sync
+functions for the two scripts, sharing the argument and parse layer.
 
-### Stage 5 — daemon tests that sleep (DF-F4)
+### Stage 5 — daemon tests that sleep (DF-F4, with F5)
 
-In `tests/overseer-daemon.test.ts`, `-ordering`, `-restart-no-double-dispatch` and `-recovery`: the
-**negative** assertions first (a `sleep(40)` followed by "nothing was dispatched" passes if no tick
-ran). Each becomes: count scheduling opportunities with `ticks(root)` / `tickAfter(root)` from
-`tests/helpers/overseer-until.ts`, wait until at least N more have happened, then assert. The
-restart file's private `waitFor` is replaced by the shared `until`. Positive fixed waits become
-`until(condition)`. Proof each can fail: mutate the daemon (or the assertion's subject) so the thing
-does happen and see the test go red. Sleeps that are the *subject* (a slow fake that must take real
-time) stay, with a comment.
+The **negative** assertions first, in `tests/overseer-daemon-restart-no-double-dispatch.test.ts`:
+each waits until the jobs callback has demonstrably run N more times (counted at the injected seam
+it already has), then asserts nothing was dispatched. Proof it can fail: disable the dedup and see
+red; and stop the callback and see the *wait* fail rather than the assertion pass. Positive fixed
+waits in the other three files become `until(condition)`. Post-shutdown "nothing runs after stop"
+assertions keep a real wait, with a comment saying why no counter exists there.
+
+### Stage 6 — the report drain (F4)
+
+Only if it stays small. Otherwise `report-artefacts.ts` stays on the list and the umbrella says so.
 
 ## Done
 
@@ -144,6 +150,9 @@ time) stay, with a comment.
 ## Log
 
 - 2026-10-04 — plan written; census re-run.
+- 2026-10-04 — GPT Sol's plan review: build with changes; all nine findings accepted (above).
+- 2026-10-04 — stage 1 built: the guard (seen red both ways by swapping one list entry), KN-G2
+  (red: "could not be run: … ETIMEDOUT" with no clock), four false comments, `processProbeOwner()`.
 
 ---
 

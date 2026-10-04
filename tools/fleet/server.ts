@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
-import { probeOwner } from "./child.js";
+import { processProbeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
 import { makeSchedule } from "./schedule-wiring.js";
 import { makeOccurrences } from "./occurrences-wiring.js";
@@ -184,7 +184,7 @@ let health: HealthReport | null = null;
  * and start it a new sibling, which is the multiplication the owned-child
  * registry exists to prevent. Health and tmux use disjoint probe-key prefixes.
  */
-const fleetProbeOwner = probeOwner();
+const fleetProbeOwner = processProbeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
