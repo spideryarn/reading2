@@ -280,6 +280,18 @@ export function CommentDialog({
   }, [pristine]);
 
   const pressedInside = useRef(false);
+  /**
+   * **Closed by a press somewhere else**, so focus must not be handed back.
+   *
+   * The unmount below returns focus to the opener, or to the paragraph's gutter
+   * mark — right for Escape and the ×, where the reader has gone nowhere. A
+   * click-away is the reader going somewhere: `focus()` scrolls its target into
+   * view, so mid-press the page jumped back to the highlight, a drag begun in
+   * the prose made no selection, and a gutter icon's click landed on another
+   * button. Browser check of plan 261004f, 2026-10-04. The press itself decides
+   * where focus goes.
+   */
+  const closedByPress = useRef(false);
   useEffect(() => {
     if (!isFresh) return;
     const begin = () => {
@@ -289,6 +301,7 @@ export function CommentDialog({
       if (pressedInside.current) return;
       const active = document.activeElement;
       if (active instanceof HTMLElement && dialogRef.current?.contains(active)) active.blur();
+      closedByPress.current = true;
       freshRef.current?.onClickOff();
     };
     window.addEventListener("pointerdown", begin, true);
@@ -393,6 +406,7 @@ export function CommentDialog({
     return () => {
       const back = openerRef.current;
       openerRef.current = null;
+      if (closedByPress.current) return;
       if (back?.isConnected) {
         back.focus();
         return;

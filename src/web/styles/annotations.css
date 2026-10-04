@@ -1264,6 +1264,16 @@ td.text.has-hit[data-hues="8"] {
 .cmt-dialog footer:has(.cmt-copy) { flex-wrap: wrap; }
 .cmt-copy,
 .cmt-delete { white-space: nowrap; }
+/* **A finger's size on a finger's device**, as `.annotate-actions` in
+   dialogs.css. "Remove highlight" and "Copy, don't highlight" were 19px tall on
+   an iPad and "Ask in chat" 25px (browser check, 2026-10-04), in the box a touch
+   highlight now always opens. docs/project/controls.md § The numbers. */
+@media (pointer: coarse) {
+  .cmt-dialog button.linky,
+  .cmt-dialog .cmt-followup button {
+    min-height: var(--control-h-lg);
+  }
+}
 
 .cmt-transport-error {
   font-family: var(--font-mono);

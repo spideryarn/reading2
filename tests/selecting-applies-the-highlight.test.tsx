@@ -130,6 +130,7 @@ HTMLElement.prototype.focus = function focusKeepingSelection(
 const trace: { url: string; method: string; body: unknown }[] = [];
 
 const SLUG = "a-piece";
+const SECOND_SLUG = "another-piece";
 const PARAGRAPH =
   "The first paragraph of the piece carries enough words to be selected in two places at once.";
 const SECOND = "A second paragraph, so that there is somewhere else on the page to press.";
@@ -212,6 +213,8 @@ const OWNED: Article = {
 
 /** What the comment store holds, as the stub server sees it. */
 let stored: Comment[] = [];
+/** A separate article's rows: comment ids are scoped by article in Postgres. */
+let secondStored: Comment[] = [];
 /** The status the comments POST answers with. Set per case. */
 let storeStatus = 200;
 /** When set, the opening GET of the comment list waits for it. */
@@ -231,6 +234,12 @@ const LIST = `/api/comments/${SLUG}`;
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
+  if (url === `/api/public/article/${SECOND_SLUG}`) {
+    return json({ ...ARTICLE, meta: { ...ARTICLE.meta, slug: SECOND_SLUG, title: "Another piece" } });
+  }
+  if (url === `/api/article/${SECOND_SLUG}`) {
+    return json({ ...OWNED, meta: { ...OWNED.meta, slug: SECOND_SLUG, title: "Another piece" } });
+  }
   if (url === "/api/reader") return json({ experimentalSince: null });
   if (url === LIST && method === "POST") {
     if (storeStatus !== 200) return json({ error: "no" }, storeStatus);
@@ -267,6 +276,13 @@ function reply(url: string, method: string, body: unknown): Response {
       return json({ comment: next });
     }
   }
+  const secondList = `/api/comments/${SECOND_SLUG}`;
+  if (url.startsWith(`${secondList}/`) && method === "DELETE") {
+    const id = url.slice(secondList.length + 1);
+    secondStored = secondStored.filter((c) => c.id !== id);
+    return new Response(null, { status: 204 });
+  }
+  if (url.startsWith(secondList)) return json({ comments: secondStored });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith(LIST)) return json({ comments: stored });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
@@ -276,6 +292,7 @@ function reply(url: string, method: string, body: unknown): Response {
 }
 
 const { App } = await import("../src/web/App.js");
+const { navigate } = await import("../src/web/router.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
 const { SETTLE_MS } = await import("../src/web/TouchSelectionChip.js");
@@ -291,6 +308,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   trace.length = 0;
   stored = [];
+  secondStored = [];
   storeStatus = 200;
   heldList = null;
   heldPatch = null;
@@ -649,6 +667,32 @@ describe("the fresh box: click away to keep it", () => {
     expect(deletes()).toEqual([]);
   });
 
+  /* **The press that closes it decides where the reader is going; the box must
+     not take focus back.** Closing restored focus to the opener or the
+     paragraph's gutter mark, and `focus()` scrolls its target into view: mid
+     press, the page jumped back to the highlight, a drag begun in the prose
+     made no selection, and a gutter icon's click landed on something else
+     (browser check, 2026-10-04). */
+  it("a press elsewhere does not hand focus back to the highlight or its gutter mark", async () => {
+    await open();
+    await drag(4, 19);
+    const focused: Element[] = [];
+    const real = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (this: HTMLElement, ...args: []) {
+      focused.push(this);
+      return real.apply(this, args);
+    };
+    try {
+      await press(prose(OTHER));
+      await until(() => param("note") === null);
+      await settle();
+    } finally {
+      HTMLElement.prototype.focus = real;
+    }
+    expect(dialog()).toBeNull();
+    expect(focused.map((el) => el.className || el.tagName)).toEqual([]);
+  });
+
   it("a click on the words just highlighted is a click away, not a request to reopen", async () => {
     await open();
     await drag(4, 19);
@@ -884,6 +928,51 @@ describe("the fresh box: remove, and copy", () => {
     expect(painted()).not.toContain(id);
   });
 
+  it("claims two successful Copy presses only once", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    const allow: (() => void)[] = [];
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow.push(go);
+        }),
+    );
+    await act(async () => {
+      button(/^Copy, don.t highlight$/)?.click();
+      button(/^Copy, don.t highlight$/)?.click();
+    });
+
+    await act(async () => {
+      allow[1]!();
+      allow[0]!();
+    });
+    await settle(12);
+    expect(deletes()).toEqual([`${LIST}/${id}`]);
+  });
+
+  it("does not delete twice when Remove highlight wins while Copy is pending", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    let allow!: () => void;
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow = go;
+        }),
+    );
+    await act(async () => button(/^Copy, don.t highlight$/)?.click());
+
+    await act(async () => {
+      button(/^Remove highlight$/)?.click();
+      allow();
+    });
+    await settle(12);
+    expect(deletes()).toEqual([`${LIST}/${id}`]);
+  });
+
   it("keeps a highlight changed after reopening while an old copy is pending", async () => {
     await open();
     await drag(4, 19);
@@ -944,6 +1033,42 @@ describe("the fresh box: remove, and copy", () => {
     expect(deletes(), "the old copy cannot discard unblurred words").toEqual([]);
     expect(note.value).toBe("still typing");
     expect(stored.some((comment) => comment.id === id)).toBe(true);
+  });
+
+  it("does not apply an old clipboard answer to a same-id row after the article changes", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    let allow!: () => void;
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow = go;
+        }),
+    );
+    await act(async () => button(/^Copy, don.t highlight$/)?.click());
+    await press(prose(OTHER));
+
+    /* Comment ids are article-scoped in Postgres. This is a different row even
+       though it has the same client-minted id and happens to be pristine. */
+    secondStored = stored.map((comment) => ({
+      ...comment,
+      createdAt: "2026-10-04T11:00:00.000Z",
+    }));
+    await act(async () => navigate(`/read/${SECOND_SLUG}`));
+    await until(
+      () =>
+        location.pathname === `/read/${SECOND_SLUG}` &&
+        host.querySelector(`tr[data-block="${PARA}"] td.text .prose`) !== null,
+    );
+
+    await act(async () => allow());
+    await settle(12);
+    expect(
+      deletes(),
+      "the old copy deleted the unrelated same-id row in the next article",
+    ).not.toContain(`/api/comments/${SECOND_SLUG}/${id}`);
+    expect(secondStored.some((comment) => comment.id === id)).toBe(true);
   });
 
   it("a refused copy says so and keeps the highlight", async () => {

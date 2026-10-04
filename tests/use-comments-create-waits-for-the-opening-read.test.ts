@@ -27,7 +27,6 @@ import type { BlockId, Comment } from "../src/types.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 const left: { url: string; init: RequestInit }[] = [];
-let answerLeaving: () => Promise<void> = () => Promise.resolve();
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
@@ -46,7 +45,6 @@ vi.mock("../src/web/lib/api.js", async () => {
     },
     leavingFetch: (url: string, init: RequestInit = {}) => {
       left.push({ url, init });
-      return answerLeaving();
     },
   };
 });
@@ -144,7 +142,6 @@ beforeEach(() => {
   root = createRoot(host);
   latest = undefined;
   left.length = 0;
-  answerLeaving = () => Promise.resolve();
 });
 
 afterEach(async () => {
@@ -650,226 +647,5 @@ describe("createOnLeave: the page is going away", () => {
     expect(left[0]!.init.method).toBe("POST");
     expect(JSON.parse(String(left[0]!.init.body))).toEqual(NEW);
     expect(posted, "it also went out the ordinary way").toHaveLength(0);
-  });
-});
-
-/**
- * **A create that has been called and not settled is replayed on `pagehide`** —
- * GPT Sol, E1 on
- * docs/plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md.
- *
- * Since 2026-10-04 a selection stores its highlight the moment it is made, with
- * no box left open whose own `pagehide` listener would send it. A create held
- * behind the opening read has sent nothing; a reload in that window lost the
- * highlight without any crash. The hook is the one thing every create passes
- * through and outlives every box, so the replay lives there.
- */
-describe("pagehide: an unsettled create is sent with the keepalive writer", () => {
-  const YELLOW = {
-    id: "spya-cmt2rv",
-    blockId: BLOCK,
-    quote: "a measure of disorder",
-    start: 40,
-    colour: "yellow" as const,
-  };
-  const leave = () =>
-    act(() => {
-      window.dispatchEvent(new Event("pagehide"));
-    });
-
-  it("replays a create held behind the opening read, once, with the same id and body", async () => {
-    const { posted } = server();
-    await show("a-piece");
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    await settle();
-    expect(posted, "still held").toHaveLength(0);
-
-    leave();
-    expect(left, "the held create was not sent as the page went").toHaveLength(1);
-    expect(left[0]!.url).toBe("/api/comments/a-piece");
-    expect(left[0]!.init.method).toBe("POST");
-    expect(JSON.parse(String(left[0]!.init.body))).toEqual(YELLOW);
-
-    leave();
-    expect(left, "a second pagehide sent it again").toHaveLength(1);
-  });
-
-  it("a page that comes back from the back/forward cache draws the row once and replays nothing more", async () => {
-    const { get, posted } = server();
-    await show("a-piece");
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    await settle();
-    leave();
-    expect(left).toHaveLength(1);
-
-    /* The page was only suspended. The held create was never cancelled, so it
-       carries on down its ordinary path when the read answers. */
-    act(() => {
-      window.dispatchEvent(Object.assign(new Event("pageshow"), { persisted: true }));
-    });
-    get.release(json({ comments: [OLD] }));
-    await settle();
-    expect(posted, "the ordinary create, under the same id").toHaveLength(1);
-    expect(posted[0]!.body).toMatchObject({ id: YELLOW.id });
-    expect((latest?.comments ?? []).filter((c) => c.id === YELLOW.id), "one row").toHaveLength(1);
-
-    leave();
-    expect(left, "a settled create has nothing left to replay").toHaveLength(1);
-  });
-
-  it("orders a later delete after the pagehide replay, so the replay cannot restore the row", async () => {
-    const post = held();
-    let finishReplay!: () => void;
-    answerLeaving = () =>
-      new Promise<void>((resolve) => {
-        finishReplay = resolve;
-      });
-    const writes: string[] = [];
-    answer = (_url, init) => {
-      const method = (init.method ?? "GET").toUpperCase();
-      if (method === "GET") return Promise.resolve(json({ comments: [] }));
-      writes.push(method);
-      if (method === "POST") return post.promise;
-      return Promise.resolve(new Response(null, { status: 204 }));
-    };
-    await show("a-piece");
-    await settle();
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    await settle();
-    leave();
-    expect(left).toHaveLength(1);
-
-    post.release(
-      json({
-        comment: { ...YELLOW, createdAt: "2026-10-04T10:00:00.000Z", status: "none" },
-      }),
-    );
-    await settle();
-    act(() => latest!.remove(YELLOW.id));
-    await settle();
-    expect(writes, "DELETE overtook the replayed POST").toEqual(["POST"]);
-
-    await act(async () => finishReplay());
-    await settle();
-    expect(writes).toEqual(["POST", "DELETE"]);
-  });
-
-  it("keeps an older replay in the delete barrier when a failed create reuses its id", async () => {
-    let finishFirstReplay!: () => void;
-    let finishSecondReplay!: () => void;
-    const replayAnswers = [
-      new Promise<void>((resolve) => {
-        finishFirstReplay = resolve;
-      }),
-      new Promise<void>((resolve) => {
-        finishSecondReplay = resolve;
-      }),
-    ];
-    answerLeaving = () => replayAnswers[left.length - 1]!;
-    const writes: string[] = [];
-    let posts = 0;
-    answer = (_url, init) => {
-      const method = (init.method ?? "GET").toUpperCase();
-      if (method === "GET") return Promise.resolve(json({ comments: [] }));
-      writes.push(method);
-      if (method === "DELETE") return Promise.resolve(new Response(null, { status: 204 }));
-      posts += 1;
-      return Promise.resolve(
-        posts === 1
-          ? json({ error: "try again" }, 500)
-          : json({
-              comment: {
-                ...YELLOW,
-                createdAt: "2026-10-04T10:00:00.000Z",
-                status: "none",
-              },
-            }),
-      );
-    };
-    await show("a-piece");
-    await settle();
-
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    leave();
-    await settle();
-    expect(left).toHaveLength(1);
-
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    leave();
-    await settle();
-    expect(left, "the retried attempt was not replayed").toHaveLength(2);
-    act(() => latest!.remove(YELLOW.id));
-    await settle();
-    expect(writes).toEqual(["POST", "POST"]);
-
-    await act(async () => finishSecondReplay());
-    await settle();
-    expect(writes, "DELETE forgot the older replay").toEqual(["POST", "POST"]);
-
-    await act(async () => finishFirstReplay());
-    await settle();
-    expect(writes).toEqual(["POST", "POST", "DELETE"]);
-  });
-
-  it("replays nothing for a create that has settled, or one the reader removed while it was held", async () => {
-    const { get } = server();
-    await show("a-piece");
-    act(() => {
-      void latest!.create(YELLOW);
-      latest!.remove(YELLOW.id);
-    });
-    await settle();
-    leave();
-    expect(left, "a removed highlight was stored on the way out").toHaveLength(0);
-
-    get.release(json({ comments: [] }));
-    await settle();
-    act(() => {
-      void latest!.create(NEW);
-    });
-    await settle();
-    leave();
-    expect(left, "an answered create was sent a second time").toHaveLength(0);
-  });
-
-  it("replays a create whose request is on the wire and unanswered", async () => {
-    const post = held();
-    answer = (_url, init) =>
-      (init.method ?? "GET").toUpperCase() === "POST"
-        ? post.promise
-        : Promise.resolve(json({ comments: [] }));
-    await show("a-piece");
-    await settle();
-    expect(latest?.loaded).toBe(true);
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    await settle();
-    leave();
-    expect(left, "a request a dying page had started is not known to have left").toHaveLength(1);
-    expect(JSON.parse(String(left[0]!.init.body))).toEqual(YELLOW);
-    post.release(json({ comment: { ...YELLOW, createdAt: "2026-10-04T10:00:00.000Z", status: "none" } }));
-    await settle();
-  });
-
-  it("holds under StrictMode: one listener, one replay", async () => {
-    server();
-    await show("a-piece", true);
-    act(() => {
-      void latest!.create(YELLOW);
-    });
-    await settle();
-    leave();
-    expect(left).toHaveLength(1);
   });
 });

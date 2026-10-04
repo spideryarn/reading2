@@ -118,12 +118,15 @@ Two smaller rules in `TableView.tsx` follow from the paint arriving between `mou
 the click that ends a drag does not follow the link under it, and a `mouseup` that finds the same
 words still selected (a press on a gutter icon) is not a second selection.
 
-**What a reload or a crash can lose.** `useComments` replays every create that has been called and
-not yet settled through the keepalive writer on `pagehide`, once, with the same id and body. That
-covers a create still held behind the opening read, which no box is holding for it. It is best
-effort: nobody reads the answer, and an expired token refuses it. A crash or a killed browser fires
-no event, so a highlight made in the first seconds of a page and not yet sent is lost. Once the
-`POST` has been answered, nothing here can lose it.
+**What a reload or a crash can lose.** A highlight is stored by an ordinary request the moment it
+is made, so the window is the time that request takes. It is widest in the first seconds of a page,
+when a create waits behind the opening read of the comment list: leave or reload then, before the
+paint has appeared, and that highlight is not stored. Once the paint is on the words the request has
+been sent, and once it has been answered nothing here can lose it. **A resend on `pagehide` was
+built for this and taken out again** on 2026-10-04: it was a second `POST` outside the hook's write
+queue, and three review rounds each found a new way for it to race a delete
+([261004f](../plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md)
+§ Landed). The window it guarded is seconds wide; the code it needed was not.
 [§ Deliberate limits](#deliberate-limits).
 
 The plan is [261004f](../plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md),
@@ -1103,7 +1106,7 @@ bare bookmark.
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
 | [`src/web/fresh-highlight.ts`](../../src/web/fresh-highlight.ts) | the default colour, what *pristine* means, and when two selections overlap |
 | [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens in Referee mode**: the quote, a Copy button, a box, Ask AI and Save — and the rule that no exit drops a draft |
-| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, the client-minted id, a create that waits behind the opening read, and the `pagehide` replay of an unsettled one |
+| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, the client-minted id, a create that waits behind the opening read |
 | [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources — and **what a selection opens everywhere else**, with the fresh box's rules |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
@@ -1273,13 +1276,12 @@ rather than blanked, and if none survives the key comes off entirely.
   request is refused or the network is down, the optimistic row is removed, the paint and the box go
   with it, and the Dock says the save failed. The same holds for a Referee draft handed to `create`
   on its way out: the words are then in neither the box nor Postgres. Keeping a recoverable failed
-  draft is its own piece of work, not built (GPT Sol's review of plan 261003i, D6). The `pagehide`
-  write is weaker still: it is a keepalive request nobody reads the answer to, and a token that
-  expired seconds earlier refuses it.
-- **A crash or a killed browser fires no event.** What that can lose is narrow since 2026-10-04: a
-  highlight made in the first seconds of a page, while its create is still held behind the opening
-  read, and in Referee mode a draft box open at that moment. `pagehide` is the last thing a page
-  reliably hears. Keystroke-by-keystroke saving is a different design and is not built.
+  draft is its own piece of work, not built (GPT Sol's review of plan 261003i, D6). The Referee
+  box's `pagehide` write is weaker still: it is a keepalive request nobody reads the answer to, and
+  a token that expired seconds earlier refuses it.
+- **Leaving in the first seconds of a page can lose a highlight made in them**, while its create
+  is still held behind the opening read (§ The box a selection opens says why nothing resends it).
+  A crash or a killed browser can lose that, and in Referee mode a draft box open at that moment. Keystroke-by-keystroke saving is a different design and is not built.
 - **A mis-drag is a create and a delete.** Writing the row on selection means a selection made by
   accident, or made to copy, costs two requests. That was the price of dropping the provisional
   mark; plan 261004f, last section.
