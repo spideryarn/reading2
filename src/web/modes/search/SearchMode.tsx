@@ -360,12 +360,12 @@ function useTypingSession({
   start(words: string): string | null;
   revise(id: string, words: string): void;
   /**
-   * Enter or *find* was pressed on these trimmed words — **whether or not the
+   * Enter or *find* was pressed on these words for this row — **whether or not the
    * session then asks anything**. A pause followed by Enter on unchanged
    * words emits neither `start` nor `revise`, and it is still the reader
    * saying "these words" (plan 261004l, review F1).
    */
-  submitted(words: string): void;
+  submitted(quickId: string, words: string): void;
 }): BandTyping & {
   renamed(from: string, to: string): void;
   rowGone(id: string): void;
@@ -386,14 +386,24 @@ function useTypingSession({
       blurTimer = undefined;
     };
     const dispatch = (event: QuickEvent): void => {
+      const before = state;
       const out = stepQuickSession(state, event);
       state = out.state;
       if (!state.open) stop();
       const effect = out.effect;
+      let submittedId = before.rowId;
       if (effect?.type === "ask") {
         const id = latest.current.start(effect.words);
+        submittedId = id;
         if (!out.sealed) dispatch({ type: "asked", id });
-      } else if (effect?.type === "revise") latest.current.revise(effect.id, effect.words);
+      } else if (effect?.type === "revise") {
+        latest.current.revise(effect.id, effect.words);
+        submittedId = effect.id;
+      }
+      if ((event.type === "flush" || out.sealed) && submittedId !== null) {
+        const words = effect?.words ?? (event.type === "flush" ? event.text.trim() : "");
+        latest.current.submitted(submittedId, words);
+      }
       // Drain sealed flushes before any pause carried by the new session.
       if (out.sealed) dispatch({ type: "loaded" });
     };
@@ -405,13 +415,11 @@ function useTypingSession({
           ? setTimeout(() => dispatch({ type: "pause", loaded: latest.current.loaded }), PAUSE_MS)
           : undefined;
       },
-      /* Told before the flush, and inside this one object rather than in a
-         wrapper round it: the panel's box, the bar's box and a taken handoff
-         all reach `flush` through here, so none of them can miss it, and the
-         object's identity stays the one the effects below depend on. */
+      /* Dispatch associates explicit submission with its own row, including
+         a sealed flush held until loading and Enter after an unchanged pause.
+         The panel, bar and handoffs all reach it through here. */
       flush(text: string) {
         clearTimeout(pauseTimer);
-        latest.current.submitted(text.trim());
         dispatch({ type: "flush", loaded: latest.current.loaded, text });
       },
       /* The pause already happened, in the bar's box (plan 261002h stage 3):

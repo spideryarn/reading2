@@ -375,6 +375,49 @@ describe("a quick search starts the thorough one", () => {
     expect(s.asked("meaning")).toEqual([WORDS]);
   });
 
+  it("an earlier Enter does not skip the settle for a later row with the same words", async () => {
+    const s = server();
+    mount();
+    await flush();
+    type(WORDS);
+    enter();
+    await flush();
+    act(() => s.posts("meaning")[0]!.finish());
+    await flush();
+    expect(isQuick(rowFor(WORDS))).toBe(false);
+
+    type("other words");
+    type(WORDS);
+    await pause();
+    expect(s.asked("quick")).toEqual([WORDS, WORDS]);
+    expect(s.asked("meaning")).toEqual([WORDS]);
+    await settle();
+    expect(s.asked("meaning")).toEqual([WORDS, WORDS]);
+  });
+
+  it("Enter held until loading still starts its row's thorough search immediately", async () => {
+    const s = server();
+    const respond = answer;
+    let release!: (response: Response) => void;
+    answer = (url, init) => (init.method ?? "GET") === "GET"
+      ? new Promise<Response>((resolve) => { release = resolve; })
+      : respond(url, init);
+    mount();
+    await flush();
+    type(WORDS);
+    enter();
+    type("other words");
+    await pause();
+    expect(s.asked("quick")).toEqual([]);
+
+    act(() => release(json({ runs: [] })));
+    await flush();
+    expect(s.asked("quick")).toEqual([WORDS, "other words"]);
+    expect(s.asked("meaning")).toEqual([WORDS]);
+    await settle();
+    expect(s.asked("meaning")).toEqual([WORDS, "other words"]);
+  });
+
   it("leaving Search mode before the settle starts nothing", async () => {
     const s = server();
     mount();

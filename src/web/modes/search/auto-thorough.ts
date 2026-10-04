@@ -13,8 +13,8 @@
  * (docs/project/search.md § A quick search starts the thorough one).
  *
  * - `launchThorough`: does this finished quick row get its thorough search
- *   now? One per *settled* answer, because a thorough search costs about a
- *   hundred times a quick one and cannot be cancelled once begun.
+ *   now? One per *settled* answer, because a thorough search costs much more
+ *   than a quick one and cannot be cancelled once begun.
  * - `settleThorough`: what becomes of a thorough search that is out: wait,
  *   swap it in for its quick row, or throw it away.
  * - `useAutoThorough`: the watch list, the settle timers, the pairs, and the
@@ -159,8 +159,8 @@ export interface AutoThorough<Run extends SearchRun> {
   upgrading: ReadonlySet<string>;
   /** The typing session minted this quick row: watch it. */
   watch(quickId: string): void;
-  /** Enter or *find* submitted these (trimmed) words, asked or not (review F1). */
-  submitted(words: string): void;
+  /** Enter or *find* submitted these words for this row, asked or not (review F1). */
+  submitted(quickId: string, words: string): void;
   /** `begin` answered under another id. */
   renamed(from: string, to: string): void;
 }
@@ -173,8 +173,8 @@ interface Local {
   seen: Map<string, { words: string; since: number; timer: ReturnType<typeof setTimeout> | undefined }>;
   /** (row, words) already launched or refused. */
   tried: Set<string>;
-  /** Words Enter or *find* submitted. */
-  submitted: Set<string>;
+  /** The words Enter or *find* submitted for each particular quick row. */
+  submitted: Map<string, string>;
   /** Thorough rows already swapped or dropped, so neither happens twice. */
   acted: Set<string>;
   /** A swapped-in row's place in the list: its quick row's `createdAt` (review F3). */
@@ -185,7 +185,7 @@ const newLocal = (): Local => ({
   watch: new Set(),
   seen: new Map(),
   tried: new Set(),
-  submitted: new Set(),
+  submitted: new Map(),
   acted: new Set(),
   place: new Map(),
 });
@@ -232,7 +232,7 @@ function launchWatched(look: Look): ThoroughPair[] {
     const key = triedKey(id, words);
     const decision = launchThorough({
       status: row.status,
-      submitted: local.submitted.has(words),
+      submitted: local.submitted.get(id) === words,
       settledMs: now - seen.since,
       unasked: unasked(look, id, words),
       running: wired.running(words),
@@ -401,9 +401,9 @@ export function useAutoThorough<Run extends SearchRun>({
 
   const watch = useCallback((quickId: string) => void local.watch.add(quickId), [local]);
   const submitted = useCallback(
-    (words: string) => {
+    (quickId: string, words: string) => {
       if (words === "") return;
-      local.submitted.add(words);
+      local.submitted.set(quickId, words);
       lookAgain();
     },
     [local],
@@ -411,6 +411,11 @@ export function useAutoThorough<Run extends SearchRun>({
   const renamed = useCallback(
     (from: string, to: string) => {
       if (local.watch.delete(from)) local.watch.add(to);
+      const words = local.submitted.get(from);
+      if (words !== undefined) {
+        local.submitted.delete(from);
+        local.submitted.set(to, words);
+      }
       setPairs((prev) =>
         prev.some((p) => p.meaningId === from || p.quickId === from)
           ? prev.map((p) => ({

@@ -117,7 +117,7 @@ letters or the meaning, until 2026-10-02; *quick* sits between them:
 |---|---|---|---|
 | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
 | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
-| what it costs | nothing | about $0.0004, and about a second | a few cents (about $0.06 a search, [measured](#a-quick-search-starts-the-thorough-one-by-itself)), and 15–40 seconds |
+| what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and 15–40 seconds |
 | when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find**, and [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled |
 | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
 | is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
@@ -346,7 +346,7 @@ be cancelled once begun and quick asks at every pause. A quick row this tab's ty
 upgraded when all of these hold:
 
 - its quick answer has landed. A failed quick search is not upgraded; it has its own retry.
-- Enter or *find* was pressed on those words, which starts it at once. Otherwise the row has stayed
+- Enter or *find* was pressed for this row's current words, which starts it at once. Otherwise the row has stayed
   finished with the same words for `SETTLE_MS` (2 seconds).
 - the box does not hold an edit that has not been asked yet. If it does, it looks again 2 seconds
   later.
@@ -363,10 +363,11 @@ row per provider call:
 | `search-quick` | 16 | $0.0006 | $0.0006 | $0.0008 | 0.4 s |
 | `search` (meaning) | 25 | $0.059 | $0.060 | $0.113 | 9.1 s |
 
-So a settled quick search goes from about $0.0006 to about $0.06, roughly a hundred times more.
-The limits of that number: 25 and 16 calls is a small sample; `search` counts every meaning search,
-chat's tool included; a long article's quick search is several calls; and a typed question is
-three to six quick calls but still one thorough one.
+The mean meaning provider call in this sample costs roughly a hundred times the mean quick
+provider call. That is not a per-search or per-typing-session ratio: a long article's quick search
+uses several calls, and typing can trigger several quick searches. The sample is small (25 and 16
+calls), and `search` includes chat's meaning tool. Each settled quick answer can start a thorough
+search, so a typing session with several long pauses can pay for several thorough searches too.
 
 **How.** In the browser only, with no server change. The two decisions are pure functions and the
 hook that carries them out is beside them, in
@@ -381,6 +382,9 @@ hook that carries them out is beside them, in
   its id in `?runs=` where it was, and is listed at the quick row's time so it does not jump above
   rows asked meanwhile. Then the quick row is deleted. Nothing scrolls. A result that was pressed
   open closes, as on any change of list.
+  As with the manual button, inheriting the resolved colour stores it as a pin, even when the quick
+  colour was automatic. Reserving that pin can change other automatic rows' colours when the palette
+  is full; see [`assignSlots`](../../src/web/hit-colours.ts).
 - If the quick row's words change, it goes back to searching, or it is deleted while the thorough
   search is out, the answer is thrown away when it lands. It is not removed sooner, so the same
   words cannot be asked twice while the first request is still running.

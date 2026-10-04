@@ -40,10 +40,13 @@ call (`purpose`; mean and median of `coalesce(credits_used_nanos, computed_cost_
 | `search-quick` | 16 | $0.0006 | $0.0006 | $0.0008 | 0.4 s |
 | `search` (meaning) | 25 | $0.059 | $0.060 | $0.113 | 9.1 s |
 
-So a settled quick search goes from **about $0.0006 to about $0.06: roughly a hundred times
-more**, six cents a question. The limits of that number: 25 and 16 calls is a small sample; `search`
-counts every meaning search, chat's tool included; a long article's quick search is several calls;
-and a typed question is three to six quick calls but still one thorough one. Local dev, on shorter
+So each thorough search this starts adds **about six cents** (mean, per provider call) to a quick
+search that cost about $0.0006 a call: roughly a hundred times more per call. That is not a
+per-question ratio. The limits: 25 and 16 calls is a small sample; `search` counts every meaning
+search, chat's tool included; a long article's quick search is several calls; a typed question is
+three to six quick calls; and **each settled answer starts its own thorough search**, so somebody
+who pauses for more than two seconds between words pays for one per pause (usually one, sometimes
+two or three). Local dev, on shorter
 fixture articles: thorough mean $0.026 over 75 calls. Greg asked for this; the number is here for
 him to see, and it decides the design question below.
 
@@ -197,3 +200,15 @@ choice is to keep it as an unticked saved row, since it was paid for. Recommende
   rows still count as running), F7 (quiet failure), F10 (the cost table's limits). F9 answered by
   dropping the reuse shortcut. **F8 overruled in part**: no server-side check; the swap requires
   the quick row `done` in this tab, and the trim paragraph was corrected.
+- 2026-10-04: built by an Opus subagent, red first (21 of 21 band cases failed before the wiring),
+  five mutations each caught; commit `b896b0668`. Two things it built that the plan did not spell
+  out: `remove` also takes *quiet* (the clean-up DELETE of a hidden row must not raise an error
+  line), and a refusal because the same words are already running is final for that row and words.
+  A → B → A in one session throws A's first answer away and leaves the row quick, as Q-orphan says.
+- 2026-10-04: GPT Sol's code review ([prompt](261004l-auto-thorough-code-review-prompt.md),
+  [answer](261004l-auto-thorough-code-review-sol.md)) of `b896b0668`: **land after the fixes I
+  made.** C1 (P1, fixed red first): Enter was remembered by words for the whole mount, so a later
+  row with the same words skipped the settle; it is now remembered per row. C2 (P2): the cost
+  sentence mixed per-call and per-search; corrected here and in search.md. C3 (P3): the help
+  sentence. C4 (P2, left): the F2 deadline test has a 100 ms real-timer margin and could flake on
+  a loaded box.

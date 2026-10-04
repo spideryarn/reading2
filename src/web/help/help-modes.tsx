@@ -257,9 +257,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           bar down the side and a mark in the spine, not a highlight over the words. Use it for a
           first look; <strong>thorough</strong> on a quick search runs the full meaning search on
           the same words, in about half a minute, and replaces the quick one. You do not have to
-          press it: once you stop typing, the thorough search starts by itself, the quick search
-          shows <strong>thorough…</strong> while it runs, and its results take the quick ones' place
-          when it finishes.
+          press it: once you stop typing and the quick answer has settled for two seconds, the
+          thorough search starts by itself (at once if you pressed Enter). The quick search shows <strong>thorough…</strong>
+          while it runs. On success its results take the quick ones' place; if it fails, the quick
+          results stay.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
