@@ -2,8 +2,8 @@
  * **What a refused tap-to-talk event leaves behind, as a plain value.**
  *
  * A pure rule over facts the hook already keeps — no React, no clock, no data
- * channel — so the whole table is a unit test (tests/live-talk-mode.test.ts)
- * and not only the cells a fake session happens to reach. The hook
+ * channel — so refusal outcomes have unit tests (tests/live-talk-mode.test.ts)
+ * as well as the sequences a fake session reaches. The hook
  * (`useLiveConversation`) keeps everything else: sending the events, the
  * microphone track, Done's timer, and the three short gates on Talk, Done and
  * a new call's mode, which are one condition each and stay where they are used.
@@ -56,16 +56,18 @@ export type TapEventKind = "entry" | "clear" | "commit" | "response";
 export type TapRefusal =
   /** Nothing changes, and the reader is told nothing. */
   | { keep: true }
+  /**
+   * Every one of these also stops waiting for a commit and cancels a Done
+   * still in its tail: after any of them, no tap turn is in flight that the
+   * hook will ask a reply for.
+   */
   | {
       keep: false;
       mode: TalkMode;
       /** Whether the microphone track is enabled afterwards. */
       mic: boolean;
-      /**
-       * The service never took this turn: no reply is owed for it, no commit
-       * is awaited, and a Done still in its tail must not send one.
-       */
-      forgetTurn: boolean;
+      /** The service never took this turn, so no reply is owed for it. */
+      dropDebt: boolean;
       /** The sentence the reader sees. */
       notice: string;
     };
@@ -77,13 +79,19 @@ export type TapRefusal =
  * over an empty buffer, a `session.update` the service will not take. Hanging
  * up on the reader for either would be worse than the noise was.
  *
- * `submitted`: Done's commit for the current turn has been sent (the mode is
- * `tap-sending` and the tail has run). **A refusal can be late.** Talk's clear
- * and the entry update are sent long before the commit, and their errors can
- * arrive after it has gone; only a refusal of the commit itself, or of the
- * reply, may then change what happens to that turn. GPT Sol, plan review of
- * 261004e, F1: the late clear refusal used to forget the pending commit, and
- * the acknowledgement that followed asked for no reply.
+ * `submitted`: the mode is `tap-sending` and Done's tail has run, so its
+ * commit has gone. **A refusal can be late.** Talk's clear is sent long before
+ * the commit and its error can arrive after it; that must not undo a turn the
+ * service is taking. GPT Sol, plan review of 261004e, F1: it used to forget
+ * the awaited commit, and the acknowledgement that followed asked for no reply.
+ *
+ * **A manual turn is only ever awaited in `tap-sending`.** The entry refusal
+ * gives the call back to the voice detector, and with it the job of asking for
+ * replies: a turn already sent is left owed (the `no-reply` notice and
+ * Reconnect), not answered by a second `response.create` racing the
+ * detector's. An earlier draft kept waiting for the commit in hands-free, and
+ * the code review found three ways for that to go wrong
+ * (docs/postmortems/261004h-recovery-mode-is-not-the-lifetime-of-a-pending-command.md).
  */
 export function tapRefusal(
   kind: TapEventKind,
@@ -93,13 +101,12 @@ export function tapRefusal(
   switch (kind) {
     case "entry":
       /* The detector is still on, so the call is what it was before the reader
-         asked: listening, whatever they have pressed since. A turn already
-         submitted is still answered: its debt and its awaited commit stay. */
+         asked: listening, whatever they have pressed since. */
       return {
         keep: false,
         mode: "hands-free",
         mic: true,
-        forgetTurn: false,
+        dropDebt: false,
         notice: "Tap to talk couldn’t start, so the conversation is listening as before.",
       };
     case "clear":
@@ -111,7 +118,18 @@ export function tapRefusal(
       if (at.mode === "tap-sending" && at.submitted) return { keep: true };
       return ready(message);
     case "commit":
-      if (at.mode === "hands-free") return { keep: true };
+      /* A commit is only sent from tap mode, so this one went before a late
+         entry refusal. That left its reply owed; the service never took the
+         turn, so it is not. The detector stays on. */
+      if (at.mode === "hands-free") {
+        return {
+          keep: false,
+          mode: "hands-free",
+          mic: true,
+          dropDebt: true,
+          notice: `Tap to talk: ${message ?? "that didn’t go through"}. The conversation is listening as before.`,
+        };
+      }
       return ready(message);
     case "response":
       if (at.mode === "hands-free") return { keep: true };
@@ -125,7 +143,7 @@ export function tapRefusal(
           keep: false,
           mode: "tap-sending",
           mic: false,
-          forgetTurn: false,
+          dropDebt: false,
           notice: `Tap to talk: ${message ?? "the reply couldn’t start"}. Reconnect to try again.`,
         };
       }
@@ -147,7 +165,7 @@ function ready(message: string | undefined): TapRefusal {
     keep: false,
     mode: "tap-idle",
     mic: false,
-    forgetTurn: true,
+    dropDebt: true,
     notice: `Tap to talk: ${message ?? "that didn’t go through"}. Tap Talk to try again.`,
   };
 }

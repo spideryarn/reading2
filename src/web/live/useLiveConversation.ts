@@ -1206,14 +1206,13 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           talkModeRef.current = after.mode;
           setTalkModeState(after.mode);
           if (micTrack.current) micTrack.current.enabled = after.mic;
-          if (after.forgetTurn) {
-            owedSince.current = null;
-            tapCommitPending.current = false;
-            /* Without this the button says Talk for the rest of the tail
-               while `talk` refuses it. */
-            if (doneTimer.current) clearTimeout(doneTimer.current);
-            doneTimer.current = null;
-          }
+          /* § TapRefusal: no tap turn is in flight after any of these. The
+             tail in particular: left running, the button says Talk while
+             `talk` refuses it. */
+          tapCommitPending.current = false;
+          if (doneTimer.current) clearTimeout(doneTimer.current);
+          doneTimer.current = null;
+          if (after.dropDebt) owedSince.current = null;
           setNotice(after.notice);
           return;
         }

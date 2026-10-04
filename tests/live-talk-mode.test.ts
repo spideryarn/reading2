@@ -3,8 +3,9 @@
  *
  * The hook's own tests (live-session-flow.test.tsx § tap to talk) drive this
  * through a fake data channel and reach a handful of the cells. This is the
- * whole table, written out rather than computed, so that a changed cell is a
- * changed line here.
+ * regression table, written out rather than computed, so that a changed cell
+ * is a changed line here. It does not prove which turn a refused event
+ * belonged to: the rule is not told, and the hook's tests cover the sequences.
  */
 import { describe, expect, it } from "vitest";
 import { type TalkMode, type TapEventKind, type TapRefusal, tapRefusal } from "../src/web/live/tap.js";
@@ -31,7 +32,7 @@ const LISTENING: TapRefusal = {
   keep: false,
   mode: "hands-free",
   mic: true,
-  forgetTurn: false,
+  dropDebt: false,
   notice: "Tap to talk couldn’t start, so the conversation is listening as before.",
 };
 /** Back to Ready: microphone off, and the turn forgotten. */
@@ -39,15 +40,23 @@ const READY: TapRefusal = {
   keep: false,
   mode: "tap-idle",
   mic: false,
-  forgetTurn: true,
+  dropDebt: true,
   notice: "Tap to talk: nope. Tap Talk to try again.",
+};
+/** A commit that went before a late entry refusal, itself refused. */
+const REJECTED_WHILE_LISTENING: TapRefusal = {
+  keep: false,
+  mode: "hands-free",
+  mic: true,
+  dropDebt: true,
+  notice: "Tap to talk: nope. The conversation is listening as before.",
 };
 /** A refused `response.create` after a commit that went through. */
 const UNANSWERED: TapRefusal = {
   keep: false,
   mode: "tap-sending",
   mic: false,
-  forgetTurn: false,
+  dropDebt: false,
   notice: "Tap to talk: nope. Reconnect to try again.",
 };
 
@@ -69,7 +78,7 @@ describe("tapRefusal: what a refused tap event leaves behind", () => {
       "tap-sending, commit gone": KEEP,
     },
     commit: {
-      "hands-free": KEEP,
+      "hands-free": REJECTED_WHILE_LISTENING,
       "tap-idle": READY,
       "tap-talking": READY,
       "tap-sending, in the tail": READY,
@@ -91,16 +100,6 @@ describe("tapRefusal: what a refused tap event leaves behind", () => {
       });
     }
   }
-
-  it("only Ready forgets the turn, so a late entry refusal leaves a sent commit awaited", () => {
-    const forgetful = KINDS.flatMap((kind) =>
-      STATE_NAMES.filter((state) => {
-        const after = tapRefusal(kind, STATES[state], "nope");
-        return !after.keep && after.forgetTurn && after.mode !== "tap-idle";
-      }).map((state) => `${kind} in ${state}`),
-    );
-    expect(forgetful).toEqual([]);
-  });
 
   it("says something when the service gave no message", () => {
     const sending = STATES["tap-sending, commit gone"];

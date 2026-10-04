@@ -2387,7 +2387,10 @@ describe("a stall says so, and Reconnect recovers it", () => {
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
-  it("a late refusal of the entry update still answers a turn whose commit has already gone", async () => {
+  /* The entry refusal hands the call back to the voice detector, and with it
+     the job of asking for replies. A turn already sent is left visibly owed,
+     not answered by a `response.create` of ours racing the detector's. */
+  it("a late refusal of the entry update leaves a sent turn owed, and asks for no reply of its own", async () => {
     const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
     try {
       act(() => h.get().enterTapToTalk());
@@ -2402,7 +2405,9 @@ describe("a stall says so, and Reconnect recovers it", () => {
       expect(h.get().talkMode).toBe("hands-free");
       expect(mic?.enabled).toBe(true);
       await act(async () => { channel?.deliver({ type: "input_audio_buffer.committed", item_id: "tap-u" }); });
-      expect(sentTypes(), "the committed turn was never answered").toContain("response.create");
+      expect(sentTypes(), "two owners for one reply").not.toContain("response.create");
+      await advance(13_000);
+      expect(h.get().stall, "the sent turn was silently forgiven").toBe("no-reply");
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
@@ -2423,6 +2428,50 @@ describe("a stall says so, and Reconnect recovers it", () => {
       expect(h.get().talkMode, "the button was enabled and the action refused").toBe("tap-talking");
       await advance(400);
       expect(sentTypes(), "the cancelled tail committed anyway").not.toContain("input_audio_buffer.commit");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("a commit refused after entry recovery neither owes a reply nor asks for one on the next detector commit", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const update = sent.find((event) => event.type === "session.update" && isTap(event));
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await advance(400);
+      const commit = sent.find((event) => event.type === "input_audio_buffer.commit");
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "update refused", event_id: update?.event_id } });
+        channel?.deliver({ type: "error", error: { message: "buffer too small", event_id: commit?.event_id } });
+      });
+      expect(h.get().talkMode).toBe("hands-free");
+      expect(mic?.enabled).toBe(true);
+      await advance(13_000);
+      expect.soft(h.get().stall, "a rejected manual commit still owed a reply").toBeNull();
+      sent = [];
+      await act(async () => { channel?.deliver({ type: "input_audio_buffer.committed", item_id: "detector-u" }); });
+      expect(sentTypes(), "the next detector commit consumed the rejected manual commit's flag").not.toContain("response.create");
+    } finally { h.unmount(); vi.useRealTimers(); }
+  });
+
+  it("entry recovery inside Done's tail cancels it before a new tap attempt offers Talk", async () => {
+    const h = await liveOnFakeClock({ wiring: wiringFor(ticketWith()) });
+    try {
+      act(() => h.get().enterTapToTalk());
+      const update = sent.find((event) => event.type === "session.update" && isTap(event));
+      act(() => h.get().talk());
+      await advance(2_000);
+      act(() => h.get().doneTalking());
+      await act(async () => {
+        channel?.deliver({ type: "error", error: { message: "update refused", event_id: update?.event_id } });
+      });
+      act(() => h.get().enterTapToTalk());
+      expect(h.get().talkMode).toBe("tap-idle");
+      act(() => h.get().talk());
+      expect(h.get().talkMode, "Ready offered Talk while the abandoned tail still blocked it").toBe("tap-talking");
+      await advance(400);
+      expect(sentTypes()).not.toContain("input_audio_buffer.commit");
     } finally { h.unmount(); vi.useRealTimers(); }
   });
 
