@@ -692,6 +692,31 @@ describe("the probe, against this box's real process table", () => {
     expect(reading.atMs).toBeGreaterThan(Date.UTC(2026, 0, 1));
   });
 
+  /**
+   * docs/postmortems/260910a: a synchronous timeout sends a signal and then
+   * goes on waiting, and the error it finally hands back names the deadline as
+   * though it had been kept. So the message has to carry the clock. A child
+   * that ignores TERM is the only kind that shows the difference — one that
+   * obeys comes back on time and every wording passes.
+   */
+  test("a ps that outlives its timeout is reported with how long it really held the caller", () => {
+    const dir = mkdtempSync(join(tmpdir(), "work-probe-stall-"));
+    try {
+      const bin = join(dir, "stalling-ps");
+      writeFileSync(bin, '#!/bin/sh\ntrap "" TERM\nsleep 1.2\n');
+      chmodSync(bin, 0o755);
+      const reading = probeProcessTable({ bin, timeoutMs: 200 });
+      expect(reading.read).toBe(false);
+      if (reading.read) return;
+      const took = /returned after (\d+) ms/.exec(reading.why);
+      expect(took, reading.why).not.toBeNull();
+      expect(Number(took?.[1])).toBeGreaterThanOrEqual(1000);
+      expect(reading.why).toContain("200 ms");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("it classifies its own ancestry rather than nothing at all", () => {
     // An end-to-end check that probe and classifier agree about pid shape: this
     // process is somebody's descendant, so walking from its parent must find it.

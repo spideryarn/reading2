@@ -49,11 +49,13 @@
  * NO IMPORT SIDE EFFECTS: nothing at module scope runs a command, binds
  * anything, or reads the environment.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readlinkSync } from "node:fs";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { processProbeOwner, type ProbeOwner } from "./child.js";
 
 import {
   actionById,
@@ -1343,6 +1345,22 @@ export function repoRoot(): string {
 const GRACE_MS = 5_000;
 
 /**
+ * How `listProcesses` reaches `ps`. Every field is optional and production
+ * passes none; a test passes a stand-in for `ps` that will not die, and a
+ * deadline short enough to wait for.
+ */
+export type ProcessListProbe = {
+  /** Default `processProbeOwner()` — the one registry this process shares. */
+  owner?: ProbeOwner;
+  /** Default `ps`, found on PATH. */
+  psBin?: string;
+  /** Default 10 s for each of the two `ps` calls. */
+  timeoutMs?: number;
+  /** The gap between SIGTERM and SIGKILL. Default: the owner's. */
+  graceMs?: number;
+};
+
+/**
  * The real thing.
  *
  * `execFile` with the plan's argv ARRAY, never a shell string, so a directory
@@ -1355,7 +1373,29 @@ const GRACE_MS = 5_000;
  * git holding a lock in a directory we were about to remove. So the child is
  * `detached`, and the deadline signals `-pid`.
  */
-export function realActionIo(): ActionIo {
+export function realActionIo(probe: ProcessListProbe = {}): ActionIo {
+  const psBin = probe.psBin ?? "ps";
+  const psTimeoutMs = probe.timeoutMs ?? 10_000;
+  // OWNED, NOT `execFileSync`. A synchronous call's `timeout` signals at the
+  // deadline and then goes on waiting, so a `ps` that would not die held every
+  // request this server had — on exactly the box somebody had opened this page
+  // to rescue. docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md
+  //
+  // A `refused` here means an earlier `ps` under the same key is still
+  // unaccounted for. It is a failed scan like any other: "we do not know what
+  // is running", never an empty list.
+  const ps = async (key: string, args: readonly string[], maxBytes: number): Promise<string> => {
+    const outcome = await (probe.owner ?? processProbeOwner()).run({
+      key,
+      cmd: psBin,
+      args,
+      timeoutMs: psTimeoutMs,
+      maxBytes,
+      ...(probe.graceMs === undefined ? {} : { graceMs: probe.graceMs }),
+    });
+    if (outcome.kind !== "ok") throw new Error(outcome.why);
+    return outcome.stdout;
+  };
   return {
     runStep: (step, timeoutMs) =>
       new Promise<StepRun>((resolve) => {
@@ -1419,18 +1459,10 @@ export function realActionIo(): ActionIo {
       }),
 
     listProcesses: () =>
-      Promise.resolve().then((): ProcScan => {
+      Promise.resolve().then(async (): Promise<ProcScan> => {
         try {
-          const args = execFileSync("ps", ["-eo", "pid=,ppid=,rss=,etimes=,args="], {
-            encoding: "utf8",
-            timeout: 10_000,
-            maxBuffer: 32 * 1024 * 1024,
-          });
-          const comm = execFileSync("ps", ["-eo", "pid=,comm="], {
-            encoding: "utf8",
-            timeout: 10_000,
-            maxBuffer: 8 * 1024 * 1024,
-          });
+          const args = await ps("actions:ps-args", ["-eo", "pid=,ppid=,rss=,etimes=,args="], 32 * 1024 * 1024);
+          const comm = await ps("actions:ps-comm", ["-eo", "pid=,comm="], 8 * 1024 * 1024);
           const rows = parsePsArgs(args);
           // AN EMPTY PARSE IS AN ERROR, NOT AN EMPTY BOX. `ps` exiting 0 with
           // nothing we could read means we do not know what is running, and

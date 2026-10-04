@@ -43,6 +43,7 @@ import type { ReportDrainOutcome } from "../tools/overseer/reports.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { CHECKPOINT_FILE, EVENTS_FILE, openStore, readCheckpoint, type RegisterEntry } from "../tools/overseer/store.js";
 import { editableFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
+import { tickAfter, until } from "./helpers/overseer-until.js";
 
 const RECOVERY_FILE = "recovery.json";
 
@@ -950,6 +951,7 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
     // exceptional path waits for the view pass, the ticks must not keep
     // starting new ones.
     let slow = true;
+    let stats = 0;
     const daemon = runOverseer({
       root,
       baseUrl: "http://127.0.0.1:0",
@@ -959,7 +961,7 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
       log: () => {},
       source: () =>
         (async function* (): AsyncGenerator<SourceMessage> {
-          await sleep(40);
+          await until("a view pass to have started its stat", () => stats > 0);
           yield* []; // A source that sends nothing, and then breaks.
           throw new Error("ri2f the source broke");
         })(),
@@ -969,6 +971,8 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
         hostname: () => "ri-daemon-host",
         viewIntervalMs: 0,
         stat: async () => {
+          stats += 1;
+          // A sleep that is the SUBJECT: the stat has to take longer than a tick.
           if (slow) await sleep(20);
           const error = new Error("ENOENT") as NodeJS.ErrnoException;
           error.code = "ENOENT";
@@ -981,6 +985,7 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
         () => "returned",
         (cause: unknown) => `threw: ${cause instanceof Error ? cause.message : String(cause)}`,
       ),
+      // A deadline, not a wait: it exists only to turn a daemon that never returns into a red test.
       sleep(3000).then(() => "still running after 3 s"),
     ]);
     // Let a daemon stuck in the loop quiesce, so a red run does not leak it.
@@ -1024,8 +1029,8 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
       log: () => {},
       source: () =>
         (async function* (): AsyncGenerator<SourceMessage> {
-          // Several drain intervals while the daemon runs.
-          await sleep(120);
+          // Several drains while the daemon runs.
+          await until("three report drains while the daemon runs", () => calls >= 3);
           yield* [];
           if (stop === "throw") throw new Error("ri2f the source broke");
           controller.abort();
@@ -1045,7 +1050,10 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
       (cause: unknown) => `threw: ${cause instanceof Error ? cause.message : String(cause)}`,
     );
     const atStop = calls;
-    // Ten intervals after it returned.
+    // Ten intervals after it returned. A REAL WAIT, on purpose: the daemon has
+    // stopped, so there is no tick or pass left to count, and the thing asserted
+    // is that a real timer does not fire — which fake timers would not test
+    // (postmortem 260930a). `atStop > 0` above is what keeps it from being vacuous.
     await sleep(100);
     return { outcome, atStop, later: calls };
   }
@@ -1457,11 +1465,14 @@ describe("dismissal through the inbox", () => {
     await recoveryCli(["dismiss", ids[0] as string, "--why", "held at start"], { root, out: () => {} });
     plantUnparseableLine(root);
     const lines: string[] = [];
-    // A dozen ticks or so, each of which finds the replay not-run.
+    // The line, and then five more ticks, each of which finds the replay not-run
+    // and must not say it again. The recovery tick is called from the heartbeat
+    // tick, so the heartbeat is the callback being counted.
     await runRaw(
       root,
       async function* () {
-        await sleep(60);
+        await until("the daemon to say the request is held", () => lines.some((line) => line.includes("RECOVERY REQUESTS HELD")));
+        for (let tick = 0; tick < 5; tick += 1) await tickAfter(root);
         yield* []; // A source that sends nothing while the ticks run.
       },
       { log: (line) => lines.push(line) },

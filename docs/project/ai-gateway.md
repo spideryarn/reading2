@@ -165,6 +165,13 @@ then the same `finally` owns the call.
 Early `break`, a throw, an abort, a missing `[DONE]`, a 429, a body that will not read — all of them
 cross it.
 
+A refused call is priced if the provider priced it. Every seam in `src/ai-call.ts` reads `usage` out
+of the response body **before** it judges the status, so a 429 or a 5xx whose body carries a cost
+gets that cost on its error row. The image seam has done this since 2026-09-03, after a 429 that had
+already cost a plate; `openRouterJson` and the streaming seam's `refuse` followed on 2026-10-04
+(`meterBody`). No refusal on the chat wire has been seen carrying usage, so for those two this is a
+guarantee about our code, not an observation about the provider. The body is still never quoted.
+
 **The Messages gateway was not that until 2026-08-28.** It wraps the Anthropic SDK, so the call
 belongs to the SDK's stream object — and `streamMessage` used to hand that object back, so a stage
 that awaited `call.stream.finalMessage()` instead of `call.finalMessage()` worked and recorded

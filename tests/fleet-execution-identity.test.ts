@@ -44,7 +44,8 @@ import {
   identityWriteGate,
   isExecutionTokenText,
 } from "../tools/fleet/execution-token.js";
-import { probeProcessTableAsync, toRows, readExecutions, type FleetRow } from "../tools/fleet/collect.js";
+import { toRows, readExecutions, type FleetRow } from "../tools/fleet/collect.js";
+import { probeProcessTableAsync } from "../tools/overseer/work-probe.js";
 import type { OwnedOutcome, ProbeOwner } from "../tools/fleet/child.js";
 import { CLOCK_SKEW_UNMEASURED, parseExecution as parseExecutionBrowser, parseRow } from "../tools/fleet/web/src/types.js";
 import type { ExecutionReading } from "../tools/fleet/wire.js";

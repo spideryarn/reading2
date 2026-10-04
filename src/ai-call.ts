@@ -89,6 +89,7 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
    something the next file to import embeddings might. `import type` is erased,
    so it creates no edge at all. */
 import type { AiJob, Wire } from "./models.js";
+import { parseRetryAfter } from "./retry-after.js";
 import { isHighPowerModel } from "./high-power-model.js";
 import {
   type StreamChunk,
@@ -1242,7 +1243,12 @@ export class ProviderRefused extends Error {
    * 400 too, and halving that would only spend twice.
    */
   readonly kind: "no-endpoints" | "context-exceeded" | null;
-  /** `Retry-After`, parsed to milliseconds, or `null` if it was absent or nonsense. */
+  /**
+   * `Retry-After`, parsed to milliseconds (src/retry-after.ts), or `null` if it
+   * was absent, nonsense or not a wait at all: `0` and a date already past are
+   * `null` too, so a caller's own backoff applies. Never clamped; how long a
+   * wait is affordable is the caller's to decide.
+   */
   readonly retryAfterMs: number | null;
   constructor(status: number, body: string, headers: Headers) {
     super(providerHttpFailure(status).message);
@@ -1254,42 +1260,8 @@ export class ProviderRefused extends Error {
         : status === 400 && body.includes("max_tokens_exceeded")
           ? "context-exceeded"
           : null;
-    this.retryAfterMs = headers ? retryAfterMs(headers) : null;
+    this.retryAfterMs = headers ? parseRetryAfter(headers.get("retry-after"), Date.now()) : null;
   }
-}
-
-/**
- * `Retry-After` as a number of milliseconds. Seconds or an HTTP date; both are
- * legal.
- *
- * **What the provider actually said, not what a caller can afford.** This
- * clamped to 30 s until 2026-09-04, which meant a header saying *ten minutes*
- * and one saying *thirty seconds* arrived here indistinguishable — so the only
- * caller that wanted to *decide* about a long wait could not tell there had been
- * one, and asked again well inside a window the provider had just told it was
- * closed. Truncating an instruction and then obeying the truncation is the
- * dishonest shape ⟨GPT Sol, 2026-09-04⟩; how long a wait is affordable is a
- * property of the caller's deadline, and the callers have one each
- * (src/pdf-read.ts § `MAX_RETRY_AFTER_MS`, src/embeddings.ts § `backoffMs`).
- *
- * Still a parsed number and never a string: nothing a provider wrote leaves
- * this function — see `ProviderRefused`.
- *
- * **Exported since 2026-09-05** for the deepening wave
- * (src/structure-deepen.ts), which meets its 429s on the Anthropic SDK's road
- * rather than this one and so has an `APIError` with a `Headers` on it instead
- * of a `ProviderRefused`. The header is the same header; a second parser for it
- * would be a second opinion about what "a minute" means, and the two would
- * disagree the day one of them learned about the HTTP-date form.
- */
-export function retryAfterMs(headers: Headers): number | null {
-  const header = headers.get("retry-after");
-  if (!header) return null;
-  const seconds = Number(header);
-  const ms = Number.isFinite(seconds)
-    ? seconds * 1000
-    : Date.parse(header) - Date.now();
-  return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 /* ---------------------------------------------------------------- the meter -- */
@@ -1618,8 +1590,11 @@ function outgoing(
  * `NOT_CONFIGURED.message` rather than the variable's name, for the split
  * docs/project/logging.md describes: the name of an environment variable is
  * useful to whoever runs the server and useless to a reader, who has not got the
- * repository. Callers log the operator's half themselves, because they know
- * which feature just failed.
+ * repository. The operator's half is logged here, once, in fixed words with
+ * nothing interpolated. Until 2026-10-04 seven runners each logged their own
+ * version first, from a pre-check of a key they never used; those are gone
+ * (plan 261004c § R3), so this is the only place a missing key is said. Which
+ * feature it was is on the caller's own failure line.
  *
  * **`loadEnvLocal()` is deliberately not called here** — same reason as
  * [`messagesClient`](messages-stream.ts), which learned it the expensive way: a
@@ -1638,7 +1613,10 @@ function apiKey(override: string | undefined): string {
      names the key prefix, which is the fastest way to tell two OpenRouter
      accounts apart. */
   const key = override ?? process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error(NOT_CONFIGURED.message);
+  if (!key) {
+    log("model").error("OPENROUTER_API_KEY is not set, so every model call on this wire will fail");
+    throw new Error(NOT_CONFIGURED.message);
+  }
   return key;
 }
 
@@ -1650,9 +1628,12 @@ function apiKey(override: string | undefined): string {
  * an inverse the first version got wrong: **no attempt, no record.** The meter
  * used to be constructed first, so a missing key or an unserialisable body — a
  * `BigInt`, a circular reference — produced a spend row for a call that never
- * left the process. Every caller happens to validate its own key first today,
- * which is exactly why nothing caught it. Raised by a GPT Sol review of the
- * code.
+ * left the process. Every caller validated its own key first at the time, which
+ * is exactly why nothing caught it. Raised by a GPT Sol review of the code.
+ *
+ * Since 2026-10-04 the streaming runners no longer check the key themselves, so
+ * `apiKey` below is the only check on their road and this order is what stands
+ * between a missing key and a phantom row (tests/no-key-runners.test.ts).
  */
 function prepare(
   job: ChatJob,
@@ -1752,13 +1733,69 @@ function abortedBy(err: unknown, signal: AbortSignal | undefined): boolean {
 }
 
 /**
- * Drain a failed response and throw the status, never the words.
+ * **A chat-wire response body, parsed once, with whatever it says about money
+ * handed to the meter.** The parsed value, or `null` where it was not JSON.
  *
- * The body **has** to be consumed or the connection leaks; nothing here wants to
- * know what it said.
+ * Shared by the two seams that used to judge the status first:
+ * `openRouterJson`, and `refuse` for a stream that was refused. It is called
+ * **before the status is judged** in both, the order the image seam has had
+ * since 2026-09-03 (`openRouterImage`, which says why at length): a `429` or a
+ * `5xx` whose body carries `usage` is a call the provider priced, and rejecting
+ * it on the status before parsing leaves an unpriced error row. Nothing about a
+ * non-2xx makes its `usage` less true.
+ *
+ * No refusal on this wire has been observed carrying usage (plan 261004c §
+ * F11). This is a proof about our code and a guess about the provider: if one
+ * ever does, the row is right.
+ *
+ * `Meter.saw` overwrites its figures and does not add to them, and a refused
+ * stream never reaches the SSE loop, so nothing here can count a call twice.
+ *
+ * The parse error is swallowed and never rethrown: V8 puts the first characters
+ * of the offending input into a `SyntaxError`'s message, so a mangled response
+ * can carry a prefix of what we sent it, which on this wire is an article, a
+ * reader's question or their voice. See `providerSpokeNonsense` in
+ * openrouter-stream.ts. And nothing from the body is quoted by this function:
+ * it reads numbers, a model id and a provider name into the meter and returns.
  */
-async function refuse(response: Response): Promise<never> {
+function meterBody(meter: Meter, text: string): unknown {
+  let json: unknown = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* Left as `null`. See above for why the error goes nowhere. */
+  }
+  /* Only a JSON object can carry any of these. `null`, an array, a string and a
+     number all parse, and none of them is a body to read fields off. */
+  const record =
+    json !== null && typeof json === "object" && !Array.isArray(json)
+      ? (json as { usage?: unknown; model?: unknown; provider?: unknown; openrouter_metadata?: unknown })
+      : null;
+  if (record?.usage) meter.saw(record.usage);
+  meter.sawModel(record?.model);
+  meter.sawUpstream(record?.provider);
+  meter.sawRoute(record?.openrouter_metadata);
+  return json;
+}
+
+/**
+ * Drain a failed response, meter anything it priced, and throw the status,
+ * never the words.
+ *
+ * The body **has** to be consumed or the connection leaks. Until 2026-10-04
+ * nothing here looked at what it said; now `meterBody` reads any `usage` out of
+ * it first, so a refusal the provider charged for is not an unpriced row.
+ *
+ * **The `.catch(() => "")` is kept on purpose**, and it is the one place this
+ * differs from the image seam, which awaits `response.text()` bare. A refused
+ * stream whose body fails to read is still a refusal, with a status, a
+ * classification and a `Retry-After` the caller acts on. Without the catch it
+ * would surface as a transport error and lose all three ⟨GPT Sol, reviewing the
+ * plan, F3⟩. An unreadable body simply meters nothing.
+ */
+async function refuse(response: Response, meter: Meter): Promise<never> {
   const body = await response.text().catch(() => "");
+  meterBody(meter, body);
   throw new ProviderRefused(response.status, body, response.headers);
 }
 
@@ -1847,7 +1884,7 @@ export async function* openRouterStream(
     options.end.answered = false;
     const response = await send(prepared, options.signal);
     meter.generationId = generationIdOf(response);
-    if (!response.ok || !response.body) await refuse(response);
+    if (!response.ok || !response.body) await refuse(response, meter);
     /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
     const stream = response.body as ReadableStream<Uint8Array>;
     for await (const chunk of sseChunks(
@@ -1991,34 +2028,19 @@ export async function openRouterJson(
     /* Read once, before the status is judged. A failed body still has to be
        consumed or the connection leaks, and reading it twice throws. */
     const text = await response.text();
-    /* **The images seam does this the other way round on purpose**, parsing the
-       body and metering any `usage` in it *before* judging the status, because
-       a `429` there arrives carrying the cost of a plate that was already drawn
-       (`openRouterImage` below). It has not been changed here, and that is a
-       gap rather than a decision: no non-2xx on this wire has been *observed*
-       carrying usage, and nobody has looked. If you are here because a chat
-       call's money went missing, this is the line. */
+    /* **Metered before the status is judged**, the same order as the images
+       seam below and for its reason: a `429` whose body carries `usage` is a
+       call the provider priced. Until 2026-10-04 this seam judged first, and
+       its comment called that "a gap rather than a decision"; `meterBody` says
+       the rest. A body that is not JSON comes back `null`, which is what a
+       caller has always been handed for one. */
+    const json = meterBody(meter, text);
     if (!response.ok) {
       outcome = "error";
+      /* The raw text, not the parsed value: `ProviderRefused` classifies by
+         matching fixed strings in it, and keeps none of it. */
       throw new ProviderRefused(response.status, text, response.headers);
     }
-    let json: unknown = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      /* Left as `null`, and the parse error is never rethrown from here: V8 puts
-         the first characters of the offending input into the `SyntaxError`
-         message, so a mangled response can carry a prefix of what we sent it —
-         which on this wire is an article, a reader's question, or their voice.
-         See `providerSpokeNonsense` in openrouter-stream.ts. */
-    }
-    const record = json as
-      | { usage?: unknown; model?: unknown; provider?: unknown; openrouter_metadata?: unknown }
-      | null;
-    if (record?.usage) meter.saw(record.usage);
-    meter.sawModel(record?.model);
-    meter.sawUpstream(record?.provider);
-    meter.sawRoute(record?.openrouter_metadata);
     return {
       json,
       answeredBy: meter.answeredBy,

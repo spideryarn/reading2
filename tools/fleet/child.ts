@@ -655,6 +655,25 @@ export function probeOwner(deps: {
   return { run, live };
 }
 
+let processOwner: ProbeOwner | null = null;
+
+/**
+ * **The one owner a long-running process shares.**
+ *
+ * The registry that refuses a second child for a key is per owner, so two
+ * owners in one process can each start a sibling of the other's stuck child —
+ * the multiplication the registry exists to prevent. A module that needs to
+ * run a child takes this as its default rather than building its own, and the
+ * probe KEY is then the whole of its exclusion: give each probe a key nothing
+ * else uses, and decide what a `refused` outcome means at that site.
+ *
+ * Made on first use, so importing this file still starts nothing.
+ */
+export function processProbeOwner(): ProbeOwner {
+  processOwner ??= probeOwner();
+  return processOwner;
+}
+
 /** A concurrency limiter. `limit(3)` returns a function that runs at most 3 jobs at once. */
 export function limit(n: number): <T>(job: () => Promise<T>) => Promise<T> {
   if (!Number.isSafeInteger(n) || n <= 0) throw new RangeError("the concurrency limit must be a positive integer");

@@ -655,6 +655,11 @@ describe("the synchronous recapture (G5)", () => {
       async function* () {
         yield* accept(w);
         // The tap comes after a trusted inventory, so the pass that pauses captured one.
+        // And after a recovery pass has published its view over that inventory:
+        // the process-table probe is awaited now (plan 261004c), so a heartbeat
+        // can tick before this run's first fold and write `recovery.json` with no
+        // view yet — as it always could when the first payload was slow to arrive.
+        await until(() => (recoveryJson(w).view ?? null) !== null, "a recovery view over the accepted inventory");
         tap(w, a);
         await reached.promise;
         yield* accept(w, [rowFor(w, a, NEW_TOKEN(0))]);

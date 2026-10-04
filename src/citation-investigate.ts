@@ -300,7 +300,7 @@ function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
 
 /**
  * The system prompt — developed from the probe's draft
- * (scripts/probes/260930a-investigate-prompt.ts), fixing what the probe found:
+ * (scripts/probes/260930a-investigate-prompt.ts at 9b611dfe2, since deleted), fixing what the probe found:
  * two of six answers claimed the full text and one opened with "I". Since plan
  * 260930d it **forbids quotation marks outright**: allowing them round the
  * article's words and the work's title led the model to quote its own phrases,

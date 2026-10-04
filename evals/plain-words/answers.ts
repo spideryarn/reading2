@@ -42,6 +42,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { loadEnvLocal } from "../../src/env.js";
 import { blindCoin, hardShare, isCommon, wordsIn } from "./run.js";
+import { sourceFingerprint } from "./source-fingerprint.js";
 
 const OUT = path.join(import.meta.dirname, "..", "results", "plain-words", "answers");
 
@@ -110,21 +111,16 @@ function locate(blocks: { id: string; text: string }[], term: string): { blockId
   throw new Error(`"${term}" appears in no block — pick another case`);
 }
 
+/** The prompt source files; source-fingerprint.ts adds the shared prompt modules they import. */
+export const SOURCES = ["explain.ts", "converse.ts"];
+
 async function generate(arm: string, keepUnfinished: boolean): Promise<void> {
   loadEnvLocal();
+  const sourceSha256 = sourceFingerprint(SOURCES);
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { explainStream } = await import("../../src/explain.js");
   const { converse } = await import("../../src/converse.js");
-
-  const sourceSha256 = Object.fromEntries(
-    ["explain.ts", "converse.ts"].map((file) => [
-      file,
-      createHash("sha256")
-        .update(fs.readFileSync(path.join(import.meta.dirname, "..", "..", "src", file)))
-        .digest("hex"),
-    ]),
-  );
 
   type Req = Parameters<typeof explainStream>[0];
   async function explainOnce(meta: Req["meta"], blocks: Req["blocks"], blockId: string, quote: string) {

@@ -45,7 +45,7 @@ import { describeKey } from "./describe-pass.js";
 import { descriptionsRoot, readDescriptionMemory } from "./describe-store.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
 import { classifyPaneHarness } from "../overseer/harness.js";
-import { PS_ARGV, readingFromPs } from "../overseer/work-probe.js";
+import { probeProcessTableAsync } from "../overseer/work-probe.js";
 import type { ProcessTableReading } from "../overseer/work.js";
 
 /** One line of the page. Deliberately flat: it is rendered, and it is JSON. */
@@ -883,35 +883,6 @@ export type ExecutionIo = {
   uptime: () => UptimeReading;
   readStart: (pid: number) => ProcessStartTicks;
 };
-
-/** Read one process table without blocking the dashboard's request thread. */
-export async function probeProcessTableAsync(owner: ProbeOwner): Promise<ProcessTableReading> {
-  try {
-    const outcome = await owner.run({
-      // Both ends of the bracket deliberately share one key and are awaited
-      // sequentially. If the first `ps` is still unaccounted for, starting a
-      // second cannot produce a usable bracket and would multiply stuck
-      // children; the owner's refusal instead carries that first child's pid.
-      key: "process-table",
-      cmd: "ps",
-      args: PS_ARGV,
-      timeoutMs: 10_000,
-      maxBytes: 32 * 1024 * 1024,
-    });
-    if (outcome.kind !== "ok") return { read: false, why: outcome.why };
-
-    // TIMED AFTER ps RETURNS. `etimes` is relative to when ps read /proc, so a
-    // stamp from before the await would make every derived start time early by
-    // the entire probe duration — worst on the swapping box this watches.
-    const atMs = Date.now();
-    return readingFromPs(outcome.stdout, atMs, { bin: "ps", selfPid: process.pid });
-  } catch (cause) {
-    return {
-      read: false,
-      why: `the owned process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
-    };
-  }
-}
 
 /**
  * **FILL IN `execution` ON EVERY ROW, FROM TWO READINGS OF THE PROCESS TABLE.**

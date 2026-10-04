@@ -16,7 +16,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Dock } from "../src/web/Dock.js";
 import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
 
@@ -49,6 +49,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   for (const el of extras) el.remove();
+  vi.useRealTimers();
 });
 
 function mount(props: Record<string, unknown> = {}): void {
@@ -310,9 +311,10 @@ describe("the Metadata tooltip", () => {
     mount();
     const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"], a[href^="/read/a-piece/metadata"]');
     expect(link, "the Dock draws no Metadata link").not.toBeNull();
+    vi.useFakeTimers();
     link?.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     const card = document.querySelector('[role="tooltip"]');
     expect(card?.textContent?.replace(/\s+/g, " ")).toContain("⌘Enter / Ctrl-Enter");

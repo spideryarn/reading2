@@ -584,9 +584,11 @@ function run(cmd: string, args: string[]): CommandOutcome {
     const out = execFileSync(cmd, args, { encoding: "utf8", timeout: 5_000, maxBuffer: 16 * 1024 * 1024 });
     return { ok: true, out };
   } catch (err) {
-    // Covers: binary missing (ENOENT), non-zero exit, and the 5s timeout —
-    // all indistinguishable to the caller and all "I could not tell", never a
-    // reading of 0.
+    // Covers: binary missing (ENOENT), non-zero exit, and a timeout — all
+    // indistinguishable to the caller and all "I could not tell", never a
+    // reading of 0. The 5 s is when the signal is sent, NOT the most this call
+    // can take: `execFileSync` waits until the child has exited (postmortem
+    // 260910a). Long-running processes use `collectHealthAsync` below.
     const why = err instanceof Error ? err.message : String(err);
     return { ok: false, why };
   }

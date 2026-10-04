@@ -180,9 +180,9 @@ export async function runAttentionCommand(
     options.panes !== null
       ? readCapturedFleet(options.panes)
       : options.captureTo !== null
-        ? captureFleet(seams.listSessions(), options.captureTo)
+        ? captureFleet(await seams.listSessions(), options.captureTo)
         : null;
-  const sessions = fleet?.sessions ?? seams.listSessions();
+  const sessions = fleet?.sessions ?? (await seams.listSessions());
   const capture =
     fleet === null
       ? seams.capture
@@ -209,7 +209,7 @@ export async function runAttentionCommand(
   // is a different session wearing the same handle.
   const memory = memoryForEpoch(
     read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY,
-    `cli-${process.pid}:tmux-${seams.tmuxGeneration() ?? "unknown"}`,
+    `cli-${process.pid}:tmux-${(await seams.tmuxGeneration()) ?? "unknown"}`,
   );
 
   // From the environment, never `.env.local` — `readGatewayKey` says why.
@@ -442,7 +442,22 @@ export function attentionRunner(
     // generation, and diff.ts refuses to diff two snapshots that disagree on it
     // because they describe different worlds. A wait carried across that would be
     // a duration measured on somebody else's question.
-    const epoch = `${instance}:tmux-${seams.tmuxGeneration() ?? "unknown"}`;
+    //
+    // READ ON BOTH SIDES OF THE LISTING, because the two are separate awaited
+    // children now and tmux can restart between them (GPT Sol on plan 261004c).
+    // One read would then put the OLD generation beside a listing from the NEW
+    // server: the epoch matches the stored one, and the old waits are carried
+    // onto whichever sessions the new server happens to call `$1`. A generation
+    // that is not the same before and after is treated as one tmux could not
+    // give — "unknown", which no real generation's epoch matches — so the waits
+    // restart, which under-states them and is the safe direction. It costs a
+    // third tmux call a pass. Restart-and-back between the two reads would need
+    // tmux to be given the same pid twice in that window, and is not defended.
+    const generationBefore = await seams.tmuxGeneration();
+    const sessions = await seams.listSessions();
+    const generationAfter = await seams.tmuxGeneration();
+    const generation = generationBefore !== null && generationBefore === generationAfter ? generationBefore : null;
+    const epoch = `${instance}:tmux-${generation ?? "unknown"}`;
     const read = readAttentionMemory(root);
     // THE EPOCH DROPS THE WAITS AND KEEPS THE VERDICTS — GPT Sol's finding 2.
     // `store.ts` refuses to republish the previous attention list after a
@@ -451,13 +466,16 @@ export function attentionRunner(
     // as "waiting since" a moment nobody observed. A verdict is about a piece of
     // text and survives any gap; a wait is about continuous observation and
     // cannot.
-    const memory = memoryForEpoch(read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY, epoch);
+    const prior = read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY;
+    // "Unknown" cannot prove continuity with another "unknown". Keep cached
+    // text verdicts, but drop waits on EVERY pass whose generation is unproven.
+    const memory = memoryForEpoch(generation === null ? { ...prior, waits: new Map() } : prior, epoch);
     // ONE VERSION, HANDED TO BOTH HALVES, exactly as the hand run does. Read
     // per pass rather than per runner so both compositions follow one rule;
     // a daemon's environment is fixed at start, so in practice it never moves.
     const promptVersion = promptVersionFor(seams.proposals());
     const result = await runAttentionPass({
-      sessions: seams.listSessions(),
+      sessions,
       capture: seams.capture,
       classify: paidClassifier(budget, classifierOptions(apiKey, promptVersion, seams)),
       memory,

@@ -32,6 +32,7 @@ import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { NotTheLiveAttempt, openOrBeginJobDraft } from "../src/store/pg-revisions.js";
 import type { JobStep } from "../src/types.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 
@@ -148,25 +149,6 @@ async function holdRow(
   });
 
   return { pid: await gotPid, release, done };
-}
-
-/**
- * Wait until some other backend is blocked by `pid` — or say so and fail.
- *
- * `pg_blocking_pids` rather than a count of ungranted locks: vitest runs test
- * files at the same time, so "somebody somewhere is waiting" is a condition
- * another suite can satisfy for us, and a probe that fires early would prove
- * whatever the timing happened to be.
- */
-async function waitUntilBlockedBy(pid: number): Promise<void> {
-  for (let i = 0; i < 200; i++) {
-    const found = await getDb().execute(
-      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
-    );
-    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`nothing ever queued behind backend ${pid} — the call under test never blocked`);
 }
 
 async function cleanUp(slug: string): Promise<void> {

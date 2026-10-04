@@ -29,14 +29,34 @@
 # everything. See docs/plans/260826ae-auth-ui-and-production.md § The check, and why it
 # is written this way, and docs/reusable/silent-success.md.
 #
+# ## ON means the JSON value `true`, and nothing else
+#
+# The first version asked jq whether a provider was truthy. In jq everything
+# but `false` and `null` is truthy, so the string "false" read as ON — and a
+# `github` key that was simply absent read as OFF, which is the answer the
+# control wants, so a response with no controls in it passed them. Supabase
+# returns booleans today; the day it does not is the day this check would have
+# gone on agreeing (2026-10-03, X13g in
+# docs/investigations/261003b-fifth-sweep-deploy-scripts-and-cross-zone-leads.md).
+#
+# So `external` must be an object, and `google`, `email` and `github` must each
+# be there and be a boolean, before anything is printed about them. Anything
+# else is exit 2: a body this check cannot read, not a provider that is off.
+# The "all providers on" list uses the same `== true`, so a line above cannot
+# say OFF about a provider the list below calls on (GPT Sol, 2026-10-04).
+#
 # Exit status: 0 google is on, 1 google is off, 2 the check itself is broken
-# (no key, no answer, or a control that came back the wrong way round).
+# (no key, no answer, a settings body of the wrong shape, or a control that
+# came back the wrong way round).
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
 export LC_ALL=C
 
-env_from_prod() { grep "^$1=" .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"'; }
+# The one env-file reader the shell checks share; its header says what the
+# `grep | cut | tr` it replaced got wrong.
+. scripts/env-value.sh || exit 2
+env_from_prod() { env_value .env.prod "$1"; }
 
 URL=${SUPABASE_URL:-$(env_from_prod SUPABASE_URL)}
 KEY=${SUPABASE_PUBLISHABLE_KEY:-$(env_from_prod SUPABASE_PUBLISHABLE_KEY)}
@@ -65,7 +85,18 @@ if [ -z "$body" ] || ! printf '%s' "$body" | jq -e '.external' >/dev/null 2>&1; 
   exit 2
 fi
 
-state() { printf '%s' "$body" | jq -r --arg p "$1" 'if .external[$p] then "ON" else "OFF" end'; }
+# Before any verdict is printed: see "ON means the JSON value `true`" above.
+if ! printf '%s' "$body" | jq -e '
+    (.external | type) == "object"
+    and ([.external.google, .external.email, .external.github] | all(type == "boolean"))
+  ' >/dev/null 2>&1; then
+  echo "/auth/v1/settings answered, but not in the shape this check reads:" >&2
+  echo "  .external must be an object with google, email and github each true or false." >&2
+  printf '  .external was: %s\n' "$(printf '%s' "$body" | jq -c '.external' 2>/dev/null)" >&2
+  exit 2
+fi
+
+state() { printf '%s' "$body" | jq -r --arg p "$1" 'if .external[$p] == true then "ON" else "OFF" end'; }
 
 google=$(state google)
 email=$(state email)
@@ -77,7 +108,7 @@ printf '  %-8s %s\n' "github" "$github"
 echo "--- the one that matters ---"
 printf '  %-8s %s\n' "google" "$google"
 
-on=$(printf '%s' "$body" | jq -r '.external | to_entries | map(select(.value)) | map(.key) | join(", ")')
+on=$(printf '%s' "$body" | jq -r '.external | to_entries | map(select(.value == true)) | map(.key) | join(", ")')
 echo "all providers on: ${on:-<none>}"
 # Deliberately not "anybody can sign up": this endpoint only knows whether
 # signup is disabled. Who can actually reach a signup also depends on which

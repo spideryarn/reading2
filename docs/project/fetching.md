@@ -291,7 +291,8 @@ deadline is doing its job, the document is just genuinely big and the server gen
 Two to three attempts, because a person is waiting. 429 (honouring `Retry-After`, capped), 502, 503,
 504 and the transient socket errors are retried; 401, 403, 404 and our own refusals are not — they
 will fail identically. Backoff uses **full jitter**, a delay drawn uniformly from zero to the
-ceiling.
+ceiling. A `Retry-After` that is not a positive wait (`0`, a date already past) counts as none, so
+the backoff applies (`src/retry-after.ts`).
 
 ## What stage 1 leaves behind, since 2026-08-31: nothing on disk
 

@@ -59,14 +59,12 @@
  * finish reason only. docs/project/logging.md.
  */
 
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { type ModelPower, modelFor } from "./models.js";
 import {
   ENDED_UNFINISHED,
   FILTER_STOPPED_IT,
   MARK_CUT_OFF,
-  NOT_CONFIGURED,
   PROVIDER_FAILED_MID_ANSWER,
   type ReaderFacingFailure,
   saidNothing,
@@ -562,15 +560,6 @@ export async function* markAnswerStream({
     ...(telemetry.ordinal !== undefined ? { ordinal: telemetry.ordinal } : {}),
     ...(telemetry.slug ? { slug: telemetry.slug } : {}),
   });
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    /* Two audiences, two sentences: the variable's name and the file it goes in
-       are useful only to whoever runs the server. logging.md. */
-    line.error("OPENROUTER_API_KEY is not set — every quiz mark will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   const messages = buildMarkMessages({
     meta,

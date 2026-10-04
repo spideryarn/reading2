@@ -70,7 +70,7 @@ import {
  * rather than a wait. Closing is quick but not instant, so a wobble of the
  * mouse between two adjacent bands doesn't blink the panel out and back.
  */
-const DELAY = { open: 240, close: 90 } as const;
+export const DELAY = { open: 240, close: 90 } as const;
 
 /**
  * Groups tooltips so that once one is open, its neighbours open *instantly*

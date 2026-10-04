@@ -46,6 +46,7 @@ import type { RuleObservation } from "../tools/overseer/rules.js";
 import type { ReadDocument } from "../tools/overseer/schedule-plan.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { EVENTS_FILE, LOCK_FILE } from "../tools/overseer/store.js";
+import { until } from "./helpers/overseer-until.js";
 
 const roots: string[] = [];
 
@@ -65,15 +66,33 @@ function fakeClock(startIso: string): { now: () => Date; advance(ms: number): vo
   return { now: () => new Date(ms), advance: (by) => (ms += by) };
 }
 
-/** Real milliseconds, only so the daemon's timers fire. */
+/** Real milliseconds. One use is left: the lock-lost run, which has no pass to count — see there. */
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitFor(what: string, predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for: ${what}`);
-    await sleep(5);
-  }
+/**
+ * How many passes the jobs scheduler has COMPLETED, read off the injected `log`.
+ *
+ * On the paths this file's fixture takes (the store writes succeed), every
+ * pass plans each definition once and logs one verdict line for it — `held`,
+ * `not due…`, `dispatched…` — whether or not it dispatches, so this counts the
+ * callback a "nothing was dispatched" assertion is about. It is not exact in
+ * general: a failed start acknowledgement logs two lines for one pass. The sweep's
+ * `STUCK` / `UNACCOUNTED` lines are extra lines in a pass, not passes, so they
+ * are left out. NOT the heartbeat's tick count: that is a separate timer, and it
+ * can advance while the scheduler never runs (plan 261004c, review finding F5).
+ */
+function passes(lines: readonly string[]): number {
+  return lines.filter((line) => line.startsWith("job restart-probe: ") && !/^job restart-probe: (STUCK|UNACCOUNTED) /.test(line)).length;
+}
+
+/**
+ * Wait until the scheduler has demonstrably run `n` MORE passes. A negative
+ * assertion goes after this, never after a sleep: over a fixed window it passes
+ * vacuously on a box too loaded to fit a pass in (postmortem 260930a).
+ */
+async function morePasses(lines: readonly string[], n = 5): Promise<void> {
+  const before = passes(lines);
+  await until(`${n} more scheduler passes after the first ${before}`, () => passes(lines) >= before + n);
 }
 
 function eventsIn(root: string): OverseerEvent[] {
@@ -192,11 +211,18 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     const { jobs, dispatched } = jobsWith(root, NEVER);
 
     // ── RUN 1: dispatched, started, never finished — then stopped by the signal.
-    const first = await runDaemon(root, fakeClock(T0), jobs, async (controller) => {
-      await waitFor("the first dispatch", () => dispatched.length >= 1);
-      await sleep(40); // many more jobs ticks, none of which may dispatch again
-      controller.abort();
-    });
+    const firstLines: string[] = [];
+    const first = await runDaemon(
+      root,
+      fakeClock(T0),
+      jobs,
+      async (controller) => {
+        await until("the first dispatch", () => dispatched.length >= 1);
+        await morePasses(firstLines); // counted, none of which may dispatch again
+        controller.abort();
+      },
+      firstLines,
+    );
     expect(first.kind).toBe("stopped");
     expect(dispatched).toHaveLength(1);
     const [original] = dispatched;
@@ -214,7 +240,7 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
       clock,
       jobs,
       async (controller) => {
-        await sleep(60);
+        await morePasses(lines);
         duringLease = {
           dispatched: dispatched.length,
           kinds: kindsFor(root, original),
@@ -222,8 +248,8 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
         };
         // Past the lease, on the daemon's own clock.
         clock.advance(60_000);
-        await waitFor("a dispatch after the lease ran out", () => dispatched.length >= 2);
-        await sleep(40);
+        await until("a dispatch after the lease ran out", () => dispatched.length >= 2);
+        await morePasses(lines);
         controller.abort();
       },
       lines,
@@ -245,7 +271,7 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     expect(dispatched[1]).not.toBe(original);
     expect(dispatched[1]).toContain(`@${at(150_000)}#`);
     expect(existsSync(join(root, LOCK_FILE))).toBe(false);
-  }, 20_000);
+  });
 
   test("killed IN THE SPAWN WINDOW: run 2 writes the reservation down as abandoned and never dispatches it", async () => {
     const root = tempRoot();
@@ -268,7 +294,12 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     });
 
     const first = await runDaemon(root, fakeClock(T0), jobs, async () => {
-      await waitFor("the first dispatch", () => dispatched.length >= 1);
+      await until("the first dispatch", () => dispatched.length >= 1);
+      // A REAL WAIT, and it cannot be a counted one without a daemon change. It
+      // stands in for "the heartbeat noticed the lock was gone", which halts the
+      // scheduler — so there is no further pass to count — and which the daemon
+      // announces through no seam a test can read until it returns `lock-lost`.
+      // Too short fails loudly on the outcome below, not silently.
       await sleep(40);
     });
     // It lost its lock, so it stopped writing — which is the point of the lock.
@@ -281,14 +312,21 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     // ── RUN 2, ten seconds on: inside the period, so nothing new is due yet.
     const clock = fakeClock(at(10_000));
     let beforePeriod: { dispatched: number; kinds: string[] } | null = null;
-    const second = await runDaemon(root, clock, jobs, async (controller) => {
-      await sleep(60);
-      beforePeriod = { dispatched: dispatched.length, kinds: kindsFor(root, original) };
-      clock.advance(60_000);
-      await waitFor("the next occurrence, a full period on", () => dispatched.length >= 2);
-      await sleep(40);
-      controller.abort();
-    });
+    const lines: string[] = [];
+    const second = await runDaemon(
+      root,
+      clock,
+      jobs,
+      async (controller) => {
+        await morePasses(lines);
+        beforePeriod = { dispatched: dispatched.length, kinds: kindsFor(root, original) };
+        clock.advance(60_000);
+        await until("the next occurrence, a full period on", () => dispatched.length >= 2);
+        await morePasses(lines);
+        controller.abort();
+      },
+      lines,
+    );
     expect(second.kind).toBe("stopped");
 
     // Written down once, as the abandoned reservation it is, and not retried.
@@ -302,17 +340,24 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     expect(dispatched).toHaveLength(2);
     expect(dispatched[1]).not.toBe(original);
     expect(existsSync(join(root, LOCK_FILE))).toBe(false);
-  }, 20_000);
+  });
 
   test("THE CONTROL: a cleanly finished run is not re-dispatched, and a genuinely new occurrence is dispatched exactly once", async () => {
     const root = tempRoot();
     const { jobs, dispatched } = jobsWith(root, NOTHING);
 
-    const first = await runDaemon(root, fakeClock(T0), jobs, async (controller) => {
-      await waitFor("the first run to finish", () => eventsIn(root).some((event) => event.kind === "job-occurrence-finished"));
-      await sleep(40);
-      controller.abort();
-    });
+    const firstLines: string[] = [];
+    const first = await runDaemon(
+      root,
+      fakeClock(T0),
+      jobs,
+      async (controller) => {
+        await until("the first run to finish", () => eventsIn(root).some((event) => event.kind === "job-occurrence-finished"));
+        await morePasses(firstLines);
+        controller.abort();
+      },
+      firstLines,
+    );
     expect(first.kind).toBe("stopped");
     expect(dispatched).toHaveLength(1);
     const [original] = dispatched;
@@ -322,14 +367,21 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     // ── RUN 2, ten seconds on, then a full period on.
     const clock = fakeClock(at(10_000));
     let beforePeriod = -1;
-    const second = await runDaemon(root, clock, jobs, async (controller) => {
-      await sleep(60);
-      beforePeriod = dispatched.length;
-      clock.advance(60_000);
-      await waitFor("the next occurrence, a full period on", () => dispatched.length >= 2);
-      await sleep(60); // more ticks: the new one must not be dispatched twice either
-      controller.abort();
-    });
+    const lines: string[] = [];
+    const second = await runDaemon(
+      root,
+      clock,
+      jobs,
+      async (controller) => {
+        await morePasses(lines);
+        beforePeriod = dispatched.length;
+        clock.advance(60_000);
+        await until("the next occurrence, a full period on", () => dispatched.length >= 2);
+        await morePasses(lines); // more passes: the new one must not be dispatched twice either
+        controller.abort();
+      },
+      lines,
+    );
     expect(second.kind).toBe("stopped");
 
     expect(beforePeriod).toBe(1);
@@ -340,5 +392,5 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
     expect(kindsFor(root, original)).toEqual(["job-occurrence-reserved", "job-occurrence-started", "rule-settled", "job-occurrence-finished"]);
     expect(notesIn(root).filter((note) => note.kind === "job-unaccounted")).toEqual([]);
     expect(existsSync(join(root, LOCK_FILE))).toBe(false);
-  }, 20_000);
+  });
 });

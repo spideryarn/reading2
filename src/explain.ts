@@ -52,14 +52,13 @@
  * timings, model name and HTTP status only.
  */
 import type { Block, Citation, Meta } from "./types.js";
-import { loadEnvLocal } from "./env.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import { blockRefLeaks, rawIds } from "./block-ref-leak.js";
 import { providerFailedMidAnswer } from "./openrouter-stream.js";
 import type { StreamOutcome } from "./ai-call.js";
 import { type StreamRunEvent, runStream } from "./stream-run.js";
-import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
+import { ENDED_UNFINISHED, saidNothing } from "./messages.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import { plainWords } from "./plain-words.js";
 import {
@@ -506,17 +505,6 @@ export async function* explainStream({
   // selection itself: enough to line a log line up with the stored comment,
   // without putting the words the reader was puzzled by into the log.
   const line = log("model").child({ blockId });
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    /* Two audiences, two sentences, and the split runs the way logging.md says:
-       the name of the variable and the file it goes in are useful only to
-       whoever runs the server, so they go in the log. The reader gets a sentence
-       that does not ask them to edit a repository they have not got. */
-    line.error("OPENROUTER_API_KEY is not set — every explain request will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   const messages = buildExplainMessages(meta, blocks, blockId, quote, dig ?? null, profile ?? null);
 

@@ -139,8 +139,8 @@ interface RunOpts {
 }
 
 async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
-  const m = /^(low|medium|high|max)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
-  if (!m) throw new Error("--arm must be <low|medium|high|max>-<none|about|goalA|goalB>[-<tag>]");
+  const m = /^(low|medium|high)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
+  if (!m) throw new Error("--arm must be <low|medium|high>-<none|about|goalA|goalB>[-<tag>]");
   const effort = m[1]!;
   const reader = m[2] as Reader;
   const pitch = 15;

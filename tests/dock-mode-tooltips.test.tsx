@@ -56,7 +56,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, type Mode } from "../src/modes.js";
@@ -65,8 +65,16 @@ import type { PublicArtefacts } from "../src/types.js";
 import { Dock } from "../src/web/Dock.js";
 import { markedModes } from "../src/web/visitor.js";
 import { EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* ---------------------------------------------------------------- harness -- */
+
+/**
+ * Past whichever open delay applies to the card being hovered: `Tooltip.tsx`'s
+ * own, or the 300ms a `TooltipGroup` on this surface sets instead. Both kinds
+ * of card go through the one helper below.
+ */
+const PAST_THE_OPEN_DELAY = Math.max(DELAY.open, 300);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -82,6 +90,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 /**
@@ -150,9 +159,12 @@ const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
  * card attached to the wrong button.
  */
 async function cardFor(el: Element): Promise<{ head: string; paras: string[] }> {
+  /* **A faked clock from here to the end of the case**, since 2026-10-04: these
+     were real sleeps, 1.3 seconds a card and most of the file's running time. */
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(PAST_THE_OPEN_DELAY);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -188,7 +200,7 @@ async function cardFor(el: Element): Promise<{ head: string; paras: string[] }> 
      docs/project/tooltips.md § Three things about testing a card in jsdom. */
   for (const _ of [0, 1, 2]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(

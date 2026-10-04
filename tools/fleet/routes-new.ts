@@ -122,7 +122,7 @@ import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { collectHealth, type HealthLevel } from "./health.js";
+import { computeVerdict, type HealthLevel, type HealthReport } from "./health.js";
 import { addressableHost } from "./origin.js";
 import type {
   LaunchProgress as LaunchProgressView,
@@ -735,10 +735,13 @@ export function realIo(): NewSessionIo {
         return false;
       }
     },
-    // Without the vmstat sample: it costs three seconds of waiting, and the
-    // question here ("is the box on fire?") is answered by load, memory and
-    // swap fullness, all of which are sub-100ms.
-    healthLevel: () => collectHealth({ includeSwapActivity: false }).verdict.level,
+    // A READ OF MEMORY, NOT A SURVEY. This used to run `collectHealth()` here:
+    // six synchronous commands inside a request, on the dashboard's only
+    // thread, each with a timeout that signals and then waits (postmortem
+    // 260910a). `server.ts` now supplies the level from its own per-minute
+    // report through `configureNewSessionHealth`; with nothing configured the
+    // answer is `unknown`, which the gate refuses — loud, not open.
+    healthLevel: () => (configuredHealth === null ? "unknown" : configuredHealth()),
     now: () => Date.now(),
     log: (line) => console.log(line),
     /**
@@ -1018,11 +1021,14 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
     // Claude is how the OOM killer gets to choose which agent dies.
     //
     // AND `unknown` IS REFUSED TOO, which it was not (Sol's F12). `unknown` is
-    // what health.ts reports when load, memory and swap could ALL not be read —
+    // what the admission read reports when any core measurement is unknown —
     // a box that cannot fork, or whose commands time out, which is a symptom of
     // the exact condition this gate exists for. Admitting it was failing open
     // at the one moment the gate mattered. The two get different sentences
     // because they are different situations for the person reading them.
+    //
+    // `unknown` is also what `newSessionHealthLevel` answers when the server's
+    // last report is missing or stale, so its sentence names both causes.
     if (gateOnHealth) {
       const level = io.healthLevel();
       if (level === "critical" || level === "unknown") {
@@ -1033,7 +1039,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
           why:
             level === "critical"
               ? "the box is critical (load, memory or swap) — starting another Claude now is how the OOM killer gets to choose which agent dies. Try again when the dashboard's health line is calmer."
-              : "I could not read this box's load, memory OR swap, which is what a machine too busy to fork looks like — so I am not starting anything. Try again, or look at the health line.",
+              : "I have no complete current health reading for this box: a load, memory or swap measurement could not be read, or the dashboard's last reading is missing or too old to trust — so I am not starting anything. Try again, or look at the health line.",
         });
       }
     }
@@ -1121,6 +1127,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
  */
 let shared: NewSessionRoutes | null = null;
 let configuredNotifier: NewSessionIo["notifyOverseer"] | null = null;
+let configuredHealth: NewSessionIo["healthLevel"] | null = null;
 
 /**
  * Give the shared routes a real way to tell the Overseer, once, at startup.
@@ -1143,6 +1150,44 @@ export function configureNewSessionNotifier(notify: NewSessionIo["notifyOverseer
     throw new Error("the new-session routes already exist; configure the notifier before the first request");
   }
   configuredNotifier = notify;
+}
+
+/**
+ * Give the routes the box's health level, as a read of something already in
+ * memory. `server.ts` passes `newSessionHealthLevel` over its last report.
+ *
+ * Unlike the notifier this is read at each request rather than frozen when the
+ * routes are built, so there is no moment to miss and nothing to refuse: until
+ * it is called, `realIo().healthLevel()` answers `unknown`.
+ */
+export function configureNewSessionHealth(read: NewSessionIo["healthLevel"]): void {
+  configuredHealth = read;
+}
+
+/**
+ * The level the gate acts on, from the server's last health report and a clock.
+ *
+ * - No report, a report older than `maxAgeMs`, or one whose `collectedAt` will
+ *   not parse is `unknown`: a reading nobody has taken lately is not a reason
+ *   to start another agent.
+ * - An unknown load, memory or swap reading is `unknown` for admission. The
+ *   dashboard's verdict can use partial evidence, but healthy swap cannot
+ *   authorize a launch when the load or memory probe was refused.
+ * - **The vmstat swap-activity sample is left out**, as it was when the gate
+ *   collected for itself with `includeSwapActivity: false` ("is the box on
+ *   fire?" is answered by load, memory and swap fullness). The report's own
+ *   verdict includes it, so the same `computeVerdict` is asked again with that
+ *   one reading marked `skipped` — the rule is not copied here.
+ */
+export function newSessionHealthLevel(report: HealthReport | null, nowMs: number, maxAgeMs: number): HealthLevel {
+  if (report === null) return "unknown";
+  const ageMs = nowMs - Date.parse(report.collectedAt);
+  // Written so that NaN (an unparseable clock) falls on the refusing side.
+  if (!(ageMs <= maxAgeMs)) return "unknown";
+  if (report.load.kind === "unknown" || report.memory.kind === "unknown" || report.swap.kind === "unknown") {
+    return "unknown";
+  }
+  return computeVerdict({ ...report, swapActivity: { kind: "skipped" } }).level;
 }
 
 export function newSessionRoutes(): NewSessionRoutes {

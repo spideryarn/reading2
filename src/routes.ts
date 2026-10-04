@@ -4981,7 +4981,7 @@ function requireScale(value: unknown): DivergingScale {
  *
  *   **With one exception, and it is an exception because the panel was lying
  *   without it.** An answer in which *every* row was thrown away is raised as a
- *   failure by `runCriterionStream` (`ANSWER_UNUSABLE`), so it arrives here as
+ *   failure by `runCriterionStream` (`ANSWER_UNUSABLE`, src/messages.ts), so it arrives here as
  *   an ordinary error and is stored as one. Without that, a `diverging` answer
  *   that anchored a passage and forgot its valence was stored `done` with no
  *   results, and the panel printed "the model did not find a passage for this"
@@ -5135,7 +5135,7 @@ function claimsProblem(blocks: Block[]): string | null {
  * The `dropped` counts come back on the outcome and are **not** sent to the
  * client, exactly as Criteria's are not — with the same exception, for the same
  * reason. An answer in which every claim was thrown away is raised as a failure
- * by `runClaimsStream` (`CLAIMS_UNUSABLE`) and stored as one, because otherwise
+ * by `runClaimsStream` (the same `ANSWER_UNUSABLE`) and stored as one, because otherwise
  * the panel would print "the model did not find" about an answer that found
  * things and could not place them. The per-claim half of that lives on the row
  * as `Claim.discarded` and *is* sent, because the sentence under an empty claim

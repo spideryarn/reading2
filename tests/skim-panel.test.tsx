@@ -41,6 +41,7 @@ import type {
   SkimControl,
   SkimView,
 } from "../src/web/modes/skim/SkimMode.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* jsdom has no `CSS.escape`, which `useFollow` uses to find the current row;
    the ids here need no escaping. scroll-glide.test.ts does the same. */
@@ -353,6 +354,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 /* =============================================================== the panel == */
@@ -560,10 +562,13 @@ describe("the panel", () => {
     const words = (r: Element | undefined) => r?.querySelector(".skim-words")?.textContent ?? null;
     const rowsOf = () => [...host.querySelectorAll<HTMLElement>(".skim-row")];
     const tips = () => document.querySelectorAll('[role="tooltip"], [role="dialog"]');
+    /* A faked clock from the first hover to the end of the case (2026-10-04:
+       these slept for real). Every later wait in such a case is an advance. */
     async function hover(el: Element) {
+      vi.useFakeTimers();
       el.dispatchEvent(new MouseEvent("mouseenter"));
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 400));
+        vi.advanceTimersByTime(DELAY.open);
       });
     }
     async function unhover(el: Element) {
@@ -571,7 +576,7 @@ describe("the panel", () => {
       el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
       for (const _ of [0, 1]) {
         await act(async () => {
-          await new Promise((r) => setTimeout(r, 300));
+          vi.advanceTimersByTime(300);
         });
       }
     }
@@ -646,12 +651,12 @@ describe("the panel", () => {
       /* → onto it: current, whole, no card. Then → off it, pointer long gone. */
       await draw(owner(), at(0));
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 200));
+        vi.advanceTimersByTime(200);
       });
       expect(tips()).toHaveLength(0);
       await draw(owner(), at(2));
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 200));
+        vi.advanceTimersByTime(200);
       });
       expect(tips()).toHaveLength(0);
     });
@@ -1113,9 +1118,10 @@ describe("the door in the prose", () => {
 describe("the step controls name their keys", () => {
   const tip = () => document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? null;
   async function hover(el: Element) {
+    vi.useFakeTimers();
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
   }
 
@@ -1135,11 +1141,12 @@ describe("the step controls name their keys", () => {
   });
 
   it("opens on keyboard focus too, and follows ‹'s label from stop 2 to stop 1", async () => {
+    vi.useFakeTimers();
     await draw(owner(), view({ position: 2 }));
     const back = () => host.querySelector<HTMLButtonElement>(".skim-head .skim-arrow")!;
     await act(async () => back().focus());
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(tip()).toContain("Previous stop");
     await draw(owner(), view({ position: 1 }));
@@ -1150,18 +1157,19 @@ describe("the step controls name their keys", () => {
   });
 
   it("closes Next's card when stepping makes the button disabled", async () => {
+    vi.useFakeTimers();
     await draw(owner(), view({ position: 2 }));
     const next = () => host.querySelector<HTMLButtonElement>('.skim-head [aria-label="Next stop"]')!;
     await act(async () => next().focus());
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(tip()).toContain("Next stop");
 
     await draw(owner(), view({ position: 3 }));
     expect(next().disabled).toBe(true);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 100));
+      vi.advanceTimersByTime(100);
     });
     expect(document.querySelectorAll('[role="tooltip"], [role="dialog"]')).toHaveLength(0);
   });

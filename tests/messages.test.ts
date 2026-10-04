@@ -261,10 +261,12 @@ describe("the code table and the messages are one fact, not two", () => {
    * Asserting `codes(EVERY) === keys(CODE_KINDS)` checked both directions at
    * once, which is why it was written that way — but the reverse direction
    * silently required that **every registered code's sentence lives in this
-   * file**. That is not true and was never quite true: `ai-unusable` is raised
-   * by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts) and `ANSWER_UNUSABLE`
-   * (src/referee-criteria-run.ts), both of which ask in their own comments to be
-   * registered here.
+   * file**. That is not true and was never quite true: `ai-unusable` was raised
+   * by two sentences in the Referee runners' own files
+   * (src/referee-claims-run.ts and src/referee-criteria-run.ts), both of which
+   * asked in their own comments to be registered here. They are one sentence in
+   * src/messages.ts since 2026-10-04, `ANSWER_UNUSABLE`, so that example has
+   * gone; the assumption is still not one this file should make.
    *
    * The cost of the assumption was four days of not registering it. Adding the
    * table entry alone turned this test red, and the only way to satisfy the

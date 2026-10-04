@@ -7,13 +7,15 @@
  * not clear `GJD_PROVISIONAL` is right on the page until somebody lists the
  * fleet, and then wrong with nothing to explain it.
  */
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { probeOwner, type OwnedOutcome, type ProbeOwner, type ProbeSpec } from "../tools/fleet/child.js";
 import {
   NAME_RULE,
   RENAME_STATUS,
@@ -21,6 +23,7 @@ import {
   checkRequest,
   makeRenameRoute,
   parseSessionNames,
+  realIo,
   type RenameIo,
 } from "../tools/fleet/routes-rename.js";
 
@@ -34,10 +37,10 @@ function fakeIo(over: Partial<RenameIo> = {}): { io: RenameIo; calls: string[][]
   return {
     calls,
     io: {
-      listSessions: over.listSessions ?? (() => LISTING),
+      listSessions: over.listSessions ?? (async () => LISTING),
       rename:
         over.rename ??
-        ((sessionId, name) => {
+        (async (sessionId, name) => {
           calls.push([sessionId, name]);
         }),
     },
@@ -78,7 +81,11 @@ function fakeRes() {
 }
 
 async function post(io: RenameIo, body: unknown, headers?: Record<string, string>) {
-  const routes = makeRenameRoute({ io, log: () => {} });
+  return send(makeRenameRoute({ io, log: () => {} }), body, headers);
+}
+
+/** One request to a route the caller keeps, so two requests can meet in it. */
+async function send(routes: ReturnType<typeof makeRenameRoute>, body: unknown, headers?: Record<string, string>) {
   const { res, finished, read } = fakeRes();
   const handled = routes.handle(fakeReq({ body: JSON.stringify(body), ...(headers ? { headers } : {}) }), res);
   expect(handled).toBe(true);
@@ -210,7 +217,7 @@ describe("the route", () => {
   it("does not rename when tmux cannot be listed", async () => {
     // "I could not ask" must not become "that name is free".
     const { io, calls } = fakeIo({
-      listSessions: () => {
+      listSessions: async () => {
         throw new Error("no server running on /tmp/tmux-1000/default");
       },
     });
@@ -222,7 +229,7 @@ describe("the route", () => {
 
   it("reports a tmux refusal without echoing the thrown error", async () => {
     const { io } = fakeIo({
-      rename: () => {
+      rename: async () => {
         throw new Error("Command failed: tmux rename-session -t $1643 …\ncan't find session: $1643");
       },
     });
@@ -249,6 +256,211 @@ describe("the route", () => {
     const req = fakeReq();
     (req as { url: string }).url = "/api/state";
     expect(routes.handle(req, res)).toBe(false);
+  });
+});
+
+describe("one rename at a time", () => {
+  /* list → check → rename used to be one synchronous stretch, so two requests
+     could not both see a name as free. Now each step is awaited, and the route
+     itself has to be what keeps them apart. */
+  function suspended(): {
+    io: RenameIo;
+    calls: string[][];
+    listing: { resolve(out: string): void; reject(e: Error): void };
+  } {
+    let resolve!: (out: string) => void;
+    let reject!: (e: Error) => void;
+    let first = true;
+    const { io, calls } = fakeIo({
+      listSessions: () => {
+        if (!first) return Promise.resolve(LISTING);
+        first = false;
+        return new Promise<string>((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
+      },
+    });
+    return { io, calls, listing: { resolve: (out) => resolve(out), reject: (e) => reject(e) } };
+  }
+
+  it("refuses a second rename while the first is still asking tmux, and takes a third once it is done", async () => {
+    const { io, calls, listing } = suspended();
+    const routes = makeRenameRoute({ io, log: () => {} });
+    const first = send(routes, { sessionId: "$1643", name: "wanted-by-both" });
+    // Let the first request read its body and reach its listSessions.
+    await new Promise((r) => setTimeout(r, 20));
+
+    const second = await send(routes, { sessionId: "$1207", name: "wanted-by-both" });
+    expect(second.status).toBe(409);
+    expect(second.json["code"]).toBe("rename-failed");
+    expect(String(second.json["why"])).toContain("another rename is in flight");
+    expect(String(second.json["why"])).toContain("try again");
+    expect(calls).toEqual([]);
+
+    listing.resolve(LISTING);
+    expect((await first).status).toBe(200);
+    expect(calls).toEqual([["$1643", "wanted-by-both"]]);
+
+    // The flag cleared: the next request is heard, not refused for ever.
+    const third = await send(routes, { sessionId: "$1207", name: "a-third-name" });
+    expect(third.status).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("clears the flag when the rename in flight fails", async () => {
+    const { io, calls, listing } = suspended();
+    const routes = makeRenameRoute({ io, log: () => {} });
+    const first = send(routes, { sessionId: "$1643", name: "new-name" });
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await send(routes, { sessionId: "$1207", name: "other-name" })).status).toBe(409);
+
+    listing.reject(new Error("no server running"));
+    expect((await first).json["code"]).toBe("rename-failed");
+
+    const third = await send(routes, { sessionId: "$1207", name: "other-name" });
+    expect(third.status).toBe(200);
+    expect(calls).toEqual([["$1207", "other-name"]]);
+  });
+
+  it("clears the flag when the rename in flight throws past its own handling", async () => {
+    // The 500 path: the log line after a successful rename is the one thing in
+    // the stretch that nothing catches locally.
+    let thrown = false;
+    const routes = makeRenameRoute({
+      io: fakeIo().io,
+      log: () => {
+        if (thrown) return;
+        thrown = true;
+        throw new Error("the log is closed");
+      },
+    });
+    expect((await send(routes, { sessionId: "$1643", name: "new-name" })).status).toBe(500);
+    expect((await send(routes, { sessionId: "$1643", name: "new-name" })).status).toBe(200);
+  });
+});
+
+describe("the real io", () => {
+  /* A `tmux` that is first on PATH, records what it was asked, ignores TERM and
+     outlives every deadline here. So these run the real io with its real argv
+     and never reach the tmux server this box is working in. */
+  const SLEEP_S = 6;
+  let dir = "";
+  let oldPath: string | undefined;
+
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), "fleet-rename-fake-tmux-"));
+    const fake = path.join(dir, "tmux");
+    writeFileSync(
+      fake,
+      ["#!/bin/sh", `printf '%s\\n' "$@" >> "${dir}/argv-$1"`, "trap '' TERM", `sleep ${SLEEP_S}`, ""].join("\n"),
+    );
+    chmodSync(fake, 0o755);
+    oldPath = process.env["PATH"];
+    process.env["PATH"] = `${dir}${path.delimiter}${oldPath ?? ""}`;
+  });
+
+  afterAll(() => {
+    if (oldPath === undefined) delete process.env["PATH"];
+    else process.env["PATH"] = oldPath;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** An owner that answers from a table and starts nothing. */
+  function fakeOwner(answer: (spec: ProbeSpec) => OwnedOutcome): { owner: ProbeOwner; specs: ProbeSpec[] } {
+    const specs: ProbeSpec[] = [];
+    return {
+      specs,
+      owner: {
+        run: async (spec) => {
+          specs.push(spec);
+          return answer(spec);
+        },
+        live: () => [],
+      },
+    };
+  }
+
+  const listed: OwnedOutcome = { kind: "ok", stdout: LISTING, stderr: "", tookMs: 1 };
+
+  it("stops waiting for a tmux that ignores TERM, at the timeout plus one grace", async () => {
+    // `execFileSync`'s timeout only signalled and then went on waiting, with
+    // the whole dashboard waiting behind it, for as long as the child lived.
+    const io = realIo(probeOwner(), 300);
+    const started = Date.now();
+    const [list, rename] = await Promise.allSettled([io.listSessions(), io.rename("$9999999999", "a-name")]);
+    const took = Date.now() - started;
+
+    // 300 ms + the owner's one-second grace, with room for a busy box — and
+    // well short of the six seconds the child would have gone on for.
+    expect(took).toBeLessThan(4_000);
+    expect(list.status).toBe("rejected");
+    expect(rename.status).toBe("rejected");
+    expect(String((rename as PromiseRejectedResult).reason)).toContain("MAY have happened");
+
+    // It was the fake that ran, with the argv the real io builds: one
+    // invocation, `;` as its own argument, the flag cleared.
+    expect(readFileSync(path.join(dir, "argv-list-sessions"), "utf8")).toBe(
+      "list-sessions\n-F\n#{session_id} #{session_name}\n",
+    );
+    expect(readFileSync(path.join(dir, "argv-rename-session"), "utf8")).toBe(
+      "rename-session\n-t\n$9999999999\na-name\n;\nset-environment\n-t\n$9999999999\nGJD_PROVISIONAL\n0\n",
+    );
+  });
+
+  it("gives the two calls different keys and ten seconds each", async () => {
+    const { owner, specs } = fakeOwner(() => listed);
+    const io = realIo(owner);
+    expect(await io.listSessions()).toBe(LISTING);
+    await io.rename("$1643", "a-name");
+    expect(specs.map((s) => s.key)).toEqual(["rename:tmux-list-sessions", "rename:tmux-rename-session"]);
+    expect(specs.map((s) => s.timeoutMs)).toEqual([10_000, 10_000]);
+    expect(specs.map((s) => s.cmd)).toEqual(["tmux", "tmux"]);
+  });
+
+  it("says a timed-out rename MAY have happened, not that tmux refused it", async () => {
+    // tmux was signalled and we stopped waiting. Whether it renamed first is
+    // not something this side knows, and "refused" would be a guess.
+    const { owner } = fakeOwner((spec) =>
+      spec.key === "rename:tmux-list-sessions"
+        ? listed
+        : { kind: "timed-out", why: "reached its 10000ms deadline", tookMs: 10_000, pid: 4242, exitObserved: false },
+    );
+    const r = await post(realIo(owner), { sessionId: "$1643", name: "new-name" });
+    expect(r.status).toBe(409);
+    expect(r.json["code"]).toBe("rename-failed");
+    expect(String(r.json["why"])).toContain("MAY have happened");
+    expect(String(r.json["why"])).not.toContain("refused");
+  });
+
+  it("says plainly when an earlier tmux is still unaccounted for", async () => {
+    const refused: OwnedOutcome = { kind: "refused", why: "still has child pid 4242", pid: 4242, liveForMs: 30_000 };
+    // The listing: nothing was asked, so nothing is renamed.
+    const listing = await post(realIo(fakeOwner(() => refused).owner), { sessionId: "$1643", name: "new-name" });
+    expect(listing.status).toBe(409);
+    expect(String(listing.json["why"])).toContain("could not ask tmux what is running");
+    expect(String(listing.json["why"])).toContain("has still not exited");
+    expect(String(listing.json["why"])).toContain("4242");
+
+    // The rename: not started, which is a different sentence from "refused by tmux".
+    const { owner } = fakeOwner((spec) => (spec.key === "rename:tmux-list-sessions" ? listed : refused));
+    const rename = await post(realIo(owner), { sessionId: "$1643", name: "new-name" });
+    expect(rename.status).toBe(409);
+    expect(rename.json["code"]).toBe("rename-failed");
+    expect(String(rename.json["why"])).toContain("has still not exited");
+    expect(String(rename.json["why"])).toContain("nothing was renamed");
+    expect(String(rename.json["why"])).not.toContain("tmux refused");
+  });
+
+  it("still says the session is gone when tmux says so", async () => {
+    const { owner } = fakeOwner((spec) =>
+      spec.key === "rename:tmux-list-sessions"
+        ? listed
+        : { kind: "failed", why: "tmux exited with code 1: can't find session: $1643", tookMs: 3, exitCode: 1, signal: null },
+    );
+    const r = await post(realIo(owner), { sessionId: "$1643", name: "new-name" });
+    expect(r.status).toBe(409);
+    expect(String(r.json["why"])).toBe("tmux refused the rename: that session is gone");
   });
 });
 

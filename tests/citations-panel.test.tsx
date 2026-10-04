@@ -9,7 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HELP_MODES } from "../src/web/help/help-modes.js";
 import { HELP_FAQ } from "../src/web/help/help-faq.js";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicCitations } from "../src/public-types.js";
 import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
@@ -17,6 +17,7 @@ import type { UseCitations } from "../src/web/useCitations.js";
 import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 const {
   CAPPED_NOTE,
@@ -366,6 +367,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function artefact(citations: CitedWork[], capped = false): Citations {
@@ -491,9 +493,12 @@ function investigateButton(id: string): HTMLButtonElement {
  *    queued state update is not applied until the block exits.
  */
 async function cardFor(el: Element): Promise<Card> {
+  /* A faked clock from the first card to the end of the case (2026-10-04: a
+     real second a card, until then); `afterEach` hands it back. */
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -511,7 +516,7 @@ async function cardFor(el: Element): Promise<Card> {
   el.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
   for (const _ of [0, 1]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(
@@ -975,7 +980,7 @@ describe("a by-line that repeats the title", () => {
        cannot check that because the visually drawn duplicate stays in the DOM. */
     link.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const accessibleText = (el: Element): string => {
       const copy = el.cloneNode(true) as Element;
@@ -995,7 +1000,7 @@ describe("a by-line that repeats the title", () => {
     link.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
     for (const _ of [0, 1]) {
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 300));
+        vi.advanceTimersByTime(300);
       });
     }
     /* A titled row's link keeps its native title and has no card. */

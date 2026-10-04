@@ -24,6 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* The one seam that leaves the browser, mocked at the module for
    article-rename.test.tsx's reason. */
@@ -107,6 +108,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 async function mount(archivedAt: string | null | undefined, owner: boolean) {
@@ -136,8 +138,9 @@ const button = () => host.querySelector<HTMLButtonElement>('[data-testid="masthe
 
 async function openCard(trigger: Element): Promise<HTMLElement> {
   await act(async () => {
+    vi.useFakeTimers();
     trigger.dispatchEvent(new MouseEvent("mouseenter"));
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const card = document.querySelector<HTMLElement>(".tip-soon");
   if (!card) throw new Error("no card");

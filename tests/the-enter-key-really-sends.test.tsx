@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClientComment } from "../src/web/useComments.js";
 import type { LiveApi } from "../src/web/live/useLiveConversation.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* ------------------------------------------------------------- the mocks -- */
 
@@ -99,6 +100,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 /**
@@ -357,7 +359,7 @@ describe("the chat composer", () => {
 
   async function cardText(): Promise<string> {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const cards = document.querySelectorAll('[role="tooltip"]');
     expect(cards, "no card opened, or more than one").toHaveLength(1);
@@ -368,7 +370,7 @@ describe("the chat composer", () => {
     await act(async () => {
       el.dispatchEvent(new MouseEvent("mouseleave"));
       el.blur();
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
 
@@ -379,6 +381,7 @@ describe("the chat composer", () => {
    * unavailable; a natively disabled button would not have opened it.
    */
   it("says both keys on its card, by mouse and by keyboard, even with nothing to send", async () => {
+    vi.useFakeTimers();
     mount(false);
     const button = sendButton();
     if (!button) throw new Error("no send button");
