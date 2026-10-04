@@ -117,6 +117,15 @@ export const FILE_MAX = 200;
 export const TOPIC_SET_LEASE_MS = Math.max(10 * 60 * 1000, TOPIC_CALL_TIMEOUT_MS * 3);
 
 /**
+ * How long before the lease ends a re-think's widening pass must be finished
+ * (`RethinkOptions.deadline`). A re-think that would run past it fails and
+ * backs off with the stored tree kept, rather than writing after another
+ * request may have claimed the row. The naming calls before it have no such
+ * limit yet; the write is fenced by the claim either way.
+ */
+export const RETHINK_DEADLINE_MARGIN_MS = 30_000;
+
+/**
  * How much work one reader may cause: the scores' numbers, with the longer
  * lease. A filing or a re-think each count once, however many calls it makes.
  * With `MAX_WORKS` a re-think is at most about two cents (measured: $0.02 at
@@ -403,6 +412,11 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
   }
 
   let claimId: string | null;
+  /* The lease begins in the database during `claimTopicSet`, before the
+     under-claim reads, allowance and response send. Anchor every later
+     deadline no later than that, rather than assuming those steps fit inside
+     the widening margin. */
+  const claimStarted = Date.now();
   try {
     claimId = await deps.store.claimTopicSet(TOPIC_SET_LEASE_MS);
   } catch (err) {
@@ -482,6 +496,10 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
       const set = await rethink(fresh.works.map(asTopicWork), deps.calls, {
         profile: normaliseProfileText(fresh.profile),
         previous: fresh.stored?.result?.topics ?? [],
+        /* Past this another request may claim the row. The margin is for the
+           write; time spent after taking the claim was already subtracted by
+           anchoring this at `claimStarted`. */
+        deadline: claimStarted + TOPIC_SET_LEASE_MS - RETHINK_DEADLINE_MARGIN_MS,
       });
       const unplaced = fresh.works.filter((w) => (set.members.get(w.id) ?? []).length === 0).length;
       const written = await deps.store.writeTopicSet(claim, {

@@ -94,7 +94,7 @@ function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
         modelNamed ? (
           <ControlTip
             head="Topics"
-            what="Subjects a model named from the titles and summaries of your articles. Broad subjects come first. Choose one to see only its articles, and the finer topics inside it, marked ›, move up beside it; choose one of those to narrow further."
+            what="Subjects a model named from the titles and summaries of your articles. Broad subjects come first. Choose one to see only its articles, and the finer topics grouped under it, marked ›, move up beside it; choose one of those to narrow further. Each pill also takes in matching articles from elsewhere on the shelf."
             how="Topics with nothing left to show are hidden while you narrow. New articles are sorted into the topics automatically. The number is how many articles in this view are in the topic."
           />
         ) : (

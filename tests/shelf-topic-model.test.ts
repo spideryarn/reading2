@@ -9,6 +9,7 @@ import { ShelfTopicsAnswerInvalid } from "../src/shelf-terms/model-scores.js";
 import {
   cleanLabel,
   FILE_BATCH,
+  filedInto,
   fileMessages,
   fileWorks,
   granularityOf,
@@ -19,12 +20,15 @@ import {
   parseFiled,
   parseNamed,
   rethink,
+  RethinkOutOfTime,
+  SAME_AS_PARENT,
   SPLIT_MIN,
   spread,
   targetCount,
   type TopicCalls,
   type TopicNode,
   type TopicWork,
+  type TreeLine,
   treeLines,
   withAncestors,
 } from "../src/shelf-terms/model-topics.js";
@@ -93,7 +97,7 @@ describe("the prompts", () => {
     expect(text).not.toContain("\n99. Injected");
   });
 
-  it("filing shows the tree indented, with the ids it must answer in", () => {
+  it("filing shows a flat topic list with the ids it must answer in", () => {
     const text = fileMessages(
       [
         { ref: "t1", label: "Neuroscience", depth: 0 },
@@ -102,8 +106,32 @@ describe("the prompts", () => {
       works(2),
       null,
     )[1]!.content;
-    expect(text).toContain("t1 · Neuroscience\n  t2 · Vision");
-    expect(text).toContain("do not force a fit");
+    /* One flat list: a finer topic is judged by its own name, not as "Vision, in Neuroscience". */
+    expect(text).toContain("t1 · Neuroscience\nt2 · Vision");
+    expect(text).not.toContain("do not force a fit");
+    expect(text).toContain("there is something of substance, include it");
+    expect(text).toContain("An empty list only if none fits");
+  });
+
+  it("naming leans towards including, with a boundary, and does not ask for padding", () => {
+    const text = nameMessages(works(30), { profile: null, within: null, previous: [] })[1]!.content;
+    expect(text).not.toContain("substantially about");
+    expect(text).toContain("there is something of substance, include it");
+    expect(text).toContain("Not for a passing mention, an analogy or general background");
+    expect(text).toContain("Do not pad a topic");
+  });
+
+  it("tells filing how to handle the same visible label under two parents", () => {
+    const text = fileMessages(
+      [
+        { ref: "t1", label: "Methods", depth: 1 },
+        { ref: "t2", label: "Methods", depth: 1 },
+      ],
+      works(2),
+      null,
+    )[1]!.content;
+    expect(text).toContain("list every id that has it");
+    expect(text).toContain("Choosing a broader pill as well");
   });
 });
 
@@ -222,7 +250,7 @@ describe("the tree's helpers", () => {
     expect(treeLines(topics).map((t) => `${t.depth}${t.ref}`)).toEqual(["0t1", "1t3", "2t4", "0t2"]);
   });
 
-  it("a work in a finer topic is in every topic above it", () => {
+  it("withAncestors adds every topic above a finer one", () => {
     expect(withAncestors(["t4"], topics)).toEqual(["t1", "t3", "t4"]);
     expect(withAncestors(["t2", "nope"], topics)).toEqual(["t2"]);
     expect(withAncestors([], topics)).toEqual([]);
@@ -234,9 +262,13 @@ describe("rethink", () => {
   function fake(
     top: (w: readonly TopicWork[]) => NamedTopic[],
     within: Record<string, (w: readonly TopicWork[]) => NamedTopic[] | Promise<NamedTopic[]>> = {},
+    /** What the widening pass answers; by default it adds nothing. */
+    widen?: (tree: readonly TreeLine[], w: readonly TopicWork[]) => Map<string, string[]> | Promise<Map<string, string[]>>,
   ) {
     const log: { within: string | null; shown: number; previous: readonly string[]; forbid: string | undefined }[] = [];
     const filed: { within: string | null; works: number }[] = [];
+    /** The widening pass's batches: how many works each was shown. */
+    const widened: number[] = [];
     const calls: TopicCalls = {
       name: async (w, name, forbid) => {
         log.push({ within: name.within, shown: w.length, previous: name.previous, forbid });
@@ -246,12 +278,18 @@ describe("rethink", () => {
         return f(w);
       },
       file: async (tree, w, parent) => {
+        /* The widening pass shows the finished tree, whose refs are topic ids
+           (`t1`); filing a level's leftovers shows that level's own (`n1`). */
+        if (tree[0]!.ref.startsWith("t")) {
+          widened.push(w.length);
+          return widen ? widen(tree, w) : new Map(w.map((x) => [x.id, []]));
+        }
         filed.push({ within: parent, works: w.length });
         /* Everything left over goes into the first topic. */
         return new Map(w.map((x) => [x.id, [tree[0]!.ref]]));
       },
     };
-    return { calls, log, filed };
+    return { calls, log, filed, widened };
   }
   const ids = (w: readonly TopicWork[], from: number, to: number) => w.slice(from, to).map((x) => x.id);
 
@@ -446,6 +484,108 @@ describe("rethink", () => {
     expect(inFirst).toBe(5 + FILE_BATCH + 5);
   });
 
+  describe("the widening pass (Greg's report d4tp0y: a memory paper missing from Memory & Learning)", () => {
+    /* AI holds w1–w20 and has a finer Memory & Learning; Psychology holds
+       w21–w32. w21 is a memory paper filed under Psychology only, so the call
+       that made Memory & Learning never saw it. */
+    const top = (w: readonly TopicWork[]) => [named("AI", ids(w, 0, 20)), named("Psychology", ids(w, 20, 32))];
+    const within = { AI: (w: readonly TopicWork[]) => [named("Memory & Learning", ids(w, 0, 5)), named("Safety", ids(w, 5, 9))] };
+
+    it("puts an article into a finer topic of a parent it was not under, without putting it in that parent", async () => {
+      const { calls, widened } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, x.id === "w21" ? ["t3"] : []])));
+      const set = await rethink(works(32), calls, { profile: null });
+      expect(set.topics.map((t) => `${t.id}:${t.label}`)).toEqual(["t1:AI", "t2:Psychology", "t3:Memory & Learning", "t4:Safety"]);
+      /* Psychology and Memory & Learning; not AI, which it is not about. */
+      expect(set.members.get("w21")).toEqual(["t2", "t3"]);
+      expect(widened).toEqual([32]);
+    });
+
+    it("a work under no broad topic that joins a finer one takes its parent, so it is never missing from every broad pill", async () => {
+      /* w33 is placed nowhere by the naming calls. */
+      const { calls } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, x.id === "w33" ? ["t3"] : []])));
+      const set = await rethink(works(33), calls, { profile: null });
+      expect(set.members.get("w33")).toEqual(["t1", "t3"]);
+    });
+
+    it("takes a broad topic the pass names for a work", async () => {
+      const { calls } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, x.id === "w21" ? ["t1"] : []])));
+      const set = await rethink(works(32), calls, { profile: null });
+      expect(set.members.get("w21")).toEqual(["t1", "t2"]);
+    });
+
+    it("only adds: what the naming calls said stays when the pass leaves it out", async () => {
+      const { calls } = fake(top, within);
+      const set = await rethink(works(32), calls, { profile: null });
+      expect(set.members.get("w1")).toEqual(["t1", "t3"]);
+      expect(set.members.get("w21")).toEqual(["t2"]);
+    });
+
+    it("shows every work the whole tree, in batches", async () => {
+      const seen: string[][] = [];
+      const { calls, widened } = fake(top, within, (tree, w) => {
+        seen.push(tree.map((t) => `${t.depth}${t.ref}`));
+        return new Map(w.map((x) => [x.id, []]));
+      });
+      await rethink(works(FILE_BATCH + 3), calls, { profile: null });
+      expect(widened).toEqual([FILE_BATCH, 3]);
+      expect(seen[0]).toEqual(["0t1", "1t3", "1t4", "0t2"]);
+    });
+
+    it("is not run when the tree has no finer topics: the one top call saw every work beside every topic", async () => {
+      const { calls, widened } = fake(top);
+      await rethink(works(32), calls, { profile: null });
+      expect(widened).toEqual([]);
+    });
+
+    it("names a work once however many ways it reached a topic", async () => {
+      /* w1 is already in AI and Memory & Learning; the pass says both again, and Safety. */
+      const { calls } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, x.id === "w1" ? ["t1", "t3", "t3", "t4"] : []])));
+      const set = await rethink(works(32), calls, { profile: null });
+      expect(set.members.get("w1")).toEqual(["t1", "t3", "t4"]);
+    });
+
+    it("does not let the pass swell a finer topic to nearly all of its parent: that topic keeps what naming gave it", async () => {
+      /* Every work is said to be in Memory & Learning: all 20 of AI's would be
+         in it, so with AI chosen the pill would narrow nothing. */
+      const { calls } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, ["t3"]])));
+      const set = await rethink(works(32), calls, { profile: null });
+      const inTopic = (id: string) => [...set.members.values()].filter((m) => m.includes(id)).length;
+      expect(inTopic("t3")).toBe(5);
+      expect(inTopic("t1")).toBe(20);
+      expect(inTopic("t3")).toBeLessThan(inTopic("t1") * SAME_AS_PARENT);
+    });
+
+    it("lets a finer topic grow past its parent's size from outside it, while it still narrows the parent", async () => {
+      /* All twelve Psychology works join Memory & Learning: 17 in the pill, 5 of AI's 20. */
+      const { calls } = fake(top, within, (_tree, w) => new Map(w.map((x) => [x.id, Number(x.id.slice(1)) > 20 ? ["t3"] : []])));
+      const set = await rethink(works(32), calls, { profile: null });
+      expect([...set.members.values()].filter((m) => m.includes("t3")).length).toBe(17);
+    });
+
+    it("starts no call that could outlive the caller's claim, and fails the re-think instead", async () => {
+      const { calls, widened } = fake(top, within);
+      await expect(rethink(works(32), calls, { profile: null, deadline: Date.now() + 1_000 })).rejects.toBeInstanceOf(RethinkOutOfTime);
+      expect(widened).toEqual([]);
+    });
+
+    it("a batch that fails once is tried again", async () => {
+      let n = 0;
+      const { calls } = fake(top, within, (_tree, w) => {
+        if (++n === 1) throw new Error("timeout");
+        return new Map(w.map((x) => [x.id, x.id === "w21" ? ["t3"] : []]));
+      });
+      const set = await rethink(works(32), calls, { profile: null });
+      expect(set.members.get("w21")).toContain("t3");
+    });
+
+    it("a batch that fails twice fails the whole re-think, rather than storing the narrow tree as finished", async () => {
+      const { calls } = fake(top, within, () => {
+        throw new Error("timeout");
+      });
+      await expect(rethink(works(32), calls, { profile: null })).rejects.toThrow("timeout");
+    });
+  });
+
   it("offers each level its own previous labels", async () => {
     const previous: TopicNode[] = [
       { id: "t1", key: "neuroscience", label: "Neuroscience", parent: null, depth: 0 },
@@ -503,5 +643,20 @@ describe("fileWorks", () => {
     expect(got.get("w1")).toEqual(["t1", "t2"]);
     expect(got.get("w2")).toEqual([]);
     expect(got.size).toBe(FILE_BATCH + 2);
+  });
+
+  it("takes the answer as it stands when it names a broad topic: a finer topic does not bring its parent", () => {
+    const tree: TopicNode[] = [
+      ...topics,
+      { id: "t3", key: "psychology", label: "Psychology", parent: null, depth: 0 },
+      { id: "t4", key: "visual cortex", label: "Visual Cortex", parent: "t2", depth: 2 },
+    ];
+    /* A depth-2 topic under Neuroscience, and Psychology: neither ancestor is added. */
+    expect(filedInto(["t4", "t3"], tree)).toEqual(["t3", "t4"]);
+    /* No broad topic named, and none held: the parent comes too. */
+    expect(filedInto(["t4"], tree)).toEqual(["t1", "t2", "t4"]);
+    /* Already under a broad topic: only what was named. */
+    expect(filedInto(["t4"], tree, true)).toEqual(["t4"]);
+    expect(filedInto(["nope", "t4", "t4"], tree, true)).toEqual(["t4"]);
   });
 });

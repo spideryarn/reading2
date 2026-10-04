@@ -63,11 +63,14 @@ import {
   PROMPT_VERSION,
   scholarUrl,
   systemPrompt,
+  toDrafts,
+  verifyEntry,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
 import { validateAnthropicJsonSchema, validateOpenAiJsonSchema } from "../src/messages-structured-output.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
+import { REF_ATTR } from "../src/notes.js";
 import { replayGuard } from "../evals/citations-say-less.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
@@ -1517,6 +1520,257 @@ describe("numbered cites", () => {
   it("keeps a citation before a page locator and ignores years and figure labels", () => {
     expect([...markerNumbers(["the result [8, p. 12]"])]).toEqual([8]);
     expect([...markerNumbers(["the 2019 sample [2019]", "the apparatus [Fig. 3]"])]).toEqual([]);
+  });
+});
+
+/* Plan 261004j: a biomedical / Nature-style paper cites with a superscript
+   number, which the PDF transcription stores glued to the word — as superscript
+   characters or as plain digits. Read only when the article has no notes. */
+describe("glued and superscript cites", () => {
+  const glued = (...quotes: string[]) => [...markerNumbers(quotes, true)].sort((a, b) => a - b);
+
+  it("are not read unless asked — the bracket rule alone, as before", () => {
+    expect([...markerNumbers(["reduced mortality.¹", "in a number of previous studies15"])]).toEqual([]);
+  });
+
+  it("reads a superscript run glued to a word or to sentence punctuation", () => {
+    expect(glued("reduced mortality.¹")).toEqual([1]);
+    expect(glued("effective in prevention.²")).toEqual([2]);
+    expect(glued("role in metastatic disease.³⁻⁵")).toEqual([3, 4, 5]);
+    expect(glued("ischemia.²⁸,²⁹")).toEqual([28, 29]);
+  });
+
+  it("reads plain digits glued to a lower-case word, with the list and range after them", () => {
+    expect(glued("lesions disrupt this pattern5,51")).toEqual([5, 51]);
+    expect(glued("in a number of previous studies15")).toEqual([15]);
+    expect(glued("a model of the environment15,24")).toEqual([15, 24]);
+    expect(glued("Wells et al.18")).toEqual([18]);
+    expect(glued("(from23)")).toEqual([23]);
+    expect(glued("as shown before17, 19–21")).toEqual([17, 19, 20, 21]);
+    expect(glued("as Smith (2020) found)4 and “so it goes”7")).toEqual([4, 7]);
+  });
+
+  it("does not read a name, a formula, a quantity or a year as a cite", () => {
+    expect(glued("activation of p38 and of p53")).toEqual([]);
+    expect(glued("CO2 and BRCA1 and H2O2 and IL6")).toEqual([]);
+    expect(glued("published in 2020.")).toEqual([]);
+    expect(glued("a ratio of 3.5", "rose by 12.5%", "version.3.5")).toEqual([]);
+    expect(glued("about 1,000 cells", "in 12 patients")).toEqual([]);
+    expect(glued("the 1990s", "since 2019", "the sample2019")).toEqual([]);
+    expect(glued("an area of 5 cm² and 3 m2", "at mol⁻¹", "R² = 0.4")).toEqual([]);
+    expect(glued("the dose5mg", "rose12%", "types3a and 3b", "a ratio of 3:1")).toEqual([]);
+    expect(glued("see Fig.3 and Eq.2")).toEqual([]);
+  });
+
+  it("does not read the numbers inside delimited maths as cites", () => {
+    expect(glued(String.raw`Use \(\log2(x)\) before the transformation.`)).toEqual([]);
+    expect(glued(String.raw`The exponent is \(f(x)2\), not an entry.`)).toEqual([]);
+    expect(glued(String.raw`The claim \(f(x)2\) follows earlier studies15.`)).toEqual([15]);
+  });
+
+  it("keeps the cite and leaves a quantity that follows a prose comma", () => {
+    expect(glued("in earlier studies15, 20 patients were")).toEqual([15]);
+    expect(glued("in earlier studies15, 20 mg daily")).toEqual([15]);
+  });
+
+  it("reads a quote that has a bracketed cite by the bracket rule only", () => {
+    expect(glued("earlier studies15 and TV episodes [8]")).toEqual([8]);
+  });
+
+  describe("pairing an entry", () => {
+    const ENTRY_8 =
+      "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
+    const ENTRY_9 =
+      "9. Baldassano, C. and Chen, J. (2017a) Discovering event structure in continuous narrative perception and memory. Neuron 95, 709–721";
+    const LIST: NumberedReferenceList = { entries: new Map([[8, ENTRY_8], [9, ENTRY_9]]) };
+    const BODY = block("spya-b00001", "People recall TV episodes in a number of previous studies8 in detail.");
+    const NOTED = block("spya-n00001", "8 A remark the author put at the foot of the page.", { role: "footnote" });
+
+    function paired(entry: number, blocks: Block[]) {
+      const drops = emptyDrops();
+      const citations = buildCitations(
+        {
+          capped: false,
+          works: [
+            {
+              title: "Shared memories reveal shared structure in neural activity across individuals",
+              authors: "Chen et al.",
+              year: "2017",
+              why: "Evidence that recall of a TV episode is shared across people.",
+              ...scored,
+              mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+              entry,
+            },
+          ],
+        },
+        {
+          power: "standard",
+          slug: "t",
+          blocks,
+          sourceHash: "h.h",
+          elapsedMs: 1,
+          inherit: null,
+          drops,
+          scores: noScoreDrops(),
+          referenceList: LIST,
+        },
+      );
+      return { row: citations.citations[0], drops };
+    }
+
+    it("attaches the entry a glued number cites, in an article with no notes", () => {
+      const { row, drops } = paired(8, [BODY]);
+      expect(row?.entry).toBe(ENTRY_8);
+      expect(row?.authors).toBe("Chen et al.");
+      expect(drops.entryMismatch).toBe(0);
+    });
+
+    it("still refuses the neighbour's entry — 9 for a work cited studies8", () => {
+      const { row, drops } = paired(9, [BODY]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("ignores glued numbers when the article has notes: they may be note markers", () => {
+      const { row, drops } = paired(8, [BODY, NOTED]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("ignores glued numbers when only a note id survives on a block", () => {
+      const identified = block("spya-n00002", "A note without its role.", { noteId: "spya-note-0123456789" });
+      const { row, drops } = paired(8, [BODY, identified]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    /* GPT Sol's C5 (review of 261004j): a note the extraction left out or did
+       not recognise leaves no block behind, so "no notes" cannot be read off
+       the blocks alone. A paper that really cites by glued numbers cites most
+       of its list that way; one stray glued number against a ten-entry list is
+       a footnote's marker far more often than a reference. */
+    it("ignores glued numbers that cover little of the reference list", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("…and reads them when the body cites at least half the list that way", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const more = block("spya-b00003", "Earlier work1–4 and a later review6,7 agree.");
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY, more],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBe(ENTRY_8);
+    });
+
+    it("…and when a body block carries a note marker", () => {
+      const marked = block("spya-b00002", "A remark.", { html: `<p>A remark.<sup ${REF_ATTR}="spya-n00009">1</sup></p>` });
+      const { row, drops } = paired(8, [BODY, marked]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+  });
+
+  /* The model's quote usually stops just before the superscript: on the real
+     paper, 1 mention in about 30 ended with its marker, and nothing was kept.
+     So the marker is also read from the block, straight after the quote. */
+  describe("the marker straight after the quoted words", () => {
+    const TEXT =
+      "Adjuvant tamoxifen lowered recurrence and reduced mortality.¹ It is effective in prevention.² " +
+      "It has a role in metastatic disease.³⁻⁵ Resistance involves p38 signalling in most tumours11,15 and more. " +
+      "It was given to 12 patients. Again it was given to more, and it was given to others7 too, and to others again.";
+    const B = block("spya-b00001", TEXT);
+    const LIST: NumberedReferenceList = {
+      entries: new Map(Array.from({ length: 40 }, (_, i) => [i + 1, `${i + 1}. An entry`])),
+    };
+    const at = (quote: string, start = TEXT.indexOf(quote)) => ({ blockId: B.id, quote, start });
+    /** The entry numbers, 1–40, that these mentions verify. */
+    function verified(mentions: ReturnType<typeof at>[], blocks: Block[] = [B]): number[] {
+      const byId = new Map(blocks.map((b) => [b.id as string, b]));
+      const glued = !blocks.some((b) => b.role === "footnote");
+      return [...LIST.entries.keys()].filter(
+        (n) => verifyEntry(n, LIST, mentions, emptyDrops(), glued, byId) !== null,
+      );
+    }
+
+    it("is read when the quote stops before it", () => {
+      expect(verified([at("reduced mortality")])).toEqual([1]);
+      expect(verified([at("effective in prevention")])).toEqual([2]);
+      expect(verified([at("role in metastatic disease")])).toEqual([3, 4, 5]);
+      expect(verified([at("p38 signalling in most tumours")])).toEqual([11, 15]);
+    });
+
+    it("…and still when the quote includes it", () => {
+      expect(verified([at("reduced mortality.¹")])).toEqual([1]);
+    });
+
+    it("reads nothing that is not glued to the end of the quoted words", () => {
+      expect(verified([at("Resistance involves p")])).toEqual([]);
+      expect(verified([at("It was given to")])).toEqual([]);
+      expect(verified([at("recurrence and reduced")])).toEqual([]);
+      expect(verified([at("p38 signalling in most")])).toEqual([]);
+    });
+
+    it.each([
+      ["The earlier studies15 were conclusive.", "earlier studies1", [15]],
+      ["The prescribed dose5mg was used.", "prescribed dose5", []],
+      ["The effect rose12% overall.", "effect rose12", []],
+      ["The lesion covers area5 cm².", "lesion covers area5", []],
+    ])("reads a partial quoted number in its block context: %s", (text, quote, expected) => {
+      const body = block(B.id, text);
+      expect(verified([{ blockId: B.id, quote, start: text.indexOf(quote) }], [body])).toEqual(expected);
+    });
+
+    it("reads nothing when the offset is wrong and the quote repeats, and finds a lone quote anyway", () => {
+      expect(verified([at("it was given to others")])).toEqual([7]);
+      expect(verified([at("it was given to others", 3)])).toEqual([7]);
+      expect(verified([at("to others", 3)])).toEqual([]);
+      expect(verified([at("to others", TEXT.indexOf("to others"))])).toEqual([7]);
+      expect(verified([at("to others", TEXT.lastIndexOf("to others"))])).toEqual([]);
+    });
+
+    it("is not read in an article with notes", () => {
+      const noted = block("spya-n00001", "1 A remark at the foot of the page.", { role: "footnote" });
+      expect(verified([at("reduced mortality")], [B, noted])).toEqual([]);
+    });
   });
 });
 

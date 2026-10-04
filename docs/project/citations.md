@@ -200,7 +200,24 @@ under the bibliography heading **at the list's own numbers**. The model sees the
 article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
 
 - the list has that number, and the work's verified mentions cite it (`[8]`, `[7,8]`, `[6–9]`) —
-  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors;
+  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors.
+  **When the article's blocks carry no recognised footnotes or endnotes**, a number stuck to the
+  text counts too —
+  `studies15`, `mortality.¹`, `pattern5,51`, `disease.³⁻⁵` — the superscript cite of a biomedical
+  paper, which otherwise lost every entry. It is read inside the quote and **straight after it in
+  the block** (`markersInBlock`), since the model's quote usually stops before the superscript. With
+  recognised notes, such a number may be a note's marker, so brackets only. The full block supplies
+  the context even for a marker inside the quote: `dose5` quoted from `dose5mg` is no citation.
+  `gluedNumbers` excludes quantities and delimited maths. A note the extraction left out or did
+  not recognise leaves no block, so `hasNotes` cannot prove there are none; the licence therefore
+  also needs **glued numbers in the body to match at least half of the list's numbers**
+  (`citesMostOfListGlued`: 69 of 69 and 26 of 27 on the two papers measured, against one or two for
+  a stray footnote). That counts matching numbers, not citations, and it narrows the gap without
+  closing it: a paper that cites by superscript and also has an unrecognised numbered footnote, or
+  labels such as `sample1–20`, can still pair a work with the entry of a footnote's number, if the
+  model names that entry with its own title —
+  [review postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md);
+  [261004j](../plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md);
 - the model's title is in the entry — else the entry is dropped as disagreeing.
 
 Then every author name must be a word of the entry, or the authors go, and the year must be one of

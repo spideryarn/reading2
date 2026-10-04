@@ -291,6 +291,18 @@ refused on three P1s. **Where the text above and this section disagree, this sec
   action. Read strictly, Greg's rule leaves only Metadata's Rerun. They are explicit presses, they
   predate this plan, this stage does not touch them, and removing a button a reader has is a
   product change nobody asked for. **[Q-summary-write-it-again]** in the debrief.
+
+  **Answered, 2026-10-04.** Option A was to keep both as explicit presses:
+
+  > A ok keep them, those are good reasons to want to rewrite it (when article has changed, or
+  > profile). but only show if they're the case
+  >
+  > — Greg, 2026-10-04, answering [Q-summary-write-it-again] (relayed by the Overseer)
+
+  So both stay, and each is drawn only when its reason holds. What that means, what the code
+  already did, and the test that pins it are in § *S2: the presses are drawn only with a reason*
+  below, and the rule's home is
+  [summaries.md § When Summary offers a rewrite](../project/summaries.md#when-summary-offers-a-rewrite-since-2026-10-04).
 - **S3 (P1), taken.** The band cannot draw the preview only "while the job is running": when the
   job finishes, the job leaves the hook a render before the stored summary arrives, and a failed
   job is not exposed at all. **Fix**: `useSimple` remembers the last preview it saw, with the id
@@ -475,3 +487,41 @@ The full `npm test` ran while the reviewer was editing: 1539 files passed and 11
 the eleven files held the reviewer's own new tests, caught mid-fix, and one was a worktree test
 that passes alone; the two above are fixed; the last six are the five fresh-worktree build tests
 and `overseer-daemon-reports`, as in stage 1. It was not run again after the fixes.
+
+### S2: the presses are drawn only with a reason
+
+The existing band already gates *Write it again* on `stale` or `profileChanged`, and the
+profile panel gates *Regenerate* on `profileChanged`. Prompt and model age alone offer neither.
+No production behaviour changed in this stage. The rule and its exceptions live in
+[summaries.md § When Summary offers a rewrite](../project/summaries.md#when-summary-offers-a-rewrite-since-2026-10-04).
+
+[`summary-rewrite-presses.test.tsx`](../../tests/summary-rewrite-presses.test.tsx) mounts the real
+band on Brief and Fuller with supplied server flags, opens the profile panel, and presses each
+offered rewrite to check its forced request. It also checks that selecting a stored length and
+opening the band's (i) spends nothing. These are client tests; they do not exercise the server's
+calculation of the flags or browser layout on a narrow screen.
+
+Each assertion was seen red by mutation, since there was no broken behaviour to see red first:
+a press for *outdated*, a press always, two presses when both reasons hold, the notice for
+*outdated*, *Regenerate* without a changed profile, and *Regenerate* for a stale article. Every
+one failed at least one case and was put back.
+
+**The browser check** (a Sonnet subagent, Playwright on the box, look-only, one local article
+whose summary was written for a profile; Brief and Fuller, at 1400 px and 390 px). Current: no
+press, no notice, and the profile panel without *Regenerate*. Made stale by changing the stored
+`sourceHash` in the local database: the notice with one *Write it again* in it, the panel still
+without *Regenerate*. Made profile-changed by changing the stored `profileHash`: one *Write it
+again* under the paragraphs, no notice, *Regenerate* in the panel. No sideways overflow at
+390 px. Both values were put back and checked.
+
+**GPT Sol's code review: approve with fixes made**, no P0 or P1, and no state found that breaks
+the rule. Three P2s, fixed by the reviewer: the test now covers Fuller, the remaining flag
+combinations, and that choosing a length or opening the (i) spends nothing; the doc's account of
+the fingerprint was corrected and two limits added (a missing tree reads as stale; the command
+bar's *Simple summary › Run again* is Metadata's Rerun, reachable from anywhere); and this section, which
+the S2 answer pointed at before it existed.
+
+**One thing found and not changed**: a summary written before the reader had any profile is not
+*profile changed* when they later write one, so no press is offered for it. That is
+`profileIsStale`'s rule for every personalised mode, from when writing without a profile was a
+choice. **[Q-first-profile-offers-a-rewrite]** in the debrief.

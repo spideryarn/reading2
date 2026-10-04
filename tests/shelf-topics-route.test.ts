@@ -212,7 +212,7 @@ function articleLines(user: string): { n: number; text: string }[] {
   return [...user.matchAll(/^(\d+)\. (.+)$/gm)].map((m) => ({ n: Number(m[1]), text: m[2] ?? "" }));
 }
 
-/** A *file* prompt's tree lines, `  t2 · Label`. */
+/** A *file* prompt's topic lines, `t2 · Label`. */
 function treeIn(user: string): { id: string; label: string }[] {
   return [...user.matchAll(/^\s*(t\d+) · (.+)$/gm)].map((m) => ({ id: m[1] ?? "", label: (m[2] ?? "").trim() }));
 }
@@ -228,7 +228,7 @@ function answerFor(call: Seen): unknown {
     };
   }
   /* A filing: **only the deepest topic that fits**, so the parent has to come
-     from `withAncestors` and not from this answer. */
+     from `filedInto` (no broad topic named) and not from this answer. */
   const tree = treeIn(call.user);
   const idOf = (label: string) => tree.find((t) => t.label === label)?.id;
   return {
@@ -435,13 +435,17 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     }
 
     /* The handler awaited the work: one call for the broad topics over all
-       fifteen works, one for what is inside the only topic big enough. */
+       fifteen works, one for what is inside the only topic big enough, and
+       the widening pass, which shows every work the whole tree. */
     expect(seen.map((c) => [c.schema, c.within])).toEqual([
       ["shelf_topics", null],
       ["shelf_topics", "Neuroscience"],
+      ["shelf_filing", null],
     ]);
     expect(articleLines(seen[0]?.user ?? "")).toHaveLength(15);
     expect(articleLines(seen[1]?.user ?? "")).toHaveLength(12);
+    expect(articleLines(seen[2]?.user ?? "")).toHaveLength(15);
+    expect(treeIn(seen[2]?.user ?? "").map((t) => t.label)).toEqual(["Neuroscience", "Hippocampal Replay", "Retinal Circuits", "Carpentry"]);
     /* What the model is shown: the title, the gist and the reader's profile. */
     expect(seen[0]?.user).toContain(TITLE_MARK);
     expect(seen[0]?.user).toContain(GIST_MARK);
@@ -471,8 +475,9 @@ describe("GET /api/library/terms with a model-named topic set", () => {
       .select({ purpose: aiCalls.purpose, scopeKind: aiCalls.scopeKind, wire: aiCalls.wire })
       .from(aiCalls)
       .where(eq(aiCalls.ownerId, OWNER));
-    expect(spent.length).toBe(before.length + 2);
+    expect(spent.length).toBe(before.length + 3);
     expect(spent.filter((s) => s.purpose === "shelf-topics")).toEqual([
+      { purpose: "shelf-topics", scopeKind: "request", wire: "chat" },
       { purpose: "shelf-topics", scopeKind: "request", wire: "chat" },
       { purpose: "shelf-topics", scopeKind: "request", wire: "chat" },
     ]);
@@ -555,7 +560,9 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     const slug = await arrive("retinal");
     const got = await get();
     expect(got.refreshing).toBe(true);
-    expect(fileCalls()).toHaveLength(0);
+    /* A re-think's one filing call is its widening pass, over every work. */
+    expect(fileCalls()).toHaveLength(1);
+    expect(articleLines(fileCalls()[0]?.user ?? "")).toHaveLength(20);
     expect(topNameCalls()).toHaveLength(1);
     expect(articleLines(topNameCalls()[0]?.user ?? "")).toHaveLength(20);
     /* A re-think is shown the labels it chose last time. */
@@ -577,7 +584,8 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     delayMs = 300;
     const [a, b] = await Promise.all([get(), get()]);
     expect(topNameCalls()).toHaveLength(1);
-    expect(seen).toHaveLength(2);
+    /* One re-think: the broad call, the finer one, the widening pass. */
+    expect(seen).toHaveLength(3);
     expect([a.refreshing, b.refreshing]).toEqual([true, true]);
     const r = await row();
     expect(r?.works).toBe(20);
@@ -670,7 +678,8 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     const got = await get();
     expect(got.chosenBy).toBe("model");
     expect(got.refreshing).toBe(true);
-    expect(fileCalls()).toHaveLength(0);
+    /* The re-think's widening pass, and no filing of arrivals. */
+    expect(fileCalls()).toHaveLength(1);
     expect(topNameCalls()).toHaveLength(1);
     expect(topNameCalls()[0]?.user).toContain(changed);
     const after = await row();
@@ -691,8 +700,9 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     };
     const got = await get();
     expect(got.refreshing).toBe(true);
-    expect(seen.map((c) => c.schema)).toEqual(["shelf_topics", "shelf_topics", "shelf_filing"]);
-    expect(articleLines(fileCalls()[0]?.user ?? "")).toHaveLength(1);
+    /* The re-think (its last call is the widening pass), then the arrival's own filing. */
+    expect(seen.map((c) => c.schema)).toEqual(["shelf_topics", "shelf_topics", "shelf_filing", "shelf_filing"]);
+    expect(articleLines(fileCalls()[1]?.user ?? "")).toHaveLength(1);
     const r = await row();
     expect(r?.filedAt).toBeInstanceOf(Date);
     expect(r?.claimId).toBeNull();
@@ -752,7 +762,7 @@ describe("GET /api/library/terms with a model-named topic set", () => {
     await db().delete(articles).where(eq(articles.slug, going[0] ?? ""));
     const got = await get();
     expect(got.refreshing).toBe(true);
-    expect(fileCalls()).toHaveLength(0);
+    expect(fileCalls()).toHaveLength(1);
     expect(topNameCalls()).toHaveLength(1);
     expect((await row())?.works).toBe(works - due);
   });
@@ -787,7 +797,8 @@ describe("GET /api/library/terms with a model-named topic set", () => {
       await get();
     });
     expect(topNameCalls()).toHaveLength(1);
-    expect(fileCalls()).toHaveLength(1);
+    /* The re-think's widening pass, and the arrival's filing. */
+    expect(fileCalls()).toHaveLength(2);
     /* The positive controls: the capture saw both jobs' own lines, and the
        model really was shown what must not be logged. */
     expect(written).toContain("re-thought the shelf's topics");

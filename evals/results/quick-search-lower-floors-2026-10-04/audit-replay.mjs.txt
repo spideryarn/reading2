@@ -1,0 +1,28 @@
+/* Saved-score replay against production hitsFrom: run with node --import tsx.
+   Fixture-only, no model calls. Before correction: 76 of 246 runs mismatched
+   (tie order or fallback=true on empty output); after: zero. */
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import { quickBlocks, hitsFrom } from '../../src/quick-search.ts';
+const { entries, sorted, rule, FIXTURES } = await import('./replay-floors.mjs');
+let checked = 0, mismatches = 0;
+for (const e of entries) {
+  if (!FIXTURES.includes(e.slug)) continue;
+  const raw = JSON.parse(readFileSync(`tests/fixtures/data-root/data/${e.slug}/blocks.json`, 'utf8'));
+  const asked = quickBlocks((Array.isArray(raw) ? raw : raw.blocks));
+  for (const r of e.reps) {
+    const actual = hitsFrom(r.scores, asked);
+    const replay = rule(0.65, 0.4, 8)(sorted(r.scores, e.slug));
+    const got = replay.ids.map(([id]) => id);
+    try {
+      assert.deepEqual(got, actual.hits.map(h => h.blockId));
+      assert.equal(replay.fb, actual.fallback);
+    } catch {
+      mismatches++;
+      if (mismatches <= 5) console.log('mismatch', e.slug, e.q, 'fb', replay.fb, actual.fallback);
+    }
+    checked++;
+  }
+}
+console.log({ checked, mismatches });
+assert.equal(mismatches, 0, 'saved-score replay must match hitsFrom');

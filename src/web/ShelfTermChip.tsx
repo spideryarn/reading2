@@ -29,8 +29,9 @@ export interface TermTipScope {
   titleOf: (slug: string) => string | undefined;
   /**
    * The label of the topic with this key, among every topic the server chose —
-   * for a finer topic's *"Inside Neuroscience"*. Absent where topics have no
-   * broader topic (the reader's tags).
+   * for a finer topic's *"Inside Neuroscience"*. This names the label's place
+   * in the tree, not a membership bound; the card explains the distinction.
+   * Absent where topics have no broader topic (the reader's tags).
    */
   labelOf?: (key: string) => string | undefined;
 }
@@ -203,7 +204,7 @@ export function TermTip({
       </span>
       <span className="tw:mt-1 tw:block tw:text-ink-faint">
         {isModelTopic(term)
-          ? "Named by a model from your articles’ titles and summaries; the articles above are the newest in it. Choosing two topics shows only articles in both."
+          ? "Named by a model from your articles’ titles and summaries; the articles above are the newest in it. A finer topic can include matching articles from outside the broader topic it is grouped under. Choosing two topics shows only articles in both."
           : "Picked automatically from the words your articles use — nobody wrote this list. Choosing two shows only articles that have both."}
       </span>
     </TipNote>
