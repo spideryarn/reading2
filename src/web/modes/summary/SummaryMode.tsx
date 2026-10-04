@@ -29,7 +29,7 @@
  * Before that it was a slider over three plain-words levels
  * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
  * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md);
- * the middle one, Simple, is still written and stored and is not shown. And
+ * the middle one, Simple, stopped being written on 2026-10-04 (plan 261004f). And
  * before 2026-10-01 it also drew the tree's gists as an outline, which Greg
  * took out: *"We already have the structure mode, and so I think that probably
  * overlaps with the summary parts and sections, and so let's just get rid of

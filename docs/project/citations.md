@@ -436,7 +436,9 @@ same row being pressed again. Since 2026-09-30 the bound is the press's own: the
 taken after the checks that refuse for free. `runCitationLookup` takes none itself, so any new
 caller must bring one. The step's first allowance policy (`FIND_RATE_POLICY`, added by the owed
 code review, GPT Sol F11) went with the `/find` route on 2026-10-04. Its `citation-find` bucket
-remains in the database's allowed values for historical rows; no caller spends it.
+remains in the database's allowed values for historical rows; it is out of the `RateBucket` type,
+so no caller can spend it. The condition for removing it is in
+[`schema.ts`](../../src/db/schema.ts) beside `rate_limit_events_bucket`.
 
 ### It reads the search extract, never the work
 
@@ -586,8 +588,9 @@ snapshot: nothing re-fetches the paper on read, so the row never claims the remo
 unchanged. An answer from before this has no paper columns and is drawn exactly as before.
 
 **The paper's words reach the reader only as passages code found.** When the paper was read, one
-small JSON call (`citation-paper-passages`, the quick check's model, no tools, the chunks fenced as
-evidence with a reminder after) offers up to three `{ chunk, quote, bears }`. Code keeps one only if
+small JSON call (`citation-paper-passages`, *Dig deeper*'s model, no tools, the chunks and the
+article's own fields — the title, `why`, the citing passages — each fenced as data with a reminder
+after) offers up to three `{ chunk, quote, bears }`. Code keeps one only if
 `verifyPassage` finds it in the one chunk it names, and stores that chunk's characters and page,
 never the model's spelling ([`citation-paper-passages.ts`](../../src/citation-paper-passages.ts)).
 They are shown under *the paper's own words, found by code in the text we read*, each with its page
@@ -662,7 +665,9 @@ paper-selection versions, and the model's generation. The search's findings and 
 content are not in it — they are a dated snapshot of what was read (`investigateContextHash` in
 [`src/citation-investigate-context.ts`](../../src/citation-investigate-context.ts)). The model is `DIG_DEEPER_MODEL` on both the write and the read, so an environment override cannot
 make the two disagree and hide a kept answer. Dig deeper bumped `CITATION_INVESTIGATE_VERSION`, so an
-answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. It never
+answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. So did
+fencing the passages call's article fields on 2026-10-04 (`/8`): that call has no version of its
+own, and its passages go on into the answer's prompt. It never
 reaches a visitor, and it is in all three exports. A failed *Dig deeper again* leaves the earlier
 answer in place, and the row says so.
 

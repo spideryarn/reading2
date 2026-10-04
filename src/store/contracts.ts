@@ -2692,7 +2692,9 @@ export type PreviewClaim =
 /* ------------------------------------------------------- fetch allowance -- */
 
 /**
- * The allowances there are. A closed set, matching the table's CHECK.
+ * The allowances a caller can spend. A closed set, and every member is in the
+ * table's CHECK; the CHECK also still allows the retired `citation-find`, for
+ * rows already written (src/db/schema.ts § `rate_limit_events_bucket`).
  *
  * They are separate buckets rather than one, because they bound different
  * things: `link-preview-fetch` bounds how much of somebody else's server a
@@ -2711,9 +2713,6 @@ export type PreviewClaim =
 export type RateBucket =
   | "link-preview-fetch"
   | "link-summary-fill"
-  /* Retired with POST …/find on 2026-10-04. Kept to match the database CHECK
-     and its historical rows; removing it needs a migration. */
-  | "citation-find"
   | "shelf-topics"
   | "upload-source-guess"
   /* Citations' *Investigate* — a streamed, web-searching answer over the whole

@@ -105,6 +105,7 @@ function ctx(): StepContext {
     slug: SLUG,
     url: "https://example.test/probe",
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };

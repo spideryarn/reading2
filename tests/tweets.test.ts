@@ -481,6 +481,7 @@ function ctxFor(): StepContext {
   return {
     slug: SLUG,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
     power: "standard",

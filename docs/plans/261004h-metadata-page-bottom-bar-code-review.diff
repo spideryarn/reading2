@@ -1,0 +1,494 @@
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index 491ca6fd0..39063fb6c 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -308,7 +308,7 @@ one and generates nothing at all.
+ Five things to get right, and the first is the one that cost this field a whole review round:
+ 
+ - **Write about the mode, not about pressing the button.** The same string is read on four surfaces
+-  at least — the segment on the reading view, the loose links on the metadata page
++  at least — the segment on the reading view, the links on the metadata page
+   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
+   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
+   Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
+@@ -336,7 +336,7 @@ Five things to get right, and the first is the one that cost this field a whole
+ 
+ *[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
+ that the second is not a copy of the first, that no price crept in, and that every mode's card opens
+-in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata
++in **both** arms of the bar: the segment on the reading view, and the links on the metadata
+ page, which are a different component and were the arm left carrying a `title` attribute.*
+ 
+ ## Moving a mode in or out of the switch
+diff --git a/docs/project/web-client.md b/docs/project/web-client.md
+index 642448b8d..acf5ed35e 100644
+--- a/docs/project/web-client.md
++++ b/docs/project/web-client.md
+@@ -37,7 +37,7 @@ Why the feature exists and what a gist may and may not be:
+ | [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) | **whether to draw the paragraph-label layer at all, and what to say instead** — four surfaces read the one rule, so it is not four `=== "ready"`s. An absent `navLabel` has always meant *deliberately unlabelled*, so a label that is merely not written yet draws a blank cell; while `Article.navLabelStatus` says otherwise the whole layer is withheld — [structure-step.md § Absence on a node](structure-step.md#absence-on-a-node-is-deliberately-unlabelled-not-written-yet-is-a-column) |
+ | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Directly under the title is the **origin line**: the article's own web address, host first with the path faded and truncated after it, or — for the owner, and never for a visitor — the words *Uploaded from a file* / *No web address was recorded*. It was a ↗ glyph beside the title until 2026-09-06, when Greg asked to be *"prominent about the origin"* (his words in full are [below the table](#the-origin-line)). Beside the title, for the owner only, one mark is left, saying **who can read it**: a globe or a lock linking to the metadata page's sharing switch ([library.md § The Shared badge](library.md#the-shared-badge)) |
+ | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the mode switch (one button per row of `MODES_UI`), your questions, and the link to the metadata page — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **five** kinds — navigate, open a drawer, switch mode, the experimental-features toggle, and, since 2026-09-06, open a modal (Feedback, and since 2026-09-07 the command bar) — and the markup says which (`aria-current` / `aria-expanded` / `aria-checked` / `aria-pressed`; a modal opener carries `aria-haspopup="dialog"` and none of the other four, because it neither goes anywhere nor holds a state). The order is Greg's, set by hand. **The way home came back on 2026-09-06** as `DockHome` at the left-hand end, along with a Feedback trigger at the right, when both left the window's top corners on the pages that mount a bar (the article and its metadata page, in both an owner's and a visitor's shape) — [260905g](../plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md). Neither is a mode: the wordmark is outside the `role="radiogroup"`, is a `Link`, and wears `.dock-home` rather than `.dock-btn` so it cannot take the hover wash |
+-| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | **what each mode *is***, as opposed to how the bar draws it: the **two sentences** on its bar-button card (`description`, and `how` — the half a press would not have told you, added 2026-09-07 in [260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)), the words they might type meaning it, and whether it is behind the experimental switch. `how` is written about the **artefact** rather than about pressing anything, and that is load-bearing rather than stylistic: the same string is read on the reading view, on the metadata page where the same modes are loose links that arm nothing, and by a visitor who gets an explanatory band instead of a generator — so *"opening it runs a model pass"* is false on three of those four. Outside `src/web/` on purpose — it imports only [`modes.ts`](../../src/modes.ts), so both runtimes can read it and neither drags React across the seam ([`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) lists it and checks the claim). The two pre-existing fields were `blurb` and `experimental` on a `MODES_UI` row until 2026-09-07, when a second reader was arriving that could not import a 2,300-line component — [260906h](../plans/260906h-mode-catalog-and-a-command-bar.md). The **name** is not here: that is `MODE_LABEL` in [`src/title-text.ts`](../../src/title-text.ts) |
++| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | **what each mode *is***, as opposed to how the bar draws it: the **two sentences** on its bar-button card (`description`, and `how` — the half a press would not have told you, added 2026-09-07 in [260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)), the words they might type meaning it, and whether it is behind the experimental switch. `how` is written about the **artefact** rather than about pressing anything, and that is load-bearing rather than stylistic: the same string is read on the reading view, on the metadata page where the same modes are links that arm nothing, and by a visitor who gets an explanatory band instead of a generator — so *"opening it runs a model pass"* is false on three of those four. Outside `src/web/` on purpose — it imports only [`modes.ts`](../../src/modes.ts), so both runtimes can read it and neither drags React across the seam ([`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) lists it and checks the claim). The two pre-existing fields were `blurb` and `experimental` on a `MODES_UI` row until 2026-09-07, when a second reader was arriving that could not import a 2,300-line component — [260906h](../plans/260906h-mode-catalog-and-a-command-bar.md). The **name** is not here: that is `MODE_LABEL` in [`src/title-text.ts`](../../src/title-text.ts) |
+ | [`src/web/CommandBar.tsx`](../../src/web/CommandBar.tsx) | **⌘/Ctrl-K, and the ⌘ button at the left-hand end of the bar, just after the wordmark since 2026-09-08**: type a command's name and press Enter. Most rows are modes. On the reading view one opens *exactly as pressing its Dock button does* — same activation, same generate-on-open, same cost; on the Metadata page it follows the mode link drawn there and arms nothing, as that link does. A native `<dialog>` + `showModal()`, following [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) down to its visual-viewport treatment, because `showModal()` alone leaves the box under the iOS keyboard. **It imports nothing from `Dock.tsx`** — the visible modes and one `activateMode` callback arrive as props, and an import back the other way would close a cycle. Its styling is `tw:` utilities rather than a sheet under `src/web/styles/`, which is an exception argued in its own header. It was modes only until 2026-09-07 and modes plus `/changelog` until 2026-09-08, when Greg named six more and left "a few more" to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)); `besideTheModes` is the whole non-mode list and includes the current article's Metadata row only while the bar is mounted over an article. What it deliberately still cannot do is named in [260906h](../plans/260906h-mode-catalog-and-a-command-bar.md) — [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) |
+ | [`src/web/command-match.ts`](../../src/web/command-match.ts) | **what the command bar shows once you have typed something**, as a pure function of the words and the list: `canonical()` (lowercase, trim, collapse internal whitespace) and `rankCommands()`, whose five tiers are one ordered array so the position *is* the rank. Ties break in the order the caller handed the commands in — the Dock's modes first, then the bar's own `besideTheModes` — so the result is total and testable, and everything else sitting below the modes is that arrangement rather than a rule. A `Command` is a mode, a **page** (2026-09-07, when `/changelog` arrived) or an **action** (2026-09-08, for Feedback and Comments, which are not places), and `commandId()` prefixes the kind onto the row id so a page whose href is spelled like a mode cannot collide with it. Every row that is not a mode carries a **required** `generates` boolean, which is what the bar's spending marker is drawn off — optional was refused, because a row that spends could then omit it and ship unmarked. `canonical` is the **same function** [`tests/mode-catalog.test.ts`](../../tests/mode-catalog.test.ts) checks the alias table with — two normalisers that agree today is how `"peer review"` and `"peer  review"` both pass uniqueness and then collide |
+ | [`src/web/command-proposal.ts`](../../src/web/command-proposal.ts) | **a command with its argument, as a value** — `CommandProposal`, its risk class, its stored token, and `runProposal`, the one dispatcher. What the bar's argument rows and chat's command buttons are both made of; the runners a page supplies are [`command-runners.ts`](../../src/web/command-runners.ts), and the verb table that gets a typed phrase here is `parseArgumentQuery` in the row above. **A new action that takes an argument is a new id here**, not a closure in the bar — [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar), [chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses) |
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 107698f33..c1e7c2cd1 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -2986,8 +2986,9 @@ function MarginToggle({
+ 
+ /**
+  * **The same modes, off the reading view** — the metadata
+- * page, where there is no band to switch, so the segment degrades to loose
+- * links back to the article.
++ * page, where there is no band to switch, so each button of the segment is a
++ * link back to the article instead. Drawn in the segment's own frames since
++ * 2026-10-04 (see inside); loose links with no frame before that.
+  *
+  * A component of its own since 2026-09-07, and it is the arm this bar keeps
+  * forgetting. It has now twice been the half left behind: `keepLabel` was not
+@@ -3013,56 +3014,75 @@ function DockModeLinks({
+   modes: readonly ModeUi[];
+   marked?: ReadonlyMap<Mode, string> | undefined;
+ }) {
+-  /* The same runs, and the same line between them, as the segment draws —
+-     `groupStarts`. */
+-  const starts = groupStarts(modes);
++  /* **The segment's three frames, and its lines between runs** — the same
++     split `DockModes` makes (Plain; the bands; Marginalia), from the same
++     list. Until 2026-10-04 these were loose links with no frame, and Greg
++     asked why the bar looked different here (spya-qerga4). What differs is
++     what a press does, not what the row is, so the row is drawn the same and
++     dock-fit.css styles both arms with one set of `.dock-modes` selectors.
++
++     **Links in plain `div`s: no radiogroup, no radio, nothing checked.** No
++     mode is open on this page, so nothing here may say it is the selected one.
++     docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md. */
++  const toggles = modes.filter((m) => m.mode === "marginalia");
++  const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
++  const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
++  const starts = groupStarts(bands);
++  const frame = (ms: readonly ModeUi[]) =>
++    ms.length > 0 && (
++      <div className="dock-frame" style={{ "--dock-frame-count": ms.length } as CSSProperties}>
++        {ms.map(link)}
++      </div>
++    );
++  function link(m: ModeUi) {
++    return (
++      <DockLink
++        key={m.mode}
++        href={modeLinkHref(slug, search, m.mode)}
++        current={false}
++        icon={m.icon}
++        label={MODE_LABEL[m.mode]}
++        className={`${marked?.has(m.mode) ? MARKED : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
++        keepLabel={m.keepLabel}
++        /* **The same card the segment draws, plus where the press lands.** A
++           reader who learned what Quotes costs by hovering it on the reading
++           view should not meet a one-line OS box for it on the metadata page.
++           The trailing clause on `what` is the only difference in the *words*.
++
++           It is not the only difference in the behaviour, and that distinction
++           is why `how` is written the way it is: this link navigates and arms
++           nothing, where the segment's button calls `armActivationForMode`. So
++           a card saying *"opening it runs a model pass"* would be false here —
++           arriving at `?mode=glossary` from this link generates nothing
++           (activation.ts § arriving is not a press). Four of them said
++           that in first draft; the rule that replaced it is
++           src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
++           docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
++        hover={
++          <ControlTip
++            head={MODE_LABEL[m.mode]}
++            state={marked?.get(m.mode)}
++            what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
++            how={MODE_CATALOG[m.mode].how}
++          />
++        }
++      />
++    );
++  }
+   return (
+-    /* **One group, so these scrub like the segment does.** Fourteen independent
+-       300ms waits is what a row of tooltips feels like without it —
+-       Tooltip.tsx § grouping. Only the modes are in it; the three buttons after
+-       this block are not modes and have a group of their own, for the reason
+-       given where it is opened (`Dock` § the three that are not modes). */
+-    <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-      {modes.map((m) => (
+-        <DockLink
+-          key={m.mode}
+-          href={modeLinkHref(slug, search, m.mode)}
+-          current={false}
+-          icon={m.icon}
+-          label={MODE_LABEL[m.mode]}
+-          /* `dock-mode` says *this is one of the modes* on a page where they are
+-             one loose link per mode rather than one segment, so § the bar's fit
+-             ladder can take their labels at the mode rung the way it takes the
+-             segment's. Without it that rung does nothing on the metadata
+-             page, and the bar there skips straight from every label to
+-             none. GPT Sol, reviewing the design. */
+-          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+-          keepLabel={m.keepLabel}
+-          /* **The same card the segment draws, plus where the press lands.** A
+-             reader who learned what Quotes costs by hovering it on the reading
+-             view should not meet a one-line OS box for it on the metadata page.
+-             The trailing clause on `what` is the only difference in the *words*.
+-
+-             It is not the only difference in the behaviour, and that distinction
+-             is why `how` is written the way it is: this link navigates and arms
+-             nothing, where the segment's button calls `armActivationForMode`. So
+-             a card saying *"opening it runs a model pass"* would be false here —
+-             arriving at `?mode=glossary` from this link generates nothing
+-             (activation.ts § arriving is not a press). Four of them said
+-             that in first draft; the rule that replaced it is
+-             src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
+-             docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
+-          hover={
+-            <ControlTip
+-              head={MODE_LABEL[m.mode]}
+-              state={marked?.get(m.mode)}
+-              what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
+-              how={MODE_CATALOG[m.mode].how}
+-            />
+-          }
+-        />
+-      ))}
+-    </TooltipGroup>
++    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
++      {/* **One group, so these scrub like the segment does.** Fourteen
++          independent 300ms waits is what a row of tooltips feels like without
++          it — Tooltip.tsx § grouping. Only the modes are in it; the three
++          buttons after this block are not modes and have a group of their own,
++          for the reason given where it is opened (`Dock` § the three that are
++          not modes). */}
++      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
++        {frame(exits)}
++        {frame(bands)}
++        {frame(toggles)}
++      </TooltipGroup>
++    </div>
+   );
+ }
+ 
+@@ -3518,7 +3538,7 @@ function DockLink({
+    */
+   hover: ReactNode;
+   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
+-   *  `dock-mode` for the loose mode links off the reading view. */
++   *  `dock-group-start` on a mode link that begins a run. */
+   className?: string | undefined;
+   /**
+    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
+@@ -3834,8 +3854,7 @@ function DockExperimentalSwitch({
+         /* `dock-experimental` styles nothing. It is how a test and a browser
+            pass find this one button among eighteen that are all `dock-btn` —
+            the alternative is matching on the label, which is copy and is allowed
+-           to change. `dock-mode` next door is the same idea doing real work for
+-           the fit ladder.
++           to change.
+ 
+            **Never `.on`.** That is the bar's *selected* look — wash, top rule,
+            orange ink — and this button is a toggle, not a place you are; the
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index f795d2180..d2132df39 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -13,7 +13,11 @@
+    says "one of these", which is what the markup already promises a screen
+    reader via `role="radiogroup"` — this is the sighted half of the same claim.
+    Since 2026-10-02 the box is three (`.dock-frame` below), and this element is
+-   the unframed row that holds them. */
++   the unframed row that holds them.
++
++   **On the metadata page the same row holds links, and none is on**
++   (`DockModeLinks`, since 2026-10-04): no mode is open there, so the frames
++   only group, and the markup promises no radiogroup. */
+ .dock-modes {
+   display: inline-flex;
+   align-items: stretch;
+@@ -75,21 +79,18 @@
+ 
+    `dock-group-start` is on the first *drawn* button of each run except the first
+    — `groupStarts` in Dock.tsx, computed from the visible list, so a run the
+-   switch has hidden leaves no stray line. In the segmented control the rule
+-   replaces an internal adjoining border; in the loose-link form it adds 1px.
+-   Both are included in the normal post-render width measurement. Visible-mode
+-   identity already participates in the fit signature, so no separate group
+-   signature is needed.
+-
+-   The loose links on the metadata page get the same rule at the
+-   same places, so both faces of the bar group alike.
+-   `--rule-strong`, the frame's own colour, on both faces. The old
++   switch has hidden leaves no stray line. It is included in the normal
++   post-render width measurement. Visible-mode identity already participates
++   in the fit signature, so no separate group signature is needed.
++
++   The links on the metadata page sit in the same frames (`DockModeLinks`,
++   since 2026-10-04), so this one rule draws the line on both faces of the bar.
++   `--rule-strong`, the frame's own colour. The old
+    between-buttons `--rule` was tried first, for *subtle*, and measured in a
+    browser it is oklch 0.27 on a bar of 0.26 — invisible, even zoomed 2x
+    (2026-09-29). One hairline in the frame's colour, a few per bar, is as quiet
+    as a line can be and still be seen. */
+ .dock-modes .dock-btn.dock-group-start { border-left: 1px solid var(--rule-strong); }
+-.dock-mode.dock-group-start { border-left: 1px solid var(--rule-strong); }
+ 
+ .dock-modes .dock-btn {
+   /* The inset top-border marker belongs to the bar's *other* buttons, where it
+@@ -245,16 +246,14 @@
+    segmented control rather than as loose glyphs. **This was rung 1 until
+    2026-09-06** and is still the old `max-width: 1100px` rule's job.
+ 
+-   **Two selectors because the bar has two shapes.** On the reading view the
+-   modes are one `.dock-modes` segment; on the metadata page they
+-   are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
+-   that only knew the segment did nothing on those pages, so the ladder skipped
+-   past it to the next rung and took every label. GPT Sol found it in the
+-   design. */
+-.dock.dock-fit-2 .dock-modes .dock-btn-label,
+-.dock.dock-fit-2 .dock-mode .dock-btn-label { display: none; }
+-.dock.dock-fit-2 .dock-modes .dock-btn,
+-.dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
++   **One selector, because the bar has one shape since 2026-10-04.** The
++   metadata page drew its modes as loose `DockLink`s with no segment around
++   them, and each rule here carried a `.dock-mode` twin for them; a rung that
++   forgot the twin did nothing on that page (GPT Sol found one in the design).
++   `DockModeLinks` draws the segment and its frames now, so the links match
++   this selector exactly as the radios do. Plan 261004h. */
++.dock.dock-fit-2 .dock-modes .dock-btn-label { display: none; }
++.dock.dock-fit-2 .dock-modes .dock-btn { padding-inline: 0.6rem; }
+ 
+ /* **Rung 3 is 0.55rem rather than 0.45, since 2026-10-01, and rung 2 stayed
+    at 0.6.** Greg, twice in a day (spya-bumjmy, spya-ng89zf): *"Add a teeny bit
+@@ -298,11 +297,12 @@
+ /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
+ 
+    **Last, and it ties on specificity with the rules above deliberately**, so
+-   source order is what makes it win. That is why the mode-link selector above
+-   is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
+-   .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
+-   (0,4,0), and Plain lost its word on the metadata page at one rung while
+-   keeping it at the next. Caught in a browser pass, 2026-09-02.
++   source order is what makes it win. A hide with one class more loses it: the
++   metadata page's mode links once had a selector of their own,
++   `.dock-btn.dock-mode .dock-btn-label`, (0,5,0) against this rule's (0,4,0),
++   and Plain lost its word there at one rung while keeping it at the next.
++   Caught in a browser pass, 2026-09-02; that selector is gone since
++   2026-10-04, when those links moved inside `.dock-modes`.
+ 
+    **Rung 1 is in the list even though nothing there hides a `keepLabel` word.**
+    It costs nothing, it keeps "on every rung" a true sentence rather than one
+diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
+index 6cf992df6..daf4789f1 100644
+--- a/src/web/styles/narrow-window.css
++++ b/src/web/styles/narrow-window.css
+@@ -795,7 +795,7 @@
+      an element is bigger than its content.
+ 
+      `.dock-modes` grows as as many buttons as it draws (`--dock-mode-count`,
+-     set by `DockModes`; it was a fixed eight until 2026-10-02) against each
++     set by `DockModes` and `DockModeLinks`; it was a fixed eight until 2026-10-02) against each
+      loose button's one, so a bar with room to spare spreads it in proportion
+      to what is inside rather than handing the segment the same share as a
+      single icon. Inside it each `.dock-frame` takes its own count
+diff --git a/tests/dock-experimental-modes.test.tsx b/tests/dock-experimental-modes.test.tsx
+index 4c3a74532..88ffe262b 100644
+--- a/tests/dock-experimental-modes.test.tsx
++++ b/tests/dock-experimental-modes.test.tsx
+@@ -170,9 +170,9 @@ function radioModes(): string[] {
+   );
+ }
+ 
+-/** The loose mode links, by the word on each. */
++/** The mode links (the metadata page), by the word on each. */
+ function linkModes(): string[] {
+-  return [...host.querySelectorAll<HTMLElement>(".dock-mode")].map(
++  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")].map(
+     (a) => a.getAttribute("aria-label") ?? a.textContent ?? "",
+   );
+ }
+@@ -285,7 +285,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+     it(`the metadata page translates ?mode=${word} before following either axis`, () => {
+       loose(`?mode=${word}`);
+       const hrefFor = (mode: Mode) => {
+-        const link = [...host.querySelectorAll<HTMLAnchorElement>("a.dock-mode")].find(
++        const link = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
+           (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
+         );
+         expect(link, `${mode} link`).toBeDefined();
+diff --git a/tests/dock-fit.test.ts b/tests/dock-fit.test.ts
+index 786cdbddd..369fc4294 100644
+--- a/tests/dock-fit.test.ts
++++ b/tests/dock-fit.test.ts
+@@ -271,7 +271,7 @@ describe("the stylesheet backs the ladder", () => {
+   it("carries the new loose-control gap and keeps rung 3 tighter than rung 2", () => {
+     expect(CSS_NO_COMMENTS).toMatch(/\.dock\s*\{[^}]*gap:\s*0\.3rem/);
+     const rung2 =
+-      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn,\s*\.dock\.dock-fit-2 \.dock-mode\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
++      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+         CSS_NO_COMMENTS,
+       );
+     const rung3 =
+@@ -324,16 +324,19 @@ describe("the stylesheet backs the ladder", () => {
+   });
+ 
+   /**
+-   * The bar has two shapes — one `.dock-modes` segment on the reading view,
+-   * fourteen loose `.dock-mode` links on the metadata and tweets pages. The
+-   * mode rung knew only the first until GPT Sol found it, so on those pages it
+-   * did nothing and the ladder went straight past it, taking every label with
+-   * it. (Rung 1 until 2026-09-06, rung 2 since.)
++   * **One shape, so one selector.** Until 2026-10-04 the metadata page drew
++   * loose `.dock-mode` links outside any segment, and every rule here needed a
++   * twin for them; the mode rung forgot its twin once (GPT Sol) and took every
++   * label on that page. Both arms draw `.dock-modes` now (plan 261004h), so the
++   * twin is gone, and a `.dock-mode` selector coming back would match nothing.
+    */
+-  it("the mode rung knows both of the bar's shapes", () => {
++  it("the mode rung is written for the segment, and no loose-link twin is left", () => {
++    const loose = /\.dock-mode(?![\w-])/;
+     const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-2"));
+     expect(hiders.some((x) => x.includes(".dock-modes"))).toBe(true);
+-    expect(hiders.some((x) => x.includes(".dock-mode "))).toBe(true);
++    expect(CSS_NO_COMMENTS).not.toMatch(loose);
++    expect(".dock.dock-fit-2 .dock-mode .dock-btn-label").toMatch(loose);
++    expect(".dock.dock-fit-2 .dock-modes .dock-btn-label").not.toMatch(loose);
+   });
+ 
+   /**
+@@ -470,9 +473,6 @@ describe("the stylesheet backs the ladder", () => {
+       `),
+     ).toHaveLength(1);
+ 
+-    const segmentOnly = ".dock.dock-fit-1 .dock-modes .dock-btn-label { display: none; }";
+-    expect(labelHiders(segmentOnly).some((x) => x.includes(".dock-mode "))).toBe(false);
+-
+     expect(floorIsUnconditional("@media (max-width: 731px) {\n  .dock { overflow-x: auto; }\n}")).toBe(
+       false,
+     );
+@@ -531,30 +531,63 @@ describe("Dock gives the ladder something to work with", () => {
+   });
+ 
+   /**
+-   * Off the reading view the modes are loose links. Both of these were missing
+-   * until GPT Sol's review: without `dock-mode` the mode rung does nothing here, and
+-   * without the `always` label Plain lost its word on the page you are most
+-   * likely to be looking for the way back from.
++   * **Off the reading view the modes are links, in the reading view's frames.**
++   * Greg, 2026-10-04 (spya-qerga4): *"Why does the bottom bar look different in
++   * metadata mode?"* They were loose links with no frame, the half of the bar
++   * that kept being left behind; now both arms draw `.dock-modes` and its
++   * `.dock-frame`s, so one set of selectors styles both.
++   * docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md.
+    *
+-   * **The count is the visible set, not "more than ten".** Five modes went
+-   * behind the experimental switch on 2026-09-03, so a default reader's bar has
+-   * eight loose links and the old `> 10` was a statement about a bar nobody
+-   * sees. Asserted against `visibleModes` rather than against `8`, so the
+-   * number moves with the rule instead of pinning today's count — the point
+-   * here is that the ladder has links to act on, and that count is not this
+-   * file's subject. tests/dock-experimental-modes.test.tsx owns the eight.
++   * **The count is the visible set**, asserted against `visibleModes` so the
++   * number moves with the rule; tests/dock-experimental-modes.test.tsx owns
++   * what that set is. **Links, not radios**: a press here leaves the page, and
++   * no mode is open on it, so nothing may claim to be the selected one.
+    */
+-  it("the metadata page: loose links that say they are modes", () => {
++  it("the metadata page: links, in the same frames as the reading view", () => {
+     render({ view: "metadata" });
+-    expect(host.querySelector(".dock-modes")).toBeNull();
+-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(
+-      visibleModes(false, undefined).length,
+-    );
+-    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(1);
++    const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
++    expect(links).toHaveLength(visibleModes(false, undefined).length);
++    expect(links.length).toBeGreaterThan(1);
++    expect(
++      host.querySelector('.dock-modes [role="radiogroup"], .dock-modes [role="radio"]'),
++    ).toBeNull();
++    expect(
++      host.querySelector(".dock-modes .on, .dock-modes [aria-checked], .dock-modes [aria-pressed]"),
++    ).toBeNull();
+     expect(host.querySelector(".dock-tail")).not.toBeNull();
+     expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+   });
+ 
++  /**
++   * **The two arms draw the same boxes.** The claim the report is about, held
++   * directly: the same visible list gives the same frames holding the same
++   * buttons in the same order, the same hairlines between runs and the same
++   * flex shares, whichever arm drew them.
++   */
++  it("both arms: the same frames, the same lines between runs, the same shares", () => {
++    const drawn = () => ({
++      frames: [...host.querySelectorAll(".dock-modes .dock-frame")].map((f) =>
++        [...f.querySelectorAll(".dock-btn")].map((b) => b.getAttribute("aria-label")),
++      ),
++      starts: [...host.querySelectorAll(".dock-modes .dock-group-start")].map((b) =>
++        b.getAttribute("aria-label"),
++      ),
++      shares: [...host.querySelectorAll<HTMLElement>(".dock-modes, .dock-modes .dock-frame")].map(
++        (e) =>
++          e.style.getPropertyValue("--dock-mode-count") ||
++          e.style.getPropertyValue("--dock-frame-count"),
++      ),
++    });
++    for (const experimental of [EXPERIMENTAL_OFF, EXPERIMENTAL_ON]) {
++      render({ mode: "plain", onMode: () => {}, experimental });
++      const reading = drawn();
++      expect(reading.frames.length).toBeGreaterThan(1);
++      expect(reading.shares.every((x) => x !== "")).toBe(true);
++      render({ view: "metadata", experimental });
++      expect(drawn()).toEqual(reading);
++    }
++  });
++
+   /**
+    * And the whole thirteen still fit through the same wiring, because that is
+    * the row `NEED` above was measured against — a reader with the switch on
+@@ -570,11 +603,11 @@ describe("Dock gives the ladder something to work with", () => {
+   });
+ 
+   /**
+-   * **And the loose arm too, which is the half that was left untested.**
++   * **And the links arm too, which is the half that was left untested.**
+    *
+    * The metadata assertion above is measured against `visibleModes`, which is
+    * the function the component itself calls — so it holds however the filter
+-   * behaves, and a loose arm that ignored the switch entirely would pass it.
++   * behaves, and a links arm that ignored the switch entirely would pass it.
+    * GPT Sol's review of stage 2 named the surviving mutation: *"make the loose
+    * arm always filter as Experimental off while leaving the radiogroup
+    * correct"*.
+@@ -583,9 +616,10 @@ describe("Dock gives the ladder something to work with", () => {
+    * rule — an independent number the filter cannot move. It is the only
+    * assertion in this file that would notice the two arms disagreeing.
+    */
+-  it("the metadata page with the switch on: every mode, as loose links", () => {
++  it("the metadata page with the switch on: every mode, as links", () => {
+     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
+-    expect(host.querySelector(".dock-modes")).toBeNull();
+-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(MODES.length);
++    expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
++      MODES.length,
++    );
+   });
+ });
+diff --git a/tests/dock-mode-tooltips.test.tsx b/tests/dock-mode-tooltips.test.tsx
+index 2467f86bc..7361e4fa7 100644
+--- a/tests/dock-mode-tooltips.test.tsx
++++ b/tests/dock-mode-tooltips.test.tsx
+@@ -136,7 +136,7 @@ function modeControls(): HTMLElement[] {
+   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
+   return [
+     ...host.querySelectorAll<HTMLElement>(
+-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',
++      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
+     ),
+   ];
+ }

@@ -113,7 +113,7 @@ import {
   type ReaderFacingFailure,
   STEP_STOPPED,
 } from "./messages.js";
-import type { Job, JobReset, JobStep, JobUpload, StepName } from "./types.js";
+import type { Job, JobReset, JobStep, JobUpload, StepName, StepPreview } from "./types.js";
 import { articlePower, type ModelPower } from "./models.js";
 import { highPowerStore } from "./store/index.js";
 
@@ -974,6 +974,58 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
 
 /**
+ * **A running step's preview: put on the job row, and taken off before the
+ * step settles** (`JobStep.preview`, src/types.ts; `StepContext.preview`,
+ * src/pipeline.ts). `runStep`'s, lifted out so the rule is in one place.
+ *
+ * `show` sets it on the step and writes the row through `note`, once per call,
+ * chained so two calls land in the order they were made. `settle` waits for
+ * whatever write is still on its way and then deletes the preview from the
+ * step in memory, so the write that settles the step carries none.
+ *
+ * **Why `settle` waits.** `noteProgress` replaces the whole `steps` array and
+ * is fenced on the claim, not on this step. A preview write that reached
+ * Postgres after the step had settled would put back `running` and the
+ * preview, on a claim the fence still accepts (GPT Sol's review of plan
+ * 261004f stage 2, S4; tests/jobs-walk.test.ts § a step's preview).
+ *
+ * **Every failure of that write is swallowed, a `StaleAttemptError`
+ * included.** Elsewhere in `runStep` a stale attempt out of `note` propagates,
+ * because it arrives before any money is spent and stopping is free. Here it
+ * arrives in the middle of a paid step, and letting it out would be the preview
+ * deciding how the step ends. If the claim really has moved, the step's commit
+ * is fenced on the same attempt and says so itself, with the meaning it has
+ * always had. So `settle` never rejects.
+ *
+ * **The preview is never logged**: it is the model's words about the article
+ * (docs/project/logging.md). The line below carries the error's class only.
+ */
+function stepPreviews(
+  job: Job,
+  step: JobStep,
+  note: () => Promise<unknown>,
+  jlog: Log,
+): { show(preview: StepPreview): void; settle(): Promise<void> } {
+  let written: Promise<void> = Promise.resolve();
+  const notWritten = (err: unknown): void => {
+    jlog.debug(
+      { step: step.name, error: err instanceof Error ? err.name : typeof err },
+      `step preview not written: ${step.name} — ${job.slug}`,
+    );
+  };
+  return {
+    show(preview) {
+      step.preview = preview;
+      written = written.then(() => note()).then(() => undefined, notWritten);
+    },
+    async settle() {
+      await written;
+      delete step.preview;
+    },
+  };
+}
+
+/**
  * Run — or skip — exactly one step, recording all of it on the job.
  *
  * The single implementation of "do this step", shared by the two things that
@@ -1041,6 +1093,7 @@ async function runStep(
      nothing downstream read either one. Both went with the filesystem store;
      a step is told where its artefacts go by the `ArtifactStore` it is handed
      and by nothing else. */
+  const shown = stepPreviews(job, step, note, jlog);
   const ctx: StepContext = {
     slug: job.slug,
     ...(job.url ? { url: job.url } : {}),
@@ -1050,6 +1103,9 @@ async function runStep(
     report: (detail: string) => {
       step.detail = detail;
     },
+    /* Persisted, unlike `report`: once per call, which for `simple` is once
+       per step. See `stepPreviews`. */
+    preview: shown.show,
     signal: controller.signal,
     /* The same instant the abort timer above is set for, passed rather than
        recomputed: a step that can decline to start work it cannot finish needs
@@ -1093,6 +1149,8 @@ async function runStep(
       step.status = "skipped";
       step.detail = "already done";
     }
+    /* A requeued attempt can have left one (see the step's start, below). */
+    delete step.preview;
     // `debug`, not `info`. Most steps of most jobs skip — a re-run of one
     // stage skips the four before it — so at `info` this would be the bulk of
     // the log and the lines that matter would be sitting in it.
@@ -1108,6 +1166,10 @@ async function runStep(
   step.status = "running";
   step.startedAt = new Date().toISOString();
   delete step.error;
+  /* A requeue resets a running step to `pending` and keeps its other fields
+     (src/store/pg-jobs.ts § `settledSteps`), so the last attempt's preview
+     would otherwise be shown under this one. */
+  delete step.preview;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
   await note();
 
@@ -1167,6 +1229,10 @@ async function runStep(
         onStepSpend?.(step.name, report);
       },
     });
+    /* **The preview comes off before the step settles**, and only once its own
+       write has landed (`stepPreviews`). What it showed is in `product` now
+       and is stored by the commit below; the job row keeps nothing of it. */
+    await shown.settle();
     step.detail = product.detail;
     /* **Marked done before the commit, not after, and that is the ordering the
        atomic boundary needs.** `decide` below asks whether this was the job's
@@ -1221,6 +1287,12 @@ async function runStep(
     );
     return { outcome: "ran", settlement };
   } catch (err) {
+    /* The failure path's half of the same rule, and before anything else here:
+       whichever ending the walk writes next carries these steps, and a preview
+       write landing after it would undo it. A failed step keeps no preview
+       either, so nothing of an artefact that was never stored sits on the job
+       (Sol's S7). The browser keeps what it was shown (src/web/useSimple.ts). */
+    await shown.settle();
     /* **The one thing that is not a step failure, and it has to leave first.**
        `commit` now carries the job's own release or finish, and those are fenced:
        a claim that moved on while we were inside the step throws
@@ -3435,7 +3507,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   for (let tries = 0; ; tries++) {
     const slug = allocation.slug;
     if (tries >= 20) {
-      throw Object.assign(new Error(`Too many articles already called "${request.slug}".`), {
+      throw Object.assign(new Error("Too many articles already have that name."), {
         status: 409,
       });
     }

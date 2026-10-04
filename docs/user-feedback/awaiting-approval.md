@@ -43,16 +43,6 @@ in this directory records which, and the line comes off.
   [261003o § Questions for Greg](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md#questions-for-greg-not-waited-on) ·
   [note](261003_1016-debate-reception-and-claims-sub-modes.md)
 
-- 2026-09-29 · SPIDERYARN-READING2-AA (spya-rze8qh and its repeat spya-xhvxue; **still `unresolved`
-  in Sentry and with no note yet**, so this line is what keeps it visible) · span highlights with a
-  colour are on `dev` and work by mouse and on an iPad; what is left is whether selecting words
-  should show a small floating menu (four colour dots that save a highlight in one press, plus
-  *Comment…* for the box) instead of opening the box straight away, as now. The question went
-  through the Overseer on 2026-10-03 and session `fbrze8qh-span-highlights` is idle waiting on it;
-  the later `spya-ur8kum` (default yellow, closing saves) changed the box in the meantime ·
-  [261003e § The menu](../plans/261003e-span-highlights-with-a-colour.md) · added by the feedback
-  sweep, 2026-10-04
-
 - 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
   reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
   try, a Debate started with a lens), and should Debate take a text box to steer it? Noted, nothing

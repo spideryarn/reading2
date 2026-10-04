@@ -3348,7 +3348,24 @@ export interface JobStep {
   finishedAt?: string;
   /** Run even if the artefact is already there — this is what a refresh is. */
   force?: boolean;
+  /**
+   * **Part of what the step is making, shown before the step is over.** On the
+   * job row only while the step is `running`: the runner deletes it when the
+   * step starts, succeeds or fails (src/jobs.ts § `runStep`), so nothing of an
+   * artefact is kept on a job. The owner's alone, as every job is, and never
+   * logged. docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2.
+   */
+  preview?: StepPreview;
 }
+
+/**
+ * What a running step may show early. A union on `kind`, so a later step adds
+ * its own arm and a reader of the row has to say which one it wants.
+ *
+ * `simple-brief`: Summary's Brief paragraphs, final and checked, while Fuller
+ * is still being written. They are stored, with Fuller, only when the step ends.
+ */
+export type StepPreview = { kind: "simple-brief"; paragraphs: SimpleParagraph[] };
 
 /**
  * One run of some steps against one article.

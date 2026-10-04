@@ -74,13 +74,13 @@ import {
   REPORT_KINDS,
   addCounts,
   countValue,
-  drainReports,
+  drainReportsAsync,
   parseSubmission,
   printable,
   readInbox,
   readReports,
   submitReport,
-  type ArtefactChecker,
+  type AsyncArtefactChecker,
   type BlockedOn,
   type BoundedCount,
   type QuarantineSummary,
@@ -1315,10 +1315,10 @@ function withoutCommentLines(text: string): string {
 export function makeReportDrain(
   root: string,
   env: NodeJS.ProcessEnv,
-  checkArtefact: ArtefactChecker = makeArtefactChecker({ repoDir: repoRoot(), decisionsRoot: decisionsRoot(env), queueRoot: queueRoot(env) }),
-): (register: SessionRegister) => ReportDrainOutcome {
+  checkArtefact: AsyncArtefactChecker = makeArtefactChecker({ repoDir: repoRoot(), decisionsRoot: decisionsRoot(env), queueRoot: queueRoot(env) }),
+): (register: SessionRegister, stillOwner: () => boolean) => Promise<ReportDrainOutcome> {
   const decisions = decisionsRoot(env);
-  return (register) => drainReports({ root, register, now: () => new Date(), checkArtefact, decisionsRoot: decisions });
+  return (register, stillOwner) => drainReportsAsync({ root, register, now: () => new Date(), checkArtefact, decisionsRoot: decisions, stillOwner });
 }
 
 function defaultReportDeps(): ReportDeps {

@@ -130,6 +130,7 @@ function ctx(over: Partial<StepContext> = {}): StepContext {
   return {
     slug: "a-slug",
     report: () => {},
+    preview: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
     power: "standard",

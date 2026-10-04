@@ -994,12 +994,17 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  * One correlated subquery rather than a read-then-write, so this file keeps its
  * rule that every transition is a single conditional statement. `jobs.steps` on
  * the right-hand side of a `SET` is the row as it was before the update.
+ *
+ * A preview belongs only to a running step. Remove it on every arm, including
+ * non-running steps: Stop on a queued job can see a pending preview left by a
+ * pause from before this removal was added. Asking a live claimant to stop does
+ * not use this transformation, so its preview stays until the claimant settles.
  */
 function settledSteps(cancelled: SQL) {
   return sql`(
     select coalesce(
       jsonb_agg(
-        case
+        (case
           when step.value->>'status' <> 'running' then step.value
           when ${cancelled}
             then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
@@ -1014,7 +1019,7 @@ function settledSteps(cancelled: SQL) {
                  'finishedAt', to_char(
                    clock_timestamp() at time zone 'utc',
                    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
-        end
+        end) - 'preview'
         order by step.ordinality
       ),
       '[]'::jsonb

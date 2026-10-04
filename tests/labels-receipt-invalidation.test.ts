@@ -391,6 +391,7 @@ const ctx: StepContext = {
   power: "standard",
   slug: SLUG,
   report: () => {},
+  preview: () => {},
   signal: new AbortController().signal,
   cacheArticle: false,
 };

@@ -81,7 +81,7 @@
  *
  * **The sixth is the one worth reading twice, because the symptom is not what
  * the design expected.** The plan predicted that copying the parent's
- * `ingestEventId` would surface as *"Too many articles already called X"* —
+ * `ingestEventId` would surface as *"Too many articles already have that name"* —
  * `jobs_ingest_event_unique` sending `enqueue`'s allocation loop round twenty
  * times. That is true of `enqueue`. `enqueueSuccessorIn` has no loop and an
  * `onConflictDoNothing`, so the insert is **swallowed**: no successor exists at
@@ -795,7 +795,7 @@ describe("publication enqueues the free labels successor", () => {
   /**
    * **Accidental charge, route 2: copying the parent's `ingestEventId` onto the
    * successor.** `jobs_ingest_event_unique` refuses it — but it surfaces to the
-   * reader as *"Too many articles already called X"* after twenty allocation
+   * reader as *"Too many articles already have that name"* after twenty allocation
    * passes, which is safe and completely unintelligible. So this case names the
    * route in its title and proves both halves: the successor carries none, and
    * the copy is what the database refuses.
