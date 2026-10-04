@@ -129,6 +129,7 @@ describe("the Help link in the Dock", () => {
     }
     bar({ mode: "chat", drawer: drawer(false) });
     expect(named("Help")).toHaveLength(0);
+    expect(named("Commands")).toHaveLength(1);
     metadataBar({});
     expect(named("Help"), "an owner's Metadata bar draws Help").toHaveLength(0);
     expect(named("Commands")).toHaveLength(1);
@@ -178,6 +179,7 @@ describe("the Help link in the Dock", () => {
     for (const experimental of [EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT]) {
       metadataBar({ visitor: true, experimental });
       expect(helpLink().getAttribute("href")).toBe("/help#the-reading-view");
+      expect(named("Commands"), "a visitor's Metadata bar draws Commands").toHaveLength(0);
     }
   });
 

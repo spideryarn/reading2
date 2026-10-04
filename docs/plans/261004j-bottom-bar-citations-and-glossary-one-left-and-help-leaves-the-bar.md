@@ -143,4 +143,27 @@ safe reading, and that nothing else derives the bar's order by hand (the command
   there, for a visitor, signed in and out.
 - P3, the `ModeGroup` comment lists the runs in order. Updated with the rows.
 
-**Code, GPT Sol, fixing:** see the end of this doc once it has run.
+**Code, GPT Sol, fixing, 2026-10-04: ready after its fixes.**
+[prompt](261004j-bottom-bar-order-and-help-code-review-prompt.md),
+[answer](261004j-bottom-bar-order-and-help-code-review-sol.md). No P0 to P2. It found the two
+gates complementary on every real mount of the bar. Four P3s, all fixed by it and read by me: a
+visitor's Metadata bar is now asserted to have no Commands (so a gate keyed on sign-in would go
+red there too); the Help page's sentence says Commands is the owner's before it says how to use
+it, and calls the icon a mode's (i); the comment on Ideas' row; a test comment in
+`tests/command-bar.test.tsx`.
+
+**Browser, a Sonnet subagent with Playwright, 2026-10-04, all six checks passed.** Owner with the
+switch on at 1500px: `… Skim, Quotes, Glossary, FAQ, Ideas, Timeline, Citations, Referee, Debate
+…`, Commands present, no Help. The command bar's Help row from Glossary goes to
+`/help#mode-glossary`, and so does *More in Help →* in Glossary's (i). Owner on Metadata: no Help,
+Commands present. Signed-out visitor on a public article: Help present, no Commands, opening at
+`/help#the-reading-view` in Plain and `/help#mode-glossary` in Glossary. At 390px the bar scrolls
+and has no Help. Not checked in a browser: a signed-in visitor, which the unit test covers.
+
+`npm run typecheck` is red on `origin/dev` in `src/backfill-registry-facts.ts` (six errors), a
+file this work does not touch; nothing else is reported.
+
+## Deferred
+
+Nothing. A help glyph of its own in each mode's corner was weighed and not built (above); it is
+an option for Greg, not a promise.

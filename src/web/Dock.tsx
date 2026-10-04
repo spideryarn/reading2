@@ -889,10 +889,10 @@ const MODES_UI = [
     group: "guides",
     icon: BadgeQuestionMark,
   },
-  /* After Glossary, because the order runs outwards from the article's
-     own words and these two are the same kind of thing pointed at different
-     units: a term is a word you look up, an idea is a proposition you hold.
-     FAQ has stood between them since 2026-10-04 (see Glossary's row).
+  /* After FAQ since Glossary moved left past it on 2026-10-04. It still
+     follows Glossary in the run because these two are the same kind of thing
+     pointed at different units: a term is a word you look up, an idea is a
+     proposition you hold. FAQ now sits between them (see Glossary's row).
      Greg set this order by hand, so a new mode goes where it belongs in his
      reasoning rather than on the end. */
   {
