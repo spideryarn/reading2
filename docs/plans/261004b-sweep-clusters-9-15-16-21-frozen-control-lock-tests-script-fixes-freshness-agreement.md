@@ -189,3 +189,47 @@ here, which is half of it; pinning the version beside it is cluster 13's gate wo
 ## Log
 
 *(filled in as stages land)*
+
+### 2026-10-04 — GPT Sol's plan review: build, with nine corrections, all accepted
+
+The review is [261004b-…-plan-review-sol.md](261004b-sweep-clusters-9-15-16-21-plan-review-sol.md)
+(prompt beside it). No P0 or P1; nine P2s, PF1–PF9. **Where a stage above and a correction below
+disagree, the correction wins**, and each builder is handed the review itself.
+
+- **PF1 → A4 is replaced.** Most of these harnesses never hold a rendered system string (the
+  generators keep it private), so "hash the rendered prompt" is not available inside the file set.
+  Instead: extend each harness's *source* fingerprint to cover the prompt-text modules it really
+  depends on (`plain-words.ts`, `paperwork.ts`, and any shared prompt module), take the snapshot
+  before generating (in `plain-words/artefacts.ts`, out of `write()`), and call it a source
+  fingerprint, not a request hash. Test that changing a previously omitted dependency changes the
+  fingerprint. `paperwork/run.ts` already hashes `paperwork.ts`; that part of the audit is stale.
+- **PF2 → C item i.** `openPage` returns a live handle with a bounded read and an idempotent
+  close. The single-client run closes before the pair starts; every started client is closed in
+  `finally`; either completion order must detect shared state; the re-read does not navigate again.
+- **PF3 → D.** Changing only an artefact's stamp makes `stampForStep` throw `StampDisagrees`, so a
+  stale case changes every recorded copy of the field together. Both calls must resolve before
+  their answers are compared. A disagreement is pinned as an ordinary test asserting the exact
+  observed pair, not `it.fails`. Deliberate differences (a new profile, a new illustration note)
+  are kept apart from currency.
+- **PF4 → file sets.** The umbrella rows are amended: cluster 15 also owns
+  `tests/store-job-draft.test.ts`, `tests/store-pg-session.test.ts`, `tests/store-tags-pg.test.ts`,
+  one new helper under `tests/helpers/`, and export-only edits to `src/web/Tooltip.tsx`
+  (`HOVER_DELAY` in `useHoverCard.ts` is already exported). Cluster 16 also owns its shared shell
+  env reader and its new tests. Checked against the other rows: nobody else names these.
+- **PF5 → C item f.** `scripts/stage.ts` runs its CLI at module scope, so the parser is exported
+  *and* the CLI goes behind `src/is-main.ts` § `isMain`. The test also covers the valid forms and
+  that a file ingest still refuses `--force`.
+- **PF6 → C item g.** Validate that `external` is an object and `google`, `email`, `github` are
+  present booleans (malformed exits 2), and use `== true` in the "all providers on" list as well.
+- **PF7 → C shell tests.** Run copies of the real scripts in a temporary checkout-shaped directory
+  with dummy `.env.local` / `.env.prod`, fake `curl` first on `PATH`, inherited overrides removed.
+- **PF8 → A1.** The run's recorded HEAD is `675aa32b22167f1b921f3286ed10e8fa1c50acf0`, where the
+  files are `src/hierarchy.ts` and `tests/hierarchy-structure-request-parity.test.ts`. Sol
+  reconstructed the text and got sha256 `532c3dc4…522998d`; the builder recovers it independently
+  and must reach the same digest. It is described as the prompt reconstructed from the run's
+  recorded commit — the run saved neither a dirty-tree check nor the bytes it sent.
+- **PF9 → B1 (reasoned; Postgres was not available to Sol).** Two requests on one row can queue
+  as request 2 → request 1 → holder, so "two backends directly blocked by the holder" can time out
+  on correct code. The visibility test waits for two distinct backends whose blocking chains
+  *reach* the holder. Verified on Postgres here, both ways, and recorded.
+- A3: guard `stop_reason === "max_tokens"` explicitly before throwing `truncationFailure`.
