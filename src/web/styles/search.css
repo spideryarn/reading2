@@ -473,6 +473,9 @@
   color: var(--ink-faint);
   font-family: var(--font-ui);
   font-size: 0.78rem;
+  /* A button's own default, which a span does not get: inheriting the row's
+     made this box 2px taller than the button it stands in for. */
+  line-height: normal;
   white-space: nowrap;
 }
 .srch-upgrading > * { grid-area: 1 / 1; }

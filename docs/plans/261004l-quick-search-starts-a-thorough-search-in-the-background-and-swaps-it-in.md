@@ -212,3 +212,21 @@ choice is to keep it as an unticked saved row, since it was paid for. Recommende
   sentence mixed per-call and per-search; corrected here and in search.md. C3 (P3): the help
   sentence. C4 (P2, left): the F2 deadline test has a 100 ms real-timer margin and could flake on
   a loaded box.
+- 2026-10-04: full `npm test` on `6dd0f645b`: 1575 files passed, 5 failed, all five the
+  fresh-worktree "no build" files (`api-dist/` and the fleet client), none of them this work.
+- 2026-10-04: browser check by a Sonnet subagent (Playwright, the local dev server, real model
+  calls), twice. At 1440, 1024, 820 and 390 wide: quick shows, the sign appears about 2 s after
+  the quick answer (at once after Enter), the swap lands 4 to 12 s later with `scrollY` unchanged
+  and no reload, one row throughout, same colour and tick. From the bottom bar's box: the same.
+  Editing the words with the sign showing, focus kept in the box: one row throughout, the first
+  thorough answer thrown away, the longer words swapped in 8 s later. **One fault found and
+  fixed**: the sign read "thorough…" beside its spinner and was 22px wider than the button, so
+  at 390 the row grew 47px to 64px while it showed
+  ([before](261004l-shot-upgrading-390.png)). It is now the spinner alone, in a box the button's
+  size ([after](261004l-shot-sign-390.png)): row height identical at 390 and 1024. The recheck
+  measured the box 2px taller than the button; `line-height: normal` was added for that and has
+  **not** been looked at in a browser since. Also seen, and as the plan says: a reload while the
+  sign was showing left both rows in the list.
+- 2026-10-04: thorough took 4 to 12 s in these runs, and 9 s median in production. The reader-facing
+  words "about half a minute" (the button's title, /help) and search.md's "15–40 seconds" are
+  older and now look long; not changed here.
