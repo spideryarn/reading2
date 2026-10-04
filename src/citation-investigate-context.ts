@@ -44,6 +44,12 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * own, and what it picks is sent on into the answer's prompt
  * (src/citation-investigate.ts § `paperSection`), so an answer kept from the
  * unfenced layout is not one today's prompts would write.
+ *
+ * **Plan 261004i rides on `/8` rather than taking `/9`**: it fences the same
+ * fields in the answer's own prompt (src/citation-investigate.ts §
+ * `investigatePart`), and `/8` had not been deployed when it landed, so
+ * readers' kept answers detach once for both. Do not copy this: a prompt
+ * change after `/8` has reached production needs its own bump.
  */
 export const CITATION_INVESTIGATE_VERSION = "citation-investigate/8";
 

@@ -320,3 +320,91 @@ describe("the Metadata tooltip", () => {
     expect(card?.textContent?.replace(/\s+/g, " ")).toContain("⌘Enter / Ctrl-Enter");
   });
 });
+
+/* **Escape on the Metadata page is a press on its button** — Greg, 2026-10-04,
+   spya-ynx97n: *"If I hit escape while in metadata mode, sort of hide the
+   metadata mode, as if I'd clicked on the metadata mode button to take me back
+   to wherever I was before."* The page itself is the last surface to hear the
+   key, so every refusal below is something in front of it.
+   docs/plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md § 1. */
+describe("Escape on the Metadata page", () => {
+  const ON_METADATA = "/read/a-piece/metadata?mode=glossary&margin=1&at=spya-k3m9qt";
+  const BACK = "/read/a-piece?mode=glossary&margin=1&at=spya-k3m9qt";
+  const pressEscape = (over: KeyboardEventInit = {}) => press({ key: "Escape", metaKey: false, ...over });
+  const onMetadata = (props: Record<string, unknown> = {}) => {
+    history.replaceState(null, "", ON_METADATA);
+    mount({ view: "metadata", onMode: undefined, mode: undefined, ...props });
+  };
+
+  it("goes where the Metadata button points there: back to the article, mode and place carried", () => {
+    onMetadata();
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
+    expect(link?.getAttribute("href")).toBe(BACK);
+    pressEscape();
+    expect(here()).toBe(BACK);
+  });
+
+  it("works on a visitor's public Metadata page", () => {
+    onMetadata({ visitor: true });
+    pressEscape();
+    expect(here()).toBe(BACK);
+  });
+
+  it("does nothing on the reading view", () => {
+    mount();
+    pressEscape();
+    expect(here()).toBe(START);
+  });
+
+  it.each(["input", "textarea"])("is the box's own while a Metadata %s has focus", (tag) => {
+    onMetadata();
+    focusOn(document.createElement(tag));
+    pressEscape();
+    expect(here()).toBe(ON_METADATA);
+  });
+
+  it("is the dialog's while a native dialog is open", () => {
+    onMetadata();
+    const other = document.createElement("dialog");
+    other.open = true;
+    document.body.append(other);
+    extras.push(other);
+    pressEscape();
+    expect(here()).toBe(ON_METADATA);
+  });
+
+  it("is left alone once a nearer handler has claimed it", () => {
+    onMetadata();
+    const button = focusOn(document.createElement("button"));
+    button.addEventListener("keydown", (e) => e.preventDefault());
+    pressEscape();
+    expect(here()).toBe(ON_METADATA);
+  });
+
+  it.each([{ shiftKey: true }, { altKey: true }, { metaKey: true }, { ctrlKey: true }, { repeat: true }])(
+    "is left alone with %o",
+    (over) => {
+      onMetadata();
+      pressEscape(over);
+      expect(here()).toBe(ON_METADATA);
+    },
+  );
+
+  it.each([{ isComposing: true }, { keyCode: 229 }])("leaves an IME's Escape alone with %o", (over) => {
+    onMetadata();
+    focusOn(document.createElement("button"));
+    pressEscape(over);
+    expect(here()).toBe(ON_METADATA);
+  });
+});
+
+/* Greg, 2026-10-04, spya-jt4gmg: *"that information icon is the same one we use
+   elsewhere for information about a mode, and I think they are different"*. */
+describe("the Metadata button's icon", () => {
+  it("is not the (i) that means 'about this mode'", () => {
+    mount();
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Metadata"]');
+    expect(link?.querySelector("svg"), "the Metadata button draws no icon").not.toBeNull();
+    expect(link?.querySelector("svg.lucide-info")).toBeNull();
+  });
+});
