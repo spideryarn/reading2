@@ -43,7 +43,7 @@ trade is the open question for Greg below.
     Commit `b56d949ce`.
   - `fbazc1`, `fbazc2` ("after", what shipped): Fuller asked for about 350 words; bold asked of
     Brief and Fuller only.
-- 18 presses, about **$4.70**. Results under `evals/results/simple/high-none-fbaz*/` and
+- 18 presses, about **$4.60**. Results under `evals/results/simple/high-none-fbaz*/` and
   `evals/results/simple/fuller-format-261004b/`.
 - **The judge was GPT Sol**, a different family from the Opus writer, read-only, in two runs that
   each read one file.
@@ -57,11 +57,11 @@ trade is the open question for Greg below.
 | Brief words | 95–122 | 89–104 | 84–109 |
 | Simple words (written, not shown) | 160–212 | 189–234 | 168–211 |
 | a press, median wall time | 26.3 s | **55.1 s** | 30.9 s |
-| a press, cost | $0.20–0.25 | $0.23–0.39 | $0.24–0.27 |
+| a press, cost | $0.20–0.25 | $0.23–0.39 | $0.24–0.28 |
 | guard: first answers flagged, of 18 levels | 0 | 2 (both Simple) | 1 (Simple) |
 | levels stored flagged | 0 | 0 | 0 |
 | bold phrases kept, Brief / Simple / Fuller, a summary | none | 2 / 2–4 / 4–6 | 2–3 / none / 3–7 |
-| bold phrases refused by validation | | 2 of 51 | 1 of 44 |
+| bold phrases refused by validation | | 2 of 65 | 1 of 39 |
 | list paragraphs in a Fuller | none | 1 in each | 1 in five of six |
 
 **Fidelity**, every Fuller sentence labelled by Sol against its paragraph's cited passages (372
@@ -104,7 +104,7 @@ The after arm:
 4. **Fidelity: met.** 0.92 unsupported sentences per 100 words, under both before draws (1.76,
    1.33); 3 Fullers with a serious one, against 4.
 5. **Substance: met.** No sentence was labelled repeated or filler in any arm.
-6. **Well-formed: met.** 43 of 44 keys kept (98%); never more than two in a paragraph; at most one
+6. **Well-formed: met.** 38 of 39 keys kept (97%); never more than two in a paragraph; at most one
    list a Fuller; none in Brief or Simple.
 7. **Formatting helps: met**, 6–0 at each level, with the caveat below.
 8. **The wait: met.** 30.9 s against 26.3 s, 4.6 s more.

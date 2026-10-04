@@ -165,11 +165,11 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * block and the reference list as paperwork (Greg, spya-abs6bj; plan
  * 261003c). The abstract rule beside it is Structure's alone.
  *
- * `simple-prompt/7` (2026-10-04): Fuller is asked for about twice the length,
- * and told what the room is for; every level marks a key phrase on a sentence
- * or two, and Fuller may write a paragraph as a list (Greg, spya-azft06 and
- * spya-qzsvx4; plan 261004b). The stored shape only gained two optional
- * fields, so `SIMPLE_VERSION` stays.
+ * `simple-prompt/7` (2026-10-04): Fuller is asked for about half as much again
+ * and told what the room is for; Brief and Fuller mark a key phrase on a
+ * sentence or two, and Fuller may write a paragraph as a list (Greg,
+ * spya-azft06 and spya-qzsvx4; plan 261004b). The stored shape only gained two
+ * optional fields, so `SIMPLE_VERSION` stays.
  */
 export const SIMPLE_PROMPT_VERSION = "simple-prompt/7";
 

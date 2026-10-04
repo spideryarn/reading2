@@ -5322,9 +5322,11 @@ export interface SimpleLevelLimits {
  * one loses all three for one level's ten words. The prompt's asks are what
  * set the length.
  *
- * Fuller's were 5 paragraphs and 480 words until 2026-10-04, when it was asked
- * for about twice the length (Greg, spya-azft06; plan 261004b). Its minimum
- * stays 3 so every Fuller stored before then still reads.
+ * Fuller's were 5 paragraphs and 480 words until 2026-10-04. The limits rose
+ * for the first, twice-as-long arm and deliberately stayed there when the
+ * smaller fallback shipped, so a longer Fuller later remains a prompt-only
+ * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
+ * stored before then still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
