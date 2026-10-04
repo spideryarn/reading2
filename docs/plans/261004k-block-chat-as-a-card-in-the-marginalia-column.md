@@ -243,3 +243,71 @@ GPT Sol reviews this plan before stage 1 and the code after stage 2.
 ## Progress
 
 - 2026-10-04: plan written; Sol's plan review in and folded in. No chat-as-research commit or plan on `origin/dev` yet.
+- 2026-10-04: stages 1 and 2 built by an Opus subagent (`f2856b5f6`), tests red first. A harness
+  that renders `Reader` exists but mocks `TableView`, so the Reader-level tests
+  (`tests/chat-dock-wiring.test.tsx`) render the block's margin entry into a real cell; real
+  placement is the browser check's.
+- 2026-10-04: browser check, code review, docs and the two feedback notes, below.
+
+## What the build did differently
+
+- The aside is `position: relative` inside an absolutely positioned host (decision 2 as amended by
+  F3), not absolute itself.
+- In the card the transcript's height is `auto` under the same cap: the floating panel's steady
+  34rem would push later notes most of a screen away for a one-line answer.
+- `preventScroll` on the close-button focus is unconditional: the dialog mounts one commit before
+  its host exists, so a card-mode test at that moment is always false; on a fixed panel it changes
+  nothing.
+- The `asked` filter keys on the card being wanted, not on the host being in hand, so the line and
+  the card swap in one render.
+
+## The browser check
+
+Playwright on the box, a local paper, `?mode=structure&margin=1`, bounds measured.
+
+- **1440 with Structure**: card left 1172 (prose cell right 1152), right 1432, 260px wide, top
+  within 4px of its row. **2200**: 576px wide, the cap. **1180** (iPad landscape): 260px.
+- Later notes sit below the expanded card and return exactly to their old tops on collapse or close.
+- Collapsed: 59px tall. The collapsed card, and the gutter chip pressed while it is collapsed, both
+  expand it.
+- Selecting text in an answer opens no dialog and selects no row.
+- Folding the section holding the open chat gives the docked panel; unfolding gives the card back.
+- Floating and unchanged at 820, at 390 and with Marginalia off.
+- A half-typed question survived 1440 → 800 → 1440.
+- The lone *Question* line, opened, says its words once.
+- No CSS fix was needed. Not checked: the clipboard after a copy; an iPad's keyboard.
+- **It is tight at 1440 with a band**: 260px, two to four words of answer a line. The room there is
+  what the band and the prose leave; the card takes all of it.
+
+Screenshots: [1440 expanded](261004k-shot-1-1440-expanded.png) ·
+[1440 collapsed](261004k-shot-2-1440-collapsed.png) ·
+[2200 expanded](261004k-shot-3-2200-expanded.png) ·
+[2200 collapsed](261004k-shot-4-2200-collapsed.png) ·
+[1180 expanded](261004k-shot-5-1180-expanded.png) ·
+[820, floating](261004k-shot-6-820-floating.png) ·
+[390, floating](261004k-shot-7-390-floating.png) ·
+[the lone question, opened](261004k-shot-8-lone-question-opened.png) ·
+[folded, docked](261004k-shot-9-folded-docked.png).
+
+## GPT Sol on the code
+
+[261004k-review-code-gpt-sol.md](261004k-review-code-gpt-sol.md), on `f2856b5f6`: land after fixes,
+which it applied, each red first. The browser check ran before these fixes and was not repeated
+after them; they are covered by component tests.
+
+- **F8** (P1): the keyboard handling looked for the composer in the footer, and a loaded thread's
+  composer is in the body. Now it finds the composer wherever it is.
+- **F9** (P1): thread A collapsed, then B, then back to A found A still collapsed. Leaving a thread
+  now clears its collapse.
+- **F10** (P1): an answer finishing while the card was collapsed left the transcript at its old
+  offset and cleared the *Latest* control. `Conversation` takes a `visible` prop and ignores hidden
+  geometry.
+- **F11** (P1): moving the card from one block's host to another's dropped focus. Focus is saved
+  before every commit and restored on a real move.
+- **F12** (P1): a card arriving on a block closed that block's opened margin note, because the
+  entry changed shape. The note now keeps its React position.
+- **F13** (P1, wider, not fixed): switching conversations while typing loses the composer's focus.
+  It predates this work and is the same in the floating panel; named here so it is not lost.
+
+It mutated the code under each test the build had never seen red; all seven noticed.
+
