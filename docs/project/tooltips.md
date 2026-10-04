@@ -457,6 +457,13 @@ All three were measured rather than reasoned about. The first two make a test th
 nothing; the third makes one fail loudly for a reason that is not in the code it is testing, which
 costs an hour in a different way.
 
+Advance a fake clock for these delays; the converted cases restore real timers after unmounting.
+Use `DELAY.open` from [`Tooltip.tsx`](../../src/web/Tooltip.tsx) for an ungrouped card. A
+`TooltipGroup` supplies its own delay, so a grouped card must advance past the delay on its surface.
+Keep real timers for unrelated layout or fetch settling; the scoped switch in
+[`tests/sketch-caption-is-not-a-native-tooltip.test.tsx`](../../tests/sketch-caption-is-not-a-native-tooltip.test.tsx)
+is the example when those waits follow a card check.
+
 - **Opening and closing do not take the same event.** A native `mouseenter` dispatched on the trigger
   opens it — `useHover` binds that listener to the reference node rather than going through React, so
   a bubbling `mouseover` never reaches it. Closing is React's synthetic `onMouseLeave`, which React
@@ -465,14 +472,15 @@ costs an hour in a different way.
 - **The close needs two `act` blocks, not one long one.** Closing is two timers in series with a
   render between them: the close delay sets `open` false, and only the render that follows schedules
   the transition's unmount. Inside a single `act` the queued update is not applied until the block
-  exits, so the card is still in the DOM however long that block waits.
+  exits, so the card is still in the DOM however far that block advances the clock.
 - **Re-hovering the same control inside a `TooltipGroup` needs a *third* `act` block.** Two blocks
   close the card and unmount it; the third is not part of closing at all, and waits out the group
   instead. `FloatingDelayGroup` waits its `timeoutMs` after a close before clearing the current group
-  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms waits
+  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms advances
   do not outlast it. Hover the same control again while it is pending and the card opens instantly
   (the group is in its instant phase) and the stale timer's close lands in the same `act`: it opens
-  and shuts inside one block, and the assertion reads zero. One more wait fixes it, and
+  and shuts inside one block, and the assertion reads zero. One more advance in a separate `act`
+  fixes it, and
   [`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx)'s `cardFor` is the
   copy to take.
 

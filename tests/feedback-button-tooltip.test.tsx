@@ -52,6 +52,7 @@ import {
   FeedbackTrigger,
   type FeedbackVariant,
 } from "../src/web/FeedbackButton.js";
+import { DELAY } from "../src/web/Tooltip.js";
 import { readerCssNoComments } from "./helpers/stylesheets.js";
 
 /* The dialog is mounted for the life of the page whether or not it is open
@@ -125,6 +126,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 const theButton = () => {
@@ -142,8 +144,10 @@ const theButton = () => {
  * A **native** `mouseenter` dispatched on the trigger, because `useHover` binds
  * that listener to the reference node rather than going through React, so a
  * bubbling `mouseover` never reaches it — tests/tooltip-on-link.test.tsx has
- * the measurement. Then the open delay waited out for real: this button is not
- * inside a `TooltipGroup`, so the delay is `Tooltip.tsx`'s own 240ms.
+ * the measurement. Then the open delay, on a faked clock and by the constant:
+ * this button is not inside a `TooltipGroup`, so the delay is `Tooltip.tsx`'s
+ * own `DELAY.open`. It slept 350ms of real time until 2026-10-04, a margin over
+ * 240 that a busy box could eat.
  */
 async function openCard(): Promise<Element> {
   /* **Nothing open before the pointer arrives**, and this line is the control
@@ -152,9 +156,10 @@ async function openCard(): Promise<Element> {
      "exactly one" check underneath, and every word assertion would be reading a
      panel this test never opened. GPT Sol asked for it, 2026-09-03. */
   expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(0);
+  vi.useFakeTimers();
   theButton().dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 350));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering the button opened no card, or more than one").toHaveLength(1);

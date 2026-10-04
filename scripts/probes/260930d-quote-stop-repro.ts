@@ -10,7 +10,7 @@
  *   npx tsx scripts/probes/260930d-quote-stop-repro.ts list <slug>
  *   npx tsx scripts/probes/260930d-quote-stop-repro.ts run <slug>:<id> [<slug>:<id> ...]
  *
- * READ ONLY against the local store (the loading is 260930a-investigate-probe's).
+ * READ ONLY against the local store (the loading is the 260930a investigate probe's, since deleted).
  * The request, the allowed texts and the matched page come from the exported
  * functions `prepare()` in src/citation-investigate.ts uses; the call goes
  * through `runStream` under job `citation-investigate`, profile null. The

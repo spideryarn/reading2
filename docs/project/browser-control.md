@@ -125,7 +125,12 @@ worth knowing here is that **it starts two of each server at once**. That is wha
 a box built for parallel sessions, `chrome-devtools` was registered without `--isolated`, so the
 second agent to reach for it got `The browser is already running for …`. One at a time passes
 happily. It also gives the two instances different markers, so two servers that ended up sharing a
-browser fail rather than agreeing with each other.
+browser fail rather than agreeing with each other. Since 2026-10-04 "at once" is made true rather
+than hoped for: both stay alive until both have opened their page, and each is then asked what it
+is looking at, without navigating again. Before that each was killed the moment its own navigation
+answered, so a pair that never overlapped passed while sharing —
+[`tests/remote-smoke-mcp-browser.test.ts`](../../tests/remote-smoke-mcp-browser.test.ts) holds it
+against a fake pair with one page between them.
 
 Three checks remain narrower than they look. The `mcp` check covers the three service servers in
 [`.mcp.json`](../../.mcp.json) and asserts the handshake only. Provisioning asserts the registration

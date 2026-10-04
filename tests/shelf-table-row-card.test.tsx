@@ -137,11 +137,16 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  /* Every wait in this file is a tooltip's timer, so the clock is faked for the
+     whole of it (2026-10-04: they were real sleeps until then). The numbers are
+     the ones that were slept: the table's `TooltipGroup` sets its own delay. */
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function paint(entries: LibraryEntry[] = [ENTRY]): void {
@@ -173,7 +178,7 @@ function action(name: string): HTMLElement {
 
 async function wait(ms: number): Promise<void> {
   await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
+    vi.advanceTimersByTime(ms);
   });
 }
 
@@ -220,14 +225,14 @@ describe("the row card", () => {
     const link = titleLink();
     await act(async () => {
       link.focus();
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     const cards = openCards();
     expect(cards, "focusing the title opened no card, or more than one").toHaveLength(1);
     expect(flat(cards[0]?.textContent)).toContain(ENTRY.gist ?? "no gist");
     await act(async () => {
       link.blur();
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   });
 
@@ -312,7 +317,7 @@ describe("one card at a time", () => {
     const link = titleLink();
     await act(async () => {
       link.focus();
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     expect(openCards()).toHaveLength(1);
     const archive = action("Archive");
@@ -329,7 +334,7 @@ describe("one card at a time", () => {
     leave(archive);
     await act(async () => {
       link.blur();
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
     await settle();
   });

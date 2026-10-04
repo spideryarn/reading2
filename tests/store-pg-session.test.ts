@@ -229,6 +229,7 @@ import type {
   Tree,
   TweetThread,
 } from "../src/types.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
@@ -794,26 +795,6 @@ async function failedDraftOf(articleId: string) {
     throw new Error(`expected exactly one failed draft for article ${articleId}, found ${rows.length}`);
   }
   return rows[0]!.id;
-}
-
-/**
- * Wait until some other backend is really blocked by `pid` — or say so and fail.
- *
- * **A sleep cannot make this claim**, and the version of the lock case that
- * slept a second could not tell a commit waiting on a row lock from a commit
- * that was merely slower than the sleep. `pg_blocking_pids` names the blocker,
- * so the answer is about *this* transaction rather than about the laptop. Copied
- * from tests/store-job-draft.test.ts, which reached the same conclusion first.
- */
-async function waitUntilBlockedBy(pid: number): Promise<void> {
-  for (let i = 0; i < 200; i++) {
-    const found = await db().execute(
-      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
-    );
-    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`nothing ever queued behind backend ${pid} — the commit under test never blocked`);
 }
 
 /** The arc text on a revision, or null — the marker every write assertion reads. */
@@ -1526,7 +1507,7 @@ describe("the transactional session", () => {
          whole class of check docs/reusable/silent-success.md is about. Watched:
          with `lockArticleFor` replaced by a 1.5s sleep, the old assertion stayed
          green and this one says "nothing ever queued behind backend N". */
-      await waitUntilBlockedBy(pid);
+      await waitUntilBlockedBy(pid, { what: "the commit" });
       expect(settled, "the commit ran to completion without the article row").toBe(false);
 
       /* **Whether the lock is taken before or after the artefact write is not

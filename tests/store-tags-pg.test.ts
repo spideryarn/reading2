@@ -18,6 +18,7 @@ import { articleTags, articles } from "../src/db/schema.js";
 import { currentOwnerId, EVAL_OWNER_ID } from "../src/owner.js";
 import { pgTagStore } from "../src/store/pg-tags.js";
 import { TAGS_PER_ARTICLE, TAGS_PER_EDIT } from "../src/tags.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -35,18 +36,6 @@ const status = (p: Promise<unknown>) =>
     () => "ok",
     (err: { status?: number }) => err.status ?? "no status",
   );
-
-/** Wait for a backend to be an actual blocker; elapsed time is never evidence. */
-async function waitUntilBlockedBy(pid: number): Promise<void> {
-  for (let i = 0; i < 200; i++) {
-    const found = await getDb().execute(
-      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
-    );
-    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  throw new Error(`the tag edit never blocked behind backend ${pid}`);
-}
 
 describe("the reader's own tags", () => {
   beforeAll(async () => {
@@ -144,7 +133,7 @@ describe("the reader's own tags", () => {
       /* The old fixed sleep could pass merely because a busy box had not
          scheduled `edit` yet. Observe the lock wait itself; the timeout above
          exists only to fail if it never happens. */
-      await waitUntilBlockedBy(pid);
+      await waitUntilBlockedBy(pid, { what: "the tag edit" });
     });
     expect(await edit).toBe(400);
     expect(await pgTagStore.tagsFor(SLUG)).toHaveLength(TAGS_PER_ARTICLE);

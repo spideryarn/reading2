@@ -14,7 +14,8 @@
  * and the shape is evals/plain-words/run.ts's. **The arms are separated in
  * time, not in code**: `generate` calls production's own `generateQuiz`, so
  * `before` is run on the commit before the prompt change and `after` on the
- * commit with it, and each arm records a hash of src/quiz.ts.
+ * commit with it, and each arm records a hash of src/quiz.ts and of the shared prompt
+ * modules it imports (evals/plain-words/source-fingerprint.ts).
  *
  * **A pair is a whole quiz, not a question.** What changed is the shape of the
  * batch — how many, how small, and whether each leans on the last — and a
@@ -29,9 +30,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../src/env.js";
 import { blindCoin } from "./plain-words/run.js";
+import { sourceFingerprint } from "./plain-words/source-fingerprint.js";
 
 const OUT = path.join(import.meta.dirname, "results", "quiz-build-up");
 
@@ -50,7 +51,10 @@ interface ArmFile {
   arm: string;
   slug: string;
   promptVersion: string;
+  /** src/quiz.ts alone. */
   sourceSha256: string;
+  /** quiz.ts and the shared prompt modules it imports. Absent on arms from before 2026-10-04. */
+  promptSourceSha256?: Record<string, string>;
   at: string;
   dropped: Record<string, number>;
   /** Missing on the two `before` arms, which were run before this was recorded. */
@@ -153,7 +157,9 @@ async function pairs(a: string, b: string): Promise<void> {
   if (a.startsWith("before") && b.startsWith("before")) {
     for (const [slug, qa] of fa) {
       const qb = fb.get(slug);
-      if (qb && (qa.sourceSha256 !== qb.sourceSha256 || qa.promptVersion !== qb.promptVersion)) {
+      const wide = (f: ArmFile) => JSON.stringify(Object.entries(f.promptSourceSha256 ?? {}).sort());
+      const movedThroughAnImport = qb?.promptSourceSha256 && qa.promptSourceSha256 && wide(qa) !== wide(qb);
+      if (qb && (qa.sourceSha256 !== qb.sourceSha256 || movedThroughAnImport || qa.promptVersion !== qb.promptVersion)) {
         throw new Error(`${a} and ${b} differ in prompt on ${slug}: not a control`);
       }
     }
@@ -246,14 +252,16 @@ async function pairs(a: string, b: string): Promise<void> {
 
 /* ----------------------------------------------------------- generate -- */
 
+/** The prompt source file; source-fingerprint.ts adds the shared prompt modules it imports. */
+export const SOURCES = ["quiz.ts"];
+
 async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
+  const promptSourceSha256 = sourceFingerprint(SOURCES);
+  const sourceSha256 = promptSourceSha256["quiz.ts"]!;
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const { loadArticle } = await import("../src/store/index.js");
   const { generateQuiz, PROMPT_VERSION, QUIZ_MAX_TOKENS } = await import("../src/quiz.js");
-  const sourceSha256 = createHash("sha256")
-    .update(fs.readFileSync(path.join(import.meta.dirname, "..", "src", "quiz.ts")))
-    .digest("hex");
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
     for (const slug of slugs) {
@@ -267,6 +275,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         slug,
         promptVersion: PROMPT_VERSION,
         sourceSha256,
+        promptSourceSha256,
         at: new Date().toISOString(),
         dropped: { ...run.dropped },
         outputTokens: run.outputTokens,

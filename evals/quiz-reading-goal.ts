@@ -42,9 +42,12 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
+import { sourceFingerprint } from "./plain-words/source-fingerprint.js";
 
 const OUT = path.join(import.meta.dirname, "results", "quiz-reading-goal");
 const QUIZ_SOURCE = path.join(import.meta.dirname, "..", "src", "quiz.ts");
+/** The prompt source file; source-fingerprint.ts adds the shared prompt modules it imports. */
+export const SOURCES = ["quiz.ts"];
 
 interface ArmFile {
   arm: string;
@@ -54,7 +57,14 @@ interface ArmFile {
   about?: string | null;
   at: string;
   /** Which prompt wrote it. Absent on runs from before 261001c. */
-  provenance?: { gitHead: string; quizDirty: boolean; quizSourceSha256: string; model: string };
+  provenance?: {
+    gitHead: string;
+    quizDirty: boolean;
+    quizSourceSha256: string;
+    /** quiz.ts and the shared prompt modules it imports. Absent on runs from before 2026-10-04. */
+    promptSourceSha256?: Record<string, string>;
+    model: string;
+  };
   /** Block ids in document order, so `report` needs no database. */
   order: string[];
   /** Each part's title and first/last block id. */
@@ -83,6 +93,7 @@ function sourceProvenance(): SourceProvenance {
     gitHead: git("rev-parse", "HEAD"),
     quizDirty: git("status", "--porcelain", "--", QUIZ_SOURCE) !== "",
     quizSourceSha256: createHash("sha256").update(fs.readFileSync(QUIZ_SOURCE)).digest("hex"),
+    promptSourceSha256: sourceFingerprint(SOURCES),
   };
 }
 
@@ -100,8 +111,8 @@ async function generate(arm: string, purpose: string | null, about: string | nul
     console.log(`${arm}: ${slug} — ${profile ?? "no profile"}`);
     const run = await generateQuiz({ power: "standard", article, profile });
     const after = sourceProvenance();
-    if (after.quizSourceSha256 !== source.quizSourceSha256) {
-      throw new Error("src/quiz.ts changed during the model call; refusing to record false provenance");
+    if (JSON.stringify(after.promptSourceSha256) !== JSON.stringify(source.promptSourceSha256)) {
+      throw new Error("src/quiz.ts or a prompt module it imports changed during the model call; refusing to record false provenance");
     }
     const file: ArmFile = {
       arm,

@@ -33,7 +33,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Comment } from "../src/types.js";
 import { Dock, fitSignature } from "../src/web/Dock.js";
 import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
@@ -100,6 +100,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 describe("a comment write that failed", () => {
@@ -207,9 +208,10 @@ describe("a comment write that failed", () => {
       const btn = commentsButton();
       const before = btn?.getAttribute("aria-describedby") ?? "";
       await act(async () => {
+        vi.useFakeTimers();
         btn?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
         btn?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
-        await new Promise((r) => setTimeout(r, 450)); // past the 300ms open delay
+        vi.advanceTimersByTime(450); // past the 300ms open delay
       });
       const after = commentsButton()?.getAttribute("aria-describedby") ?? "";
       /* The card's id is an *addition*, so the open state names at least as many

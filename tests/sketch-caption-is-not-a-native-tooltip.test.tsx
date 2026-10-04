@@ -174,22 +174,33 @@ async function settle() {
  * pointer route takes two events). 400ms is the group's open delay plus its
  * transition — the same wait tests/diagram-panel-hover.test.tsx uses. The card
  * is portalled to `<body>`, so it is not inside `host`.
+ *
+ * **On a faked clock, and only for as long as this takes** (2026-10-04; the two
+ * waits were real sleeps). The cases call `settle` again afterwards, and that
+ * ticks with a real timer, so the clock is handed back on the way out — after
+ * whatever the close left pending has run, so no timer is dropped half-way.
  */
 async function cardOn(el: Element | null): Promise<{ text: string; drawn: string | null }> {
   expect(el, "nothing to open a card on").not.toBeNull();
-  (el as HTMLElement).focus();
-  await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-  const card = document.querySelector('[role="tooltip"]');
-  expect(card, "focusing it opened no card").not.toBeNull();
-  const text = card?.textContent ?? "";
-  /* The paragraph `ControlTip` renders only for what was drawn for *this*
-     article — the one line in these cards that is not the same words for every
-     reader. `null` when the card has no such paragraph, which is what every
-     other chip's card should look like. */
-  const drawn = card?.querySelector(".tip-soon-drawn")?.textContent ?? null;
-  (el as HTMLElement).blur();
-  await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-  return { text, drawn };
+  vi.useFakeTimers();
+  try {
+    (el as HTMLElement).focus();
+    await act(async () => { vi.advanceTimersByTime(400); });
+    const card = document.querySelector('[role="tooltip"]');
+    expect(card, "focusing it opened no card").not.toBeNull();
+    const text = card?.textContent ?? "";
+    /* The paragraph `ControlTip` renders only for what was drawn for *this*
+       article — the one line in these cards that is not the same words for every
+       reader. `null` when the card has no such paragraph, which is what every
+       other chip's card should look like. */
+    const drawn = card?.querySelector(".tip-soon-drawn")?.textContent ?? null;
+    (el as HTMLElement).blur();
+    await act(async () => { vi.advanceTimersByTime(400); });
+    await act(async () => { vi.runOnlyPendingTimers(); });
+    return { text, drawn };
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 describe("the caption is not a tooltip over the whole picture", () => {
