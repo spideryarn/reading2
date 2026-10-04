@@ -182,6 +182,17 @@ Only if it stays small. Otherwise `report-artefacts.ts` stays on the list and th
 - 2026-10-04 — [round two](261004c-review-3-gpt-sol-round-two.md): **LAND**, no changes. F10–F13
   hold; the stage 5 claims hold; one prose finding (F15, the pass-counter comment overstated), fixed.
   Discovery is closed.
+- 2026-10-04 — the full `npm test` on the merged tree found one thing the focused runs had not:
+  `tests/overseer-daemon-recovery-resume.test.ts` ("the synchronous recapture") failed about one
+  run in two. It used the daemon's default probe and read `recovery.json`'s view the moment the
+  first payload was folded. With the probe awaited, a 5 ms test heartbeat can tick before that fold
+  and write the file with no view yet. That was always possible when the first payload was slow to
+  arrive; the synchronous probe just made it never happen in the test. The test now waits for the
+  view (0 failures in 8 runs). **What this says about the change:** the daemon's timers now run
+  during the probe, against the previous collection — which is the point, and at the real 30 s tick
+  against a ~40 ms `ps` it is rare. Not sent back to Sol: a test-only fix after discovery closed.
+  The other two red files (`cold-start-lazy-imports`, `pdf-bundle-trace`) want `npm run build`, as
+  in any fresh worktree.
 
 ## What is left on the guard's list, and why
 
