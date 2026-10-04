@@ -17,6 +17,7 @@
  *
  * See docs/plans/260826u-pdf-upload-and-storage.md § What was measured, not read.
  */
+import { MAX_UPLOAD_BYTES } from "../uploads.js";
 import { readStreamCapped } from "../read-capped.js";
 import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.js";
 
@@ -153,18 +154,22 @@ export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceSto
          deliberately has no such check, for the opposite reason). The count of
          what actually arrives is the only number that is true, and a chunked
          response has no header at all, so the body goes through the same
-         streaming counter the fetch uses and is cancelled at the first byte
-         over. Until 2026-10-04 this was `arrayBuffer()` and a length check
+         streaming counter the fetch uses and is cancelled on the first chunk
+         that exceeds the cap. Until 2026-10-04 this was `arrayBuffer()` and a length check
          afterwards, which bounded what we kept and not what we buffered.
          Truncating on neither is the point: half a PDF hashes to a real-looking
          number that answers a different question. */
-      const max = options?.maxBytes;
+      // A caller may tighten the bound or name a stored UTF-8 size larger than
+      // the wire document. Omitting it must still bound production image reads.
+      const requested = options?.maxBytes;
+      const max = requested !== undefined && Number.isFinite(requested) && requested >= 0
+        ? Math.floor(requested)
+        : MAX_UPLOAD_BYTES;
       const claimed = Number(res.headers.get("content-length"));
-      if (max !== undefined && Number.isFinite(claimed) && claimed > max) {
-        void res.body?.cancel();
+      if (Number.isFinite(claimed) && claimed > max) {
+        await res.body?.cancel().catch(() => {});
         throw new Error(`That object is ${claimed} bytes and the limit is ${max}.`);
       }
-      if (max === undefined) return new Uint8Array(await res.arrayBuffer());
       const bytes = await readStreamCapped(
         res.body,
         max,

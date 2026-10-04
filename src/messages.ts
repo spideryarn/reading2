@@ -2124,8 +2124,9 @@ export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
  * at `MAX_UPLOAD_BYTES` (`DEFAULTS.maxBytes` in src/fetch.ts is that constant),
  * so the number here and the number in the dialog are one number.
  *
- * `blocked` for `UPLOAD_TOO_BIG`'s reason: the address serves the same bytes
- * next time. Until 2026-10-04 this failure had no sentence of its own, so the
+ * `blocked` because this document cannot fit under the cap. A URL may change,
+ * but retrying the same document cannot make it fit. Until 2026-10-04 this
+ * failure had no sentence of its own, so the
  * job card gave it the generic copy and a Retry that fetched up to the limit
  * again and failed again
  * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
@@ -2138,8 +2139,8 @@ export const FETCH_TOO_BIG: ReaderFacingFailure = {
   kind: "blocked",
   message:
     `The document at that address is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, ` +
-    "which is the most this app can take. Trying again will not help: it will be the same size. " +
-    "A smaller document, or a shorter extract of this one saved as a file, will. [fetch-big]",
+    "which is the most this app can take. Trying again with the same document will not help. " +
+    "Choose a smaller document, or save a shorter extract of this one as a file. [fetch-big]",
 };
 
 /**

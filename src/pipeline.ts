@@ -2147,7 +2147,7 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
  *
  * `FetchFailure` declares no `readerFailure`, so `readerFailureOf` gives each
  * of its codes the generic copy and offers Retry. For this one code that was
- * a button that cannot work: the address serves the same bytes next time. The
+ * a button that cannot import the same over-limit document. The
  * upload half has said so since it was written (`UPLOAD_TOO_BIG`); this is the
  * fetched half saying the same thing, with the same number
  * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).

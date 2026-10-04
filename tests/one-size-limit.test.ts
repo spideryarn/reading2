@@ -17,9 +17,13 @@
  *     address is the same size next time.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULTS, FetchFailure, type FetchOptions } from "../src/fetch.js";
+import { DEFAULTS, FetchFailure, readRawBytes, type FetchOptions } from "../src/fetch.js";
+import { readStreamCapped } from "../src/read-capped.js";
 import { readerFailureOf } from "../src/job-failure.js";
 import { STEPS } from "../src/pipeline.js";
+import { createHash } from "node:crypto";
+import { kindOfMessage, worthRetrying } from "../src/messages.js";
+import type { RawSourceStore } from "../src/store/blobs.js";
 import { supabaseBlobs } from "../src/store/blobs-supabase.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { MAX_UPLOAD_BYTES } from "../src/uploads.js";
@@ -134,6 +138,61 @@ describe("the store's read stops at the cap", () => {
     expect(pulled).toBeLessThan(chunks);
   });
 
+  for (const maxBytes of [undefined, NaN, Infinity, -1]) {
+    it(`bounds a read with ${String(maxBytes)} as its cap`, async () => {
+      let pulled = 0;
+      const cancel = vi.fn();
+      const chunk = new Uint8Array(MAX_UPLOAD_BYTES / 2);
+      vi.stubGlobal("fetch", async () => new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled === 4) { controller.close(); return; }
+          pulled += 1;
+          controller.enqueue(chunk);
+        },
+        cancel,
+      }, { highWaterMark: 1 })));
+      const store = supabaseBlobs("https://proj.supabase.co", "service-key");
+      await expect(store.get("ab/abcdef.pdf", maxBytes === undefined ? {} : { maxBytes })
+        .then((bytes) => bytes?.byteLength)).rejects.toThrow(`the limit is ${MAX_UPLOAD_BYTES}`);
+      expect(pulled).toBeLessThanOrEqual(4);
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+  }
+
+  it("preserves the size refusal when cancelling a header refusal fails", async () => {
+    const cancel = vi.fn().mockRejectedValue(new Error("cancel failed"));
+    vi.stubGlobal("fetch", async () => new Response(new ReadableStream<Uint8Array>({ cancel }), {
+      headers: { "content-length": "4" },
+    }));
+    const store = supabaseBlobs("https://proj.supabase.co", "service-key");
+    await expect(store.get("ab/abcdef.pdf", { maxBytes: 3 })).rejects.toThrow("the limit is 3");
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("passes the AbortSignal through and preserves an abort during the body read", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("stopped", "AbortError");
+    let body: ReadableStream<Uint8Array> | undefined;
+    const fetchImpl = vi.fn(async (_input: unknown, init: RequestInit | undefined) => {
+      expect(init?.signal).toBe(controller.signal);
+      body = new ReadableStream<Uint8Array>({
+        start(stream) {
+          init?.signal?.addEventListener("abort", () => stream.error(controller.signal.reason), { once: true });
+          stream.enqueue(new Uint8Array([1]));
+        },
+      });
+      return new Response(body);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+    const pending = supabaseBlobs("https://proj.supabase.co", "service-key").get("ab/abcdef.pdf", { signal: controller.signal });
+    const assertion = expect(pending).rejects.toBe(reason);
+    await Promise.resolve();
+    controller.abort(reason);
+    await assertion;
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(body?.locked).toBe(false);
+  });
+
   /** A body delivered in these chunks, with no declared length. */
   const inChunks = (...chunks: number[][]) =>
     new ReadableStream<Uint8Array>({
@@ -182,6 +241,46 @@ describe("the store's read stops at the cap", () => {
 });
 
 describe("the job card under an address that is over the limit", () => {
+  const ctx = (signal = new AbortController().signal) => ({
+    slug: "test-one-size-limit",
+    url: "https://example.com/private-reading-history.pdf?secret=token",
+    report: () => {},
+    preview: () => {},
+    signal,
+    cacheArticle: false,
+    power: "standard" as const,
+  });
+
+  for (const error of [
+    new FetchFailure("not-found", "https://example.com/secret", "missing"),
+    new DOMException("reader stopped", "AbortError"),
+    new DOMException("deadline", "TimeoutError"),
+    new Error("broken connection"),
+  ]) {
+    it(`does not label ${error.name}: ${error.message} as too big`, async () => {
+      network.seams = {
+        attempts: 1,
+        resolve: async () => ["93.184.216.34"],
+        fetchImpl: async () => { throw error; },
+      };
+      const thrown = await STEPS.fetch.run(ctx(), memoryArtefacts(), nullCheckpointStore()).catch((err: unknown) => err);
+      expect(thrown).toBeInstanceOf(FetchFailure);
+      expect((thrown as FetchFailure).code).not.toBe("too-large");
+      expect(readerFailureOf(thrown, STEPS.fetch.label).message).not.toContain("[fetch-big]");
+    });
+  }
+
+  it("keeps a caller's Stop out of the size failure", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn();
+    network.seams = { attempts: 1, resolve: async () => ["93.184.216.34"], fetchImpl };
+    const thrown = await STEPS.fetch.run(ctx(controller.signal), memoryArtefacts(), nullCheckpointStore()).catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(FetchFailure);
+    expect((thrown as FetchFailure).code).toBe("timeout");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(readerFailureOf(thrown, STEPS.fetch.label).message).not.toContain("[fetch-big]");
+  });
   it("is told the limit and is not offered Retry", async () => {
     network.seams = serving(pdfOf(MAX_UPLOAD_BYTES + 1), false);
     const ctx = {
@@ -205,5 +304,60 @@ describe("the job card under an address that is over the limit", () => {
     expect(failure.kind).toBe("blocked");
     expect(failure.message).toContain("50 MB");
     expect(failure.message).toContain("[fetch-big]");
+    expect(kindOfMessage(failure.message)).toBe("blocked");
+    expect(worthRetrying(failure.message)).toBe(false);
+    expect((thrown as Error).message).toBe(`The fetched document is over ${MAX_UPLOAD_BYTES} bytes. [fetch-big]`);
+    expect((thrown as Error).cause).toBeUndefined();
   });
+});
+
+
+describe("the shared counter's cleanup", () => {
+  it("cancels once and releases the lock while preserving the limit error if cancel rejects", async () => {
+    const tooBig = new Error("too big");
+    const cancel = vi.fn().mockRejectedValue(new Error("cancel failed"));
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) { controller.enqueue(new Uint8Array([1, 2])); },
+      cancel,
+    }, { highWaterMark: 0 });
+    await expect(readStreamCapped(body, 1, () => tooBig)).rejects.toBe(tooBig);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it("attempts cancel after a read error, releases the lock and keeps the original error", async () => {
+    const broken = new Error("broken socket");
+    const body = new ReadableStream<Uint8Array>({ pull() { throw broken; } });
+    const reader = body.getReader();
+    const cancel = vi.spyOn(reader, "cancel");
+    vi.spyOn(body, "getReader").mockReturnValue(reader);
+    await expect(readStreamCapped(body, 10, () => new Error("too big"))).rejects.toBe(broken);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it("does not cancel on a clean finish and releases the lock", async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array([1])); controller.close(); },
+      cancel,
+    });
+    await expect(readStreamCapped(body, 1, () => new Error("too big"))).resolves.toEqual(new Uint8Array([1]));
+    expect(cancel).not.toHaveBeenCalled();
+    expect(body.locked).toBe(false);
+  });
+});
+
+
+it("bounds legacy raw HTML with room for UTF-8 expansion", async () => {
+  const bytes = new TextEncoder().encode("<p>legacy</p>");
+  const hash = createHash("sha256").update(bytes).digest("hex");
+  const get = vi.fn(async () => bytes);
+  const store = { get } as unknown as RawSourceStore;
+  await expect(readRawBytes({
+    requestedUrl: "https://example.com/", url: "https://example.com/", file: "raw.html",
+    contentType: "text/html", kind: "html", bytes: bytes.length, sha256: hash, storedSha256: hash,
+    encoding: "utf-8", fetchedAt: "2026-10-04T00:00:00Z",
+  }, { store })).resolves.toEqual(bytes);
+  expect(get).toHaveBeenCalledWith(expect.any(String), { maxBytes: 3 * MAX_UPLOAD_BYTES });
 });

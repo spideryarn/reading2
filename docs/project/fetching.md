@@ -101,7 +101,9 @@ refused at a size the dialog had just called fine.
 
 The machinery is shared too. The streaming counter is `readStreamCapped` in `src/read-capped.ts`,
 and both the fetch (`readCapped`) and the store's own read (`get` in `src/store/blobs-supabase.ts`)
-go through it; the store used to read the whole body and check its length afterwards. It is still a
+go through it; omitted Storage caps default to `MAX_UPLOAD_BYTES`, while explicit limits can
+name the size of stored UTF-8 HTML. The store used to read the whole body and check its length
+afterwards. It is still a
 defence ([security-map.md](security-map.md)): a hard stop on bytes that arrived. What a body at the cap
 holds in the fetch itself is the chunks plus one joined copy, up from about 64 MiB to about
 100 MiB; past that point an upload at 50 MiB already sends the same bytes down the same pipeline.
@@ -111,8 +113,9 @@ Only the pipeline's own document fetch uses the default: link
 previews, paper text, figures and the bibliographic lookups each pass a tighter cap of their own.
 
 **What the reader is told.** Over the cap, the job card shows `FETCH_TOO_BIG` (`[fetch-big]` in
-`src/messages.ts`), which names the limit and is `blocked`, so no Retry is offered: the address
-serves the same bytes next time. The plan is
+`src/messages.ts`), which names the limit and is `blocked`, so no Retry is offered for the same
+over-limit document. The content at an address can change;
+this refusal does not predict its future size. The plan is
 [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
 
 **The number also has a floor with a source.** The previous version used 4 MB

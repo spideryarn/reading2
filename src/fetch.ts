@@ -465,8 +465,7 @@ export class RawDocumentUnavailable extends Error {
  *
  * `storeRawSource` proves what was written; this proves what came back, and
  * they are different moments with a network and a filesystem in between. One
- * SHA-256 pass over a buffer already in memory — about 60 ms at the 32 MB
- * ceiling — against a stage that is about to run jsdom over it or spend a
+ * SHA-256 pass over a buffer already in memory, against a stage that is about to run jsdom over it or spend a
  * vision-model call on it. The same trade `pg-source.ts` makes, for the same
  * reason.
  */
@@ -506,7 +505,9 @@ export async function readRawBytes(
   try {
     bytes = await store.get(
       key,
-      manifest.storedBytes === undefined ? {} : { maxBytes: manifest.storedBytes },
+      // Legacy HTML lacks a stored count and may expand when decoded to UTF-8.
+      // At most three UTF-8 bytes replace one input byte (including U+FFFD).
+      { maxBytes: manifest.storedBytes ?? MAX_UPLOAD_BYTES * (kind === "html" ? 3 : 1) },
     );
   } catch (err) {
     /* **The bound throwing is corruption; everything else is a fault.** Both
@@ -765,7 +766,8 @@ export const USER_AGENT =
  * so the dialog's "up to 50 MB" is true of a file chosen and of an address
  * pasted and the two cannot drift. It was a second literal, 32 MiB, until
  * 2026-10-04, and a document fetched by address was refused at a size the
- * dialog had just said was fine. Greg, 2026-10-04: "make them consistent".
+ * dialog had just said was fine. Greg, 2026-10-04:
+ * "make them consistent (and perhaps reuse the same protection-machinery)".
  * docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md.
  *
  * Still a hard cap on bytes that arrived, and it still has a floor with a
@@ -1443,7 +1445,7 @@ interface LeadingToken {
  *
  * **There is no prefix cap here**, which is ⟨Sol F6⟩ answered: a licence header
  * or an unterminated comment pushes the first tag past any window we would pick,
- * and the input is already bounded by the 32 MB fetch cap and the 50 MB upload
+ * and the input is already bounded by the shared 50 MiB fetch and upload
  * cap. The walk is linear and stops at the first non-skippable unit, so the
  * common case reads a handful of them.
  *
@@ -2403,7 +2405,7 @@ async function readBody(res: Response, finalUrl: string, opts: Resolved): Promis
      already established lies about it. A server that overstates would have had
      a perfectly good article refused with a confident number in the message,
      and no way to tell from the outside. What the check bought was skipping a
-     download the cap already bounds at 32 MB — a few seconds, against a class
+     download the cap already bounds at 50 MiB — a few seconds, against a class
      of bug nobody could diagnose. */
   const bytes = await readCapped(res.body, opts.maxBytes, finalUrl);
   if (bytes.byteLength === 0) {

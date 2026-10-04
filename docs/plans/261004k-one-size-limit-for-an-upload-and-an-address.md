@@ -23,7 +23,7 @@ There are two size guards and they are not the same strength.
 
 | path | guard | how it counts |
 | --- | --- | --- |
-| address | `readCapped` in `src/fetch.ts` | counts bytes as they arrive, cancels the socket at the first byte over |
+| address | `readCapped` in `src/fetch.ts` | counts bytes as they arrive, cancels the socket on the first chunk over |
 | upload | `get` in `src/store/blobs-supabase.ts` | refuses on `Content-Length`, then `res.arrayBuffer()` reads the **whole** body and checks the length afterwards |
 
 The upload guard has a second line in front of it (`store.head` in `acquireUpload`, and Supabase's
@@ -32,7 +32,7 @@ is buffered in full before the check, which is the weaker shape.
 
 The job card: `FetchFailure` carries no `readerFailure`, so `readerFailureOf` in
 `src/job-failure.ts` gives the fetch step's over-limit failure the generic "retry" sentence and
-the card offers Retry. A retry fetches the same bytes and fails the same way. **To be shown by a
+the card offers Retry. A retry of the same over-limit document fails the same way; URL content can change. **To be shown by a
 red test before it is believed.**
 
 ## The plan
@@ -113,3 +113,25 @@ Built 2026-10-04 as planned, in one stage.
 
 Not done here: every other `FetchFailure` code still reaches the job card as the generic retry
 sentence (see § Not in this plan).
+
+## Security code review corrections
+
+The Storage adapter now defaults omitted or invalid caps to `MAX_UPLOAD_BYTES` rather than
+buffering without a limit. This also bounds the private/public image-serving callers. Explicit
+stored-byte counts remain supported, including UTF-8 HTML larger than its wire representation;
+legacy manifests without that count use a bounded allowance of three times the document cap for
+HTML. A failed header-refusal cancellation is swallowed so it cannot create an unhandled rejection.
+
+The reader sentence still declares `blocked`, but refers to retrying the same document rather
+than promising that mutable URL content will always have the same size. Cleanup, signal handling,
+error classification and the cap defaults have regression assertions in `tests/one-size-limit.test.ts`.
+
+
+Review validation: the requested `one-size-limit`, `fetch` and `blobs` suites pass **152 tests**.
+The message-registry and doc-link suites also passed (196 tests in that combined run). The original
+adapter fails all four new default-cap regressions; mutations of the old fetch default, reader
+classification, counter cancellation, lock release and header cancellation each fail for their
+intended reason. The checking script passes all four TypeScript projects and coverage of 3,031
+source files through `node --import tsx scripts/typecheck.ts`. `npm run typecheck` itself cannot
+launch here because the sandbox refuses tsx's IPC socket; full `npm test` cannot reach local
+Postgres (`EPERM`). No commit was made by the reviewer.
