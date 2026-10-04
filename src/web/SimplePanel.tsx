@@ -7,15 +7,18 @@
  *
  * Drawn inside the Summary band, below the one row of controls
  * (SummaryMode.tsx § `SummaryControls`), so there is no `ModeSurface` here —
- * this is the body. Two levels, `simple` and `fuller`, one artefact: the panel
- * draws whichever the row has chosen.
+ * this is the body. Three levels, `brief`, `simple` and `fuller`, one artefact:
+ * the panel draws whichever the row has chosen.
  *
  * Two things keep it an orientation rather than a replacement for reading,
  * and the file must go on doing both:
  *
  * - **every paragraph is a door** — its ids are drawn with the same `BlockRef`
  *   chips the gists use, hover shows the passage, a click goes there;
- * - **plain text**, never markdown — model output is not HTML (security.md).
+ * - **the model's words are drawn as text**, never parsed — model output is
+ *   not HTML (security.md). Bold and bullets are two fields beside the text
+ *   (`key` and `list`, plan 261004b), and the elements for them are made here:
+ *   no markdown, no `dangerouslySetInnerHTML`.
  *
  * **What it is lives on the pills, not under the paragraphs.** There was a foot
  * here — *"Written by AI in plain words to help you get your bearings…"* —
@@ -23,10 +26,16 @@
  * descriptions - they waste space."* Each pill's card says it now, and
  * docs/project/mode.md has the rule.
  */
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type BlockId, type SimpleLevel, type SimpleParagraph, usableSentences } from "../types.js";
+import {
+  type BlockId,
+  type SimpleLevel,
+  type SimpleParagraph,
+  type SimpleSentence,
+  paragraphShape,
+} from "../types.js";
 import type { PublicSimpleSummary } from "../public-types.js";
 import type { UseSimple } from "./useSimple.js";
 import { BlockRef } from "./BlockRef.js";
@@ -162,40 +171,92 @@ export function SimplePanel({
  * the one shared card, a press that jumps, and the band's on-screen wash
  * (on-screen.ts § `onScreenLinkCss`) with nothing of its own. `.simple-sentence`
  * makes it read as prose rather than as an id chip. A sentence that names none
- * is plain text. Only `usableSentences` decides whether there are sentences to
- * draw — the same question a visitor's payload was built with — and a paragraph
- * without them draws exactly as before.
+ * is plain text. Only `paragraphShape` decides what there is to draw — the same
+ * question a visitor's payload was built with — and a paragraph without usable
+ * sentences draws exactly as before.
+ *
+ * **A list is the same sentences, laid out** (plan 261004b, Greg's spya-qzsvx4):
+ * the first is the lead-in and each later one a bullet, so a bullet is still
+ * one sentence and still the link above. The `<ul>` wears `.simple-text` as
+ * well, which is what puts it in the model's face and under the sentence rules.
  */
 function Paragraph({ paragraph, onJump }: { paragraph: SimpleParagraph; onJump(id: BlockId): void }) {
-  const sentences = usableSentences(paragraph);
+  const shape = paragraphShape(paragraph);
+  /* A rewrite can keep the paragraph but change a sentence's passage or
+     wording. Remount that link so the shared card dismisses its old anchor;
+     position distinguishes repeated sentences. */
+  const keyOf = (s: SimpleSentence, i: number) => JSON.stringify([i, s.id, s.text, s.key]);
+  const body = (): ReactNode => {
+    switch (shape.kind) {
+      case "text":
+        return <p className="simple-text">{paragraph.text}</p>;
+      case "prose":
+        return (
+          <p className="simple-text">
+            {shape.sentences.map((s, i) => (
+              <Fragment key={keyOf(s, i)}>
+                {i > 0 && " "}
+                <Sentence sentence={s} onJump={onJump} />
+              </Fragment>
+            ))}
+          </p>
+        );
+      case "list":
+        return (
+          <>
+            <p className="simple-text">
+              <Sentence key={keyOf(shape.lead, 0)} sentence={shape.lead} onJump={onJump} />
+            </p>
+            <ul className="simple-list simple-text">
+              {shape.items.map((s, i) => (
+                <li key={keyOf(s, i + 1)}>
+                  <Sentence sentence={s} onJump={onJump} />
+                </li>
+              ))}
+            </ul>
+          </>
+        );
+      default:
+        return shape satisfies never;
+    }
+  };
   return (
     <div className="simple-para">
-      {sentences ? (
-        <p className="simple-text">
-          {sentences.map((s, i) => (
-            /* A rewrite can keep the paragraph but change a sentence's passage
-               or wording. Remount that link so the shared card dismisses its
-               old anchor; position distinguishes repeated sentences. */
-            <Fragment key={JSON.stringify([i, s.id, s.text])}>
-              {i > 0 && " "}
-              {s.id === null ? (
-                <span>{s.text}</span>
-              ) : (
-                <BlockRef id={s.id} onJump={onJump} className="simple-sentence">
-                  {s.text}
-                </BlockRef>
-              )}
-            </Fragment>
-          ))}
-        </p>
-      ) : (
-        <p className="simple-text">{paragraph.text}</p>
-      )}
+      {body()}
       <div className="simple-refs">
         {paragraph.ids.map((id) => (
           <BlockRef key={id} id={id} onJump={onJump} />
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * One sentence: a block link when it names its passage, plain words when it
+ * names none. Its `key`, when it has one, is bold at its first occurrence —
+ * inside the link, so a bold phrase is as pressable as the words round it.
+ * `usableSentences` has already checked the key is in the text; a key that
+ * somehow is not draws no bold rather than anything else.
+ */
+function Sentence({ sentence, onJump }: { sentence: SimpleSentence; onJump(id: BlockId): void }) {
+  const { text, id, key } = sentence;
+  const at = key === undefined ? -1 : text.indexOf(key);
+  const words =
+    key === undefined || at < 0 ? (
+      text
+    ) : (
+      <>
+        {text.slice(0, at)}
+        <strong>{key}</strong>
+        {text.slice(at + key.length)}
+      </>
+    );
+  return id === null ? (
+    <span>{words}</span>
+  ) : (
+    <BlockRef id={id} onJump={onJump} className="simple-sentence">
+      {words}
+    </BlockRef>
   );
 }

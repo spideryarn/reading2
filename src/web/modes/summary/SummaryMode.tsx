@@ -253,7 +253,8 @@ function SummarySurface({
 /**
  * Each view's name and what it is, for the card on its segment. Short and very
  * simple, a little longer — Greg's words for the two lengths
- * (SPIDERYARN-READING2-7J); the thread's are the Tweets mode's.
+ * (SPIDERYARN-READING2-7J), until Fuller was made longer still on 2026-10-04
+ * (spya-azft06, plan 261004b); the thread's are the Tweets mode's.
  */
 const VIEW: Record<SummaryView, { label: string; what: string; how: string }> = {
   brief: {
@@ -263,7 +264,7 @@ const VIEW: Record<SummaryView, { label: string; what: string; how: string }> = 
   },
   fuller: {
     label: SUMMARY_SUB_MODES.fuller.label,
-    what: "Moderately complex: a little longer, keeping more of the piece's own terms, still in plain words.",
+    what: "Longer and more detailed: how it was done, the evidence and the limits, still in plain words.",
     how: "Written by AI once, with Brief, and kept. Each paragraph links to the passages it rests on — the article says it better.",
   },
   thread: {

@@ -534,18 +534,28 @@ function publicFaq(faq: Faq): PublicFaq {
 
 /**
  * **Simple, rebuilt level by level and paragraph by paragraph** — each
- * `{ text, ids }`, plus `sentences` when they are usable, and nothing else;
+ * `{ text, ids }`, plus `sentences` when they are usable (each with its `key`
+ * when that is valid) and `list: true` when it draws as one, and nothing else;
  * the stamp is pipeline provenance, and `profileHash` is the owner's.
  * src/public-types.ts § `PublicSimpleSummary` is the argument.
  */
 function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
   /* Sentences cross only through `usableSentences` — the owner's panel asks
      the same question — so a visitor never gets a list that is not the
-     paragraph's own checked text (plan 261002e, Sol F2). */
+     paragraph's own checked text (plan 261002e, Sol F2). It returns each
+     sentence rebuilt as `{ text, id }` and a `key` only when that is a phrase
+     of the sentence, so bold discloses no word the text does not (plan
+     261004b). `list` is one boolean about sentences that already cross, and
+     goes only with them: without usable sentences there is no list to draw. */
   const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
     paragraphs.map((p): SimpleParagraph => {
       const sentences = usableSentences(p);
-      return { text: p.text, ids: [...p.ids], ...(sentences ? { sentences } : {}) };
+      return {
+        text: p.text,
+        ids: [...p.ids],
+        ...(sentences ? { sentences } : {}),
+        ...(sentences && p.list === true ? { list: true } : {}),
+      };
     });
   return {
     levels: {

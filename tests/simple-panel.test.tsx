@@ -441,6 +441,99 @@ describe("the Simple view", () => {
     expect(sentenceLinks().map((a) => a.getAttribute("data-block-link"))).toEqual([MIDDLE]);
   });
 
+  /* ---- bold and bullets (plan 261004b) ---- */
+
+  const LEAD = "The essay gives three reasons:";
+  const ONE = "Brains are alive and machines are not.";
+  const TWO = "A simulation of a storm is not wet.";
+  const BULLETS = [
+    { text: LEAD, id: null },
+    { text: ONE, id: MIDDLE, key: "alive" },
+    { text: TWO, id: null },
+  ];
+  /** The first Simple paragraph as a list: a lead-in and two bullets. */
+  function withList(sentences: unknown = BULLETS, list: unknown = true): SimpleSummary {
+    const simple = withSentences(sentences, (sentences as { text: string }[]).map((s) => s.text).join(" "));
+    simple.levels.simple[0] = { ...simple.levels.simple[0]!, list };
+    return simple;
+  }
+
+  it("draws a list paragraph as its lead-in and a bullet for each later sentence, still linked", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withList() }) });
+    const para = host.querySelector(".simple-para");
+    expect(para?.querySelector("p.simple-text")?.textContent).toBe(LEAD);
+    const items = [...(para?.querySelectorAll("ul.simple-list > li") ?? [])];
+    expect(items.map((li) => li.textContent)).toEqual([ONE, TWO]);
+    /* A bullet is one sentence: the linked one is the same block link, so it
+       hovers, jumps and lights up with no code of its own. */
+    const link = items[0]?.querySelector<HTMLAnchorElement>("a.simple-sentence.block-ref");
+    expect(link?.getAttribute("data-block-link")).toBe(MIDDLE);
+    expect(link?.textContent).toBe(ONE);
+    expect(sentenceLinks()).toContain(link);
+    expect(items[1]?.querySelector("a")).toBeNull();
+    await act(async () => {
+      link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(jumps).toEqual([MIDDLE]);
+    /* The doors still follow the paragraph. */
+    expect(doors(para ?? undefined)).toEqual([EARLY, MIDDLE]);
+    /* The other paragraph is untouched. */
+    expect(host.querySelectorAll("ul.simple-list")).toHaveLength(1);
+  });
+
+  it("draws a list of only two sentences, and one that is not `true`, as prose", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withList(BULLETS.slice(0, 2)) }) });
+    expect(host.querySelector("ul.simple-list")).toBeNull();
+    expect(host.querySelector(".simple-text")?.textContent).toBe(`${LEAD} ${ONE}`);
+    await draw({ kind: "owner", owner: owner({ simple: withList(BULLETS, "true") }) });
+    expect(host.querySelector("ul.simple-list")).toBeNull();
+  });
+
+  it("draws a sentence's key as one strong, with exactly the key's words, inside the link", async () => {
+    const sentences = [
+      { text: ASKS, id: MIDDLE, key: "a machine" },
+      /* Twice in the sentence: only the first is bold. */
+      { text: "Not now and not later.", id: null, key: "not" },
+    ];
+    const simple = withSentences(sentences, `${ASKS} Not now and not later.`);
+    await draw({ kind: "owner", owner: owner({ simple }) });
+    const strongs = [...host.querySelectorAll(".simple-text strong")];
+    expect(strongs.map((s) => s.textContent)).toEqual(["a machine", "not"]);
+    expect(strongs[0]?.closest("a.simple-sentence")?.getAttribute("data-block-link")).toBe(MIDDLE);
+    expect(strongs[1]?.closest("a")).toBeNull();
+    /* The words are unchanged: bold wraps them, it adds none. */
+    expect(host.querySelector(".simple-text")?.textContent).toBe(`${ASKS} Not now and not later.`);
+    expect(strongs[1]?.previousSibling?.textContent).toBe("Not now and ");
+  });
+
+  it("draws no strong for a key that is not its sentence's words", async () => {
+    const sentences = [
+      { text: ASKS, id: MIDDLE, key: "a toaster" },
+      { text: SAYS, id: null, key: SAYS },
+    ];
+    await draw({ kind: "owner", owner: owner({ simple: withSentences(sentences) }) });
+    expect(host.querySelector(".simple-text strong")).toBeNull();
+    expect(host.querySelector(".simple-text")?.textContent).toBe(ASKS_SAYS);
+  });
+
+  it("renders markup in a sentence, a bullet or a key as the characters, never as HTML", async () => {
+    const sentences = [
+      { text: "Three <b>bold</b> things:", id: null },
+      { text: "**stars** and <i>tags</i> stay.", id: MIDDLE, key: "<i>tags</i>" },
+      { text: "- a dash is a dash.", id: null, key: "**stars**" },
+    ];
+    await draw({ kind: "owner", owner: owner({ simple: withList(sentences) }) });
+    const para = host.querySelector(".simple-para");
+    expect(para?.querySelector("b, i, em")).toBeNull();
+    expect(para?.querySelector("p.simple-text")?.textContent).toBe("Three <b>bold</b> things:");
+    expect([...(para?.querySelectorAll("li") ?? [])].map((li) => li.textContent)).toEqual([
+      "**stars** and <i>tags</i> stay.",
+      "- a dash is a dash.",
+    ]);
+    /* The one strong is the valid key, as characters; the other key is not in its sentence. */
+    expect([...(para?.querySelectorAll("strong") ?? [])].map((s) => s.textContent)).toEqual(["<i>tags</i>"]);
+  });
+
   it("dismisses a sentence's old passage card when a rewrite changes only its target", async () => {
     class FakeResizeObserver {
       observe() {}

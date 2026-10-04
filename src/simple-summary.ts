@@ -106,6 +106,7 @@ import {
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import {
   SIMPLE_ARTIFACT_VERSION,
+  SIMPLE_KEY_MAX_WORDS,
   SIMPLE_LEVELS,
   SIMPLE_LIMITS,
   SIMPLE_MAX_IDS,
@@ -120,6 +121,7 @@ import {
   type SimpleSentence,
   type SimpleSummary,
   type Tree,
+  simpleKey,
 } from "./types.js";
 
 export type { SimpleLevel, SimpleParagraph, SimpleSummary } from "./types.js";
@@ -162,8 +164,14 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * `simple-prompt/6` (2026-10-03): the shared paperwork rule names the title
  * block and the reference list as paperwork (Greg, spya-abs6bj; plan
  * 261003c). The abstract rule beside it is Structure's alone.
+ *
+ * `simple-prompt/7` (2026-10-04): Fuller is asked for about twice the length,
+ * and told what the room is for; every level marks a key phrase on a sentence
+ * or two, and Fuller may write a paragraph as a list (Greg, spya-azft06 and
+ * spya-qzsvx4; plan 261004b). The stored shape only gained two optional
+ * fields, so `SIMPLE_VERSION` stays.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/6";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/7";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -185,11 +193,11 @@ export const FIRST_LEVEL: SimpleLevel = "fuller";
 export const LEVEL_ATTEMPTS = 2;
 
 /**
- * The most sentences a paragraph is asked for — "two to four" in `PITCH`'s
+ * The most sentences a paragraph is asked for — "two to five" in `PITCH`'s
  * shapes. Not enforced (a sentence count is the prompt's ask, not a limit);
  * here only to size `ANSWER_TOKENS`.
  */
-const MAX_SENTENCES_ASKED = 4;
+const MAX_SENTENCES_ASKED = 5;
 
 /**
  * What each sentence costs beyond its words: `{"text": "", "id": "spya-k3m9qt"}`
@@ -199,18 +207,32 @@ const MAX_SENTENCES_ASKED = 4;
 const SENTENCE_JSON_TOKENS = 20;
 
 /**
+ * What a sentence's `key` costs: `, "key": ""` and a phrase of up to
+ * `SIMPLE_KEY_MAX_WORDS` words, which are the sentence's own words written a
+ * second time. Counted for every sentence, though most are asked to say `null`.
+ */
+const KEY_JSON_TOKENS = 6 + Math.ceil(SIMPLE_KEY_MAX_WORDS / 0.75);
+
+/** A paragraph's `"list": false,`. */
+const LIST_JSON_TOKENS = 5;
+
+/** The highest of the levels' own limits: the budget is sized for the largest answer any may give. */
+const most = (pick: (limits: (typeof SIMPLE_LIMITS)[SimpleLevel]) => number): number =>
+  Math.max(...SIMPLE_LEVELS.map((level) => pick(SIMPLE_LIMITS[level])));
+
+/**
  * One call's answer budget in tokens, sized for the larger level: Fuller's
- * word ceiling (480 words, ~640 tokens at 0.75 words a token, nearly doubled for
- * safety), plus, for each of its paragraphs, three ids and the JSON around
- * them, and the JSON around each sentence at twice the sentences asked for
- * (the model runs over a count it is given, as it does over a length).
- * Undersizing does not degrade: it throws `truncationFailure` and loses the
- * whole pass.
+ * word ceiling at 0.75 words a token, doubled for safety (850 words, ~1,134
+ * tokens, so 2,268); plus, for each of its paragraphs, three ids and the JSON
+ * around them, its `list`, and the JSON around each sentence, key included, at
+ * twice the sentences asked for (the model runs over a count it is given, as
+ * it does over a length). Undersizing does not degrade: it throws
+ * `truncationFailure` and loses the whole pass.
  */
 export const ANSWER_TOKENS =
-  1_200 +
-  Math.max(...SIMPLE_LEVELS.map((level) => SIMPLE_LIMITS[level].maxParagraphs)) *
-    (MAX_IDS * 10 + 2 * MAX_SENTENCES_ASKED * SENTENCE_JSON_TOKENS);
+  2 * Math.ceil(most((l) => l.maxWords) / 0.75) +
+  most((l) => l.maxParagraphs) *
+    (MAX_IDS * 10 + LIST_JSON_TOKENS + 2 * MAX_SENTENCES_ASKED * (SENTENCE_JSON_TOKENS + KEY_JSON_TOKENS));
 
 /*
  * **The word asks are below what the ceiling allows, on evidence.** The first
@@ -228,25 +250,49 @@ export const ANSWER_TOKENS =
  * simple, at twelve; Simple fairly simple and just under that length, at
  * fifteen; Fuller moderately complex and just over it, at eighteen — Greg's
  * *"+3 or something"* above fifteen (7A).
+ *
+ * **Fuller is about twice that since 2026-10-04** (Greg, spya-azft06: *"longer
+ * and more detailed still"*; plan 261004b). Asked for 220 it came back at
+ * 221–261; it is now asked for about 500. `never` is the "never more than" the
+ * prompt states, a number of its own per level, so Fuller's can sit 100 over
+ * its ask while the other two stay 50 over theirs.
  */
-const PITCH: Record<SimpleLevel, { reader: string; shape: string; words: number; sentence: number }> = {
+
+/** How LENGTH ends for Brief and Simple; `simpleSystem` supplies the line it finishes. */
+const ORIENTATION_NOT_DIGEST = `Shorter is fine; this is an
+orientation, not a digest, so leave detail to the article.`;
+
+const PITCH: Record<
+  SimpleLevel,
+  { reader: string; shape: string; words: number; never: number; sentence: number; shorter: string }
+> = {
   brief: {
     reader: "A bright twelve-year-old",
     shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
     words: 80,
+    never: 130,
     sentence: 18,
+    shorter: ORIENTATION_NOT_DIGEST,
   },
   simple: {
     reader: "A bright fifteen-year-old",
     shape: "Two to four paragraphs, each two to four sentences",
     words: 170,
+    never: 220,
     sentence: 25,
+    shorter: ORIENTATION_NOT_DIGEST,
   },
   fuller: {
     reader: "A bright eighteen-year-old in their first year at university",
-    shape: "Three to five paragraphs, each two to four sentences",
-    words: 220,
+    shape: "Five to eight paragraphs, each two to five sentences",
+    words: 500,
+    never: 600,
     sentence: 30,
+    /* Not the line above: detail is what this level is for, so it is not told
+       to leave it out. It is still not a replacement for the article. */
+    shorter: `Shorter is fine for a short
+piece. This is still not a replacement for the article: spend the words on what
+the piece did, found and admits, and never on saying one thing twice.`,
   },
 };
 
@@ -274,8 +320,34 @@ most one other key idea.
   fuller: `
 
 You may keep more of the piece's own terms than a beginner's version would (each
-still said in plain words where it first appears), and add one more layer of how
-or why.`,
+still said in plain words where it first appears).
+
+This version has room to go into the piece. Use it for:
+
+- how the work was done: what was studied, measured or argued from;
+- the evidence and the numbers behind each main finding;
+- the limits the piece itself names;
+- how the steps of the argument connect: what each one leads to.`,
+};
+
+/**
+ * What a level is told about `list`. Only Fuller is long enough for a list to
+ * help; the other two are told to say false, and a `true` from them is still
+ * drawn safely, since `paragraphShape` (src/types.ts) decides, not the prompt.
+ */
+const NO_LISTS = `"list" on a paragraph says whether it is drawn as a bulleted list. This
+version has none. Always write "list": false.`;
+const LIST_RULE: Record<SimpleLevel, string> = {
+  brief: NO_LISTS,
+  simple: NO_LISTS,
+  fuller: `"list" on a paragraph: true when the reader should see it as a bulleted list,
+false for an ordinary paragraph. Use a list only where the piece itself gives
+parallel items: its findings, its steps, its reasons. At most two paragraphs
+are lists, and many summaries need none.
+
+In a list paragraph the first sentence is the lead-in, and it must make sense
+on its own. Each later sentence is one bullet, and there are at least two.
+Every bullet is a full sentence with its own "id", like any other sentence.`,
 };
 
 /**
@@ -327,7 +399,7 @@ export function simpleSystem(level: SimpleLevel): string {
 
 WHAT YOU WRITE
 
-A short orientation in plain words: what the piece is about, why it matters,
+${level === "fuller" ? "An orientation" : "A short orientation"} in plain words: what the piece is about, why it matters,
 and its key ideas. It is not a replacement for the article. It is what a reader
 wants to know first, so that the article itself makes sense when they read it.
 
@@ -344,8 +416,7 @@ ${KNOWN_WORDS[level]}
 LENGTH
 
 ${p.shape}. Every sentence under ${p.sentence} words. About ${p.words} words in
-all, and never more than ${p.words + 50}. Shorter is fine; this is an
-orientation, not a digest, so leave detail to the article.${systemTail(level)}`;
+all, and never more than ${p.never}. ${p.shorter}${systemTail(level)}`;
 }
 
 const systemTail = (level: SimpleLevel): string => `
@@ -384,6 +455,19 @@ whole paragraph. A sentence never names an id its paragraph did not list.
 The ids go only in "ids" and "id". Never write an id, or "block …", in a
 sentence's text.
 
+WHAT A SKIMMING READER CATCHES
+
+Two more fields say how a paragraph is drawn. They are the only formatting
+there is.
+
+"key" on a sentence: a few words copied exactly from that sentence's "text",
+which the reader sees in bold. Pick the finding, the number or the term that a
+reader skimming the page should catch. At most ${SIMPLE_KEY_MAX_WORDS} words, and never the whole
+sentence. In a paragraph, at most two sentences have a "key". Most sentences
+have none: write null.
+
+${LIST_RULE[level]}
+
 ${plainWords("explain")}
 
 ${paperwork("summary")}
@@ -395,15 +479,17 @@ OUTPUT
 JSON only, no prose, no code fence:
 
 {"paragraphs": [
-  {"ids": ["spya-k3m9qt", "spya-p7w2dn"],
+  {"ids": ["spya-k3m9qt", "spya-p7w2dn"], "list": false,
    "sentences": [
-     {"text": "...", "id": "spya-k3m9qt"},
-     {"text": "...", "id": null},
-     {"text": "...", "id": "spya-p7w2dn"}]}
+     {"text": "...", "id": "spya-k3m9qt", "key": "..."},
+     {"text": "...", "id": null, "key": null},
+     {"text": "...", "id": "spya-p7w2dn", "key": null}]}
 ]}
 
-Plain text in "text": no markdown, no bullet points, no headings. Never put a
-real line break inside a string, and escape any straight double quote as \\".`;
+Plain text in "text" and "key": no markdown, no asterisks, no bullet or list
+characters, no headings. Bold and lists are said only by "key" and "list".
+Never put a real line break inside a string, and escape any straight double
+quote as \\".`;
 
 /** Each level's system prompt, built once. */
 export const SIMPLE_SYSTEMS = Object.fromEntries(
@@ -420,6 +506,9 @@ export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
         type: "object",
         properties: {
           ids: { type: "array", items: { type: "string" } },
+          /* Before the sentences, so the model has said what the paragraph is
+             by the time it writes the first one as a lead-in. */
+          list: { type: "boolean" },
           sentences: {
             type: "array",
             minItems: 1,
@@ -431,13 +520,17 @@ export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
                    makes the model write the comma anyway, and OpenAI's subset
                    wants every property required (prompting-guide.md). */
                 id: { type: ["string", "null"] },
+                /* After `text`, which it is copied from. Nullable for `id`'s
+                   reason, and never an empty string (`text`'s pattern); that
+                   it is the sentence's own words is `simpleKey`'s check. */
+                key: { type: ["string", "null"], pattern: "\\S" },
               },
-              required: ["text", "id"],
+              required: ["text", "id", "key"],
               additionalProperties: false,
             },
           },
         },
-        required: ["ids", "sentences"],
+        required: ["ids", "list", "sentences"],
         additionalProperties: false,
       },
     },
@@ -528,6 +621,12 @@ export interface SimpleDropped {
    * a string): the sentence is kept, unlinked. Never promoted into `ids`.
    */
   sentenceIds: number;
+  /**
+   * A sentence's `key` that `simpleKey` (src/types.ts) refused — not its own
+   * words, empty, too long, or the whole sentence: the sentence is kept, with
+   * no bold. A `null` key is the usual answer and is not counted.
+   */
+  keys: number;
   /** An id that is not a body-evidence block of this article (or not a string). */
   unknownIds: number;
   /** An id a paragraph had already named. */
@@ -544,6 +643,7 @@ export function emptyDropped(): SimpleDropped {
     empty: 0,
     emptySentences: 0,
     sentenceIds: 0,
+    keys: 0,
     unknownIds: 0,
     duplicateIds: 0,
     overCap: 0,
@@ -585,24 +685,28 @@ function keptIds(raw: unknown, evidenceIds: ReadonlySet<string>, dropped: Simple
  * One paragraph's sentences: each with text, trimmed, and an id only when it is
  * one of the paragraph's own surviving `ids` — anything else becomes `null` and
  * is counted, so a sentence can only point at a passage the paragraph already
- * rests on and the guard already reads.
+ * rests on and the guard already reads. A `key` is stored only when
+ * `simpleKey` accepts it; one it refuses is counted and left off.
  */
 function keptSentences(raw: unknown, ids: readonly BlockId[], dropped: SimpleDropped): SimpleSentence[] {
   const own = new Set<string>(ids);
   const out: SimpleSentence[] = [];
   for (const item of Array.isArray(raw) ? raw : []) {
-    const r = item && typeof item === "object" ? (item as { text?: unknown; id?: unknown }) : null;
+    const r = item && typeof item === "object" ? (item as { text?: unknown; id?: unknown; key?: unknown }) : null;
     const text = typeof r?.text === "string" ? r.text.trim() : "";
     if (!r || !text) {
       dropped.emptySentences++;
       continue;
     }
+    const key = simpleKey(r.key, text);
+    if (key === null && r.key != null) dropped.keys++;
+    const bold = key === null ? {} : { key };
     const id = typeof r.id === "string" ? r.id.trim() : r.id;
-    if (id === null) out.push({ text, id: null });
-    else if (typeof id === "string" && own.has(id)) out.push({ text, id: id as BlockId });
+    if (id === null) out.push({ text, id: null, ...bold });
+    else if (typeof id === "string" && own.has(id)) out.push({ text, id: id as BlockId, ...bold });
     else {
       dropped.sentenceIds++;
-      out.push({ text, id: null });
+      out.push({ text, id: null, ...bold });
     }
   }
   return out;
@@ -619,6 +723,10 @@ function keptSentences(raw: unknown, ids: readonly BlockId[], dropped: SimpleDro
  * joined with one space, which is exactly what `usableSentences` (src/types.ts)
  * requires before a reader sees them. Word limits, the fidelity guard and
  * everything else read `text`, as before.
+ *
+ * `list` is stored only when the model said `true`. Whether that draws as a
+ * list is `paragraphShape`'s answer on every read (src/types.ts), so a list
+ * with too few sentences is stored as said and drawn as prose.
  */
 export function toParagraphs(
   raw: readonly unknown[],
@@ -631,7 +739,7 @@ export function toParagraphs(
       dropped.malformed++;
       continue;
     }
-    const r = item as { sentences?: unknown; ids?: unknown };
+    const r = item as { sentences?: unknown; ids?: unknown; list?: unknown };
     /* The ids first, so each sentence is checked against the ones that
        survived — tallied aside, because an empty paragraph's ids were never
        counted as dropped and still are not. */
@@ -648,7 +756,7 @@ export function toParagraphs(
       dropped.unanchored++;
       continue;
     }
-    out.push({ text, ids, sentences });
+    out.push({ text, ids, sentences, ...(r.list === true ? { list: true } : {}) });
   }
   return out;
 }
