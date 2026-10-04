@@ -165,6 +165,11 @@ noticeable enough to want a slide.
 - 2026-10-04: built (`c795b9e08`). GPT Sol's code review, *approve with changes*: no P0 or P1, two
   comments that claimed more than was shown, which it fixed
   ([review](261004a-headings-rail-uses-the-width-above-the-mode-band-code-review-sol.md)).
+- 2026-10-04: the full suite on `73c06db36`: 1499 files passed, 5 failed, all five for a build a
+  fresh worktree does not have (`api-dist/`, the fleet client). After `npm run build` and
+  `npm run build:fleet` the five pass alone (112 tests). Merged `origin/dev`, then typecheck and the
+  breadcrumb, stylesheet and doc-link tests again, green; the full suite was not re-run on the
+  merge. Pushed to `dev`. Not deployed.
 
 ## What the browser showed afterwards
 
