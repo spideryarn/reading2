@@ -212,3 +212,14 @@ every cached chunk would go stale, and the code rule covers the measured case).
 **For Greg to decide** (asked through the Overseer, not built): whether to build the re-render
 operation — an extract that reuses a stored transcription made under an older prompt — and run it
 on the *Entropy* article, rather than re-import.
+
+## Greg's decision on the old articles, 2026-10-04
+
+> I don't mind too much about fixing old articles, but I do want this fixed going forwards. If
+> there's an easyish fairly low-risk low-complexity fix for the old articles, great
+
+So the re-render operation (option a) is **not** built, and the Entropy article is not re-imported.
+Going forwards is covered by the two fixes above, once deployed. For the old articles, only the
+steps that change no passage: *Citations: make it again* on the three superscript-citing papers
+(s41598-023, jco-2005, arxiv-2212), and a re-import of the two whose footnotes carry nothing of
+Greg's (distributed-representations, 2406-01506v1). Everything else is left as it is.
