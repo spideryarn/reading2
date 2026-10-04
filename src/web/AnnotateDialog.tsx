@@ -142,6 +142,7 @@ import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
@@ -721,14 +722,13 @@ export function AnnotateDialog({
  * the ordinary "I want that sentence" case; the block's citable address is a
  * different thing and already has its own button in the gutter (BlockGutter).
  *
- * The three states, the statement-not-optional-chain guard and the live region
- * are all `ChatPanel`'s `CopyAnswer`, deliberately: a copy button that silently
- * does nothing is the shape docs/reusable/silent-success.md is about, and
- * `navigator.clipboard` is undefined in every insecure context — which includes
- * reading this app at `http://192.168.1.x:5273` from a phone.
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts. What is here is what this button shows and
+ * says.
  *
  * **The live region is a sibling of the button, not a child of it, and that is
- * the one place this deliberately departs from `CopyAnswer`.** `button` is one
+ * the one place this deliberately departs from `ChatPanel`'s `CopyAnswer`.** `button` is one
  * of the ARIA roles whose children are *presentational*, so a live region
  * nested inside one is announced at the screen reader's discretion and several
  * of them drop it — which would leave the failure case silent in the very
@@ -737,47 +737,16 @@ export function AnnotateDialog({
  * shape and the same doubt; it was left alone here rather than changed
  * underneath a feature it is not part of.
  */
-/**
- * What the button is currently saying, and **a fresh object every time it says
- * it**.
- *
- * The identity is load-bearing, which is why this is an object and not the
- * bare union it started as. The revert timer hangs off an effect keyed on this
- * value, and `setState("copied")` when the state is *already* `"copied"` is a
- * no-op React bails out of — so a second successful copy just before the first
- * timer expired inherited the old timer and flashed for whatever was left of
- * it. A new object is never `Object.is`-equal to the last one, so every
- * outcome re-runs the effect and every outcome gets its own full 1.6 seconds.
- */
-type Said = { kind: "idle" | "copied" | "failed" };
-
 function CopyQuote({ text, onCopyPressed }: { text: string; onCopyPressed(): void }) {
-  const [said, setSaid] = useState<Said>({ kind: "idle" });
-  /**
-   * Which press this is.
-   *
-   * `writeText` is a promise and two presses can be in flight at once, so
-   * without a token the *older* one's outcome lands last and wins: press twice,
-   * the second succeeds, the first rejects a moment later, and the button
-   * reports failure over a clipboard that holds exactly what was asked for.
-   * `BlockGutter` already carries this token; this is the half of the house
-   * pattern the first version left out. Found by GPT Sol, 2026-09-05.
-   */
-  const press = useRef(0);
-  /* Cleared on a timer, and the timer is cleaned up: closing the box mid-tick
-     would otherwise leave one running over a component that is gone. */
-  useEffect(() => {
-    if (said.kind === "idle") return;
-    const timer = setTimeout(() => setSaid({ kind: "idle" }), 1600);
-    return () => clearTimeout(timer);
-  }, [said]);
+  /* 1.6 seconds for a tick and for a refusal alike. */
+  const { state: said, copy } = useCopy({ copiedMs: 1600, failedMs: 1600 });
   return (
     <>
       <button
         type="button"
         className="annotate-copy"
         title={
-          said.kind === "failed"
+          said === "failed"
             ? "Your browser would not allow the copy — an insecure connection is the usual reason"
             : "Copy the passage"
         }
@@ -786,31 +755,16 @@ function CopyQuote({ text, onCopyPressed }: { text: string; onCopyPressed(): voi
            is concerned; what happened is the status region's job, below. */
         aria-label="Copy the passage"
         onClick={() => {
-          const mine = ++press.current;
           /* Before the clipboard is asked anything: what the box does at its
              next close hangs on the reader having pressed this, not on a
              promise that may still be out, or refused. */
           onCopyPressed();
-          const settle = (kind: Said["kind"]) => {
-            if (press.current === mine) setSaid({ kind });
-          };
-          /* A statement rather than `navigator.clipboard?.writeText(…)`: the
-             optional chain short-circuits the whole expression, `.catch`
-             included, so with no clipboard object nothing throws, nothing
-             rejects, and the button reports nothing at all. */
-          if (!navigator.clipboard) {
-            settle("failed");
-            return;
-          }
-          navigator.clipboard
-            .writeText(text)
-            .then(() => settle("copied"))
-            .catch(() => settle("failed"));
+          copy(text);
         }}
       >
-        {said.kind === "copied" ? (
+        {said === "copied" ? (
           <ClipboardCheck size={15} />
-        ) : said.kind === "failed" ? (
+        ) : said === "failed" ? (
           /* **Not an X**, which is the glyph on the Close button six pixels to
              the right: a failed copy drew a second X beside the first one, and
              the only thing distinguishing them was a `title` no touch device
@@ -839,9 +793,9 @@ function CopyQuote({ text, onCopyPressed }: { text: string; onCopyPressed(): voi
           *before* its text changes, and one that appears already holding its
           message is announced by nobody. */}
       <span className="sr-only" role="status" aria-atomic="true">
-        {said.kind === "copied"
+        {said === "copied"
           ? "Passage copied."
-          : said.kind === "failed"
+          : said === "failed"
             ? "Copy refused by the browser."
             : ""}
       </span>

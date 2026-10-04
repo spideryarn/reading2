@@ -11,9 +11,9 @@
  * (docs/plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md
  * § Stages, stage 1).
  *
- * The last block is a source scan: nothing else under `src/web` may reach for
- * the clipboard by hand. It is what stops a ninth writer being copied from a
- * neighbour.
+ * The last block scans common clipboard syntax and legacy copy commands.
+ * Its explicit census shrinks as callers move onto the hook; a new writer
+ * using that syntax fails the scan.
  */
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -50,6 +50,7 @@ afterEach(() => {
   host.remove();
   Reflect.deleteProperty(navigator as object, "clipboard");
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 /** The smallest component that can hold the hook: the state as text, the rest handed out. */
@@ -203,6 +204,26 @@ describe("how one write went", () => {
 });
 
 describe("two presses out at once", () => {
+  it.each(["copied", "refused"] as const)("drops the older %s outcome while the newer press is still out", async (kind) => {
+    /* A latest-completed token would pass the two newest-first cases below.
+       The token must instead belong to the latest press, even while pending. */
+    const writes = clipboard();
+    const first = vi.fn();
+    const second = vi.fn();
+    const refused = new Error("denied");
+    mount(BOTH);
+    press("one", first);
+    press("two", second);
+    await settle(() => kind === "copied" ? nth(writes, 0).ok() : nth(writes, 0).no(refused));
+    expect(shown()).toBe("idle");
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    await settle(() => nth(writes, 1).ok());
+    expect(shown()).toBe("copied");
+    expect(second).toHaveBeenCalledExactlyOnceWith({ result: "copied" });
+  });
+
   it("reports the second's success when the first is refused afterwards", async () => {
     /* The worst case: "failed" over a clipboard holding what was asked for.
        Wrong hook: no token; a token checked only on success. */
@@ -238,6 +259,23 @@ describe("two presses out at once", () => {
 });
 
 describe("how long the feedback shows", () => {
+  it("gives a second refusal its own full time", async () => {
+    /* Wrong hook: stops the previous timer only on success. */
+    const writes = clipboard();
+    mount(BOTH);
+    press("x");
+    await settle(() => nth(writes, 0).no(new Error("denied")));
+    expect(shown()).toBe("failed");
+    wait(1000);
+    press("x");
+    await settle(() => nth(writes, 1).no(new Error("denied again")));
+    wait(1000);
+    expect(shown()).toBe("failed");
+    wait(601);
+    expect(shown()).toBe("idle");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("gives a second success its own full time", async () => {
     /* Wrong hook: a timer hung off an effect keyed on the state, where
        "copied" over "copied" re-runs nothing; and a timer that never fires. */
@@ -308,15 +346,15 @@ describe("how long the feedback shows", () => {
     expect(shown()).toBe("copied");
   });
 
-  it("reads the timings when a press settles, not when it starts", async () => {
+  it.each(["copied", "refused"] as const)("reads the %s timing when a press settles, not when it starts", async (kind) => {
     /* Which is what lets a caller pass a fresh object every render. */
     const writes = clipboard();
     mount(BOTH);
     press("x");
     mount({ copiedMs: null, failedMs: null });
-    await settle(() => nth(writes, 0).ok());
+    await settle(() => kind === "copied" ? nth(writes, 0).ok() : nth(writes, 0).no(new Error("denied")));
     wait(60_000);
-    expect(shown()).toBe("copied");
+    expect(shown()).toBe(kind === "copied" ? "copied" : "failed");
   });
 });
 
@@ -364,7 +402,7 @@ describe("reset()", () => {
     expect(shown()).toBe("idle");
   });
 
-  it("overtakes a press still out, which then says nothing", async () => {
+  it.each(["copied", "refused"] as const)("overtakes a press still out, which then says nothing when %s", async (kind) => {
     /* FeedbackDialog's case: a press settles after the form was reset, and must
        not tick the fresh one. Wrong hook: a reset that does not bump the token. */
     const writes = clipboard();
@@ -372,25 +410,10 @@ describe("reset()", () => {
     mount(BOTH);
     press("x", said);
     act(() => api.reset());
-    await settle(() => nth(writes, 0).ok());
+    await settle(() => kind === "copied" ? nth(writes, 0).ok() : nth(writes, 0).no(new Error("denied")));
     expect(shown()).toBe("idle");
     expect(said).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it("does not let the old timer cut a later press's tick short", async () => {
-    const writes = clipboard();
-    mount(BOTH);
-    press("x");
-    await settle(() => nth(writes, 0).ok());
-    wait(1500);
-    act(() => api.reset());
-    press("x");
-    await settle(() => nth(writes, 1).ok());
-    wait(1000);
-    expect(shown()).toBe("copied");
-    wait(601);
-    expect(shown()).toBe("idle");
   });
 });
 
@@ -448,6 +471,60 @@ describe("under StrictMode", () => {
 });
 
 describe("what a caller can rely on", () => {
+  it.each(["unavailable", "throw"] as const)("contains a throwing said on the synchronous %s path", (kind) => {
+    const callbackError = new Error("announcement broke");
+    const refused = new Error("write threw");
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => {});
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: kind === "unavailable" ? undefined : {
+        writeText: () => { throw refused; },
+      },
+    });
+    const said = vi.fn(() => { throw callbackError; });
+    mount(BOTH);
+    expect(() => press("x", said)).not.toThrow();
+    expect(said).toHaveBeenCalledExactlyOnceWith(
+      kind === "unavailable" ? { result: "unavailable" } : { result: "refused", error: refused },
+    );
+    expect(shown()).toBe("failed");
+    expect(diagnostic).toHaveBeenCalledExactlyOnceWith("[useCopy] outcome callback threw", callbackError);
+    wait(1601);
+    expect(shown()).toBe("idle");
+  });
+
+  it.each(["copied", "refused"] as const)("contains a throwing said on the asynchronous %s path", async (kind) => {
+    const callbackError = new Error("announcement broke");
+    const refused = new Error("write refused");
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => {});
+    let ok!: () => void;
+    let no!: (error: unknown) => void;
+    const promise = new Promise<void>((resolve, reject) => { ok = resolve; no = reject; });
+    const then = vi.spyOn(promise, "then");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => promise },
+    });
+    const said = vi.fn(() => { throw callbackError; });
+    mount(BOTH);
+    press("x", said);
+    /* Inspect the continuation the hook discards. Attach its rejection handler
+       before settling, so a broken hook fails this assertion, not the runner's
+       global unhandled-rejection listener. */
+    const continuation = then.mock.results[0]?.value as Promise<void>;
+    expect(continuation).toBeInstanceOf(Promise);
+    const completion = continuation.then(() => "handled", (error: unknown) => error);
+    await settle(() => kind === "copied" ? ok() : no(refused));
+    expect(await completion).toBe("handled");
+    expect(said).toHaveBeenCalledExactlyOnceWith(
+      kind === "copied" ? { result: "copied" } : { result: "refused", error: refused },
+    );
+    expect(shown()).toBe(kind === "copied" ? "copied" : "failed");
+    expect(diagnostic).toHaveBeenCalledExactlyOnceWith("[useCopy] outcome callback threw", callbackError);
+    wait(1601);
+    expect(shown()).toBe("idle");
+  });
+
   it("hands back the same copy and reset after a re-render with a new, equal options object", () => {
     /* Wrong hook: callbacks rebuilt when the options object changes. */
     clipboard();
@@ -506,7 +583,7 @@ describe("what a caller can rely on", () => {
 });
 
 /**
- * **Nothing else under `src/web` reaches for the clipboard by hand.**
+ * **A census of common clipboard syntax under `src/web`.**
  *
  * Read from the syntax tree, with `@babel/parser` as tests/stop-details.test.ts
  * does (this checkout's `typescript` has no `createSourceFile`,
@@ -514,16 +591,20 @@ describe("what a caller can rely on", () => {
  * not hits and a string is not a hit.
  *
  * A hit is any member access named `clipboard` (dotted, optional, or computed
- * with a string literal), `clipboard` taken out of an object by destructuring,
- * or any call of a member named `writeText`. It is a guard against a ninth
+ * with a string literal or static template), `clipboard` taken out of an object
+ * by destructuring, any call of a member named `writeText`, or an
+ * `execCommand("copy")` call. It is a guard against a ninth
  * hand-written writer copied from a neighbour, not proof against a determined
  * alias: `const n = navigator; n[key]` walks straight past it.
  */
 function clipboardHits(code: string): string[] {
   const tree = parse(code, { sourceType: "module", plugins: ["typescript", "jsx", "decorators-legacy"] });
+  const literal = (node: Node, name: string): boolean =>
+    (node.type === "StringLiteral" && node.value === name) ||
+    (node.type === "TemplateLiteral" && node.expressions.length === 0 && node.quasis[0]?.value.cooked === name);
   const named = (node: Node, computed: boolean, name: string): boolean =>
     (!computed && node.type === "Identifier" && node.name === name) ||
-    (computed && node.type === "StringLiteral" && node.value === name);
+    (computed && literal(node, name));
   const member = (node: Node): node is Extract<Node, { type: "MemberExpression" | "OptionalMemberExpression" }> =>
     node.type === "MemberExpression" || node.type === "OptionalMemberExpression";
   /** What this one node is, if it is a reach for the clipboard. */
@@ -531,6 +612,10 @@ function clipboardHits(code: string): string[] {
     if (member(node)) return named(node.property, node.computed, "clipboard") ? ["clipboard"] : [];
     if (node.type === "CallExpression" || node.type === "OptionalCallExpression") {
       const callee = node.callee;
+      if (
+        member(callee) && named(callee.property, callee.computed, "execCommand") &&
+        node.arguments[0] && literal(node.arguments[0], "copy")
+      ) return ["execCommand(copy)"];
       return member(callee) && named(callee.property, callee.computed, "writeText") ? ["writeText()"] : [];
     }
     if (node.type === "ObjectPattern") {
@@ -572,6 +657,8 @@ describe("the source itself", () => {
     ["c.writeText(t);", ["writeText()"]],
     ["c?.writeText(t);", ["writeText()"]],
     ['c["writeText"](t);', ["writeText()"]],
+    ["navigator[`clipboard`][`writeText`](t);", ["writeText()", "clipboard"]],
+    ["document.execCommand('copy');", ["execCommand(copy)"]],
     ["const el = <button onClick={() => void navigator.clipboard.writeText(t)} />;", ["writeText()", "clipboard"]],
   ])("sees a clipboard reach in: %s", (code, expected) => {
     expect(clipboardHits(code).sort()).toEqual([...expected].sort());
@@ -591,13 +678,16 @@ describe("the source itself", () => {
           // A variable or a key called clipboard is not an access to one.
           "const clipboard = 1; const o = { clipboard, writeText: 2 };",
           "const writeText = () => {}; writeText();",
+          "document.execCommand('selectAll');",
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Source fixture, not interpolation in this test.
+          "const value = navigator[`clip${suffix}`];",
           "const icon = <ClipboardCheck size={12} />;",
         ].join("\n"),
       ),
     ).toEqual([]);
   });
 
-  it("finds the hook, and in this stage the eight callers still to move", async () => {
+  it("finds the hook and the callers still to move", async () => {
     const entries = await readdir(WEB, { recursive: true, withFileTypes: true });
     const files = entries
       .filter((e) => e.isFile() && /\.tsx?$/.test(e.name))
@@ -615,8 +705,6 @@ describe("the source itself", () => {
        name here is a ninth hand-written writer: use the hook instead. */
     expect(found.sort()).toEqual([
       "AccessSharing.tsx",
-      "AnnotateDialog.tsx",
-      "BlockGutter.tsx",
       "ChatPanel.tsx",
       "FeedbackDialog.tsx",
       "ShelfEntry.tsx",

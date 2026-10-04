@@ -141,9 +141,7 @@ import {
 } from "lucide-react";
 import type { BlockId, Comment } from "../types.js";
 import { blockHref, blockPermalink, shortBlockId } from "./BlockRef.js";
-
-/** How the last copy went. `idle` is also "the reader has moved on". */
-type CopyState = "idle" | "copied" | "failed";
+import { useCopy } from "./useCopy.js";
 
 /** Long enough to read a tick, short enough not to look like a mode. */
 const SETTLE_MS = 1500;
@@ -279,37 +277,22 @@ export function BlockGutter({
   onJump,
   announce,
 }: Props) {
-  const [copy, setCopy] = useState<CopyState>("idle");
   /**
-   * One timer and one token, and both are about the same thing: a clipboard
-   * write is a promise, so its result can arrive after the reader has moved on.
-   *
-   * GPT Sol found two ways that went wrong, 2026-08-31. Click twice and the
-   * *older* write can settle last, replacing the newer tick with its own
-   * result; click and navigate away, and the continuation still calls
-   * `setCopy` and starts a timer after the cleanup has run. `op` is bumped on
-   * every press and checked in every continuation, so a stale one is simply
-   * dropped.
+   * How the last copy went; `idle` is also "the reader has moved on". A
+   * clipboard write is a promise, so its result can arrive after a newer press
+   * or after the reader has navigated away. `useCopy` drops both, and owns the
+   * timer that takes the tick away again: useCopy.ts has the reasoning.
    */
-  const op = useRef(0);
+  const { state: copyState, copy } = useCopy({ copiedMs: SETTLE_MS, failedMs: SETTLE_MS });
   /** The bookmark button's own press token — see its `onClick`. */
   const marking = useRef(0);
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** For the bookmark button, which has a promise of its own to outlive. */
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      if (settle.current) clearTimeout(settle.current);
     };
-  }, []);
-  const later = useCallback((state: CopyState, mine: number) => {
-    if (!alive.current || mine !== op.current) return;
-    setCopy(state);
-    if (settle.current) clearTimeout(settle.current);
-    settle.current = setTimeout(() => {
-      if (alive.current) setCopy("idle");
-    }, SETTLE_MS);
   }, []);
 
   /**
@@ -381,29 +364,17 @@ export function BlockGutter({
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       const said = shortBlockId(id);
-      const mine = ++op.current;
-      const failed = () => {
-        later("failed", mine);
-        if (alive.current && mine === op.current) {
-          announce(`Couldn't copy the link to ${said}.`);
-        }
-      };
-      /* A statement, not `navigator.clipboard?.writeText(…)`: where there is no
-         clipboard object the optional chain evaluates to undefined and `.catch`
-         throws on it. ChatPanel.tsx has the long version. */
-      if (!navigator.clipboard) {
-        failed();
-        return;
-      }
-      navigator.clipboard
-        .writeText(blockPermalink(id))
-        .then(() => {
-          later("copied", mine);
-          if (alive.current && mine === op.current) announce(`Copied the link to ${said}.`);
-        })
-        .catch(failed);
+      /* Announced from inside `useCopy`'s callback, which runs only for the
+         newest press on a mounted component: a stale result says nothing. */
+      copy(blockPermalink(id), (outcome) => {
+        announce(
+          outcome.result === "copied"
+            ? `Copied the link to ${said}.`
+            : `Couldn't copy the link to ${said}.`,
+        );
+      });
     },
-    [id, announce, later, onJump],
+    [id, announce, copy, onJump],
   );
 
   /**
@@ -626,7 +597,7 @@ export function BlockGutter({
           `BlockRef` still jumps everywhere else — gist ranges and model
           citations — and is untouched. */}
       <a
-        className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
+        className={`blk-permalink${copyState === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}
         /* The tooltip Greg asked for, carrying the full id. **`data-tip`, read
            by the reading view's one delegated card** (BlockLinkCard.tsx §
@@ -637,9 +608,9 @@ export function BlockGutter({
            tooltip at all (spya-jc0vm6, *"Make sure they all have tooltips"*).
            Every control in this column does the same. */
         data-tip={
-          copy === "copied"
+          copyState === "copied"
             ? `Copied — ${id}`
-            : copy === "failed"
+            : copyState === "failed"
               ? `Couldn't copy. Use the link's own menu — ${id}`
               : `${id} — click to copy a link to this paragraph`
         }
@@ -649,9 +620,9 @@ export function BlockGutter({
         aria-label={`Link to this paragraph, ${id}`}
         onClick={onCopy}
       >
-        {copy === "copied" ? (
+        {copyState === "copied" ? (
           <Check size={GLYPH} aria-hidden="true" />
-        ) : copy === "failed" ? (
+        ) : copyState === "failed" ? (
           <TriangleAlert size={GLYPH} aria-hidden="true" />
         ) : (
           <Link2 size={GLYPH} aria-hidden="true" />
@@ -760,8 +731,8 @@ export function BlockGutter({
           onClick={(e) => {
             e.stopPropagation();
             setOpen(false);
-            /* Its own token, not the permalink's `op`: sharing one would let a
-               bookmark press silently drop a copy result still in flight, and
+            /* Its own token, not the permalink's, which `useCopy` keeps:
+               sharing one would let a bookmark press silently drop a copy result still in flight, and
                the reverse. Only the newest press speaks, and nothing speaks
                after unmount. */
             const mine = ++marking.current;

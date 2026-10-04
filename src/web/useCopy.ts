@@ -3,13 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /**
  * Put text on the clipboard, and say truthfully how it went.
  *
- * Every copy button in `src/web` needs the same four things, and until
- * 2026-10-04 each wrote them out by hand: the guard for a browser with no
- * clipboard, the promise handling, a "which press is this" token, and a timer
- * that takes the tick away again. The copies drifted; a fix for one reached two
- * of the eight and stopped. This hook is the one copy of all four. What a
- * button *shows* (the glyph, the words, the live region, where a failure is
- * said) stays with the button.
+ * Clipboard controls share a browser guard and promise handling; some also
+ * need a "which press is this" token and a timer that takes the tick away
+ * again. Before this extraction, only two of the eight writers had the token.
+ * This hook owns all four mechanisms. What a button *shows* (the glyph, the
+ * words, the live region, where a failure is said) stays with the button.
  * docs/plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md.
  *
  * ## The guard is a statement, and that is not style
@@ -26,9 +24,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * 2026-08-26.
  *
  * **The guard runs inside the click.** With no clipboard object the state is
- * `"failed"` and `said` has been called before `copy()` returns. `writeText` is
- * called before `copy()` returns too, so it is inside the reader's gesture,
- * which is when a browser is willing to allow it.
+ * scheduled to become `"failed"` and `said` has been called before `copy()`
+ * returns. `writeText` is called before `copy()` returns too, so it is inside
+ * the reader's gesture, which is when a browser is willing to allow it.
  *
  * ## The token: only the newest press may speak
  *
@@ -43,6 +41,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * returns nothing rather than a promise carrying "was this the current press?",
  * because a reset or an unmount can land between the hook answering that and
  * the caller reading the answer. Here nothing can come between them.
+ * A synchronous throw from `said` is logged and contained: it must neither
+ * escape the click nor reject a promise the hook has discarded, and it does
+ * not change the clipboard outcome.
  *
  * ## The timer: every outcome gets its full time
  *
@@ -132,7 +133,11 @@ export function useCopy(revert: {
           setState("idle");
         }, ms);
       }
-      said?.(outcome);
+      try {
+        said?.(outcome);
+      } catch (error) {
+        console.error("[useCopy] outcome callback threw", error);
+      }
     },
     [stopTimer],
   );
@@ -152,9 +157,8 @@ export function useCopy(revert: {
         settle(mine, { result: "refused", error }, said);
         return;
       }
-      /* Both handlers in one `then`, not `.then(…).catch(…)`: that form would
-         hand a throw from the caller's own `said` to the failure handler, and
-         report a copy that worked as refused. */
+      /* Only the write's rejection is classified as refused. Notification
+         errors are handled separately in settle. */
       void write.then(
         () => settle(mine, { result: "copied" }, said),
         (error: unknown) => settle(mine, { result: "refused", error }, said),

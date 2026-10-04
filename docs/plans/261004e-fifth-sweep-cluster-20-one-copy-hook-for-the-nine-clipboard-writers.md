@@ -241,4 +241,30 @@ inside the stage), commit by name.
 
 ## What landed
 
-(filled in per stage)
+**Stage 1, `453599ea6`.** `src/web/useCopy.ts` and `tests/use-copy.test.tsx` (39 tests, each proved
+red against a named wrong hook by the implementer).
+
+**GPT Sol's review of stage 1: READY after its own fixes**, which landed with stage 2. It read the
+candidate at `453599ea6`.
+
+- S1-1 (P1, fixed): a `said` that throws escaped the click on the no-clipboard path, and on the
+  promise path rejected a promise nobody holds. The hook now logs it and carries on; the outcome
+  and the timer are unaffected. Four tests, red first.
+- S1-2 (fixed): deleted the one test the implementer could not make red.
+- S1-3 (fixed): the scan now also sees a template-literal key and `document.execCommand("copy")`.
+- S1-6 (fixed): five more lifecycle tests, among them "the older press settles first, while the
+  newer is still out", which a hook keeping the latest *completed* press would have passed before.
+- S1-5 (reported, accepted as it stands): two things every moved caller gains or changes, which
+  "extraction only" did not say. A `writeText` that throws synchronously now shows the failure
+  instead of throwing out of the click handler; no browser is known to do this. And in Tweets,
+  `copy(text())` builds the text before the hook's guard, where today a browser with no clipboard
+  skips building it; the text is a string join and nothing sees the difference.
+
+**Stage 2.** `AnnotateDialog` and `BlockGutter` are on the hook; 113 lines out, 38 in. Their four
+test files pass without an edit (127 tests). Mutations: announcing outside `said` reds four
+`block-gutter` tests; calling `onCopyPressed` when the write settles rather than at the press reds
+two `annotate-dialog-keeps-a-draft` tests. Swapping the order of `onCopyPressed()` and `copy()`
+inside the one click handler reds nothing, and cannot: both run in the same step.
+
+One thing changed that no reader can see: `AnnotateDialog` had no mounted flag, so a write settling
+after the box closed set state on a component that was gone, which React ignores. The hook drops it.
