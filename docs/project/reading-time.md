@@ -62,12 +62,10 @@ and the drawing.
   > — Greg, 2026-10-03 (spya-bguwsn)
 
   [261003o](../plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md).
-- **The rail is rarely full, and fainter again**, since 2026-10-04. The reach is logarithmic from a
-  quarter of the rail at 0.35 of the reading time to the whole of it at about 45 times the reading
-  time (seven doublings), so each sixteenth is the same multiple of time. One read at the expected
-  pace is 6 sixteenths. Before, the rail filled at 2.8, and on Greg's own reading 43% of the drawn
-  passages were full width; now 2.7% are. The area is at 0.18 and the line at 0.65. What it gives
-  up: a full-strength gutter line no longer means a full rail.
+- **The rail uses a longer logarithmic scale and fainter paint**, chosen to leave only a few percent
+  of measured drawn blocks at full width. A full-strength gutter line no longer means a full rail.
+  The sample, results and limits of that inference are in the plan below; the thresholds live in
+  `readReach`, and the opacities in spine.css § reading time.
 
   > Spine reading chart make the cyan horizontal-reading-level slightly fainter. and also somehow
   > make it a bit logarithmic so it's rarer that the reading-time fills up completely all the way to

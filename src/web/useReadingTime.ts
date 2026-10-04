@@ -259,7 +259,7 @@ export function useReadingTime(
         const seconds = (server.get(id) ?? 0) + (local.get(id) ?? 0);
         const words = wordsRef.current.get(id) ?? 0;
         /* Two independent comparisons, and no early `continue` on an equal
-           level: reach moves three times inside each one. */
+           level: either scale can move while the other stays put. */
         next = withValue(shown, next, id, readLevel(seconds, words));
         nextReach = withValue(shownReach, nextReach, id, readReach(seconds, words));
       }

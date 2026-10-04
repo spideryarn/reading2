@@ -18,6 +18,9 @@ export type ReadLevel = 0 | 1 | 2 | 3 | 4;
 /** Words per minute a block's expected reading time is measured at. */
 export const READING_WPM = 230;
 
+/** The share of a block's reading time at which both the gutter and rail start to draw. */
+export const READ_REACH_FROM = 0.35;
+
 /**
  * Seconds it takes to read a block of `words` words, and never under one.
  *
@@ -56,7 +59,7 @@ export function expectedSeconds(words: number): number {
 export function readLevel(seconds: number, words: number): ReadLevel {
   if (!(seconds > 0)) return 0;
   const ratio = seconds / expectedSeconds(words);
-  if (ratio < 0.35) return 0;
+  if (ratio < READ_REACH_FROM) return 0;
   if (ratio < 0.7) return 1;
   if (ratio < 1.4) return 2;
   if (ratio < 2.8) return 3;
@@ -69,18 +72,13 @@ export function readLevel(seconds: number, words: number): ReadLevel {
  */
 export type ReadReach = number;
 
-/** The share of a block's reading time at which the rail starts to draw: `readLevel`'s first threshold. */
-export const READ_REACH_FROM = 0.35;
-
 /**
  * The share of a block's reading time at which the rail is full: seven
  * doublings of `READ_REACH_FROM`, about 45 times the reading time.
  *
- * Chosen from Greg's own reading on 2026-10-04 (1,220 passages over 22
- * articles; 595 of them drawn). The time spent is spread roughly evenly on a
- * log scale from a glance to about 30 times the reading time, with a tail to
- * 168. At the earlier 2.8, 43% of the drawn passages were full width; at this,
- * 2.7%. docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
+ * Chosen to leave only a few percent of the measured drawn blocks full.
+ * The sample, results and limits of that inference are in
+ * docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
  */
 export const READ_REACH_FULL = READ_REACH_FROM * 2 ** 7;
 
@@ -103,7 +101,7 @@ const REACH_STEPS: readonly number[] = Array.from({ length: 12 }, (_, i) =>
  * Logarithmic from `READ_REACH_FROM` (4, a quarter of the rail) to
  * `READ_REACH_FULL` (16), so each sixteenth is the same multiple of time,
  * about one and a half times the step before. One read at the expected pace is
- * 6; three slow reads are 9.
+ * 6; three reads at the expected pace are 9.
  *
  * > make it a bit logarithmic so it's rarer that the reading-time fills up
  * > completely all the way to the right

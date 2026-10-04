@@ -30,8 +30,8 @@ rows belong to blocks no longer in a current revision and were left out.
   time, with a tail to 168. Quantiles of the drawn passages, as multiples of the reading time:
   median 2.0, 75% 6.9, 90% 18.7, 95% 30.8, 97% 41.4, 99% 66.
 
-So the scale fills too soon by a factor of ten or more, and the right shape is the one it has: a
-logarithm, over a longer range.
+For the goal of only a few percent of drawn blocks being full in this sample, the scale fills too
+soon. A longer logarithmic range preserves the existing shape while meeting that goal.
 
 ## What we build
 
@@ -66,8 +66,25 @@ always its reach's quarter, so a full-strength hairline beside a paragraph meant
 they agree only on whether anything is drawn. The gutter's levels are not changed: the quiz's "read"
 is one of them, and Greg asked about the rail.
 
-**Forty-five times the reading time sounds absurd, and is what the data says.** A passage left on
-screen while its reader thinks, or one returned to many times, gets there.
+**This is a calibration of recorded block ratios, not proof of repeated reading.** A passage left
+on screen during thought or revisited could reach the tail, but the supplied histogram cannot tell
+why it did. It has no word counts or block types: the tail could instead be dominated by headings
+or figures whose expected time is floored at one second. A breakdown by word count and block type
+would distinguish those explanations. Seven doublings meets the width goal in this one owner's
+sample; it does not establish that the same proportions hold for other readers or for prose alone.
+
+The histogram totals 595: bins k ≥ 12 contain 255 (42.857%), and k ≥ 28 contain 16 (2.689%). Near
+full (reach 15 or 16) starts at about 29.9004 times the reading time, inside bin 25. The histogram
+therefore only bounds that count at 29–37 (4.9–6.2%); the reported raw-row count of 32 (5.4%) is
+consistent, but cannot be recovered exactly from these bins. Six doublings would leave 47/595
+(7.9%) full, eight 4/595 (0.7%); seven is a defensible middle choice for this sample.
+
+**The word-count breakdown, which the reviewer did not have.** The first production query also
+counted blocks under 8 words in each bin. Of the 16 passages still at full width, 10 are under 8
+words; of all 595 drawn, about 180 are. So the far tail is mostly headings and other short blocks,
+whose expected time is floored at a second, and a full rail after this change will most often be a
+heading its reader sat under. That is the floor in `expectedSeconds` doing what its comment says,
+and it is not changed here.
 
 ### Passed over
 
@@ -96,3 +113,39 @@ drawn exactly when `readLevel` is above 0, including the doubles either side of 
 `tests/spine-reading.test.ts` pins the two opacities, so putting them back is noticed.
 
 Seen red first: six tests failed against the old function and the old opacities.
+
+## GPT Sol's code review — land after fixes
+
+[The review](261004j-spine-reading-chart-code-review-sol.md). No P0 or P1.
+
+- **F1 (established), not taken.** `readReach(1, NaN)` is 16 and a word count near the largest
+  double overflows. Both are `expectedSeconds`' and older than this change; `words` is a non-null
+  integer column, so neither can arrive.
+- **F2 (established), fixed by Sol.** No test noticed an interior step moving by one double. Each
+  of the eleven is now pinned by a literal, below, at and above.
+- **F3 (established), fixed by Sol.** `readLevel` spelt 0.35 itself; it now uses `READ_REACH_FROM`.
+- **F4 (reasoned), accepted.** "Is what the data says" claimed a cause the histogram cannot show.
+  Sol reworded it; the word-count breakdown above is the missing evidence.
+- **F5 (established), fixed by Sol.** Three stale phrases.
+
+Sol recomputed 255/595 and 16/595 from the histogram and agrees.
+
+## The browser check
+
+A Sonnet subagent, Playwright on the box, dark theme, 1440 and 390 wide, on a local article of 427
+blocks. "Before" was the primary checkout's dev server (0.22 and 0.8 read back from the page),
+"after" this worktree's (0.18 and 0.65).
+
+- **Real pattern**: one production article's ratios in block order (numbers only), stretched over
+  the local article. 131 blocks drawn; at full width 38 (29%) before and 5 (3.8%) after.
+- **Ladder**: stretches at 0.4, 1, 2.8, 6, 12, 25, 45 and 100 times the reading time. Before they
+  drew at 4, 10 and then 16 for every other step; after, 4, 6, 9, 11, 12, 14, 16, 16. The full
+  step is not clipped at the rail's side.
+- **Opacity**: 0.15/0.5, 0.18/0.65 and 0.22/0.8 side by side in
+  `261004j-shot-opacity-options.png`. 0.18/0.65 stands: fainter than before against the part
+  tints and the ticks, and the line can still be followed through the orange section fill; at
+  0.15/0.5 the line starts to go.
+
+Shots: `261004j-shot-{before,after}-{desktop,phone}-{real,ladder}.png`,
+`261004j-shot-compare-{desktop,phone}.png`. Not checked: light theme, Safari, a real iPad, and a
+real article with its own real times (the pattern is real, the article is not).
