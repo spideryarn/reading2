@@ -99,6 +99,24 @@ press. Then mutate: remove the eligibility check and see a test go red.
 `glossary.md` and `quotes.md` where they describe Find more, the `/help` page's command bar part,
 and the `mode-catalog.ts` docblock.
 
+## Changes after GPT Sol's plan review
+
+[261004k-command-bar-find-more-plan-review-sol.md](261004k-command-bar-find-more-plan-review-sol.md),
+verdict *build with the changes above*. Every finding was checked against the code and accepted.
+**Where this section and the stages above disagree, this section wins.**
+
+| ID | Sev | Finding | Taken |
+|---|---|---|---|
+| F1 | P1 | Eligibility left out `starting` and `failed`; `useStepJob.start` has no in-flight latch, so the command could post beside *Starting…* or past a *Retry* | One predicate per band, *a fresh Find more is offered now*, used by the band's own control **and** by the hand-off. Tests for starting, a retryable failure, a failed POST and a non-retryable failure |
+| F2 | P1 | Glossary's `rewrites` falls back to `stale or outdated` when the server's verdict is absent, which misses a changed profile | The command requires `panelRun === "append"`; an absent verdict is ineligible. Test: absent verdict, profiled list, profile changed |
+| F3 | P1 | A row offered when it cannot do what it says breaks the bar's rule (*no row, never a row that fails*) | **The row is drawn only when the reading view's own read says an append is on offer**: Glossary `ready`, a list, `panelRun === "append"`; Quotes `ready`, a list, not stale, not outdated, under the cap. Reader already holds both reads (`owner.glossary`, `owner.quotes`). The band still rechecks the transient state (F1) and drops the press if a run started in between. This replaces the question for Greg below: there is no longer a case where the command opens a band and does nothing by design |
+| F4 | P1 | The picker's catalogue is built from a synthetic owner with no executor, so the new rows would be missing from it and a sentence could never pick them | Give the synthetic owner the capability; assert both ids are in the `owner-article` slice |
+| F5 | P2 | `find more …` aliases collide with the `find` argument verb, against the collision matrix | Declared exceptions in the matrix, by id, and a test that the rows come before *Find “more …” in this article*. The parser is not weakened |
+| F6 | P2 | "No immediate POST" does not prove the hand-off was consumed | For each dropped state, move the mounted band to eligible inside the window and assert still no POST; both consumers mounted under `StrictMode` |
+| F7 | P2 | Sampling aliases is too weak for a hundred new words | A generated test: **every** alias ranks its own mode first; every label prefix that identifies one label ranks it first; an explicit table for the ambiguous prefixes. The label rule reads "not another row's label unless both open the same place" (`sketch`, `recall`) |
+| F8 | P2 | New aliases also multiply through the *Run again* phrases, and the picker's option wording is a measured thing | Add Find-more and new-alias sentences to `evals/command-pick/phrases.ts`, regenerate the catalogue, and re-run the production arm only; results into the investigation doc |
+| F9 | P3 | Three facts in *What exists* were wrong: Structure already has seven aliases, the test has four rules, and Glossary also appends to compatible older versions | Corrected here |
+
 ## The simpler options passed over
 
 - **Only add `find more <name>` as words on the existing *Run again* rows.** No new seam, but it is
@@ -115,7 +133,7 @@ and the `mode-catalog.ts` docblock.
 - **Aliases for pages, actions and sub-mode rows** (queue entry added before the note says
   shipped).
 
-## Question for Greg (not waited on)
+## Question for Greg (withdrawn after F3)
 
 **When Find more is not what the band offers** — no list yet, or the list would be rewritten — the
 command opens the band and presses nothing, and the band shows its own button. The alternative is
