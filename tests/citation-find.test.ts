@@ -9,15 +9,18 @@
  * model wrote in place of the result's, a result that is not the cited work, a
  * search that returned nothing. None of them may write a row.
  *
- * No network and no database: the model call and the store are injected. The
- * Postgres half — ownership, the read-back, the article-given link winning — is
- * tests/citation-find-route.test.ts.
+ * No network and no database: the model call and the store are injected, and
+ * the lookup is driven as its one caller drives it — `runCitationLookup`, the
+ * first step of *Investigate* (src/citation-investigate.ts). The route these
+ * cases used to go through, `POST /api/citations/:slug/:id/find`, was deleted on
+ * 2026-10-04 with its own wrapper's cases (the 404s, its allowance, its model
+ * choice); Investigate's equivalents are tests/citation-investigate.test.ts.
+ * The Postgres half — a stored find read back through `GET /api/citations/:slug`,
+ * the article-given link winning — is tests/citation-finds-read-back-pg.test.ts.
  */
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
-import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
 import { ProviderRefused, type AiRequestBody, type JsonCall } from "../src/ai-call.js";
 import {
@@ -28,14 +31,13 @@ import {
   LOOKUP_ANSWER_TOKENS,
   LOOKUP_SYSTEM,
   lookupPrompt,
-  makeFindCitation,
   readFind,
+  runCitationLookup,
 } from "../src/citation-find.js";
 import { lookupContext } from "../src/citation-lookup.js";
 import { attachFinds, pageNamesTitle } from "../src/citations.js";
 import { CITATION_LOOKUP_NO_MATCH, CITATION_NO_MATCH, providerHttpFailure } from "../src/messages.js";
-import type { AllowanceTaken, RatePolicy } from "../src/store/contracts.js";
-import type { Article, CitationFind, Citations, CitationsFound, CitedWork, BlockId } from "../src/types.js";
+import type { Article, CitationFind, Citations, CitedWork, BlockId } from "../src/types.js";
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. */
 const WORK_ID = "spya-w2rk3a";
@@ -135,89 +137,43 @@ const A_REVIEW = {
   content: "A post about compute and data, citing many papers.",
 };
 
-/** The harness: a fake reader, a store that records, a model that answers `reply`. */
-function harness(
-  reply: unknown | Error,
-  works: CitedWork[] = [work()],
-  allowed: AllowanceTaken = { kind: "allowed", id: "lease-1" },
-  article: Article = ARTICLE,
-) {
+/** The model the caller resolved. Its own choice is tests/citation-investigate.test.ts. */
+const MODEL = "anthropic/claude-sonnet-5";
+
+/**
+ * The harness: a store that records and a model that answers `reply`, behind
+ * `runCitationLookup`. `lookUp` resolves the row from `works` as the caller
+ * does; an id the list lacks is the caller's 404 and is not reachable here.
+ */
+function harness(reply: unknown | Error, works: CitedWork[] = [work()], model: string = MODEL) {
   const saved: { slug: string; entryId: string; find: CitationFind }[] = [];
   const sent: AiRequestBody[] = [];
-  const taken: { bucket: string; policy: RatePolicy }[] = [];
-  const finished: string[] = [];
-  const findCitation = makeFindCitation({
-    reader: {
-      loadCitations: async () => ({ citations: list(works), stale: false, outdated: false }) as CitationsFound,
-      loadArticle: async () => article,
-    },
-    finds: {
-      async save(slug, entryId, find) {
-        saved.push({ slug, entryId, find });
+  const lookUp = async (slug: string, entryId: string) => {
+    const listed = works.find((w) => w.id === entryId);
+    if (!listed) throw new Error(`the test asked for ${entryId}, which its list does not have`);
+    return runCitationLookup(
+      {
+        finds: {
+          async save(slug, entryId, find) {
+            saved.push({ slug, entryId, find });
+          },
+        },
+        call: async (body): Promise<JsonCall> => {
+          sent.push(body);
+          if (reply instanceof Error) throw reply;
+          return { json: reply, answeredBy: "anthropic/claude-sonnet-5", generationId: null };
+        },
+        now: () => "2026-09-12T10:00:00.000Z",
       },
-    },
-    allowance: {
-      async take(bucket, policy) {
-        taken.push({ bucket, policy });
-        return allowed;
-      },
-      async finish(id) {
-        finished.push(id);
-      },
-    },
-    call: async (body): Promise<JsonCall> => {
-      sent.push(body);
-      if (reply instanceof Error) throw reply;
-      return { json: reply, answeredBy: "anthropic/claude-sonnet-5", generationId: null };
-    },
-    now: () => "2026-09-12T10:00:00.000Z",
-  });
-  return { findCitation, saved, sent, taken, finished };
+      slug,
+      entryId,
+      listed,
+      ARTICLE,
+      model,
+    );
+  };
+  return { lookUp, saved, sent };
 }
-
-/* ------------------------------------------------------------- the allowance -- */
-
-describe("the allowance — every press is billed, so presses are bounded (Sol F11)", () => {
-  it("takes one fill from the citation-find bucket before the call, and finishes it after", async () => {
-    const { findCitation, taken, finished, sent } = harness(answer({ results: [THE_PAPER] }));
-    await findCitation("a-piece", WORK_ID);
-    expect(taken.map((t) => t.bucket)).toEqual(["citation-find"]);
-    expect(taken[0]!.policy.daily?.globalFills).toBeGreaterThan(0);
-    expect(sent).toHaveLength(1);
-    expect(finished).toEqual(["lease-1"]);
-  });
-
-  it("finishes the lease when the call fails, too", async () => {
-    const { findCitation, finished } = harness(new ProviderRefused(429, "busy", new Headers()));
-    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status: 502 });
-    expect(finished).toEqual(["lease-1"]);
-  });
-
-  it.each([
-    ["rate", 429],
-    ["concurrency", 429],
-    ["global", 503],
-  ] as const)("a %s refusal is a %i, and nothing is called or stored", async (kind, status) => {
-    const { findCitation, sent, saved, finished } = harness(answer({ results: [THE_PAPER] }), [work()], { kind });
-    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status });
-    expect(sent).toEqual([]);
-    expect(saved).toEqual([]);
-    expect(finished).toEqual([]);
-  });
-
-  it("spends no allowance on a 404 — the check comes first", async () => {
-    const { findCitation, taken } = harness(answer({ results: [THE_PAPER] }), [work()]);
-    await expect(findCitation("a-piece", "spya-n2t3h4")).rejects.toMatchObject({ status: 404 });
-    expect(taken).toEqual([]);
-  });
-
-  it("takes the same bucket for a row the article linked — a lookup is the same billed press", async () => {
-    const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
-    const { findCitation, taken } = harness(answer({ results: [THE_PAPER] }), [work(), linked]);
-    await findCitation("a-piece", LINKED_ID);
-    expect(taken.map((t) => t.bucket)).toEqual(["citation-find"]);
-  });
-});
 
 /* --------------------------------------------------------------- readFind -- */
 
@@ -306,15 +262,15 @@ describe("pageNamesTitle", () => {
 
 /* ----------------------------------------------------- the orchestration -- */
 
-describe("findCitation — what is stored", () => {
+describe("runCitationLookup — what is stored", () => {
   it("stores the annotation's url and title, never the model's", async () => {
     const reply = answer({
       content: JSON.stringify({ url: PAPER, title: "The Model's Own Title", doi: "10.0/made-up" }),
       results: [THE_PAPER],
     });
-    const { findCitation, saved } = harness(reply);
+    const { lookUp, saved } = harness(reply);
 
-    const result = await findCitation("a-piece", WORK_ID);
+    const result = await lookUp("a-piece", WORK_ID);
 
     /* The result names neither the first author nor the year, so the link is
        kept (Find it's rule) but nothing is read from it (R-1's stricter one). */
@@ -356,31 +312,25 @@ describe("findCitation — what is stored", () => {
   });
 
   it("stores nothing for a model-picked URL that was not a result", async () => {
-    const { findCitation, saved } = harness(
+    const { lookUp, saved } = harness(
       answer({ content: JSON.stringify({ url: "https://doi.org/10.48550/arXiv.2001.08361" }), results: [THE_PAPER] }),
     );
-    expect(await findCitation("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
+    expect(await lookUp("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
     expect(saved).toEqual([]);
   });
 
   it("stores nothing when the named result's title does not match the work", async () => {
-    const { findCitation, saved } = harness(
+    const { lookUp, saved } = harness(
       answer({ content: JSON.stringify({ url: A_REVIEW.url }), results: [A_REVIEW] }),
     );
-    expect(await findCitation("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
+    expect(await lookUp("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
     expect(saved).toEqual([]);
   });
 
   it("stores nothing when there are no annotations at all", async () => {
-    const { findCitation, saved } = harness(answer({ results: [], searches: 3 }));
-    expect(await findCitation("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
+    const { lookUp, saved } = harness(answer({ results: [], searches: 3 }));
+    expect(await lookUp("a-piece", WORK_ID)).toEqual({ outcome: "no-match", message: CITATION_NO_MATCH });
     expect(saved).toEqual([]);
-  });
-
-  it("is a 404 for an entry id the list does not have, and spends nothing", async () => {
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }));
-    await expect(findCitation("a-piece", "spya-n2t3h4")).rejects.toMatchObject({ status: 404 });
-    expect(sent).toEqual([]);
   });
 
   /* Until plan 260929g this was a 409 (`CITATION_ALREADY_LINKED`): Find it
@@ -388,11 +338,11 @@ describe("findCitation — what is stored", () => {
      the refusal is gone on purpose and these tests pin what replaced it. */
   it("looks up a row the article linked, and hands back its link unchanged", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
-    const { findCitation, sent, saved } = harness(
+    const { lookUp, sent, saved } = harness(
       answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }),
       [work(), linked],
     );
-    const result = await findCitation("a-piece", LINKED_ID);
+    const result = await lookUp("a-piece", LINKED_ID);
     expect(sent).toHaveLength(1);
     expect(result).toMatchObject({ outcome: "found", work: linked });
     if (result.outcome !== "found") throw new Error("unreachable");
@@ -412,22 +362,22 @@ describe("findCitation — what is stored", () => {
 
   it("keeps no judgement on a DOI row whose result URL does not carry that DOI", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/other", linkFrom: "doi" });
-    const { findCitation } = harness(answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }), [linked]);
-    const result = await findCitation("a-piece", LINKED_ID);
+    const { lookUp } = harness(answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }), [linked]);
+    const result = await lookUp("a-piece", LINKED_ID);
     expect(result).toMatchObject({ outcome: "found", work: linked, lookup: { state: "not-identified" } });
     expect(JSON.stringify(result)).not.toContain(SUPPORT_QUOTE);
   });
 
   it("says the article's link is still there when a linked row matches nothing", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
-    const { findCitation, saved } = harness(answer({ content: '{"url": null}', results: [DOI_PAGE] }), [linked]);
-    expect(await findCitation("a-piece", LINKED_ID)).toEqual({ outcome: "no-match", message: CITATION_LOOKUP_NO_MATCH });
+    const { lookUp, saved } = harness(answer({ content: '{"url": null}', results: [DOI_PAGE] }), [linked]);
+    expect(await lookUp("a-piece", LINKED_ID)).toEqual({ outcome: "no-match", message: CITATION_LOOKUP_NO_MATCH });
     expect(saved).toEqual([]);
   });
 
   it("reads a searched row's extract too, and upgrades its link as before", async () => {
-    const { findCitation } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }));
-    const result = await findCitation("a-piece", WORK_ID);
+    const { lookUp } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }));
+    const result = await lookUp("a-piece", WORK_ID);
     expect(result).toMatchObject({
       outcome: "found",
       work: { url: PAPER, linkFrom: "web" },
@@ -436,10 +386,10 @@ describe("findCitation — what is stored", () => {
   });
 
   it("keeps the URL pick when the reading is malformed", async () => {
-    const { findCitation } = harness(
+    const { lookUp } = harness(
       answer({ content: JSON.stringify({ ...JUDGED, url: PAPER, support: "yes" }), results: [NAMED_PAPER] }),
     );
-    expect(await findCitation("a-piece", WORK_ID)).toMatchObject({
+    expect(await lookUp("a-piece", WORK_ID)).toMatchObject({
       outcome: "found",
       work: { url: PAPER, linkFrom: "web" },
       lookup: { state: "unreadable" },
@@ -449,45 +399,16 @@ describe("findCitation — what is stored", () => {
   it("replaces a found row's link on a second press, and drops the earlier lookup from the row", async () => {
     const earlier = { state: "no-extract", host: "x.org", searches: 1, model: "m", at: "t", contextHash: "c", evidenceHash: "e" } as const;
     const found = work({ url: "https://x.org/old", linkFrom: "web", lookup: earlier });
-    const { findCitation } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }), [found]);
-    const result = await findCitation("a-piece", WORK_ID);
+    const { lookUp } = harness(answer({ content: JSON.stringify({ ...JUDGED, url: PAPER }), results: [NAMED_PAPER] }), [found]);
+    const result = await lookUp("a-piece", WORK_ID);
     expect(result).toMatchObject({ outcome: "found", work: { url: PAPER, linkFrom: "web" }, lookup: { state: "assessed" } });
     if (result.outcome !== "found") throw new Error("unreachable");
     expect(result.work).not.toHaveProperty("lookup");
   });
 
-  it("passes a stranger's 404 through before any call — ownership is the read", async () => {
-    const sent: AiRequestBody[] = [];
-    const taken: string[] = [];
-    const findCitation = makeFindCitation({
-      reader: {
-        loadCitations: async () => {
-          throw Object.assign(new Error('No article "a-piece".'), { status: 404 });
-        },
-        loadArticle: async () => ARTICLE,
-      },
-      finds: { save: async () => {} },
-      allowance: {
-        async take(bucket) {
-          taken.push(bucket);
-          return { kind: "allowed", id: "lease-1" };
-        },
-        async finish() {},
-      },
-      call: async (body) => {
-        sent.push(body);
-        return { json: null, answeredBy: null, generationId: null };
-      },
-    });
-    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status: 404 });
-    expect(sent).toEqual([]);
-    // A stranger's slug spends none of the caller's allowance either.
-    expect(taken).toEqual([]);
-  });
-
   it("reports a refused call in the house copy, and stores nothing", async () => {
-    const { findCitation, saved } = harness(new ProviderRefused(429, "busy", new Headers()));
-    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({
+    const { lookUp, saved } = harness(new ProviderRefused(429, "busy", new Headers()));
+    await expect(lookUp("a-piece", WORK_ID)).rejects.toMatchObject({
       status: 502,
       message: providerHttpFailure(429).message,
     });
@@ -495,8 +416,8 @@ describe("findCitation — what is stored", () => {
   });
 
   it("reports an unreadable answer as a failure to retry, not as no match", async () => {
-    const { findCitation, saved } = harness(answer({ finish: "length", results: [THE_PAPER] }));
-    await expect(findCitation("a-piece", WORK_ID)).rejects.toMatchObject({ status: 502 });
+    const { lookUp, saved } = harness(answer({ finish: "length", results: [THE_PAPER] }));
+    await expect(lookUp("a-piece", WORK_ID)).rejects.toMatchObject({ status: 502 });
     expect(saved).toEqual([]);
   });
 });
@@ -533,15 +454,15 @@ describe("the request — the only bounds on spend that exist", () => {
   });
 
   it("sends the article's reference entry when the work has one", async () => {
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }));
-    await findCitation("a-piece", WORK_ID);
+    const { lookUp, sent } = harness(answer({ results: [THE_PAPER] }));
+    await lookUp("a-piece", WORK_ID);
     const user = (sent[0]?.messages as { content: string }[] | undefined)?.[1]?.content ?? "";
     expect(user).toContain("The article's reference entry: Kaplan et al. (2020)");
   });
 
   it("Look it up sends its own prompt, the why and the citing passage, with the same search bounds", async () => {
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }));
-    await findCitation("a-piece", WORK_ID);
+    const { lookUp, sent } = harness(answer({ results: [THE_PAPER] }));
+    await lookUp("a-piece", WORK_ID);
     const body = sent[0]!;
     const messages = body.messages as { role: string; content: string }[];
     expect(messages[0]?.content).toBe(LOOKUP_SYSTEM);
@@ -559,11 +480,11 @@ describe("the request — the only bounds on spend that exist", () => {
 
   it("gives the search a linked row's DOI because the result URL must carry it", async () => {
     const linked = work({ id: LINKED_ID, url: "https://doi.org/10.1000/x", linkFrom: "doi" });
-    const { findCitation, sent } = harness(
+    const { lookUp, sent } = harness(
       answer({ content: JSON.stringify(JUDGED), results: [DOI_PAGE] }),
       [linked],
     );
-    await findCitation("a-piece", LINKED_ID);
+    await lookUp("a-piece", LINKED_ID);
     const user = (sent[0]?.messages as { role: string; content: string }[] | undefined)?.[1]?.content ?? "";
     expect(user).toContain("DOI: 10.1000/x");
   });
@@ -613,18 +534,10 @@ describe("attachFinds — a found page is read back, and never beats the article
 
 /* ------------------------------------------------ High-powered AI (260930f) -- */
 
-describe("High-powered AI — the /find route and findWorkPage follow the article (Sol F4)", () => {
-  const HIGH = { ...ARTICLE, highPowerSince: "2026-09-30T00:00:00.000Z" } as unknown as Article;
-
-  it("sends Opus for an administrator's high-powered article", async () => {
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work()], undefined, HIGH);
-    await runAsOwner(ADMIN_USER_ID_LOCAL as OwnerId, () => findCitation("a-piece", WORK_ID));
-    expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
-  });
-
-  it("sends Opus for a reader's article too — the column is the charge paid (plan 260930k)", async () => {
-    const { findCitation, sent } = harness(answer({ results: [THE_PAPER] }), [work()], undefined, HIGH);
-    await runAsOwner(DEV_OWNER_ID, () => findCitation("a-piece", WORK_ID));
+describe("which model searches — the caller's choice, and findWorkPage's `power` (Sol F4)", () => {
+  it("sends the model its caller resolved, and no other", async () => {
+    const { lookUp, sent } = harness(answer({ results: [THE_PAPER] }), [work()], HIGH_POWER_MODEL_OPENROUTER);
+    await lookUp("a-piece", WORK_ID);
     expect(sent[0]?.model).toBe(HIGH_POWER_MODEL_OPENROUTER);
   });
 

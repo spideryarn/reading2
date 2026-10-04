@@ -53,6 +53,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, articleTags, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { UNEXPECTED_FAILURE } from "../src/messages.js";
 import { captureFailure } from "../src/monitoring.js";
 import { originalUrl } from "../src/vercel.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT } from "../src/types.js";
@@ -1092,7 +1093,10 @@ describe("a slug that is not a slug", () => {
     for (const [method, url] of cases) {
       const r = await call(method, url);
       expect(r.status, url).toBe(400);
-      expect(r.body.error, url).toMatch(/Not a slug/);
+      /* The words and nothing else: this message is written to the request log,
+         so it does not echo the value (src/routes.ts § `logRequest`, plan
+         261004e § R11). */
+      expect(r.body.error, url).toBe("Not a slug");
     }
   });
 
@@ -1106,7 +1110,7 @@ describe("a slug that is not a slug", () => {
       start: 0,
     });
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Not a slug/);
+    expect(r.body.error).toBe("Not a slug");
   });
 
   it("refuses the shapes that are not traversals but are not slugs either", async () => {
@@ -2652,6 +2656,30 @@ describe("the admin gate", () => {
       expect(refused.status).toBe(403);
       expect(refused.body).not.toHaveProperty("reports");
       expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  /* **A missing file inside a request is a fault, not "no such article".**
+     `serveApi`'s catch mapped any `ENOENT` to 404 for the filesystem store,
+     which went on 2026-09-05. Left in place it did three wrong things to an
+     unexpected one: answered 404, so nothing was reported; and, because a
+     status under 500 passes the error's own message through, put the path on
+     the wire. docs/plans/261004e-fifth-sweep-cluster-8-routes-deletions.md § R9. */
+  it("answers an ENOENT thrown inside a handler as a reported 500, without its message", async () => {
+    const enoent = Object.assign(
+      new Error("ENOENT: no such file or directory, open '/var/task/api-dist/missing.json'"),
+      { code: "ENOENT" },
+    );
+    const list = vi.spyOn(adminStore, "listFeedbackAcrossOwners").mockRejectedValueOnce(enoent);
+    vi.mocked(captureFailure).mockClear();
+    try {
+      const r = await call("GET", "/api/admin/feedback");
+      expect(r.status).toBe(500);
+      expect(r.body.error).toBe(UNEXPECTED_FAILURE.message);
+      expect(JSON.stringify(r.body)).not.toContain("/var/task");
+      expect(vi.mocked(captureFailure).mock.calls.map((c) => c[0])).toContain(enoent);
     } finally {
       list.mockRestore();
     }

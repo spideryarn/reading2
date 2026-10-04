@@ -118,23 +118,22 @@ describe("a sentence that was written for a reader", () => {
     expect(authoredSentence(new Error(sentence))).toBe(sentence);
   });
 
-  it("uses the declared sentence at both formerly uncoded 5xx throw sites", () => {
-    /* The registry assertion above is not enough: reverting either throw site
+  it("uses the declared sentence at the formerly uncoded 5xx throw site", () => {
+    /* The registry assertion above is not enough: reverting the throw site
        to its old bare string would leave it green while the reader once again
-       got `UNEXPECTED_FAILURE`. These are private helpers with database-shaped
-       dependencies, so pin the small wiring seam directly. */
+       got `UNEXPECTED_FAILURE`. It is a private helper with database-shaped
+       dependencies, so pin the small wiring seam directly.
+
+       There were two until 2026-10-04: the other was *Find it*'s 503
+       (`CITATION_FIND_RESTING`) in src/citation-find.ts, which went with the
+       `POST …/find` route that threw it. */
     const shelf = readFileSync(
       path.resolve(import.meta.dirname, "..", "src", "store", "pg-shelf.ts"),
-      "utf8",
-    );
-    const citations = readFileSync(
-      path.resolve(import.meta.dirname, "..", "src", "citation-find.ts"),
       "utf8",
     );
     expect(shelf).toMatch(
       /new Error\(DELETE_HELD_BY_UNSETTLED_SLOT\.message\),\s*\{ status: 500 \}/,
     );
-    expect(citations).toContain("httpError(503, CITATION_FIND_RESTING.message)");
   });
 
   it("passes the server's own { error } through, from a real readJson", async () => {

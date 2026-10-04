@@ -7,120 +7,13 @@
  * actual work stays in src/store/index.ts, src/comments.ts and src/explain.ts; this file
  * is only routing, parsing and status codes.
  *
- *   GET    /api/library         every article on the shelf, for the homepage
- *                                `?archived=1` for the other half
- *   GET    /api/library/search   `?q=…&limit=…&archived=1` → passages from every article at once
- *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
- *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
- *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
- *                                 import is running; no body, and nothing to undo
- *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
- *   GET    /api/library/tags     every tag the reader uses → { tags: [{ tag, count }] }
- *   PATCH  /api/library/:slug/tags   { add?: string[], remove?: string[] } → { tags }
- *   GET    /api/models           which model writes what
- *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
- *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
- *                                 — purpose is null without a slug
- *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
- *                                 → { profile, experimentalSince }, both always
- *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
- *   GET    /api/link-summary    `?slug=&url=&block=` → SSE: how it stands to the piece being read
- *   GET    /api/article/:slug    meta + blocks + tree, one payload
- *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
- *   GET    /api/asset/:slug/:hash.:ext   one picture of that article, out of our own bucket
- *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
- *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
- *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
- *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
- *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
- *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources → SSE
- *   POST   /api/glossary/:slug/ask   find a term the reader typed, explain it and add it → SSE
- *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
- *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
- *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
- *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
- *   GET    /api/relations/:slug  how each paragraph bears on the one before it, and staleness (owner only)
- *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
- *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
- *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
- *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
- *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
- *   POST   /api/citations/:slug/:id/investigate   look one cited work up, then look into it on the web, and keep both → SSE
- *   POST   /api/citations/:slug/:id/find   the lookup alone; no button calls it since plan 260930d, kept one deploy for open tabs
- *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
- *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
- *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
- *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
- *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
- *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
- *   GET    /api/comments/:slug   selection-anchored comments for compatibility;
- *                                `?anchors=whole-block` opts the current client into every comment
- *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence?, colour? },
- *                                or { blockId } for a whole-block bookmark
- *                                → the stored comment. `criterionId` + `valence` are the referee's
- *                                  own placement of the passage — `tidyMark`; `colour` is a
- *                                  highlight's, refused on a whole-block bookmark — `tidyColour`
- *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
- *                                  The key is required: a patch that never mentions the body
- *                                  is a 400, not a silent wipe
- *   PATCH  /api/comments/:slug/:id/mark   { criterionId, valence } — both keys, always, each a
- *                                  value or `null`; both `null` clears the placement
- *   PATCH  /api/comments/:slug/:id/colour { colour } — a highlight colour, or `null` to
- *                                  remove it; the key is required. 409 on a whole-block comment
- *   DELETE /api/comments/:slug/:id
- *   GET    /api/chat/:slug       every stored conversation for the article
- *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
- *                                  { threadId, question, at? }      ask
- *                                  { threadId, retry: messageId }   answer again
- *                                  { threadId, edit: messageId, question, at? }
- *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
- *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
- *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
- *                                            id, the thread as seed items, and the tail
- *   POST   /api/chat/:slug/:threadId/live-session { sdp, placement?, useProfile? }
- *                                          → GPT-Live: the SDP answer, a session id, the tail
- *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
- *                                          → { thread }, one exchange appended
- *   POST   /api/live/:sessionId/connected  → the data channel opened
- *   POST   /api/live/:sessionId/usage      { kind, … } → one ledger row (four kinds, two per engine)
- *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
- *   PATCH  /api/chat/:slug/:threadId   { title }
- *   DELETE /api/chat/:slug/:threadId
- *   GET    /api/search/:slug     every saved meaning-search for the article
- *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
- *   PATCH  /api/search/:slug/:id  { colour } — the reader's palette slot, or null for auto
- *   DELETE /api/search/:slug/:id
- *   GET    /api/referee/criteria/:slug      every saved criterion for the article
- *   POST   /api/referee/criteria/:slug      { id?, criterion, kind, poles?, scale? } → **a stream**,
- *                                           see `runRefereeCriterion`
- *   PATCH  /api/referee/criteria/:slug/:id  { colour } — the palette slot, or null for auto
- *   DELETE /api/referee/criteria/:slug/:id
- *   GET    /api/referee/claims/:slug        the paper's claims run, or null
- *   POST   /api/referee/claims/:slug        no body → **a stream**, see `runRefereeClaims`.
- *                                           One run per article; a second POST replaces the first
- *   POST   /api/referee/mirror/:slug        no body → **a stream**, see `runMirror`. Reads the
- *                                           referee's own comments back to them; never the paper
- *   GET    /api/referee/scan/:slug          the deterministic injection scan of the stored raw
- *                                           source — no model, no cost, and no verdict
- *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
- *   GET    /api/uploads/:id      what became of one upload, and whether its bytes have arrived
- *   DELETE /api/uploads/:id      the reader pressed Stop: pending → expired
- *   GET    /api/jobs             every ingest job this server knows about
- *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
- *   GET    /api/jobs/:id         one job, for the progress indicator to poll
- *   DELETE /api/jobs/:id         hide a finished job from its reader
- *   POST   /api/jobs/:id/cancel
- *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
- *   POST   /api/jobs/:id/advance run the next step this job has not done yet
- *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought —
- *                                and, first, claims any gift voucher waiting for the
- *                                reader's confirmed address (the one write in a GET)
- *   GET    /api/admin/vouchers   (admin) every gift voucher, with each claimant's usage
- *   POST   /api/admin/vouchers   (admin) { email, articles, note? } → a voucher, waiting
- *   PATCH  /api/admin/vouchers/:id (admin) { articles?, note?, email?, revoked? }
- *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
- *   POST   /api/billing/portal   → a hosted Customer Portal session
- *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
+ * **There is no list of routes here, on purpose.** The signed-in routes are
+ * the rows of `AUTH_ROUTES` below, each with its own comment, and the inventory
+ * a test keeps true is `EXPECTED_AUTH_ROUTES` in
+ * tests/authenticated-api-route-contract.test.ts. The signed-out ones are in
+ * src/public/routes.ts. A list kept here until 2026-10-04 was a third copy that
+ * nothing checked: it had fallen a fifth of the table behind, and every
+ * new-route commit collided in it.
  *
  * The job routes return immediately; the work happens on the queue in
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
@@ -173,7 +66,6 @@ import {
   loadDebate,
   loadCitations,
   citedCandidates,
-  findCitation,
   investigateCitation,
   guessSource,
   loadTimeline,
@@ -1375,6 +1267,23 @@ function sse(res: ServerResponse): {
    * call, closing the tab leaves OpenRouter generating, and being paid for,
    * until it finishes on its own — and a retry then starts a second paid call
    * beside the first. A caller that wants only the frames can ignore this.
+   *
+   * **And most do. There is no rule here, only ten choices** — what each
+   * stream does when the reader leaves, read off the callers on 2026-10-04:
+   *
+   *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
+   *                           `markOneAnswer`, and `search` for a quick run
+   *   lets it run to the end  `answer` (comments), `streamTermLookup`,
+   *                           `streamCitationInvestigation`,
+   *                           `runRefereeCriterion`, `runRefereeClaims`,
+   *                           `runMirror`, and `search` for a meaning run
+   *
+   * "A stream whose answer is stored runs on" is the tempting summary and it is
+   * false both ways: `runMirror` stores nothing and runs on, and
+   * `streamAskedTerm` stores its term and stops. Each caller's own comment says
+   * why. Whether there should be one rule is Greg's to decide
+   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4); when
+   * you add a stream, choose on purpose and add it to this list.
    */
   gone: AbortSignal;
 } {
@@ -1405,7 +1314,9 @@ function sse(res: ServerResponse): {
      would be live and stay live: the paid call starts anyway, on a response
      that is already destroyed, and nothing ever cancels it. Asking the socket
      what it is rather than waiting to be told. GPT Sol's second review of the
-     quiz code found this; it applies to every streaming route here. */
+     quiz code found this. This check runs for every streaming route here;
+     what it buys is `alive()` for all of them and a cancelled call only for
+     the ones that hand `gone` on — the list above. */
   if (res.destroyed || res.writableEnded) {
     open = false;
     left.abort();
@@ -2137,7 +2048,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
  * by `investigateCitation` before a header is written. Then, since plan
  * 260930d, `stage` (`{ stage: "finding" }`) and one `lookup` (the stored
- * *Look it up* answer, `/find`'s body) when the press looks the work up first,
+ * *Look it up* answer, a `FindCitationResponse`) when the press looks the work up first,
  * and `stage` (`{ stage: "reading" }`); then any number of `delta` and exactly
  * one `done` (`{ investigation }`, **written only after it is stored**) or
  * `error` (`{ error }`). Every delta has already passed the
@@ -2167,8 +2078,8 @@ async function streamCitationInvestigation(slug: string, entryId: string, res: S
           frame("stage", { stage: event.stage });
           break;
         case "lookup":
-          /* The body `POST …/find` answers, unchanged — the client applies it
-             exactly as it applied that route's answer. */
+          /* A `FindCitationResponse`, the body the retired `POST …/find` answered,
+             unchanged — the client applies it exactly as it applied that route's. */
           frame("lookup", event.response);
           break;
         case "delta":
@@ -5416,10 +5327,14 @@ function part(m: RegExpExecArray, group: number): string {
  *
  * 400 rather than 404: the request is malformed, and saying "not found" would
  * send whoever sent it looking for a missing article.
+ *
+ * **Fixed words, without the value.** The message goes to the request log
+ * (§ `logRequest`: "nothing but words we chose"), and the value is already in
+ * the path the caller sent.
  */
 function slugPart(m: RegExpExecArray, group: number): string {
   const value = part(m, group);
-  if (!isSlug(value)) throw httpError(400, `Not a slug: ${JSON.stringify(value)}`);
+  if (!isSlug(value)) throw httpError(400, "Not a slug");
   return value;
 }
 
@@ -7719,7 +7634,7 @@ async function serveApi(
        part of the JSON boundary: a thrown `null` must not make the catch throw
        a second time and escape without a body. Accept a status only when it is
        actually numeric, as the rest of this function assumes. */
-    const thrown = err as { status?: unknown; code?: unknown } | null | undefined;
+    const thrown = err as { status?: unknown } | null | undefined;
     const explicitStatus = typeof thrown?.status === "number" ? thrown.status : null;
     const status =
       explicitStatus ??
@@ -7748,7 +7663,11 @@ async function serveApi(
          being pushed down the retired explanation path (409). Guessing one for
          both would make a deleted comment read as "you cannot answer that". */
       (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
-      (thrown?.code === "ENOENT" ? 404 : 500);
+      /* Anything else is a fault. **`ENOENT` used to be a 404 here**, for the
+         filesystem store that went on 2026-09-05; with no file read left that
+         means "no such article", it would have turned a missing bundled file
+         into an unreported 404 carrying the path. tests/routes.test.ts. */
+      500;
     // Handed to `logRequest`, which decides how much of it to write down — the
     // message for a failure this file chose, the whole stack for one it did
     // not. That is the point of the exercise: an unexpected throw used to be
@@ -9068,9 +8987,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      await withSpendAttribution({ articleSlug: at }, () =>
-        streamTermLookup(at, slugPart(captures, 2), res),
-      );
+      await streamTermLookup(at, slugPart(captures, 2), res);
     },
   },
 
@@ -9104,8 +9021,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          POST has none either, and feedback's hourly cap is the only limiter in
          this file (`fileFeedback`). So an owner with one article of their own
          can drive paid `explain` calls as fast as they can post: ownership says
-         *which* article, not *how many* requests, and `withSpendAttribution`
-         records the spend rather than authorising it. **This request never
+         *which* article, not *how many* requests, and the row's
+         `article: "first-capture"` records the spend rather than authorising it. **This request never
          enters the job queue**, so the queue's concurrency cap is not a
          limit on it either — a first draft of this comment claimed it was, and
          GPT Sol was right that it is false. Stated rather than fixed here
@@ -9115,11 +9032,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          docs/user-feedback/ for Greg.
 
          Re-traced 2026-09-10 for the move to streaming, and still true: the
-         route has no limiter, and `withSpendAttribution` records rather than
-         gates. It wraps the whole stream, so the one model call inside it is
-         attributed to this article however it ends. `streamAskedTerm` above. */
+         route has no limiter, and spend attribution records rather than
+         gates. `dispatchAuthRoute` wraps the whole handler, so the one model
+         call inside the stream is attributed to this article however it ends.
+         `streamAskedTerm` above. */
       const askBody = (await readBody(req)) as { term?: unknown } | null;
-      await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
+      await streamAskedTerm(at, askBody?.term, res);
     },
   },
 
@@ -9381,44 +9299,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **Find one searched work's own page on the web** — Citations mode's *Find
-     it*, docs/plans/260911g-citations-mode.md § Stage 3. The citations' one
-     POST, and the glossary `lookup`'s shape: one reader-triggered model call
-     for one entry, owner-only because `loadCitations` joins through
-     `ownedSlug`, stored per `(article, entry id)`. **JSON, not SSE**: the
-     answer is a link, not prose to start reading. Nothing is read off the body
-     — the work is found server-side by id, so this cannot be made to search
-     for text of the caller's choosing.
-
-     **Rate-limited per owner**, on `fetchAllowanceStore`'s `citation-find`
-     bucket — the limiter `link-summary-fill` spends money through, taken after
-     the 404 and 409 so a refusal for free costs nothing (GPT Sol F11). What
-     bounds one press is the deadline and the prompt; `webSearches` on the
-     ledger row is the alarm. src/citation-find.ts § `FIND_RATE_POLICY`. */
-  {
-    kind: "pattern",
-    method: "POST",
-    pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/find$/,
-    article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: at }, () =>
-          findCitation(at, slugPart(captures, 2)),
-        ),
-      );
-    },
-  },
-
   /* **Look into one cited work on the web, and keep the answer** — Citations'
      *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
      SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
      owner-scoped), rate-limited on its own `citation-investigate` bucket after
      the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).
-     Nothing is read off the body. The pattern ends `/investigate`, so it cannot
-     collide with `/find`. */
+     Nothing is read off the body. Citations' one POST: the lookup-only
+     `…/find` beside it was deleted on 2026-10-04, several deploys after the
+     last button that called it (plan 261004e § R7). */
   {
     kind: "pattern",
     method: "POST",
@@ -9426,9 +9314,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      await withSpendAttribution({ articleSlug: at }, () =>
-        streamCitationInvestigation(at, slugPart(captures, 2), res),
-      );
+      await streamCitationInvestigation(at, slugPart(captures, 2), res);
     },
   },
 
@@ -9454,7 +9340,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      send(res, 200, await withSpendAttribution({ articleSlug: at }, () => guessSource(at)));
+      send(res, 200, await guessSource(at));
     },
   },
 
@@ -9533,10 +9419,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          than an error frame the client would have to parse. */
       const at = slugPart(captures, 1);
       const markBody = await readBody(req);
-      /* **The article goes on every row this request writes**, or "what has
-         this piece cost me" would cover writing the questions and none of the
-         answering. src/ai-spend.ts § `withSpendAttribution`. */
-      await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
+      /* **The article goes on every row this request writes** — the row's
+         `article: "first-capture"` — or "what has this piece cost me" would
+         cover writing the questions and none of the answering. */
+      await markOneAnswer(at, markBody, res);
     },
   },
 
@@ -9686,34 +9572,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/similar\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      {
-        const at = slugPart(captures, 1);
-        /* This route pays for embeddings, so its rows carry the article like
-           chat's and explain's do. GPT Sol found both this and `projection`
-           writing owner-attributed rows with a null slug — which the report then
-           excludes from "by article" entirely, so an article's real cost would
-           have been understated by exactly the two features that embed it. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          /* The whole article, because this needs the prose **and the tree** —
-             the tree so that two passages of one section cannot take a place in
-             the answer from two passages of different ones (src/similar.ts §
-             `sectionOfRow`). It is the same read every other artefact route
-             makes and the store caches nothing, so on a warm similarity cache
-             this load is the entire cost of the request. */
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
-          } catch (err) {
-            /* **This used to catch everything and blame the provider**, which
-               is the bug a GPT Sol review had already found and fixed in
-               `projection` twenty lines below — and this, its sibling, was left
-               with it. A ranking bug in src/similar.ts was reported to the
-               reader, and logged, as an outage at somebody else's company.
-               ⟨Sol⟩, 2026-08-28. */
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
+      const at = slugPart(captures, 1);
+      /* This route pays for embeddings, so its rows carry the article like
+         chat's and explain's do — `article: "first-capture"` above. GPT Sol
+         found both this and `projection` writing owner-attributed rows with a
+         null slug — which the report then excludes from "by article" entirely,
+         so an article's real cost would have been understated by exactly the
+         two features that embed it. */
+      /* The whole article, because this needs the prose **and the tree** —
+         the tree so that two passages of one section cannot take a place in
+         the answer from two passages of different ones (src/similar.ts §
+         `sectionOfRow`). It is the same read every other artefact route
+         makes and the store caches nothing, so on a warm similarity cache
+         this load is the entire cost of the request. */
+      const loaded = await loadArticle(at);
+      try {
+        send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
+      } catch (err) {
+        /* **This used to catch everything and blame the provider**, which
+           is the bug a GPT Sol review had already found and fixed in
+           `projection` twenty lines below — and this, its sibling, was left
+           with it. A ranking bug in src/similar.ts was reported to the
+           reader, and logged, as an outage at somebody else's company.
+           ⟨Sol⟩, 2026-08-28. */
+        throw embeddingHttpError(err, at);
       }
     },
   },
@@ -9741,19 +9623,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/projection\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      {
-        const at = slugPart(captures, 1);
-        /* Same reason as `similar` above: this route pays for embeddings, so its
-           rows carry the article. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await projectArticle(at, loaded.blocks));
-          } catch (err) {
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
+      const at = slugPart(captures, 1);
+      /* Same reason as `similar` above: this route pays for embeddings, so its
+         rows carry the article. */
+      const loaded = await loadArticle(at);
+      try {
+        send(res, 200, await projectArticle(at, loaded.blocks));
+      } catch (err) {
+        throw embeddingHttpError(err, at);
       }
     },
   },
@@ -9813,9 +9690,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          bad request is an ordinary 400. */
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       const answerBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slug }, () =>
-        answer(slug, id, answerBody, res),
-      );
+      await answer(slug, id, answerBody, res);
     },
   },
 
@@ -9968,14 +9843,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          reads. A stream that fails *before* the headers go out throws, and the
          catch below answers it as ordinary JSON; after that, the failure is an
          `error` frame inside a 200, because the status line is long gone. */
-      /* **The article goes on every row this request writes.** Without it,
-         "what has this piece cost me" would cover the ingest and none of the
-         questions asked about it afterwards — which is the half a reader
-         actually generates. src/ai-spend.ts § `withSpendAttribution`. */
+      /* **The article goes on every row this request writes** — the row's
+         `article: "first-capture"`. Without it, "what has this piece cost me"
+         would cover the ingest and none of the questions asked about it
+         afterwards — which is the half a reader actually generates. */
       const chatBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        streamChat(slugPart(captures, 1), chatBody, res),
-      );
+      await streamChat(slugPart(captures, 1), chatBody, res);
     },
   },
 
@@ -10001,11 +9874,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          at the questions that were typed. */
       const slug = slugPart(captures, 1);
       const toolBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => liveTool(slug, toolBody)),
-      );
+      send(res, 200, await liveTool(slug, toolBody));
     },
   },
 
@@ -10107,8 +9976,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
-      /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today: the realtime rows
+      /* **The spend attribution the streaming route has (`article:
+         "first-capture"`), for the half of a live session this server can
+         see.** It buys nothing today: the realtime rows
          are written by `/api/live/:sessionId/usage` above, which takes its
          article off the session row rather than off the ambient scope. Kept
          because this request makes model calls of its own the moment anything
@@ -10116,11 +9986,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          that knows which article it belongs to. */
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       const spokenBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => spokenChat(slug, id, spokenBody)),
-      );
+      send(res, 200, await spokenChat(slug, id, spokenBody));
     },
   },
 
@@ -10201,9 +10067,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          still reached through `send` for its *failures*: validation throws
          before a header is written, so a bad request is an ordinary 400. */
       const searchBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        search(slugPart(captures, 1), searchBody, res),
-      );
+      await search(slugPart(captures, 1), searchBody, res);
     },
   },
 
@@ -10287,9 +10151,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          *failures*: `readCriterionRequest` throws before a header is written,
          so a bad request is an ordinary 400. */
       const criteriaBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runRefereeCriterion(slugPart(captures, 1), criteriaBody, res),
-      );
+      await runRefereeCriterion(slugPart(captures, 1), criteriaBody, res);
     },
   },
 
@@ -10366,12 +10228,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          a body is not refused, it is ignored, which is the same call
          `POST /api/referee/mirror/:slug` makes.
 
-         `withSpendAttribution`, because the call inside it pays: the rows have
-         to carry the article or the cost report cannot say which paper a
+         `article: "first-capture"`, because the call inside it pays: the rows
+         have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runRefereeClaims(slugPart(captures, 1), res),
-      );
+      await runRefereeClaims(slugPart(captures, 1), res);
     },
   },
 
@@ -10396,7 +10256,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          there; tests/referee-scan-route.test.ts pins it here. The answer is
          discarded — it is asked as a question. */
       await shelfStore.read(slug);
-      /* **No `withSpendAttribution`**, and its absence is the point rather than
+      /* **Nothing here spends**, which is the point rather than
          an omission: this is the one thing in Referee mode that calls no model.
          It is deterministic, free, and it reports without deciding anything —
          see src/injection-scan.ts § *It reports. It does not decide.*
@@ -10429,12 +10289,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          before a header is written, and `runMirror` reads everything it needs
          above `sse(res)` for exactly that reason.
 
-         `withSpendAttribution`, because the call inside it pays — the rows have
-         to carry the article or the cost report cannot say which paper a
+         `article: "first-capture"`, because the call inside it pays — the rows
+         have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runMirror(slugPart(captures, 1), res),
-      );
+      await runMirror(slugPart(captures, 1), res);
     },
   },
 

@@ -244,8 +244,10 @@ export interface CitationsRead extends CitationDig {
    * **The one write that crosses this seam**, and it exists because `find`
    * cannot.
    *
-   * *Find it on the web* POSTs, so it stays in the band with the poller and the
-   * auto-run. But its answer patches the list, and the list now lives up here.
+   * *Find it on the web* POSTed (`POST …/find`, a route deleted on 2026-10-04;
+   * since plan 260930d the same answer arrives as Investigate's `lookup`
+   * frame), so it stayed in the band with the poller and the auto-run. But
+   * its answer patches the list, and the list now lives up here.
    * The alternative GPT Sol offered — `refresh()` after every successful find —
    * was refused for two reasons: it is a whole extra `GET` after a call the
    * reader is already waiting on, and the F14 condition below would then live

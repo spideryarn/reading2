@@ -22,7 +22,7 @@ import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { HIGH_POWER_MODEL_OPENROUTER, modelFor } from "../src/models.js";
 import { DEV_OWNER_ID, type OwnerId, runAsOwner } from "../src/owner.js";
 
-import { FIND_TIMEOUT_MS, LOOKUP_SYSTEM, makeFindCitation } from "../src/citation-find.js";
+import { FIND_TIMEOUT_MS, LOOKUP_SYSTEM, runCitationLookup } from "../src/citation-find.js";
 import {
   INVESTIGATE_MAX_CHARACTERS,
   INVESTIGATE_PRESS_BUDGET_USD,
@@ -793,64 +793,33 @@ describe("step 1, the lookup — when it runs (P-2)", () => {
 });
 
 describe("step 1, the lookup — what it hands on", () => {
-  it("stores the find and yields exactly the body POST …/find answers", async () => {
+  it("stores the find and yields exactly what runCitationLookup answers, unchanged", async () => {
     const h = harness({ deltas: ["An answer."], lookupReply: FOUND_ANSWER });
     const { events } = await drain((await h.investigate(SLUG, ID, null)).stream());
     const frame = events.find((e) => e.type === "lookup");
 
-    /* The route, driven with the same reply, the same row and the same clock. */
-    const findSaved: CitationFind[] = [];
-    const find = makeFindCitation({
-      reader: {
-        loadCitations: async () => ({ citations: citationsOf([work()]), stale: false, outdated: false }),
-        loadArticle: async () => ARTICLE,
+    /* The lookup itself, driven with the same reply, the same row, the same
+       article, the same clock and the model Investigate sends. Until
+       2026-10-04 this compared against the `POST …/find` route, which is
+       deleted; what it pins is that Investigate hands the row on whole and
+       adds nothing to, and drops nothing from, the answer or the stored find. */
+    const direct: CitationFind[] = [];
+    const fromLookup = await runCitationLookup(
+      {
+        finds: { save: async (_s, _i, f) => void direct.push(f) },
+        call: async () => ({ json: FOUND_ANSWER, answeredBy: "anthropic/claude-sonnet-5", generationId: null }),
+        now: () => "2026-09-30T12:00:00.000Z",
       },
-      finds: { save: async (_s, _i, f) => void findSaved.push(f) },
-      allowance: { take: async () => ({ kind: "allowed", id: "l" }), finish: async () => {} },
-      call: async () => ({ json: FOUND_ANSWER, answeredBy: "anthropic/claude-sonnet-5", generationId: null }),
-      now: () => "2026-09-30T12:00:00.000Z",
-    });
-    const fromRoute = await find(SLUG, ID);
-    expect(fromRoute.outcome).toBe("found");
-    expect(frame?.type === "lookup" ? frame.response : null).toEqual(fromRoute);
-    expect(h.savedFinds).toEqual(findSaved);
+      SLUG,
+      ID,
+      work(),
+      ARTICLE,
+      DIG_DEEPER_MODEL,
+    );
+    expect(fromLookup.outcome).toBe("found");
+    expect(frame?.type === "lookup" ? frame.response : null).toEqual(fromLookup);
+    expect(h.savedFinds).toEqual(direct);
     expect(h.savedFinds[0]?.lookup?.state).toBe("assessed");
-  });
-
-  it("keeps /find's allowance scoped to the provider call, not the later save", async () => {
-    let saveStarted: (() => void) | undefined;
-    const saving = new Promise<void>((resolve) => {
-      saveStarted = resolve;
-    });
-    let letSaveFinish: (() => void) | undefined;
-    const saveGate = new Promise<void>((resolve) => {
-      letSaveFinish = resolve;
-    });
-    const finished: string[] = [];
-    const find = makeFindCitation({
-      reader: {
-        loadCitations: async () => ({ citations: citationsOf([work()]), stale: false, outdated: false }),
-        loadArticle: async () => ARTICLE,
-      },
-      finds: {
-        save: async () => {
-          saveStarted?.();
-          await saveGate;
-        },
-      },
-      allowance: {
-        take: async () => ({ kind: "allowed", id: "find-lease" }),
-        finish: async (id) => void finished.push(id),
-      },
-      call: async () => ({ json: FOUND_ANSWER, answeredBy: "anthropic/claude-sonnet-5", generationId: null }),
-      now: () => "2026-09-30T12:00:00.000Z",
-    });
-
-    const pending = find(SLUG, ID);
-    await saving;
-    expect(finished).toEqual(["find-lease"]);
-    letSaveFinish?.();
-    await pending;
   });
 
   it("feeds a found page into the matched branch and the quote guard, read back from the store (P-3)", async () => {

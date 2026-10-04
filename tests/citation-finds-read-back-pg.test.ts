@@ -1,32 +1,44 @@
 /**
- * **Find it on the web, through the route and Postgres** —
- * `POST /api/citations/:slug/:id/find`, src/citation-find.ts,
- * docs/plans/260911g-citations-mode.md § Stage 3.
+ * **A stored find, read back through `GET /api/citations/:slug` — in Postgres.**
+ * src/citation-find.ts § `runCitationLookup`, src/store/pg-citation-finds.ts,
+ * and the read half in `loadCitations` (`attachFinds`, `attachLookups`).
  *
  * The rules about *what* is kept are tests/citation-find.test.ts, with the
  * model and the store injected. What only the real composition can show is
- * here:
+ * here: the lookup writes through the real `citationFindStore`, and the GET a
+ * page refresh makes reads the row back onto its entry.
  *
- * 1. **A kept page is stored and read back onto its entry** — the GET a page
- *    refresh makes shows the row as `web`, with the search result's own URL and
- *    title, not the model's.
+ * 1. **A kept page is stored and read back onto its entry** — a searched row
+ *    reads as `web`, with the search result's own URL and title, not the
+ *    model's.
  * 2. **A link the article gave wins** over a stored find for the same id — a
  *    re-run can turn a searched row into a DOI row and inherit its id.
- * 3. **An id that is not in the list is a 404, and a stranger's slug is a 404**,
- *    both before anything is spent.
+ * 3. **A looked-up row the article linked keeps its DOI link and gains the
+ *    reading**, and a list made again with a different `why` drops the reading
+ *    and keeps the link.
  *
- * The provider is `globalThis.fetch`, stubbed — nothing here spends.
+ * Until 2026-10-04 this file was tests/citation-find-route.test.ts and wrote its
+ * finds through `POST /api/citations/:slug/:id/find`. That route is deleted
+ * (no caller since plan 260930d); the lookup is now driven the way its one
+ * caller drives it — `runCitationLookup` with `DIG_DEEPER_MODEL`, as
+ * *Investigate* does (src/citation-investigate.ts) — so the fingerprints on the
+ * stored lookup are the real ones the read half checks. Investigate's own route
+ * is tests/citation-investigate-route.test.ts.
+ *
+ * The model call is injected — nothing here spends.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { JsonCall } from "../src/ai-call.js";
+import { runCitationLookup } from "../src/citation-find.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, citationFinds } from "../src/db/schema.js";
+import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { loadEnvLocal } from "../src/env.js";
-import { EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type { BlockId, Citations, CitationsResponse, CitedWork, FindCitationResponse } from "../src/types.js";
-import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
@@ -42,97 +54,60 @@ const PAPER_TITLE = "[2001.08361] Scaling Laws for Neural Language Models";
 const TITLE = "Scaling Laws for Neural Language Models";
 
 await pgReady({
-  suite: "tests/citation-find-route.test.ts",
+  suite: "tests/citation-finds-read-back-pg.test.ts",
   tables: ["spideryarn.revision_blocks", "spideryarn.citation_finds"],
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { findCitation } = await import("../src/store/index.js");
+const { citationFindStore, loadArticle } = await import("../src/store/index.js");
 
 let article: ScratchArticle | undefined;
-const realFetch = globalThis.fetch;
-let providerCalls = 0;
 
-/** The provider answers one non-streamed chat completion naming the paper. */
-function providerNames(url: string): void {
-  globalThis.fetch = ((_url: string) => {
-    providerCalls += 1;
-    const body = {
-      model: "anthropic/claude-sonnet-5",
-      choices: [
-        {
-          finish_reason: "stop",
-          message: {
-            /* The model's answer carries its own title too — which must never
-               be the one stored. */
-            content: JSON.stringify({ url, title: "What The Model Called It" }),
-            annotations: [
-              {
-                type: "url_citation",
-                url_citation: { url: PAPER, title: PAPER_TITLE, content: `Abstract. ${TITLE}.` },
-              },
-            ],
-          },
+/** One non-streamed chat completion, as the provider answers it. */
+function completion(content: unknown, result: { url: string; title: string; content: string }): unknown {
+  return {
+    model: "anthropic/claude-sonnet-5",
+    choices: [
+      {
+        finish_reason: "stop",
+        message: {
+          content: JSON.stringify(content),
+          annotations: [{ type: "url_citation", url_citation: result }],
         },
-      ],
-      usage: { prompt_tokens: 10, completion_tokens: 5, server_tool_use: { web_search_requests: 1 } },
-    };
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-      text: () => Promise.resolve(JSON.stringify(body)),
-    } as unknown as Response);
-  }) as unknown as typeof fetch;
+      },
+    ],
+    usage: { prompt_tokens: 10, completion_tokens: 5, server_tool_use: { web_search_requests: 1 } },
+  };
 }
+
+/** The model names the paper — and offers its own title too, which must never be the one stored. */
+const NAMES_THE_PAPER = completion(
+  { url: PAPER, title: "What The Model Called It" },
+  { url: PAPER, title: PAPER_TITLE, content: `Abstract. ${TITLE}.` },
+);
 
 const SUPPORT_QUOTE = "The loss scales as a power-law with model size";
 const DOES_QUOTE = "We study empirical scaling laws for language model performance";
+const PUBLISHER_PAGE = "https://publisher.example/doi/10.1000/given";
 
 /**
- * The provider names the DOI row's publisher page and reads its extract — an
+ * The model names the DOI row's publisher page and reads its extract — an
  * extract that names the first author and the year, and holds both quotes.
  */
-function providerJudges(): void {
-  const page = "https://publisher.example/doi/10.1000/given";
-  globalThis.fetch = ((_url: string) => {
-    providerCalls += 1;
-    const body = {
-      model: "anthropic/claude-sonnet-5",
-      choices: [
-        {
-          finish_reason: "stop",
-          message: {
-            content: JSON.stringify({
-              url: page,
-              paperDoes: "It measures how a language model's loss falls as the model grows.",
-              paperDoesQuote: DOES_QUOTE,
-              support: "supports",
-              supportQuote: SUPPORT_QUOTE,
-            }),
-            annotations: [
-              {
-                type: "url_citation",
-                url_citation: {
-                  url: page,
-                  title: TITLE,
-                  content: `Kaplan (2020). ${DOES_QUOTE}. ${SUPPORT_QUOTE}, dataset size and compute.`,
-                },
-              },
-            ],
-          },
-        },
-      ],
-      usage: { prompt_tokens: 10, completion_tokens: 5, server_tool_use: { web_search_requests: 1 } },
-    };
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-      text: () => Promise.resolve(JSON.stringify(body)),
-    } as unknown as Response);
-  }) as unknown as typeof fetch;
-}
+const JUDGES_THE_DOI_PAGE = completion(
+  {
+    url: PUBLISHER_PAGE,
+    paperDoes: "It measures how a language model's loss falls as the model grows.",
+    paperDoesQuote: DOES_QUOTE,
+    support: "supports",
+    supportQuote: SUPPORT_QUOTE,
+  },
+  {
+    url: PUBLISHER_PAGE,
+    title: TITLE,
+    content: `Kaplan (2020). ${DOES_QUOTE}. ${SUPPORT_QUOTE}, dataset size and compute.`,
+  },
+);
 
 const WHY = "The curve the piece extrapolates from.";
 
@@ -194,29 +169,23 @@ beforeAll(async () => {
   if (!row?.revision) throw new Error("the scratch article has no current revision");
   await db.update(articleRevisions).set({ citations }).where(eq(articleRevisions.id, row.revision));
   /* A find stored against the row whose article gave a DOI — what a re-run
-     that turned a searched row into a DOI row and inherited its id leaves. */
-  await db.insert(citationFinds).values({
-    articleId: article.articleId,
-    entryId: GIVEN,
-    ownerId: TEST_OWNER,
-    url: "https://example.org/not-the-doi",
-    title: "A page found earlier",
-    host: "example.org",
-    searches: 1,
-    model: "test",
-    foundAt: new Date(),
-  });
+     that turned a searched row into a DOI row and inherited its id leaves.
+     Through the real store, as every find is written. */
+  await asTestOwner(() =>
+    citationFindStore.save(SLUG, GIVEN, {
+      url: "https://example.org/not-the-doi",
+      title: "A page found earlier",
+      host: "example.org",
+      searches: 1,
+      model: "test",
+      at: new Date().toISOString(),
+    }),
+  );
 }, 120_000);
 
 afterAll(async () => {
-  globalThis.fetch = realFetch;
   await article?.remove();
   await closeDb();
-});
-
-beforeEach(() => {
-  providerCalls = 0;
-  providerNames(PAPER);
 });
 
 /** One JSON request and its response. */
@@ -253,20 +222,45 @@ async function request(method: string, url: string): Promise<{ status: number; b
   return { status: status || (res as unknown as { statusCode: number }).statusCode, body: written ? JSON.parse(written) : null };
 }
 
-const find = (id: string) => request("POST", `/api/citations/${SLUG}/${id}/find`);
-
 async function listed(id: string): Promise<CitedWork | undefined> {
   const got = await request("GET", `/api/citations/${SLUG}`);
+  expect(got.status).toBe(200);
   return (got.body as CitationsResponse).citations.citations.find((w) => w.id === id);
 }
 
-describe("POST /api/citations/:slug/:id/find", () => {
+/**
+ * ***Look it up* for one row, as Investigate's first step runs it**: the row
+ * as the list has it now, the article, the real find store, and the model
+ * Investigate sends. Only the model call is a stub.
+ */
+async function lookUp(id: string, reply: unknown): Promise<FindCitationResponse> {
+  const row = await listed(id);
+  if (!row) throw new Error(`the list has no ${id}`);
+  return asTestOwner(async () =>
+    runCitationLookup(
+      {
+        finds: citationFindStore,
+        call: async (): Promise<JsonCall> => ({
+          json: reply,
+          answeredBy: "anthropic/claude-sonnet-5",
+          generationId: null,
+        }),
+      },
+      SLUG,
+      id,
+      row,
+      await loadArticle(SLUG),
+      DIG_DEEPER_MODEL,
+    ),
+  );
+}
+
+describe("a stored find, read back through GET /api/citations/:slug", () => {
   it("keeps the search result's page, and a fresh read shows it on the entry", async () => {
-    const got = await find(SEARCHED);
-    expect(got.status).toBe(200);
-    const answer = got.body as FindCitationResponse;
+    expect(await listed(SEARCHED)).toMatchObject({ linkFrom: "search" });
+
+    const answer = await lookUp(SEARCHED, NAMES_THE_PAPER);
     expect(answer.outcome).toBe("found");
-    expect(providerCalls).toBe(1);
 
     const [row] = await getDb()
       .select()
@@ -278,31 +272,20 @@ describe("POST /api/citations/:slug/:id/find", () => {
     expect(entry).toMatchObject({ url: PAPER, linkFrom: "web", found: { title: PAPER_TITLE, host: "arxiv.org" } });
   });
 
-  it("stores nothing when the model names a page the search did not return", async () => {
-    await getDb()
-      .delete(citationFinds)
-      .where(and(eq(citationFinds.articleId, article?.articleId ?? ""), eq(citationFinds.entryId, SEARCHED)));
-    providerNames("https://arxiv.org/pdf/2001.08361");
-    const got = await find(SEARCHED);
-    expect(got.status).toBe(200);
-    expect((got.body as FindCitationResponse).outcome).toBe("no-match");
-    expect(await listed(SEARCHED)).toMatchObject({ linkFrom: "search" });
-  });
-
   it("never lets a stored find override a link the article gave", async () => {
+    /* The premise: the find the suite seeded for this row is really there. */
+    const stored = await asTestOwner(() => citationFindStore.load(SLUG, GIVEN));
+    expect(stored).toMatchObject({ url: "https://example.org/not-the-doi" });
+
     expect(await listed(GIVEN)).toMatchObject({ url: "https://doi.org/10.1000/given", linkFrom: "doi" });
     expect((await listed(GIVEN))?.found).toBeUndefined();
   });
 
-  /* Until plan 260929g this was a 409 with no call: Find it was only for
-     searched rows. Look it up is offered on every row (R-3), so these pin what
-     replaced the refusal — and that the article's link still always wins. */
+  /* Until plan 260929g a linked row could not be looked up at all. Look it up
+     is offered on every row (R-3), so these pin what replaced the refusal — and
+     that the article's link still always wins. */
   it("looks up a row the article linked: the reading is read back, and its DOI link stays", async () => {
-    providerJudges();
-    const got = await find(GIVEN);
-    expect(got.status).toBe(200);
-    expect(providerCalls).toBe(1);
-    const answer = got.body as FindCitationResponse;
+    const answer = await lookUp(GIVEN, JUDGES_THE_DOI_PAGE);
     expect(answer).toMatchObject({
       outcome: "found",
       work: { id: GIVEN, url: "https://doi.org/10.1000/given", linkFrom: "doi" },
@@ -329,18 +312,5 @@ describe("POST /api/citations/:slug/:id/find", () => {
       await setWhy(GIVEN, WHY);
     }
     expect((await listed(GIVEN))?.lookup?.state).toBe("assessed");
-  });
-
-  it("is a 404 for an entry id the list does not have, with no call", async () => {
-    const got = await find("spya-n2t3h4");
-    expect(got.status).toBe(404);
-    expect(providerCalls).toBe(0);
-  });
-
-  it("is a 404 for somebody who does not own the article, with no call", async () => {
-    await expect(runAsOwner(EVAL_OWNER_ID, () => findCitation(SLUG, SEARCHED))).rejects.toMatchObject({
-      status: 404,
-    });
-    expect(providerCalls).toBe(0);
   });
 });

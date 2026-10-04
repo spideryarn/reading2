@@ -64,7 +64,6 @@
    to sit at it again. */
 
 import { log } from "../log.js";
-import { makeFindCitation } from "../citation-find.js";
 import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
@@ -551,20 +550,6 @@ export const lookUpTerm = makeLookUpTerm({
   library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
 });
 
-/**
- * Citations mode's *Find it*: one web-search call for one cited work, kept only when
- * a search result is plainly that work's own page. Built here out of the
- * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
- * slug is a 404), the allowance bounds the presses, and src/citation-find.ts
- * decides what is kept. **Below `fetchAllowanceStore`**, because it is read when
- * this line runs.
- */
-export const findCitation = makeFindCitation({
-  reader,
-  finds: citationFindStore,
-  allowance: fetchAllowanceStore,
-});
-
 /** Where *Investigate* keeps an answer — one row per `(article, entry)`. */
 export const citationInvestigationStore: CitationInvestigationStore = guarded(
   "citation-investigations",
@@ -573,9 +558,13 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 
 /**
  * Citations' *Investigate*: one streamed, web-searching answer about one cited
- * work, kept. `findCitation`'s parts plus the finds as a read (the URL of the
- * page a current *Look it up* read) and its own store —
- * src/citation-investigate.ts. Below `fetchAllowanceStore` for the same reason.
+ * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
+ * decides ownership (a stranger's slug is a 404), the allowance bounds the
+ * presses, the finds are both written (its first step, *Look it up* —
+ * src/citation-find.ts § `runCitationLookup`) and read (the URL of the page a
+ * current lookup read), and it has its own store —
+ * src/citation-investigate.ts. **Below `fetchAllowanceStore`**, because it is
+ * read when this line runs.
  */
 export const investigateCitationDeps = {
   reader,
@@ -598,7 +587,7 @@ export const sourceGuessStore: SourceGuessStore = guarded("source-guesses", pgSo
 
 /**
  * **Look for an uploaded paper on the web, once** — `POST /api/source-guess/:slug`,
- * src/source-guess-run.ts. `findCitation`'s parts: the reader decides ownership,
+ * src/source-guess-run.ts. `investigateCitation`'s parts: the reader decides ownership,
  * the allowance bounds spend, and src/source-guess.ts decides what is kept.
  * Below `fetchAllowanceStore` for the same reason.
  */

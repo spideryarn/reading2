@@ -1,11 +1,14 @@
 /**
  * **Find one cited work's own page on the web** — Citations mode's *Find it*,
- * `POST /api/citations/:slug/:id/find`. docs/plans/260911g-citations-mode.md
- * § Stage 3; docs/project/citations.md § Find it on the web.
+ * which since plan 260930d is the first step of the one *Investigate / Dig
+ * deeper* press (src/citation-investigate.ts) and has no route of its own:
+ * `POST /api/citations/:slug/:id/find` was deleted on 2026-10-04.
+ * docs/plans/260911g-citations-mode.md § Stage 3; docs/project/citations.md
+ * § Find it on the web.
  *
- * A row whose article gave no link offers a Scholar search. Pressing *Find it*
- * asks a model to run a web search for that one work and say which result, if
- * any, is the work's own page. What comes back is kept only if **all** of this
+ * A row whose article gave no link offers a Scholar search. The press asks a
+ * model to run a web search for that one work and say which result, if any, is
+ * the work's own page. What comes back is kept only if **all** of this
  * holds, and every clause is code, not the model:
  *
  * 1. **The URL is one the search returned** — an exact key in the map of the
@@ -24,7 +27,7 @@
  * Anything else stores nothing and the reader is told no page matched; the
  * Scholar search stays. **No annotation, nothing kept** — which is also what
  * a fallback that silently dropped the search tool would produce, and the
- * route's `require_parameters` is what stops that one (src/ai-call.ts).
+ * call's `require_parameters` is what stops that one (src/ai-call.ts).
  *
  * ## One call, not one search (Sol F1)
  *
@@ -48,7 +51,7 @@
  *
  * ## Look it up: the same call also reads the result's extract
  *
- * Citations' route (`makeFindCitation`) sends `LOOKUP_SYSTEM` rather than
+ * Citations' lookup (`runCitationLookup`) sends `LOOKUP_SYSTEM` rather than
  * `FIND_SYSTEM`: the same one search and the same URL answer, plus — when the
  * model names the work's page — its reading of **that result's search
  * extract** against what the article uses the work for. The URL rules above
@@ -86,16 +89,13 @@ import {
 import { pageNamesTitle } from "./citations.js";
 import { errorFields, log, since } from "./log.js";
 import {
-  CITATION_FIND_BUSY,
-  CITATION_FIND_LIMITED,
-  CITATION_FIND_RESTING,
   CITATION_LOOKUP_NO_MATCH,
   CITATION_NO_MATCH,
   PROVIDER_UNREADABLE,
   providerHttpFailure,
   tookTooLong,
 } from "./messages.js";
-import { articlePower, type ModelPower, modelFor } from "./models.js";
+import { type ModelPower, modelFor } from "./models.js";
 import {
   collectSearchEvidence,
   type SearchUsagePath,
@@ -104,12 +104,11 @@ import {
 } from "./openrouter-stream.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { plainWords } from "./plain-words.js";
-import type { AllowanceTaken, CitationFindStore, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
+import type { CitationFindStore } from "./store/contracts.js";
 import type {
   Article,
   CitationFind,
   CitationLookup,
-  CitationsFound,
   CitedWork,
   FindCitationResponse,
   SearchEvidence,
@@ -142,46 +141,6 @@ export const LOOKUP_ANSWER_TOKENS = 1_200;
  * past it a reader waiting on a button is better told than kept waiting.
  */
 export const FIND_TIMEOUT_MS = 60_000;
-
-/**
- * **How many presses of *Find it* one owner may make** — the other bound on
- * spend, on the count of calls where the deadline bounds each one. GPT Sol F11,
- * 2026-09-12: nothing limited it, and a no-match stores nothing, so the same row
- * could be pressed for ever.
- *
- * The numbers are **guesses**, as `SUMMARY_RATE_POLICY`'s are and for its
- * reason (src/store/contracts.ts § `RatePolicy`): nothing has measured how many
- * works a reader looks up. Twenty an hour is most of a long bibliography's
- * searched rows pressed one after another; the panel runs one at a time, so a
- * concurrency of two is a second tab, not a second reader. The global fuse is
- * a day's worst case in money, at a few cents a press, that nobody would
- * notice until the bill.
- */
-export const FIND_RATE_POLICY: RatePolicy = {
-  fills: 20,
-  windowMs: 60 * 60 * 1000,
-  concurrency: 2,
-  /* The deadline plus a margin: a process that dies mid-call frees its slot
-     soon after the call itself could have ended. */
-  leaseMs: FIND_TIMEOUT_MS + 30_000,
-  daily: { fills: 60, globalFills: 600, windowMs: 24 * 60 * 60 * 1000 },
-};
-
-/** A refused allowance as the route's error: 429 for this reader, 503 for everyone. */
-function refusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
-  switch (kind) {
-    case "concurrency":
-      return httpError(429, CITATION_FIND_BUSY);
-    case "rate":
-      return httpError(429, CITATION_FIND_LIMITED);
-    case "global":
-      return httpError(503, CITATION_FIND_RESTING.message);
-    default: {
-      const never: never = kind;
-      return never;
-    }
-  }
-}
 
 /** A search result's own title, capped before it is stored. */
 const TITLE_CAP = 300;
@@ -418,36 +377,15 @@ export function hostOfPage(url: string): string {
 
 /* ------------------------------------------------------- the orchestration -- */
 
-export interface FindCitationDeps {
-  /** Where the list and the article come from — owner-scoped, so a stranger's slug is a 404. */
-  readonly reader: {
-    loadCitations(slug: string): Promise<CitationsFound>;
-    loadArticle(slug: string): Promise<Article>;
-  };
-  /** Where a kept find goes. */
-  readonly finds: Pick<CitationFindStore, "save">;
-  /**
-   * **The bound on presses** — required, so a caller cannot build this without
-   * one. Each press is a billed web search, and ownership says *which* article,
-   * not *how many* times. GPT Sol F11, 2026-09-12.
-   */
-  readonly allowance: Pick<FetchAllowanceStore, "take" | "finish">;
-  /** The model call. Overridable so a test can drive every outcome without a network. */
-  readonly call?: (body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
-  readonly now?: () => string;
-  readonly timeoutMs?: number;
-}
-
-function httpError(status: number, message: string): Error {
-  return Object.assign(new Error(message), { status });
-}
+/** The model call. Overridable so a test can drive every outcome without a network. */
+export type LookupCall = (body: AiRequestBody, options: { signal: AbortSignal }) => Promise<JsonCall>;
 
 /**
  * **The model call failed, and the provider is why** — refused (by status),
  * past its deadline, or an answer that could not be read. It carries the house
- * copy and an HTTP status exactly as `httpError` did, so `POST …/find` answers
- * what it always answered; the class is only so that *Investigate*, which runs
- * this lookup as its first step, can tell *the provider failed* (stop, spend
+ * copy and an HTTP status, which `findWorkPage`'s callers answer with; the
+ * class is so that *Investigate*, which runs this lookup as its first step,
+ * can tell *the provider failed* (stop, spend
  * nothing more) from *the store failed* or a bug (fail the press) — plan
  * 260930d P-5.
  */
@@ -464,10 +402,9 @@ export class LookupCallFailed extends Error {
  * A transport failure known to have come from the lookup's model call. Kept
  * separate from an arbitrary `TypeError` so a store or programming failure
  * with undici's terse message cannot be mistaken for the provider (P-5).
- * `/find` unwraps it again, preserving that route's old error exactly.
  */
 class LookupTransportFailed extends Error {
-  constructor(readonly original: TypeError) {
+  constructor(original: TypeError) {
     super(original.message, { cause: original });
     this.name = "LookupTransportFailed";
   }
@@ -492,7 +429,7 @@ export function isLookupCallFailure(err: unknown): boolean {
  * might echo back what we sent.
  */
 async function callOnce(
-  send: NonNullable<FindCitationDeps["call"]>,
+  send: LookupCall,
   body: AiRequestBody,
   ctx: { timeoutMs: number; line: ReturnType<typeof log>; model: string; started: number },
 ): Promise<JsonCall> {
@@ -526,8 +463,9 @@ export interface FoundWorkPage {
 /**
  * **Search the web for one work and judge the answer — the shared core**, with
  * no route, no allowance and no store: each caller brings its own bound on
- * presses and decides what to keep. Citations' *Find it* below is one caller;
- * an uploaded paper looking for its canonical page is another.
+ * presses and decides what to keep. Its callers are outside this file — an
+ * uploaded paper looking for its canonical page is one. Citations' own lookup,
+ * `runCitationLookup` below, shares `sendAndRead` rather than calling this.
  *
  * The rules are `readFind`'s and are all code: the URL must be one the search
  * returned, and the result must name the work. A failure arrives as the house
@@ -556,7 +494,7 @@ export async function findWorkPage(
 }
 
 interface FindOptions {
-  call?: NonNullable<FindCitationDeps["call"]>;
+  call?: LookupCall;
   model?: string;
   timeoutMs?: number;
   line?: ReturnType<typeof log>;
@@ -599,21 +537,19 @@ function lookupLogFields(judged: ReturnType<typeof judgeLookup> | null): Record<
 /** What `runCitationLookup` needs: somewhere to keep a find, and the call. No allowance — the caller brings its own. */
 export interface CitationLookupDeps {
   readonly finds: Pick<CitationFindStore, "save">;
-  readonly call?: FindCitationDeps["call"];
+  readonly call?: LookupCall;
   readonly now?: () => string;
   readonly timeoutMs?: number;
-  /** `/find` releases its fetch allowance when the provider call ends. Investigate owns a longer, two-call lease. */
-  readonly callFinished?: () => Promise<void>;
 }
 
 /**
  * ***Look it up*, the whole of it, for one listed row — with no allowance and
- * no route.** The body `makeFindCitation` had until plan 260930d, extracted so
- * *Investigate* can run the same lookup as its first step (P-1): the lookup
- * prompt, the raw answer judged by `readFind` and then `judgeLookup`, the
- * `CitationFind` **saved before this returns**, and the same
- * `FindCitationResponse` the route answers. **Every caller must take an
- * allowance first** — this is a billed web search, and nothing here counts it.
+ * no route.** The body the retired `/find` route had until plan 260930d,
+ * extracted so *Investigate* can run it as its first step (P-1) — its only
+ * caller since the route was deleted on 2026-10-04: the lookup prompt, the raw
+ * answer judged by `readFind` and then `judgeLookup`, the `CitationFind`
+ * **saved before this returns**, and a `FindCitationResponse`. **Every caller
+ * must take an allowance first** — this is a billed web search, and nothing here counts it.
  *
  * `listed` is the row as the list has it now; `article` is the article it
  * belongs to. A call failure is branded for `isLookupCallFailure`; a save
@@ -626,10 +562,10 @@ export async function runCitationLookup(
   listed: CitedWork,
   article: Article,
   /**
-   * **Which model searches and reads**, resolved by the caller: `/find`
-   * takes the article's High-powered AI setting (plan 260930f); *Dig deeper*
-   * on a cited work sends `DIG_DEEPER_MODEL` whatever it says, because the
-   * verdict is shown to the reader (plan 261001p stage 2, Sol F3).
+   * **Which model searches and reads**, resolved by the caller: *Dig deeper*
+   * on a cited work sends `DIG_DEEPER_MODEL` whatever the article's
+   * High-powered AI setting says, because the verdict is shown to the reader
+   * (plan 261001p stage 2, Sol F3).
    */
   model: string,
 ): Promise<FindCitationResponse> {
@@ -654,17 +590,12 @@ export async function runCitationLookup(
   const line = log("model").child({ slug, entryId });
 
   const started = Date.now();
-  let answered: FoundWorkPage & { json: unknown };
-  try {
-    answered = await sendAndRead(lookupRequest(context, model), work.title, {
-      call: send,
-      model,
-      timeoutMs,
-      line,
-    });
-  } finally {
-    await deps.callFinished?.();
-  }
+  const answered = await sendAndRead(lookupRequest(context, model), work.title, {
+    call: send,
+    model,
+    timeoutMs,
+    line,
+  });
   const { reading, model: used } = answered;
 
   const kept = reading.verdict.kind === "kept" ? reading.verdict.page : null;
@@ -719,59 +650,4 @@ export async function runCitationLookup(
   /* **The link and the lookup, separately** (R-3): only a searched row takes
      the found page as its link; any other row comes back exactly as it was. */
   return { outcome: "found", work: searched ? { ...work, url, linkFrom: "web", found } : work, lookup };
-}
-
-/**
- * `POST /api/citations/:slug/:id/find` — the free checks, this route's own
- * allowance, then `runCitationLookup`. **No button calls it since plan
- * 260930d** (the one *Investigate* press runs the lookup as its first step);
- * it stays for one deploy so a tab opened before that keeps working (P-7).
- */
-export function makeFindCitation(
-  deps: FindCitationDeps,
-): (slug: string, entryId: string) => Promise<FindCitationResponse> {
-  return async function findCitation(slug, entryId) {
-    /* Ownership is this read: every one joins through `ownedSlug`, so somebody
-       else's slug — or an article with no list — is a 404 before anything is
-       spent. */
-    const { citations } = await deps.reader.loadCitations(slug);
-    const listed = citations.citations.find((w) => w.id === entryId);
-    if (!listed) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
-    const article = await deps.reader.loadArticle(slug);
-
-    /* **The allowance, after every check that can refuse for free** — a 404
-       spends none of it — and before the one thing that costs. */
-    const allowance = await deps.allowance.take("citation-find", FIND_RATE_POLICY);
-    if (allowance.kind !== "allowed") {
-      log("model").child({ slug, entryId }).warn({ why: allowance.kind }, "citation find: allowance spent");
-      throw refusedBy(allowance.kind);
-    }
-    let released = false;
-    const release = async () => {
-      if (released) return;
-      released = true;
-      await deps.allowance.finish(allowance.id);
-    };
-    try {
-      return await runCitationLookup(
-        { ...deps, callFinished: release },
-        slug,
-        entryId,
-        listed,
-        article,
-        /* The reader seam is owner-scoped, so the ambient owner is this
-           article's (plan 260930f). */
-        modelFor("citations-find", articlePower(article.highPowerSince)),
-      );
-    } catch (err) {
-      /* `callOnce` brands undici's two otherwise-indistinguishable TypeErrors
-         so Investigate can classify only errors from the provider boundary.
-         This compatibility route still exposes the raw error it exposed before. */
-      if (err instanceof LookupTransportFailed) throw err.original;
-      throw err;
-    } finally {
-      /* Frees the concurrency slot whatever happened; the fill still counts. */
-      await release();
-    }
-  };
 }

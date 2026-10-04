@@ -22,8 +22,8 @@ before you touch anything:
    any model call, and [security.md § the manuscript](security.md#hidden-instructions) says what it
    cannot see — starting with PDFs, which it does not read.
 
-Whoever signs in is a fifth party and is *not* untrusted. **There is no allowlist** — `isAllowed()`
-returns true for anybody Supabase will vouch for, which is Greg's call and an accepted risk — and
+Whoever signs in is a fifth party and is *not* untrusted. **There is no allowlist** — `requireUser`
+admits anybody Supabase will vouch for, which is Greg's call and an accepted risk — and
 **every reader gets their own shelf**, which is a separate guarantee that had not been built when
 that risk was accepted. [auth.md](auth.md) has both halves, and the contradiction between them that
 stood until 2026-08-27.
@@ -89,7 +89,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
-| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
+| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
 | [`src/store/pg.ts`](../../src/store/pg.ts) | `ownedSlug()` — keeps one reader's shelf out of another's |
 | [`src/asset-delivery.ts`](../../src/asset-delivery.ts) | `storedAssetFor()` — **the storage key is rebuilt from this article's own manifest entry, never from the caller's string.** The bucket is content-addressed and shared by every article and every reader, so a route that concatenated a caller's hash into a key would be an arbitrary-object read. A hash absent from this article's manifest is a 404 **even for its owner**. Both `GET /api/asset/…` and its public twin go through it. See below |
