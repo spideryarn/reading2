@@ -417,8 +417,9 @@ of them are properties of the code and the third is only a prompt rule, and the 
   for it that could not be found in the paper, so *the model named none* and *the model named some
   and none of them were there* print different sentences. That distinction is the one that went wrong
   in Criteria and needed a second review to catch (finding 4); it is built in here rather than
-  retrofitted. The same split exists for a whole run: `CLAIMS_UNUSABLE` is a **failed** run with a
-  Try again, not an empty one.
+  retrofitted. The same split exists for a whole run: an answer where every claim was thrown away
+  is a **failed** run with a Try again, not an empty one. Its sentence is `ANSWER_UNUSABLE` in
+  `src/messages.ts`, the one Criteria throws for the same thing.
 - **Linkage, never adequacy** is asked for in the prompt, said in words behind the panel's *How to
   read this* button (at the top of the panel until 2026-10-03), and
   since 2026-09-01 also **backed by a fail-safe in code**. The eval is

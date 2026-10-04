@@ -9,9 +9,11 @@
  * codes that `src/messages.ts` itself exports.** A code minted in another file
  * is not something it fails on; it is something it cannot see.
  *
- * That blind spot had a real occupant for four days. `ai-unusable` is raised by
- * `CLAIMS_UNUSABLE` (src/referee-claims-run.ts) and `ANSWER_UNUSABLE`
- * (src/referee-criteria-run.ts), and was registered nowhere. Both files asked in
+ * That blind spot had a real occupant for four days. `ai-unusable` was raised by
+ * two sentences that lived in the Referee runners' own files
+ * (src/referee-claims-run.ts and src/referee-criteria-run.ts; they are one
+ * sentence in src/messages.ts since 2026-10-04, `ANSWER_UNUSABLE`), and was
+ * registered nowhere. Both files asked in
  * prose to be registered — twice each — and
  * docs/plans/260902e-codebase-rework-umbrella-what-is-worth-doing-next.md asked
  * a third time. `referee-criteria-run.ts` even wrote down why none of that would
@@ -119,7 +121,7 @@ describe("every ai- failure code in the tree resolves to a kind", () => {
    * keys to *equal* the codes carried by messages `src/messages.ts` itself
    * mints. That caught an orphan, and it also encoded an assumption that turned
    * out to be false — that every registered code's sentence lives in that one
-   * file. `ai-unusable`'s does not, and the equality made registering it
+   * file. `ai-unusable`'s did not at the time, and the equality made registering it
    * impossible without first moving two constants, which is why it went four
    * days unregistered with three written reminders against it.
    *

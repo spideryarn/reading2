@@ -99,7 +99,7 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 import { errorFields, log, since } from "./log.js";
-import { ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
+import { ANSWER_UNUSABLE, ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import { type ModelPower, modelFor } from "./models.js";
 import {
   explainAbort,
@@ -206,35 +206,6 @@ export const CLAIMS_MAX_TOKENS = budgetFor(CLAIMS_JOB, CLAIMS_ANSWER_ROOM, CLAIM
  */
 export const CLAIMS_TIMEOUT_MS = deadlineFor(CLAIMS_MAX_TOKENS);
 export const CLAIMS_STALL_MS = 45_000;
-
-/**
- * **What a referee is told when the model answered and not one claim could be
- * kept.**
- *
- * The third outcome, and it has its own sentence for the reason `ANSWER_UNUSABLE`
- * in src/referee-criteria-run.ts sets out at length: *found nothing* and *found
- * things I could not use* call for different actions, so they must not print the
- * same sentence. Here the first of those would be a claim about the paper — *the
- * paper makes no claims* — which is exactly the sentence this sub-mode exists not
- * to make, so getting it wrong is worse rather than equally bad.
- *
- * It is a **failed run** rather than an empty one: the row goes to
- * `status: "error"`, the panel prints this and offers Try again. A *partial* loss
- * is still a success — one usable claim means the run ran, and the rest is a log
- * line.
- *
- * Like `ANSWER_UNUSABLE`, it is not in src/messages.ts and
- * docs/project/copy.md says it should be. Same known debt, same two mechanical
- * steps to pay it: export it there **and** register `ai-unusable` in `CODE_KINDS`.
- *
- * The rule it must keep, whichever file it ends up in: **a null result is
- * evidence about the model, never a claim about the paper.**
- * tests/referee-copy-is-about-the-model.test.ts holds it to that.
- */
-export const CLAIMS_UNUSABLE =
-  "The model answered and none of what it returned could be found in the paper, so there is " +
-  "nothing to show. That is about the answer rather than about the paper, and asking again " +
-  "usually works. [ai-unusable]";
 
 /**
  * The instructions, in full.
@@ -764,9 +735,11 @@ export async function* runClaimsStream({
      After the log, so the counts that say *which* way it failed are recorded
      either way. An empty list with nothing discarded is left alone — that is the
      model saying it looked and found nothing, and here even that is a claim we
-     do not make on the panel. See `CLAIMS_UNUSABLE`. */
+     do not make on the panel. The sentence is `ANSWER_UNUSABLE` in
+     src/messages.ts, the same one Criteria throws; this file had its own
+     wording, `CLAIMS_UNUSABLE`, until 2026-10-04. */
   if (claims.length === 0 && discardedClaims(dropped) > 0) {
-    throw new Error(CLAIMS_UNUSABLE, { cause: "every-claim-discarded" });
+    throw new Error(ANSWER_UNUSABLE.message, { cause: "every-claim-discarded" });
   }
 
   yield {
