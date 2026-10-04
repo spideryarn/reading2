@@ -47,7 +47,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { Metadata } = await import("../src/web/Metadata.js");
 const { PublicMetadataPage } = await import("../src/web/PublicPages.js");

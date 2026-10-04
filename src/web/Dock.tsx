@@ -2588,8 +2588,11 @@ export function helpHrefFor(mode: BandMode | undefined): string {
  * `carriedSearch` has just stripped `?panel=` — deliberately, because a drawer
  * left open across a navigation is not a place you were. This puts one back
  * when the navigation is *for* the drawer, which is the one case where it is.
+ *
+ * Exported for the metadata page's *Comments* row, which links to the same
+ * drawer and had its own copy until 2026-10-04.
  */
-function withPanel(search: string, panel: Panel): string {
+export function withPanel(search: string, panel: Panel): string {
   return search ? `${search}&panel=${panel}` : `panel=${panel}`;
 }
 

@@ -83,7 +83,7 @@ vi.mock("../src/web/lib/offline-store.js", () => ({
 }));
 
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, toggle: () => {} }),
+  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null,

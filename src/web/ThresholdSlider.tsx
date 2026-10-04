@@ -1,15 +1,17 @@
 /**
- * **A threshold slider, given every number it shows.** The row the Glossary's
- * `GateSlider` and Citations' `BarSlider` each draw for themselves — label,
- * value, `N of M`, a reset once the bar has moved, the range, and the foot line
- * — as one dumb component that computes nothing: the caller runs the one pass
- * (threshold.ts § applyThreshold) and hands over the counts, so the list and
- * the numbers here cannot disagree.
+ * **A threshold slider, given every number it shows.** The row a band draws
+ * under its *prioritised* order — label, value, `N of M`, a reset once the bar
+ * has moved, the range, and the foot line — as one dumb component that computes
+ * nothing: the caller runs the one pass (threshold.ts § applyThreshold) and
+ * hands over the counts, so the list and the numbers here cannot disagree.
  *
- * The FAQ's is the first caller (2026-09-29). Moving the Glossary and Citations
- * onto it is deliberately separate work, with its own browser check — GPT Sol's
- * plan review, F4, in
- * docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md.
+ * **Who uses it:** the FAQ (the first, 2026-09-29, plan 260929g), and since
+ * 2026-10-04 the Glossary (`GateSlider`) and Citations (`BarSlider`), which
+ * drew the same row for themselves until then (plan 261004d, B1). Each keeps
+ * its own pass, `max`, noun, title and foot line and hands them in.
+ * tests/threshold-slider-adopters.test.tsx pins those two rows attribute by
+ * attribute, and was written against the private copies before the move.
+ * Search, Quotes and Debate still draw their own.
  *
  * The four decisions it carries are the Glossary's, and the argument for each
  * is beside `GateSlider` in GlossaryPanel.tsx: the track ends where the data

@@ -360,8 +360,9 @@ list from the client: a box adopting a microphone should not have to know how to
 vocabulary, and a vocabulary accepted from a caller is a string that caller chooses landing in a
 model prompt, for no gain, since the server has the glossary already.
 
-If the box is inside a form, guard the submit on `dictate.readOnly` — **and on
-`dictate.dictation.armed` as well**, which is not the same thing and is the guard everybody forgets.
+If the box is inside a form, guard the submit on **`dictate.busy`** — `readOnly || dictation.armed`,
+a field on the hook's result since 2026-10-04 so that nobody writes the pair out (eleven sites did,
+and the half everybody forgets is `armed`).
 `readOnly` is `transcribing` alone, the two seconds *after* the reader presses stop; `armed` is the
 microphone actually being on. Guard only the first and ⌘+Enter mid-sentence sends the rough live
 guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol found it in the

@@ -263,7 +263,7 @@ import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js"
 import { WPM } from "../reading-time.js";
 import { isWebUrl } from "../urls.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
-import { Dock } from "./Dock.js";
+import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
@@ -274,7 +274,7 @@ import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { calendarDay, howLong, timeAgo } from "./relative-time.js";
+import { calendarDay, howLong, relativeAgo, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -791,6 +791,10 @@ export function Metadata({
     section?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   }
 
+  /* The page's one clock for the three times it says in words — "fetched …",
+     "ran …", "last wrote …" — read here and passed down, so the heading's
+     "last wrote" and the row's cannot straddle a minute (useNow.ts). */
+  const now = useNow();
   const pipelineLine = useMemo(() => {
     if (!provenance) return null;
     const ran = provenance.stages.filter((s) => s.done).length;
@@ -798,8 +802,8 @@ export function Metadata({
       .map((s) => (s.ranAt ? Date.parse(s.ranAt) : Number.NaN))
       .filter((t) => !Number.isNaN(t));
     const newest = stamps.length ? Math.max(...stamps) : null;
-    return `${ran} of ${provenance.stages.length} stages${newest === null ? "" : ` · last wrote ${ago(new Date(newest))}`}`;
-  }, [provenance]);
+    return `${ran} of ${provenance.stages.length} stages${newest === null ? "" : ` · last wrote ${whenSaid(new Date(newest).toISOString(), now)}`}`;
+  }, [provenance, now]);
 
   return (
     <>
@@ -910,7 +914,7 @@ export function Metadata({
           {/* Relative, with the exact stamp on hover — theirs did this and it is
               the right way round. "3 days ago" is what you want to know; the
               timestamp is what you want when the answer is surprising. */}
-          <Fetched iso={meta.fetchedAt} />
+          <Fetched iso={meta.fetchedAt} now={now} />
         </p>
         {/* Where it came from, and the way back to it — `Origin` below. `owner`
             is `hasShelfRow` rather than a fresh test, because the link it gates
@@ -1217,7 +1221,7 @@ export function Metadata({
                 count={provenance?.comments ?? null}
                 failed={Boolean(provenanceError)}
                 slow={slow}
-                href={readHref(slug, withPanel(carriedSearch(location.search)), "article")}
+                href={readHref(slug, withPanel(carriedSearch(location.search), "questions"), "article")}
               />
             </Row>
             <Row icon={Target} label="Where you left off">
@@ -1280,6 +1284,7 @@ export function Metadata({
           error={provenanceError}
           slow={slow}
           aside={pipelineLine}
+          now={now}
           structureGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
@@ -1499,6 +1504,7 @@ function RerunSection({
   error,
   slow,
   aside,
+  now,
   structureGenerator,
   arcGenerator,
 }: {
@@ -1518,6 +1524,8 @@ function RerunSection({
   slow: boolean;
   /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
   aside: string | null;
+  /** The page's clock, for the rows' "ran …" — `Metadata`'s one `useNow`. */
+  now: number;
   structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
@@ -1599,6 +1607,7 @@ function RerunSection({
         provenance={provenance}
         error={error}
         slow={slow}
+        now={now}
         structureGenerator={structureGenerator}
         arcGenerator={arcGenerator}
       />
@@ -1620,12 +1629,14 @@ function StageRecord({
   provenance,
   error,
   slow,
+  now,
   structureGenerator,
   arcGenerator,
 }: {
   provenance: ArticleMetadata | null;
   error: string | null;
   slow: boolean;
+  now: number;
   structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
@@ -1653,6 +1664,7 @@ function StageRecord({
               <StageRow
                 key={stage.step}
                 stage={stage}
+                now={now}
                 generator={
                   stage.step === "structure"
                     ? structureGenerator
@@ -2687,11 +2699,11 @@ function ArchiveArticle({
            the reader did this on purpose, so it is a confirmation rather than an
            emergency.
 
-           `timeAgo` on a `useNow` clock rather than this file's own `ago`, and
-           both halves of that matter. The clock, because this line is written
-           the instant the reader presses Archive: `ago` reads `Date.now()` once
-           during render, so "Archived just now" would still say "just now" an
-           hour later, on a page nothing else re-renders. And `timeAgo`, because
+           `timeAgo` on a `useNow` clock, and both halves of that matter. (This
+           file had a private `ago` until 2026-10-04 that had neither.) The
+           clock, because this line is written the instant the reader presses
+           Archive: a `Date.now()` read once during render would have "Archived
+           just now" still saying "just now" an hour later. And `timeAgo`, because
            it hands back `undefined` for a date it cannot parse instead of
            feeding `NaN` to `Intl.RelativeTimeFormat`, which throws. Both found
            by a cross-model review, 2026-08-27. */
@@ -3508,7 +3520,15 @@ function Row({
  * `article.html`. This is the page you open to go and look at a file, and a
  * name you cannot find on disk is worse than no name.
  */
-function StageRow({ stage, generator }: { stage: StageState; generator: string | undefined }) {
+function StageRow({
+  stage,
+  generator,
+  now,
+}: {
+  stage: StageState;
+  generator: string | undefined;
+  now: number;
+}) {
   const { step, label, outputs, done } = stage;
   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
   // destructured here, so a reader of `<Wrote>` can see which they are.
@@ -3556,7 +3576,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         {done && (
           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
         )}
-        <Wrote at={stage.ranAt} began={stage.startedAt} bytes={stage.bytes} done={done} />
+        <Wrote at={stage.ranAt} began={stage.startedAt} bytes={stage.bytes} done={done} now={now} />
       </div>
     </div>
   );
@@ -3595,11 +3615,13 @@ function Wrote({
   began,
   bytes,
   done,
+  now,
 }: {
   at: string | null;
   began: string | null;
   bytes: number | null;
   done: boolean;
+  now: number;
 }) {
   if (!at) return null;
   const t = Date.parse(at);
@@ -3640,7 +3662,7 @@ function Wrote({
         {/* "last wrote" rather than "ran" for a stage that is not done: something
             of its is on disk and the set is incomplete, which is precisely the
             state this page gets opened to look at. */}
-        {done ? "ran" : "last wrote"} {ago(when)}
+        {done ? "ran" : "last wrote"} {whenSaid(at, now)}
       </button>
     </Tooltip>
   );
@@ -3719,7 +3741,7 @@ function fetchedIsShown(iso: string | undefined): iso is string {
   return Boolean(iso) && !Number.isNaN(Date.parse(iso ?? ""));
 }
 
-function Fetched({ iso }: { iso: string | undefined }) {
+function Fetched({ iso, now }: { iso: string | undefined; now: number }) {
   if (!fetchedIsShown(iso)) return null;
   const t = Date.parse(iso);
   const when = new Date(t);
@@ -3738,7 +3760,7 @@ function Fetched({ iso }: { iso: string | undefined }) {
     >
       <span className="tw:cursor-help">
         <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
-          fetched {ago(when)}
+          fetched {whenSaid(iso, now)}
         </span>
       </span>
     </Tooltip>
@@ -3746,44 +3768,32 @@ function Fetched({ iso }: { iso: string | undefined }) {
 }
 
 /**
- * "3 days ago", from `Intl.RelativeTimeFormat` rather than a date library.
+ * **A time, as the words after a verb**: "ran 3 days ago", "fetched just now",
+ * and past a month "last wrote on 5 Aug 2026".
  *
- * Theirs used date-fns' `formatDistanceToNow` for this one string. The platform
- * has done it since 2018 and this app has no other use for a date library, so
- * the dependency would be carrying ~20KB to say "yesterday".
- */
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["year", 365 * 24 * 3600e3],
-  ["month", 30 * 24 * 3600e3],
-  ["week", 7 * 24 * 3600e3],
-  ["day", 24 * 3600e3],
-  ["hour", 3600e3],
-  ["minute", 60e3],
-];
-
-function ago(when: Date): string {
-  const fmt = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-  const elapsed = when.getTime() - Date.now();
-  /* `Intl.RelativeTimeFormat.format` throws a RangeError on a non-finite
-     number, so an unparseable date anywhere upstream would take the whole page
-     down rather than print a wrong time. Same rule `timeAgo` in
-     relative-time.ts keeps, arrived at the same way — a review, 2026-08-27. */
-  if (!Number.isFinite(elapsed)) return "at an unknown time";
-  for (const [unit, ms] of UNITS) {
-    if (Math.abs(elapsed) >= ms) return fmt.format(Math.round(elapsed / ms), unit);
-  }
-  return fmt.format(Math.round(elapsed / 1000), "second");
-}
-
-/**
- * A carried query string asking for the questions drawer.
+ * The shared formatter (relative-time.ts) on the page's `useNow` clock, since
+ * 2026-10-04. Until then this file had a private `ago()` that read
+ * `Date.now()` during render, so it never moved while the page was open, said
+ * "ran in 4 seconds" when the server's clock was a little ahead of the
+ * browser's, and counted in "last month" and "2 months ago" where everything
+ * else in the app gives the date.
  *
- * `carriedSearch` strips `?panel=` deliberately — a drawer left open across a
- * navigation is not a place you were. This puts one back for the one case where
- * the navigation IS for the drawer, exactly as Dock.tsx does for its own button.
+ * **"on", because `timeAgo`'s absolute half is a bare date** and all three
+ * callers put a verb in front: "ran Aug 5, 2026" is not a sentence. The
+ * threshold stays `relativeAgo`'s — it answers `undefined` exactly where the
+ * date takes over. GPT Sol's plan review, S4, in
+ * docs/plans/261004d-sweep-clusters-13-and-18-lint-gates-census-test-and-client-tidy.md.
+ *
+ * Every caller has already refused an unparseable stamp and draws nothing for
+ * it; the last arm is what the old copy said for one, kept so that this cannot
+ * print "on undefined" if a caller ever stops checking.
+ * tests/metadata-relative-times.test.tsx.
  */
-function withPanel(search: string): string {
-  return search ? `${search}&panel=questions` : "panel=questions";
+function whenSaid(iso: string, now: number): string {
+  const recent = relativeAgo(iso, now);
+  if (recent !== undefined) return recent;
+  const date = timeAgo(iso, now);
+  return date === undefined ? "at an unknown time" : `on ${date}`;
 }
 
 /** Enough of a paragraph to recognise it, cut on a word boundary. */
