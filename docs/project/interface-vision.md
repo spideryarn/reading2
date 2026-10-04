@@ -199,6 +199,30 @@ Each step is useful on its own, and none commits us to the next.
    eval corpus before shipping, as any new prompt is ([prompting-guide.md](prompting-guide.md)).
 6. **The left as a column of its own**, if the band turns out not to be enough.
 
+## Decluttering the bottom bar
+
+Greg wants fewer buttons on the bottom bar, and is still deciding how. On 2026-10-04, asked whether
+to build an "Extracts" menu:
+
+> this needs more thought from me before we're ready to proceed. perhaps write up somewhere in a
+> vision or appropriate doc that we're interested in finding ways to declutter the bottom bar (and
+> this is part of that)
+
+So this is a goal, not a plan. What has happened and what is on the table:
+
+- **Done:** Tweets left the bar and became Summary's Thread
+  ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)).
+- **Proposed, not decided** (all in queue item `qi-5ay85q7d` and the plan above): one *Extracts*
+  button opening a menu of Quotes, Glossary and Ideas; or a merged *Lists* mode with sub-modes; or
+  leaving the bar alone and leaning on the command bar. Folding those lists into Marginalia was
+  weighed and argued against, because a phone has no Marginalia column.
+- **Related:** folding Citations into Debate as a sub-mode
+  ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md) Part 2), and the command
+  bar taking a sentence ([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)),
+  which makes a mode reachable without a button.
+
+Any change that removes or merges a bar button goes to Greg first.
+
 ## Open questions
 
 Put to Greg three at a time through the Overseer

@@ -40,3 +40,14 @@ What is built is in [summaries.md](../project/summaries.md).
   neither is Q-summary-format-keep in the investigation.
 
 Summaries already written keep their text until somebody presses *Write it again*.
+
+## Greg's answers, 2026-10-04
+
+> Q-summary-format-keep both. it looks good
+
+So bold and bullets both stay; `spya-qzsvx4` is no longer an experiment.
+
+> Q-summary-fuller-length D and C
+
+D (stop writing the hidden Simple level) and C (store and show Brief as soon as it is written, then
+raise Fuller to about 500 words) are being built in session `summary-drop-simple`.
