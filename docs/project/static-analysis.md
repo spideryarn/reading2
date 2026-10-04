@@ -10,6 +10,8 @@ npm run check          # everything below, gates first — MINUTES, not seconds;
 npm run check -- --offline   # the same, minus the database suites — NOT the real gate
 npm run knip           # unused files, exports, dependencies
 npm run cycles         # import cycles
+npm run lint:hook-deps # React hooks whose dependency list is wrong
+npm run lint:promises  # promises nobody awaits or handles
 npm run check:conflicts # unresolved merge conflicts in tracked files
 npm run complexity     # the functions worth looking at
 npm run dupes          # copy-paste
@@ -51,12 +53,14 @@ That single fact is why the list below is so short, and why two obvious names ar
 |---|---|---|
 | **[Knip](https://knip.dev) 6.32.2** (`npm run knip`) | unused **files**, **exports**, **dependencies** | advisory |
 | **Biome `noImportCycles`** (`npm run cycles`) | import cycles | **gate** |
+| **Biome `useExhaustiveDependencies`** (`npm run lint:hook-deps`) | a React hook whose dependency list does not match what it reads | **gate** |
+| **Biome `noFloatingPromises`** (`npm run lint:promises`) | a promise nobody awaits, handles or marks `void` | **gate** |
 | **[`conflict-markers.ts`](../../scripts/conflict-markers.ts)** (`npm run check:conflicts`) | unresolved merge conflicts in tracked files | **gate** |
 | **Biome `noExcessiveCognitiveComplexity`** (`npm run complexity`) | functions worth a second look | advisory |
 | **[jscpd](https://github.com/kucherenko/jscpd) 5.0.16** (`npm run dupes`) | copy-paste | advisory |
 
-Only Knip and jscpd are new dependencies. The other two were already inside the Biome we had
-installed, switched off — which is worth remembering next time a tool is proposed: **mine the tool
+Only Knip and jscpd are new dependencies. Cycles and cognitive complexity were already inside the
+Biome we had installed, switched off when adopted — which is worth remembering next time a tool is proposed: **mine the tool
 you already have before adding one.**
 
 ### Knip is the project-wide layer, and only that
@@ -79,6 +83,15 @@ The `api/` and `src/vercel.ts` entries are there because the deploy is reachable
 `vercel.json`, which no tool here reads. Delete those entries and four live files start reporting as
 dead.
 
+`scripts/eval/*.ts` and `scripts/probes/*.ts` are entries since 2026-10-04, for a similar reason:
+they are research CLIs run by hand, so nothing imports them and Knip reported all fifteen as unused
+files. The entry is those two folders and not `scripts/**/*.ts`, because an entry is never reported
+as unused, and that glob would hide a helper module under `scripts/` that had really gone dead.
+`vitest.witness.config.ts` is also an entry: it is passed to a spawned Vitest command that Knip
+cannot follow. A full Knip run now reports no unused files. `knip --include files` still reports
+`vite.api.config.ts` and `vite.fleet.config.ts`; [knip.jsonc](../../knip.jsonc) records the mode
+difference. The other categories still have findings, so Knip remains advisory.
+
 ### Knip does not need a build
 
 Knip *imports* every Vite config it finds, `vite.api.config.ts` included, and reads the exported
@@ -97,7 +110,7 @@ history. In this repo the load error happened not to change a single finding (35
 the error still made every run look broken, and the next config to fail that way may not be so
 harmless.
 
-### Cycles gate; nothing else does
+### Cycles gate
 
 There are **zero** import cycles, confirmed independently by four tools, which is exactly why this
 one gates: it is green, so a failure means something is newly wrong today. Biome parses with its own
@@ -105,6 +118,16 @@ parser, so it is untouched by the TypeScript 7 problem, and it checks 183 files 
 
 It was **proved red against a two-file fixture before being switched on**. A check nobody has watched
 fail is not yet a check — [silent-success.md](../reusable/silent-success.md).
+
+### Hook dependencies and floating promises gate
+
+Two more single Biome rules, each with its own command, each a gate since 2026-10-04 on the same
+rule as cycles: they reached zero that day. `npm run lint:hook-deps` is
+`useExhaustiveDependencies` and `npm run lint:promises` is `noFloatingPromises`; each runs over the
+whole tree in a few seconds. Whole `npm run lint` is still advice.
+
+What to do when one names your code, and why its red control lives in a scratch directory, is in
+[linting.md § Two rules that are gates on their own](linting.md#two-rules-that-are-gates-on-their-own).
 
 ### Conflict markers gate, and the false-positive story is the design
 
@@ -155,7 +178,7 @@ monsters are gone, if anyone still cares.
 The lint baseline is deliberately not clean, and Knip has real findings that are queued rather than
 fixed. If `npm run check` exited non-zero for those, its exit code would be ignored — and the day a
 *test* broke, that would be ignored too. So gates are things that are green **today**: typecheck,
-tests, the production build, and cycles.
+tests, the production build, cycles, and the others marked **gate** in the table above.
 
 `npm run build` is a gate because a typecheck does not prove Vite can resolve, bundle and parse the
 CSS. Before it was here, that class of failure was only ever discovered by a deploy. **It runs above

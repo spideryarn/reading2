@@ -110,6 +110,7 @@ export function useCriteria(slug: string): CriteriaApi {
   const patching = useRef(new Map<string, Promise<void>>());
 
   // Switching article throws the tombstones away with the rows they name.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger, not an input — the cleanup has to run when the article changes, and the three maps are refs.
   useEffect(() => {
     const gone = deleted.current;
     const picks = chosen.current;

@@ -543,6 +543,18 @@ export function Reader({
     [experimental.on, article.tree, article.blocks, geometry],
   );
   /**
+   * **Is a band lying over the prose?** A band is open and there is no room
+   * for it beside the article (`fit.modeW === 0`), so it is the whole window —
+   * a phone with a mode open. **Not `fit.modeW === 0` alone**: that is also
+   * true with no band open at all (Plain on a phone).
+   *
+   * Declared once, here, above everything that asks. Until 2026-10-04 it was
+   * declared below two of its own re-derivations and written out again in
+   * four more places. Still true while the band has stepped aside — that is
+   * `bandBack`, below.
+   */
+  const bandCovers = bandOpen && fit.modeW === 0;
+  /**
    * **Is the breadcrumb drawn?** For a reader with Experimental features on,
    * at every scroll position — Greg, 2026-09-29 (spya-m3pteb): *"always
    * present if experimental features are turned on, and invisible if not"*.
@@ -567,7 +579,7 @@ export function Reader({
    */
   const showCrumbs =
     experimental.on &&
-    !(bandOpen && fit.modeW === 0) &&
+    !bandCovers &&
     (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
   /**
    * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
@@ -630,7 +642,7 @@ export function Reader({
    */
   const setReadingCounting = owner?.readingTime.setCounting;
   /* A band that has stepped aside (`bandAway`) is not lying over anything. */
-  const bandOverProse = bandOpen && fit.modeW === 0 && !bandAway;
+  const bandOverProse = bandCovers && !bandAway;
   const proseOnScreen = !bandOverProse;
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
@@ -688,7 +700,6 @@ export function Reader({
    * hover card keep plain `jumpTo`, since none of them is under a band.
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
    */
-  const bandCovers = bandOpen && fit.modeW === 0;
   const bandBack = bandAway && bandCovers;
   /**
    * **Where focus was in the band when it stepped aside**, so it goes back
@@ -2773,8 +2784,8 @@ export function Reader({
               blocks={article.blocks}
               tree={article.tree}
               quoteMarks={quotes.found}
-              covers={fit.modeW === 0}
-              away={bandAway && fit.modeW === 0}
+              covers={bandCovers}
+              away={bandBack}
               onAway={bandStepsAside}
               onJump={jumpTo /* not `bandJump`: Skim jumps on opening, and steps aside itself (`onAway`) — Sol, 260929g */}
               onFound={setSkimFound}
@@ -2793,8 +2804,8 @@ export function Reader({
             tree={article.tree}
             quotes={owner.quotes}
             quoteMarks={quotes.found}
-            covers={fit.modeW === 0}
-            away={bandAway && fit.modeW === 0}
+            covers={bandCovers}
+            away={bandBack}
             onAway={bandStepsAside}
             onJump={jumpTo /* not `bandJump`: see the visitor arm above */}
             onFound={setSkimFound}
@@ -2929,7 +2940,6 @@ export function Reader({
    */
   function marginColumn(): ReactNode {
     if (!marginOpen) return null;
-    const covered = bandOpen && fit.modeW === 0;
     return (
       <ModeBoundary
         mode="marginalia"
@@ -2938,7 +2948,7 @@ export function Reader({
         onPlain={() => void setMargin(null)}
       >
         {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
-        {!covered && (
+        {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}
             beside={bandOpen}
@@ -2974,10 +2984,14 @@ export function Reader({
          thrown over the article.
 
          So the fact is written here, from the one number that computes it,
-         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
-         true when no band is open at all, which is why every rule keyed off
-         this class also names `.mode-band` — styles.css § a band with no room,
-         tests/spine-width.test.ts. */
+         beside the `--mode-w` it is derived from. **`fit.modeW === 0`, not
+         `bandCovers`**: it is also true when no band is open at all, and one
+         rule wants exactly that — narrow Marginalia in Plain hides the
+         small-screen banner with `.band-covers:has(.mode-band, .marg-narrow)`
+         (styles/narrow-window.css). So every rule keyed off this class also
+         names what is lying over the prose: `.mode-band`, or there
+         `.marg-narrow` — styles.css § a band with no room,
+         tests/spine-width.test.ts, tests/layout-margin.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
       }${bandBack ? " band-away" : ""}`}

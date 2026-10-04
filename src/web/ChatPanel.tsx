@@ -2259,7 +2259,7 @@ export function Composer({
        at all — and the microphone keeps running afterwards. GPT Sol's plan
        review item 3, then its code review of 2026-09-04 for the half that was
        missing. docs/project/dictation.md § Adding it to a box. */
-    if (dictate.readOnly || dictate.dictation.armed) return;
+    if (dictate.busy) return;
     const question = value.trim();
     if (question === "" || busy) return;
     const submittedBox = box.current;
@@ -2279,7 +2279,7 @@ export function Composer({
     ) putKeyboardAway(submittedBox);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
-  const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";
+  const unavailable = busy || dictate.busy || value.trim() === "";
 
   return (
     <form

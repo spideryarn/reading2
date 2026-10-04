@@ -157,7 +157,8 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
 
 `noFloatingPromises` is switched **on**, at error. It lives in Biome's `nursery` group because it
 needs type inference, which is also why `@biomejs/biome` is pinned to an exact version in
-`package.json`: nursery rules move between releases.
+`package.json`: nursery rules move between releases. Since 2026-10-04 it is also a gate with a
+command of its own — § Two rules that are gates on their own, below.
 
 ## Tabs or spaces
 
@@ -309,3 +310,45 @@ this morning.
 **So `npm run lint` is not yet a gate that passes.** Don't wire it into anything that must be green
 until the baseline is cleared — and don't clear the baseline by turning rules off. Suppress a single
 line with a reason, or fix it, or write it down as an open question. Not the third option quietly.
+
+## Two rules that are gates on their own
+
+Since 2026-10-04 two single rules are at zero over the whole tree, and each has its own command that
+must stay at zero:
+
+```
+npm run lint:hook-deps   # correctness/useExhaustiveDependencies — about 2 s
+npm run lint:promises    # nursery/noFloatingPromises — about 5 s
+```
+
+Both are gates in [`scripts/check.ts`](../../scripts/check.ts), beside `cycles`. And because
+`npm run check` takes minutes,
+[`tests/biome-config-is-live.test.ts`](../../tests/biome-config-is-live.test.ts) runs the same two
+commands inside `npm test`, checks that Biome looked at thousands of files, and proves each rule
+still fires on a file that breaks it.
+
+**When `lint:hook-deps` names your hook**, read it before you do what it says. If the list is
+missing something the hook reads, that is a stale closure: fix it. If a dependency is there to make
+the hook run again — the `layoutKey` case above — or the missing one cannot change, keep the code and
+put the reason on the line above the hook:
+
+```ts
+// biome-ignore lint/correctness/useExhaustiveDependencies: `open` is the trigger, not an input — …
+useEffect(() => {
+```
+
+The reason has to be about that hook. Eleven hooks were read on the day this became a gate: eight
+got a suppression, three listed a value that cannot change and lost it, and none was a live bug
+([261004d](../plans/261004d-sweep-clusters-13-and-18-lint-gates-census-test-and-client-tidy.md) § A1).
+
+**When `lint:promises` names your call**, `await` it or handle its rejection. `void` is for a
+promise that cannot reject and that nothing may wait on, such as `leavingFetch` on the way out of a
+page.
+
+**The red controls use scratch copies of the repo's settings.** A file outside the repo, linted with
+`--config-path` pointing at `biome.jsonc`, is ignored: *"Checked 0 files"*, exit 1. And
+`noFloatingPromises` does not fire on stdin at all. So the test copies `biome.jsonc`, `.gitignore`
+and `package.json` into a scratch directory, then writes its violating file under `tests/`.
+Both ordinary lint and the gate command must flag it by name and exit 1. That holds the configured
+severity as well as rule discovery: with `noFloatingPromises` switched off, `--only=` still reports
+it at info and exits 0.

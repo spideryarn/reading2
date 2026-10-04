@@ -76,7 +76,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 /* The Dock reaches Supabase and the whole visitor layer, and none of it is
    what this file is about. Same reason as
    tests/background-reload-keeps-the-list.test.tsx. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
 const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");

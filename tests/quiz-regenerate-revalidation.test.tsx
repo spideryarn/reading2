@@ -30,7 +30,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, toggle: () => {} }),
+  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null, DictationStrip: () => null,

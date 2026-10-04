@@ -12,6 +12,8 @@
     "lint": "biome lint --max-diagnostics=none .",
     "lint:fix": "biome lint --write --max-diagnostics=none .",
     "cycles": "biome lint --only=suspicious/noImportCycles .",
+    "lint:hook-deps": "biome lint --only=correctness/useExhaustiveDependencies --max-diagnostics=none .",
+    "lint:promises": "biome lint --only=nursery/noFloatingPromises --max-diagnostics=none .",
     "complexity": "biome lint --only=complexity/noExcessiveCognitiveComplexity --max-diagnostics=none .",
     "knip": "knip",
     "dupes": "jscpd src api scripts evals --min-lines 5 --min-tokens 50 --format typescript,tsx --reporters console",

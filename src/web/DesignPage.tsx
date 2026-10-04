@@ -481,6 +481,7 @@ function useMeasured(names: string[]): Record<string, { css: string; rgb: Rgb | 
      say: the swatches repaint by themselves, the numbers beside them do not.
      The *resolved* theme, so System following the OS remeasures too. */
   const theme = useTheme();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `theme` is the trigger, not an input — `measure` reads the computed colours from the DOM, and those change when the theme does.
   useEffect(() => {
     setMap(measure(names));
   }, [names, theme]);
@@ -1281,6 +1282,7 @@ function LogoAnimations() {
      One frame of delay gives them the starting value they need, and costs the
      keyframe ones nothing. */
   const [armed, setArmed] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `take` is the trigger, not an input — Play again rebuilds the cells without the class, so they need arming again (the comment inside says the rest).
   useEffect(() => {
     setArmed(false);
     const id = requestAnimationFrame(() => setArmed(true));

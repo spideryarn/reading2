@@ -36,7 +36,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
-import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
+import { BookOpen, BookText, ExternalLink, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
   type BlockId,
@@ -76,12 +76,12 @@ import {
   floorToGateStep,
   applyThreshold,
   canThreshold,
-  GATE_STEP,
   hiddenNote,
   thresholdMax,
   thresholdTop,
   type ThresholdResult,
 } from "./threshold.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -1152,44 +1152,20 @@ function BarSlider({
 }) {
   /* One pass, and every number here comes out of it — threshold.ts. */
   const { visible, hiddenCount } = visibleWorks(works, bar);
-  const count = `${visible.length} of ${works.length}`;
-
   return (
-    <div className="gloss-gate">
-      <div className="gloss-gate-row">
-        <label className="gloss-gate-label" htmlFor="cite-bar">
-          threshold
-        </label>
-        <span className="gloss-gate-value">
-          {bar.toFixed(2)} · {count}
-        </span>
-        {moved && (
-          <button
-            type="button"
-            className="gloss-gate-reset"
-            title={`Back to ${CITATION_BAR_DEFAULT.toFixed(2)}`}
-            aria-label={`Reset the threshold to ${CITATION_BAR_DEFAULT.toFixed(2)}`}
-            onClick={() => onBar(null)}
-          >
-            <RotateCcw size={11} />
-          </button>
-        )}
-      </div>
-      <input
-        id="cite-bar"
-        className="gloss-gate-range"
-        type="range"
-        min={0}
-        max={barMax(works, bar)}
-        step={GATE_STEP}
-        value={bar}
-        title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
-        aria-valuetext={`${bar.toFixed(2)}, showing ${count} citations`}
-        onChange={(e) => onBar(Number.parseFloat(e.target.value))}
-      />
-      {/* Always, wherever the slider is: threshold.ts § hiddenNote. */}
-      <p className="gloss-gate-note">{citationsNote(hiddenCount, works.length)}</p>
-    </div>
+    <ThresholdSlider
+      id="cite-bar"
+      value={bar}
+      max={barMax(works, bar)}
+      defaultValue={CITATION_BAR_DEFAULT}
+      moved={moved}
+      visible={visible.length}
+      total={works.length}
+      noun="citations"
+      title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
+      note={citationsNote(hiddenCount, works.length)}
+      onChange={onBar}
+    />
   );
 }
 

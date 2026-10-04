@@ -440,7 +440,7 @@ export function AnnotateDialog({
        and Firefox saves nothing that was said at all. The same pair, for the
        same reason, as the follow-up box in `CommentDialog`.
        docs/project/dictation.md § Adding it to a box. */
-    if (dictate.readOnly || dictate.dictation.armed) return;
+    if (dictate.busy) return;
     /* Before the latch, so a press refused for this reason is not remembered
        as a Save on its way — the next one, once loaded, has to get through. */
     if (!loaded) return;
@@ -546,7 +546,7 @@ export function AnnotateDialog({
   /* Both microphone states and the list still loading, matching the guards in
      `press` — a lit button over a handler that returns is a press that does
      nothing and says nothing. */
-  const waiting = !loaded || dictate.readOnly || dictate.dictation.armed;
+  const waiting = !loaded || dictate.busy;
 
   return (
     <aside

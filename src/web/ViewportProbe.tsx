@@ -479,10 +479,19 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
        work — but a download is not (an installed web app has nowhere to put a
        file you can find again), which is why the textarea below is not a
        fallback so much as the other half of the same answer. */
-    void navigator.clipboard
-      ?.writeText(t)
+    const refused = () => setSaid("copy refused — select the box");
+    /* A statement, not `navigator.clipboard?.writeText(…)`: the optional chain
+       short-circuits the whole chain, `.catch` included, so with no clipboard
+       object — every insecure context, which is how a phone reaches a dev
+       server — the press said nothing. ChatPanel.tsx has the long version. */
+    if (!navigator.clipboard) {
+      refused();
+      return;
+    }
+    navigator.clipboard
+      .writeText(t)
       .then(() => setSaid("copied"))
-      .catch(() => setSaid("copy refused — select the box"));
+      .catch(refused);
   };
 
   return (

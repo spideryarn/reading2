@@ -361,7 +361,7 @@ function useSteerNote(slug: string, painted: string | undefined): SteerNote {
     box,
     dictate,
     tooLong,
-    blocked: tooLong || dictate.readOnly || dictate.dictation.armed,
+    blocked: tooLong || dictate.busy,
   };
 }
 
