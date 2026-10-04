@@ -191,6 +191,15 @@ read, so the modes must still wait for both. That is many surfaces and a publica
 (`tree` required) changed, which is why 260930c deferred it. A smaller cut worth pricing first:
 move only `assets` behind the publication, as `labels` was moved on 2026-09-06.
 
+**Greg's answer**, to the question put as A (open after `blocks`), B (move only `assets`) or C
+(leave it):
+
+> see if you can find a way to get to the article loading faster by deferring stuff, as long as the
+> article will update automatically (without requiring a page refresh), and as long as it's not
+> going to introduce too much complexity. use your judgment
+>
+> — Greg, 2026-10-04
+
 ## Cost
 
 Production medians per article since 30 September, standard model, 4 to 12 articles per step:
