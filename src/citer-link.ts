@@ -17,6 +17,6 @@ export const OPENALEX_WORK_ID = /^W\d{1,15}$/;
 
 /** `https://doi.org/<doi>` when there is a DOI, else the work's OpenAlex page, else null. */
 export function citerUrl(citer: { doi?: string; openalexId: string }): string | null {
-  if (citer.doi !== undefined) return `https://doi.org/${citer.doi}`;
+  if (citer.doi !== undefined) return `https://doi.org/${citer.doi.split("/").map(encodeURIComponent).join("/")}`;
   return OPENALEX_WORK_ID.test(citer.openalexId) ? `https://openalex.org/${citer.openalexId}` : null;
 }

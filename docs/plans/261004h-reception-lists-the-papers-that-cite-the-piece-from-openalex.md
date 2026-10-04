@@ -258,4 +258,7 @@ out of the stored Debate artefact.
 
 ## Code review
 
-(to be filled)
+[The code review](261004h-reception-lists-citers-code-review-sol.md) covers `e8de3e851` and its
+uncommitted review fixes: nine stage findings fixed, one wider DOI-link finding left for separate
+work, and the exact validation results and remaining database checks. Verdict: **land with the
+fixes made in review**.

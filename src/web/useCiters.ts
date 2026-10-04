@@ -20,7 +20,7 @@
  * reader, the same "we could not get it just now", with the same button.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CitersResult } from "../types.js";
+import type { Citer, CitersResult } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 
@@ -33,14 +33,28 @@ export interface UseCiters {
 
 const UNAVAILABLE: CitersResult = { kind: "unavailable" };
 
+/** Validate the fields the row renders before it reaches React. */
+function isCiter(value: unknown): value is Citer {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.openalexId === "string" &&
+    typeof row.title === "string" &&
+    Array.isArray(row.authors) && row.authors.every((name) => typeof name === "string") &&
+    typeof row.authorCount === "number" && typeof row.citedByCount === "number" &&
+    (row.doi === undefined || typeof row.doi === "string") &&
+    (row.year === undefined || typeof row.year === "number") &&
+    (row.venue === undefined || typeof row.venue === "string") &&
+    (row.kind === undefined || typeof row.kind === "string");
+}
+
 /**
  * **Is this one of the route's answers?** The panel switches exhaustively on
  * `kind` and maps over `citers`, so a 200 carrying anything else (an older
  * server, a proxy's page, a test stub's `{}`) would throw while drawing and
  * take the whole Debate band with it. Checked once here, as far as the panel
  * reads: the kind, and for a list its four numbers, its date and that the list
- * is one. Each citer's own fields are the server's, bounded where they were
- * parsed.
+ * is one, including each row's rendered fields. String bounds and identifier
+ * shapes remain the server parser's job.
  */
 function asCitersResult(value: unknown): CitersResult | null {
   if (typeof value !== "object" || value === null) return null;
@@ -58,7 +72,7 @@ function asCitersResult(value: unknown): CitersResult | null {
         typeof body.dropped === "number" &&
         typeof body.capped === "boolean" &&
         typeof body.fetchedAt === "string" &&
-        Array.isArray(body.citers)
+        Array.isArray(body.citers) && body.citers.every(isCiter)
         ? (value as CitersResult)
         : null;
     default:
@@ -97,6 +111,13 @@ export function useCiters(slug: string, wanted: boolean): UseCiters {
   /* A ref rather than state: React's StrictMode runs this effect twice inside
      one commit, and the second run must find the first one's mark. */
   const askedFor = useRef<string | null>(null);
+  const article = useRef(slug);
+  if (article.current !== slug) {
+    article.current = slug;
+    /* useOrderedRead invalidates the previous article even when this section
+       is unwanted. Its ask-once mark must be invalidated at the same time. */
+    askedFor.current = null;
+  }
   useEffect(() => {
     if (!wanted || askedFor.current === slug) return;
     askedFor.current = slug;

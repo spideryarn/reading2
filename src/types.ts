@@ -6586,8 +6586,8 @@ export interface Citer {
  *   article: its title and one author must both agree. Not a claim that the
  *   DOI is another work's; with no byline there is simply nothing to agree.
  * - `unavailable` — it could not be asked just now. Worth trying again.
- * - `too-large` — its answer is bigger than we read, twice. Not worth trying
- *   again today.
+ * - `too-large` — its target record exceeds our byte limit, or its list does
+ *   even after asking for a shorter page. Not worth the same retry today.
  * - `found` — the list. `count` is OpenAlex's own count of citers, `returned`
  *   how many records its answer carried, `dropped` how many of those could not
  *   be shown (no title, a malformed id, a duplicate), and `capped` whether the

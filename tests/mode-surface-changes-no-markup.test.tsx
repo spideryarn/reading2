@@ -1904,7 +1904,7 @@ const DEBATE_SHAPE: BandShape = {
  *  plan 261001m) — not empty, which is what makes Debate the
  *  control for the five bands whose headers do empty out.
  *
- *  `section.dbt-citers` is the owner's *Cited by*, which since 2026-10-04 is on
+ *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
  *  screen before a search is stored (plan 261004h) — a deliberate change to
  *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
  *  Reception's list, so that shape did not move. */
@@ -1916,7 +1916,7 @@ const DEBATE_LOADING: BandShape = {
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
     "p.gloss-quiet",
-    "section.dbt-group.dbt-citers[aria-labelledby]",
+    "div.dbt-scroll",
   ],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",

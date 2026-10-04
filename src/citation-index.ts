@@ -241,19 +241,35 @@ export function parseOpenAlexCiters(json: unknown): CitersPage | null {
 }
 
 /**
- * **OpenAlex's display names, in the shape `registryAuthorIsOurs` reads.** It
- * prints a name given-first (`Michael G. Levin`), so the last word is the
- * family name and the rest the given names; a single word is a family name
- * alone. A two-word family name (`van Gelder`) still agrees, because the check
- * looks for the given name among the words before the family name.
+ * **OpenAlex's display names, in the shape `registryAuthorIsOurs` reads.**
+ * Recognise a trailing generational suffix and explicit `Family, Given`
+ * order before falling back to the last word as family name. For long names,
+ * also try compound family endings: the shared check only looks three words
+ * before the family, so a last-word split alone loses the first given name.
+ * Each candidate retains the final surname and the first given name.
  */
 export function openAlexAuthors(names: readonly string[]): WorkAuthor[] {
   const authors: WorkAuthor[] = [];
   for (const name of names) {
-    const words = name.trim().split(/\s+/).filter((w) => w !== "");
+    const core = name.trim().replace(/(?:,?\s+)(?:jr\.?|sr\.?|ii|iii|iv)$/i, "").trim();
+    const comma = core.indexOf(",");
+    if (comma > 0) {
+      const family = core.slice(0, comma).trim();
+      const given = core.slice(comma + 1).trim();
+      if (given) {
+        authors.push({ family, given });
+        continue;
+      }
+    }
+    const words = core.split(/\s+/).filter((w) => w !== "");
     const family = words.pop();
     if (family === undefined) continue;
     authors.push(words.length > 0 ? { family, given: words.join(" ") } : { family });
+    if (words.length > 3) {
+      for (let at = 1; at < words.length; at++) {
+        authors.push({ family: [...words.slice(at), family].join(" "), given: words.slice(0, at).join(" ") });
+      }
+    }
   }
   return authors;
 }
@@ -325,6 +341,7 @@ async function ask(id: WorkId, article: ArticleIdentity, d: Resolved): Promise<A
   const doi = id.slice("doi:".length);
   const first = await get(id, "work", openAlexWorkUrl(doi), d);
   if (first.kind === "missing") return { kind: "not-indexed" };
+  if (first.kind === "too-large") return { kind: "too-large" };
   if (first.kind !== "json") return { kind: "unavailable" };
   const target = parseOpenAlexWork(first.json);
   if (target === null) return { kind: "unavailable" };

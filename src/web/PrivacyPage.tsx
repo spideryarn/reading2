@@ -376,7 +376,7 @@ export function PrivacyPage() {
           >
             DataCite
           </a>
-          , when you add an article, for its journal and date and for the works it cites; and{" "}
+          , when you add an article, for its journal and date, and when you look up the works it cites; and{" "}
           <a
             href="https://openalex.org/"
             target="_blank"
@@ -385,7 +385,7 @@ export function PrivacyPage() {
           >
             OpenAlex
           </a>
-          , when you open Debate on an article of yours, for the list of papers that cite it. Our
+          , when you open Reception in Debate on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address; never the article’s text, and nothing about who you are.
           They learn that somebody using Spideryarn asked about that work, not who.

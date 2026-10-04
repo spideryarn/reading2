@@ -1149,7 +1149,7 @@ export function DebatePanel({
           `debate && ready` block on purpose (GPT Sol's F8): the list is free and
           is the fastest answer to "has anyone cited this", so it must not wait
           for a paid search, and it is not a control that starts one. */}
-      {!(debate && ready) && citedBy}
+      {!(debate && ready) && citedBy && <div className="dbt-scroll">{citedBy}</div>}
 
       {debate && ready && (
         <>

@@ -32,6 +32,7 @@ import {
 import { citerUrl } from "../src/citer-link.js";
 import { FetchFailure, fetchBibliographicJson, type FetchLike } from "../src/fetch.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
+import { citersLines } from "../src/messages.js";
 import { providerHostOf } from "./setup/provider-guard.js";
 
 const fixture = (name: string): unknown =>
@@ -217,6 +218,9 @@ describe("parseOpenAlexCiters", () => {
     expect(parsed?.citers.map((c) => c.openalexId)).toEqual(["W1001", "W1002"]);
     expect(parsed?.citers[0]?.doi).toBeUndefined();
     expect(parsed?.dropped).toBe(1);
+    if (!parsed) throw new Error("no page");
+    expect(citersLines({ ...parsed, listed: parsed.citers.length, capped: false }, undefined).join(" "))
+      .toContain("invalid identifier");
   });
 
   it("keeps at most twenty authors' names, and the full count", () => {
@@ -237,6 +241,15 @@ describe("parseOpenAlexCiters", () => {
 });
 
 describe("a citer's link", () => {
+  it("encodes literal URL metacharacters in a parsed DOI", () => {
+    for (const doi of ["10.1000/citer%2fpart", "10.1000/citer\\part"]) {
+      const [work] = works(1, () => ({ doi }));
+      const citer = parseOpenAlexCiters({ meta: { count: 1 }, results: [work] })?.citers[0];
+      if (!citer?.doi) throw new Error("no parsed DOI");
+      const link = new URL(citerUrl(citer)!);
+      expect(decodeURIComponent(link.pathname.slice(1))).toBe(doi);
+    }
+  });
   it("is built from the DOI, or from the W id, and is never a string from the response", () => {
     const [w] = works(1, () => ({
       doi: "https://doi.org/10.1000/Real.DOI",
@@ -282,6 +295,37 @@ describe("the addresses", () => {
 /* ------------------------------------------------------------- citersOf -- */
 
 describe("citersOf", () => {
+  it.each(["Michael G. Levin Jr.", "Levin, Michael G."])(
+    "confirms the same author from the display name %s, fresh and cached",
+    async (name) => {
+      const h = harness({
+        ...HAPPY,
+        [WORK_URL]: { ...WORK, authorships: [{ author: { display_name: name } }] },
+      });
+      expect((await citersOf(LEVIN, h.deps)).kind).toBe("found");
+      expect((await citersOf(LEVIN, h.deps)).kind).toBe("found");
+      expect(h.api.asked).toEqual([WORK_URL, CITERS_URL]);
+      expect(await citersOf({ ...LEVIN, byline: "Ada Levin" }, h.deps)).toEqual({ kind: "unconfirmed" });
+    },
+  );
+
+  it("confirms a complete multiword author name without losing its first given name", async () => {
+    const name = "Juan Carlos de la Cruz";
+    const h = harness({
+      ...HAPPY,
+      [WORK_URL]: { ...WORK, authorships: [{ author: { display_name: name } }] },
+    });
+    expect((await citersOf({ ...LEVIN, byline: name }, h.deps)).kind).toBe("found");
+    expect((await citersOf({ title: TITLE, doi: DOI, authors: [{ name, affiliations: [] }] }, h.deps)).kind).toBe("found");
+    expect(await citersOf({ ...LEVIN, byline: "Pedro Carlos de la Cruz" }, h.deps)).toEqual({ kind: "unconfirmed" });
+  });
+
+  it("reports an oversized target record as too-large instead of offering the same retry", async () => {
+    const h = harness({ [WORK_URL]: failure(200, "too-large") });
+    expect(await citersOf(LEVIN, h.deps)).toEqual({ kind: "too-large" });
+    expect(h.api.asked).toEqual([WORK_URL]);
+    expect(h.store.writes).toEqual([]);
+  });
   it("lists the 39, stores them, and asks twice", async () => {
     const h = harness(HAPPY);
     const got = await citersOf(LEVIN, h.deps);

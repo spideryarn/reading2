@@ -520,7 +520,7 @@ and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 
 public indexes of published work are asked about a paper by its identifier, from our server:
 
 - **Crossref and DataCite**, since 2026-10-01: what a DOI or arXiv id refers to, for an article
-  being added and for the works it cites ([`src/bibliographic.ts`](../../src/bibliographic.ts)).
+  being added and when its cited works are looked up ([`src/bibliographic.ts`](../../src/bibliographic.ts)).
   **They were missing from the page until this change**, which is the page falling behind the
   code for three days.
 - **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Debate's

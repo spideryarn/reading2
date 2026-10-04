@@ -979,6 +979,9 @@ describe("Cited by, under Reception", () => {
       },
     });
     withCiters(found(12), before);
+    /* The band is height-bounded. A list must sit inside
+       its scroller even before there is a stored paid search. */
+    expect(section()?.parentElement?.classList.contains("dbt-scroll")).toBe(true);
     expect(text()).toContain("Nobody has asked the web about this one yet.");
     expect(said()).toContain("12 papers cite this piece");
     expect(titles()).toHaveLength(10);
@@ -991,6 +994,10 @@ describe("Cited by, under Reception", () => {
     expect(titles()).toHaveLength(2);
     withCiters(found(2), owner({ status: "error", debate: null, error: "We could not load this." }));
     expect(titles()).toHaveLength(2);
+  });
+
+  it("names the service contact address in its description of what is sent", () => {
+    expect(CITERS_ABOUT).toContain("contact address");
   });
 
   it("is Reception's, not Claims'", () => {

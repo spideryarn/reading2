@@ -4778,7 +4778,8 @@ export const CITERS_UNREAD = "We have not read what any of them says about it.";
 /** What the band's (i) says of the section, for the owner. */
 export const CITERS_ABOUT =
   "Cited by is OpenAlex's list of the papers that cite this piece. To get it we send OpenAlex " +
-  "the piece's DOI and nothing else. No AI is involved, and we have not read the papers.";
+  "the piece's DOI and our contact address, never its text or reader details. No AI is involved, " +
+  "and we have not read the papers.";
 
 const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
 
@@ -4817,8 +4818,8 @@ export function citersLines(
   if (found.dropped > 0) {
     lines.push(
       found.dropped === 1
-        ? "1 record could not be shown: it has no title, or it repeats another."
-        : `${found.dropped} records could not be shown: they have no title, or repeat another.`,
+        ? "1 record could not be shown: it has no title, an invalid identifier, or it repeats another."
+        : `${found.dropped} records could not be shown: they have no title, an invalid identifier, or repeat another.`,
     );
   }
   lines.push(CITERS_UNREAD);

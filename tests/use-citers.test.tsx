@@ -22,10 +22,12 @@ import type { CitersResult } from "../src/types.js";
 const gets: string[] = [];
 /** What the next GETs answer: a body, or a status that is not ok. */
 let answer: CitersResult | number = { kind: "not-indexed" };
+let pending: Promise<Response> | null = null;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
     gets.push(url);
+    if (pending) return pending;
     return typeof answer === "number"
       ? new Response(JSON.stringify({ error: "no" }), { status: answer })
       : new Response(JSON.stringify(answer), { status: 200 });
@@ -58,6 +60,7 @@ async function show(slug: string, wanted: boolean): Promise<void> {
 beforeEach(() => {
   gets.length = 0;
   answer = { kind: "not-indexed" };
+  pending = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -136,4 +139,37 @@ it("asks about another article, and does not show the last one's answer meanwhil
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
   expect(gets).toEqual(["/api/citers/one", "/api/citers/two"]);
   expect(host.textContent).toBe("no-doi");
+});
+
+it("reads again after a pending article is left for an unwanted section and then revisited", async () => {
+  let finish!: (res: Response) => void;
+  pending = new Promise<Response>((resolve) => { finish = resolve; });
+  await show("one", true);
+  await show("two", false);
+  pending = null;
+  await show("one", true);
+  await act(async () => { finish(new Response(JSON.stringify({ kind: "no-doi" }))); });
+  expect(gets).toEqual(["/api/citers/one", "/api/citers/one"]);
+  expect(host.textContent).toBe("not-indexed");
+});
+
+it("refuses malformed citer rows before they can crash the Debate band", async () => {
+  const valid = {
+    openalexId: "W1", title: "A citing paper", authors: ["Ada Lovelace"],
+    authorCount: 1, citedByCount: 0,
+  };
+  for (const [i, row] of [null, {}, { ...valid, authors: null }, { ...valid, title: {} }].entries()) {
+    answer = {
+      kind: "found", count: 1, returned: 1, dropped: 0, capped: false,
+      citers: [row], fetchedAt: "2026-10-04T00:00:00Z",
+    } as CitersResult;
+    await show(`malformed-${i}`, true);
+    expect(host.textContent, JSON.stringify(row)).toBe("unavailable");
+  }
+  answer = {
+    kind: "found", count: 1, returned: 1, dropped: 0, capped: false,
+    citers: [valid], fetchedAt: "2026-10-04T00:00:00Z",
+  };
+  await show("valid-row", true);
+  expect(host.textContent).toBe("found");
 });
