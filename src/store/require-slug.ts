@@ -29,5 +29,5 @@ import { isSlug } from "../ingest.js";
 /** A slug that is about to reach a query, or a 400. */
 export function requireSlug(slug: string): void {
   if (isSlug(slug)) return;
-  throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
+  throw Object.assign(new Error("Not a slug"), { status: 400 });
 }
