@@ -245,14 +245,17 @@ export function screenModes(files: ArmFile[]): { rows: string[]; hits: string[];
   return { rows, hits, totals };
 }
 
-function report(): void {
-  const arms = fs.existsSync(OUT) ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()) : [];
+export function report(out: string = OUT): void {
+  // Comparisons are sibling directories, but their key/exclusions JSON are not ArmFiles.
+  const arms = fs.existsSync(out)
+    ? fs.readdirSync(out).filter((d) => !d.startsWith("pairs-") && fs.statSync(path.join(out, d)).isDirectory())
+    : [];
   const files = arms.sort().flatMap((arm) =>
     fs
-      .readdirSync(path.join(OUT, arm))
+      .readdirSync(path.join(out, arm))
       .filter((x) => x.endsWith(".json"))
       .sort()
-      .map((f) => JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as ArmFile),
+      .map((f) => JSON.parse(fs.readFileSync(path.join(out, arm, f), "utf8")) as ArmFile),
   );
   const { rows, hits, totals } = screenModes(files);
   console.log(["arm\tslug\tmode\titems\tpaperwork-by-id\tpaperwork-by-words", ...rows].join("\n"));

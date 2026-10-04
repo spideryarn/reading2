@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { type ArmFile, screenModes } from "../evals/paperwork/modes.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { type ArmFile, report, screenModes } from "../evals/paperwork/modes.js";
 
 const quotes = (n: number) => ({
   quotes: { quotes: Array.from({ length: n }, (_, i) => ({ text: `Quote ${i}`, reason: "kept", blockId: "spya-qqq001" })) },
@@ -32,5 +35,24 @@ describe("the paperwork-modes totals", () => {
   it("show a mode that failed on every article, with no items", () => {
     const { totals } = screenModes([file("one", { quotes: { error: "refused" } })]);
     expect(totals["after\tquotes"]).toEqual({ attempted: 1, failed: 1, items: 0, byId: 0, byWords: 0 });
+  });
+
+  it("still reports real arms after pairs has written a comparison and its exclusions", () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "paperwork-modes-report-"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      fs.mkdirSync(path.join(out, "after"));
+      fs.writeFileSync(path.join(out, "after", "one.json"), JSON.stringify(file("one", { quotes: quotes(3) })));
+      const comparison = path.join(out, "pairs-before-vs-after");
+      fs.mkdirSync(comparison);
+      fs.writeFileSync(path.join(comparison, "pairs.md"), "# Blind pairs\n");
+      fs.writeFileSync(path.join(comparison, "key.json"), JSON.stringify([{ id: "P1", left: "before", right: "after" }]));
+      fs.writeFileSync(path.join(comparison, "exclusions.json"), JSON.stringify([{ slug: "two", field: "quotes", reason: "failed" }]));
+      expect(() => report(out)).not.toThrow();
+      expect(log.mock.calls.flat().join("\n")).toContain("after\tquotes\t1\t1\t0\t3\t0\t0");
+    } finally {
+      log.mockRestore();
+      fs.rmSync(out, { recursive: true, force: true });
+    }
   });
 });

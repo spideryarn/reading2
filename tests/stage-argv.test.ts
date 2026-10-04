@@ -145,4 +145,24 @@ describe("scripts/stage.ts, started as a command", () => {
     expect(r.stderr).toContain("Usage:");
     expect(r.status).toBe(1);
   });
+
+  it("refuses malformed argv even when the runtime has no Storage credentials", () => {
+    const r = spawnSync(process.execPath, ["--import", "tsx", "scripts/stage.ts", "ingest", "--froce"], {
+      cwd: repo,
+      encoding: "utf8",
+      timeout: 30_000,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        VITEST: "",
+        SUPABASE_URL: "",
+        SUPABASE_SERVICE_ROLE_KEY: "",
+        SPIDERYARN_ENV_PINNED: "SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY",
+      },
+    });
+    expect(r.stderr).toContain("`--froce`");
+    expect(r.stderr).toMatch(/any step: .*structure/);
+    expect(r.stderr).not.toContain("no Supabase Storage configured");
+    expect(r.status).toBe(1);
+  });
 });

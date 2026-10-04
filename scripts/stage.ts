@@ -94,6 +94,7 @@ import path from "node:path";
 
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
+import { STEP_ORDER } from "../src/step-order.js";
 
 /* **The module graph, loaded by `loadRuntime` and not by importing this file.**
 
@@ -122,7 +123,6 @@ let enqueue: typeof import("../src/jobs.js").enqueue;
 let getJob: typeof import("../src/jobs.js").getJob;
 let environmentOwnerId: typeof import("../src/owner.js").environmentOwnerId;
 let isStepName: typeof import("../src/pipeline.js").isStepName;
-let STEP_ORDER: typeof import("../src/pipeline.js").STEP_ORDER;
 let stagingKey: typeof import("../src/source.js").stagingKey;
 let uploadedDocumentKind: typeof import("../src/fetch.js").uploadedDocumentKind;
 let CONTENT_TYPE: typeof import("../src/store/blobs.js").CONTENT_TYPE;
@@ -141,7 +141,7 @@ async function loadRuntime(): Promise<void> {
   ({ slugFromFilename, slugFromUrl } = await import("../src/ingest.js"));
   ({ advanceJob, enqueue, getJob } = await import("../src/jobs.js"));
   ({ environmentOwnerId } = await import("../src/owner.js"));
-  ({ isStepName, STEP_ORDER } = await import("../src/pipeline.js"));
+  ({ isStepName } = await import("../src/pipeline.js"));
   ({ stagingKey } = await import("../src/source.js"));
   ({ uploadedDocumentKind } = await import("../src/fetch.js"));
   ({ CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js"));
@@ -151,8 +151,7 @@ async function loadRuntime(): Promise<void> {
 
 type Job = Awaited<ReturnType<typeof enqueue>>;
 
-/** A function rather than a constant because `STEP_ORDER` is one of the names
- *  `loadRuntime` fills in. */
+/** The step-order leaf supplies usage without loading the server graph. */
 function usage(): string {
   return (
     "Usage:\n" +
@@ -554,7 +553,7 @@ export type StageCommand =
 /**
  * `message: null` is the bare usage text, for a command line with nothing on
  * it. `usage` says whether the usage text follows the message — the caller adds
- * it, because the list of steps in it comes from `src/pipeline.ts` and this
+ * it, because the list of steps in it comes from `src/step-order.ts` and this
  * function loads nothing.
  */
 export type ParsedStageArgv =
@@ -631,16 +630,16 @@ export function parseStageArgv(args: readonly string[]): ParsedStageArgv {
  *
  * The arguments are read **before** anything is loaded, so a mistyped command
  * line is refused without `.env.local` being applied or a database client
- * being made. The graph is then loaded even for a refusal, because the usage
- * text names the pipeline's steps.
+ * being made. Usage comes from the step-order leaf; loading the server graph
+ * first would let missing Storage credentials hide the argument error.
  */
 if (isMain(import.meta.url)) {
   const parsed = parseStageArgv(process.argv.slice(2));
-  await loadRuntime();
   if (!parsed.ok) {
     if (parsed.message === null) die(usage().trim());
     die(parsed.usage ? `${parsed.message}\n\n${usage()}` : parsed.message);
   }
+  await loadRuntime();
   const { command } = parsed;
   switch (command.kind) {
     case "ingest-url":

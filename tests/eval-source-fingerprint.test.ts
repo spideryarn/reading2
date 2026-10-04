@@ -42,6 +42,31 @@ describe("a harness's source fingerprint", () => {
     expect(after["stage.ts"]).toBe(before["stage.ts"]);
   });
 
+  it("follows a shared import written with single quotes", () => {
+    fs.writeFileSync(path.join(src, "stage.ts"), "import { paperwork } from './paperwork.js';\n");
+    const before = sourceFingerprint(["stage.ts"], src);
+    fs.writeFileSync(path.join(src, "paperwork.ts"), 'export const paperwork = () => "Changed wording.";\n');
+    const after = sourceFingerprint(["stage.ts"], src);
+    expect(after).not.toEqual(before);
+    expect(after["stage.ts"]).toBe(before["stage.ts"]);
+  });
+
+  it("keeps following a registered dependency re-exported by the named file", () => {
+    fs.writeFileSync(path.join(src, "stage.ts"), 'export { paperwork } from "./paperwork.js";\n');
+    expect(Object.keys(sourceFingerprint(["stage.ts"], src))).toEqual(["stage.ts", "paperwork.ts"]);
+  });
+
+  it("does not mistake comments or prompt prose for imports", () => {
+    fs.writeFileSync(
+      path.join(src, "stage.ts"),
+      [
+        '// Old implementation: import { paperwork } from "./paperwork.js";',
+        'export const SYSTEM = `Do not copy words from "./plain-words.js".`;',
+      ].join("\n"),
+    );
+    expect(Object.keys(sourceFingerprint(["stage.ts"], src))).toEqual(["stage.ts"]);
+  });
+
   it("covers the shared prompt modules the named file imports, and not its other imports", () => {
     expect(Object.keys(sourceFingerprint(["stage.ts"], src)).sort()).toEqual(["paperwork.ts", "plain-words.ts", "stage.ts"]);
   });
