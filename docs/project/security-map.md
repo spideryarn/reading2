@@ -7,7 +7,7 @@ shrinks a security problem to nothing. It doesn't, because a reader is targeted 
 the app at somebody else's article. "Don't open untrusted documents" was never available as a
 mitigation: opening them is the product.
 
-[security.md](security.md) counts four untrusted parties, and it is worth being able to name them
+[security.md](security.md) counts six untrusted parties, and it is worth being able to name them
 before you touch anything:
 
 1. **The content** — a stranger's HTML, or a stranger's PDF, rendered into our own origin.
@@ -21,8 +21,12 @@ before you touch anything:
    2025. [`src/injection-scan.ts`](../../src/injection-scan.ts) looks for it in the raw source before
    any model call, and [security.md § the manuscript](security.md#hidden-instructions) says what it
    cannot see — starting with PDFs, which it does not read.
+6. **The bibliographic registries** — Crossref, DataCite and OpenAlex send titles, authors and
+   venues that end up on the page. Rendered as text only, and every link is built by us from an
+   identifier. Lower risk than the five above (Greg, 2026-10-04: *"probably they're slightly lower
+   risk"*). [security.md § registries](security.md#registries).
 
-Whoever signs in is a fifth party and is *not* untrusted. **There is no allowlist** — `requireUser`
+Whoever signs in is a seventh party and is *not* untrusted. **There is no allowlist** — `requireUser`
 admits anybody Supabase will vouch for, which is Greg's call and an accepted risk — and
 **every reader gets their own shelf**, which is a separate guarantee that had not been built when
 that risk was accepted. [auth.md](auth.md) has both halves, and the contradiction between them that
