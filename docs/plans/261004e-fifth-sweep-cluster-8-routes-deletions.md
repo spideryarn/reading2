@@ -106,4 +106,34 @@ equivalent. Four findings, all accepted:
 
 ## Log
 
-(filled in as it lands)
+**2026-10-04, `f050be585`** — all eight items, in one commit rather than the two planned (the
+behaviour changes are two one-line edits and are named in the message).
+
+- Red first, observed: the contract rule refused the old table at its first wrap; the `ENOENT` test
+  got 404 where it wants 500; both exact `"Not a slug"` assertions got the echoed value.
+- Mutation, observed: bypassing `admitOrResync` in `chargeAndSwitchOnHighPower` fails both stale
+  tests; three mutations of the moved Postgres test each went red.
+- R7 grew, as Sol's F2 said it must: `makeFindCitation`, `FindCitationDeps`, `FIND_RATE_POLICY` and
+  the store's `findCitation` went too. Deleted with the wrapper: its seven allowance cases, its two
+  404 cases, and "keeps /find's allowance scoped to the provider call". Every case about what is
+  kept, stored, sent or judged now drives `runCitationLookup`.
+- One test outside the plan had to change: `tests/describe-fetch-failure.test.ts` read
+  `src/citation-find.ts` as text for a throw site that went with the route.
+
+**2026-10-04, `1513bbefe`** — [Sol's code review](261004e-fifth-sweep-cluster-8-code-review-sol.md)
+of `f050be585`: no P0 or P1, *ready with these fixes*, and it made them (F5 the dead
+`CITATION_FIND_*` messages and `cite-resting` code; F6 and F7 prose). It confirmed the R10 census
+row by row and that `security-map.md` changed pointers only. One round; nothing was overruled.
+
+## Decided not to do
+
+- **The `"citation-find"` allowance bucket** stays in `RateBucket`, commented as retired. The
+  database CHECK constraint names it and old rows carry it, so removing it is a migration.
+- **The other value-echoing messages R11 named** (`src/store/require-slug.ts`,
+  `src/store/public-reader.ts`, `src/jobs.ts`, `src/term-lookup.ts`) are outside this cluster's
+  files. They reach the same log line.
+- **`SPIDERYARN_CITATIONS_FIND_MODEL`** no longer chooses any call; it still feeds one of the two
+  lookup fingerprints the read accepts (`src/store/pg.ts`). It can go once no stored lookup
+  carries that hash.
+- **R10's product question** (should a paid answer stop when the reader leaves) is the umbrella's
+  *For Greg 4*. The comment records the ten choices and changes none.
