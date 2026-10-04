@@ -292,3 +292,15 @@ always there. Run both once from the primary checkout.
    follow them.
 5. Five shelf test files sleep past a hover through a `wait(ms)` helper they also use for network
    settles; the audit's grep cannot see them.
+
+### 2026-10-04 — the full suite, and one regression it caught in the review's fix
+
+`npm test`: 1515 files passed, 6 failed, 1 skipped. Five were the fresh-worktree ones (no
+`api-dist/`, no fleet client build); built, re-run, green. The sixth was real:
+`tests/stage2c-raw-bytes.test.ts` § "reads .env.local before it reads its own arguments". Sol's
+CF3 had moved the argv refusal ahead of `loadRuntime()`, and `loadEnvLocal()` lived in there, so a
+refused command no longer applied `.env.local` — and that test watches for it on the no-argument
+path. Fix: the guarded CLI calls `loadEnvLocal()` first, then reads argv, then loads the graph.
+Both tests hold: env before argv, argv before the graph. This fix came after the review's
+snapshot; it is two lines in a dev script and both tests that pin each side were re-run (50
+passing), so it was not sent back.

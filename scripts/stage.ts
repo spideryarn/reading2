@@ -133,9 +133,9 @@ let noteSlug: typeof import("../src/upload-records.js").noteSlug;
 let readUpload: typeof import("../src/upload-records.js").readUpload;
 let MAX_UPLOAD_BYTES: typeof import("../src/uploads.js").MAX_UPLOAD_BYTES;
 
-/** `.env.local` first, then the graph — in that order, for the reason above. */
+/** The graph. The guarded CLI calls `loadEnvLocal()` before this — in that
+ *  order, for the reason above. */
 async function loadRuntime(): Promise<void> {
-  loadEnvLocal();
   ({ sql } = await import("drizzle-orm"));
   ({ getDb } = await import("../src/db/client.js"));
   ({ slugFromFilename, slugFromUrl } = await import("../src/ingest.js"));
@@ -628,12 +628,16 @@ export function parseStageArgv(args: readonly string[]): ParsedStageArgv {
  * Imported, nothing below runs: not the environment, not the module graph, not
  * a read of the importer's own `process.argv`.
  *
- * The arguments are read **before** anything is loaded, so a mistyped command
- * line is refused without `.env.local` being applied or a database client
+ * `.env.local` is applied first, before the arguments are read: it is cheap,
+ * it loads none of the graph, and tests/stage2c-raw-bytes.test.ts watches for
+ * it on the no-argument path, which is the one place the order can be seen
+ * without a database. The arguments are then read **before the graph is
+ * loaded**, so a mistyped command line is refused without a database client
  * being made. Usage comes from the step-order leaf; loading the server graph
  * first would let missing Storage credentials hide the argument error.
  */
 if (isMain(import.meta.url)) {
+  loadEnvLocal();
   const parsed = parseStageArgv(process.argv.slice(2));
   if (!parsed.ok) {
     if (parsed.message === null) die(usage().trim());
