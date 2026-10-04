@@ -393,8 +393,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           If you have filled in your <HelpRef to="reader-profile">reader profile</HelpRef>, the
-          summary is written with it in mind, and a small badge says so. <strong>Write it again</strong>{" "}
-          gives you a fresh one.
+          summary is written with it in mind, and a small badge says so. A summary is written once and
+          kept. <strong>Write it again</strong> appears only when the article has changed since, or you
+          have changed your profile, and gives you a fresh one.
         </p>
         <p>In the thread:</p>
         <ul>

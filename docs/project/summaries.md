@@ -167,6 +167,56 @@ Opus with the guard on, timed from the start of the write to each level being fi
 The design, the review that changed it and the option passed over are
 [261004f § Stage 2](../plans/261004f-stop-writing-the-simple-summary-level.md#stage-2-show-brief-as-soon-as-it-is-written-then-a-longer-fuller).
 
+### When Summary offers a rewrite (since 2026-10-04)
+
+A stored summary is written once. Greg's rule, and the two exceptions he then kept:
+
+> we only want to write it once, i.e. when we first open the mode (or perhaps before that if it's
+> part of the import process). the only time we'd rewrite it is if we click Rerun in Metadata.
+>
+> — Greg, 2026-10-04 (relayed by the Overseer)
+
+> A ok keep them, those are good reasons to want to rewrite it (when article has changed, or
+> profile). but only show if they're the case
+>
+> — Greg, 2026-10-04, answering [Q-summary-write-it-again] (relayed by the Overseer)
+
+So Summary's band has two presses that rewrite, and each is drawn only when its reason holds.
+
+| The stored summary | In the band | In the profile icon's panel |
+|---|---|---|
+| is current | no press | no press |
+| was written with an older prompt (*outdated*) or model only | no press, and no notice | no press |
+| was written from an older version of the article (*stale*) | the notice, and *Write it again* | no press |
+| was written for a profile the reader has since changed | *Write it again* under the paragraphs | *Regenerate* |
+| both | the notice, and one *Write it again* | *Regenerate* |
+
+- **The profile icon is not a press.** It is drawn whenever the summary was written for a profile,
+  changed or not, and opens the panel that shows the profile
+  ([`WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)). The panel's *Regenerate* is the press,
+  and [`ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) draws it only when the profile changed.
+- **The server decides both reasons; the band only reads them.** *Stale* is the stored
+  `sourceHash` against the article as it is now ([`simple-summary.ts`](../../src/simple-summary.ts)
+  § `isStale`). The fingerprint covers the rendered article's text and head and the fixed,
+  profile-free user message; prompt-version and model stamps are separate. Changing those stamps
+  alone never makes a summary stale. The store also reports stale when the article's tree is
+  missing, because it cannot check the fingerprint (`pg.ts` § `loadSimpleSummary`).
+  *Profile changed* is the stored `profileHash`
+  against the reader's profile now ([`profile.ts`](../../src/profile.ts) § `profileIsStale`).
+  Two cases are deliberately not a change there: the reader cleared their profile, and the summary
+  was written when there was no profile at all.
+- **A rewrite already asked for is not a new offer.** While a forced run is under way the band
+  shows its progress, and if it failed, the failure and **Retry**. That includes a Rerun pressed
+  in Metadata while Summary is open. These follow a press the reader has made.
+- **Both presses are the same forced run** of the `simple` step, and it replaces both levels.
+- **Commands also exposes Metadata's forced run**, as *Simple summary › Run again*, regardless of
+  either flag ([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `rerunRows`). That action is
+  outside Summary's band and lands in Metadata's AI processing section.
+
+Pinned by [`summary-rewrite-presses.test.tsx`](../../tests/summary-rewrite-presses.test.tsx),
+which mounts the real band on Brief and Fuller for each row of the table, with supplied server
+flags. The flag calculations and narrow-screen layout are outside that test.
+
 ### Cost of a write (since 2026-10-04)
 
 Measured on three local articles of 8.6k to 12.6k words, on Opus with the guard on, two writes each
@@ -241,7 +291,8 @@ the paragraphs.
   jargon than the Simple beside it
   ([261002h](../plans/261002h-brief-summary-plainer-for-a-reader-in-a-hurry.md); what a good
   summary is, [261002c](../research/261002c-what-makes-a-good-summary.md)). Recorded as `profileHash`, not in the stamp — a changed
-  profile makes nothing stale; the badge shows it and *Write it again* picks up the new one. A
+  profile makes nothing stale; the badge shows it and *Write it again* picks up the new one
+  ([§ When Summary offers a rewrite](#when-summary-offers-a-rewrite-since-2026-10-04)). A
   visitor reads the owner's paragraphs, and the owner's *make public* dialog says they were written
   for the owner's profile.
 - **One press writes every level**, two since 2026-10-04: one model call per level, all or none
@@ -302,7 +353,9 @@ stored limit is 3 to 8 paragraphs and 850 words (`SIMPLE_LIMITS` in
 [`types.ts`](../../src/types.ts)), unchanged by either step; the minimum stayed at 3 so every Fuller
 stored before still reads. Brief is asked for what it was, byte for byte. No stored summary was
 rewritten by either step, and an unforced job will not rewrite one for it: a stored summary is
-*outdated*, which is silent, and *Write it again* or Metadata's Rerun writes the longer one.
+*outdated*, which is silent, and Metadata's Rerun writes the longer one. So does *Write it again*,
+on the occasions it is offered
+([§ When Summary offers a rewrite](#when-summary-offers-a-rewrite-since-2026-10-04)).
 [261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md) has the measurements.
 
 ### Bold and bullets (since 2026-10-04)
@@ -435,7 +488,8 @@ while its passage is on screen. On touch a tap jumps; there is no card, as for e
   joined) and `ids`; `sentences` is an optional field beside them, read only through
   `usableSentences` ([`types.ts`](../../src/types.ts)), which answers "none" unless they rejoin to
   exactly the `text` the guard read. A paragraph without usable sentences — every one written before
-  `simple-prompt/4` — draws as it always did. Nothing is backfilled: *Write it again* picks it up.
+  `simple-prompt/4` — draws as it always did. Nothing is backfilled: the next rewrite picks it up
+  ([§ When Summary offers a rewrite](#when-summary-offers-a-rewrite-since-2026-10-04)).
 - Measured before it landed, in
   [261002e](../plans/261002e-summary-sentences-point-at-their-passage.md) § Ledger.
 
