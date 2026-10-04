@@ -1349,10 +1349,6 @@ describe("a signed-out browser on a shared document", () => {
             { text: "The short one.", ids: ["spya-cccccc"] },
             { text: "Why.", ids: ["spya-cccccc"] },
           ],
-          simple: [
-            { text: "The middle one, which is stored and not shown.", ids: ["spya-cccccc"] },
-            { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
-          ],
           fuller: [
             { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
             { text: "Then why it matters.", ids: ["spya-cccccc"] },

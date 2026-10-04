@@ -566,10 +566,6 @@ describe("what counts as shareable", () => {
             { text: "What it is.", ids: ["spya-k3m9qt"] },
             { text: "Why it matters.", ids: ["spya-p7w2dn"] },
           ],
-          simple: [
-            { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
-            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
-          ],
           fuller: [
             { text: "What the piece is about, in more detail.", ids: ["spya-k3m9qt"] },
             { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
