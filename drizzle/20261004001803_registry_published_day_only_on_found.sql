@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."bibliographic_records" DROP CONSTRAINT "bibliographic_records_published_day";--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD CONSTRAINT "bibliographic_records_published_day" CHECK ("spideryarn"."bibliographic_records"."published_day" is null or ("spideryarn"."bibliographic_records"."state" is not distinct from 'found' and "spideryarn"."bibliographic_records"."published_day" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));

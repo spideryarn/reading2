@@ -6573,7 +6573,7 @@ export const bibliographicRecords = spideryarn.table(
     /** Only a found record has one, and only in the one spelling. */
     check(
       "bibliographic_records_published_day",
-      sql`${t.publishedDay} is null or (${t.state} = 'found' and ${t.publishedDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')`,
+      sql`${t.publishedDay} is null or (${t.state} is not distinct from 'found' and ${t.publishedDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')`,
     ),
     /** Same length, at most 100, and a family name for every author. */
     check(

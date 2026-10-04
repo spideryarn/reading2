@@ -395,8 +395,31 @@ describe("when and where it was published, under the title", () => {
     expect(facts()).not.toContain("Published");
   });
 
+  it("ends an item with the separator, so a wrapped row on a phone never starts with one", async () => {
+    await owner({ url: URL_, siteName: "Noema", journal: "Entropy", publishedAt: "2024-05-31", fetchedAt: "2026-10-01T00:00:00Z" });
+    const items = [...(host.querySelector("[data-metadata-facts]")?.children ?? [])].map((el) => el.textContent ?? "");
+    expect(items.length).toBeGreaterThanOrEqual(4);
+    expect(items.filter((text) => text.trimStart().startsWith("·"))).toEqual([]);
+    /* Every item but the last carries one, and the last carries none. */
+    expect(items.slice(0, -1).every((text) => text.trimEnd().endsWith("·"))).toBe(true);
+    expect(items.at(-1)).not.toContain("·");
+  });
+
   it("names a journal once when the site has the same name", async () => {
     await owner({ url: URL_, siteName: "Entropy", journal: "entropy" });
     expect(facts().match(/entropy/gi)).toHaveLength(1);
+  });
+
+  it("names a journal once despite surrounding whitespace in the site name", async () => {
+    await owner({ siteName: " Entropy ", journal: "entropy" });
+    expect(facts().match(/entropy/gi)).toHaveLength(1);
+  });
+
+  it("gives identical facts different React keys", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    await owner({ byline: "Entropy", journal: "Entropy" });
+    expect(facts().match(/Entropy/g)).toHaveLength(2);
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/i);
+    errors.mockRestore();
   });
 });

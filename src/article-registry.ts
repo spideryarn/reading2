@@ -1,15 +1,14 @@
 /**
  * **What Crossref or DataCite says about the article itself** — its journal
  * and the day it was published — kept only when the registry's title is the
- * article's own.
+ * article's own, corroborated by an author.
  * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md
  *
  * Two halves. The candidates are found without a model: the identifiers
  * printed at the front of a PDF, or declared by a web page. Then each goes
  * through stage 1's `lookupWork` (src/bibliographic.ts), and a record is this
- * article's only when `registryIsThisArticle` says the titles agree — a DOI on
- * a first page may be a cited work's or the journal issue's, and that check is
- * the only thing between it and a wrong date.
+ * article's only when its complete title and an author agree — a DOI on
+ * a first page may be a cited work's or the journal issue's.
  *
  * It never fails an import: an unreachable registry, a miss and a disagreement
  * all leave `meta` exactly as it was.
@@ -27,11 +26,14 @@ import type { Meta } from "./types.js";
 export const MAX_OWN_IDS = 3;
 /** How far into a PDF its own identifier is looked for: the first page, and the one after a publisher's cover. */
 const FRONT_PAGES = 2;
-/** The shorter title must be at least this long before "the same, plus a subtitle" counts. */
-const MIN_SHARED_WORDS = 4;
 
 const DOI_IN_TEXT = /\b10\.\d{4,9}\/[^\s"'<>]+/g;
 const ARXIV_IN_TEXT = /\barxiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})/gi;
+
+/** Running text and meta tags can wrap an identifier in the same punctuation. */
+function unwrappedIdentifier(value: string): string {
+  return value.replace(/^[\s<(]+/, "").replace(/[.,;:)\]}>\s]+$/, "");
+}
 
 function unique(ids: readonly (WorkId | null)[]): WorkId[] {
   const seen = new Set<WorkId>();
@@ -52,7 +54,7 @@ export function ownIdsOfPdf(records: readonly { page: number; text: string }[]):
   for (const r of records) {
     if (r.page < first + FRONT_PAGES) {
       for (const m of r.text.matchAll(DOI_IN_TEXT)) {
-        found.push({ at: base + m.index, id: parseWorkId(m[0].replace(/[.,;:)\]}>]+$/, "")) });
+        found.push({ at: base + m.index, id: parseWorkId(unwrappedIdentifier(m[0])) });
       }
       for (const m of r.text.matchAll(ARXIV_IN_TEXT)) {
         found.push({ at: base + m.index, id: m[1] ? parseWorkId(`arxiv:${m[1]}`) : null });
@@ -72,35 +74,40 @@ const DOI_META = new Set(["citation_doi", "prism.doi", "dc.identifier"]);
 
 /** `ownIdsOfPage`, off a document's scholarly meta tags. Read before Readability, which rewrites the document. */
 export function ownIdsOfDocument(doc: Document, url: string | null): WorkId[] {
-  let doi: string | undefined;
+  let declared: WorkId | null = null;
   for (const el of Array.from(doc.querySelectorAll("meta"))) {
     const name = (el.getAttribute("name") ?? el.getAttribute("property") ?? "").trim().toLowerCase();
     const content = el.getAttribute("content")?.trim();
     if (!content || !DOI_META.has(name)) continue;
-    const found = DOI_IN_TEXT.exec(content)?.[0];
-    DOI_IN_TEXT.lastIndex = 0;
-    if (found && parseWorkId(found) !== null) {
-      doi = found;
+    /* Parse the declared value whole. A URL or ISBN containing a DOI is not
+       a declaration that the DOI identifies this page. */
+    const found = parseWorkId(unwrappedIdentifier(content));
+    if (found) {
+      declared = found;
       break;
     }
   }
-  return ownIdsOfPage({ doi, url });
+  return unique([declared, ...ownIdsOfPage({ doi: undefined, url })]);
 }
 
 /**
- * **Is the registry's record this article?** The same words in the same order,
- * or one title is the other plus a subtitle (Crossref keeps a subtitle in its
- * own field). Both must be distinctive, and a correction, reply or supplement
- * to the work is another object.
+ * **Is the registry's record this article?** The same words and maths operators in the same order,
+ * with no extra words on either side. A subtitle can name another work by
+ * the same author, so a shared prefix is insufficient. Both must be distinctive,
+ * and a correction, reply or supplement to the work is another object.
  */
 export function registryIsThisArticle(articleTitle: string, registryTitle: string): boolean {
   if (!registryTitleIsDistinctive(articleTitle) || !registryTitleIsDistinctive(registryTitle)) return false;
   if (titlesDifferByObjectQualifier(articleTitle, registryTitle)) return false;
-  const a = tokens(articleTitle.replace(/<[^>]*>/g, " "));
-  const b = tokens(registryTitle.replace(/<[^>]*>/g, " "));
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  if (!short.every((word, i) => long[i] === word)) return false;
-  return short.length === long.length || short.length >= MIN_SHARED_WORDS;
+  /* Word folding alone erases x+y versus x-y. Keep operators in their places
+     between the words while ignoring prose punctuation and registry markup. */
+  const titleParts = (title: string) => title.replace(/<[^>]*>/g, " ")
+    .normalize("NFKC")
+    .split(/([\p{Sm}*/()\[\]{}-])/u)
+    .flatMap((part, i) => i % 2 === 1 ? [part] : tokens(part));
+  const a = titleParts(articleTitle);
+  const b = titleParts(registryTitle);
+  return a.length === b.length && a.every((word, i) => b[i] === word);
 }
 
 /** Letters and digits, lower-cased, accents off: `Müller` and `Muller` are one name. */
@@ -117,18 +124,44 @@ function authorWords(meta: Pick<Meta, "byline" | "authors">): Set<string> {
  * share an exact title with the piece that cites it (a thesis and its paper),
  * so a title alone does not say whose DOI was printed on the first page —
  * src/source-guess.ts § `isSamePaper` meets the same case. With no author on
- * either side there is nothing to agree, and the answer is no.
+ * either side there is nothing to agree, and the answer is no. A free-text
+ * byline needs a full registry name; a surname alone can be an ordinary word.
+ * Structured authors are checked separately, never as one bag of words.
  */
 export function registryAuthorIsOurs(
   meta: Pick<Meta, "byline" | "authors">,
-  authors: readonly { family: string }[],
+  authors: readonly { family: string; given?: string }[],
 ): boolean {
-  const ours = authorWords(meta);
+  /* The same given name, or the same initial where either side prints one:
+     a registry's `Michael J.` and `M.` are both a byline's `Michael Levin`. */
+  const sameGiven = (a: string | undefined, b: string | undefined) =>
+    a !== undefined && b !== undefined && (a === b || ((a.length === 1 || b.length === 1) && a[0] === b[0]));
   return authors.some((a) => {
     const family = nameWords(a.family);
-    return family.length > 0 && family.every((word) => ours.has(word));
+    if (family.length === 0) return false;
+    const given = nameWords(a.given ?? "");
+    /* The family name whole, with the first given name among the words just
+       before it (`Michael J. Levin`) or straight after it (`Levin, Michael`). */
+    const fullNameIn = (name: string) => {
+      const words = nameWords(name);
+      return words.some((_, at) => {
+        if (!family.every((word, j) => words[at + j] === word)) return false;
+        const before = words.slice(Math.max(0, at - GIVEN_WORDS_BEFORE), at);
+        return before.some((word) => sameGiven(word, given[0])) || sameGiven(words[at + family.length], given[0]);
+      });
+    };
+    if (given.length > 0) {
+      return (meta.authors ?? []).some((author) => fullNameIn(author.name)) || fullNameIn(meta.byline ?? "");
+    }
+    return (meta.authors ?? []).some((author) => {
+      const words = nameWords(author.name);
+      return words.length >= family.length && family.every((word, i) => words[words.length - family.length + i] === word);
+    });
   });
 }
+
+/** How many words before a family name a given name may sit: itself and two middle names or initials. */
+const GIVEN_WORDS_BEFORE = 3;
 
 /** Stop starting lookups after this long. One already started keeps `lookupWork`'s own bounds. */
 const LOOKUP_BUDGET_MS = 10_000;

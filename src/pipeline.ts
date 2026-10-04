@@ -2067,19 +2067,26 @@ export const metadataReaders = {
  * the moment they asked to read the paper. Only those two fields: everything
  * else stage 2 says about the piece is its own, and better.
  *
- * **And, with a kept DOI, what a registry said about it** — the journal, and
- * the publication day when this extraction states none. They were confirmed
- * against that DOI, and `withArticleRegistry` runs next: an answer replaces
- * the journal, and an unreachable registry leaves the reader what they had.
+ * **And, during the minimal-to-full transition, what a registry said about
+ * the kept DOI.** An ordinary re-extraction must use fresh evidence: an old
+ * publisher date may have been removed. A minimal paper has metadata but no
+ * extracted HTML yet, and that is how the transition is recognised.
  */
 async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: Meta): Promise<Meta> {
   if (next.abstract !== undefined && next.doi !== undefined) return next;
   const previous = await store.read(ctx.slug, "extract", "meta");
-  const keptDoi = next.doi === undefined && previous?.doi ? previous : null;
+  /* **The DOI is kept as it always was**, on any re-extraction that finds
+     none. What a registry said about it is kept only while the paper has never
+     been read in full: *Read this* re-reads the same bytes, so the facts are
+     still that document's whatever title the fuller reading gives it. */
+  const keptDoi =
+    next.doi === undefined && previous?.doi && (await store.read(ctx.slug, "extract", "extractedHtml")) === null
+      ? previous
+      : null;
   return {
     ...next,
     ...(next.abstract === undefined && previous?.abstract ? { abstract: previous.abstract } : {}),
-    ...(keptDoi?.doi ? { doi: keptDoi.doi } : {}),
+    ...(next.doi === undefined && previous?.doi ? { doi: previous.doi } : {}),
     ...(keptDoi?.journal ? { journal: keptDoi.journal } : {}),
     ...(keptDoi?.publishedAt && next.publishedAt === undefined ? { publishedAt: keptDoi.publishedAt } : {}),
   };

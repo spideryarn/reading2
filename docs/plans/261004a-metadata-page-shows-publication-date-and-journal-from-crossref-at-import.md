@@ -134,9 +134,55 @@ above is the plan as reviewed; where a finding changed it, this section wins.
   Readability's date also comes from JSON-LD `datePublished`.
 - **Pages, not page.** The candidates come from the first two pages, not the first, so a
   publisher's cover page does not hide the DOI. The agreement checks are what make that safe.
-- **The title rule** allows one title to be the other plus a subtitle, when the shared part is at
-  least four words: Crossref keeps a subtitle in a field of its own.
+- **The title rule** first allowed one title to be the other plus a subtitle. The code review took
+  that back out (C1 below).
+
+## GPT Sol's code review
+
+[The review](261004a-metadata-date-and-journal-code-review-sol.md): six findings, each fixed by the
+reviewer with a test, and a verdict of *not yet* until the database tests had run. I read the diff
+and kept all six, with two changes of my own.
+
+- **C1, kept.** The whole title must agree, maths operators included. A shared opening plus a
+  subtitle can be another work by the same author. This costs the paper whose registry record
+  keeps its subtitle in a separate field; it gets nothing, which is the safe failure.
+- **C2, kept and loosened.** A surname alone could match an ordinary word in a free-text byline, or
+  be assembled from two people's names. The reviewer's fix wanted the registry's whole given name
+  beside the family name, so a registry `Michael J.` did not match a byline `Michael Levin`. Now the
+  first given name must agree, or its initial where either side prints one.
+- **C3, kept in part.** `keptPaperMetadata` carries the journal and day only on the
+  minimal-to-full transition (no extracted HTML yet). An ordinary re-extraction asks afresh, so a
+  date a publisher removed is not carried forward. The reviewer's version also dropped the DOI
+  unless the two titles agreed, which the full suite caught: *Read this* lost a paper's DOI when
+  the fuller reading gave it a different title. That was behaviour from before this work, and
+  *Read this* re-reads the same bytes, so the DOI is kept as it always was and there is no title
+  condition.
+- **C4, kept.** A `dc.identifier` holding a URL or an ISBN is not a DOI declaration; the declared
+  value is parsed whole.
+- **C5, kept, by a second migration.** `state = 'found'` is NULL for a claim, and a CHECK rejects
+  only false. The reviewer edited the migration already applied to the shared local database, so I
+  put that file back and generated `20261004001803` to swap the check.
+  [The postmortem](../postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md).
+- **C6, kept.** The facts line is keyed by what each fact is, not by its text.
+
+## Checks
+
+- **The real registries**, through the final code, for eight real papers: five state a whole day,
+  three a year or month only (Neuron 2011, Psychological Review 1995, an arXiv preprint). For the
+  paper the report was filed from, with a cited work's DOI offered first: the cited work refused,
+  then *Entropy*, 2024-05-31.
+- **Browser**, a Sonnet subagent with Playwright at 1440, 820 and 390 wide, on a PDF and a web page
+  given a journal and a date in the local database and put back afterwards. The line read
+  correctly at each width, nothing overflowed with a 78-character journal name on the phone, an
+  untouched article was unchanged, and the Shelf's Published sort picked the PDF up. One defect: a
+  wrapped row on the phone began with a stranded "·". Fixed: the separator now ends an item. The
+  screenshots (`261004a-shot-*.png`) are from before that fix.
+
+- **The full suite**, in tmux, before the last fixes: 1498 files passed, 7 failed. One was real
+  (C3 above, fixed). Six were the fresh worktree's missing build output; after `npm run build` and
+  `npm run build:fleet`, five passed and the sixth passed once the second migration was committed
+  (it copies tracked files, and the `.sql` was not tracked yet).
 
 ## Log
 
-- 2026-10-04: plan written, reviewed, built in one stage.
+- 2026-10-04: plan written, reviewed, built in one stage, code-reviewed, browser-checked.

@@ -4,11 +4,14 @@
  * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md
  */
 import { describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
 
 import {
   MAX_OWN_IDS,
   ownIdsOfPage,
   ownIdsOfPdf,
+  ownIdsOfDocument,
+  registryAuthorIsOurs,
   registryIsThisArticle,
   withRegistryFacts,
 } from "../src/article-registry.js";
@@ -86,13 +89,69 @@ describe("ownIdsOfPage", () => {
   });
 });
 
+describe("ownIdsOfDocument", () => {
+  function ids(name: string, content: string) {
+    const doc = new JSDOM("<html><head></head></html>").window.document;
+    const tag = doc.createElement("meta");
+    tag.setAttribute("name", name);
+    tag.setAttribute("content", content);
+    doc.head.append(tag);
+    return ownIdsOfDocument(doc, null);
+  }
+
+  it("refuses ISBNs and arbitrary URLs that happen to contain a DOI", () => {
+    expect(ids("dc.identifier", "ISBN:9781234567890")).toEqual([]);
+    expect(ids("dc.identifier", "https://example.org/references/10.1000/cited")).toEqual([]);
+    expect(ids("dc.identifier", "https://doi.org/10.1000/own")).toEqual(["doi:10.1000/own"]);
+  });
+
+  it("reads a wrapped DOI without its punctuation, repeatedly across PDF and document calls", () => {
+    for (let i = 0; i < 3; i++) {
+      expect(ids("citation_doi", "doi:10.1000/own]")).toEqual(["doi:10.1000/own"]);
+      expect(ownIdsOfPdf([{ page: 1, text: "<10.1000/own> (10.1000/second)." }])).toEqual([
+        "doi:10.1000/own", "doi:10.1000/second",
+      ]);
+    }
+  });
+});
+
+describe("registryAuthorIsOurs", () => {
+  it("does not mistake a common byline word for a family name", () => {
+    expect(registryAuthorIsOurs({ byline: "By the Economist staff" }, [{ family: "By" }])).toBe(false);
+    expect(registryAuthorIsOurs({ byline: "Updated in May by Taylor Beck" }, [{ family: "May", given: "Jane" }])).toBe(false);
+    expect(registryAuthorIsOurs({ byline: "By the Economist staff" }, [{ family: "Economist" }])).toBe(false);
+  });
+
+  it("does not assemble one family name out of several people's names", () => {
+    expect(registryAuthorIsOurs({ authors: [
+      { name: "Jana Van", affiliations: [] }, { name: "Taylor Beck", affiliations: [] },
+    ] }, [{ family: "van Beck" }])).toBe(false);
+  });
+
+  it("corroborates a full name in a byline, including family-first order", () => {
+    expect(registryAuthorIsOurs({ byline: "By Taylor Beck" }, [{ family: "Beck", given: "Taylor" }])).toBe(true);
+    expect(registryAuthorIsOurs({ byline: "Beck, Taylor" }, [{ family: "Beck", given: "Taylor" }])).toBe(true);
+  });
+
+  it("reads a middle initial, or an initial alone, as the same person", () => {
+    const levin = { authors: [{ name: "Michael Levin", affiliations: [] }] };
+    expect(registryAuthorIsOurs(levin, [{ family: "Levin", given: "Michael J." }])).toBe(true);
+    expect(registryAuthorIsOurs(levin, [{ family: "Levin", given: "M." }])).toBe(true);
+    expect(registryAuthorIsOurs({ byline: "M. J. Levin; A. Other" }, [{ family: "Levin", given: "Michael" }])).toBe(true);
+    /* Another Levin is not this one. */
+    expect(registryAuthorIsOurs(levin, [{ family: "Levin", given: "Sarah" }])).toBe(false);
+    expect(registryAuthorIsOurs({ byline: "S. Levin" }, [{ family: "Levin", given: "Michael" }])).toBe(false);
+  });
+});
+
 describe("registryIsThisArticle", () => {
   it("agrees on the same words whatever the case, markup or punctuation", () => {
     expect(registryIsThisArticle(TITLE, "Entropy and the Arrow of Time in Open Quantum Systems.")).toBe(true);
   });
 
-  it("agrees when one is the other plus a subtitle", () => {
-    expect(registryIsThisArticle(`${TITLE}: a field guide`, TITLE)).toBe(true);
+  it("refuses a shared title followed by another work's subtitle, in either direction", () => {
+    expect(registryIsThisArticle(`${TITLE}: a field guide`, TITLE)).toBe(false);
+    expect(registryIsThisArticle(TITLE, `${TITLE}: a field guide`)).toBe(false);
   });
 
   it("refuses another work, a generic title, and a correction to this one", () => {
@@ -104,10 +163,25 @@ describe("registryIsThisArticle", () => {
   it("refuses a short shared opening", () => {
     expect(registryIsThisArticle("Entropy and time", "Entropy and time in the kitchen")).toBe(false);
   });
+
+  it("refuses mathematical titles that differ only in their operators", () => {
+    expect(registryIsThisArticle("Learning from x+y in complex networks", "Learning from x-y in complex networks")).toBe(false);
+    expect(registryIsThisArticle("Learning from x≤y in complex networks", "Learning from x≥y in complex networks")).toBe(false);
+    expect(registryIsThisArticle("Learning from (x+y)*z in complex networks", "Learning from x+y*z in complex networks")).toBe(false);
+    expect(registryIsThisArticle("Learning from <i>x</i>+y in complex networks", "Learning from x+y in complex networks")).toBe(true);
+  });
 });
 
 describe("withRegistryFacts", () => {
   const ID = "doi:10.3390/e26060481" as WorkId;
+
+  it("does not take a cited work's facts even when an author and title prefix agree", async () => {
+    const candidates = ownIdsOfPdf([{ page: 1, text: "References: 10.1000/cited" }]);
+    const { lookup } = lookupOf({
+      "doi:10.1000/cited": { kind: "found", record: record("10.1000/cited", { title: `${TITLE}: a field guide` }) },
+    });
+    expect((await withRegistryFacts(meta(), candidates, { lookup })).meta).toEqual(meta());
+  });
 
   it("fills the DOI, the journal and the day from an agreeing record", async () => {
     const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
