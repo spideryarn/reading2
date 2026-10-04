@@ -13,6 +13,21 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-04 · SPIDERYARN-READING2-C6 (spya-bac46a; the report itself shipped as measurements and
+  two fixes, this is what they found and could not fix) · a PDF of 250 pages is promised and most
+  are refused: the structure step stops any document over about 2,890 blocks, after transcription
+  is paid for. A real 250-page book and a dense paper past about 178 pages both hit it. Five ways
+  out, A to E. Recommended: when one answer will not fit, build the tree from the document's own
+  headings so the reader can read (D), then fill it in a section at a time (E) · qi-kbkbw4rp ·
+  [261004f § The decision](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#the-decision-this-will-probably-end-on) ·
+  [note](261004_1033-big-pdfs-and-long-documents-up-to-our-limits.md)
+
+- 2026-10-04 · SPIDERYARN-READING2-C6 (spya-bac46a, the same report) · the dialog says "PDF or web
+  page, up to 50 MB", but a document pasted as an address stops at 32 MB. The cap is a listed
+  security defence, so it was left. Raise it to 50 MB, or make the dialog say both numbers? ·
+  qi-bv9nbj5z ·
+  [261004f § Decisions](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#decisions)
+
 - 2026-10-03 · SPIDERYARN-READING2-BV (spya-c2qmbg; the report itself shipped as *Dig deeper* on
   the citation card, this is its larger half) · should Citations become a sub-mode of Debate
   (Reception, Claims, Cited works, under one name), and should a cited work be listed beside the

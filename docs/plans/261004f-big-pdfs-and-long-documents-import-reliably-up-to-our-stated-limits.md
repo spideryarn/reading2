@@ -42,7 +42,8 @@ A read-only survey of the code (2026-10-04, this session, by a subagent; every l
    dialog's sentence covers both.
 5. **One PDF page too heavy for one request** (about 22 MB raw, or a heavy page plus the previous
    page it carries as context) fails as `[pdf-chunk-big]`. Plan
-   [260928b](260928b-pdf-chunk-too-big-for-one-request.md) wrote the fix and built nothing.
+   [260928b](260928b-pdf-chunk-too-big-for-one-request.md) wrote the fix and built nothing. (Built
+   in stage 2 of this plan; see § Result.)
 6. **No AI call has its own time limit.** A hung call uses a whole 740 s window, and a job gets
    three.
 7. Smaller suspicions: the `blocks` step took 36 s on 2,046 blocks against a 5 s "worth starting"
@@ -209,4 +210,51 @@ find.
 
 ## Result
 
-(Filled in as stages land.)
+All four stages ran on 2026-10-04. The write-up, with the tables, is
+[the investigation](../investigations/261004b-big-document-imports-at-the-limits.md).
+
+**The answer to the report: 50 MB works, 250 pages mostly does not.** A real 45 MB paper imported
+end to end. A real 250-page book was transcribed and then refused at the structure step, which is
+hypothesis 2 above, confirmed on a real document and wider than first thought: it catches an
+ordinary book of fiction, not only a dense paper.
+
+### Stage 1, measured (`e6c49cea9`)
+
+`scripts/eval-big-imports.ts`. Hypotheses 2, 3 and 4 confirmed with exact numbers; the response
+size (in 7) confirmed as a size, not as a Vercel refusal; "more chunks than concurrency" (in 7)
+refuted; 5 not reachable through the test seam; 6 not measured. One accident: the harness's first
+run published articles with labels pending, which queued four jobs on the shared local database;
+two were claimed by another agent's worker and failed without spending. Cleaned up, and the
+harness now writes a finished labels manifest so nothing is queued.
+
+### Stage 2, fixed (`e8fa927c4`), reviewed (`27c21b8f0`)
+
+- The block insert is batched (`src/db/insert-batches.ts`). 6,000 blocks store and load.
+- 260928b's A and B: 40 MiB for the current reader model, tied to it by type; a chunk too big only
+  because of its context page goes without it. `openRouterReader` takes an injectable wire, which
+  is what makes the refusal and the send testable for free.
+- `tests/stated-limits.test.ts` pins the stated limits against the code, the known gap included.
+- [GPT Sol's code review](261004f-big-pdfs-stage-2-code-review-sol.md): **ship**, no P0 or P1, no
+  changes made. Its three P2s are not fixed: F9 and F11 (which predates this work) are in
+  `qi-astc8qqs` with the transcription observations; F10 (the harness can forget an unfinished
+  cleanup on an interrupt) is accepted for a hand-run script whose normal path left zero rows.
+
+### Stage 3, two real PDFs, $2.15 of the $10
+
+A 250-page book: refused at structure, 3,112 blocks, nothing published, $0.65 spent. A 45 MB,
+160-page paper: published, labelled, loads at 0.96 MB, $1.50. Both ran at `e8fa927c4`. Raw records
+in `evals/results/big-imports-2026-10-04/stage3-*.json`. The two articles are left in the local
+database as `s3-doctorow-250p-spya-sw2jbz` (a failed draft) and `s3-gdl-45mb-spya-cc9kr8`.
+
+### Not built, and where each went
+
+- **The structure ceiling**, options A to E above. Greg's. `qi-kbkbw4rp`, and a line in
+  `awaiting-approval.md`. Recommended: D, then E.
+- **The 32 MB fetch cap.** Greg's; a listed defence. `qi-bv9nbj5z`.
+- **The article response against 4.5 MB.** `qi-sbytr395`.
+- **Chunks asked twice, checkpoints on under half, figures not stored, the untried 40 MiB.**
+  `qi-astc8qqs`.
+- **The labels budget as a pure function** (F4) and **a time limit on each model call**
+  (hypothesis 6): not measured and not queued on their own; both are named in the investigation's
+  "not measured" list.
+- **Production's record of failed big imports** was not read.
