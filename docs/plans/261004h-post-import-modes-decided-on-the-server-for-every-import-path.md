@@ -1,6 +1,6 @@
 # Post-import modes, decided on the server for every import path
 
-Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 is a question for Greg, not built. Parent: [plans.md](../project/plans.md). Follows
+Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 is a question for Greg, not built. The purpose box's question is answered: [261004l](261004l-the-add-page-purpose-box-saves-as-you-type.md). Parent: [plans.md](../project/plans.md). Follows
 [260930c](260930c-auto-generate-the-main-modes-after-import.md), whose Deferred 2 this is.
 
 > We should automatically run Glossary mode generation as part of every import process
@@ -146,6 +146,17 @@ Built in this plan: the simple version above. The alternatives, for Greg:
    ends still misses.
 3. **Resolve the profile when a queued automatic job is first claimed** rather than when it is
    queued. With 2, the window becomes the length of `labels`. More machinery in the job runner.
+
+**Decided, 2026-10-04: option 2.**
+
+> B with a small debounce of some kind
+>
+> — Greg, 2026-10-04
+
+(The options were lettered A, B and C when they were put to him; B is 2 above.) The box saves as
+it is typed, 700 ms after the last keystroke, once the article row exists. The build, and what it
+still does not cover, is
+[261004l](261004l-the-add-page-purpose-box-saves-as-you-type.md).
 
 ### The simpler option passed over
 

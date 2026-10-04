@@ -47,8 +47,7 @@
  *
  * See docs/project/ingest-queue.md and docs/project/library.md.
  */
-import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
@@ -72,7 +71,14 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { AUTO_MODES_LABEL, autoModesDetail } from "./auto-modes.js";
 import { useAutoModesSetting } from "./auto-modes-setting.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
-import { savePurpose } from "./purpose.js";
+import { leavePurpose, savePurpose } from "./purpose.js";
+import {
+  ADD_PURPOSE_IDLE_MS,
+  type AddPurposeIo,
+  AddPurposeSession,
+  type AddPurposeSnapshot,
+} from "./add-purpose.js";
+import { SaveStatus, useIdleCommit, useUnsavedWarning } from "./ProfileBox.js";
 import { markAskPurpose } from "./ask-purpose.js";
 import { Button } from "@/components/ui/button";
 import { withVoice } from "./voice.js";
@@ -134,23 +140,26 @@ interface Completion {
 /**
  * **Between "the import is running" and "the article is open".**
  *
- * Since 260930e the page can stop between the two: a reader who has typed why
- * they are reading is asked whether to save it before the article opens. Until
- * plan 261004h that was also before the modes were queued; the server queues
- * them at publication now, with the profile as it stands then, so a purpose
- * saved here reaches chat and whatever is generated afterwards, not those
- * first jobs (the plan's § The purpose box). A union rather than booleans so
- * that *saving* and *ready* cannot both be true, and so both carry the
- * completion they are about.
+ * The page can stop between the two, and since plan 261004l it stops only
+ * when it has to: the purpose box saves as it is typed, so at the end of the
+ * import there is usually nothing left to decide and the article opens by
+ * itself. It waits at *ready* when the box is focused, or holds words the
+ * server does not have, or a save was refused, with one button: **Open the
+ * article**. `opening` is that button pressed and waiting for the save it
+ * started to land. A union rather than booleans so *ready* carries the
+ * completion it is about, and *opened* cannot also be waiting.
+ *
+ * The first modes were queued when the import published, with the profile as
+ * it stood then (plan 261004h § The purpose box). Saving as it is typed is
+ * what puts the purpose in before that; a reader still typing at the end
+ * misses them with whatever came after the last save.
  *
  * `running` covers everything before a completion, failed imports included.
- * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md
- * § Stage 1; GPT Sol's F2.
+ * docs/plans/261004l-the-add-page-purpose-box-saves-as-you-type.md § 4.
  */
 type Phase =
   | { kind: "running" }
-  | { kind: "ready"; completion: Completion; error: string | null }
-  | { kind: "saving"; completion: Completion }
+  | { kind: "ready"; completion: Completion; opening: boolean }
   | { kind: "opened" };
 
 /**
@@ -182,6 +191,86 @@ const putHighPower: PutHighPower = (slug, on) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ on }),
   }).then((r) => readJson<{ highPowerSince: string | null }>(r));
+
+/**
+ * The purpose session's three requests (src/web/add-purpose.ts). `save` and
+ * `leave` are the ones Metadata's box, the first-open prompt and the profile
+ * panel use: an empty box clears, and the answer is what the server stored.
+ */
+const purposeIo: AddPurposeIo = {
+  async read(slug, signal) {
+    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`, { signal });
+    /* `apiFetch` answers a GET it could not send from the offline cache, as a
+       200 with this header on it. A copy from last week does not say the
+       article exists now, so the session does not seed from one (Sol's F5). */
+    const fresh = res.headers.get("x-spideryarn-offline") !== "copy";
+    const body = await readJson<{ purpose?: string | null; purposeFailed?: unknown }>(res);
+    return { fresh, purpose: body.purpose ?? null, purposeFailed: body.purposeFailed };
+  },
+  save: async (slug, text) => (await savePurpose(slug, text === "" ? null : text)) ?? "",
+  leave: leavePurpose,
+};
+
+/**
+ * **Sessions still finishing their last write, by article.** A retired session
+ * sends its latest words after any write in flight, and a new session for the
+ * same article must not read or write until that has settled (Sol's F9:
+ * `/add/https://example.com/paper` and the same with a trailing slash are two
+ * addresses and one slug). At module level so it also holds between a page
+ * that unmounted and the next one mounted on the same article.
+ */
+const retiringPurposes = new Map<string, Promise<void>>();
+
+function retirePurpose(session: AddPurposeSession): void {
+  const done = session.retire();
+  const slug = session.slug;
+  if (slug === null || retiringPurposes.get(slug) === done) return;
+  retiringPurposes.set(slug, done);
+  void done.then(() => {
+    if (retiringPurposes.get(slug) === done) retiringPurposes.delete(slug);
+  });
+}
+
+function openPurpose(slug: string | null, text: string): AddPurposeSession {
+  const after = slug === null ? undefined : retiringPurposes.get(slug);
+  return new AddPurposeSession(slug, purposeIo, after ? { after, text } : { text });
+}
+
+/** For a test that left a write unanswered: later tests must not wait behind it. */
+export function resetAddPurposeForTests(): void {
+  retiringPurposes.clear();
+}
+
+/** The page's current purpose session, and the `/add/` address it belongs to. */
+interface PurposeHeld {
+  source: string;
+  session: AddPurposeSession;
+}
+
+/**
+ * **The session for this address and this article**, the held one or its
+ * successor. One per `(source, slug)`:
+ *
+ *  - **a new address** starts with an empty box, and the old session is
+ *    retired, which sends its last words to its own article;
+ *  - **a new slug within one address** (the first job arriving, or a Retry
+ *    that comes back with another article: `slugForRetry`) carries only words
+ *    the reader typed. A box still showing a stored purpose they never edited
+ *    is emptied, so one article's purpose is never written to another;
+ *  - **no slug** (a poll that briefly has no matching job) keeps the session
+ *    it has, as `HighPowerIntent.observe` keeps its slug;
+ *  - **a retired session under the same address** is StrictMode's
+ *    unmount-and-mount-again, or a page restored: succeeded like any other.
+ */
+function purposeFor(held: PurposeHeld | null, source: string, slug: string | null): PurposeHeld {
+  if (held === null) return { source, session: openPurpose(slug, "") };
+  const same = held.source === source;
+  const target = slug ?? (same ? held.session.slug : null);
+  if (same && target === held.session.slug && !held.session.isRetired) return held;
+  const text = same ? held.session.carried() : "";
+  retirePurpose(held.session);
+  return { source, session: openPurpose(target, text) };
+}
 
 /** Whether the file-owning tab still has a live add rather than an outcome. */
 function transferIsActive(transfer: Transfer | null): boolean {
@@ -349,19 +438,15 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const highPower = highPowerRef.current.intent;
 
   /**
-   * **Why the reader is reading this**, asked while the import runs — the one
-   * moment answering costs nothing extra (plan 260930e § Stage 1).
+   * **Why the reader is reading this**, asked while the import runs: the one
+   * moment answering costs nothing extra (plan 260930e § Stage 1). The text
+   * itself is in the purpose session, further down, once the slug is known.
    *
-   * Read through refs at completion: one of the
-   * three completions arrives in a promise made by the posting effect, which
-   * would otherwise see the draft as it was when the request went out (Sol's
-   * F2). Focus counts, because a reader with the caret in an empty box may be
-   * about to type, and navigating out from under them is not a decision they
-   * made.
+   * Focus is read through a ref at completion, because one of the three
+   * completions arrives in a promise made by the posting effect (Sol's F2).
+   * It counts, because a reader with the caret in an empty box may be about
+   * to type, and navigating out from under them is not a decision they made.
    */
-  const [draft, setDraft] = useState("");
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
   const focusedRef = useRef(false);
   /**
    * **Whether the reader has ever been in the box** — focus or a keystroke —
@@ -375,20 +460,22 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   const [phase, setPhase] = useState<Phase>({ kind: "running" });
   /**
    * **The once-guard on the terminal decision**, holding the completion's key.
-   * Synchronous, so StrictMode's second effect, or Save and Open-without pressed
-   * in one frame, find it taken before anything has re-rendered. Released only
-   * by a failed save, which puts the reader back at *ready*.
+   * Synchronous, so StrictMode's second effect, or the two buttons pressed in
+   * one frame, find it taken before anything has re-rendered. It is taken only
+   * at the moment the article opens: the save decides *when*, this decides
+   * *once*.
    */
   const claimed = useRef<string | null>(null);
   /* The retention-path `{article}` answer to this page's own POST, recorded
      rather than acted on — see `completion` below. */
   const [articleAnswer, setArticleAnswer] = useState<{ slug: string; source: string } | null>(null);
 
-  /* The component is reused when the address after `/add/` changes. A purpose
-     typed for the old article must not follow it to the new one, and an old
-     save answering later must not open the old article over the new page. This
-     is keyed only by the source, not `attempt`: Retry is still the same add and
-     deliberately keeps the draft. */
+  /* The component is reused when the address after `/add/` changes. What the
+     reader did in the old article's box must not follow it to the new one, and
+     an old save answering later must not open the old article over the new
+     page. The text goes with the session (`purposeFor`). This is keyed only by
+     the source, not `attempt`: Retry is still the same add and deliberately
+     keeps the draft. */
   const sourceRef = useRef(wanted);
   sourceRef.current = wanted;
   const draftSource = useRef(wanted);
@@ -397,10 +484,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        address and must not release the terminal once-guard. */
     if (draftSource.current === wanted) return;
     draftSource.current = wanted;
-    draftRef.current = "";
     focusedRef.current = false;
     purposeTouchedRef.current = false;
-    setDraft("");
     setPhase({ kind: "running" });
     claimed.current = null;
   }, [wanted]);
@@ -593,9 +678,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
           : null;
   const completionKey = completion?.key ?? null;
   const completionSlug = completion?.slug ?? null;
-  /* Written during render so an old save callback is fenced as soon as a new
-     completion (or no completion for a new address) is on screen, before the
-     deciding effect below has had a chance to run. */
+  /* Written during render so a press still waiting on its save is fenced as
+     soon as a new completion (or no completion for a new address) is on
+     screen, before the deciding effect below has had a chance to run. */
   const activeCompletionKey = useRef<string | null>(completionKey);
   activeCompletionKey.current = completionKey;
 
@@ -610,93 +695,146 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     highPower.observe(highPowerSlug, highPowerAlive, highPowerLate);
   }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
 
+  /**
+   * **The purpose session for this address and this article** (plan 261004l
+   * § 1). The job's own slug, or the completion's, never one derived from the
+   * address: the same rule as High-powered AI above. Replaced during render,
+   * as that intent is, so the box and every decision below read the session
+   * for the article now on screen.
+   */
+  const purposeRef = useRef<PurposeHeld | null>(null);
+  purposeRef.current = purposeFor(purposeRef.current, wanted, job?.slug ?? completion?.slug ?? null);
+  const purpose = purposeRef.current.session;
+  const purposeNow = useSyncExternalStore(purpose.subscribe, purpose.get);
+
+  /* The read of the stored purpose runs while the add is alive: a job queued
+     or running, or a completion. A stopped job gets one last try, and its
+     Retry a fresh run (add-purpose.ts § `observe`). */
+  const purposeAlive =
+    completion !== null || job?.status === "queued" || job?.status === "running";
+  useEffect(() => {
+    purpose.observe(purposeAlive);
+  }, [purpose, purposeAlive]);
+  /* And a read that gave up while the job sat queued starts again once there
+     is a completion, because the row exists by then. */
+  useEffect(() => {
+    if (completionKey !== null) purpose.completed();
+  }, [purpose, completionKey]);
+
+  /* **Saved after a short pause**, with the timer the other purpose boxes use
+     and a shorter wait: this one is racing the import. */
+  useIdleCommit({
+    text: purposeNow.text,
+    dirty: purposeNow.state.kind === "dirty",
+    inFlight: purposeNow.inFlight,
+    paused: false,
+    ms: ADD_PURPOSE_IDLE_MS,
+    commit: purpose.commit,
+  });
+  /* The browser's own question on closing the tab. It covers words typed
+     before there is an article to save them to. A click on *Back to the shelf*
+     is not stopped; unmounting sends what can be sent. */
+  useUnsavedWarning(purposeNow.unsaved);
+
+  /* **And on the way out.** A hidden tab saves while there is still time;
+     `pagehide` sends the `keepalive` write at once; unmounting retires the
+     session, which is ordered after any write in flight because the page
+     lives on. Through the ref, so each reaches whichever session is current. */
+  const [, renewPurpose] = useState(0);
+  useEffect(() => {
+    /* StrictMode ran the cleanup below and then this again. The retired
+       session needs its successor, and only a render makes one. */
+    if (purposeRef.current?.session.isRetired) renewPurpose((n) => n + 1);
+    const hidden = (): void => {
+      if (document.visibilityState === "hidden") purposeRef.current?.session.commit();
+    };
+    const leaving = (): void => purposeRef.current?.session.leaveNow();
+    document.addEventListener("visibilitychange", hidden);
+    window.addEventListener("pagehide", leaving);
+    return () => {
+      document.removeEventListener("visibilitychange", hidden);
+      window.removeEventListener("pagehide", leaving);
+      if (purposeRef.current) retirePurpose(purposeRef.current.session);
+    };
+  }, []);
+
+  /** Open it, once. Callers have checked the fences; this takes the guard. */
+  const finish = (done: Completion): void => {
+    claimed.current = done.key;
+    setPhase({ kind: "opened" });
+    openArticle(done, highPower);
+  };
+
   useEffect(() => {
     if (completionKey === null || completionSlug === null) return;
     if (claimed.current === completionKey) return;
     const finished = { key: completionKey, slug: completionSlug, source: wanted };
-    /* A different completion supersedes any save still in flight for the old
-       one. Its promise callback checks this guard before doing anything. */
+    /* A different completion supersedes a press still waiting on the old one.
+       The waiting effect below checks this guard before doing anything. */
     claimed.current = null;
-    /* **Nothing said, nothing to wait for** — exactly the page before 260930e. */
-    if (draftRef.current.trim() === "" && !focusedRef.current) {
-      claimed.current = completionKey;
+    /* **Nothing to wait for**: the box is not focused, and it holds nothing
+       the server does not have. Never typed in, or typed and saved with no
+       write in flight. Read from the session in this tick, not from a render. */
+    if (!focusedRef.current && !purposeRef.current?.session.get().unsaved) {
       /* **And ask once, when it opens**, if the reader never so much as
-         clicked into the box — the "didn't notice it" case. Greg, 2026-10-01,
-         spya-hbqezu; plan 261001s § Stage 3. Only here: *Open without it* is a
-         reader who saw the box and declined, and *Save and open* has its
-         answer. A re-add of an article already on the shelf is marked too, on
-         purpose (Sol's item 1) — the reading view asks only if it has no
-         purpose. */
-      if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
+         clicked into the box: the "didn't notice it" case. Greg, 2026-10-01,
+         spya-hbqezu; plan 261001s § Stage 3. Only here: either button is a
+         reader who saw the box. A re-add of an article already on the shelf is
+         marked too, on purpose (Sol's item 1): the reading view asks only if
+         it has no purpose. */
+      if (!purposeTouchedRef.current) markAskPurpose(completionSlug);
+      claimed.current = completionKey;
       setPhase({ kind: "opened" });
       openArticle(finished, highPower);
       return;
     }
-    /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
-    setPhase({ kind: "ready", completion: finished, error: null });
+    /* Otherwise wait, indefinitely. A blur saves; it is not a decision to leave. */
+    setPhase({ kind: "ready", completion: finished, opening: false });
   }, [completionKey, completionSlug, wanted, highPower]);
 
+  const mayOpen = (done: Completion): boolean =>
+    claimed.current !== done.key &&
+    activeCompletionKey.current === done.key &&
+    sourceRef.current === done.source;
+
   /**
-   * **Save and open**: the purpose first and awaited, then the article — so
-   * chat, and anything generated from the reading view, is written for it
-   * (`patchShelf` commits before it answers). The first modes are not: the
-   * server queued them at publication (plan 261004h § The purpose box).
-   *
-   * **An empty draft is never sent** (Sol's F1, a P0). `null` clears the stored
-   * purpose, and on a re-add this box starts empty over a sentence the reader
-   * cannot see from here. Empty means "leave it alone", always.
+   * **Open the article**: commit, and open once nothing is unsaved and no
+   * write is in flight, the latch `PurposePrompt`'s *Done* uses. With nothing
+   * to save that is this tick. Otherwise `opening` waits for the save, and
+   * the effect below opens when it lands or lets go when it is refused.
    */
-  const saveAndOpen = (): void => {
-    if (
-      phase.kind !== "ready" ||
-      phase.completion.source !== wanted ||
-      claimed.current === phase.completion.key
-    )
-      return;
-    const done = phase.completion;
-    claimed.current = done.key;
-    const text = draftRef.current;
-    if (text.trim() === "") {
-      setPhase({ kind: "opened" });
-      openArticle(done, highPower);
+  const openTheArticle = (): void => {
+    if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+    purpose.commit();
+    const now = purpose.get();
+    if (!now.unsaved) {
+      finish(phase.completion);
       return;
     }
-    setPhase({ kind: "saving", completion: done });
-    savePurpose(done.slug, text).then(
-      () => {
-        if (
-          claimed.current !== done.key ||
-          activeCompletionKey.current !== done.key ||
-          sourceRef.current !== done.source
-        )
-          return;
-        setPhase({ kind: "opened" });
-        openArticle(done, highPower);
-      },
-      /* Back to *ready* with the draft intact, so the words are not lost. */
-      (e: Error) => {
-        if (
-          claimed.current !== done.key ||
-          activeCompletionKey.current !== done.key ||
-          sourceRef.current !== done.source
-        )
-          return;
-        claimed.current = null;
-        setPhase({ kind: "ready", completion: done, error: e.message });
-      },
-    );
+    /* The read of the stored purpose gave up, so no save can start. */
+    if (cannotSave(now)) return;
+    setPhase({ kind: "ready", completion: phase.completion, opening: true });
   };
 
-  const openWithoutIt = (): void => {
-    if (
-      phase.kind !== "ready" ||
-      phase.completion.source !== wanted ||
-      claimed.current === phase.completion.key
-    )
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `purposeNow` is the trigger. What is decided on is read from the session in this tick.
+  useEffect(() => {
+    if (phase.kind !== "ready" || !phase.opening || !mayOpen(phase.completion)) return;
+    const now = purposeRef.current?.session.get();
+    if (!now) return;
+    if (!now.unsaved) {
+      finish(phase.completion);
       return;
-    claimed.current = phase.completion.key;
-    setPhase({ kind: "opened" });
-    openArticle(phase.completion, highPower);
+    }
+    /* A refusal lets go: the reason is in the status line, the words are in
+       the box, and *Open without saving* appears beside the button. */
+    if (cannotSave(now)) setPhase({ kind: "ready", completion: phase.completion, opening: false });
+  }, [phase, purposeNow]);
+
+  /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
+  const openWithoutSaving = (): void => {
+    if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
+    purpose.abandon();
+    finish(phase.completion);
   };
 
   /* The tab, naming what is being added — the host for an address, the filename
@@ -715,19 +853,18 @@ export function AddPage({ source: origin }: { source: AddSource }) {
      all of those states, especially the minutes-long file transfer; showing it
      only once a job row appeared made the upload path needlessly different. */
   const showAutoModes = offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
-  /* Waiting on the reader's choice, with the add finished. The tick box stays
-     up through this too: it is read at the press, so it can still be changed. */
-  const deciding = phase.kind === "ready" || phase.kind === "saving";
+  /* Waiting on the reader, with the add finished. The tick box stays up
+     through this too: it is the reader's setting and can still be changed. */
+  const deciding = phase.kind === "ready";
   /* **Drawn from the phase, not from `offerAutoModes`** (Sol's F4): that is
      false for a finished job and for an existing-article answer, which are
      exactly when the box has to stay. While running it also stays over a failed
      job, whose card has a Retry that may yet finish it (F3). */
   const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
-  /* A failed or stopped job is not on its way to finishing: its card's Retry
-     may yet finish it, but "until the import finishes" would be a promise. The
-     261001s browser check found that line under a failed import. */
+  /* A failed or stopped job is not on its way to making the article: its
+     card's Retry may yet, but "it saves once the article exists" would be a
+     promise. The 261001s browser check found that line under a failed import. */
   const jobStopped = job?.status === "error" || job?.status === "cancelled";
-  const purposeStatus = purposeStatusOf(phase, draft, jobStopped);
   const uploadFilename =
     origin.kind === "upload" ? (mine?.filename ?? job?.upload?.filename) : undefined;
   const originLabel =
@@ -1009,50 +1146,43 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 
       {showPurpose && (
         <PurposeBox
-          value={draft}
-          status={purposeStatus}
-          /* The save carries the snapshot taken at the press. Leaving the box
-             editable would let it say Saving… over newer words that are not in
-             that request, then navigate and throw those words away. */
-          disabled={phase.kind === "saving"}
+          now={purposeNow}
+          stopped={jobStopped}
           onChange={(value) => {
-            /* In the gesture as well as at render, for the reason the tick box
-               writes its ref: a completion can land before the re-render. */
-            draftRef.current = value;
+            /* Straight into the session, which is what a completion landing
+               before the next render will read. */
             purposeTouchedRef.current = true;
-            setDraft(value);
-            /* A refusal describes the words that were sent. Once they are
-               edited it is about text no longer in the box, and "Not saved —"
-               over the new words would be a claim about them. Sol's item 10. */
-            setPhase((p) => (p.kind === "ready" && p.error !== null ? { ...p, error: null } : p));
+            purpose.setText(value, true);
           }}
           onFocusChange={(focused) => {
             focusedRef.current = focused;
             if (focused) purposeTouchedRef.current = true;
+            /* A blur saves. While waiting at the end it still does not open. */
+            else purpose.commit();
           }}
-          onShortcut={saveAndOpen}
+          /* ⌘/Ctrl+Enter saves while the import runs, and is *Open the
+             article* once it is in. */
+          onShortcut={phase.kind === "ready" ? openTheArticle : purpose.commit}
         />
       )}
 
-      {deciding && (
+      {phase.kind === "ready" && (
         <div className="tw:mt-3">
           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            Ready. Any first modes already queued use the purpose saved when the import finished.
-            Saving this now reaches chat and anything generated later.
+            Ready. Any first modes that were queued use the reason saved when the import finished.
+            Changes saved after that reach chat and anything you generate later.
           </p>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <Button type="button" size="sm" disabled={phase.kind === "saving"} onClick={saveAndOpen}>
-              {phase.kind === "saving" ? "Saving…" : "Save and open"}
+            <Button type="button" size="sm" disabled={phase.opening} onClick={openTheArticle}>
+              {phase.opening ? "Saving…" : "Open the article"}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={phase.kind === "saving"}
-              onClick={openWithoutIt}
-            >
-              Open without it
-            </Button>
+            {/* Only when the words cannot be saved from here: a refusal, or
+                the read of the stored purpose gave up. */}
+            {cannotSave(purposeNow) && (
+              <Button type="button" variant="ghost" size="sm" onClick={openWithoutSaving}>
+                Open without saving
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -1069,35 +1199,42 @@ export function AddPage({ source: origin }: { source: AddSource }) {
 }
 
 /**
- * **"Why are you reading this?"** — a plain textarea in `ProfileBox`'s clothes.
+ * Whether the words in the box cannot be saved from here: the save was
+ * refused, or the read of the stored purpose gave up. What offers *Open
+ * without saving*, and what lets go of a pressed *Open the article*.
+ */
+function cannotSave(now: AddPurposeSnapshot): boolean {
+  return now.state.kind === "error" || now.gaveUp;
+}
+
+/**
+ * **"Why are you reading this?"**: a plain textarea in `ProfileBox`'s clothes,
+ * saving as it is typed (plan 261004l).
  *
- * Not `ProfileBox` itself (Sol's F5): that commits on blur and on the shortcut
- * alike, and here a blur must do nothing — a reader tabbing away mid-import has
- * not decided anything. It also brings dictation, which the add page has never
- * loaded (plan § What this passes over).
+ * Not `ProfileBox` itself: that brings dictation, which the add page has never
+ * loaded, and a microphone running while the page opens the article by itself
+ * is a new way to lose words (the plan's § The simpler option passed over).
+ * It uses the same idle timer, leave warning and status line, exported from
+ * there, with the session in add-purpose.ts doing the saving.
  *
  * Capped rather than counted past: the server refuses more than
- * `MAX_PURPOSE_CHARS`, and a refusal after the import is a worse place to learn
- * that than the box.
+ * `MAX_PURPOSE_CHARS`, and the box is a better place to learn that than a
+ * refusal.
  *
- * **It says whether the words have been saved**, in `ProfileBox`'s status line
- * and its `prof-save` clothes. Greg, 2026-10-01, spya-hbqezu: *"it doesn't have
- * a UI indication of when/whether it has saved it or not."* There is no
- * *Saved* state, because a successful save navigates straight to the article:
- * the line says *Not saved yet* until the moment the sentence can be stored,
- * which is the honest shape. Plan 261001s § Stage 2.
+ * **It says whether the words have been saved.** Greg, 2026-10-01,
+ * spya-hbqezu: *"it doesn't have a UI indication of when/whether it has saved
+ * it or not."* `PurposeLine` below.
  */
 function PurposeBox({
-  value,
-  status,
-  disabled,
+  now,
+  stopped,
   onChange,
   onFocusChange,
   onShortcut,
 }: {
-  value: string;
-  status: PurposeStatus;
-  disabled: boolean;
+  now: AddPurposeSnapshot;
+  /** The job failed or was stopped, so nothing is on its way to making the article. */
+  stopped: boolean;
   onChange: (value: string) => void;
   onFocusChange: (focused: boolean) => void;
   onShortcut: () => void;
@@ -1115,14 +1252,12 @@ function PurposeBox({
         rows={2}
         maxLength={MAX_PURPOSE_CHARS}
         placeholder="e.g. I want to know how they handled missing data"
-        value={value}
-        disabled={disabled}
+        value={now.text}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => onFocusChange(true)}
         onBlur={() => onFocusChange(false)}
         onKeyDown={(e) => {
-          /* ⌘/Ctrl+Enter is Save and open once the import is in, and nothing
-             before it — there is nothing to open yet. Plain Enter is a newline. */
+          /* Plain Enter is a newline: this is prose. */
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             onShortcut();
@@ -1130,75 +1265,72 @@ function PurposeBox({
         }}
       />
       <div className="prof-box-foot">
+        {/* Each sentence has to be true with automatic modes off, on a re-add,
+            and when the import failed after its row was made (Sol's F8). */}
         <p className="prof-box-hint">
-          Optional. Shapes the quotes, ideas, glossary and the reading route — for this article
-          only. Never what the article says. You can change it later on the article's Metadata
-          page.
+          Optional. Saves by itself after a short pause, once the article exists. If first modes
+          are generated automatically, they use the reason saved when the import finishes. For
+          this article only. Never what the article says. You can change it later on the article's
+          Metadata page.
         </p>
         <span className="prof-count">
-          {value.length} / {MAX_PURPOSE_CHARS}
+          {now.text.length} / {MAX_PURPOSE_CHARS}
         </span>
       </div>
-      {/* Mounted for the life of the box and `aria-live`, as ProfileBox's is,
-          so what is announced is the change. The refusal inside it is
-          `role="alert"` as it was when it sat under the buttons. */}
-      <p className={`prof-save is-${status.kind}`} aria-live="polite">
-        {purposeStatusWords(status)}
-      </p>
+      <PurposeLine now={now} stopped={stopped} />
     </div>
   );
 }
 
-/** Where the add page's purpose stands. `PurposeBox`'s status line draws it. */
-type PurposeStatus =
-  | { kind: "none" }
-  | { kind: "waiting" }
-  | { kind: "stopped" }
-  | { kind: "ready" }
-  | { kind: "saving" }
-  | { kind: "error"; message: string };
+/**
+ * Where the words stand before the article's stored purpose has been read.
+ * After that the line is `ProfileBox`'s own.
+ */
+type Unseeded = "none" | "waiting" | "stopped" | "gave-up";
 
 /**
- * The status, from the phase and the draft. An empty (or blank) draft says
- * nothing: the hint already says *Optional*, and a blank one is never sent, so
- * "Save and open stores it" would be untrue of it.
+ * A blank box says nothing: the hint already says *Optional*, and a blank box
+ * takes whatever is stored when it is read.
  */
-function purposeStatusOf(phase: Phase, draft: string, jobStopped: boolean): PurposeStatus {
-  if (phase.kind === "saving") return { kind: "saving" };
-  if (phase.kind === "ready" && phase.error !== null) return { kind: "error", message: phase.error };
-  if (draft.trim() === "") return { kind: "none" };
-  if (phase.kind === "ready") return { kind: "ready" };
-  if (phase.kind === "running") return jobStopped ? { kind: "stopped" } : { kind: "waiting" };
-  return { kind: "none" };
+function unseededOf(now: AddPurposeSnapshot, stopped: boolean): Unseeded {
+  if (now.text.trim() === "") return "none";
+  if (now.gaveUp) return "gave-up";
+  return stopped ? "stopped" : "waiting";
 }
 
-function purposeStatusWords(status: PurposeStatus) {
-  switch (status.kind) {
+function unseededWords(kind: Unseeded): string | null {
+  switch (kind) {
     case "none":
       return null;
     case "waiting":
-      return "Not saved yet — kept here until the import finishes.";
+      /* *If you stay on this page*: words left before the article exists have
+         nothing to be saved to, and the line must not promise otherwise. */
+      return "Not saved yet. It saves once the article exists, if you stay on this page.";
     case "stopped":
-      return "Not saved — the import didn't finish, so there is nothing to save it to yet.";
-    case "ready":
-      return "Not saved yet — Save and open stores it.";
-    case "saving":
-      return (
-        <>
-          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
-        </>
-      );
-    case "error":
-      return (
-        <span role="alert" className="tw:inline-flex tw:items-center tw:gap-[0.3rem]">
-          <TriangleAlert size={12} aria-hidden="true" /> Not saved — {status.message}
-        </span>
-      );
+      /* Not "there is no article": an unread purpose does not prove that (F13). */
+      return "Not saved. The import stopped before this article's saved reason could be read.";
+    case "gave-up":
+      return "Not saved. Could not read this article's saved reason.";
     default: {
-      const never: never = status;
+      const never: never = kind;
       return never;
     }
   }
+}
+
+/**
+ * The status line: the add page's own sentences until the session is seeded,
+ * then `SaveStatus`, the line every other purpose box has. `aria-live` either
+ * way, so what is announced is the change.
+ */
+function PurposeLine({ now, stopped }: { now: AddPurposeSnapshot; stopped: boolean }) {
+  if (now.seeded) return <SaveStatus save={now.state} />;
+  const kind = unseededOf(now, stopped);
+  return (
+    <p className={`prof-save is-${kind}`} aria-live="polite">
+      {unseededWords(kind)}
+    </p>
+  );
 }
 
 /**

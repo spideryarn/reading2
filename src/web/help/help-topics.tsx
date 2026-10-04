@@ -749,12 +749,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           article says. The glossary is where you will notice it most.
         </p>
         <p>
-          Each article also asks <strong>Why are you reading this?</strong> when you add it; change
-          the answer on its Metadata page. Something like “I want the methods, not the history” is
-          what helps — the quiz, for one, aims more of its questions at what you said.
+          Each article also asks <strong>Why are you reading this?</strong> while it is being added,
+          and saves your answer as you type; change it later on its Metadata page. Something like “I
+          want the methods, not the history” is what helps — the quiz, for one, aims more of its
+          questions at what you said.
         </p>
         <ul>
-          <li>Both boxes save themselves a couple of seconds after you stop typing.</li>
+          <li>These boxes save themselves a moment after you stop typing.</li>
           <li>
             Text written with your profile has a small <strong>person icon</strong> in the corner
             of its mode; point at it to see what it means, or press it to read and edit your

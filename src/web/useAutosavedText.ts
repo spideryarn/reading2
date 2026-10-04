@@ -207,7 +207,11 @@ export function useAutosavedText({
         setSavedThisVisit(true);
       })
       .catch((e: Error) => {
-        if (mine === epoch.current) setError(e.message);
+        /* Only over the words it is about. A refusal of text no longer in the
+           box would be a claim about the new words, and since the idle timer
+           arms only on `dirty` (ProfileBox.tsx § `useIdleCommit`) it would
+           also stop them being sent until the next keystroke or blur. */
+        if (mine === epoch.current && now.current.draft === text) setError(e.message);
       })
       .finally(() => {
         if (mine !== epoch.current) return;
