@@ -193,20 +193,49 @@ glossary is the one of the five that already had this right: forcing this step *
 own one was deleted on 2026-09-01 as a second way to do this
 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
-### The run row: Find more, or Find terms again
+### The run row: Find more
 
 > There used to be a Find More button in Glossary mode. Add it back, at the top of the column
 >
 > — Greg, 2026-10-02 (spya-s660yh)
 
+> In glossary, there's a find terms again button. I don't know what that does. I want a find more
+> button that finds a bunch more.
+>
+> — Greg, 2026-10-04 (spya-try2v7)
+
 The owner's one run button is the band's **first row**, above *Look up a term*, on every finished
 list. It was the band's foot until 2026-10-03, and hidden there on an outdated list. Its press is
 always the forced run, in the list's own profile setting (`more(profiled)`), but the forced run does
-not always append: `existingFor` merges only when the article, the prompt version and the profile
-all match. So the button is labelled by what it will do — **Find more** when it appends, **Find
-terms again** when it rewrites — and the glossary read says which: `panelRun` on
-`GET /api/glossary/:slug`, from `panelRunKind` in [src/glossary.ts](../../src/glossary.ts), computed
-in the route beside `profileChanged` because the profile half needs the reader's current profile.
+not always append: `existingFor` merges only when the article and the profile match and the list's
+prompt version is one today's prompt may add to. So the button is labelled by what it will do —
+**Find more** when it appends, **Write a new list** when it rewrites — and the glossary read says
+which: `panelRun` on `GET /api/glossary/:slug`, from `panelRunKind` in
+[src/glossary.ts](../../src/glossary.ts), computed in the route beside `profileChanged` because the
+profile half needs the reader's current profile.
+
+**A list an older prompt wrote is added to, since 2026-10-04**
+([261004f](../plans/261004f-glossary-find-more-always-adds-across-prompt-versions.md)). Until then
+the version had to be the current one, the prompt was bumped five times in eight days, and so on
+most of the shelf the one button replaced the list under a label (*Find terms again*) Greg could not
+read. `appendableVersion` is the rule, in one place for the run and the label: `glossary/4` up to
+the current version. Below 4 the entries are another shape or the `sourceHash` was computed another
+way; above the current one, an older build must not add to a newer build's list. The list is
+stamped with the current version afterwards, because that stamp is what the store checks a write
+against and what lets an unforced run skip, and `oldestVersion` on the artefact records the oldest
+prompt an entry came from, so the stamp does not vouch for the older entries.
+
+**What that gives up:** a prompt improvement no longer reaches an old list through this button.
+Its older entries stay as they were written, beside new ones, and nothing in the client rewrites a
+list whose article and profile have not changed. That was already so for a current list since
+*Start again* went ([below](#there-was-a-start-again-beside-it-and-it-went)). *Hide* takes an entry
+off the reader's own view.
+
+**The rewrite that is left says why, on screen**: under *Write a new list* is one sentence (the
+article, the profile or how we write glossaries has changed, so this replaces the list; terms you
+added are kept). A tooltip alone was not enough: a touch screen never shows one. And **a *Find
+more* that found nothing says so** (*No more terms worth adding turned up*), from `lastAdded` on
+the artefact, as Quotes does.
 That includes the case `profileChanged` leaves out on purpose: a list written for a profile the
 reader has since **cleared** is run plainly, so it rewrites. A rewrite keeps the terms the reader
 added (they are outside the document) and, when the article has not changed, the ids of terms it
@@ -629,7 +658,7 @@ gone and an outdated glossary is not announced — Greg, SPIDERYARN-READING2-55
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). It also hid
 *Find more* on such a list, because its run would replace rather than append; that hid the button
 on most lists, Greg's included, and since 2026-10-03 the button is back, at the top of the band,
-labelled for what it will do — [§ The run row](#the-run-row-find-more-or-find-terms-again).
+labelled for what it will do — [§ The run row](#the-run-row-find-more).
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic
@@ -1122,10 +1151,15 @@ hands the model a FORBIDDEN list naming every term already present, so it never 
 result is stamped `glossary/2`, the banner disappears, and the original weak entry survives wearing a
 "background" label whose tooltip says the article did not say it. Certified rather than replaced.
 
-**What it does now is refuse, and inherit the ids.** A version change regenerates the prose, which is
-what *Find them again* promises; `idsByTerm` gives a fresh entry the id the old list used for the same
+**What it does now, for a `glossary/1` list, is refuse and inherit the ids.** The rewrite regenerates
+the prose; `idsByTerm` gives a fresh entry the id the old list used for the same
 name or alias, so `?term=` links and stored lookups survive a rewrite that the sentences do not. Names
 are display; ids are identity.
+
+**That refusal covered every older prompt until 2026-10-04, and no longer does.** From `glossary/4`
+on the entries are the same shape, the "certified rather than replaced" argument above does not
+apply (no label on an older entry lies; it is only written less plainly), and the list is added
+to — [§ The run row](#the-run-row-find-more).
 
 ### Where the previous list comes from, and the four answers it can give
 
@@ -1320,8 +1354,10 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 
 ## Finding more
 
-The [run row](#the-run-row-find-more-or-find-terms-again) is the one button at the top of the
+The [run row](#the-run-row-find-more) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
+Each pass asks for `suggestedCount(words)` more, at most 20, and records how many it added
+(`lastAdded`).
 
 ### Each entry keeps the time it was added
 
@@ -1363,8 +1399,9 @@ wrong". Three things had made that argument weaker than it reads.
 - **"Too long, too noisy" is the threshold's job now**, and has been since it started hiding rather
   than grouping — one gesture, no model call
   ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
-- **Some recovery survives**, because `existingFor` refuses to append when the source hash, the
-  prompt version or the profile differs. An edit, a prompt bump or a changed profile therefore
+- **Some recovery survives**, because `existingFor` refuses to append when the source hash or the
+  profile differs (and, until 2026-10-04, the prompt version: [§ The run row](#the-run-row-find-more)).
+  An edit or a changed profile therefore
   rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's `?term=` links
   survive it. (This listed the *use my profile* checkbox too, until the checkbox was removed on
   2026-09-13 — [reader-profile.md](reader-profile.md#no-control-one-label).)

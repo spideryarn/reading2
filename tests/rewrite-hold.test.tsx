@@ -354,9 +354,9 @@ const ROWS: Row[] = [
       profileChanged: profiled,
     }),
     mount: (show) => createElement(GlossaryOuter, { show }),
-    forced: ["Find more", "Find terms again"],
+    forced: ["Find more", "Write a new list"],
     direct: [
-      { label: "Find terms again", stale: true },
+      { label: "Write a new list", stale: true },
       { label: "Find more", stale: false },
     ],
     waiting: "The new terms haven't loaded yet.",

@@ -374,10 +374,12 @@ export function GlossaryPanel({
           Add it back, at the top of the column"*. It was pinned in the foot,
           and hidden there on an outdated list (plan 260929c) — most lists, and
           Greg's. Now it shows on every owner's finished list, and says what
-          its run will do: *Find more* when it appends, *Find terms again* when
+          its run will do: *Find more* when it appends, *Write a new list* when
           it rewrites (`MoreRow`). The guard is the one the foot had: an owner
           whose glossary has arrived.
-          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */}
+          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1.
+          Since 2026-10-04 an older prompt's list is appended to, so the second
+          label is the rare one (plan 261004f). */}
       {glossary && owner?.status === "ready" && owner.glossary ? (
         <MoreRow
           job={owner.job}
@@ -385,9 +387,12 @@ export function GlossaryPanel({
           failed={owner.failed}
           stalled={owner.stalled}
           /* The server's verdict when it gave one (`panelRunKind`, which
-             also sees a changed or cleared profile); otherwise the two facts
-             the panel has. Plan 261003c, GPT Sol's plan review P1. */
-          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
+             also sees a changed or cleared profile); otherwise the one fact
+             the panel has that always rewrites. Not `outdated`: an older
+             prompt's list is added to (plan 261004f). Plan 261003c, GPT Sol's
+             plan review P1. */
+          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale}
+          foundNothing={owner.glossary.passes > 1 && owner.glossary.lastAdded === 0}
           /* **In the list's own recorded setting**, not the current profile.
              `existingFor` refuses to append across a profile difference, so
              asking a plain list's Find more for the profile would *rewrite*
@@ -514,8 +519,8 @@ export function GlossaryPanel({
                 <TriangleAlert size={13} />
                 These terms describe an older version of the article.
               </p>
-              {/* **No run button of its own since 2026-10-03**: *Find terms
-                  again* at the top of the column is the same rewrite, and two
+              {/* **No run button of its own since 2026-10-03**: *Write a new
+                  list* at the top of the column is the same rewrite, and two
                   buttons each drawing the one job's progress was a second
                   place to look. GPT Sol's plan review of 261003c, P2. */}
             </div>
@@ -523,7 +528,8 @@ export function GlossaryPanel({
           {/* **No banner for an outdated glossary** (older prompt, same
               article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
               worth bugging the user about it."* Plan 260929c. The run row at
-              the top says *Find terms again* on such a list (plan 261003c). */}
+              the top says *Find more* on such a list, and adds to it (plan
+              261004f). */}
 
           {/* One list again, in every order. It was a `div` wrapping two headed
               `ol`s from 2026-08-26 until 2026-09-03, when the threshold started
@@ -2219,6 +2225,7 @@ function MoreRow({
   failed,
   stalled,
   rewrites,
+  foundNothing,
   waiting,
   onRead,
   onMore,
@@ -2243,17 +2250,23 @@ function MoreRow({
   stalled: boolean;
   /**
    * **This press writes a fresh list rather than adding to this one** —
-   * `existingFor` (src/glossary.ts) refuses to merge when the article, the
-   * prompt version or the profile differs, so a button saying "more" would
-   * replace the list (the reason plan 260929c hid it on an outdated list). It
-   * says *Find terms again* instead, and its tooltip says so plainly: some
-   * terms may go. Terms the reader added survive (they are outside the
+   * `existingFor` (src/glossary.ts) refuses to merge when the article or the
+   * profile differs, or the list is one today's prompt may not add to
+   * (`appendableVersion`), so a button saying "more" would replace the list.
+   * It says *Write a new list* instead, with the reason under it, and its
+   * tooltip says the rest plainly: some terms may go. Terms the reader added survive (they are outside the
    * document, `glossary_lookups.added_name`), and so does anything keyed to an
    * entry the new run finds again under the same name, when the article has
    * not changed (`idsByTerm`); a `?term=` link, a *Dig deeper* answer or a hide
    * on a term that does not come back has nothing to attach to.
    */
   rewrites: boolean;
+  /**
+   * The last pass was a *Find more* and it added nothing — `Glossary.lastAdded`
+   * of 0 on a list of more than one pass. False on a list from before the
+   * field existed.
+   */
+  foundNothing: boolean;
   /**
    * **The run this row offers was pressed, has finished, and its list has not
    * loaded** (`UseGlossary.rewriting`). `"read"` draws the read in the button's
@@ -2266,7 +2279,12 @@ function MoreRow({
   onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const label = rewrites ? "Find terms again" : "Find more";
+  /* *Find terms again* until 2026-10-04, when Greg could not tell what it did
+     (spya-try2v7). It is rare now — a list an older prompt wrote is added to
+     (src/glossary.ts § `appendableVersion`) — and what is left says what it
+     does in the label, and why in a sentence beside it rather than only in a
+     tooltip, which a touch screen never shows. Plan 261004f. */
+  const label = rewrites ? "Write a new list" : "Find more";
   const title = rewrites
     ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
     : "Another model call, told what it has already found, looking for the quieter terms";
@@ -2314,6 +2332,17 @@ function MoreRow({
           {label}
         </button>
       </div>
+      {rewrites ? (
+        <p className="gloss-more-note">
+          The article, your profile or how we write glossaries has changed since these terms were
+          found, so this replaces the list. Terms you added are kept.
+        </p>
+      ) : foundNothing ? (
+        /* Said, because a *Find more* that found nothing otherwise looks like
+           a button that did nothing — QuotesPanel.tsx § `Foot` has the same
+           line for the same reason. */
+        <p className="gloss-more-note">No more terms worth adding turned up.</p>
+      ) : null}
     </div>
   );
 }
