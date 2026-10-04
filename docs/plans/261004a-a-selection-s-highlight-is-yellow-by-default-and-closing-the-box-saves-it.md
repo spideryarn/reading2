@@ -199,3 +199,29 @@ P1, five P2. All accepted. **Where this section and the text above disagree, thi
 What changes downstream, with no code change (Sol's answer 6): more rows say *Highlight* in the
 drawer; every coloured selection outside Referee is a "yours" row in Quotes; a visitor on a shared
 link sees the wash; a wordless highlight has no ✳.
+
+## Landed, 2026-10-04
+
+Built as the review section says. The deferred half, `[Q-save-on-select]` with `[Q-ask-ai-colour]`,
+is queue item `qi-tymfbk48`, waiting on Greg. The note is
+[261003_1807](../user-feedback/261003_1807-highlight-defaults-to-yellow-and-closing-saves-it.md).
+
+**GPT Sol's code review: land after fixes (made)** —
+[261004a-yellow-default-code-review-sol.md](261004a-yellow-default-code-review-sol.md).
+
+- **C1 (P1).** `flush` read the last render's fields, so two presses inside one frame could store
+  the wrong thing: Copy then × stored Yellow, Green then × stored Yellow. Every field writer now
+  updates the ref as well as the state (`remember`). Tests were red first.
+- **C2.** The draft test left a fake `navigator.clipboard` behind for later cases; it is removed.
+- **C3.** Header comments in `Reader.tsx` and `useComments.ts` still said a selection opens a
+  conversation. Rewritten; I checked the routes they name.
+
+**Browser check** (Sonnet subagent, Playwright on the box, `/read/fowler-phrenology`): 14 of 14.
+Yellow picked on open; Escape, × and Save each leave a yellow wash that survives a reload; Discard,
+a second selection, Copy then ×, and No colour then × leave nothing; pink then Escape is pink;
+Referee opens on No colour; an iPad profile's chip opens the box on Yellow; no overflow at 390px.
+Two limits: the iPad selection was set by script, not by a long press, and WebKit was not run. One
+thing it noticed that is not new: with the caret in the text field, the first Escape clears typed
+words and the second closes (and saves).
+Shots: [the box](261004a-shot-desktop-box.png), [the wash](261004a-shot-yellow-wash.png),
+[a phone](261004a-shot-phone-box.png).

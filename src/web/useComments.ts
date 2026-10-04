@@ -1,19 +1,16 @@
 /**
  * The client half of comments — see docs/project/comments.md.
  *
- * **Closed to new arrivals since 2026-08-26.** Selecting text used to create a
- * comment here and spend a model call on the spot; it now opens a conversation
- * instead — docs/plans/260826ab-chat-as-gateway.md. So this hook reads the explanations
- * a reader already has, and offers the two ways to ask one again: `retry` for a
- * model call that failed, `deepen` for an answer they have read and judged thin.
+ * Selecting text opens `AnnotateDialog`, whose Save, close and Ask AI paths all
+ * create the same free comment here. Ask AI then opens a separate conversation;
+ * it does not make this create a paid request. This hook also reads existing
+ * comments, edits their reader-owned fields, and offers `retry` and `deepen` for
+ * the older explanations that are still stored on comments.
  *
- * That is why there is no longer an `ask`, and why the id is no longer minted
- * here: both re-ask paths send an id the server already knows, and the server
- * refuses one it does not. The rule lives there rather than here, because
- * deleting a function closes the React path and nothing else.
- *
- * The POST is also the answer: it streams, and the terminal frame carries the
- * finished comment, so there is nothing to poll.
+ * Creation and answering are separate routes. A create takes an id minted once
+ * by the draft; both re-answer paths use an id the server already knows, and the
+ * server refuses one it does not. Answering streams, and its terminal frame
+ * carries the finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -78,8 +75,9 @@ interface NewCommentInputFields {
    */
   mark?: Mark;
   /**
-   * A highlight's colour, if the reader picked one. Only on a selection: the
-   * server refuses a colour on a whole-block bookmark.
+   * A highlight's colour, if the saved selection has one. Yellow is the default
+   * in `AnnotateDialog`, so it need not have been picked explicitly. Only on a
+   * selection: the server refuses a colour on a whole-block bookmark.
    */
   colour?: HighlightColour;
 }
@@ -133,10 +131,10 @@ export interface CommentsApi {
    * calling a failed load a failed save. Plan 260908f § A.
    */
   loadError: string | null;
-  /* **No `ask`.** Selecting text used to create a comment and spend a model
-     call on the spot; since 2026-08-26 it opens a conversation instead
-     (docs/plans/260826ab-chat-as-gateway.md), so nothing creates a new explanation and
-     this hook is a reader of old ones plus the two ways to re-ask them.
+  /* **No `ask`.** A new comment is always free. `AnnotateDialog`'s Ask AI path
+     stores it through `create`, then opens a separate chat composer; nothing in
+     this hook creates a new explanation. It only reads the old ones still on
+     comments and offers the two ways to re-answer them.
 
      The rule is not enforced here. `POST /api/comments/:slug` refuses an id it
      has not already stored, because deleting a function closes the React path
@@ -704,8 +702,8 @@ export function useComments(slug: string): CommentsApi {
    * Make a free comment.
    *
    * **The caller mints the id once for the act it is saving**, so the mark can
-   * be drawn and the dialog opened in the same frame the reader lets go of the
-   * mouse. For a draft that is once per draft; for the gutter it survives an
+   * be drawn in the same turn the dialog closes or Save is pressed. For a draft
+   * that is once per draft; for the gutter it survives an
    * uncertain retry (`makeBlockBookmarker`). The server takes it as given
    * unless it is malformed or already used — and "already used by a different
    * comment" is a 409 rather than an overwrite, which is what stops a collision
@@ -735,7 +733,7 @@ export function useComments(slug: string): CommentsApi {
       const task = (async (): Promise<Comment | null> => {
         /* **Behind the opening read, if it is still out** — see `opening`. The
            `settled` check keeps the ordinary case synchronous: no `await`, so
-           the mark is drawn in the turn the reader let go of the mouse. */
+           the mark is drawn in the turn the caller asks to store it. */
         const gate = opening.current;
         const list = gate.settled ?? (await gate.done);
         /* Deleted while held: no row existed yet, so the right DELETE is no

@@ -763,8 +763,9 @@ export function Reader({
 
 
   /**
-   * Comments: selecting prose asks a question of the model, and the answer
-   * arrives in a floating dialog. See docs/project/comments.md.
+   * Comments and highlights: selecting prose opens the free annotation box.
+   * Ask AI is an explicit second action, and its conversation arrives in the
+   * separate floating chat dialog. See docs/project/comments.md.
    *
    * Note what is *not* here — no column, no change to `fit`, nothing threaded
    * through the layout arithmetic. That was the point of choosing a dialog.
@@ -2305,8 +2306,8 @@ export function Reader({
       setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
       /* **The browser's selection is deliberately left alone**, which is a
          reversal. It used to be cleared because it sat on top of the mark we had
-         just drawn and hid it. There is now no mark to reveal — nothing is
-         stored until the reader asks — so clearing it would leave them looking
+         just drawn and hid it. There is no stored mark yet — the reader still
+         has to close or save the box — so clearing it would leave them looking
          at a quote in a box with no idea which words on the page it came from. */
     },
     /* **`isOwner`, not `owner`.** The capability is a new object on every

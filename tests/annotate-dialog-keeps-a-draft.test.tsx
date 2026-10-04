@@ -103,6 +103,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  Reflect.deleteProperty(navigator as object, "clipboard");
 });
 
 /** The box alone over passage A, keyed as every caller keys it. */
@@ -128,12 +129,14 @@ function unmount(): void {
 
 const textarea = () => host.querySelector("textarea") as HTMLTextAreaElement;
 
-function type(text: string): void {
+function enter(text: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-  act(() => {
-    setter?.call(textarea(), text);
-    textarea().dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  setter?.call(textarea(), text);
+  textarea().dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function type(text: string): void {
+  act(() => enter(text));
 }
 
 function button(words: string): HTMLButtonElement {
@@ -160,14 +163,19 @@ function pressEscape(): void {
 }
 
 /** Press one swatch of the colour row: a colour's name, or `none`. */
-function pick(colour: "none" | "yellow" | "green" | "blue" | "pink"): void {
+function swatch(colour: "none" | "yellow" | "green" | "blue" | "pink"): HTMLElement {
   const swatch = host.querySelector<HTMLElement>(`.hl-swatch[data-colour="${colour}"]`);
   if (!swatch) throw new Error(`no ${colour} swatch on screen`);
-  act(() => swatch.click());
+  return swatch;
+}
+
+function pick(colour: "none" | "yellow" | "green" | "blue" | "pink"): void {
+  act(() => swatch(colour).click());
 }
 
 /** The name of the swatch the row shows as picked. */
 const picked = () => host.querySelector('.hl-swatch[aria-checked="true"]')?.getAttribute("aria-label");
+const hint = () => host.querySelector(".annotate-hint")?.textContent ?? "";
 
 /** A clipboard whose write never settles, so only the press itself can count. */
 function clipboardThatNeverAnswers(): void {
@@ -281,6 +289,17 @@ describe("the box ends in Discard, Ask AI and Save", () => {
 });
 
 describe("every other way out stores a draft that has something in it", () => {
+  it("typing and the × in the same frame stores the words that were typed", () => {
+    mount();
+    const close = button("Close");
+    act(() => {
+      enter(WORDS);
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.body).toBe(WORDS);
+  });
+
   it("the ×: words are stored once with ask: false, and the box is closed", () => {
     mount();
     type(WORDS);
@@ -329,6 +348,18 @@ describe("every other way out stores a draft that has something in it", () => {
     expect(saved[0]!.colour).toBe("yellow");
   });
 
+  it("a colour change and the × in the same frame stores the colour that was pressed", () => {
+    mount();
+    const green = swatch("green");
+    const close = button("Close");
+    act(() => {
+      green.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("green");
+  });
+
   it("a Referee placement and nothing else is a draft", () => {
     mount({ placing: true });
     press("place it");
@@ -336,6 +367,18 @@ describe("every other way out stores a draft that has something in it", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]!.mark).toEqual({ criterionId: "spya-crt7pn", valence: 0 });
     expect(saved[0]!.body).toBe("");
+  });
+
+  it("a Referee placement and the × in the same frame stores the placement", () => {
+    mount({ placing: true });
+    const place = button("place it");
+    const close = button("Close");
+    act(() => {
+      place.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.mark).toEqual({ criterionId: "spya-crt7pn", valence: 0 });
   });
 
   it("unmounting for any reason stores it once", () => {
@@ -369,6 +412,45 @@ describe("the box opens on Yellow, and closing it saves the highlight (spya-ur8k
     unmount();
     mount({ placing: true });
     expect(picked()).toBe("No colour");
+  });
+
+  it("chooses the default once at mount, rather than recolouring when Referee mode changes", () => {
+    mount();
+    mount({ placing: true });
+    expect(picked()).toBe("Yellow");
+
+    unmount();
+    mount({ placing: true });
+    mount({ placing: false });
+    expect(picked()).toBe("No colour");
+  });
+
+  it("the placeholder and hint describe Yellow, No colour, Referee, Copy and loading truthfully", () => {
+    mount();
+    expect(textarea().placeholder).toContain("save the highlight");
+    expect(hint()).toContain("Closing this saves the highlight");
+
+    pick("none");
+    expect(textarea().placeholder).toContain("save to bookmark");
+    expect(hint()).toContain("Closing this keeps what you wrote");
+    expect(hint()).not.toContain("saves the highlight");
+
+    clipboardThatNeverAnswers();
+    press("Copy the passage");
+    expect(hint()).not.toContain("saves the highlight");
+
+    unmount();
+    mount({ placing: true });
+    expect(textarea().placeholder).toContain("save to bookmark");
+    expect(hint()).toContain("Closing this keeps what you wrote");
+
+    unmount();
+    mount({ loaded: false });
+    expect(hint()).toContain("Save will be ready in a moment");
+    expect(button("Save").disabled).toBe(true);
+    press("Close");
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.colour).toBe("yellow");
   });
 
   it("untouched, the ×: one wordless yellow highlight, not asked, and the box closes", () => {
@@ -413,6 +495,17 @@ describe("the box opens on Yellow, and closing it saves the highlight (spya-ur8k
     expect(saved[0]).toMatchObject({ body: "", colour: "yellow" });
   });
 
+  it("clearing words and closing in the same frame does not put the cleared words back", () => {
+    mount();
+    type(WORDS);
+    act(() => {
+      textarea().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ body: "", colour: "yellow" });
+  });
+
   it("No colour picked and nothing else: neither the × nor an unmount stores anything", () => {
     mount();
     pick("none");
@@ -442,6 +535,19 @@ describe("the box opens on Yellow, and closing it saves the highlight (spya-ur8k
 });
 
 describe("Copy, then close, leaves no highlight", () => {
+  it("Copy and the × in the same frame still leave no highlight", () => {
+    clipboardThatNeverAnswers();
+    mount();
+    const copy = button("Copy the passage");
+    const close = button("Close");
+    act(() => {
+      copy.click();
+      close.click();
+    });
+    expect(saved).toHaveLength(0);
+    expect(cancelled).toBe(1);
+  });
+
   it("Copy then the ×: nothing, even with the clipboard still to answer; and the hint says so", () => {
     clipboardThatNeverAnswers();
     mount();

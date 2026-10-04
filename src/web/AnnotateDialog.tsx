@@ -374,6 +374,27 @@ export function AnnotateDialog({
   const latest = useRef({ fields, onSave, onCancel });
   latest.current = { fields, onSave, onCancel };
 
+  /**
+   * Record a field synchronously as well as through React state.
+   *
+   * `flush` is allowed to run before React renders a state update: Copy and the
+   * adjacent × can both be pressed in one frame, as can a colour and the ×. The
+   * ref is the draft those exit handlers read, so changing state alone would
+   * make Copy save an unwanted Yellow highlight, or make Green save as Yellow.
+   * The next render replaces this snapshot with the same values from state.
+   */
+  const remember = (changed: Partial<Fields>) => {
+    latest.current.fields = { ...latest.current.fields, ...changed };
+  };
+  const changeBody = (next: string) => {
+    remember({ body: next });
+    setBody(next);
+  };
+  const changeMark = (next: Mark) => {
+    remember({ mark: next });
+    setMark(next);
+  };
+
   /* The other box in this app with an article in scope, so transcription gets
      the glossary as its vocabulary — the reader is writing about a passage they
      have just read, and the words in it are the words they are about to say.
@@ -383,7 +404,7 @@ export function AnnotateDialog({
   const route = parseRoute(location.pathname);
   const dictate = useDictationField({
     value: body,
-    onChange: setBody,
+    onChange: changeBody,
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe: sendForTranscription,
@@ -551,7 +572,13 @@ export function AnnotateDialog({
               is keyed on the passage (`annotateKey`), which remounts this with
               it, state and in-flight write included. GPT Sol's review of the
               built code, 2026-09-05; tests/annotate-dialog-copy.test.tsx. */}
-          <CopyQuote text={anchor.quote} onCopyPressed={() => setCopyPressed(true)} />
+          <CopyQuote
+            text={anchor.quote}
+            onCopyPressed={() => {
+              remember({ copyPressed: true });
+              setCopyPressed(true);
+            }}
+          />
           <button
             type="button"
             className="annotate-close close-x"
@@ -579,7 +606,7 @@ export function AnnotateDialog({
             ref={box}
             value={body}
             readOnly={dictate.readOnly}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => changeBody(e.target.value)}
             onKeyDown={(e) => {
               /* Escape closes the panel from a window listener, which would eat
                  half-written words without warning. Stopped here so the first
@@ -587,7 +614,7 @@ export function AnnotateDialog({
                  same two-stage escape the follow-up box has. */
               if (e.key === "Escape" && body) {
                 e.stopPropagation();
-                setBody("");
+                changeBody("");
                 return;
               }
               /* The chord is the **free** Save, never Ask AI. */
@@ -609,7 +636,7 @@ export function AnnotateDialog({
               same read `useDictationField` above is already making, for the
               reason this file's header gives. */}
           {placing && route.kind === "read" && (
-            <PlaceOnCriterion slug={route.slug} value={mark} onChange={setMark} />
+            <PlaceOnCriterion slug={route.slug} value={mark} onChange={changeMark} />
           )}
 
           {/* A highlight is this same comment with a colour; no words and a
@@ -621,6 +648,7 @@ export function AnnotateDialog({
           <HighlightSwatches
             value={colour}
             onChange={(next) => {
+              remember({ colour: next, colourChanged: true });
               setColour(next);
               setColourChanged(true);
             }}
