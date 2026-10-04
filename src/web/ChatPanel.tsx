@@ -114,6 +114,7 @@ import { useSlow } from "./useSlow.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
+import { chatDraftsFor } from "./chat-draft.js";
 
 interface Props {
   threads: ChatThread[];
@@ -259,15 +260,6 @@ interface Props {
    * is a second sub-mode at all.
    */
   subMode?: React.ReactNode;
-  /**
-   * **An unsent question for one conversation**, handed over from another mode
-   * — the glossary's *Ask in chat*, or a Summary paragraph's ask button. Used as that keyed composer's initial
-   * draft, so it is exactly what the reader would have had if they had typed it:
-   * in the box, editable, cleared by Escape, and enough to stop `leave`
-   * discarding the conversation. Sent only by Send.
-   * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
-   */
-  seed?: { threadId: string; text: string } | null | undefined;
 }
 
 /**
@@ -370,7 +362,6 @@ export function ChatPanel({
   subMode,
   live,
   onStartLive,
-  seed,
 }: Props) {
   useRenderCount("ChatPanel");
   /* **Remember's layout, for all three of its conversations** — Recall,
@@ -388,44 +379,57 @@ export function ChatPanel({
       measuringInput: false, quietInput: false, stall: null } : undefined;
 
   /**
-   * What the reader has typed and not sent yet, per conversation.
+   * What the reader has typed and not sent yet: per conversation in chat, per
+   * kind in Remember, and one more for the box under chat's list.
    *
-   * Here rather than in the composer because two different things need it, and
-   * neither is the composer. Switching conversation used to carry the half-typed
-   * question across into the next one, because the composer kept it in its own
-   * state and nothing remounted it; and closing an empty conversation has to
-   * know whether there was anything in the box before it throws the
-   * conversation away.
+   * Above the composer because two different things need it, and neither is
+   * the composer. Switching conversation used to carry the half-typed question
+   * across into the next one, because the composer kept it in its own state
+   * and nothing remounted it; and closing an empty conversation has to know
+   * whether there was anything in the box before it throws the conversation
+   * away.
    *
-   * A ref rather than state: nothing above the composer renders from it, and
-   * putting it in state would repaint the whole transcript on every keystroke.
-   * The composer is keyed by thread id, so it reads this once on mount and owns
-   * the value from then on.
+   * **And not in this panel either, since 2026-10-04.** It was a ref here, and
+   * a ref goes when the reader switches mode, so a question typed and not sent
+   * was gone on the way back with nothing said. It is the article's store now
+   * (src/web/chat-draft.ts), which lives as long as the page —
+   * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
+   * Still not state: nothing above the composer renders from it, and state
+   * would repaint the whole transcript on every keystroke. The composer is
+   * keyed by thread id, so it reads this once on mount and owns the value from
+   * then on.
    *
-   * Two limits worth knowing rather than discovering. It lives as long as this
-   * panel does, so a draft does not survive switching to another mode and back
-   * — chat mode is unmounted, and the empty conversation it belonged to goes
-   * with it. And it is keyed by thread id, so on the rare occasion the server
-   * overrules an optimistic thread id (`begin` in useChat.ts — a collision, or
-   * an id somebody typed into the URL) the composer remounts under the new id
-   * and the draft, the scroll position and the caret are lost with it.
+   * Two limits worth knowing rather than discovering. It is memory and nothing
+   * else, so a reload or a closed tab takes it. And chat's is keyed by thread
+   * id, so on the rare occasion the server overrules an optimistic thread id
+   * (`begin` in useChat.ts — a collision, or an id somebody typed into the
+   * URL) the composer remounts under the new id and the draft, the scroll
+   * position and the caret are lost with it.
    */
-  const drafts = useRef(new Map<string, string>());
+  const drafts = chatDraftsFor(slug);
 
   /**
    * The draft a keyed composer should adopt on mount.
    *
-   * A lookup during render rather than a write: React may abandon a render, so
-   * mutating `drafts` here would let an uncommitted tree change the committed
-   * panel. The composer owns the returned value from mount onwards and writes
-   * every reader edit into `drafts`, including Escape's empty string — which is
-   * why this asks `has` rather than for a truthy value: a question the reader
-   * cleared must not come back as the seed.
+   * A lookup during render and never a write: React may abandon a render, so
+   * mutating the store here would let an uncommitted tree change what the
+   * committed panel reads. The composer owns the returned value from mount
+   * onwards and writes every reader edit back, including Escape's empty string
+   * — so a question handed over from another mode, which the band writes into
+   * the store once (`ChatHandoff` in ConversationModes.tsx), does not come
+   * back after the reader has cleared it.
+   *
+   * **Remember's is by kind, not by id.** Recall, Tutorial and Explore are each
+   * one conversation per article and the band decides which conversation that
+   * is — it can be a different one on the way back, when a stored one has
+   * arrived or Start over has begun another — so the words go to whichever it
+   * picked. GPT Sol's review of the plan above, F4.
    */
-  const draftFor = (id: string): string => {
-    if (drafts.current.has(id)) return drafts.current.get(id) ?? "";
-    if (seed?.threadId !== id) return "";
-    return seed.text;
+  const draftFor = (id: string): string =>
+    isSingleThreadKind(kind) ? drafts.remember(kind) : (drafts.thread(id) ?? "");
+  const setDraftFor = (id: string, text: string): void => {
+    if (isSingleThreadKind(kind)) drafts.setRemember(kind, text);
+    else drafts.setThread(id, text);
   };
 
   /**
@@ -449,15 +453,14 @@ export function ChatPanel({
   /**
    * The same two things again, for the box under the thread list.
    *
-   * Separate from `drafts` and `focused` above rather than sharing them, and
-   * each for its own reason. The draft belongs to no conversation — that is the
-   * whole point of the box — so there is no id to key it by; a question typed
-   * there and abandoned for a row in the list is still there when you come
-   * back. And the nonce counter has to be a *different* counter, because
+   * Its draft is the store's `list`, apart from the per-conversation ones: it
+   * belongs to no conversation — that is the whole point of the box — so there
+   * is no id to key it by; a question typed there and abandoned for a row in
+   * the list, or for another mode, is still there when you come back. And the
+   * nonce counter has to be a *different* counter from `focused`, because
    * spending the panel's one here would leave the real composer unfocused the
    * next time a new conversation was started.
    */
-  const listDraft = useRef("");
   const listFocused = useRef(0);
 
   /**
@@ -470,9 +473,12 @@ export function ChatPanel({
    * enough to keep it, because the draft lives under the conversation's id and
    * throwing the conversation away would take the reader's unsent words off the
    * screen with it — which is the one outcome worse than a stray "New chat" in
-   * the list. Only off the screen, and only for as long as chat mode stays
-   * open: an unsent draft is not stored anywhere, so it does not survive
-   * switching modes or reloading. See `drafts` above.
+   * the list. The words outlive a mode change but not a reload, and a kept
+   * conversation outlives a mode change only if it is the one the reader was
+   * in when they left: one closed here with words in it, and then left for
+   * another conversation or for the list, goes with the band and takes its
+   * words with it. See `drafts` above, and § Deliberately not built in
+   * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
   const leave = async () => {
     // A new spoken thread has no chat rows until its first exchange is flushed.
@@ -481,7 +487,7 @@ export function ChatPanel({
     }
     const unsavedSpeech = live?.threadId === open?.id && (live?.lines.length ?? 0) > 0;
     if (open && !unsavedSpeech && open.messages.length === 0 && draftFor(open.id).trim() === "") {
-      drafts.current.delete(open.id);
+      drafts.dropThread(open.id);
       onDiscard(open.id);
     }
     onThread(null);
@@ -592,6 +598,7 @@ export function ChatPanel({
           recovering={recovering}
           blocks={blocks}
           onSend={onSend}
+          onSubmitStarted={open.kind === "chat" ? () => drafts.submitted(open.id) : undefined}
           onRetry={onRetry}
           onEdit={onEdit}
           onStop={onStop}
@@ -599,7 +606,7 @@ export function ChatPanel({
           focusNonce={focusNonce}
           focused={focused}
           draft={draftFor(open.id)}
-          onDraft={(text) => drafts.current.set(open.id, text)}
+          onDraft={(text) => setDraftFor(open.id, text)}
           /* The OPEN conversation's kind, not the mode's. Each mode now lists only
              its own kind (plan 261001m), so the two agree on every path the band
              takes; reading the thread is still the honest source. */
@@ -701,18 +708,16 @@ export function ChatPanel({
               busy={false}
               focusNonce={0}
               focused={listFocused}
-              draft={listDraft.current}
-              onDraft={(text) => {
-                listDraft.current = text;
-              }}
+              draft={drafts.list()}
+              onDraft={(text) => drafts.setList(text)}
               placeholder="Ask something new…"
               kind={kind}
               live={kind === "chat" ? shownLive : undefined}
               onStartLive={kind === "chat" && onStartLive ? () => {
                 const id = onStartLive(null);
                 if (id) {
-                  drafts.current.set(id, listDraft.current);
-                  listDraft.current = "";
+                  drafts.setThread(id, drafts.list());
+                  drafts.setList("");
                 }
               } : undefined}
             />
@@ -1058,6 +1063,7 @@ export function Conversation({
   recovering,
   blocks,
   onSend,
+  onSubmitStarted,
   onRetry,
   onEdit,
   onStop,
@@ -1080,6 +1086,8 @@ export function Conversation({
   recovering: Set<string>;
   blocks: Map<string, string>;
   onSend(question: string): void;
+  /** See Composer: submission begins before the awaited Live hang-up. */
+  onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
@@ -1307,6 +1315,7 @@ export function Conversation({
       <Composer
         slug={slug}
         onSend={onSend}
+        onSubmitStarted={onSubmitStarted}
         busy={busy}
         onStop={busy && last ? () => onStop(last.id) : undefined}
         focusNonce={focusNonce}
@@ -2154,6 +2163,7 @@ function Answer({
 export function Composer({
   slug,
   onSend,
+  onSubmitStarted,
   busy,
   onStop,
   focusNonce,
@@ -2170,6 +2180,8 @@ export function Composer({
 }: {
   slug: string;
   onSend(question: string): void;
+  /** The reader has submitted, even if Live must finish before `onSend`. */
+  onSubmitStarted?: (() => void) | undefined;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
@@ -2207,9 +2219,10 @@ export function Composer({
   blocks?: ReadonlyMap<string, string> | undefined;
   onJump?: ((id: BlockId) => void) | undefined;
 }) {
-  /* Seeded from the draft and owned here from then on. The panel keeps the map
-     because it outlives this component; this keeps the value because typing
-     into it must not repaint the transcript above. */
+  /* Seeded from the draft and owned here from then on. The words are kept
+     above (`drafts` in ChatPanel) because they have to outlive this component;
+     this keeps the value because typing into it must not repaint the
+     transcript above. */
   const [value, setValue] = useState(draft);
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
   const remember = isSingleThreadKind(kind);
@@ -2237,7 +2250,7 @@ export function Composer({
    *
    * **The caret goes to the end.** A new conversation's box is usually empty,
    * where that changes nothing; when it was started with a question handed over
-   * (`seed` in `ChatPanel`), `focus()` alone left the caret before the first
+   * (`ChatHandoff` in ConversationModes.tsx), `focus()` alone left the caret before the first
    * word — measured in Chrome — so the reader's first keystroke landed in front
    * of the question rather than after it.
    */
@@ -2336,6 +2349,9 @@ export function Composer({
     if (question === "" || busy) return;
     const submittedBox = box.current;
     const handoff = live && live.phase !== "idle" && live.phase !== "failed";
+    // Revoke never-submitted recovery before the wait: another draft can be
+    // typed and the mode left while this question is already on its way.
+    onSubmitStarted?.();
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
@@ -2388,8 +2404,8 @@ export function Composer({
         }
         onChange={(e) => {
           setValue(e.target.value);
-          // The panel keeps the draft so it survives this component; see
-          // `drafts` in ChatPanel.
+          // Kept above this component so the words survive it; see `drafts`
+          // in ChatPanel.
           onDraft(e.target.value);
         }}
         onKeyDown={(e) => {

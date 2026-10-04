@@ -54,6 +54,7 @@ import {
   markerNumbers,
   generateCitations,
   idsByKey,
+  keysOf,
   linkFor,
   locateInArticle,
   MAX_CITATIONS,
@@ -242,6 +243,42 @@ describe("the link comes from the article, by code", () => {
       new Map([[ref.id, 1]]),
     );
     expect(link).toEqual({ url: "https://doi.org/10.1021/ma0507995", linkFrom: "doi" });
+  });
+
+  it("rule 1: the doi.org link names the DOI the reference printed, whatever characters it holds (qi-thwhkxxh)", () => {
+    /* A backslash in the DOI: pasted in unencoded, a browser reads it as a slash. */
+    const ref = block("spya-ref001", 'Sapede, D. (2005). "Nanofibrillar structure". doi:10.1021/ma\\0507995.', {
+      html:
+        '<li>Sapede, D. (2005). "Nanofibrillar structure". doi:' +
+        '<a href="https://doi.org/10.1021%2Fma%5C0507995">10.1021/ma\\0507995</a>.</li>',
+    });
+    const link = linkFor(
+      draft({ reference: { blockId: ref.id, quote: "Sapede", start: 0 } }),
+      byId([ref]),
+      new Map([[ref.id, 1]]),
+    );
+    expect(link).toEqual({ url: "https://doi.org/10.1021/ma%5C0507995", linkFrom: "doi" });
+    expect(new URL(link.url).pathname).toBe("/10.1021/ma%5C0507995");
+  });
+
+  it("does not manufacture a different DOI from malformed Unicode in a reference", () => {
+    for (const doi of ["10.1234/a\uD800b", "10.1234/a\uDC00b"]) {
+      const ref = block("spya-ref001", `Sapede (2005). Nanofibrillar structure. doi:${doi}`);
+      const link = linkFor(
+        draft({ reference: { blockId: ref.id, quote: "Sapede", start: 0 } }),
+        byId([ref]),
+        new Map([[ref.id, 1]]),
+      );
+      expect(link.linkFrom).toBe("search");
+    }
+  });
+
+  it("a work's key is its DOI, not the DOI's encoded spelling in the link (qi-thwhkxxh)", () => {
+    const key = (url: string) => keysOf({ title: "T", authors: "A", year: "2005", url, linkFrom: "doi" }).idKey;
+    expect(key("https://doi.org/10.1234/a%252Fb")).toBe("doi:10.1234/a%2fb");
+    expect(key("https://doi.org/10.1234/a%5Cb")).toBe("doi:10.1234/a\\b");
+    /* A row stored before DOIs were encoded keeps its key, so a re-run inherits its id. */
+    expect(key("https://doi.org/10.1023/A:1010933404324")).toBe("doi:10.1023/a:1010933404324");
   });
 
   it("rule 2: no DOI and one arXiv id — found in gwern's data-url-original — becomes arxiv.org/abs", () => {
@@ -1250,6 +1287,24 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
       linkFrom: "doi",
     });
     expect(linkOf(`${CHEN}. https://doi.org/10.1038/nn.4450`).url).toBe("https://doi.org/10.1038/nn.4450");
+  });
+
+  it("keeps a search for malformed Unicode in a PDF entry instead of repairing its DOI", () => {
+    expect(linkOf(`${CHEN}. doi:10.1234/a\uD800b`).linkFrom).toBe("search");
+  });
+
+  it("inherits a legacy percent DOI by its stored key even though reading its old URL is ambiguous", () => {
+    const entry = `${CHEN}. doi:10.1234/a%2Fb`;
+    const previous = run(entry);
+    const old = previous.citations[0]!;
+    /* The old writer pasted the literal DOI; its persisted key recorded that
+       DOI, even though decoding its URL now reads a/b. */
+    old.url = "https://doi.org/10.1234/a%2Fb";
+    expect(old.key).toBe("doi:10.1234/a%2fb");
+    expect(keysOf(old).idKey).toBe("doi:10.1234/a/b");
+    const current = run(entry, idsByKey(previous)).citations[0]!;
+    expect(current.url).toBe("https://doi.org/10.1234/a%252Fb");
+    expect(current.id).toBe(old.id);
   });
 
   it("one arXiv id, either shape, becomes arxiv.org/abs", () => {

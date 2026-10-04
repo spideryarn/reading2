@@ -649,6 +649,13 @@ tab started for it (an answer, a spoken exchange) is still out (`settled` in `us
 DELETE always names a thread the server knows and never has to wait for one, and an empty, unnamed
 or half-answered conversation simply has no button.
 
+**What is typed and not sent stays in the box across a mode change**, since 2026-10-04, for Recall,
+Tutorial and Explore alike — kept per kind rather than per thread, because the band picks the
+thread and may pick a different one on the way back. In memory only, so a reload loses it. **Start
+over does not clear the box**: a refused delete puts the conversation back, and the words should
+still be under it. [`chat-draft.ts`](../../src/web/chat-draft.ts);
+[261004j](../plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md).
+
 **The box is smaller on a short screen.** Six rows at rest on a desktop; on a viewport under 500px
 tall — a landscape phone, where the band is about 338px — it is two rows at rest and grows with
 what is said, up to 30% of the screen's height, so the transcript stays in view.

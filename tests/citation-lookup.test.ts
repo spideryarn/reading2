@@ -412,6 +412,17 @@ describe("resultIsTheWork — R-1, stricter than Find it's title rule", () => {
     expect(anchorOf(work({ linkFrom: "article", url: "https://example.org/p" }))).toBeNull();
     expect(anchorOf(work({ linkFrom: "doi", url: "https://doi.org/10.1/a" }))).toEqual({ kind: "doi", id: "10.1/a" });
   });
+
+  it("anchors on the DOI itself, not on its encoded spelling in the link (qi-thwhkxxh)", () => {
+    /* The anchor is searched for in a page's text and its decoded address, so it has to be the DOI as printed. */
+    expect(anchorOf(work({ linkFrom: "doi", url: "https://doi.org/10.1234/a%252Fb" }))).toEqual({ kind: "doi", id: "10.1234/a%2Fb" });
+    expect(anchorOf(work({ linkFrom: "doi", url: "https://doi.org/10.1234/a%5Cb" }))).toEqual({ kind: "doi", id: "10.1234/a\\b" });
+    /* A link stored before DOIs were encoded reads as it always did. */
+    expect(anchorOf(work({ linkFrom: "doi", url: "https://doi.org/10.1023/A:1010933404324" }))).toEqual({
+      kind: "doi",
+      id: "10.1023/A:1010933404324",
+    });
+  });
 });
 
 /* ----------------------------------------------------- prompt injection -- */

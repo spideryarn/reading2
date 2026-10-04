@@ -41,6 +41,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBody } from "./block-policy.js";
+import { doiIsEncodable, doiOfUrl, doiUrl } from "./doi-url.js";
 import { plainTitle } from "./html.js";
 import { mintUniqueId } from "./ids.js";
 import { findMathSpans } from "./maths-tex.js";
@@ -977,6 +978,7 @@ const ARXIV_TEXT = /\barxiv:\s?(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})(?:
 
 /** Trim the punctuation a sentence puts after a DOI, keeping a bracket the DOI opened. */
 function trimDoi(raw: string): string {
+  if (!doiIsEncodable(raw)) return "";
   let doi = raw.replace(/[.,;:]+$/, "");
   for (const [open, close] of [
     ["(", ")"],
@@ -1264,10 +1266,7 @@ function normal(value: string): string {
     .trim();
 }
 
-/** The link for one DOI / arXiv id. */
-function doiUrl(doi: string): string {
-  return `https://doi.org/${doi}`;
-}
+/** The link for one arXiv id; a DOI's is `doiUrl` (src/doi-url.ts), which encodes it. */
 function arxivUrl(id: string): string {
   return `https://arxiv.org/abs/${id}`;
 }
@@ -1437,7 +1436,9 @@ export function keysOf(work: Pick<CitedWork, "title" | "authors" | "year" | "url
   workKey: string;
 } {
   let idKey: string | null = null;
-  if (work.linkFrom === "doi") idKey = `doi:${work.url.slice("https://doi.org/".length).toLowerCase()}`;
+  /* The decoded DOI, not its spelling in the link. Legacy percent links are
+     ambiguous (doiOfUrl); idsByKey still inherits by the stored c.key. */
+  if (work.linkFrom === "doi") idKey = `doi:${(doiOfUrl(work.url) ?? work.url).toLowerCase()}`;
   else if (work.linkFrom === "arxiv") idKey = `arxiv:${work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
   else if (work.linkFrom === "article") idKey = `url:${canonicalUrl(work.url)}`;
   const workKey = `work:${keyWords(work.title)}|${keyWords(firstAuthor(work.authors))}|${keyWords(work.year ?? "")}`;

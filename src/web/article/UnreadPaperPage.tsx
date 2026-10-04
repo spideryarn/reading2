@@ -25,6 +25,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Check, Circle, LoaderCircle } from "lucide-react";
 import { APP_NAME, SEP, clamp } from "../../title-text.js";
+import { doiUrl } from "../../doi-url.js";
 import type { Job, UnreadPaper } from "../../types.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { HomeLogo } from "../HomeLogo.js";
@@ -51,7 +52,7 @@ export function doiHref(doi: string | undefined): string | null {
   ) {
     return null;
   }
-  return `https://doi.org/${doi.split("/").map(encodeURIComponent).join("/")}`;
+  return doiUrl(doi);
 }
 
 /** "A, B and C". */

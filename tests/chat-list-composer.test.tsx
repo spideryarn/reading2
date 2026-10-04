@@ -42,6 +42,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 
@@ -70,7 +71,6 @@ function paint(
   threads: ChatThread[] = [THREAD],
   threadId: string | null = null,
   loaded = true,
-  seed?: { threadId: string; text: string },
 ): void {
   act(() => {
     root.render(
@@ -104,7 +104,6 @@ function paint(
         blocks: new Map<string, string>(),
         focusNonce: 0,
         error: null,
-        seed,
       }),
     );
   });
@@ -136,6 +135,9 @@ function ask(box: HTMLTextAreaElement, question: string): void {
 }
 
 beforeEach(() => {
+  /* The drafts are the article's, not the panel's, and outlive it — which here
+     means they outlive a test. src/web/chat-draft.ts. */
+  forgetChatDrafts();
   sent.open = [];
   sent.fresh = [];
   host = document.createElement("div");
@@ -222,8 +224,8 @@ describe("the composer under the conversation list", () => {
     expect(sent.open).toEqual([]);
   });
 
-  /* The draft belongs to no conversation, so it is kept in a ref of its own
-     rather than in the panel's map, which is keyed by thread id. Opening a row
+  /* The draft belongs to no conversation, so it is kept as a string of its own
+     rather than with the per-conversation ones, which are keyed by thread id. Opening a row
      and coming back must not eat the reader's half-typed question. Asked for by
      GPT-5.6's review of the first version. */
   it("keeps a half-typed question across a look at one of the conversations", () => {
@@ -259,13 +261,16 @@ describe("the composer under the conversation list", () => {
     expect(composer()?.value).toBe("Still half a question");
   });
 
-  /* A handed-over question (`seed`, from the glossary's Ask in chat) is the
-     box's *initial* value and nothing more: once the reader has edited it — or
-     cleared it with Escape — a later render still carrying the same seed must
-     not put the handed-over words back. `draftFor` in ChatPanel asks `has`. */
-  it("keeps the reader's edit over a seed the panel is still being handed", () => {
+  /* A handed-over question (from the glossary's Ask in chat) is written into
+     the article's drafts once by the band, as that conversation's unsent
+     words, and is the box's *initial* value and nothing more: once the reader
+     has edited it — or cleared it with Escape — remounting the composer must
+     not put the handed-over words back. It was a `seed` prop until 2026-10-04,
+     looked up on every render, and this is the same promise kept by the store. */
+  it("opens on a handed-over question, and keeps the reader's edit over it", () => {
     const handed = "The handed-over question";
-    paint([THREAD], THREAD.id, true, { threadId: THREAD.id, text: handed });
+    chatDraftsFor("a-piece").setThread(THREAD.id, handed);
+    paint([THREAD], THREAD.id);
     const box = composer();
     expect(box?.value).toBe(handed);
     act(() => {
@@ -275,9 +280,17 @@ describe("the composer under the conversation list", () => {
     });
 
     /* Away to the list and back remounts the keyed composer, which reads its
-       draft afresh — the moment a seed could win over the edit. */
-    paint([THREAD], null, true, { threadId: THREAD.id, text: handed });
-    paint([THREAD], THREAD.id, true, { threadId: THREAD.id, text: handed });
+       draft afresh. */
+    paint([THREAD], null);
+    paint([THREAD], THREAD.id);
     expect(composer()?.value).toBe("The reader's edited question");
+
+    /* And Escape's empty string is a value, not an absence. */
+    act(() => {
+      composer()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    paint([THREAD], null);
+    paint([THREAD], THREAD.id);
+    expect(composer()?.value).toBe("");
   });
 });

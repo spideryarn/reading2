@@ -18,6 +18,11 @@
  * And move Search into section with Chat."* Six runs became five —
  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md.
  *
+ * And on 2026-10-04 (spya-tnqt2t): *"Move the citations mode one to the left in
+ * the bottom bar and move the glossary one to the left."* Each swapped with its
+ * left-hand neighbour inside its own run —
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ *
  * Read through `visibleModes`, which is what the bar draws; with the switch on
  * every mode is present, and with it off the lines must still fall only where
  * two surviving runs meet.
@@ -32,8 +37,8 @@ const RUNS = [
      2026-10-03; it is Summary's Thread view now, and one button fewer
      (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
   ["structure", "summary", "diagram"],
-  ["skim", "quotes", "faq", "glossary", "ideas", "timeline"],
-  ["referee", "citations", "debate"],
+  ["skim", "quotes", "glossary", "faq", "ideas", "timeline"],
+  ["citations", "referee", "debate"],
   ["search", "chat", "remember"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column

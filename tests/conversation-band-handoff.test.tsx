@@ -18,6 +18,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 import type { ChatHandoff } from "../src/web/modes/conversation/ConversationModes.js";
 
 /** The props the band last handed down. */
@@ -73,6 +74,7 @@ enableHistorySync();
 
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  forgetChatDrafts();
   calls.length = 0;
   stored = [];
   holdList = false;
@@ -149,7 +151,10 @@ describe("ConversationBand's handoff", () => {
     const fresh = threads()[0] as ChatThread;
     expect(fresh.messages).toHaveLength(0);
     expect(panel?.threadId).toBe(fresh.id);
-    expect(panel?.seed).toEqual({ threadId: fresh.id, text: QUESTION });
+    /* The question is that conversation's unsent words — written into the
+       article's drafts by the band, which is where the panel's composer reads
+       from and where a mode change leaves them. */
+    expect(chatDraftsFor(SLUG).thread(fresh.id)).toBe(QUESTION);
     expect(panel?.focusNonce, "the composer is told to take the caret").toBe(1);
     expect(taken, "the owner is told to forget it").toBeGreaterThan(0);
     expect(calls.filter((c) => c.method === "POST"), "nothing is sent").toHaveLength(0);
@@ -170,7 +175,8 @@ describe("ConversationBand's handoff", () => {
     expect(threads().map((t) => t.id)).toContain("spya-k3m9qt");
     expect(threads()).toHaveLength(2);
     expect(panel?.threadId).not.toBe("spya-k3m9qt");
-    expect(prop<{ threadId: string }>("seed").threadId).toBe(panel?.threadId);
+    expect(chatDraftsFor(SLUG).thread(panel?.threadId as string)).toBe(QUESTION);
+    expect(chatDraftsFor(SLUG).thread("spya-k3m9qt"), "the earlier conversation's box was written to").toBeUndefined();
   });
 
   it("does not take the same handoff twice when the band re-renders with it", async () => {
@@ -216,7 +222,8 @@ describe("ConversationBand's handoff", () => {
   it("drops a question asked in another article, and starts only the ordinary empty one", async () => {
     await mount({ slug: "another-piece", question: QUESTION });
     expect(taken, "refused, but still handed back").toBeGreaterThan(0);
-    expect(panel?.seed ?? null).toBeNull();
+    for (const t of threads()) expect(chatDraftsFor(SLUG).thread(t.id)).toBeUndefined();
+    for (const t of threads()) expect(chatDraftsFor("another-piece").thread(t.id)).toBeUndefined();
     /* The arrival rule's own conversation: nothing stored, so one empty one —
        the behaviour with no handoff at all. */
     expect(threads()).toHaveLength(1);

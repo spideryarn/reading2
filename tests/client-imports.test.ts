@@ -58,8 +58,11 @@ const SHARED = new Set([
   /* The address of a paper that cites the article, built from its DOI or its
      OpenAlex id — the server shape-checks the id with the same pattern before
      it stores it, and the panel checks it again before it is an `href`.
-     Imports nothing. Plan 261004h. */
+     Imports `doi-url.js` and nothing else. Plan 261004h. */
   "citer-link.js",
+  /* A DOI as a doi.org address, encoded, and back — one builder for the
+     server's links and the client's. Imports nothing. Plan 261004j. */
+  "doi-url.js",
   /* Which influence a Citations row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`

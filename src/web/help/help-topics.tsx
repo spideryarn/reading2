@@ -141,10 +141,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             stay open beside any panel. It is <HelpRef to="experimental-features">experimental</HelpRef>.
           </li>
           <li>
-            <strong>The bottom bar</strong> holds the way home (the Spideryarn wordmark), the{" "}
-            <kbd>⌘</kbd> button for commands, one button per mode, then <strong>Comments</strong>,{" "}
-            <strong>Metadata</strong> and <strong>Help</strong>. When you are signed in, it also has{" "}
-            the <strong>Experimental</strong> switch and <strong>Feedback</strong>.
+            <strong>The bottom bar</strong> starts with the way home (the Spideryarn wordmark). On
+            your own article, that is followed by the <strong>Commands</strong> button. Next come
+            the mode buttons, then <strong>Comments</strong> and <strong>Metadata</strong>. When you
+            are signed in, it also has the <strong>Experimental</strong> switch and{" "}
+            <strong>Feedback</strong>. To come back to this page from your own article, press{" "}
+            <strong>Commands</strong> and type <em>help</em>, or follow <strong>More in Help</strong>{" "}
+            in a mode’s (i). On an article somebody shared with you there is no{" "}
+            <strong>Commands</strong> button, and the bar has a <strong>Help</strong> link instead.
           </li>
         </ul>
         <p>
