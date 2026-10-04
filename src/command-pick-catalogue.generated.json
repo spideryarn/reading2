@@ -115,23 +115,6 @@
   ]
  },
  {
-  "id": "mode:faq",
-  "label": "FAQ",
-  "description": "The questions a careful reader would ask this piece, and where it responds",
-  "aliases": [
-   "faqs",
-   "frequently asked questions"
-  ],
-  "kind": "mode",
-  "generates": true,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
   "id": "mode:glossary",
   "label": "Glossary",
   "description": "The terms this piece uses in a non-obvious way, defined from the piece itself",
@@ -145,6 +128,23 @@
   "contexts": [
    "owner-article",
    "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:faq",
+  "label": "FAQ",
+  "description": "The questions a careful reader would ask this piece, and where it responds",
+  "aliases": [
+   "faqs",
+   "frequently asked questions"
+  ],
+  "kind": "mode",
+  "generates": true,
+  "contexts": [
+   "owner-article",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -188,24 +188,6 @@
   ]
  },
  {
-  "id": "mode:referee",
-  "label": "Referee",
-  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
-  "aliases": [
-   "review",
-   "reviewer",
-   "peer review"
-  ],
-  "kind": "mode",
-  "generates": false,
-  "contexts": [
-   "owner-article",
-   "owner-article-archived",
-   "reader-on-someone-elses-article",
-   "owner-metadata"
-  ]
- },
- {
   "id": "mode:citations",
   "label": "Citations",
   "description": "The works this piece cites, each with a link — ranked by how much the piece leans on them",
@@ -217,6 +199,24 @@
   ],
   "kind": "mode",
   "generates": true,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
+  "id": "mode:referee",
+  "label": "Referee",
+  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+  "aliases": [
+   "review",
+   "reviewer",
+   "peer review"
+  ],
+  "kind": "mode",
+  "generates": false,
   "contexts": [
    "owner-article",
    "owner-article-archived",

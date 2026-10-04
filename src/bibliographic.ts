@@ -31,6 +31,7 @@
  */
 
 import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js";
+import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
 import { CONTACT_EMAIL } from "./site-text.js";
@@ -262,11 +263,6 @@ export function parseWorkId(input: string): WorkId | null {
 export function doiFor(id: WorkId): string {
   if (id.startsWith("doi:")) return id.slice("doi:".length);
   return `10.48550/arxiv.${id.slice("arxiv:".length)}`;
-}
-
-/** Each path segment encoded, the slashes kept: both APIs take `/works/10.1038/nn.4304` as written. */
-export function doiPath(doi: string): string {
-  return doi.split("/").map(encodeURIComponent).join("/");
 }
 
 export function crossrefUrl(doi: string): string {

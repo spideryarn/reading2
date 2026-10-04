@@ -657,11 +657,11 @@ interface Props {
  *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
  *  - `guides` — ways through the piece, each drawn from it along one line: a
  *    route through its quotes, the quotes, questions it answers, its terms,
- *    its ideas, its dates (Skim, Quotes, FAQ, Glossary, Ideas,
+ *    its ideas, its dates (Skim, Quotes, Glossary, FAQ, Ideas,
  *    Timeline). Not "contents": several of these are a model's reading of the
  *    piece rather than things literally in it (GPT Sol, 2026-09-29).
- *  - `critical` — reading it critically and against other work (Referee,
- *    Citations, Debate).
+ *  - `critical` — reading it critically and against other work (Citations,
+ *    Referee, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
  *    conversation, what they took from it (Search, Chat, Remember) — the
  *    same category docs/project/mode.md already names.
@@ -671,6 +671,11 @@ interface Props {
  * (SPIDERYARN-READING2-57,
  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md).
  * The two runs that changed were renamed for what they now hold.
+ *
+ * Inside two runs the order changed on 2026-10-04, when Greg moved Glossary
+ * and Citations one place left each (spya-tnqt2t,
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
+ * No run gained or lost a mode.
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -859,8 +864,18 @@ const MODES_UI = [
     group: "guides",
     icon: Quote,
   },
-  /* **In the guides run, after Quotes, since 2026-09-29** — Greg: *"Move FAQ
-     and Search a little bit further left"* (SPIDERYARN-READING2-4E). Every row
+  /* **Straight after Quotes, ahead of FAQ, since 2026-10-04** — Greg: *"move
+     the glossary one to the left"* (spya-tnqt2t, plan 261004j). It had stood
+     after FAQ since 2026-09-29. */
+  {
+    mode: "glossary",
+    group: "guides",
+    icon: BookA,
+  },
+  /* **In the guides run since 2026-09-29** — Greg: *"Move FAQ
+     and Search a little bit further left"* (SPIDERYARN-READING2-4E) — and
+     after Glossary since 2026-10-04, when Glossary moved one place left past
+     it (spya-tnqt2t, plan 261004j); until then it stood straight after Quotes. Every row
      is a question answered by passages of the piece itself, which is what the
      piece contains. It had stood after Citations, at the end of the "one dimension
      pulled out" group, where Greg had not yet placed it by hand.
@@ -874,14 +889,10 @@ const MODES_UI = [
     group: "guides",
     icon: BadgeQuestionMark,
   },
-  {
-    mode: "glossary",
-    group: "guides",
-    icon: BookA,
-  },
-  /* Straight after Glossary, because the order runs outwards from the article's
-     own words and these two are the same kind of thing pointed at different
-     units: a term is a word you look up, an idea is a proposition you hold.
+  /* After FAQ since Glossary moved left past it on 2026-10-04. It still
+     follows Glossary in the run because these two are the same kind of thing
+     pointed at different units: a term is a word you look up, an idea is a
+     proposition you hold. FAQ now sits between them (see Glossary's row).
      Greg set this order by hand, so a new mode goes where it belongs in his
      reasoning rather than on the end. */
   {
@@ -902,9 +913,28 @@ const MODES_UI = [
     group: "guides",
     icon: Clock,
   },
-  /* **First of the critical run — Referee, Citations, Debate — since
+  /* **First of the critical run — Citations, Referee, Debate — since
+     2026-10-04**: Greg, *"Move the citations mode one to the left in the
+     bottom bar"* (spya-tnqt2t, plan 261004j). It joined this run on
+     2026-09-29, between Referee and Debate — *"Move Citations further right,
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
+     is the web's, and Referee is somebody weighing the piece against other
+     work: the three are reading it critically. It stood after Timeline before
+     that.
+
+     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
+     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
+     is Quotes'. docs/plans/260911g-citations-mode.md. */
+  {
+    mode: "citations",
+    group: "critical",
+    icon: BookText,
+  },
+  /* **In the critical run — Citations, Referee, Debate — since
      2026-09-29**, which is Greg's grouping: *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Until then it sat
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). First of it until
+     2026-10-04, when Citations moved one place left past it (spya-tnqt2t,
+     plan 261004j). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
@@ -925,21 +955,6 @@ const MODES_UI = [
     mode: "referee",
     group: "critical",
     icon: ClipboardCheck,
-  },
-  /* **Between Referee and Debate, since 2026-09-29** — Greg: *"Move
-     Citations further right, next to Debate and Reviewer"*
-     (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
-     is the web's, and Referee is somebody weighing the piece against other
-     work: the three are reading it critically. It stood after Timeline before
-     that.
-
-     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
-     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
-     is Quotes'. docs/plans/260911g-citations-mode.md. */
-  {
-    mode: "citations",
-    group: "critical",
-    icon: BookText,
   },
   /* **Last of the critical run, before the input run, since 2026-09-29**, when
      Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
@@ -1996,7 +2011,9 @@ export function Dock({
   useMetadataEscape(view === "metadata", metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
-     neither can be trusted. */
+     neither can be trusted. Since 2026-10-04 no reader has both — the link is
+     the visitor's and the row is everybody else's (`DockHelp`) — and it is
+     still one rule for which section. */
   const helpLink = helpHrefFor(mode);
 
   /**
@@ -2430,43 +2447,9 @@ export function Dock({
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
 
-        {/* **Help, beside Feedback, for everybody.** Greg asked for more (i)
-            icons explaining the interface (SPIDERYARN-READING2-85); GPT Sol's
-            plan review turned that into this one labelled link rather than new
-            glyphs in the spine, which is 12px wide and clips, or in the band's
-            corner, which already holds its (i) — docs/plans/261002b-help-page.md
-            § After GPT Sol's plan review, R5.
-
-            **Here, at the app end of the row**, because Help is about the app
-            rather than about this article: outside the `TooltipGroup` above for
-            the reason the switch is, and just before Feedback because the two
-            are the conventional pair — *how does this work* and *this does not
-            work*. Unlike Feedback it has no gate: a visitor on a shared link is
-            the reader who knows least about what the buttons do, and `/help` is
-            a public page.
-
-            **Contextual**: it opens at the section for the mode the band is in,
-            or at the reading view in Plain and off the reading view —
-            `helpHrefFor`. A real link in the same tab, so Back returns to the
-            article with its address, mode and place intact, and ⌘-click opens
-            Help beside it.
-
-            `dock-help` is so the fit ladder can drop its word on the first rung,
-            with the wordmark's and Feedback's (styles/dock-fit.css § the bar's
-            fit ladder): the app-level words are the ones worth losing before
-            any mode's. On a phone the row already scrolls rather than clips
-            (docs/project/narrow-windows.md), so one more glyph pushes nothing
-            off-screen; it is one more thing to drag to. */}
-        <DockLink
-          href={helpLink}
-          current={false}
-          icon={LifeBuoy}
-          label="Help"
-          className="dock-help"
-          hover={
-            <ControlTip head="Help" what={NOT_A_MODE.help.what} how={NOT_A_MODE.help.how} />
-          }
-        />
+        {/* **Help, beside Feedback, on a visitor's bar only** since
+            2026-10-04 — the gate and Greg's words are on `DockHelp`. */}
+        <DockHelp isVisitor={isVisitor} href={helpLink} />
 
         {/* **Feedback, at the far end, and only for somebody a report can
             belong to.** It left the top-right corner on 2026-09-06 for the same
@@ -2477,8 +2460,8 @@ export function Dock({
 
             **After the switch**, because the two are the bar's app-level pair
             and this is the least urgent thing in the row — which is also why
-            the fit ladder takes its word first (dock-fit.ts § the rungs). Help
-            has sat between them since 2026-10-02; see there.
+            the fit ladder takes its word first (dock-fit.ts § the rungs). On a
+            visitor's bar Help sits between them (`DockHelp`).
 
             The one thing this makes worse, recorded rather than discovered
             later: on a phone the row already overflows and scrolls, and this
@@ -2527,6 +2510,7 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * **The buttons in this bar that are not modes**, and the two sentences
  * each of them says on hover. Three of them since Help joined on 2026-10-02 —
  * Comments, Metadata, Help — after a spell at two when Tweets became a mode.
+ * Help is drawn on a visitor's bar only since 2026-10-04 (`DockHelp`).
  *
  * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
  * makes the next mode a compile error until somebody writes them
@@ -2625,7 +2609,7 @@ const NOT_A_MODE = {
   },
   help: {
     /* Not the button's own word back (the label is *Help*), and true on every
-       surface it is drawn on — owner, visitor, metadata page. */
+       surface it is drawn on — a visitor's reading view and metadata page. */
     what: "How Spideryarn works: every mode, the map down the side, the gutter, sharing, and what costs what",
     /* The half nobody would guess: that it is not the top of a manual but the
        part about what is on screen, and that the sections are linkable. Said
@@ -3559,6 +3543,59 @@ function DockCommandBar({
       open={bar.open}
       onOpen={bar.show}
       onClose={bar.hide}
+    />
+  );
+}
+
+/**
+ * **Help, in the bar of a reader who has no command bar.**
+ *
+ * It was on every bar from 2026-10-02: Greg asked for more (i) icons
+ * explaining the interface (SPIDERYARN-READING2-85), and GPT Sol's plan review
+ * turned that into one labelled link here rather than new glyphs in the spine
+ * (docs/plans/261002b-help-page.md § After GPT Sol's plan review, R5). Then
+ * Greg, 2026-10-04 (spya-dev7pf):
+ *
+ * > We don't need to show the help icon in the bottom bar of reading view. …
+ * > I'm trying to avoid cluttering that bottom bar, but of course we also want
+ * > to make sure that if people need help, they can get to it.
+ *
+ * So it is gone wherever the command bar is, because that bar's Help row opens
+ * the same section (`helpRow` in CommandBar.tsx), and a mode's (i) ends in
+ * *More in Help →* besides (BandAbout.tsx). **A visitor has no command bar**
+ * (`DockCommands`, `DockCommandBar`), and in Plain, on the Metadata page, in a
+ * mode that is not shared (`VisitorBand`) or in a band that failed there is no
+ * (i) either, so for them this link is the only way to Help from the page, and
+ * it stays. That is every visitor, signed in or not: the gate is the one the
+ * command bar stands down on, so nobody can be without both.
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ *
+ * **At the app end of the row**, just before Feedback, because Help is about
+ * the app rather than about this article, and the two are the conventional
+ * pair — *how does this work* and *this does not work*.
+ *
+ * **Contextual**: `href` is `helpHrefFor`'s, the section for the mode the band
+ * is in, or the reading view's in Plain and off the reading view. A real link
+ * in the same tab, so Back returns to the article with its address, mode and
+ * place intact, and ⌘-click opens Help beside it.
+ *
+ * `dock-help` is so the fit ladder can drop its word on the first rung, with
+ * the wordmark's and Feedback's (styles/dock-fit.css § the bar's fit ladder).
+ *
+ * The gate is in here rather than in a `&&` in `Dock`, for the reason
+ * `DockFeedback`'s is: that function is at Biome's cognitive-complexity
+ * ceiling.
+ */
+function DockHelp({ isVisitor, href }: { isVisitor: boolean; href: string }) {
+  if (!isVisitor) return null;
+  return (
+    <DockLink
+      href={href}
+      current={false}
+      icon={LifeBuoy}
+      label="Help"
+      className="dock-help"
+      hover={<ControlTip head="Help" what={NOT_A_MODE.help.what} how={NOT_A_MODE.help.how} />}
     />
   );
 }

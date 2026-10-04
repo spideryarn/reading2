@@ -1049,6 +1049,32 @@ findings are held; each was watched red against a mutated panel before it was be
 The scan is also **not** what stops an injected instruction from working. Nothing does. It is a way
 for a referee to find out that somebody tried.
 
+## The bibliographic registries are outside sources too <a id="registries"></a>
+
+**Crossref, DataCite and OpenAlex send us strings that end up on the page** — a cited work's title,
+authors, venue and year ([`src/bibliographic.ts`](../../src/bibliographic.ts)), and the papers that
+cite the article ([`src/citation-index.ts`](../../src/citation-index.ts)). They are reputable, but
+what they hold was typed by publishers and depositors, so it is treated like any other outside
+content:
+
+- **The registry fetcher dials only `api.crossref.org`, `api.datacite.org` and
+  `api.openalex.org`**, on the guarded fetch path with no redirects —
+  `fetchBibliographicJson` in [`src/fetch.ts`](../../src/fetch.ts).
+- **Their text is rendered as text.** `plainRegistryText` strips the markup Crossref titles carry,
+  and nothing a registry sends goes through `dangerouslySetInnerHTML`.
+- **No address a registry sends is used as a link.** A record keeps an identifier, never a URL, and
+  a citing paper's link is built by `citerUrl` in [`src/citer-link.ts`](../../src/citer-link.ts).
+  Its DOI was shape-checked by `parseWorkId` when the response was parsed, then encoded by
+  `doiUrl` in [`src/doi-url.ts`](../../src/doi-url.ts); without a DOI, `citerUrl` checks the
+  OpenAlex id before constructing its address. `doiUrl` itself is an encoder, not a shape check.
+- **Every address we construct from a DOI encodes that identifier**, including registry API
+  requests through `doiPath`. Its suffix may hold `%` or `\`, and pasted in as written those name
+  a different work. Until 2026-10-04 three call sites did paste it in —
+  [261004j](../plans/261004j-encode-dois-in-link-addresses.md).
+
+As with model-supplied addresses, registry-supplied URLs are not passed through into link
+attributes. Ordinary text attributes are escaped by React, like text content.
+
 ## A third party who is not untrusted: whoever signs in <a id="the-gate"></a>
 
 Since 2026-08-27 there is a gate. [auth.md](auth.md) says where the pieces are; two facts belong

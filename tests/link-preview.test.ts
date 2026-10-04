@@ -141,6 +141,16 @@ describe("describeLink", () => {
      block drops, taken from the corpus, so the two rules are tested against
      each other rather than in isolation. */
   describe("the identifier a path is carrying", () => {
+    it.each([
+      ["https://doi.org/10.1234%2F../x", "10.1234/../x"],
+      ["https://doi.org/10.1234%2F.", "10.1234/."],
+      ["https://doi.org/10.1234/a//b/", "10.1234/a//b/"],
+      ["https://doi.org/10.1234/a%252Fb", "10.1234/a%2Fb"],
+    ])("reads the whole opaque DOI in %s", (url, id) => {
+      const out = describeLink(url, NOEMA);
+      expect(out.kind === "external" && out.citation).toEqual({ label: "DOI", id });
+    });
+
     const CITED: [string, string, string][] = [
       ["https://arxiv.org/abs/0706.3639", "arXiv", "0706.3639"],
       // The version suffix stays: v1 and v3 are different papers to anyone who

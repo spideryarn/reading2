@@ -9,14 +9,17 @@
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
  * **A module of its own so the browser can import it**: src/citation-index.ts
- * reaches the fetcher and the database. This file imports nothing.
+ * reaches the fetcher and the database. This file imports only src/doi-url.ts,
+ * which imports nothing.
  */
+
+import { doiUrl } from "./doi-url.js";
 
 /** OpenAlex's id for a work, as it appears after `https://openalex.org/`. */
 export const OPENALEX_WORK_ID = /^W\d{1,15}$/;
 
 /** `https://doi.org/<doi>` when there is a DOI, else the work's OpenAlex page, else null. */
 export function citerUrl(citer: { doi?: string; openalexId: string }): string | null {
-  if (citer.doi !== undefined) return `https://doi.org/${citer.doi.split("/").map(encodeURIComponent).join("/")}`;
+  if (citer.doi !== undefined) return doiUrl(citer.doi);
   return OPENALEX_WORK_ID.test(citer.openalexId) ? `https://openalex.org/${citer.openalexId}` : null;
 }

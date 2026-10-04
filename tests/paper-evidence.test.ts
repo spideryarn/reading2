@@ -13,6 +13,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
+import { identityOf } from "../src/cited-in-spideryarn.js";
 import type { FetchLike } from "../src/fetch.js";
 import {
   canonicalPaper,
@@ -536,6 +537,16 @@ describe("readPaperEvidence — is it the work?", () => {
     expect(paperAddress("https://doi.org/10.1101/2020.06.26.174482.full")?.url).toBe("https://doi.org/10.1101/2020.06.26.174482");
     expect(paperAddress("https://doi.org/10.1636/JoA-S-17-093.1.full")?.url).toBe("https://doi.org/10.1636/joa-s-17-093.1");
     expect(paperAddress("https://arxiv.org/abs/2401.01234v2")?.url).toBe("https://arxiv.org/pdf/2401.01234v2");
+  });
+
+  it("the address it reads names the DOI the row's link named, whatever characters the DOI holds (qi-thwhkxxh)", () => {
+    /* A literal `%2f` and a backslash in the DOI: pasted in unencoded, the
+       address we fetch is for `a/b`, a different work. */
+    expect(paperAddress("https://doi.org/10.1234/a%252Fb")?.url).toBe("https://doi.org/10.1234/a%252fb");
+    expect(paperAddress("https://doi.org/10.1234/a%5Cb")?.url).toBe("https://doi.org/10.1234/a%5Cb");
+    for (const row of ["https://doi.org/10.1234/a%252Fb", "https://doi.org/10.1234/a%5Cb"]) {
+      expect(identityOf(paperAddress(row)!.url)).toEqual(identityOf(row));
+    }
   });
 });
 

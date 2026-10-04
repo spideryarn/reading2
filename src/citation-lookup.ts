@@ -57,6 +57,7 @@
 import { createHash } from "node:crypto";
 
 import { firstAuthor } from "./citations.js";
+import { doiOfUrl } from "./doi-url.js";
 import { generationKey } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import type {
@@ -116,9 +117,9 @@ export interface LookupContext {
 
 /** A row's identity anchor. `web` is a searched row we found a page for: no anchor. */
 export function anchorOf(work: Pick<CitedWork, "url" | "linkFrom">): LookupAnchor {
-  if (work.linkFrom === "doi" && work.url.startsWith("https://doi.org/")) {
-    return { kind: "doi", id: work.url.slice("https://doi.org/".length) };
-  }
+  /* Decoded: the anchor is looked for in a page's text and its decoded address. */
+  const doi = work.linkFrom === "doi" ? doiOfUrl(work.url) : null;
+  if (doi !== null) return { kind: "doi", id: doi };
   if (work.linkFrom === "arxiv" && work.url.startsWith("https://arxiv.org/abs/")) {
     return { kind: "arxiv", id: work.url.slice("https://arxiv.org/abs/".length) };
   }

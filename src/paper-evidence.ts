@@ -53,6 +53,7 @@ import { parseWorkId, type WorkId, type WorkRecord } from "./bibliographic.js";
 import { MIN_QUOTE_WORDS, surnameOf, titleNamesWork, tokens } from "./citation-lookup.js";
 import type { InvestigateContext } from "./citation-investigate-context.js";
 import { identityOf } from "./cited-in-spideryarn.js";
+import { doiUrl } from "./doi-url.js";
 import { log, since } from "./log.js";
 import {
   arxivPdfUrl,
@@ -185,12 +186,11 @@ export type PaperEvidenceState = PaperEvidence["state"];
  */
 export function paperAddress(workUrl: string, matchedPageUrl?: string | null): PaperAddress | null {
   const id = identityOf(workUrl);
-  /* `identityOf`'s DOI has no `?`, `#` or whitespace, so it is already a path. */
   if (id.doi) {
     const workId = parseWorkId(`doi:${id.doi}`);
     /* From the normalised id, not the row's: `parseWorkId` drops a publisher's
        path suffix (`….full`, `….abstract`), which doi.org does not resolve. */
-    if (workId) return { url: `https://doi.org/${workId.slice("doi:".length)}`, from: "doi", id: workId };
+    if (workId) return { url: doiUrl(workId.slice("doi:".length)), from: "doi", id: workId };
   }
   if (id.arxiv) {
     /* `arxivPdfUrl` keeps a version the article cited (`v1`); `identityOf` does not. */
