@@ -658,7 +658,8 @@ export function useShelf(readerId: string): Shelf {
       restore,
       renaming,
       tagging,
-      setTagging,
+      // `setTagging` is a state setter, which React keeps the same for the
+      // life of the component, so it is returned above and not listed here.
       beginRename,
       cancelRename,
     ],

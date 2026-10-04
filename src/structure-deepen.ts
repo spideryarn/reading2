@@ -123,6 +123,7 @@ import {
 import type { BuildReport, ModelNode } from "./structure.js";
 import type { ModelPower } from "./models.js";
 import {
+  messageText,
   messagesWireBody,
   streamMessage,
   wasRefused,
@@ -865,10 +866,7 @@ export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): 
     }
     if (message.stop_reason === "max_tokens") throw new ExpansionTruncated();
     return {
-      text: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join(""),
+      text: messageText(message),
       /* Off `finalMessage()` rather than off the raw `message_delta`, which is
          what `CallMeter` reads. The four fields here are the ones the SDK's own
          `Usage` type names, so they survive the merge; the TTL split and the

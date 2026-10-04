@@ -56,6 +56,11 @@ const quoteMarks = await readFile(path.join(ROOT, "src/web/reader/useQuoteMarks.
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
+/* The Glossary's threshold row is drawn by the shared component since
+   2026-10-04, so what was asserted of GlossaryPanel's own markup is asserted of
+   this file, plus that the panel hands it what it used to print itself. The
+   row as rendered is tests/threshold-slider-adopters.test.tsx. */
+const thresholdSlider = await readFile(path.join(ROOT, "src/web/ThresholdSlider.tsx"), "utf8");
 
 describe("the reading view's glossary wiring", () => {
   it("reads the glossary exactly once", () => {
@@ -225,9 +230,10 @@ describe("the threshold wiring", () => {
     /* Present wherever the threshold control is, absent wherever it is not. A
        line that is sometimes missing for a *different* reason teaches the
        reader nothing, so neither of the first two may be behind a `note &&`. */
-    expect(glossaryPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
+    expect(glossaryPanel).toMatch(/<ThresholdSlider\s[^>]*note=\{gateNote\(hiddenCount, entries\.length\)\}/);
+    expect(thresholdSlider).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
     expect(quotesPanel).toMatch(/<p className="quotes-bar-note">\{note\}<\/p>/);
-    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+    for (const panel of [glossaryPanel, thresholdSlider, quotesPanel, searchPanel]) {
       expect(panel).not.toMatch(/\{note && </);
     }
     /* Search is the exception since 2026-10-03, and by one rule only: no line
@@ -259,7 +265,7 @@ describe("the threshold wiring", () => {
   it("says 'showing' rather than 'promoting' on every slider", () => {
     /* An unscored item is shown without being promoted, so the verb would be a
        small lie in the one place this feature has to be honest. */
-    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+    for (const panel of [thresholdSlider, quotesPanel, searchPanel]) {
       expect(panel).toMatch(/aria-valuetext=\{`[^`]*showing \$\{count\}/);
     }
   });

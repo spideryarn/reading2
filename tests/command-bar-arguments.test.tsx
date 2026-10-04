@@ -54,6 +54,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
       },
     },
     readOnly: mic.transcribing,
+    busy: mic.transcribing || mic.armed,
     toggle: () => {},
   }),
 }));

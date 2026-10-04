@@ -386,6 +386,59 @@ describe("what it survives", () => {
   });
 
   /**
+   * **No clipboard is a refusal the probe says, not a press that does nothing.**
+   * `navigator.clipboard` is undefined in every insecure context — which is
+   * how the probe is most often reached: a phone at `http://192.168.1.x:5273`.
+   * Until 2026-10-04 the write was `navigator.clipboard?.writeText(t).then(…)`,
+   * and an optional chain short-circuits the whole chain, `.catch` included, so
+   * *copy* filled the box and said nothing at all. jsdom has no clipboard, so
+   * the first case is the phone's; watched fail against the optional chain.
+   */
+  describe("copy", () => {
+    const clipboard = (value: unknown) =>
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value });
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, "clipboard");
+    });
+
+    it("says the copy was refused when there is no clipboard, and still fills the box", () => {
+      address("?probe=1");
+      show();
+      expand();
+      expect("clipboard" in navigator && navigator.clipboard, "jsdom should have no clipboard").toBeFalsy();
+
+      press("copy");
+      expect(host.textContent).toContain("copy refused — select the box");
+      expect(JSON.parse(host.querySelector("textarea")?.value || "{}").head?.probe).toBe("spideryarn viewport probe");
+    });
+
+    it("says copied when the clipboard takes it, with the trace it was given", async () => {
+      const written: string[] = [];
+      clipboard({ writeText: async (t: string) => void written.push(t) });
+      address("?probe=1");
+      show();
+      expand();
+
+      press("copy");
+      await act(async () => {});
+      expect(host.textContent).toContain("copied");
+      expect(host.textContent).not.toContain("refused");
+      expect(written).toEqual([host.querySelector("textarea")?.value]);
+    });
+
+    it("says refused when the clipboard rejects", async () => {
+      clipboard({ writeText: async () => Promise.reject(new Error("no permission")) });
+      address("?probe=1");
+      show();
+      expand();
+
+      press("copy");
+      await act(async () => {});
+      expect(host.textContent).toContain("copy refused — select the box");
+    });
+  });
+
+  /**
    * **The listeners go.** A leak here is worse than a leak anywhere else in the
    * app: these fire on every visual-viewport movement for the rest of the
    * session, on the device least able to afford it.

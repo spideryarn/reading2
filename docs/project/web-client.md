@@ -114,8 +114,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   again. `useQuiz` had its own hold until 2026-10-04 —
   [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
-  "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
-  private copy with neither the switch to a date nor the clock.
+  "3 days ago" that stays true while the page is open. A caller that puts a verb in front says
+  "on" before the date — `src/web/Metadata.tsx` § `whenSaid`, which replaced that file's private
+  `ago` on 2026-10-04.
 - **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
   `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
   home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
@@ -137,9 +138,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   on a touch screen it is one line that scrolls sideways and keeps the pressed order in view
   (glossary.css § a touch screen). Quotes, Citations, Glossary, Debate and FAQ use it.
 - **`src/web/ThresholdSlider.tsx` § `ThresholdSlider`, with `src/web/threshold.ts` §
-  `applyThreshold`** — "show the items above this score". The FAQ uses the component; the
-  Glossary's `GateSlider` and the `BarSlider`s in Citations and Quotes draw the same row for
-  themselves, and share only `applyThreshold`.
+  `applyThreshold`** — "show the items above this score". The FAQ, the Glossary and
+  Citations use the component; Quotes, Search and Debate draw the same row for themselves, and
+  share only `applyThreshold`.
 - **`src/web/lib/DataTable.tsx` § `DataTable`, `useSortedTable`** — a sortable table whose sort is in
   the URL.
 - **`src/web/key-chord.ts` § `isTyping`, `isModChord`; `src/web/keynav.ts` § `useArrowNav`;

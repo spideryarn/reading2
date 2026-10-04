@@ -44,10 +44,8 @@ import { isBody } from "./block-policy.js";
 import { plainTitle } from "./html.js";
 import { mintUniqueId } from "./ids.js";
 import type { Article } from "./article-input.js";
-import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { parseJsonAnswer } from "./parse-json.js";
@@ -66,7 +64,7 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { firstAuthor, scholarUrl } from "./scholar-search.js";
 import {
@@ -1991,19 +1989,7 @@ export async function generateCitations(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, { authored: "the model answered with stop_reason: refusal" });
-  }
-  const answerText = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("citations", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: answerText.length,
-    });
-  }
+  const answerText = finishedText(message, "citations", maxTokens, answerTokens);
 
   const drops = emptyDrops();
   const scores = noScoreDrops();

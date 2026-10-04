@@ -576,7 +576,7 @@ export function CommentDialog({
                microphone actually recording, and Enter arrives from a soft
                keyboard as readily as from a hard one. dictation.md § Adding it
                to a box calls this the guard everybody forgets. */
-            if (dictate.readOnly || dictate.dictation.armed) return;
+            if (dictate.busy) return;
             const q = followUp.trim();
             if (!q) return;
             setFollowUp("");
@@ -617,7 +617,7 @@ export function CommentDialog({
                submit handler that returns without doing anything — the guard
                above is correct and silent, which is the worse half of the two.
                GPT Sol, 2026-09-04. */
-            disabled={dictate.readOnly || dictate.dictation.armed || !followUp.trim()}
+            disabled={dictate.busy || !followUp.trim()}
           >
             Ask in chat
           </button>

@@ -321,7 +321,8 @@ export function useReadingTime(
         body: JSON.stringify({ seconds }),
       };
       if (leaving) {
-        leavingFetch(path, init);
+        // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
+        void leavingFetch(path, init);
         return;
       }
       /* Dropped on failure, never re-queued — see the file header. `apiFetch`

@@ -118,6 +118,33 @@ const STEPS: Step[] = [
   },
   {
     /**
+     * A React hook whose dependency list does not match what it reads. Gates
+     * since 2026-10-04, the day it reached zero: eleven findings, none a live
+     * bug, eight of them deliberate and now suppressed in place with the reason
+     * (docs/plans/261004d § A1). So a new one is either a stale closure or a
+     * decision somebody has to write down. About 2 s.
+     *
+     * tests/biome-config-is-live.test.ts asks the same question inside
+     * `npm test`, and proves the rule can still fire.
+     */
+    name: "hook-deps",
+    gate: true,
+    argv: ["run", "--silent", "lint:hook-deps"],
+  },
+  {
+    /**
+     * A promise nobody awaits, handles or marks `void` — the shape that loses
+     * an error without a trace. Gates since 2026-10-04, the day it reached zero
+     * (docs/plans/261004d § A2). The rule is in Biome's `nursery` group, which
+     * is why the binary is pinned to an exact version: an upgrade can move or
+     * rename it, and the test named above is what would say so. About 5 s.
+     */
+    name: "promises",
+    gate: true,
+    argv: ["run", "--silent", "lint:promises"],
+  },
+  {
+    /**
      * **A forked snapshot chain — two worktrees generating from one parent.**
      *
      * `drizzle-kit check` is the only thing that reads `drizzle/meta/*` as a

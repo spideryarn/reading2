@@ -697,7 +697,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * has no live recogniser — and the microphone is still on after the report
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
-  const dictationBusy = dictate.dictation.armed || dictate.readOnly;
+  const dictationBusy = dictate.busy;
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 

@@ -75,7 +75,6 @@ import {
   Globe,
   Info,
   LoaderCircle,
-  RotateCcw,
   Search,
   TextSearch,
   Trash2,
@@ -108,6 +107,7 @@ import {
   survivesThreshold,
   type ThresholdResult,
 } from "./threshold.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
 import type { LookKept, UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
@@ -1152,6 +1152,15 @@ function SortBar({
  * A native `<input type="range">` rather than anything built: it is draggable,
  * arrow-key steppable, announced by screen readers and touch-friendly for free,
  * and `accent-color` is the whole of the styling it needs.
+ *
+ * **The row itself is `ThresholdSlider`** (src/web/ThresholdSlider.tsx) since
+ * 2026-10-04 — it was drawn here until then, and the decisions above are
+ * the ones that component carries for every panel. What stays here is the one
+ * pass and this panel's numbers and words. The reset appears only once there is
+ * something to undo (a reset that is always there is a permanent invitation to
+ * a state you are already in), and the foot line is there always, never
+ * conditionally: an empty list under a slider is otherwise ambiguous between
+ * "there is nothing here" and "you have hidden it all".
  */
 function GateSlider({
   entries,
@@ -1168,55 +1177,22 @@ function GateSlider({
      `N of M` and the foot line have to agree, and the way they cannot disagree
      is for there to be one result rather than a filter beside a counter. */
   const { visible, hiddenCount } = visibleEntries(entries, gate);
-  const note = gateNote(hiddenCount, entries.length);
-  const count = `${visible.length} of ${entries.length}`;
-
   return (
-    <div className="gloss-gate">
-      <div className="gloss-gate-row">
-        <label className="gloss-gate-label" htmlFor="gloss-gate">
-          threshold
-        </label>
-        <span className="gloss-gate-value">
-          {gate.toFixed(2)} · {count}
-        </span>
-        {/* Only once there is something to undo. A reset that is always there
-            is a permanent invitation to a state you are already in. */}
-        {moved && (
-          <button
-            type="button"
-            className="gloss-gate-reset"
-            title={`Back to ${PRIORITY_GATE.toFixed(2)}`}
-            aria-label={`Reset the threshold to ${PRIORITY_GATE.toFixed(2)}`}
-            onClick={() => onGate(null)}
-          >
-            <RotateCcw size={11} />
-          </button>
-        )}
-      </div>
-      <input
-        id="gloss-gate"
-        className="gloss-gate-range"
-        type="range"
-        min={0}
-        max={gateMax(entries, gate)}
-        step={GATE_STEP}
-        value={gate}
-        title="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
-        /* The thumb's position is a number nobody can hear. This is what makes
-           it audible, and it is the count rather than the product because the
-           count is what the reader is aiming at. **"showing", not
-           "promoting"** — an unscored term is shown without being promoted. */
-        aria-valuetext={`${gate.toFixed(2)}, showing ${count} terms`}
-        onChange={(e) => onGate(Number.parseFloat(e.target.value))}
-      />
-      {/* Always, never conditionally: present wherever the slider is, absent
-          wherever it is not. A line that is sometimes missing for a *different*
-          reason teaches the reader nothing, and an empty list under a slider is
-          otherwise ambiguous between "there is nothing here" and "you have
-          hidden it all". */}
-      <p className="gloss-gate-note">{note}</p>
-    </div>
+    <ThresholdSlider
+      id="gloss-gate"
+      value={gate}
+      max={gateMax(entries, gate)}
+      defaultValue={PRIORITY_GATE}
+      moved={moved}
+      visible={visible.length}
+      total={entries.length}
+      /* **"showing … terms", not "promoting"** in the spoken value — an
+         unscored term is shown without being promoted. */
+      noun="terms"
+      title="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
+      note={gateNote(hiddenCount, entries.length)}
+      onChange={onGate}
+    />
   );
 }
 

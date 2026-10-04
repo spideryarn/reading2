@@ -388,8 +388,8 @@ const NEEDS_GRAPH = new Set<DiagramKind>(["force"]);
  * The collapse set, which is empty and stays empty — see `collapsed` in the
  * panel for why, and why it is a constant rather than a deletion.
  *
- * Module-level so it is one object for the life of the page: it is a dependency
- * of the `graph` and `layout` memos, and a fresh `new Set()` per render would
+ * Module-level so it is one object for the life of the page: it is used inside
+ * the `graph` and `layout` memos, and a fresh `new Set()` dependency per render would
  * make both of them miss on every render — which on Force is a 300-tick physics
  * simulation.
  */
@@ -911,7 +911,10 @@ export function DiagramPanel({
     // `similar.pairs` is a *stable* array — the hook hands back the same one
     // until a new answer lands — so this rebuilds exactly twice per article:
     // once immediately without the embeddings, once when they arrive.
-    [root, wantsGraph, blocks, collapsed, similar.pairs],
+    //
+    // `collapsed` is not listed: it aliases the module constant NOTHING_COLLAPSED,
+    // so its identity cannot change. A picture that makes it state again must add it here.
+    [root, wantsGraph, blocks, similar.pairs],
   );
 
   /* **The two scatters, and only those two.** Same narrow gate as `similar`
@@ -1054,7 +1057,8 @@ export function DiagramPanel({
       graph,
       scatter,
     );
-  }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
+    // `collapsed` is not listed, for the reason given at `graph` above.
+  }, [root, kind, box, words, graph, scatter, followsReader]);
 
   /**
    * **`drawnKind` was here, and its removal is the point of this change.**

@@ -94,8 +94,8 @@ export function wholeDocumentAnswerFields(
 /**
  * The text of a whole-document answer, for the two harnesses that hand it straight
  * to production's parser (evals/paperwork/run.ts, evals/plain-words/run.ts) — after
- * the two checks production makes first (src/structure.ts, around its own
- * `wasRefused` call). A refusal or an answer cut off at `max_tokens` can still be
+ * the two checks production makes first (`finishedText` in
+ * src/messages-stream.ts, which src/structure.ts calls). A refusal or an answer cut off at `max_tokens` can still be
  * text the parser accepts, and would be scored as an ordinary answer.
  */
 export function acceptedStructureAnswer(message: Anthropic.Message, body: Block[], maxTokens: number): string {

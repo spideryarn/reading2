@@ -442,6 +442,7 @@ export function BlockGutter({
    * from wherever a reader has just clicked is worse than leaving it.
    */
   const goTo = useRef<"head" | "more" | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` is the trigger, not an input — the focus moves after the render that drew or removed the controls, and where to is read from the `goTo` ref.
   useEffect(() => {
     const where = goTo.current;
     goTo.current = null;

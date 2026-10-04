@@ -1584,7 +1584,7 @@ export function CommandBar({
    * dictation.md calls the guard everybody forgets: Enter mid-sentence would
    * take whichever row the half-heard words happened to select.
    */
-  const dictationBusy = dictate.dictation.armed || dictate.readOnly;
+  const dictationBusy = dictate.busy;
   /* **The bar stays mounted when it closes**, so the hook's cleanup never runs
      and a microphone left on would go on recording behind a shut bar.
      `dictation.toggle`, not the field's, which would put the focus back into a

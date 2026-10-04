@@ -815,7 +815,7 @@ export function QuizPanel({
      way**, box empty or not: a browser that shows no rough words leaves the box
      empty while it listens, and the transcript lands through `setTyped` after a
      move — under the *next* question. GPT Sol's plan review, finding 2. */
-  const listening = dictate.dictation.armed || dictate.readOnly;
+  const listening = dictate.busy;
   const stepByKey = useRef<(dir: -1 | 1) => boolean>(() => false);
   stepByKey.current = (dir) => {
     if (!question || unmarked || listening) return false;
@@ -877,13 +877,7 @@ export function QuizPanel({
     return i >= 0 && included[i] === true;
   };
 
-  const cannotAnswer =
-    !typed.trim() ||
-    tooLong ||
-    marking ||
-    owner.stale ||
-    dictate.readOnly ||
-    dictate.dictation.armed;
+  const cannotAnswer = !typed.trim() || tooLong || marking || owner.stale || dictate.busy;
   const answerName = marking ? "Marking…" : mine?.status === "failed" && !superseded ? "Try again" : "Answer";
 
   const submit = () => {
@@ -896,7 +890,7 @@ export function QuizPanel({
        two-pass design must not produce, and it would be marked as the reader's
        own answer. The same pair chat's composer carries, for the same reason.
        docs/project/dictation.md § Adding it to a box. */
-    if (dictate.readOnly || dictate.dictation.armed || !question) return;
+    if (dictate.busy || !question) return;
     const answer = typed.trim();
     if (answer === "" || tooLong || marking || owner.stale) return;
     void owner.mark(question.id, answer);

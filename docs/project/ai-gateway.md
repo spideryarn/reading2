@@ -1081,16 +1081,17 @@ The research is
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
-`stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. All seven stages branch on
-`message.stop_reason === "refusal"`, and if that branch stops firing each one tries to parse a
-refusal sentence as JSON — `summarise.ts` worst of all, treating it as a
-repairable parse error, buying a second call, and then salvaging the batch as merely missing
-summaries.
+`stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. A stage that checked only
+`message.stop_reason === "refusal"` would, if that branch stopped firing, try to parse a refusal
+sentence as JSON — `summarise.ts` (gone with Summary mode, 2026-08-31) was the worst of them,
+treating it as a repairable parse error, buying a second call, and then salvaging the batch as
+merely missing summaries.
 
 It could not be settled by probe: triggering a genuine refusal means composing a harmful request,
 which is not a thing to do to check a field name. The answer is not a probe anyway — a check that
 accepts *either* shape is correct whichever way OpenRouter's documentation gets fixed, and costs one
-clause.
+clause. That check is `wasRefused` in `src/messages-stream.ts`, and since 2026-10-04 the ordinary
+stages reach it through `finishedText` in the same file rather than each calling it.
 
 ## See also
 

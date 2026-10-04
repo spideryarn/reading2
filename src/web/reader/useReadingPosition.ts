@@ -145,6 +145,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   }, [layoutKey, at]);
 
   // Page → URL, once the reader stops moving.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `layoutKey` is the trigger, not an input — a column toggle reflows every row with no scroll event, so the effect re-runs to look the rows up again and measure once.
   useEffect(() => {
     /* One pass over the table, not one document scan per section — see
        rows.ts. This loop was 38.1% of all script time on a 2,046-block

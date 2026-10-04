@@ -53,11 +53,9 @@ import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { isBodyEvidence } from "./block-policy.js";
-import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { findMathSpans, temmlRenderer, type RenderTex } from "./maths-tex.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -79,7 +77,7 @@ import {
   renderPrompt,
 } from "./crossrefs-fingerprint.js";
 export { inputFingerprint, isStale, linkCap, MAX_LINKS, renderPrompt };
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type {
   Block,
   BlockId,
@@ -545,24 +543,8 @@ export async function generateCrossrefs(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("crossrefs", maxTokens, answer, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "crossrefs", maxTokens, answer);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyDropped();
   const crossrefs = buildCrossrefs(parseJson(raw), {

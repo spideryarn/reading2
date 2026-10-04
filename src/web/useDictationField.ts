@@ -70,6 +70,21 @@ export interface UseDictationField {
   /** True while the transcript is on its way. Put it on the box. */
   readOnly: boolean;
   /**
+   * **A dictation is in progress: do not send, and disable what would.**
+   * `readOnly || dictation.armed` — the microphone is on, or it has just gone
+   * off and the transcript is on its way. The two are different moments and
+   * never both true, and a box that sends has to refuse in both: guard
+   * `readOnly` alone and Enter mid-sentence sends the rough live guesses, or on
+   * Safari and Firefox nothing that was said at all (docs/project/dictation.md
+   * § Adding it to another box).
+   *
+   * Use this rather than writing the pair out: the guard that names only one
+   * half is the bug this file's docs record twice. Not for the box itself — that
+   * takes `readOnly`, so the reader can still type while the microphone is on.
+   * tests/dictation-field-busy.test.tsx.
+   */
+  busy: boolean;
+  /**
    * Start or stop dictating. **Use this rather than `dictation.toggle`**: it
    * notes where the caret was first, and pressing the button is the moment the
    * box loses the focus.
@@ -284,5 +299,6 @@ export function useDictationField<C>({
   /* Derived, not stored. The box is closed exactly while the hook says a
      transcript is on its way — one source, so there is no state to leave locked
      when a dictation ends in a way nobody anticipated. */
-  return { dictation, readOnly: dictation.transcribing, toggle };
+  const readOnly = dictation.transcribing;
+  return { dictation, readOnly, busy: readOnly || dictation.armed, toggle };
 }

@@ -44,7 +44,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 /* The bar is not what is under test, and with the switch on it would draw the
    experimental modes too. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 /** Whether the experimental switch reads as on. */
 let experimentalOn = true;

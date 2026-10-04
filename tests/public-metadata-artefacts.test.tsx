@@ -39,7 +39,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 /* The dock is a fixed bar with fetches of its own and is not what this is
    about — the same stub tests/metadata-origin.test.tsx uses on the same page. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { PublicMetadataPage } = await import("../src/web/PublicPages.js");
 const { NOUN } = await import("../src/web/visitor.js");
