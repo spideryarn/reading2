@@ -117,6 +117,7 @@ async function readyToVerify(bytes: Uint8Array, claimedSha?: string) {
     slug,
     upload: { id, filename: "paper.pdf" },
     report: () => {},
+    preview: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
     power: "standard" as const,

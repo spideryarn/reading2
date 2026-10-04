@@ -383,6 +383,7 @@ describe("a step run for real, through the commit", () => {
       power: "standard",
       slug: SLUG,
       report: () => undefined,
+      preview: () => undefined,
       signal: new AbortController().signal,
       cacheArticle: false,
     };

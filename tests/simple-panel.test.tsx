@@ -80,9 +80,17 @@ function artefact(): SimpleSummary {
   };
 }
 
+/**
+ * When set, the GET waits for it before it answers: a read that is under way
+ * and has not landed. What it answers is decided when it lands, as a server's
+ * would be.
+ */
+let artefactGate: Promise<void> | null = null;
+
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
     gets.push(url);
+    if (artefactGate) await artefactGate;
     if (artefactFails) throw new Error("network");
     return artefactStatus === 404
       ? new Response(null, { status: 404 })
@@ -96,32 +104,48 @@ vi.mock("../src/web/lib/api.js", () => ({
 }));
 
 let nextJobId = 0;
-const jobs: Job[] = [];
+/**
+ * The polled job list. **Replaced, never edited**, as the engine's is: the
+ * hook under it memoises on the array, so a test that changes what is queued
+ * assigns a new one and draws again (`showJobs`).
+ */
+let jobs: Job[] = [];
+/** The completion listener the mounted hook registered — `useStepJob`'s `announce`. */
+let finished: ((job: Job) => void) | undefined;
+/** What a press on Retry does: the ids asked for, and the job the queue answers with. */
+const retried: string[] = [];
+let retryAnswer: Job | null = null;
 vi.mock("../src/web/useJobs.js", async () => {
   const actual = await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
   return {
     ...actual,
-    useJobs: () => ({
-      jobs,
-      loaded: true,
-      error: null,
-      driverFailures: {},
-      lastFailure: () => "The queue said no.",
-      run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
-        posts.push(request);
-        nextJobId += 1;
-        return { id: `job${nextJobId}` };
-      },
-      cancel: async () => {},
-      add: async () => null,
-      addUpload: async () => null,
-      retry: async () => {},
-      forget: async () => {},
-    }),
+    useJobs: (_cadence: unknown, onFinished?: (job: Job) => void) => {
+      finished = onFinished;
+      return {
+        jobs,
+        loaded: true,
+        error: null,
+        driverFailures: {},
+        lastFailure: () => "The queue said no.",
+        run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
+          posts.push(request);
+          nextJobId += 1;
+          return { id: `job${nextJobId}` };
+        },
+        cancel: async () => {},
+        add: async () => null,
+        addUpload: async () => null,
+        retry: async (id: string) => {
+          retried.push(id);
+          return retryAnswer;
+        },
+        forget: async () => {},
+      };
+    },
   };
 });
 
-const { SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
+const { SIMPLE_FULLER_NOT_WRITTEN, SIMPLE_FULLER_PENDING, SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
   "../src/web/SimplePanel.js"
 );
 const { BlockLinkProvider } = await import("../src/web/BlockLinkCard.js");
@@ -138,10 +162,14 @@ let root: Root;
 beforeEach(() => {
   gets.length = 0;
   posts.length = 0;
-  jobs.length = 0;
+  jobs = [];
+  finished = undefined;
+  retried.length = 0;
+  retryAnswer = null;
   nextJobId = 0;
   artefactStatus = 404;
   artefactFails = false;
+  artefactGate = null;
   resetActivations();
   jobEngine.reset();
   host = document.createElement("div");
@@ -180,6 +208,7 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
     stalled: false,
     starting: false,
     rewriting: false,
+    preview: null,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -319,8 +348,12 @@ describe("the Simple view", () => {
        "Writing it in plain words" read as a contradiction in the browser check. */
     await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
     expect(text()).not.toContain(SIMPLE_NONE_OWNER);
-    expect(text()).toContain("Brief and Fuller are written together, usually in about half a minute");
-    expect(text()).not.toContain("under half a minute");
+    /* Brief is shown first since 2026-10-04 (plan 261004f stage 2), so the hint
+       no longer says the two arrive together, or in half a minute. */
+    expect(text()).toContain("Brief appears first. Fuller follows, and can take up to about a minute.");
+    expect(text()).toContain("Written once and kept");
+    expect(text()).not.toContain("written together");
+    expect(text()).not.toContain("half a minute");
   });
 
   it("offers to write it when there is none, and shows why a run failed", async () => {
@@ -952,5 +985,301 @@ describe("Summary's band, arriving on an old link", () => {
     await band("owner");
     expect(host.querySelector("input[type=range]"), "the slider is gone").toBeNull();
     expect(host.querySelector(".summ-controls")?.textContent).toBe("BriefFullerThread");
+  });
+});
+
+/* -------------------------------------------------------- Brief first -- */
+
+/**
+ * **Brief is shown as soon as it is written, while Fuller is still on its way**
+ * (docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2, and
+ * GPT Sol's S3 on that stage's plan).
+ *
+ * The real `SummaryBand`, so the real `useSimple` and `useStepJob`, over the
+ * stubbed queue and the stubbed GET. What moves between the cases is what a
+ * poll and a read would move: the job list, the completion the engine
+ * announces, and when the stored summary's GET lands.
+ *
+ * **Mutation, watched red on 2026-10-04.** `keptPreview` in
+ * src/web/useSimple.ts made to forget the preview when no job is current: the
+ * deferred-read, failed-read and failed-job cases go red, and the Fuller case
+ * at its failed half; the rest stay green.
+ */
+describe("Brief, before Fuller is written", () => {
+  const NEW_BRIEF = "A newer Brief that has not been stored.";
+  const RUNNING_LABEL = "Writing it in plain words";
+
+  /** The job as the poll shows it while `simple` runs, with Brief on its step or not. */
+  function writing(id: string, paragraphs: SimpleSummary["levels"]["brief"] | null): Job {
+    return {
+      id,
+      ownerId: "owner" as Job["ownerId"],
+      slug: "a-piece",
+      status: "running",
+      createdAt: "2026-10-04T09:00:00.000Z",
+      startedAt: "2026-10-04T09:00:01.000Z",
+      steps: [
+        {
+          name: "simple",
+          label: RUNNING_LABEL,
+          status: "running",
+          startedAt: "2026-10-04T09:00:01.000Z",
+          ...(paragraphs ? { preview: { kind: "simple-brief" as const, paragraphs } } : {}),
+        },
+      ],
+    };
+  }
+
+  /** The same job once it is over: off the running set, and with no preview on its row. */
+  function ended(job: Job, status: "done" | "error", error?: string): Job {
+    return {
+      ...job,
+      status,
+      finishedAt: "2026-10-04T09:01:00.000Z",
+      ...(error ? { error } : {}),
+      steps: job.steps.map(({ preview: _gone, ...step }) => ({
+        ...step,
+        status,
+        ...(error ? { error } : {}),
+      })),
+    };
+  }
+
+  /** A fresh element each time, of the same types: React draws the same band again rather than bailing out. */
+  let bandElement: () => ReactElement = () => createElement("div");
+
+  async function ownerBand(view: "brief" | "fuller"): Promise<void> {
+    history.replaceState(null, "", `/read/a-piece?mode=summary${view === "fuller" ? "&summary=fuller" : ""}`);
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    bandElement = () =>
+      createElement(
+        NuqsAdapter,
+        null,
+        createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} }),
+      );
+    await act(async () => root.render(bandElement()));
+    await settle();
+  }
+
+  /** What the next poll shows: a new list, and the band drawn again over it. */
+  async function showJobs(next: Job[]): Promise<void> {
+    jobs = next;
+    await act(async () => root.render(bandElement()));
+    await settle();
+  }
+
+  /** The engine announcing a finished job, which is what makes the hook read again. */
+  async function announce(job: Job): Promise<void> {
+    await act(async () => finished?.(job));
+    await settle();
+  }
+
+  const paras = (): string[] => [...host.querySelectorAll(".simple-para .simple-text")].map((p) => p.textContent ?? "");
+  const buttons = (): string[] => [...host.querySelectorAll("button")].map((b) => b.textContent?.trim() ?? "");
+
+  it("draws Brief's paragraphs, doors and all, with the progress under them", async () => {
+    await ownerBand("brief");
+    expect(text()).toContain(SIMPLE_NONE_OWNER);
+    await showJobs([writing("job-a", null)]);
+    expect(paras(), "nothing to show before Brief is written").toEqual([]);
+
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(
+      [...host.querySelectorAll(".simple-para a.block-ref")].map((a) => a.getAttribute("data-block-link")),
+    ).toEqual([EARLY, MIDDLE, LATER]);
+    expect(text()).toContain(RUNNING_LABEL);
+    expect(buttons()).toContain("Stop");
+    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
+    expect(text(), "the empty state's hint is not drawn over the paragraphs").not.toContain("Brief appears first");
+    expect(posts, "showing it spends nothing").toEqual([]);
+  });
+
+  it("on Fuller, says Brief is ready and draws none of Brief's text", async () => {
+    await ownerBand("fuller");
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    expect(text()).toContain(SIMPLE_FULLER_PENDING);
+    expect(text()).toContain(RUNNING_LABEL);
+    expect(text()).not.toContain(WHAT);
+    expect(paras()).toEqual([]);
+
+    /* And when the write fails, it stops saying Fuller is on its way. */
+    const failed = ended(writing("job-a", null), "error", "The AI service is busy right now.");
+    await showJobs([failed]);
+    expect(text()).toContain(SIMPLE_FULLER_NOT_WRITTEN);
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(text()).toContain("The AI service is busy right now.");
+    expect(text()).not.toContain(WHAT);
+  });
+
+  it("keeps Brief on screen from the job finishing until the stored summary has loaded", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    expect(paras()).toEqual([WHAT, WHY]);
+
+    /* The job is over and its read has gone out and not come back. */
+    let land: () => void = () => {};
+    artefactGate = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    artefactStatus = 200;
+    const before = simpleGets().length;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(simpleGets().length, "the completion has to have started a read").toBe(before + 1);
+    expect(paras(), "an empty band between the job and the read").toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
+
+    /* It lands: the stored summary, whose Brief is the same words. */
+    await act(async () => land());
+    await settle();
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(RUNNING_LABEL);
+    /* And it is the stored one now: Fuller is there to move to. */
+    await pressSegment("Fuller");
+    expect(text()).toContain(FULLER_TEXT);
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(posts).toEqual([]);
+  });
+
+  it("keeps Brief on screen beside the read error when the completion read fails", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+
+    artefactFails = true;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(host.querySelector(".read-error"), "the failed read is said").not.toBeNull();
+    expect(paras()).toEqual([WHAT, WHY]);
+  });
+
+  it("keeps Fuller legible while the completion read is pending, with a read-only retry", async () => {
+    await ownerBand("fuller");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(text()).toContain("The summary hasn't loaded yet.");
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(buttons()).toContain("Try again");
+    expect(buttons()).not.toContain("Write it");
+    const before = simpleGets().length;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(posts).toEqual([]);
+    await act(async () => land());
+    await settle();
+    expect(simpleGets().length).toBeGreaterThan(before);
+    expect(text()).toContain(FULLER_TEXT);
+  });
+
+  it("keeps Brief visible during a retry of a failed completion read", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    artefactFails = true;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    artefactFails = false;
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(paras()).toEqual([WHAT, WHY]);
+    await act(async () => land());
+    await settle();
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(posts).toEqual([]);
+  });
+
+  it("drops the remembered Brief when the same job is requeued for a new attempt", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    expect(paras()).toEqual([WHAT, WHY]);
+    const queued = { ...writing("job-a", null), status: "queued" as const, requeues: 1 };
+    await showJobs([queued]);
+    expect(paras()).toEqual([]);
+    await showJobs([{ ...writing("job-a", null), requeues: 1 }]);
+    expect(paras()).toEqual([]);
+  });
+
+  it("keeps Brief when a later step is paused and simple itself is already done", async () => {
+    await ownerBand("brief");
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    const paused = writing("job-a", null);
+    paused.steps[0]!.status = "done";
+    paused.status = "queued";
+    paused.requeues = 1;
+    await showJobs([paused]);
+    expect(paras(), "the new attempt will keep the finished simple step").toEqual([WHAT, WHY]);
+    await showJobs([{ ...paused, status: "running" }]);
+    expect(paras()).toEqual([WHAT, WHY]);
+  });
+
+  it("keeps Brief beside the failure when the job fails, and drops it when a retry starts", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+
+    await showJobs([ended(job, "error", "The AI service is busy right now.")]);
+    expect(paras(), "Brief was shown, so it stays").toEqual([WHAT, WHY]);
+    expect(text()).toContain("The AI service is busy right now.");
+    expect(buttons()).toContain("Retry");
+
+    /* The retry is a new job, and it writes both levels again. */
+    const successor = { ...writing("job-b", null), status: "queued" as const };
+    retryAnswer = successor;
+    const retry = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Retry");
+    await act(async () => retry?.click());
+    await settle();
+    expect(retried).toEqual(["job-a"]);
+    await showJobs([successor, ended(job, "error", "The AI service is busy right now.")]);
+    expect(paras(), "the failed attempt's Brief under the new attempt").toEqual([]);
+    expect(text()).not.toContain(WHAT);
+
+    /* And it does not come back when the successor leaves the list. */
+    await showJobs([ended(job, "error", "The AI service is busy right now.")]);
+    expect(text()).not.toContain(WHAT);
+  });
+
+  it("goes on drawing the stored summary while a forced rewrite carries a newer Brief", async () => {
+    artefactStatus = 200;
+    await ownerBand("brief");
+    expect(paras()).toEqual([WHAT, WHY]);
+
+    await showJobs([writing("job-a", [{ text: NEW_BRIEF, ids: [EARLY] }])]);
+    expect(paras(), "the old summary stays until both new levels are stored").toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(NEW_BRIEF);
+  });
+
+  it("never shows a visitor a preview", async () => {
+    jobs = [writing("job-a", [{ text: NEW_BRIEF, ids: [EARLY] }])];
+    history.replaceState(null, "", "/read/a-piece?mode=summary");
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    await act(async () => {
+      root.render(
+        createElement(
+          NuqsAdapter,
+          null,
+          createElement(VisitorSummaryBand, {
+            slug: "a-piece",
+            simple: undefined,
+            thread: undefined,
+            article: ARTICLE,
+            onJump: () => {},
+          }),
+        ),
+      );
+    });
+    await settle();
+    expect(text()).toContain(SIMPLE_NONE_VISITOR);
+    expect(text()).not.toContain(NEW_BRIEF);
+    expect(paras()).toEqual([]);
+    expect(gets, "a visitor's band reads nothing").toEqual([]);
   });
 });

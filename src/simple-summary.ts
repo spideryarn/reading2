@@ -184,11 +184,18 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * spya-azft06 and spya-qzsvx4; plan 261004b). The stored shape only gained two
  * optional fields, so `SIMPLE_VERSION` stays.
  *
- * **Not bumped when the middle level went** (2026-10-04, plan 261004f): Brief's
- * and Fuller's prompts are the same bytes, pinned by
- * tests/simple-two-levels.test.ts, so nothing stored is outdated.
+ * **Not bumped when the middle level went** (2026-10-04, plan 261004f stage
+ * 1): Brief's and Fuller's prompts were the same bytes, pinned by
+ * tests/simple-two-levels.test.ts, so nothing stored was outdated.
+ *
+ * `simple-prompt/8` (2026-10-04): Fuller is asked for about 500 words, in five
+ * to eight paragraphs, now that Brief is shown first and a longer Fuller no
+ * longer keeps the reader waiting for anything to read. Brief is unchanged,
+ * byte for byte (plan 261004f stage 2). Every stored summary becomes
+ * *outdated*, which is silent, and none is rewritten for it: an unforced run
+ * skips a stored summary whatever its prompt's age (src/pipeline.ts § `simple`).
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/7";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/8";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -269,12 +276,19 @@ export const ANSWER_TOKENS =
  *
  * **Fuller is about half as long again since 2026-10-04** (Greg, spya-azft06:
  * *"longer and more detailed still"*; plan 261004b). Asked for 220 it came
- * back at 221–261; asked for 350 it comes back at 338–412. Asked for 500 it
+ * back at 221–261; asked for 350 it came back at 338–412. Asked for 500 it
  * came back at 464–520 and the press took twice as long (55 s against 26 s),
- * because nothing is shown until the slowest level is written, so 350 is what
- * shipped and the longer one is a question for Greg. `never` is the "never
- * more than" the prompt states, a number of its own per level, so Fuller's can
- * sit 80 over its ask while Brief's stays 50 over its own.
+ * because nothing was shown until the slowest level was written, so 350 is
+ * what shipped that morning.
+ *
+ * **And about 500 since later the same day** (plan 261004f stage 2). Brief is
+ * now shown as soon as it is written (`onLevel`, below), so the longer Fuller
+ * costs a wait for Fuller alone and the reader has Brief to read meanwhile.
+ * The three values are the arm 261004b measured: five to eight paragraphs,
+ * about 500 words, never more than 600. `SIMPLE_LIMITS.fuller` already allowed
+ * it and is unchanged. `never` is the "never more than" the prompt states, a
+ * number of its own per level, so Fuller's can sit 100 over its ask while
+ * Brief's stays 50 over its own.
  */
 
 /** How LENGTH ends for Brief; `simpleSystem` supplies the line it finishes. */
@@ -295,9 +309,9 @@ const PITCH: Record<
   },
   fuller: {
     reader: "A bright eighteen-year-old in their first year at university",
-    shape: "Four to seven paragraphs, each two to five sentences",
-    words: 350,
-    never: 430,
+    shape: "Five to eight paragraphs, each two to five sentences",
+    words: 500,
+    never: 600,
     sentence: 30,
     /* Not the line above: detail is what this level is for, so it is not told
        to leave it out. It is still not a replacement for the article. */
@@ -947,6 +961,18 @@ export async function generateSimpleSummary(opts: {
    * `SIMPLE_CHECK_ENABLED`; tests pass it rather than flipping the constant.
    */
   guard?: boolean;
+  /**
+   * **Told once for each level, when that level is final**: valid, checked,
+   * and past any retry, so these are the paragraphs that will be stored if the
+   * other level also lands. Brief is final long before Fuller, which is what
+   * lets a reader be shown it while Fuller is still being written (plan
+   * 261004f, stage 2). Nothing is stored by this: all or none still holds, and
+   * a level announced here is lost with the press if the other one fails.
+   *
+   * A courtesy, so a listener that throws is ignored rather than allowed to
+   * lose a paid write.
+   */
+  onLevel?: (level: SimpleLevel, paragraphs: SimpleParagraph[]) => void;
 }): Promise<SimpleSummaryRun> {
   const { blocks, tree, meta: realMeta } = opts.article;
 
@@ -1200,7 +1226,13 @@ export async function generateSimpleSummary(opts: {
   const settled = await Promise.allSettled(
     SIMPLE_LEVELS.map(async (level) => {
       try {
-        return await writeLevel(level);
+        const written = await writeLevel(level);
+        try {
+          opts.onLevel?.(level, written.paragraphs);
+        } catch {
+          /* See `onLevel`: never a reason to fail the press. */
+        }
+        return written;
       } catch (err) {
         if (!failed) {
           failed = true;

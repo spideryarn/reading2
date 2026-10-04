@@ -220,7 +220,7 @@ import {
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
   TWEETS_OUTPUT_SCHEMA,
 } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName } from "./types.js";
+import type { Block, JobUpload, Meta, StepName, StepPreview } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
@@ -649,6 +649,15 @@ export interface StepContext {
    */
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
+  /**
+   * **Show part of what this step is making, before it is over.** Unlike
+   * `report` it is written to the job row, once per call, so the reader's poll
+   * sees it; the runner takes it off the row again when the step ends, either
+   * way (`JobStep.preview`, src/types.ts). Nothing is stored by it and it never
+   * fails the step. `simple` is the only caller: Brief, while Fuller is written.
+   * A command line or a test passes a no-op.
+   */
+  preview(preview: StepPreview): void;
   signal: AbortSignal;
   /**
    * **When this claimant stops** — `Date.now()`'s clock, and `undefined` where
@@ -4177,20 +4186,40 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * owner's GET is how the reader hears of it. So `inputFingerprint` hashes
      * the profile-free user message, which is all this can compute.
      * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+     *
+     * **The prompt version and model expected are the stored summary's own,
+     * when one is stored.** So an unforced run never rewrites a summary because
+     * the prompt or model has moved on since; it still rewrites when the
+     * article moved, and a forced run never asks. Without this every bump of
+     * `SIMPLE_PROMPT_VERSION` made each stored summary eligible for a rewrite
+     * by any unforced job that names `simple`, and the add page's *Generate
+     * the main modes* queues one (GPT Sol's review of plan 261004f stage 2,
+     * S1). *Outdated* is asked elsewhere, against the current version:
+     * src/store/pg.ts, the owner's GET and Metadata's row.
+     *
+     * `stampFor` answers from the artefact through the shared shape check, so
+     * a row no read would accept has no version here and is written again;
+     * `stepIsDone` has already said no to it at `has`.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
+      const stored = await store.stampFor(ctx.slug, "simple");
       return {
         inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: SIMPLE_PROMPT_VERSION,
-        model: CAPABLE_MODEL,
+        promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
+        model: stored?.model ?? CAPABLE_MODEL,
       };
     },
     async run(ctx, store) {
       const run = await generateSimpleSummary({
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
+        /* Brief is final long before Fuller, so the reader is shown it while
+           Fuller is written. Nothing is stored by this (`StepContext.preview`). */
+        onLevel: (level, paragraphs) => {
+          if (level === "brief") ctx.preview({ kind: "simple-brief", paragraphs });
+        },
         signal: ctx.signal,
         /* Opus for every article, not the article's setting: `ALWAYS_HIGH_POWER`. */
         power: powerFor("simple", ctx.power),

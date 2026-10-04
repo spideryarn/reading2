@@ -308,7 +308,7 @@ one and generates nothing at all.
 Five things to get right, and the first is the one that cost this field a whole review round:
 
 - **Write about the mode, not about pressing the button.** The same string is read on four surfaces
-  at least — the segment on the reading view, the loose links on the metadata page
+  at least — the segment on the reading view, the links on the metadata page
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
   Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
@@ -336,7 +336,7 @@ Five things to get right, and the first is the one that cost this field a whole 
 
 *[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
 that the second is not a copy of the first, that no price crept in, and that every mode's card opens
-in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata
+in **both** arms of the bar: the segment on the reading view, and the links on the metadata
 page, which are a different component and were the arm left carrying a `title` attribute.*
 
 ## Moving a mode in or out of the switch

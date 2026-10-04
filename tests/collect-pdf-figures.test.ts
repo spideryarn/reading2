@@ -742,6 +742,7 @@ async function captionOnlyPdf(caption: string): Promise<Uint8Array> {
 const CTX = {
   slug: "a",
   report: () => {},
+  preview: () => {},
   signal: new AbortController().signal,
   cacheArticle: false,
   power: "standard" as const,

@@ -83,9 +83,11 @@ failed took Brief and Fuller with it.
 - **One write, two calls.** Fuller is asked first with the article marked for the cache, and Brief
   starts once Fuller's stream has begun, so it reads the cache. All or none, one retry a level, and
   the fidelity guard on each, as before.
-- **Brief's and Fuller's prompts did not change by a byte**
+- **Brief's and Fuller's prompts did not change by a byte when the level went**
   ([`simple-two-levels.test.ts`](../../tests/simple-two-levels.test.ts) pins them), so the prompt
-  version is still `simple-prompt/7` and nothing stored is outdated.
+  version stayed `simple-prompt/7` and nothing stored became outdated. It is `simple-prompt/8`
+  since later the same day, for [the longer Fuller](#a-longer-fuller-since-2026-10-04). Brief's
+  bytes are still the pinned ones.
 - **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
   when Summary is written:
 
@@ -107,6 +109,63 @@ failed took Brief and Fuller with it.
 
 The plan, with the option passed over and what a rollback would do, is
 [261004f](../plans/261004f-stop-writing-the-simple-summary-level.md).
+
+### Brief first (since 2026-10-04)
+
+Brief is written and checked well before Fuller. The reader is shown it then, and does not wait
+for both.
+
+- **What the reader sees.** On Brief: Brief's paragraphs, with their passages, and the job's
+  progress under them while Fuller is written. On Fuller: the progress and one line saying Brief
+  is ready and Fuller is still being written. When the write ends the band reads the stored
+  summary. Its Brief is the same paragraphs, so nothing on the page moves.
+- **Nothing is stored early.** Both levels are stored together when the step ends, or neither is.
+  Until then Brief rides on the owner's job row, on the `simple` step, as `preview`
+  ([`JobStep.preview`](../../src/types.ts)). It is there only while the step is running: the
+  runner takes it off when the step starts, succeeds or fails
+  ([`runStep`](../../src/jobs.ts)); interrupted steps lose it through the store's shared
+  settlement ([`settledSteps`](../../src/store/pg-jobs.ts)). So no part of a summary is kept on a job, a visitor is never
+  sent one, and an export is missing nothing. It is never logged.
+- **If Fuller fails**, after any retry it can make, the job fails and nothing is stored. The band keeps
+  the Brief it was already showing, beside the failure and **Retry**. It keeps it in the page's
+  memory only ([`useSimple`](../../src/web/useSimple.ts) § `keptPreview`), so after a reload the
+  failure is shown without Brief. Retry writes both levels again, and the old Brief leaves the
+  screen when the new job starts. Banking Brief as a step checkpoint is the follow-up if this
+  turns out to happen: the plan's § *Where this departs from the queue item's words*.
+- **A rewrite does not use it.** With a summary already stored, the stored one stays on screen
+  until both new levels are stored. The preview is drawn only when nothing is.
+- **An unforced job never rewrites a stored summary for the prompt's or model's age.** The `simple` step's
+  stamp expects the prompt version and model of the summary already stored
+  ([`pipeline.ts`](../../src/pipeline.ts) § `simple`), so the add page's *Generate the main modes*
+  box, which queues `simple` unforced, skips an article that has a summary however old its prompt.
+  It still writes when the article itself has moved, and a forced run always writes. Metadata and
+  the owner's read compare against the current version on their own
+  ([`pg.ts`](../../src/store/pg.ts)), so *outdated* and Metadata's Rerun work as they did.
+
+**The two waits, measured.** Three local articles of 8.6k to 12.6k words, two cold writes each, on
+Opus with the guard on, timed from the start of the write to each level being final
+(`evals/simple/probe.ts`; `evals/results/simple/high-none-timed350a|b` and `high-none-timed500a|b`):
+
+| | Fuller asked for 350 | Fuller asked for 500 |
+|---|---:|---:|
+| wait to Brief, median of six (range) | 15.6 s (12.3 to 26.1) | 14.3 s (12.3 to 26.4) |
+| wait to Fuller, median of six (range) | 35.6 s (23.7 to 63.5) | 34.7 s (28.4 to 36.8) |
+| Fuller's words, range | 334 to 481 | 438 to 513 |
+| a write, mean | $0.220 | $0.217 |
+
+- **Brief was final in about a quarter of a minute at the median.** The job's start-up,
+  preview write and polling add to the reader's wait; previously nothing appeared until Fuller was done.
+- **The median wait to the longer Fuller was slightly lower in this sample.** That is not what
+  261004b saw (55 s for about 500 words, with three levels). The slowest 350 write retried after
+  a fidelity flag; none of the 500 writes did. The [plan's ledger](../plans/261004f-stop-writing-the-simple-summary-level.md#stage-2-cost-and-wait-measured)
+  explains why this does not isolate length or bound its effect on wait.
+- **Through the real job in a browser**, one write on a fourth article: Brief on screen at 26 s,
+  Fuller stored at 56 s, 517 words in eight paragraphs. The job adds its own start-up and polling
+  to both.
+- These timings are the first to say which level a slow write is waiting on: it is Fuller.
+
+The design, the review that changed it and the option passed over are
+[261004f § Stage 2](../plans/261004f-stop-writing-the-simple-summary-level.md#stage-2-show-brief-as-soon-as-it-is-written-then-a-longer-fuller).
 
 ### Cost of a write (since 2026-10-04)
 
@@ -205,10 +264,13 @@ the paragraphs.
   with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
   main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
   Q-summary-on-add), and it writes what the press writes: both plain-words levels, Brief and
-  Fuller, all or none, through the `simple` step. A visitor on a public article gets the
+  Fuller, all or none, through the `simple` step. Like the press it writes only when the article
+  has no usable summary for its current text: a stored one from an older prompt is left alone
+  ([Brief first](#brief-first-since-2026-10-04)). A visitor on a public article gets the
   stored paragraphs off the payload, or a line saying none has been made.
-- **It does not stream**, against CLAUDE.md's rule for a call somebody waits on — the first press
-  waits behind the job progress, like FAQ. Why, and the one decision left for Greg, are in
+- **It does not stream**, against CLAUDE.md's rule for a call somebody waits on. Since 2026-10-04
+  the first press shows [Brief as soon as Brief is written](#brief-first-since-2026-10-04), whole
+  and checked, and waits behind the job progress for Fuller. Why it does not stream is in
   [260930i](../plans/260930i-simple-summaries-eli15-sub-mode.md) § *A departure from CLAUDE.md*.
 
 The design, the measurements and the review are
@@ -221,18 +283,26 @@ The design, the measurements and the review are
 >
 > — Greg, 2026-10-03 (`spya-azft06`, SPIDERYARN-READING2-BC)
 
-Fuller is asked for about 350 words in four to seven paragraphs of two to five sentences, and told
-never more than 430; it was asked for about 220 in three to five. Measured, it comes back at
-338–412 words where it came back at 221–261, and the press takes about 31 s where it took 26.
-**About 500 words was tried first and not shipped**: the text was good, but the press took 55 s,
-because nothing is shown until the slowest level is written. Whether to take that
-wait, or to show Brief as soon as Brief is ready, is with Greg
-([261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md)). Its prompt says what the room is
-for: how the work was done, the evidence and numbers behind each main finding, the limits the piece
-itself names, and how the steps of the argument connect. The stored limit is 3 to 8 paragraphs and
-850 words (`SIMPLE_LIMITS` in [`types.ts`](../../src/types.ts)); the minimum stayed at 3 so every
-Fuller stored before still reads. Brief is asked for what it was. No stored summary
-was rewritten: *Write it again* picks up the new prompt (`simple-prompt/7`).
+Fuller is asked for about 500 words in five to eight paragraphs of two to five sentences, and told
+never more than 600 (`simple-prompt/8`). It went there in two steps on the same day:
+
+- **About 350 words first** (`simple-prompt/7`), in four to seven paragraphs and never more than
+  430, where it had been asked for about 220 in three to five. Measured, it came back at 338–412
+  words where it had come back at 221–261, and the press took about 31 s where it had taken 26.
+  About 500 was tried then and not shipped: the text was good, but the press took 55 s, because
+  nothing was shown until the slowest level was written
+  ([261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md)).
+- **About 500 words once [Brief is shown first](#brief-first-since-2026-10-04)**. Greg chose that
+  option of 261004a (option C). The longer Fuller now costs a wait for Fuller alone, with Brief to
+  read meanwhile. When it was measured in 261004b, asked for 500 it came back at 464–520 words.
+
+Its prompt says what the room is for: how the work was done, the evidence and numbers behind each
+main finding, the limits the piece itself names, and how the steps of the argument connect. The
+stored limit is 3 to 8 paragraphs and 850 words (`SIMPLE_LIMITS` in
+[`types.ts`](../../src/types.ts)), unchanged by either step; the minimum stayed at 3 so every Fuller
+stored before still reads. Brief is asked for what it was, byte for byte. No stored summary was
+rewritten by either step, and an unforced job will not rewrite one for it: a stored summary is
+*outdated*, which is silent, and *Write it again* or Metadata's Rerun writes the longer one.
 [261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md) has the measurements.
 
 ### Bold and bullets (since 2026-10-04)

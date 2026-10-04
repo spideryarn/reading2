@@ -71,6 +71,13 @@ interface ArmFile {
   /** `simple/2` arms: who it was written for, and the `fuller` level. */
   reader?: string;
   fullerWords?: number;
+  /**
+   * When each level was final, from the write's start: valid, checked and past
+   * any retry (`onLevel`, plan 261004f stage 2). Present on a failed write too
+   * for a level that landed before the other was lost. Absent before 2026-10-04.
+   */
+  briefReadyMs?: number;
+  fullerReadyMs?: number;
   fuller?: { text: string; ids: string[] }[];
   /** Since the slider (7J): the `brief` level. */
   briefWords?: number;
@@ -189,6 +196,11 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
           guard: opts.guard ?? SIMPLE_CHECK_ENABLED,
         };
         const started = Date.now();
+        const readyMs: { brief?: number; fuller?: number } = {};
+        const ready = () => ({
+          ...(readyMs.brief === undefined ? {} : { briefReadyMs: readyMs.brief }),
+          ...(readyMs.fuller === undefined ? {} : { fullerReadyMs: readyMs.fuller }),
+        });
         let file: ArmFile;
         let spent: { costUsd: number | null; tokens: ArmFile["tokens"] } = { costUsd: null, tokens: null };
         const onDone = (report: { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number }; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }[] }) => {
@@ -215,6 +227,9 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
                 profile: await readerProfile(reader, slug),
                 power: opts.power,
                 ...(opts.guard === undefined ? {} : { guard: opts.guard }),
+                onLevel: (level) => {
+                  readyMs[level] = Date.now() - started;
+                },
               }),
             {
               attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
@@ -226,6 +241,7 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             ...base,
             wallMs: Date.now() - started,
             ...spent,
+            ...ready(),
             ok: true,
             reader,
             fullerWords: result.words.fuller,
@@ -242,13 +258,14 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             ...base,
             wallMs: Date.now() - started,
             ...spent,
+            ...ready(),
             ok: false,
             error: err instanceof Error ? err.message : String(err),
           };
         }
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
         console.log(
-          `${arm} ${slug}: ${file.ok ? `Brief ${file.briefWords} words, Fuller ${file.fullerWords} words` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
+          `${arm} ${slug}: ${file.ok ? `Brief ${file.briefWords} words at ${((file.briefReadyMs ?? 0) / 1000).toFixed(1)}s, Fuller ${file.fullerWords} words at ${((file.fullerReadyMs ?? 0) / 1000).toFixed(1)}s` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
         );
       }),
     );
