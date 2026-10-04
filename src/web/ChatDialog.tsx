@@ -523,7 +523,7 @@ export function ChatDialog({
    * reader has just typed, and the composer is where they are.
    */
   const [openedAs] = useState(() => target.kind);
-  /** The panel itself, so the draft → thread swap can ask whether the caret was inside it. */
+  /** The panel itself, so a change of conversation can ask whether the caret was in its composer. */
   const box = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -586,7 +586,7 @@ export function ChatDialog({
   const cardWidth = place.kind === "card" ? place.width : null;
 
   /**
-   * **Read on the render that is about to move it**, for `caretWasInside`'s
+   * **Read on the render that is about to move it**, for `composerHeld`'s
    * reason below: it is the only moment the answer exists. When the card's
    * cell is unmounted in the same commit that takes the card away (Marginalia
    * switched off, a resize under the threshold), the container has left the
@@ -667,29 +667,65 @@ export function ChatDialog({
    * reopened thread's composer", which this is not — the condition below is
    * exactly that the reader was already typing.
    *
-   * So: only when focus was in the composer that is going away, and only on the
-   * draft → thread transition. A reader who sent from the keyboard shortcut with
-   * focus elsewhere is left where they are, and `?thread=` opened cold still
-   * lands on the close control above.
+   * So: only when focus was in the composer that is going away. A reader who
+   * sent from the keyboard shortcut with focus elsewhere is left where they
+   * are, and `?thread=` opened cold still lands on the close control above.
    */
-  const wasDraft = useRef(target.kind === "draft");
   /**
-   * Read **on the swapping render itself**, which is the only moment the answer
-   * exists: the outgoing composer is still focused and still in the document,
-   * and React has not committed the replacement yet. A first attempt sampled on
-   * the previous *draft* render instead and was always false, because the reader
-   * had not started typing when that render happened — the test said so.
+   * ## The caret follows the composer
+   *
+   * Draft → thread was the first case and not the only one. `Conversation` is
+   * keyed on the thread's id, so **every** change of conversation under a
+   * mounted dialog unmounts the composer: thread → thread (Back and Forward;
+   * another paragraph's chip or "?" in Safari, where a pressed button takes no
+   * focus), and thread → draft, where the draft arm's `focusNonce={1}` is
+   * already spent if the dialog opened as a draft. qi-7dvah74y, plan 261004l
+   * § B.
+   *
+   * One rule covers them, and it asks about the DOM rather than about `target`:
+   * **a commit that removes a composer holding focus owes the focus to the
+   * composer that replaces it.** The composer is its `<form>` — the box, and
+   * the Send a first question may have been pressed with — and nothing wider:
+   * not Close, not the footer's controls, not the question editor, which is a
+   * rewrite of one question in the conversation being left and has no
+   * replacement in the next (GPT Sol's plan review, F4).
+   *
+   * Read **on the render itself**, which is the only moment the answer exists:
+   * the outgoing composer is still focused and still in the document, and
+   * React has not committed the replacement yet. A first attempt sampled on the
+   * previous render instead and was always false, because the reader had not
+   * started typing when that render happened — the test said so.
    */
-  const swapping = wasDraft.current && target.kind === "thread";
-  const caretWasInside =
-    swapping && typeof document !== "undefined"
-      ? box.current?.contains(document.activeElement) === true
-      : false;
-  useEffect(() => {
-    wasDraft.current = target.kind === "draft";
-    if (!caretWasInside) return;
-    box.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
-  }, [target.kind, caretWasInside]);
+  const focusedNow = typeof document === "undefined" ? null : document.activeElement;
+  const composerHeld =
+    focusedNow instanceof HTMLElement && box.current?.contains(focusedNow) === true
+      ? focusedNow.closest<HTMLElement>(".chat-composer")
+      : null;
+  /**
+   * **Owed, rather than paid at once**, because the replacement may not be
+   * there yet: a conversation whose transcript is still arriving draws a
+   * spinner and no composer. It is paid on the first commit that has one, and
+   * forgiven if the reader has put focus anywhere in the meantime.
+   */
+  const caretOwed = useRef(false);
+  /* **A layout effect, after the move above**: the card changes cell in the
+     same commit as a switch to another paragraph's conversation, and focus
+     cannot be given to a box that is not in the document yet. No dependency
+     list, for the reason the move has none. */
+  useLayoutEffect(() => {
+    if (composerHeld && !composerHeld.isConnected) caretOwed.current = true;
+    if (!caretOwed.current) return;
+    const at = document.activeElement;
+    if (at !== null && at !== document.body) {
+      caretOwed.current = false;
+      return;
+    }
+    const next = box.current?.querySelector<HTMLTextAreaElement>(".chat-composer textarea");
+    if (!next) return;
+    caretOwed.current = false;
+    /* `preventScroll`: the card is in the page, and the reader has not moved. */
+    next.focus({ preventScroll: true });
+  });
   useEffect(() => {
     /* **The mount point, not the `<aside>`**, since 261004k: the aside is in a
        container that may be sitting in the card's host, which this component
