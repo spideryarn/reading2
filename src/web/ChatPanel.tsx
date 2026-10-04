@@ -598,6 +598,7 @@ export function ChatPanel({
           recovering={recovering}
           blocks={blocks}
           onSend={onSend}
+          onSubmitStarted={open.kind === "chat" ? () => drafts.submitted(open.id) : undefined}
           onRetry={onRetry}
           onEdit={onEdit}
           onStop={onStop}
@@ -1062,6 +1063,7 @@ export function Conversation({
   recovering,
   blocks,
   onSend,
+  onSubmitStarted,
   onRetry,
   onEdit,
   onStop,
@@ -1084,6 +1086,8 @@ export function Conversation({
   recovering: Set<string>;
   blocks: Map<string, string>;
   onSend(question: string): void;
+  /** See Composer: submission begins before the awaited Live hang-up. */
+  onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
@@ -1311,6 +1315,7 @@ export function Conversation({
       <Composer
         slug={slug}
         onSend={onSend}
+        onSubmitStarted={onSubmitStarted}
         busy={busy}
         onStop={busy && last ? () => onStop(last.id) : undefined}
         focusNonce={focusNonce}
@@ -2158,6 +2163,7 @@ function Answer({
 export function Composer({
   slug,
   onSend,
+  onSubmitStarted,
   busy,
   onStop,
   focusNonce,
@@ -2174,6 +2180,8 @@ export function Composer({
 }: {
   slug: string;
   onSend(question: string): void;
+  /** The reader has submitted, even if Live must finish before `onSend`. */
+  onSubmitStarted?: (() => void) | undefined;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
@@ -2341,6 +2349,9 @@ export function Composer({
     if (question === "" || busy) return;
     const submittedBox = box.current;
     const handoff = live && live.phase !== "idle" && live.phase !== "failed";
+    // Revoke never-submitted recovery before the wait: another draft can be
+    // typed and the mode left while this question is already on its way.
+    onSubmitStarted?.();
     setValue("");
     onDraft("");
     if (handoff) await live.stop();

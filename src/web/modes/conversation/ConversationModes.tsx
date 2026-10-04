@@ -824,15 +824,18 @@ export function ConversationBand({
    *
    * After that rule, and only once the list has answered: before then
    * `?thread=` is whatever the last mode left in it, and recording that would
-   * overwrite the very thing the rule is about to read. Not on a failed load
-   * either, when every conversation looks like the list.
+   * overwrite the very thing the rule is about to read. A failed load cannot
+   * establish that a conversation is absent, so it cannot record the list.
+   * A positively matched local conversation is still known, though: `begin`
+   * can have supplied it independently of that failed fetch.
    *
    * "On screen" is the panel's own test — `?thread=` names a conversation in
    * the list — rather than `thread` alone, which can name nothing.
    */
   useEffect(() => {
-    if (kind !== "chat" || !loaded || loadFailed) return;
-    drafts.setDestination(threads.some((t) => t.id === thread) ? thread : null);
+    if (kind !== "chat" || !loaded) return;
+    if (threads.some((t) => t.id === thread)) drafts.setDestination(thread);
+    else if (!loadFailed) drafts.setDestination(null);
   }, [kind, loaded, loadFailed, threads, thread, drafts]);
 
   /**

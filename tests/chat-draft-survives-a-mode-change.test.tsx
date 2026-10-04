@@ -55,9 +55,11 @@ vi.mock("../src/web/QuizPanel.js", () => ({
 
 /** What the band told the live session it may use — `speak` is the one wanted. */
 let liveOptions: LiveOptions | undefined;
+let liveState: Partial<LiveApi> = {};
 
-/* Idle, and never anything else: no microphone in jsdom. The band's `speak` is
-   what a spoken exchange is written through, and the test calls it directly. */
+/* No microphone in jsdom. Normally idle; the handoff test supplies a Live
+   session whose stop is deferred. Spoken writes call the band's `speak`
+   directly. */
 vi.mock("../src/web/live/useLive.js", () => ({
   useLive: (_slug: string, opts: LiveOptions): LiveApi => {
     liveOptions = opts;
@@ -93,6 +95,7 @@ vi.mock("../src/web/live/useLive.js", () => ({
       enterTapToTalk: () => {},
       talk: () => {},
       doneTalking: () => {},
+      ...liveState,
     } as unknown as LiveApi;
   },
 }));
@@ -182,6 +185,7 @@ beforeEach(() => {
   deleteStatus = 200;
   panel = undefined;
   liveOptions = undefined;
+  liveState = {};
   handoff = null;
   host = document.createElement("div");
   document.body.append(host);
@@ -464,6 +468,22 @@ describe("Remember keeps its unsent words by kind", () => {
 });
 
 describe("what is not recreated", () => {
+  it("keeps words typed into the local conversation begun after a failed list load", async () => {
+    failList = true;
+    await arrive("chat");
+    expect(panel?.loadFailed).toBe(true);
+    expect(open()?.messages).toHaveLength(0);
+    const was = open()?.id as string;
+    await type("a question typed while the list was unavailable");
+    await go("structure");
+    failList = false;
+    await go("chat");
+    expect(threads()).toHaveLength(1);
+    expect(open()?.id).not.toBe(was);
+    expect(box().value).toBe("a question typed while the list was unavailable");
+    expect(posts()).toHaveLength(0);
+  });
+
   /* F1. A list that failed to load says nothing about which conversations
      exist, so nothing is recovered into a new one on the strength of it. */
   it("a stored conversation's words, when the list fails to load on the way back", async () => {
@@ -560,6 +580,38 @@ describe("what is not recreated", () => {
     await settle();
     expect(chatDraftsFor(SLUG).isFresh(was)).toBe(false);
   });
+
+  it("a typed submission awaiting Live hang-up, even when another draft is typed during the wait", async () => {
+    await arrive("chat");
+    const was = open()?.id as string;
+    let finishStop!: () => void;
+    const stopping = new Promise<void>((resolve) => {
+      finishStop = resolve;
+    });
+    liveState = { phase: "live", threadId: was, stop: () => stopping };
+    await go("chat");
+    await type("the question I press Send on");
+    try {
+      await act(async () => {
+        box().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      });
+      expect(box().value).toBe("");
+      expect(posts(), "Send must still wait for Live").toHaveLength(0);
+      await type("a follow-up typed during the hang-up");
+      await go("structure");
+      liveState = {};
+      await go("chat");
+      expect(
+        box().value,
+        "a follow-up was restored into a conversation without its first question",
+      ).toBe("");
+      expect(chatDraftsFor(SLUG).thread(was)).toBe("a follow-up typed during the hang-up");
+      expect(chatDraftsFor(SLUG).isFresh(was)).toBe(false);
+    } finally {
+      await act(async () => finishStop());
+      await addressSettles();
+    }
+  });
 });
 
 /**
@@ -604,6 +656,20 @@ describe("a question handed over from another mode", () => {
     expect(box().value).toBe(QUESTION);
     expect(handoff, "the owner was told to forget it").toBeNull();
     await go("structure");
+    await go("chat");
+    expect(threads()).toHaveLength(1);
+    expect(box().value).toBe(QUESTION);
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("survives untouched when the list load failed on handoff arrival", async () => {
+    failList = true;
+    handoff = { slug: SLUG, question: QUESTION };
+    await arrive("chat");
+    expect(panel?.loadFailed).toBe(true);
+    expect(box().value).toBe(QUESTION);
+    await go("structure");
+    failList = false;
     await go("chat");
     expect(threads()).toHaveLength(1);
     expect(box().value).toBe(QUESTION);

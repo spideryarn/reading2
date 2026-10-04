@@ -166,3 +166,29 @@ One stage, one commit.
 Done means: at each width, type without sending in Chat, switch mode by the bar button and by the
 command bar, come back, and the words are in the box — for a conversation with history, for a new
 one, and for the box under the list.
+
+## What landed
+
+Built as the Round 2 section says, in one stage (commit `0e3633def`), then GPT Sol's fixing code
+review ([the review](261004j-chat-keeps-an-unsent-question-code-review-sol.md), APPROVE). It checked
+F1–F11 against the code and fixed two more, each red first:
+
+- **F12** — after a failed list fetch, a conversation begun in this tab was on screen but was not
+  recorded as where Chat was, so its words were hidden on return.
+- **F13** — "never submitted" was revoked only when the send went out, which is after the wait for
+  Live to hang up; a follow-up typed in that wait could be recovered into a new conversation
+  without its first question. It is revoked the moment the reader submits.
+
+Its write-up of the two is
+[the postmortem](../postmortems/261004m-draft-recovery-eligibility-must-follow-accepted-submissions-and-known-local-state.md).
+
+**Left as it was (F14, reasoned, older than this work):** when the server overrules an optimistic
+conversation id, the draft stays under the old id. `ChatPanel.tsx` § drafts has always said so.
+
+**Two things that differ from the first sketch:** on a failed list load the old arrival rule still
+opens one empty conversation, and a never-submitted conversation's words wait under their old id
+for that visit rather than being moved; and the store has no subscription, because nothing renders
+from it.
+
+`npm run typecheck` was red throughout on six errors in `src/backfill-registry-facts.ts`, a file
+this work does not touch and which is red on the trunk.
