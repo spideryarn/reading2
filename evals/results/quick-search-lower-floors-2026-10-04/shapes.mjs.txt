@@ -1,0 +1,39 @@
+/* 261004: lowering the floor under an only-when-empty fallback can SHRINK a
+   list: a search whose best block is 0.67 showed the fallback's eight and now
+   shows that one block. Compare rule shapes for it. No model calls.
+   Precision columns are the three fixtures (all judged down to 0.5 on any run,
+   and to 0.35 on runs with nothing at 0.7); the shrink and size columns are all
+   six articles. */
+import { writeFileSync } from "node:fs";
+import { entries, FIXTURES, sorted, verdict } from "./replay-floors.mjs";
+const OUT = process.env.QOUT ?? "data/qeval";
+const ge = (s, f) => s.filter(([, p]) => p >= f);
+const onlyEmpty = (M, F, C) => (s) => { const k = ge(s, M).slice(0, 20); return k.length ? k : ge(s, F).slice(0, C); };
+/* Fewer than N at the floor: show the best C at F or more instead (which holds those few). */
+const fewerThan = (N, M, F, C) => (s) => { const k = ge(s, M).slice(0, 20); return k.length >= N ? k : ge(s, F).slice(0, Math.max(C, k.length)); };
+const RULES = {
+  "today: 0.7, empty -> 0.5 best 8": onlyEmpty(0.7, 0.5, 8),
+  "A: 0.65, empty -> 0.4 best 8": onlyEmpty(0.65, 0.4, 8),
+  "B: 0.7, empty -> 0.4 best 8": onlyEmpty(0.7, 0.4, 8),
+  "C: 0.65, fewer than 8 -> best 8 at 0.5": fewerThan(8, 0.65, 0.5, 8),
+  "D: 0.65, fewer than 8 -> best 8 at 0.4": fewerThan(8, 0.65, 0.4, 8),
+  "E: 0.65, fewer than 3 -> best 8 at 0.4": fewerThan(3, 0.65, 0.4, 8),
+  "F: 0.65, fewer than 3 -> best 8 at 0.5": fewerThan(3, 0.65, 0.5, 8),
+  "G: 0.65, fewer than 5 -> best 5 at 0.5": fewerThan(5, 0.65, 0.5, 5),
+  "H: 0.65, fewer than 3 -> best 3 at 0.5; empty -> 0.4 best 8": (s) => { const k = ge(s, 0.65).slice(0, 20); if (k.length >= 3) return k; const t = ge(s, 0.5).slice(0, 3); return t.length ? t : ge(s, 0.4).slice(0, 8); },
+};
+const today = RULES["today: 0.7, empty -> 0.5 best 8"];
+const rows = [];
+for (const [name, rule] of Object.entries(RULES)) for (const group of ["working", "bare", "request", "absent"]) {
+  const t = { n: 0, show: 0, shown: 0, shrunk: 0, lost: 0, grew: 0, fy: 0, fn: 0, fu: 0, fshown: 0 };
+  for (const e of entries.filter((x) => x.group === group)) for (const r of e.reps) {
+    const s = sorted(r.scores); const a = today(s).map(([id]) => id); const b = rule(s).map(([id]) => id);
+    t.n++; if (b.length) t.show++; t.shown += b.length;
+    if (b.length < a.length) t.shrunk++; if (b.length > a.length) t.grew++;
+    t.lost += a.filter((id) => !b.includes(id)).length;
+    if (FIXTURES.includes(e.slug)) for (const id of b) { t.fshown++; const v = verdict(e, id); if (v === "y") t.fy++; else if (v === "n") t.fn++; else t.fu++; }
+  }
+  rows.push({ rule: name, group, searches: t.n, "show something": t.show, "per search": +(t.shown / t.n).toFixed(2), "lists shorter than today": t.shrunk, "longer": t.grew, "passages today shows that this drops": t.lost, "fixtures: right": t.fy, wrong: t.fn, unjudged: t.fu, "% right": t.fy + t.fn ? Math.round(100 * t.fy / (t.fy + t.fn)) : null });
+}
+for (const g of ["working", "bare", "request", "absent"]) { console.log(`\n${g}: rule | show/searches | per search | shorter longer dropped | fixtures right wrong unj %`); for (const r of rows.filter((x) => x.group === g)) console.log(`${r.rule.padEnd(62)} | ${r["show something"]}/${r.searches} | ${r["per search"]} | ${r["lists shorter than today"]} ${r.longer} ${r["passages today shows that this drops"]} | ${r["fixtures: right"]} ${r.wrong} ${r.unjudged} ${r["% right"]}%`); }
+writeFileSync(`${OUT}/shapes.json`, JSON.stringify(rows, null, 1));

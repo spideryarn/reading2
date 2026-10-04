@@ -151,27 +151,34 @@ describe("turning probabilities into hits", () => {
     ]);
   });
 
-  it("puts the floor at 0.7, inclusive: a block under it is dropped when another clears it", () => {
-    expect(QUICK_FLOOR).toBe(0.7);
-    const { hits, fallback } = hitsFrom({ [a.id]: 0.7, [b.id]: 0.6999 }, [a, b]);
+  /* 0.65 since 2026-10-04 (Greg: "a more permissive threshold, so that more
+     shows up"), down from 0.7. Investigation 261004d. */
+  it("puts the floor at 0.65, inclusive: a block under it is dropped when another clears it", () => {
+    expect(QUICK_FLOOR).toBe(0.65);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.65, [b.id]: 0.6499 }, [a, b]);
     expect(hits.map((h) => h.blockId)).toEqual([a.id]);
     expect(fallback).toBe(false);
   });
 
   /* Feedback spya-jp5nxn: "results" on a paper scored its best paragraphs 0.52
-     to 0.57 and the reader saw nothing (investigation 261003f). */
-  it("falls back to the lower floor when nothing clears 0.7, best first", () => {
-    expect(QUICK_FALLBACK_FLOOR).toBe(0.5);
-    const { hits, fallback } = hitsFrom({ [a.id]: 0.5, [b.id]: 0.4999, [c.id]: 0.62 }, [a, b, c]);
+     to 0.57 and the reader saw nothing (investigation 261003f). 0.4 since
+     2026-10-04, down from 0.5 (investigation 261004d). */
+  it("falls back to the lower floor when nothing clears the floor, best first", () => {
+    expect(QUICK_FALLBACK_FLOOR).toBe(0.4);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.4, [b.id]: 0.3999, [c.id]: 0.62 }, [a, b, c]);
     expect(hits).toEqual([
       { blockId: c.id, quote: c.text, confidence: 62, reasoning: "", start: 0 },
-      { blockId: a.id, quote: a.text, confidence: 50, reasoning: "", start: 0 },
+      { blockId: a.id, quote: a.text, confidence: 40, reasoning: "", start: 0 },
     ]);
     expect(fallback).toBe(true);
   });
 
+  it("keeps the lower floor under the floor, so the fallback can only add", () => {
+    expect(QUICK_FALLBACK_FLOOR).toBeLessThan(QUICK_FLOOR);
+  });
+
   it("still finds nothing when nothing clears the lower floor either", () => {
-    const { hits, fallback } = hitsFrom({ [a.id]: 0.4999, [b.id]: 0.12 }, [a, b]);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.3999, [b.id]: 0.12 }, [a, b]);
     expect(hits).toEqual([]);
     expect(fallback).toBe(false);
   });

@@ -47,8 +47,8 @@ empty one:
   [§ The counts in the log line](#the-counts-in-the-log-line).
 - **The text in the box was replaced** by a saved run's criterion arriving late:
   [§ And the fetch](#and-the-fetch-which-can-still-take-the-text-away).
-- **A quick search** shows only paragraphs Jev scored at 0.7 or more (or, when there are none,
-  the best eight at 0.5 or more), never a heading, and at most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
+- **A quick search** shows only paragraphs Jev scored at 0.65 or more (or, when there are none,
+  the best eight at 0.4 or more), never a heading, and at most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
 - **On the shelf**, only gistable blocks are indexed for passages (`searchLibrary` in
   [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts)), so a heading or a figure is never a hit;
   [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one).
@@ -160,7 +160,9 @@ measured in [261002o-quick-search-spike.md](../investigations/261002o-quick-sear
 again on 2026-10-03, when the question's wording changed, in
 [261003c](../investigations/261003c-quick-search-recall-eval-jev-wording-floor-and-small-llm.md),
 and a third time the same day, for the fallback floor, in
-[261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md).
+[261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md). Both
+floors were lowered on 2026-10-04, by score band, in
+[261004d](../investigations/261004d-quick-search-lower-floors-precision-by-score-band.md).
 
 > I really love the idea of our kind of search that can search by concepts or ideas or questions,
 > but it's quite slow. And so I was wondering about using TypeSafe.ai's Jev model through OpenRouter
@@ -189,7 +191,30 @@ from that shape:
   It is still printed, because [§ The confidence](#the-confidence-and-the-unit-that-changed-silently)
   is about not hiding uncertainty; the row's *quick* tag, and each result's score explanation, say
   which number it is.
-- **Floor 0.7, cap 20, best first** (`QUICK_FLOOR` in
+- **Floor 0.65 and fallback floor 0.4 since 2026-10-04**, down from 0.7 and 0.5; the two bullets
+  below are the history of those earlier numbers.
+
+  > for the Quick search, perhaps a more permissive threshold, so that more shows up
+  >
+  > — Greg, 2026-10-04
+
+  Every passage a lower floor would show on the three fixture articles was judged blind, and
+  counted by score band. On phrase, question and topic searches 86% of what scores 0.7 or more is
+  right, 62% of 0.65 to 0.7, 38% of 0.6 to 0.65 and 13% of 0.5 to 0.55: **0.65 is the last band
+  where a passage is more likely right than wrong**, on all three kinds of query measured. A
+  search that already worked shows about 11% more. For the fallback, 0.4 to 0.5 is right as often
+  (52%) as the 0.5 to 0.55 it already showed (54%), and 107 of 111 bare-word searches now show
+  something, against 99. What it costs: a fallback list is about half right (it was about 6 in
+  10); the one absent topic that already showed wrong paragraphs ("human memory") now shows eight
+  of them; and **6 of 111 bare-word searches show fewer than before**, because a search whose
+  best paragraph scores 0.65 to 0.7 used to get the fallback's eight and now gets the one or two
+  that clear the floor. A weaker result reads as weaker by its printed score and by the
+  *Prioritised* bar, which a reader can raise; a quick hit's paragraph bar does not vary with its
+  score. The measurement, the rule shapes passed over, and its limits (three articles, not six)
+  are in
+  [261004d](../investigations/261004d-quick-search-lower-floors-precision-by-score-band.md); the
+  plan is [261004k](../plans/261004k-quick-search-lower-floors-so-more-shows-up.md).
+- **Floor 0.7, cap 20, best first, until 2026-10-04** (`QUICK_FLOOR` in
   [`src/quick-search.ts`](../../src/quick-search.ts), `MAX_HITS` shared with meaning). There is no
   natural break in Jev's scores, so the floor is a measurement, not a gap: the plan said 0.8, and
   re-measured on the wording actually sent, 0.8 kept about half the meaning search's hits and 0.7
@@ -197,8 +222,9 @@ from that shape:
   about the whole piece. On the new wording, up to 94 of 505 blocks cleared 0.7 in the eval.
   Floors of 0.6 and 0.65 found no more literal targets on its short-topic set and let in more
   known wrong paragraphs; 0.5 recovered three more target opportunities with more junk.
-- **When nothing clears 0.7, the best eight at 0.5 or more are shown instead**
-  (`QUICK_FALLBACK_FLOOR`, `QUICK_FALLBACK_HITS`), since 2026-10-03, from Greg's report
+- **When nothing clears the floor, the best eight at the fallback floor or more are shown
+  instead** (`QUICK_FALLBACK_FLOOR`, `QUICK_FALLBACK_HITS`; the numbers in this bullet are for
+  0.7 and 0.5, as built), since 2026-10-03, from Greg's report
   `spya-jp5nxn`: *"The quick search still doesn't seem to find enough"*, on a search for "results"
   in a paper. Its best paragraphs scored 0.52–0.57 and were the right ones. A bare word naming a
   kind of passage or a field ("results", "examples", "linear algebra") scores the paragraphs that
@@ -1571,7 +1597,7 @@ a hope.
 - **A failed thorough search has already cost the quick answer.** Accepted for v1, because it is a
   second to ask again; the alternative is in the plan (261003i, B2).
 - **Quick scores wobble from run to run** — up to 0.17 between identical requests in the spike — so
-  the order of close hits, and whether a block near 0.7 makes it in, is not stable. Another reason
+  the order of close hits, and whether a block near the floor makes it in, is not stable. Another reason
   the row says *quick*. Its known failure is *about* versus *against*: "things Claude should never
   do" scored a passage on being over-cautious nearly as high as the hard limits
   ([261002o](../investigations/261002o-quick-search-spike.md)).

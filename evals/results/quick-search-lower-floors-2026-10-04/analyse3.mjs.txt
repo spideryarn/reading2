@@ -1,0 +1,48 @@
+/* 261004: merge the third judge's files, check them against the key, measure
+   agreement with the earlier labels, and report precision by score band on the
+   three fixture articles. No model calls. Writes judged3.json (gaps only) and
+   summary3.json. Run replay-floors.mjs afterwards: it reads judged3.json. */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const OUT = process.env.QOUT ?? "data/qeval";
+const key = JSON.parse(readFileSync(`${OUT}/pool3-key.json`, "utf8"));
+const got = {};
+for (let i = 1; existsSync(`${OUT}/judged3-${i}.json`); i++) for (const [k, v] of Object.entries(JSON.parse(readFileSync(`${OUT}/judged3-${i}.json`, "utf8")))) got[k] = { ...(got[k] ?? {}), ...v };
+
+/* Every id asked about has exactly a y or an n, and nothing else was answered. */
+let missing = 0, extra = 0, bad = 0;
+for (const [k, v] of Object.entries(key)) for (const id of [...v.candidates, ...v.overlap, ...v.decoys]) { const a = got[k]?.[id]; if (a === undefined) missing++; else if (a !== "y" && a !== "n") bad++; }
+for (const [k, v] of Object.entries(got)) { const want = new Set(key[k] ? [...key[k].candidates, ...key[k].overlap, ...key[k].decoys] : []); for (const id of Object.keys(v)) if (!want.has(id)) extra++; }
+console.log(`verdicts: missing ${missing}, not y/n ${bad}, not asked for ${extra}`);
+if (missing || bad) throw new Error("the judge's files do not cover the pool");
+
+/* judged3.json: the candidates only. Overlap and decoys are checks, not labels. */
+const j3 = {};
+for (const [k, v] of Object.entries(key)) j3[k] = Object.fromEntries(v.candidates.map((id) => [id, got[k][id]]));
+writeFileSync(`${OUT}/judged3.json`, JSON.stringify(j3, null, 1));
+
+const { entries, FIXTURES, sorted, verdict } = await import("./replay-floors.mjs");
+const byKey = new Map(); for (const e of entries) if (!byKey.has(e.k)) byKey.set(e.k, e);
+const ag = { both: 0, agree: 0, "earlier y, judge 3 n": 0, "earlier n, judge 3 y": 0 }; let dy = 0, dn = 0;
+for (const [k, v] of Object.entries(key)) {
+  const e = byKey.get(k);
+  for (const id of v.overlap) { const a = e.v.get(id), b = got[k][id]; ag.both++; if (a === b) ag.agree++; else if (a === "y") ag["earlier y, judge 3 n"]++; else ag["earlier n, judge 3 y"]++; }
+  for (const id of v.decoys) if (got[k][id] === "y") dy++; else dn++;
+}
+console.log("agreement on already-judged blocks:", JSON.stringify(ag), `| decoys marked right: ${dy} of ${dy + dn}`);
+
+/* Precision by score band: one count per (search, block). */
+const BANDS = [[0.7, 1.01], [0.65, 0.7], [0.6, 0.65], [0.55, 0.6], [0.5, 0.55], [0.45, 0.5], [0.4, 0.45], [0.35, 0.4]];
+const bands = [];
+for (const group of ["working", "bare", "request"]) for (const mode of ["any run", "runs with nothing at 0.7 (best 8)"]) for (const [lo, hi] of BANDS) {
+  if (mode === "any run" && lo < 0.5) continue;
+  let y = 0, n = 0, u = 0;
+  for (const e of entries.filter((x) => x.group === group && FIXTURES.includes(x.slug))) for (const r of e.reps) {
+    const s = sorted(r.scores); const fb = s[0][1] < 0.7;
+    if (mode !== "any run" && !fb) continue;
+    const list = mode === "any run" ? s.filter(([, p]) => p >= 0.5).slice(0, 20) : s.filter(([, p]) => p >= 0.35).slice(0, 8);
+    for (const [id, p] of list) if (p >= lo && p < hi) { const v = verdict(e, id); if (v === "y") y++; else if (v === "n") n++; else u++; }
+  }
+  bands.push({ group, mode, band: `${lo} to ${hi > 1 ? 1 : hi}`, right: y, wrong: n, unjudged: u, "% right": y + n ? Math.round(100 * y / (y + n)) : null });
+}
+console.table(bands);
+writeFileSync(`${OUT}/summary3.json`, JSON.stringify({ agreement: ag, decoysMarkedRight: `${dy} of ${dy + dn}`, bands }, null, 1));
