@@ -759,6 +759,13 @@ describe("a body saved by an older deployment", () => {
     expect(shelfFromCachedBody({ articles: [{ ...rich, visibility: "private" }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, lastOpenedAt: 17 }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, publishedAt: 2024 }] })).toBeNull();
+    /* A paper dated only to a year (plan 261004h): a whole year in the
+       column's bounds, or the body is not a shelf. */
+    const { publishedAt: _day, ...undated } = rich;
+    const paper = { ...undated, publishedYear: 2011 };
+    expect(shelfFromCachedBody({ articles: [paper] })).toEqual([paper]);
+    expect(shelfFromCachedBody({ articles: [{ ...paper, publishedYear: "2011" }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...paper, publishedYear: 20111 }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, sourceReusable: "yes" }] })).toBeNull();
     const { sourceReusable: _missing, ...old } = rich;
     expect(shelfFromCachedBody({ articles: [old] })).toBeNull();

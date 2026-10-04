@@ -42,6 +42,11 @@ const WITHOUT_CREATED_AT: Record<string, Allowance> = {
   bibliographic_services: { exempt: "one row of rate-limit state per outside service, not an action" },
   billing_tier_prices: { exempt: "a price list, not an action" },
   block_identities: { column: "first_seen_at" },
+  citation_index_citers: {
+    exempt: "one row of a fetched list, and citation_index_lookups.fetched_at times the fetch that wrote it",
+  },
+  /* A fetch cache like bibliographic_records, and it says when it fetched. */
+  citation_index_lookups: { column: "fetched_at" },
   ingest_events: { column: "reserved_at" },
   link_previews: { column: "fetched_at" },
   queue_state: { column: "updated_at" },

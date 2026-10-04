@@ -472,7 +472,7 @@ describe("lookupWork", () => {
 describe("fetchBibliographicJson", () => {
   const resolve = vi.fn(async () => ["104.18.0.1"]);
 
-  it("refuses any host but the two registries, before a lookup or a request", async () => {
+  it("refuses any host but the two registries and OpenAlex, before a lookup or a request", async () => {
     const fetchImpl = vi.fn<FetchLike>();
     for (const url of [
       "https://example.com/works/10.1000/x",
@@ -480,7 +480,7 @@ describe("fetchBibliographicJson", () => {
       "https://api.crossref.org:8443/works/10.1000/x",
       "https://user@api.crossref.org/works/10.1000/x",
       "https://api.crossref.org.evil.example/works/10.1000/x",
-      "https://api.openalex.org/works/doi:10.1000/x",
+      "https://api.semanticscholar.org/graph/v1/paper/DOI:10.1000/x",
     ]) {
       await expect(fetchBibliographicJson(url, { fetchImpl, resolve }), url).rejects.toMatchObject({
         code: "blocked-address",

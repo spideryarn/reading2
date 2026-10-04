@@ -36,7 +36,7 @@ import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { calendarDay, exactly, timeAgo } from "./relative-time.js";
+import { exactly, publishedOf, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
@@ -83,8 +83,8 @@ export const CARD_NOTES: Record<string, CardNote> = {
     return when ? `opened ${when}` : "never opened";
   },
   published: (e) => {
-    const day = calendarDay(e.publishedAt);
-    return day ? `published ${day.label}` : "no publication date";
+    const published = publishedOf(e);
+    return published ? `published ${published.label}` : "no publication date";
   },
   opens: (e) =>
     e.opens === 0 ? "never opened" : e.opens === 1 ? "opened once" : `opened ${e.opens} times`,
@@ -201,10 +201,15 @@ export function libraryColumns(
          directions**, by the rule every key follows (`sinkLast` in
          Library.tsx): a PDF never has one, so that group is large, and
          borrowing its Added date would put a 1990 paper fetched yesterday at
-         the top of "newest first". Plan 261003m. */
+         the top of "newest first". Plan 261003m.
+
+         **A paper dated only to a year sorts among the dated ones**, at the
+         start of its year, and prints as the year alone — `publishedOf`, plan
+         261004h. Left with the undated, most older print papers would be
+         outside the sort that was built for them. */
       id: "published",
       header: "Published",
-      accessorFn: (e) => calendarDay(e.publishedAt)?.t,
+      accessorFn: (e) => publishedOf(e)?.t,
       sortDescFirst: true,
       sortingFn: numberOrMissing<LibraryEntry>(),
       meta: {
@@ -220,7 +225,7 @@ export function libraryColumns(
       /* The date itself, not "3 days ago": it is a fact about the piece, not
          about the reader's week. The dash and its words as on Last opened. */
       cell: ({ row }) =>
-        calendarDay(row.original.publishedAt)?.label ?? (
+        publishedOf(row.original)?.label ?? (
           <span className="tw:opacity-40">
             <span aria-hidden="true">—</span>
             <span className="tw:sr-only">no publication date</span>
@@ -553,7 +558,7 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
 
   /* The cell prints the whole date, so the card repeats it only when the
      column is hidden — and says nothing where there is none to carry back. */
-  const published = calendarDay(entry.publishedAt);
+  const published = publishedOf(entry);
   if (published && isHidden("published")) facts.push({ label: "Published", value: published.label });
 
   if (isHidden("opens")) {

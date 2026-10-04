@@ -260,8 +260,8 @@ end`;
  * stops being able to tell a selected column from an unselected one — which is
  * most of what a projection is for.
  *
- * Read the absences. No `fetched_at`, no `note`, and none of the six PDF
- * provenance columns. `articles.title_override` is not selected either, so there
+ * Read the absences. No `fetched_at`, no `note`, no `doi`, no `abstract`, and
+ * none of the six PDF provenance columns. `articles.title_override` is not selected either, so there
  * is nothing here for a `titleFor()` to be called on.
  *
  * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
@@ -282,6 +282,12 @@ const PUBLIC_PROJECTIONS = {
     siteName: articleRevisions.siteName,
     lang: articleRevisions.lang,
     excerpt: articleRevisions.excerpt,
+    /* Where and when the piece was published, since 2026-10-04 (plan 261004h).
+       `published_at` does not reach the wire as itself: `publicMeta` sends its
+       calendar day. `doi` and `abstract` are not selected. */
+    journal: articleRevisions.journal,
+    publishedAt: articleRevisions.publishedAt,
+    publishedYear: articleRevisions.publishedYear,
     finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
@@ -852,6 +858,9 @@ export const pgPublicReader: PublicArticleReader = {
         siteName: found.revision.siteName,
         lang: found.revision.lang,
         excerpt: found.revision.excerpt,
+        journal: found.revision.journal,
+        publishedAt: found.revision.publishedAt,
+        publishedYear: found.revision.publishedYear,
         headingTitle: headingTitleOf(blocks),
         finalUrl: found.revision.finalUrl,
         blocks,

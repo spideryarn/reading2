@@ -145,7 +145,7 @@ function paint(o: UseDebate, view: DebateView = "reception", order: DebateOrder 
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o },
+        access: { kind: "owner", owner: o, citers: { result: { kind: "no-doi" }, retry: () => {} } },
         onJump: () => {},
         view,
         onView: () => {},

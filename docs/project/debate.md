@@ -44,8 +44,9 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
   identification slider any more: the old default hid the published replies and citing papers the
   search exists to find
   ([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).
-  It ends with a Google Scholar search for who cites the piece. Listing every citer needs a
-  citation index, which waits on Greg (261002i stage 2).
+  For the owner it ends with **Cited by**: the papers that cite the piece, from OpenAlex, most cited
+  first, ten and then all (see [§ Cited by](#cited-by-the-papers-that-cite-the-piece) below). A
+  visitor gets a Google Scholar search for who cites it instead.
 - **Claims**: what has been written about the claims the piece makes. One open disclosure per
   claim, in article order, headed by the article's own words; the relevance bar belongs here.
 
@@ -54,6 +55,44 @@ claim is checked or steer the search; that is an open question for Greg in 26100
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## Cited by: the papers that cite the piece
+
+Since 2026-10-04, in
+[261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). It
+answers "has anyone cited this?" for a paper the open web has not written about, where Reception
+honestly finds nothing.
+
+- **A list and a count, and no reading of either.** OpenAlex says which papers cite a DOI; it has no
+  citing sentence, and no model is asked. The panel says so under the count. What each citer says,
+  for or against, is not built.
+- **Not part of the stored debate.** It is free, has its own route (`GET /api/citers/<slug>`) and
+  its own cache, so it is on screen whenever the owner has Reception open: before the paid search
+  has run, and on a debate stored before it existed. Nothing in it can start the search, and it
+  does not change Reception's count, which stays the web search's rows.
+- **The DOI is checked before it is trusted.** OpenAlex's record for the DOI must carry the
+  article's whole title and one of its authors, as imported (never a reader's rename). The check
+  runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
+  the same DOI by mistake gets nothing.
+- **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
+  `src/messages.ts`): no DOI on record, not in OpenAlex, could not be confirmed, could not be
+  reached (with Try again), too large to read, no citers yet, and the list. A short list says why
+  it is short: the page limit (100, most cited first) and records that could not be shown are two
+  different sentences.
+- **Cached per DOI for 7 days**, shared by every reader of that paper: public bibliographic facts,
+  with no owner and no article on the row (`src/db/schema.ts` § citation index). If OpenAlex cannot be
+  reached and an older list exists, that list is shown with its own date.
+- **OpenAlex's strings are text.** Titles and names are stripped of markup and bounded; a link is
+  built by us from the citing paper's DOI or OpenAlex id, never taken from the answer
+  ([security-map.md](security-map.md)). A citer's title is drawn in the app's face, like a source's
+  title in the rows above: [fonts.md](fonts.md) leaves third-party text there.
+- **What is sent**: the article's DOI and our contact address, from the server. No key.
+  [privacy.md](privacy.md) has the page's sentence.
+
+Not built, each named in the plan: a visitor's view of the list; a title search when there is no
+DOI (an arXiv preprint has none on record today, so it shows the no-DOI sentence, as does an article
+imported before 2026-10-04 until its owner uses Read it again); more than one page; hiding
+self-citations; an API key.
 
 ## What has changed, and where each change is written up
 
@@ -77,11 +116,14 @@ every extract the search returned for a page is checked, not just the first — 
 throwing away correctly copied replies
 ([261002i](../plans/261002i-debate-leads-with-who-has-cited-this-article.md),
 [postmortem 261002g](../postmortems/261002g-debate-refused-quotes-from-a-later-extract-of-the-same-page.md)).
-Listing every citer from a citation index is that plan's stage 2, and waits on Greg.
 Since 2026-10-03 the panel is two sub-modes, Reception and Claims, and the identification slider
 is a headed group ([261003o](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md);
 what the evals behind it measured is
 [investigation 261003g](../investigations/261003g-debate-on-a-thinly-received-paper-what-reception-finds-and-how-claims-spread.md)).
+Since 2026-10-04 the owner's Reception ends with **Cited by**, the papers that cite the piece, from
+OpenAlex: 261002i's stage 2, built as
+[261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). It is
+not part of the stored debate, so it is there before a search has run.
 
 How the mode was evaluated, and what that found:
 [260906b](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md), with the stage-0
@@ -129,6 +171,12 @@ Each module's header comment says what it owns and why; start with `src/debate.t
   threads, scoped to a sub-mode.
 - [`src/scholar-search.ts`](../../src/scholar-search.ts) — the Scholar search Reception ends with;
   browser-safe, shared with Citations.
+- [`src/citation-index.ts`](../../src/citation-index.ts) — Cited by: the two requests to OpenAlex,
+  the parsers, the identity check and the fallbacks. Its cache is
+  [`src/store/pg-citation-index.ts`](../../src/store/pg-citation-index.ts); its politeness is the
+  shared limiter in [`src/bibliographic.ts`](../../src/bibliographic.ts) (`inServiceTurn`).
+  [`src/citer-link.ts`](../../src/citer-link.ts) builds a citer's link, and
+  [`src/web/useCiters.ts`](../../src/web/useCiters.ts) is the panel's read, which has no job.
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;

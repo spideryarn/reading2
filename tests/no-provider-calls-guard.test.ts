@@ -166,7 +166,7 @@ describe("the no-provider-calls guard", () => {
     /* These are deliberately outside PROVIDER_HOSTS because they do not charge
        per token. Literals here make removing one from ALSO_REFUSED observable
        instead of letting a loop over the same register certify itself. */
-    for (const host of ["api.stripe.com", "api.resend.com"]) {
+    for (const host of ["api.stripe.com", "api.resend.com", "api.crossref.org", "api.datacite.org", "api.openalex.org"]) {
       expect(providerHostOf(`https://${host}/v1/anything`), host).toBe(host);
     }
   });

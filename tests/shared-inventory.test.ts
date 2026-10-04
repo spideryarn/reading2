@@ -305,6 +305,17 @@ describe("the sweep over the modes", () => {
     expect(keys(ifBuilt)).not.toContain("search");
   });
 
+  /* `PublicMeta` gained the journal and the publication date on 2026-10-04
+     (plan 261004h). The owner is told before they share, in the row that
+     covers `meta`. */
+  it("tells the owner the journal and the publication date go out", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((r) => r.key === "provenance");
+    expect(row?.detail).toMatch(/journal/);
+    expect(row?.detail).toMatch(/when it was published/);
+    /* And not what stays: a DOI is not sent. */
+    expect(row?.detail).not.toMatch(/DOI/i);
+  });
+
   /* Every row says something, and nothing says the same thing twice. A label
      with no tooltip is a row the owner cannot act on; two rows with one
      sentence is the copy having been pasted. */

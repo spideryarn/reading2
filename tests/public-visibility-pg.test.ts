@@ -1390,6 +1390,57 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
+   * **Where and when it was published, from the real columns** — the journal
+   * and the publication date cross, at the precision we hold; the DOI and the
+   * abstract beside them in the same row do not (plan 261004h). Through the
+   * real reader and route, because the DTO's own test is handed its row and
+   * cannot see a projection that forgot a column.
+   */
+  it("sends a visitor the journal and the day or the year, and never the DOI", async () => {
+    const db = getDb();
+    const set = (values: { publishedAt: string | null; publishedYear: number | null }) =>
+      db
+        .update(articleRevisions)
+        .set({ journal: "Entropy", doi: "10.3390/e26060481", abstract: "ABSTRACT_SENTINEL", ...values })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    const visitorMeta = async () => {
+      const r = await call("GET", `/api/public/article/${SLUG}`);
+      expect(r.status).toBe(200);
+      expect(r.text).not.toContain("10.3390");
+      expect(r.text).not.toContain("ABSTRACT_SENTINEL");
+      return (r.body as { meta: Record<string, unknown> }).meta;
+    };
+    try {
+      await set({ publishedAt: "2024-05-31T23:30:00-05:00", publishedYear: null });
+      const dated = await visitorMeta();
+      expect(dated).toMatchObject({ journal: "Entropy", published: "2024-05-31" });
+      expect(dated).not.toHaveProperty("publishedAt");
+      expect(dated).not.toHaveProperty("publishedYear");
+
+      await set({ publishedAt: null, publishedYear: 2011 });
+      const yearOnly = await visitorMeta();
+      expect(yearOnly).toMatchObject({ journal: "Entropy", publishedYear: 2011 });
+      expect(yearOnly).not.toHaveProperty("published");
+
+      /* And the owner's own reads carry the year: the article, and the shelf row. */
+      const owned = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
+      expect((owned.body as { meta: Record<string, unknown> }).meta).toMatchObject({
+        journal: "Entropy",
+        doi: "10.3390/e26060481",
+        publishedYear: 2011,
+      });
+      const shelf = await call("GET", "/api/library", { as: OWNER });
+      const row = (shelf.body as { articles: { slug: string; publishedYear?: number }[] }).articles.find((a) => a.slug === SLUG);
+      expect(row?.publishedYear).toBe(2011);
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ journal: null, doi: null, abstract: null, publishedAt: null, publishedYear: null })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    }
+  });
+
+  /**
    * **And the deleted metadata path is still 404 for an article that *is*
    * shared** — which is the control on the case above.
    *

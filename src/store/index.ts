@@ -248,6 +248,7 @@ export const loadSkim = reader.loadSkim.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
 export const loadDebate = reader.loadDebate.bind(reader);
+export const loadArticleIdentity = reader.loadArticleIdentity.bind(reader);
 export const loadCitations = reader.loadCitations.bind(reader);
 /* The articles a cited work may be matched to: the reader's own and public ones
    only. Owner's GET /api/citations only — docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */

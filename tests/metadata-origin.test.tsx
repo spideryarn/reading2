@@ -420,6 +420,44 @@ describe("when and where it was published, under the title", () => {
     expect(facts().match(/entropy/gi)).toHaveLength(1);
   });
 
+  /* Plan 261004h: a paper the registry dates only to a year. */
+  it("prints the year alone for a paper with no day, and no made-up day", async () => {
+    await owner({ source: "pdf", journal: "Neuron", publishedYear: 2011 });
+    const published = [...(host.querySelector("[data-metadata-facts]")?.children ?? [])]
+      .map((el) => el.textContent?.replace("·", "").trim())
+      .find((text) => text?.startsWith("Published"));
+    expect(published).toBe("Published 2011");
+  });
+
+  describe("on the visitor's page", () => {
+    /* A visitor's meta is the public payload: `published` is the day alone,
+       under its own name (src/public-types.ts § `PublicMeta.published`). */
+    const shared = (meta: Partial<Meta> & { published?: string }) => visitor(meta as Partial<Meta>);
+    const line = () => host.querySelector("[data-public-facts]")?.textContent ?? "";
+
+    it("prints the journal and the day", async () => {
+      await shared({ byline: "A Writer", journal: "Entropy", published: "2024-05-31" });
+      expect(line()).toContain("Entropy");
+      expect(line()).toMatch(/Published (31 May|May 31),? 2024/);
+    });
+
+    it("prints the year alone for a paper with no day", async () => {
+      await shared({ journal: "Neuron", publishedYear: 2011 });
+      expect(line()).toMatch(/Published 2011$/);
+    });
+
+    it("names a journal once when the site has the same name, and no date it was not sent", async () => {
+      await shared({ siteName: " Entropy ", journal: "entropy" });
+      expect(line().match(/entropy/gi)).toHaveLength(1);
+      expect(line()).not.toContain("Published");
+    });
+
+    it("does not read the owner's field: a `publishedAt` on a visitor's meta prints nothing", async () => {
+      await shared({ siteName: "Noema", publishedAt: "2024-03-11T23:30:00-05:00" });
+      expect(line()).not.toContain("Published");
+    });
+  });
+
   it("gives identical facts different React keys", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     await owner({ byline: "Entropy", journal: "Entropy" });

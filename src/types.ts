@@ -1645,11 +1645,22 @@ export interface Meta {
    * **The journal or venue the registry names for this piece** — Crossref's or
    * DataCite's, for the article's own DOI, kept only when the registry's title
    * is the article's (src/article-registry.ts). The same lookup may fill `doi`
-   * and, when the page stated no date, `publishedAt`. Owner-facing only, like
-   * `doi`. Absent on everything imported before 2026-10-04.
+   * and, when the page stated no date, `publishedAt` or `publishedYear`. A
+   * visitor is sent it too (`PublicMeta.journal`), which `doi` is not. Absent
+   * on everything imported before 2026-10-04.
    * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md.
    */
   journal?: string;
+  /**
+   * **The year of publication, when that is all the registry states** — an
+   * older print paper, or a DataCite record. Set only while `publishedAt` is
+   * absent: an article has a day or a year, never both, and the database
+   * refuses a row with both. Read the two together with `publishedOf`
+   * (src/web/relative-time.ts). Timeline does not read it: a year is too
+   * coarse a frame for "last March".
+   * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+   */
+  publishedYear?: number;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1745,6 +1756,17 @@ export interface Meta {
    * it, nobody is checking. `recall` is the number; this is the complaint.
    */
   quality?: string[];
+}
+
+/**
+ * `value` when it is a year `Meta.publishedYear` may hold, else undefined: a
+ * whole number from 1000 to 2999, the bounds of the column's own check
+ * (`article_revisions_published_year`). One function for every place a year
+ * comes in from outside the type system: a registry record, a database row on
+ * its way to a visitor, a shelf saved in the browser.
+ */
+export function publishedYearOf(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1000 && value <= 2999 ? value : undefined;
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */
@@ -2073,6 +2095,13 @@ export interface LibraryEntry {
    * that states none or was last extracted before 2026-08-31.
    */
   publishedAt?: string;
+  /**
+   * `Meta.publishedYear`: the year alone, for a paper whose registry record
+   * states no whole day. Never beside `publishedAt`. The shelf reads the pair
+   * with `publishedOf` (src/web/relative-time.ts), which sorts a year at the
+   * start of that year and prints it as `2011`.
+   */
+  publishedYear?: number;
   /**
    * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
    * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
@@ -6579,6 +6608,68 @@ export interface DebateResponse {
   /** The article is the same and we would ask the web differently now. */
   outdated: boolean;
 }
+
+/**
+ * **One paper that cites the article**, as OpenAlex lists it — Reception's
+ * *Cited by* (src/citation-index.ts). Every string is plain text and bounded,
+ * and none is a link: the panel builds its link from `doi` or `openalexId`
+ * (src/citer-link.ts). We have not read what the paper says about the piece.
+ */
+export interface Citer {
+  /** OpenAlex's id for the work, `W…`, shape-checked. */
+  openalexId: string;
+  /** Lower-cased and shape-checked. Absent when OpenAlex has none. */
+  doi?: string;
+  /** The citing paper's own title: its authors' words, not ours. */
+  title: string;
+  /** The first authors' display names, at most 20. */
+  authors: string[];
+  /** How many authors the work has, which can be more than `authors` holds. */
+  authorCount: number;
+  year?: number;
+  /** Where it appeared: OpenAlex's `primary_location.source.display_name`. */
+  venue?: string;
+  /** OpenAlex's `type`: `article`, `preprint`, `review`, … */
+  kind?: string;
+  /** How often the citing paper is itself cited. The list's order. */
+  citedByCount: number;
+}
+
+/**
+ * `GET /api/citers/:slug` — **who cites this article, or why there is no
+ * list.** No model made any of it, and it is not part of the stored Debate.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+ *
+ * - `no-doi` — the article has no DOI on record, so nothing was asked.
+ * - `not-indexed` — OpenAlex has no record of the DOI.
+ * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
+ *   article: its title and one author must both agree. Not a claim that the
+ *   DOI is another work's; with no byline there is simply nothing to agree.
+ * - `unavailable` — it could not be asked just now. Worth trying again.
+ * - `too-large` — its target record exceeds our byte limit, or its list does
+ *   even after asking for a shorter page. Not worth the same retry today.
+ * - `found` — the list. `count` is OpenAlex's own count of citers, `returned`
+ *   how many records its answer carried, `dropped` how many of those could not
+ *   be shown (no title, a malformed id, a duplicate), and `capped` whether the
+ *   page limit left some out. `citers.length` is `returned - dropped`, so the
+ *   panel can say which of the two reasons a short list has.
+ */
+export type CitersResult =
+  | { kind: "no-doi" }
+  | { kind: "not-indexed" }
+  | { kind: "unconfirmed" }
+  | { kind: "unavailable" }
+  | { kind: "too-large" }
+  | {
+      kind: "found";
+      count: number;
+      returned: number;
+      dropped: number;
+      capped: boolean;
+      citers: Citer[];
+      /** When OpenAlex answered, ISO. A cached list keeps the day it was fetched. */
+      fetchedAt: string;
+    };
 
 /**
  * As `TimelineFound` and `QuizFound`, and here too it is the *same* type, for

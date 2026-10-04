@@ -484,6 +484,10 @@ async function reply(url: string, method: string, body: string | null): Promise<
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
   if (url.startsWith("/api/search/")) return json({ runs: [] });
+  /* Reception's *Cited by*, answered as the route answers an article with no
+     DOI. A 404 here would be its `unavailable`, which draws a second *Try
+     again* in Debate's band beside the one this file counts (plan 261004h). */
+  if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
   const kind = new RegExp(`^/api/([a-z]+)/${SLUG}$`).exec(url)?.[1];
   if (kind && kind in BODIES) {
     gets[kind] = (gets[kind] ?? 0) + 1;
@@ -642,6 +646,8 @@ const ROWS: readonly Row[] = [
  */
 const NOT_A_ROW: Record<string, string> = {
   "useOrderedRead.ts": "the definition itself",
+  "useCiters.ts":
+    "Reception's Cited by is a section inside Debate's band, not a mode's artefact read: it has no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/use-citers.test.tsx and tests/debate-panel.test.tsx.",
   "useArc.ts":
     "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
   "useClaims.ts":

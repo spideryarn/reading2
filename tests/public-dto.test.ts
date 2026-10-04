@@ -296,6 +296,11 @@ const FORBIDDEN_ON_META = [
      DTO cannot be handed one — there is no such argument. That is the design
      this file's header describes, and it is why the list below is short. */
   "fetchedAt",
+  /* The owner's field, which may carry a time of day and an offset. A visitor
+     gets `published`, the day alone (plan 261004h). */
+  "publishedAt",
+  "doi", // not one of the two facts Greg approved on 2026-10-04
+  "abstract",
   "note", // the extraction note
   "source", // and the whole PDF/upload provenance block below
   "method",
@@ -323,6 +328,12 @@ describe("the public article payload", () => {
     siteName: "Noema",
     lang: "en",
     excerpt: "Two sentences of Readability's own.",
+    /* A journal and a day with a time, so the whole-key-set assertion sees
+       `meta.journal` and `meta.published` (plan 261004h). The year is its own
+       fixture below, because an article has a day or a year and never both. */
+    journal: "Noema Journal",
+    publishedAt: "2026-01-14T09:00:00+00:00",
+    publishedYear: null,
     headingTitle: "The mythology of conscious AI",
     /* **A real address, not `null`**, for the same reason `assets` below is a
        real manifest: with `null` in, the whole-key-set assertion never sees
@@ -401,7 +412,14 @@ describe("the public article payload", () => {
         "meta",
         "meta.byline",
         "meta.excerpt",
+        /* Where and when the piece was published, since 2026-10-04 — Greg:
+           "Q-visitor-page yes". `published` is the calendar day alone, never
+           the owner's `publishedAt`; `meta.publishedYear` takes its place for
+           a paper dated only to a year (§ the journal and the publication
+           date, below). `doi` stays out. */
+        "meta.journal",
         "meta.lang",
+        "meta.published",
         "meta.siteName",
         "meta.slug",
         "meta.title",
@@ -536,6 +554,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [HEADING, BLOCK],
@@ -629,6 +650,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
@@ -676,6 +700,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [
@@ -724,6 +751,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -744,6 +774,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: "From the article's own h1",
       finalUrl: null,
       blocks: [BLOCK],
@@ -766,6 +799,9 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -775,6 +811,105 @@ describe("the public article payload", () => {
       ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
+  });
+
+  /**
+   * **Where and when the piece was published** — the journal and the
+   * publication date, at the precision we hold it. Greg, 2026-10-04:
+   * "Q-visitor-page yes". Plan 261004h.
+   *
+   * The owner's `publishedAt` may carry a time of day and an offset; a visitor
+   * gets the calendar day and nothing after it, under a different name.
+   */
+  describe("the journal and the publication date", () => {
+    const meta = (over: { journal?: string | null; publishedAt?: string | null; publishedYear?: number | null }) =>
+      publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: null,
+        publishedAt: null,
+        publishedYear: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...over,
+      }).meta;
+
+    it("sends the journal and the day", () => {
+      expect(meta({ journal: "Entropy", publishedAt: "2024-05-31" })).toEqual({
+        slug: "noema",
+        title: "T",
+        journal: "Entropy",
+        published: "2024-05-31",
+      });
+    });
+
+    it("sends the day alone when the stored string carries a time and an offset", () => {
+      const out = meta({ publishedAt: "2024-03-11T23:30:00-05:00" });
+      expect(out.published).toBe("2024-03-11");
+      expect(JSON.stringify(out)).not.toContain("23:30");
+      expect(JSON.stringify(out)).not.toContain("-05:00");
+    });
+
+    it("sends the year for a paper with no day", () => {
+      expect(meta({ journal: "Neuron", publishedYear: 2011 })).toEqual({
+        slug: "noema",
+        title: "T",
+        journal: "Neuron",
+        publishedYear: 2011,
+      });
+    });
+
+    it("has none of the three keys for an article with none of the facts", () => {
+      expect(Object.keys(meta({}))).toEqual(["slug", "title"]);
+    });
+
+    it("sends nothing for a stored date that is not a real day, or a year out of range", () => {
+      expect(Object.keys(meta({ publishedAt: "soon" }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedAt: "2024-02-31T09:00:00Z" }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedYear: 20111 }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedYear: 2011.5 }))).toEqual(["slug", "title"]);
+    });
+
+    it("never sends both: a day beside a year crosses as the day", () => {
+      const out = meta({ publishedAt: "2011-06-02", publishedYear: 2011 });
+      expect(out.published).toBe("2011-06-02");
+      expect("publishedYear" in out).toBe(false);
+    });
+
+    it("does not send the owner's `publishedAt` key, or a DOI it is handed by mistake", () => {
+      /* The DTO has no `doi` argument, so the only way one arrives is a caller
+         spreading a whole revision row in. It must still not cross. */
+      const out = publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: "Entropy",
+        publishedAt: "2024-05-31T09:00:00+02:00",
+        publishedYear: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...({ doi: "10.3390/e26060481", abstract: "An abstract." } as object),
+      }).meta;
+      expect(Object.keys(out).sort()).toEqual(["journal", "published", "slug", "title"]);
+      expect(JSON.stringify(out)).not.toContain("10.3390");
+    });
   });
 });
 
@@ -1302,6 +1437,9 @@ describe("the artefacts a shared link carries", () => {
     siteName: null,
     lang: null,
     excerpt: null,
+    journal: null,
+    publishedAt: null,
+    publishedYear: null,
     headingTitle: null,
     finalUrl: null,
     blocks: [BLOCK],
@@ -2165,6 +2303,9 @@ describe("the artefacts a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2204,6 +2345,9 @@ describe("the artefacts a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2244,6 +2388,9 @@ describe("the source URL a stranger receives", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl,
       blocks: [HEADING, BLOCK],
@@ -2451,6 +2598,9 @@ describe("the debate a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl,
       blocks: [BLOCK],
@@ -2697,6 +2847,9 @@ describe("the debate a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],

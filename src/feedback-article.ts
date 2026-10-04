@@ -283,6 +283,8 @@ function pickArticle(article: Article): ArticleJson["article"] {
       ...(meta.url === undefined ? {} : { url: meta.url }),
       ...(meta.fetchedAt === undefined ? {} : { fetchedAt: meta.fetchedAt }),
       ...(meta.publishedAt === undefined ? {} : { publishedAt: meta.publishedAt }),
+      /* The same fact at a coarser precision, so it follows the date. */
+      ...(meta.publishedYear === undefined ? {} : { publishedYear: meta.publishedYear }),
       ...(meta.excerpt === undefined ? {} : { excerpt: meta.excerpt }),
       ...(meta.note === undefined ? {} : { note: meta.note }),
       ...(meta.source === undefined ? {} : { source: meta.source }),

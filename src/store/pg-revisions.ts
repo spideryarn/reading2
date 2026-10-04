@@ -225,6 +225,7 @@ export const REVISION_CARRY_POLICY: Record<
   abstract: "carry",
   doi: "carry",
   journal: "carry",
+  publishedYear: "carry",
 
   // Stage 1: what was fetched, and what came back.
   requestedUrl: "carry",

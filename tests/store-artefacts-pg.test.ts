@@ -1269,6 +1269,53 @@ describe("writing artefacts into a draft", () => {
     });
   });
 
+  /* Plan 261004h: the year alone, for a paper whose registry record states no
+     whole day. It goes through every mapping `journal` does. */
+  it("carries a paper's DOI, journal and year through the columns, and clears the year for a day", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const paper = { slug: SLUG, title: "A paper", doi: "10.1016/j.neuron.2011.01.001", journal: "Neuron", publishedYear: 2011 };
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: paper }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toMatchObject(paper);
+      const [row] = await tx
+        .select({ year: articleRevisions.publishedYear, day: articleRevisions.publishedAt })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({ year: 2011, day: null });
+
+      /* A later extraction that finds a whole day has no year, and the column
+         must not keep the old one beside it: the table refuses a row with both. */
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "A paper", publishedAt: "2011-03-10" } }, {});
+      const back = await readArtefact(claimed, tx, SLUG, "extract", "meta");
+      expect(back).toMatchObject({ publishedAt: "2011-03-10" });
+      expect(back).not.toHaveProperty("publishedYear");
+    });
+  });
+
+  it("is refused a day beside a year, or a year that is not one, by the table itself", async () => {
+    /** The CHECK that refused, read off the driver's error under drizzle's wrapper. */
+    const refusedBy = async (set: { publishedAt?: string | null; publishedYear?: number | null }): Promise<string | undefined> => {
+      try {
+        await getDb().transaction(async (tx) => {
+          await tx.update(articleRevisions).set(set).where(eq(articleRevisions.id, ref.revisionId));
+          throw new RollBack();
+        });
+        return undefined;
+      } catch (err) {
+        if (err instanceof RollBack) return undefined;
+        const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+        expect(cause?.code).toBe("23514");
+        return cause?.constraint;
+      }
+    };
+    expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: 2011 })).toBe("article_revisions_published_day_or_year");
+    expect(await refusedBy({ publishedAt: null, publishedYear: 999 })).toBe("article_revisions_published_year");
+    expect(await refusedBy({ publishedAt: null, publishedYear: 3000 })).toBe("article_revisions_published_year");
+    /* And each alone goes in, so the refusals above are about the pair and the bounds. */
+    expect(await refusedBy({ publishedAt: null, publishedYear: 2011 })).toBeUndefined();
+    expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: null })).toBeUndefined();
+  });
+
   it("replaces the blocks wholesale, in the order it was given", async () => {
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "blocks");

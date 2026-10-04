@@ -155,6 +155,7 @@ const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
+const { useCiters } = await import("../src/web/useCiters.js");
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
@@ -243,6 +244,10 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  */
 function DebateBand({ slug }: { slug: string }): ReactElement {
   const view = useDebate(slug);
+  /* The owner's band makes a second read, the papers that cite the piece
+     (src/web/modes/debate/DebateMode.tsx, plan 261004h). It is here so the two
+     Debate cases below can show it asks on arrival and can start nothing. */
+  useCiters(slug, true);
   return createElement(
     "div",
     { "data-band": "debate" },
@@ -675,7 +680,25 @@ describe("a press", () => {
     await settle();
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
+    /* Exactly the one search it started before *Cited by* existed: the citers
+       read beside it is a GET and adds no job (plan 261004h, F8). */
+    expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
     expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
+  });
+
+  /* **The other half, and the one that guards the money.** A bookmarked
+     `?mode=debate` mounts the band with nobody having pressed anything. The
+     free list is asked for at once — once, under StrictMode's doubled effects —
+     and no search starts, although the artefact GET has settled on "nothing
+     here", which is the state a press would spend on. */
+  it("asks who cites the piece on a bookmarked arrival, and starts no search", async () => {
+    await open("debate");
+    await settle();
+
+    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(bandSays()).toBe("none");
+    expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
+    expect(posts).toEqual([]);
   });
 
   /* The fifth positive control. See FaqBand above. */
