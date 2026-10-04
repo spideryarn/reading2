@@ -222,10 +222,13 @@ export async function withRegistryFacts(
     const journal = record.source === "crossref" || id.startsWith("arxiv:") ? record.venue : undefined;
     /* **A day or a year, never both** (plan 261004h). The year is kept only
        when the article ends up with no day, its own or the registry's; a year
-       and a month is kept as the year. Any year `meta` arrived with is taken
-       off first, so this record's answer is the only one left standing. */
-    const { publishedYear: _carried, ...rest } = meta;
-    const year = rest.publishedAt === undefined && day === undefined ? publishedYearOf(record.year) : undefined;
+       and a month is kept as the year. A carried minimal-paper year survives
+       an agreeing record with no usable date, just as a carried day does.
+       Ordinary re-extraction does not carry either date into this function. */
+    const { publishedYear: carried, ...rest } = meta;
+    const year = rest.publishedAt === undefined && day === undefined
+      ? publishedYearOf(record.year) ?? publishedYearOf(carried)
+      : undefined;
     return {
       outcome: "agreed",
       asked,

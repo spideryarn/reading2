@@ -189,6 +189,25 @@ apply. The text above is the plan as reviewed; where a finding changed it, this 
 - The sharing inventory's words live in `src/messages.ts`. The Metadata network trace gets a
   fixture with a day and one with a year.
 
+## Stage 1 as built, and GPT Sol's code review of it
+
+Built as planned, in commit `698c9052d`. What differs from the text above:
+
+- `PublicMeta` has ten fields now. The DTO sends a day or a year, never both, whatever the row
+  holds, and a year outside 1000 to 2999 sends nothing.
+- A year is also taken when the registry's day is not a real calendar day.
+- `optNull` in `src/public/dto.ts` is `opt` for a row whose empty columns are `null`.
+- The migration is `20261004143816_article_published_year`.
+
+[The review](261004h-year-visitor-backfill-code-review-1-sol.md): approve, with one P1 it fixed.
+
+- **F7, P1, fixed by the reviewer, kept.** *Read this* on a minimal paper carried its year in, and
+  an agreeing record with no usable date then erased it. A carried year now survives, as a carried
+  day does. [The postmortem](../postmortems/261004k-a-coarser-fact-loses-the-carry-policy-of-its-precise-sibling.md).
+- **F8, P2, not done here.** Debate's publication marker reads only `publishedAt`, so it ignores a
+  year-only paper and a visitor's `published`. A follow-up: the marker wants a day, and what a year
+  should draw there is a product question.
+
 ## Log
 
 - 2026-10-04: plan written.

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Meta } from "../src/types.js";
 import type { RawManifest } from "../src/fetch.js";
+import { parseWorkId, type LookupResult, type WorkId } from "../src/bibliographic.js";
 
 vi.mock("../src/fetch.js", async (original) => ({
   ...(await original<typeof import("../src/fetch.js")>()),
@@ -21,7 +22,7 @@ const previous: Meta = {
 
 afterEach(() => vi.restoreAllMocks());
 
-async function extract(old: Meta, full: boolean, title = TITLE) {
+async function extract(old: Meta, full: boolean, title = TITLE, answer: LookupResult = { kind: "unavailable", why: "busy" }) {
   const store = memoryArtefacts();
   store.plant("s", "fetch", "raw", {
     kind: "html", file: "raw.html", requestedUrl: "https://example.org/paper", url: "https://example.org/paper",
@@ -37,7 +38,7 @@ async function extract(old: Meta, full: boolean, title = TITLE) {
     `<html><head><title>${title}</title><meta name="author" content="Taylor Beck"></head>` +
     `<body><article><h1>${title}</h1>${"<p>A careful discussion of entropy and the arrow of time in open quantum systems. We measure the system and consider what this means for time and physics.</p>".repeat(30)}</article></body></html>`,
   ));
-  const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
+  const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue(answer);
   const result = await STEPS.extract.run({
     slug: "s", url: "https://example.org/paper", report: () => {}, preview: () => {},
     signal: new AbortController().signal, cacheArticle: false, power: "standard",
@@ -74,6 +75,22 @@ describe("registry metadata retained during extraction", () => {
   it("does not carry an old year into a full re-extraction", async () => {
     const { meta } = await extract(yearOnly, true);
     expect(meta).not.toHaveProperty("publishedYear");
+  });
+
+  it("keeps the minimal paper's year when an agreeing registry reply has no date", async () => {
+    const answer: LookupResult = {
+      kind: "found",
+      record: {
+        id: parseWorkId("10.1000/old") as WorkId, doi: "10.1000/old", source: "crossref", title: TITLE,
+        authors: [{ family: "Beck", given: "Taylor" }], venue: "Old Journal",
+      },
+    };
+    const { meta, lookup } = await extract(yearOnly, false, TITLE, answer);
+    expect(lookup).toHaveBeenCalledWith("doi:10.1000/old");
+    expect(meta).toMatchObject({ publishedYear: 2011 });
+    expect(meta).not.toHaveProperty("publishedAt");
+    const reextracted = await extract(yearOnly, true, TITLE, answer);
+    expect(reextracted.meta).not.toHaveProperty("publishedYear");
   });
 
   it("keeps them whatever title the fuller reading gives: Read this re-reads the same bytes", async () => {

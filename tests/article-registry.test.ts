@@ -341,6 +341,23 @@ describe("withRegistryFacts", () => {
       expect(out.meta).not.toHaveProperty("publishedYear");
     });
 
+    it("keeps a confirmed year when an agreeing record supplies no usable date", async () => {
+      for (const year of [undefined, 20111]) {
+        const { lookup } = lookupOf({
+          [ID]: { kind: "found", record: record("10.3390/e26060481", { year, published: undefined }) },
+        });
+        const out = await withRegistryFacts(meta({ publishedYear: 2011 }), [ID], { lookup });
+        expect(out.meta.publishedYear).toBe(2011);
+        expect(out.meta).not.toHaveProperty("publishedAt");
+      }
+    });
+
+    it("uses a newly stated year instead of a carried year", async () => {
+      const { lookup } = lookupOf({ [ID]: yearOnly });
+      const out = await withRegistryFacts(meta({ publishedYear: 2010 }), [ID], { lookup });
+      expect(out.meta.publishedYear).toBe(2011);
+    });
+
     it("writes no year from a record that states none", async () => {
       const { lookup } = lookupOf({
         [ID]: { kind: "found", record: record("10.3390/e26060481", { year: undefined, published: undefined }) },
