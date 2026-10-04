@@ -154,3 +154,32 @@ and Help updated; the feedback note with `reports: spya-rbxrgc, spya-uzkmn3`.
 
 - 2026-10-04: prior-work check (nothing built; this session holds the claim), survey of the bands,
   plan written.
+- **Stage 1 landed** (2ca8bf35c): six to twelve nicknames a mode; a generated test types every one
+  into the whole list the bar holds (`tests/command-match-mode-aliases.test.ts`). Left out on
+  purpose, with the reason beside each mode: `questions and answers` (would take Chat's
+  `question`), `abstract`, `concepts`, `figure`, `test me`, `highlights`, `discussion`.
+- **Stage 2 landed** (037bcdc54): `src/web/find-more.ts` (words and the predicates),
+  `find-more-handoff.ts`, `useFindMoreHandOff.ts`; the capability is one optional field on the
+  reading view's executor. `define find more` went into the `define` verb's `except` list.
+- **GPT Sol's code review** ([the review](261004k-command-bar-find-more-code-review-sol.md)),
+  verdict *do not land* on F11. **F10** (P1, fixed by Sol): before the first job poll "no job" means
+  "not known"; `loaded` now gates the predicate and the bands' buttons. **F11** (P1, fixed in
+  b01b5a2ef): after the first poll the snapshot could still be stale; the hand-off is ready only
+  after a job list whose request started after the press (`jobEngine.afterFreshList`). **F12** (P3):
+  the count in the docs. Sol's narrow check of the F11 fix is
+  [here](261004k-command-bar-find-more-f11-check-sol.md).
+- **Still open, accepted**: a run that starts elsewhere in the one round trip between that fresh
+  list and the band's POST can double up, because the server does not dedupe a forced run across
+  profiles. The band's own button has the same window.
+- **Browser check** (Playwright, 1280, 820 and 390 px; shots `261004k-shot-*.png`): the nicknames,
+  the two rows and their order, one `POST /api/jobs` per press, absent on Metadata and in the empty
+  list. Not checked in the browser: a visitor (tests cover it), and that the list grew.
+- **F8, the picker re-measured**
+  ([261004e](../investigations/261004e-command-pick-re-measured-after-more-nicknames-and-find-more-rows.md)):
+  177 of the same 192 sentences right against 181 the day before; Find more 10 of 10; nothing that
+  generates picked at 0.95 or above, so the threshold stays. $0.07. Two things it found are not
+  built: the request is 44% bigger, nearly all of it the *Run again* and *Find more* phrase
+  permutations the model does not need; and a sentence that opens with `find` never reaches the
+  model (`find more good quotes for me` is read as a search).
+- **Deferred**: qi-ca3kxyg9, nicknames for the rows that are not modes, and who owns `source` and
+  `annotations`.

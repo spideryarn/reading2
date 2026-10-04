@@ -55,11 +55,20 @@ const STALE_AFTER_MS = 10_000;
 let held: HandOff | null = null;
 /** Stop waiting for the held press's list. */
 let unwait: (() => void) | null = null;
+/** Remove an unanswered press and its engine waiter at the ceiling. */
+let expiry: ReturnType<typeof setTimeout> | null = null;
 let nonces = 0;
 const listeners = new Set<() => void>();
 
 function announce(): void {
   for (const listener of listeners) listener();
+}
+
+function stopWaiting(): void {
+  unwait?.();
+  unwait = null;
+  if (expiry !== null) clearTimeout(expiry);
+  expiry = null;
 }
 
 function live(handOff: HandOff | null, slug: string, mode: FindMoreMode): handOff is HandOff {
@@ -79,7 +88,7 @@ function live(handOff: HandOff | null, slug: string, mode: FindMoreMode): handOf
 export function handOffFindMore(slug: string, mode: FindMoreMode): void {
   nonces += 1;
   const nonce = nonces;
-  unwait?.();
+  stopWaiting();
   held = { slug, mode, nonce, epoch: jobEngine.epoch(), at: Date.now(), fresh: false };
   /* Registered before the poke, so the list the poke starts is the first that
      counts; one already in flight is followed by another (jobEngine.ts §
@@ -90,6 +99,12 @@ export function handOffFindMore(slug: string, mode: FindMoreMode): void {
     held = { ...held, fresh: true };
     announce();
   });
+  expiry = setTimeout(() => {
+    if (held?.nonce !== nonce) return;
+    stopWaiting();
+    held = null;
+    announce();
+  }, STALE_AFTER_MS);
   jobEngine.poke();
   announce();
 }
@@ -116,6 +131,7 @@ export function readyFindMore(slug: string, mode: FindMoreMode): number | null {
 export function takeFindMore(slug: string, mode: FindMoreMode, nonce: number): boolean {
   const handOff = held;
   if (!live(handOff, slug, mode) || !handOff.fresh || handOff.nonce !== nonce) return false;
+  stopWaiting();
   held = null;
   announce();
   return true;
@@ -130,8 +146,7 @@ export function subscribeFindMore(onChange: () => void): () => void {
 
 /** Forget it, for a test. */
 export function resetFindMoreForTests(): void {
-  unwait?.();
-  unwait = null;
+  stopWaiting();
   held = null;
   announce();
 }

@@ -64,9 +64,14 @@ const {
   quotesAppendOnOffer,
   quotesFindMoreOffered,
 } = await import("../src/web/find-more.js");
-const { handOffFindMore, pendingFindMore, readyFindMore, resetFindMoreForTests, takeFindMore } = await import(
-  "../src/web/find-more-handoff.js"
-);
+const {
+  handOffFindMore,
+  pendingFindMore,
+  readyFindMore,
+  resetFindMoreForTests,
+  subscribeFindMore,
+  takeFindMore,
+} = await import("../src/web/find-more-handoff.js");
 
 const SLUG = "a-piece";
 const BLOCKS: Block[] = [];
@@ -259,6 +264,21 @@ describe("the hand-off", () => {
     jobEngine.receive([]);
     expect(readyFindMore(SLUG, "glossary")).toBeNull();
     expect(takeFindMore(SLUG, "glossary", nonce)).toBe(false);
+  });
+
+  it("stops waiting for a job list when the ten-second hand-off expires", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-04T10:00:00.000Z"));
+    const changed = vi.fn();
+    const unsubscribe = subscribeFindMore(changed);
+    handOffFindMore(SLUG, "glossary");
+
+    vi.advanceTimersByTime(10_000);
+    changed.mockClear();
+    jobEngine.receive([]);
+
+    expect(changed, "an expired job-list waiter still fired").not.toHaveBeenCalled();
+    unsubscribe();
   });
 });
 
