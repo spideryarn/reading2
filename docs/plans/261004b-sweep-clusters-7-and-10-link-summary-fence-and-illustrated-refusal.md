@@ -136,3 +136,15 @@ eighteen and one does not.
   - PL-4: the source test is about the name, not one spelling: outside `messages.ts` and imports,
     every mention of `MODEL_REFUSED` is the first argument of an `authored` `stageFailure`. It is
     checked against six snippets first, four of them wrong forms.
+- 2026-10-04 — **Sol's code review: land after fixes**, and it made them. Nothing left open.
+  - CR-1 (P1): a card that was **open** when a save landed lost its summary and did not ask for
+    another, because the hook's effect did not re-run. `useLinkFacts` now reads the generation
+    during render and lists it as a dependency. The cost, accepted: a card left open across a
+    keepalive save asks twice, once at the send and once at the settle.
+  - CR-2 (P1), CR-3 (P2): the source test's import-stripping regex could swallow code between a
+    side-effect import and the next named one, and an aliased import hid a stray use. Both fixed,
+    each with a snippet that failed first.
+- 2026-10-04 — landed: cluster 10 `5ae9316e7`, cluster 7 `bddf8c0c8`. `npm run typecheck` clean;
+  `npm test` 32,464 passed and 4 failed in 5 files, all of them the fresh-worktree "no build yet"
+  set (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-composed-access`,
+  `fleet-decisions-route`, `fleet-reports-route`), none touching this work.
