@@ -985,8 +985,15 @@
     {
       "idx": 140,
       "version": "7",
-      "when": 1791132790313,
-      "tag": "20261004165310_article_published_year",
+      "when": 1791132435770,
+      "tag": "20261004164715_citation_index_and_openalex_service",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1791132884945,
+      "tag": "20261004165444_article_published_year",
       "breakpoints": true
     }
   ]

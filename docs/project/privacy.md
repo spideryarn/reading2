@@ -512,6 +512,33 @@ email above, **this one does carry their words**, through Resend's log and Namec
 `hello@`, which is two more places an erasure has to reach. The Resend entry on the page says so,
 and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 2 October 2026.
 
+## Crossref, DataCite and OpenAlex are sent a DOI
+
+**Added 2026-10-04**, with
+[debate.md § Cited by](debate.md#cited-by-the-papers-that-cite-the-piece)
+([261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md)). Three
+public indexes of published work are asked about a paper by its identifier, from our server:
+
+- **Crossref and DataCite**, since 2026-10-01: what a DOI or arXiv id refers to, for an article
+  being added and when its cited works are looked up ([`src/bibliographic.ts`](../../src/bibliographic.ts)).
+  **They were missing from the page until this change**, which is the page falling behind the
+  code for three days.
+- **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Debate's
+  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
+
+Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
+service asks for it). Never the article's text, never anything about the reader. For a private
+upload this does tell the service that somebody using Spideryarn asked about that paper, and the
+page says so in those words.
+
+**A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
+sent something of the reader's; these are sent the identifier of a published work. The page names
+all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.
+
+**Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
+`BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
+dial, and requires the page to name each. A fourth index turns it red until the page names it.
+
 ## What is pinned by a test, and what is not
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to

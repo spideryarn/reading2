@@ -83,7 +83,7 @@ const CROSSREF_ANSWER = {
 };
 
 describe("the seeded politeness rows", () => {
-  it("has one service row each, and 2 + 1 slots", async () => {
+  it("has one service row each, and 2 + 1 + 1 slots", async () => {
     expect(
       await rows<{ service: string; slots: number }>(sql`
         select s.service, count(l.slot)::int as slots
@@ -93,6 +93,8 @@ describe("the seeded politeness rows", () => {
     ).toEqual([
       { service: "crossref", slots: 2 },
       { service: "datacite", slots: 1 },
+      /* The citation index, since 2026-10-04 (plan 261004h): a third service on the same limiter. */
+      { service: "openalex", slots: 1 },
     ]);
   });
 });

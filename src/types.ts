@@ -6610,6 +6610,68 @@ export interface DebateResponse {
 }
 
 /**
+ * **One paper that cites the article**, as OpenAlex lists it — Reception's
+ * *Cited by* (src/citation-index.ts). Every string is plain text and bounded,
+ * and none is a link: the panel builds its link from `doi` or `openalexId`
+ * (src/citer-link.ts). We have not read what the paper says about the piece.
+ */
+export interface Citer {
+  /** OpenAlex's id for the work, `W…`, shape-checked. */
+  openalexId: string;
+  /** Lower-cased and shape-checked. Absent when OpenAlex has none. */
+  doi?: string;
+  /** The citing paper's own title: its authors' words, not ours. */
+  title: string;
+  /** The first authors' display names, at most 20. */
+  authors: string[];
+  /** How many authors the work has, which can be more than `authors` holds. */
+  authorCount: number;
+  year?: number;
+  /** Where it appeared: OpenAlex's `primary_location.source.display_name`. */
+  venue?: string;
+  /** OpenAlex's `type`: `article`, `preprint`, `review`, … */
+  kind?: string;
+  /** How often the citing paper is itself cited. The list's order. */
+  citedByCount: number;
+}
+
+/**
+ * `GET /api/citers/:slug` — **who cites this article, or why there is no
+ * list.** No model made any of it, and it is not part of the stored Debate.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+ *
+ * - `no-doi` — the article has no DOI on record, so nothing was asked.
+ * - `not-indexed` — OpenAlex has no record of the DOI.
+ * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
+ *   article: its title and one author must both agree. Not a claim that the
+ *   DOI is another work's; with no byline there is simply nothing to agree.
+ * - `unavailable` — it could not be asked just now. Worth trying again.
+ * - `too-large` — its target record exceeds our byte limit, or its list does
+ *   even after asking for a shorter page. Not worth the same retry today.
+ * - `found` — the list. `count` is OpenAlex's own count of citers, `returned`
+ *   how many records its answer carried, `dropped` how many of those could not
+ *   be shown (no title, a malformed id, a duplicate), and `capped` whether the
+ *   page limit left some out. `citers.length` is `returned - dropped`, so the
+ *   panel can say which of the two reasons a short list has.
+ */
+export type CitersResult =
+  | { kind: "no-doi" }
+  | { kind: "not-indexed" }
+  | { kind: "unconfirmed" }
+  | { kind: "unavailable" }
+  | { kind: "too-large" }
+  | {
+      kind: "found";
+      count: number;
+      returned: number;
+      dropped: number;
+      capped: boolean;
+      citers: Citer[];
+      /** When OpenAlex answered, ISO. A cached list keeps the day it was fetched. */
+      fetchedAt: string;
+    };
+
+/**
  * As `TimelineFound` and `QuizFound`, and here too it is the *same* type, for
  * the same reason: there is no `profileChanged` for a store adapter to leave
  * out. Named rather than skipped so both adapters agree with their neighbours

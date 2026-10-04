@@ -64,6 +64,7 @@ import {
   loadSimpleSummary,
   loadSkim,
   loadDebate,
+  loadArticleIdentity,
   loadCitations,
   citedCandidates,
   investigateCitation,
@@ -226,6 +227,9 @@ import { isWebUrl } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
+/* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+import { citersOf } from "./citation-index.js";
+import type { CitersResult } from "./types.js";
 /* The other half of the same card, and the half we wrote — a model call with a
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
@@ -9329,6 +9333,43 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          staleness, and a year-old shared link must not have its artefact
          declared invalid by the clock. */
       send(res, 200, await loadDebate(slugPart(captures, 1)));
+    },
+  },
+
+  /**
+   * **The papers that cite this article, from OpenAlex** — Reception's *Cited
+   * by*. src/citation-index.ts,
+   * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+   *
+   * **A `GET` that may make two outside requests and fill a cache**, which is
+   * the link preview's shape above: no model, no money, and almost every call
+   * is answered by a row a week fresh. Every outcome is a 200 carrying one
+   * `CitersResult` member, because each has its own sentence in the panel.
+   *
+   * **The owner's only, and in this table.** `loadArticleIdentity` goes through
+   * the owner filter, so somebody else's slug is the same 404 as one that does
+   * not exist, and it is thrown before anything is asked. A visitor to a public
+   * article gets no list in v1: this is not under `/api/public/`, and adding it
+   * there is a new field on the public boundary.
+   *
+   * **No experimental gate**, because Debate has none on the server: the switch
+   * hides the bar's button, and a bookmarked `?mode=debate` stays reachable
+   * (docs/project/experimental-features.md). GPT Sol's F4.
+   *
+   * **The identity is the imported one, not the shelf's**: a reader's rename
+   * would fail the title check on a correct DOI (F2).
+   */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/citers\/([\w.%-]+)$/,
+    /* No model is called, so there is no spend to attribute; the capture is
+       named anyway because the path names an article. */
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const identity = await loadArticleIdentity(slugPart(captures, 1));
+      const citers: CitersResult = await citersOf(identity);
+      send(res, 200, citers);
     },
   },
 

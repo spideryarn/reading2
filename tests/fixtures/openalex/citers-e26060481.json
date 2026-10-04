@@ -1,0 +1,1292 @@
+{
+  "meta": {
+    "count": 39,
+    "page": 1,
+    "per_page": 200
+  },
+  "results": [
+    {
+      "id": "https://openalex.org/W4404978008",
+      "doi": "https://doi.org/10.1002/bies.202400196",
+      "display_name": "The Multiscale Wisdom of the Body: Collective Intelligence as a Tractable Interface for Next‐Generation Biomedicine",
+      "publication_year": 2024,
+      "cited_by_count": 34,
+      "type": "review",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S27819959",
+          "display_name": "BioEssays"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4413116398",
+      "doi": "https://doi.org/10.1016/j.biosystems.2025.105553",
+      "display_name": "A biogenic principle within the constructal law: The flow of information in biological systems",
+      "publication_year": 2025,
+      "cited_by_count": 13,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5083098413",
+            "display_name": "William B. Miller"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5086787155",
+            "display_name": "Jaime Fernando Cárdenas-García"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5013379996",
+            "display_name": "František Baluška"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5004541413",
+            "display_name": "Arthur S. Reber"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5030222127",
+            "display_name": "Predrag Slijepčević"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5014429449",
+            "display_name": "John C. Little"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S99347777",
+          "display_name": "Biosystems"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4411182530",
+      "doi": "https://doi.org/10.1016/j.tig.2025.04.002",
+      "display_name": "What does evolution make? Learning in living lineages and machines",
+      "publication_year": 2025,
+      "cited_by_count": 13,
+      "type": "review",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5031845068",
+            "display_name": "Benedikt Hartl"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S139283865",
+          "display_name": "Trends in Genetics"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4406574114",
+      "doi": "https://doi.org/10.1016/j.plrev.2025.01.008",
+      "display_name": "Thoughts and thinkers: On the complementarity between objects and processes",
+      "publication_year": 2025,
+      "cited_by_count": 11,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5039187916",
+            "display_name": "Chris Fields"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S78119372",
+          "display_name": "Physics of Life Reviews"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4416818787",
+      "doi": "https://doi.org/10.1016/j.plrev.2025.11.010",
+      "display_name": "Neural cellular automata: Applications to biology and beyond classical AI",
+      "publication_year": 2025,
+      "cited_by_count": 10,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5031845068",
+            "display_name": "Benedikt Hartl"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5100662026",
+            "display_name": "Michael Levin"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5064258116",
+            "display_name": "Léo Pio‐Lopez"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S78119372",
+          "display_name": "Physics of Life Reviews"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4407306192",
+      "doi": "https://doi.org/10.1016/j.tig.2025.01.008",
+      "display_name": "The Genomic Code: the genome instantiates a generative model of the organism",
+      "publication_year": 2025,
+      "cited_by_count": 10,
+      "type": "review",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5082858330",
+            "display_name": "Kevin J. Mitchell"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5112965505",
+            "display_name": "Nick Cheney"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S139283865",
+          "display_name": "Trends in Genetics"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4407665671",
+      "doi": "https://doi.org/10.1080/19420889.2025.2466017",
+      "display_name": "Life, its origin, and its distribution: a perspective from the Conway-Kochen Theorem and the Free Energy Principle",
+      "publication_year": 2025,
+      "cited_by_count": 8,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5039187916",
+            "display_name": "Chris Fields"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S197152527",
+          "display_name": "Communicative & Integrative Biology"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4406801504",
+      "doi": "https://doi.org/10.1002/syst.202400075",
+      "display_name": "Can Molecular Systems Learn?",
+      "publication_year": 2025,
+      "cited_by_count": 8,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5078059525",
+            "display_name": "Kübra Kaygisiz"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5019096622",
+            "display_name": "Rein V. Ulijn"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210224226",
+          "display_name": "ChemSystemsChem"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4415963673",
+      "doi": "https://doi.org/10.1007/s11229-025-05319-6",
+      "display_name": "Cognition all the way down 2.0: neuroscience beyond neurons in the diverse intelligence era",
+      "publication_year": 2025,
+      "cited_by_count": 7,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5054414386",
+            "display_name": "Robert Chis-Ciure"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S255146",
+          "display_name": "Synthese"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4409948636",
+      "doi": "https://doi.org/10.1002/aisy.202401034",
+      "display_name": "Artificial Intelligences: A Bridge Toward Diverse Intelligence and Humanity's Future",
+      "publication_year": 2025,
+      "cited_by_count": 6,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210212817",
+          "display_name": "Advanced Intelligent Systems"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7154836373",
+      "doi": "https://doi.org/10.1016/j.biosystems.2026.105792",
+      "display_name": "Access denied: Plato's cave and the epistemic limits of cellular life",
+      "publication_year": 2026,
+      "cited_by_count": 5,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5083098413",
+            "display_name": "William B. Miller"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5030222127",
+            "display_name": "Predrag Slijepčević"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5013379996",
+            "display_name": "František Baluška"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S99347777",
+          "display_name": "Biosystems"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4405484992",
+      "doi": "https://doi.org/10.1016/j.biosystems.2024.105381",
+      "display_name": "Cancer memory as a mechanism to establish malignancy",
+      "publication_year": 2024,
+      "cited_by_count": 4,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5050354046",
+            "display_name": "Thomas Lissek"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S99347777",
+          "display_name": "Biosystems"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7131367056",
+      "doi": "https://doi.org/10.1007/s13752-025-00524-5",
+      "display_name": "Mind Everywhere: A Framework for Conceptualizing Goal-Directedness in Biology and Other Domains—Part Two",
+      "publication_year": 2026,
+      "cited_by_count": 2,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5126772863",
+            "display_name": "Michael Levin"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5061129814",
+            "display_name": "David B. Resnik"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S131583313",
+          "display_name": "Biological Theory"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4414744353",
+      "doi": "https://doi.org/10.1098/rstb.2024.0298",
+      "display_name": "Towards origins of virtual artificial life: an overview",
+      "publication_year": 2025,
+      "cited_by_count": 2,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5031800049",
+            "display_name": "Susan Stepney"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S91660768",
+          "display_name": "Philosophical Transactions of the Royal Society B Biological Sciences"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4410841067",
+      "doi": "https://doi.org/10.1093/evolut/qpaf065",
+      "display_name": "Circuit design in biology and machine learning. I. Random networks and dimensional reduction",
+      "publication_year": 2025,
+      "cited_by_count": 2,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5056079279",
+            "display_name": "Steven A. Frank"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S87560609",
+          "display_name": "Evolution"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7166825539",
+      "doi": "https://doi.org/10.1016/j.plrev.2026.06.009",
+      "display_name": "Remapping and navigation of an embedding space via error minimization: A fundamental organizational principle of cognition in natural and artificial systems",
+      "publication_year": 2026,
+      "cited_by_count": 1,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5031845068",
+            "display_name": "Benedikt Hartl"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5064258116",
+            "display_name": "Léo Pio‐Lopez"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5039187916",
+            "display_name": "Chris Fields"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S78119372",
+          "display_name": "Physics of Life Reviews"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7155100410",
+      "doi": "https://doi.org/10.1111/ejn.70497",
+      "display_name": "Reductionism in Engram Neuroscience",
+      "publication_year": 2026,
+      "cited_by_count": 1,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5019954304",
+            "display_name": "Caitlin Mace"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5134182316",
+            "display_name": "Fionn O'Sullivan"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5134149717",
+            "display_name": "Scott R. Wilson"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S171130801",
+          "display_name": "European Journal of Neuroscience"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4415140600",
+      "doi": "https://doi.org/10.1016/j.bbrc.2025.152805",
+      "display_name": "Learning and memory in molecular networks",
+      "publication_year": 2025,
+      "cited_by_count": 1,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5050354046",
+            "display_name": "Thomas Lissek"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S151589183",
+          "display_name": "Biochemical and Biophysical Research Communications"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4409580989",
+      "doi": "https://doi.org/10.1109/tmbmc.2025.3562358",
+      "display_name": "Extending Iterated, Spatialized Prisoner’s Dilemma to Understand Multicellularity: Game Theory With Self-Scaling Players",
+      "publication_year": 2025,
+      "cited_by_count": 1,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5030534047",
+            "display_name": "Lakshwin Shreesha"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5115093046",
+            "display_name": "Federico Pigozzi"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": null,
+            "display_name": "Adam Goldstein"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S2490853239",
+          "display_name": "IEEE Transactions on Molecular Biological and Multi-Scale Communications"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7204930315",
+      "doi": "https://doi.org/10.3389/fnins.2026.1907922",
+      "display_name": "From chemistry to cognition: the adaptive origins of consciousness under constraint",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5012358529",
+            "display_name": "Jeffrey M. Stibel"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S115201632",
+          "display_name": "Frontiers in Neuroscience"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7202196052",
+      "doi": "https://doi.org/10.64898/2026.08.10.741213",
+      "display_name": "Trained Planaria Retain Memories Through Head Regeneration: A Model System for Insights into Non-Neural Memory and Neurodegenerative Diseases",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "preprint",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5146461143",
+            "display_name": "Nikhil Dev"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5146579390",
+            "display_name": "Angelina Nguyen"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4306402567",
+          "display_name": "bioRxiv (Cold Spring Harbor Laboratory)"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7201955763",
+      "doi": "https://doi.org/10.1007/s00146-026-03252-x",
+      "display_name": "Beyond optimization: structural redundancy and the governance of human potential in the age of AI",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5044126201",
+            "display_name": "Kohta Suzuki"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210190517",
+          "display_name": "AI & Society"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7202356568",
+      "doi": "https://doi.org/10.1145/3795101.3814625",
+      "display_name": "Hot off the Press: The Genomic Code: The Genome Instantiates a Generative Model of the Organism",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "conference-paper",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5082858330",
+            "display_name": "Kevin J. Mitchell"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5091485524",
+            "display_name": "Nick Cheney"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4363608771",
+          "display_name": "Proceedings of the Genetic and Evolutionary Computation Conference Companion"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7202358079",
+      "doi": "https://doi.org/10.1145/3795101.3814707",
+      "display_name": "Symbiogenesis: from Barricelli's Legacy to Collective Intelligence",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "conference-paper",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5111958030",
+            "display_name": "James Ashford"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5092450709",
+            "display_name": "Berfin Sakallioglu"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5128689984",
+            "display_name": "Marta Tataryn"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5085233052",
+            "display_name": "Alessandro Valerio"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5031845068",
+            "display_name": "Benedikt Hartl"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5064258116",
+            "display_name": "Léo Pio‐Lopez"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5120054976",
+            "display_name": "Marko Cvjetko"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5088219046",
+            "display_name": "Richard J. G. Löffler"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5083527093",
+            "display_name": "Stefano Nichele"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4363608771",
+          "display_name": "Proceedings of the Genetic and Evolutionary Computation Conference Companion"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7204085443",
+      "doi": "https://doi.org/10.1109/iccsc71566.2026.11650379",
+      "display_name": "Decentralized Causal Agents with Sheaf-Theoretic Conflict Resolution for Glucose Forecasting in Type 1 Diabetes",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "conference-paper",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5148033530",
+            "display_name": "Firdaous Charchaoui"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5120339743",
+            "display_name": "Ayoub El Ouardi"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5023092592",
+            "display_name": "Otman Abdoun"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": null
+      }
+    },
+    {
+      "id": "https://openalex.org/W7161154609",
+      "doi": "https://doi.org/10.1098/rsta.2024.0528",
+      "display_name": "Cognitive glues are shared models of relative scarcities: the economics of collective intelligence",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5136095855",
+            "display_name": "Michael Levin"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5151982581",
+            "display_name": "Benjamin Lyons"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S99517592",
+          "display_name": "Philosophical Transactions of the Royal Society A Mathematical Physical and Engineering Sciences"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7160903757",
+      "doi": "https://doi.org/10.3389/fnint.2026.1772467",
+      "display_name": "Consciousness emerges from temporal integration across biological scales: from cellular memory to phenomenological experience",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5088834562",
+            "display_name": "Alfredo López Parra"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S158917573",
+          "display_name": "Frontiers in Integrative Neuroscience"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7147650137",
+      "doi": "https://doi.org/10.1002/aisy.202501450",
+      "display_name": "Material‐Based Intelligence: Autonomous Adaptation and Embodied Computation in Physical Substrates",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5029574106",
+            "display_name": "Vladimir A. Baulin"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5003398081",
+            "display_name": "Rudolf Marcel Füchslin"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5048127995",
+            "display_name": "Achille Giacometti"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5021023927",
+            "display_name": "Helmut Häuser"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5007866163",
+            "display_name": "Marco Werner"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210212817",
+          "display_name": "Advanced Intelligent Systems"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7152426596",
+      "doi": "https://doi.org/10.21256/zhaw-36330",
+      "display_name": "Material‐based intelligence : autonomous adaptation and embodied computation in physical substrates",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5029574106",
+            "display_name": "Vladimir A. Baulin"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5003398081",
+            "display_name": "Rudolf Marcel Füchslin"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5048127995",
+            "display_name": "Achille Giacometti"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5021023927",
+            "display_name": "Helmut Häuser"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5007866163",
+            "display_name": "Marco Werner"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4306401811",
+          "display_name": "Zürcher Hochschule für Angewandte Wissenschaften digital collection (Zurich University of Applied Sciences)"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7148437836",
+      "doi": "https://doi.org/10.2139/ssrn.6512520",
+      "display_name": "Access Denied: Plato's Cave and the Epistemic Limits of Cellular Life",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "preprint",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5132824703",
+            "display_name": "Jr. William B. Miller"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5013379996",
+            "display_name": "František Baluška"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5030222127",
+            "display_name": "Predrag Slijepčević"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210172589",
+          "display_name": "SSRN Electronic Journal"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7157316686",
+      "doi": "https://doi.org/10.1017/s1473550426100287",
+      "display_name": "Temporal retention of information as a biosignature",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5111807370",
+            "display_name": "Terence P. Kee"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5123439010",
+            "display_name": "James McCrum"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S120171627",
+          "display_name": "International Journal of Astrobiology"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7203727873",
+      "doi": "https://doi.org/10.2139/ssrn.7308265",
+      "display_name": "Beyond the machine metaphor: Cognition-Based Biology, agency, and the limits of artificial intelligence",
+      "publication_year": 2026,
+      "cited_by_count": 0,
+      "type": "preprint",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5030222127",
+            "display_name": "Predrag Slijepčević"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5147418598",
+            "display_name": "Frantisek Baluška"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5083098413",
+            "display_name": "William B. Miller"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210172589",
+          "display_name": "SSRN Electronic Journal"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4416553968",
+      "doi": "https://doi.org/10.1016/j.newideapsych.2025.101221",
+      "display_name": "The brain edits the past: Neural systems of memory reconstruction and self-stability",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": null,
+            "display_name": "Max Lepsius"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S158706580",
+          "display_name": "New Ideas in Psychology"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4413414545",
+      "doi": "https://doi.org/10.1016/j.plrev.2025.08.005",
+      "display_name": "Beyond objects and processes: Interfaces and the non-dual ground of perception and cognition. Comment on “Thoughts and Thinkers” by C. Fields and M. Levin",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5008805003",
+            "display_name": "Robert Prentner"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S78119372",
+          "display_name": "Physics of Life Reviews"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4412402466",
+      "doi": "https://doi.org/10.59973/ipil.242",
+      "display_name": "Four Cubes: On the Necessity of Four-Dimensional Perception",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5026847629",
+            "display_name": "Szymon Łukaszyk"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4387290810",
+          "display_name": "IPI Letters"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7164898450",
+      "doi": "https://doi.org/10.53765/mm2025.13",
+      "display_name": "Cases of Unconventional Information Flow Across the Mind-Body Interface",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5093752352",
+            "display_name": "Karina Kofman"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5126772863",
+            "display_name": "Michael Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4390963346",
+          "display_name": "Mind and Matter"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4407360278",
+      "doi": "https://doi.org/10.1111/tops.12789",
+      "display_name": "Process and Dynamics in AI and Language Use",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "article",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5060790296",
+            "display_name": "Eleni Gregoromichelaki"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5047129306",
+            "display_name": "Gregory Mills"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S22283869",
+          "display_name": "Topics in Cognitive Science"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W7117787709",
+      "doi": "https://doi.org/10.2139/ssrn.5991245",
+      "display_name": "Access Denied: Plato's Cave and the Epistemic Limits of Cellular Life",
+      "publication_year": 2025,
+      "cited_by_count": 0,
+      "type": "preprint",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": "https://openalex.org/A5083098413",
+            "display_name": "William B. Miller"
+          }
+        },
+        {
+          "author_position": "middle",
+          "author": {
+            "id": "https://openalex.org/A5013379996",
+            "display_name": "František Baluška"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5030222127",
+            "display_name": "Predrag Slijepčević"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": {
+          "id": "https://openalex.org/S4210172589",
+          "display_name": "SSRN Electronic Journal"
+        }
+      }
+    },
+    {
+      "id": "https://openalex.org/W4404139953",
+      "doi": "https://doi.org/10.31219/osf.io/3fdya",
+      "display_name": "Cognitive Glues Are Shared Models of Relative Scarcities: The Economics of Collective Intelligence",
+      "publication_year": 2024,
+      "cited_by_count": 0,
+      "type": "preprint",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": {
+            "id": null,
+            "display_name": "Benjamin Frederick Lyons"
+          }
+        },
+        {
+          "author_position": "last",
+          "author": {
+            "id": "https://openalex.org/A5085228887",
+            "display_name": "Michael G. Levin"
+          }
+        }
+      ],
+      "primary_location": {
+        "source": null
+      }
+    }
+  ]
+}

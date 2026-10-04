@@ -80,6 +80,7 @@ import type {
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
+  Meta,
   LibraryTermsResponse,
   LibraryHit,
   ListOptions,
@@ -350,6 +351,21 @@ export interface ArticleReader {
    * (src/store/artifacts.ts) makes the same call at the store boundary.
    */
   loadDebate(slug: string): Promise<DebateFound>;
+
+  /**
+   * **What the article was imported as: its title, its authors and its DOI** —
+   * for checking an outside record against it (src/citation-index.ts).
+   *
+   * **The title is the revision's own, never the reader's rename.** `loadArticle`
+   * puts its meta through `titleFor`, so a renamed paper's title is the
+   * reader's label, and a correct DOI would then fail a title check (GPT Sol's
+   * F2 on plan 261004h). No stored title falls back to the first heading, then
+   * the slug, as `metaFrom` does.
+   *
+   * Owner-scoped like every read here: somebody else's slug is the same 404 as
+   * one that does not exist.
+   */
+  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">>;
 
   /**
    * Every work the piece cites, plus whether the list still describes the

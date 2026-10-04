@@ -2,7 +2,7 @@
 
 Up: [debate.md](../project/debate.md)
 
-**Status:** built and on `dev` (2026-10-04). The claims picker and the citation index wait on Greg. Report `spya-caue42`, Greg (admin), 2026-10-03, on Levin 2024,
+**Status:** built and on `dev` (2026-10-04). The claims picker waits on Greg; the citation index was answered the same day and is [261004h](261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). Report `spya-caue42`, Greg (admin), 2026-10-03, on Levin 2024,
 *Self-Improvising Memory* (Entropy 26(6), 481).
 
 ## What Greg asked for
@@ -176,7 +176,7 @@ control apply to everything on screen.
 - **A claims picker and a steering box** (Q-claims-picker). It needs the search to take a reader's
   input, per-claim runs merged into a stored debate, and a spend rule: a product call and real
   complexity.
-- **Listing every citer** (Q-citation-index).
+- **Listing every citer** (Q-citation-index; since built, as [261004h](261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md)).
 - **Claims with no sources, and a for/against tally per claim.** Pass B reports only claims it
   found something on. Both belong with the picker.
 - **An unclosed fence on an otherwise complete answer fails the run** (one of the four baseline
@@ -299,6 +299,9 @@ journal, most-cited first. It would not say what each one says about the piece; 
 still rely on the web search, or on Semantic Scholar's citing sentences, whose licence needs
 asking for. It is your call because it sends the article's DOI (not its text, not who is reading)
 to an outside service.
+
+**Answered 2026-10-04: yes, OpenAlex.** Greg's words and the build are in
+[261004h](261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md).
 
 ### [Q-identification-slider] The "identification" slider is gone. Is that all right?
 

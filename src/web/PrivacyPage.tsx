@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "3 October 2026";
+const LAST_UPDATED = "4 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -346,6 +346,50 @@ export function PrivacyPage() {
             and Stripe’s customer and subscription references.
           </Third>
         </ul>
+        {/* **Three indexes of published work, and why they are a paragraph and
+            not three more entries in the list above.** That list is who is sent
+            something of the reader's. These are sent the identifier of a
+            published work and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
+            is the whole list of hosts, and the request is built in
+            src/bibliographic.ts and src/citation-index.ts. Crossref and DataCite
+            have been asked since 2026-10-01 and were missing from this page
+            until OpenAlex arrived on 2026-10-04
+            (docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md).
+            tests/privacy-page.test.ts reads the host list, so a fourth index
+            turns it red until it is named here. */}
+        <p>
+          Three public indexes of published work are asked about papers:{" "}
+          <a
+            href="https://www.crossref.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            Crossref
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://datacite.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            DataCite
+          </a>
+          , when you add an article, for its journal and date, and when you look up the works it cites; and{" "}
+          <a
+            href="https://openalex.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            OpenAlex
+          </a>
+          , when you open Reception in Debate on an article of yours, for the list of papers that cite it. Our
+          server sends each one the identifier of a published work — for your article, its DOI —
+          and our own contact address; never the article’s text, and nothing about who you are.
+          They learn that somebody using Spideryarn asked about that work, not who.
+        </p>
         <p>
           {/* **The honest version of the training question.** Everything here
               is checkable in the code, and until 2026-09-07 the checkable fact

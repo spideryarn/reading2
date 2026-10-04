@@ -4034,6 +4034,26 @@ const rawPgArticleReader: ArticleReader = {
    * the reader to a POST that pays up to $0.27 for the same answer on every
    * open. `SHAPE.debate` (src/store/artifacts.ts) makes the same call.
    */
+  /**
+   * The Postgres half of `loadArticleIdentity`: the `article` read's own
+   * columns, with `titleFor` deliberately not applied (the contract says why).
+   * The heading query runs only for a revision with no stored title.
+   */
+  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "article");
+    if (!found) throw notFound(slug);
+    const { revision } = found;
+    const title = revision.title ?? (await firstHeadingTitle(revision.id)) ?? slug;
+    const authors = decodeAuthors(revision.authors);
+    return {
+      title,
+      ...(revision.byline === null ? {} : { byline: revision.byline }),
+      ...(authors ? { authors } : {}),
+      ...(revision.doi === null ? {} : { doi: revision.doi }),
+    };
+  },
+
   async loadDebate(slug: string): Promise<DebateFound> {
     requireSlug(slug);
     const found = await currentRevision(slug, "debate");

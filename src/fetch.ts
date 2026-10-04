@@ -2577,7 +2577,7 @@ export async function fetchAsset(url: string, options: AssetFetchOptions): Promi
  * ------------------------------------------------------------------ */
 
 /**
- * **The only two hosts this caller will dial**, checked before any DNS lookup.
+ * **The only three hosts this caller will dial**, checked before any DNS lookup.
  *
  * `fetchBibliographicJson` exists so that src/bibliographic.ts can ask Crossref
  * and DataCite about a DOI without a third, general "fetch me some JSON" door
@@ -2585,8 +2585,13 @@ export async function fetchAsset(url: string, options: AssetFetchOptions): Promi
  * fixed list rather than a parameter, so a caller cannot widen it.
  * docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md
  * § Stage 1, and GPT Sol's P-8.
+ *
+ * **OpenAlex since 2026-10-04**, for src/citation-index.ts: which papers cite a
+ * DOI. The same door for the same reason — one fixed, public, bibliographic
+ * API, asked about an identifier and nothing else.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  */
-export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org"];
+export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org", "api.openalex.org"];
 
 /**
  * **An honest User-Agent, unlike `USER_AGENT` above**, and on purpose.
@@ -2650,7 +2655,7 @@ async function readJson(res: Response, finalUrl: string, _chain: string[], opts:
 }
 
 /**
- * **One GET to Crossref or DataCite, parsed as JSON.**
+ * **One GET to Crossref, DataCite or OpenAlex, parsed as JSON.**
  *
  * The same guarded path as `fetchDocument` — the address guard and its pin, one
  * deadline, the byte cap on the bytes that arrive — with the host checked
@@ -2674,7 +2679,7 @@ export async function fetchBibliographicJson(
     throw new FetchFailure(
       "blocked-address",
       input.trim(),
-      "Only the Crossref and DataCite APIs are asked for bibliographic records.",
+      "Only the Crossref, DataCite and OpenAlex APIs are asked for bibliographic records.",
     );
   }
   return await fetchBytes(

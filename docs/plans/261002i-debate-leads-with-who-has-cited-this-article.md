@@ -3,8 +3,10 @@
 Up: [debate.md](../project/debate.md)
 
 **Status:** stage 1 (the search for responses also looks for the papers that cite this one) is
-built here. Stage 2 (a citation index, which would list every citer) needs a new outside service
-and is **awaiting Greg** — § The question for Greg.
+built here. Stage 2 (a citation index, which would list every citer) was **decided on 2026-10-04**:
+option 1, OpenAlex, the list and the count. It is built as
+[261004h](261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md), which also has
+Greg's answer. § Stage 2 and § The question for Greg below are kept as they were asked.
 
 ## What Greg asked for
 
@@ -133,7 +135,7 @@ Also found, not fixed (outside this change): the eval's cost line still expects 
 per run and reports `not measured`, exit 1, for every completed run since `debate/4` added the
 search-free themes call (`evals/debate/run.ts`).
 
-## Stage 2 — a citation index (awaiting Greg)
+## Stage 2 — a citation index (decided 2026-10-04: OpenAlex, built as 261004h)
 
 The thing that knows who cited a paper is a citation index. Measured 2026-10-02 on Greg's article
 (DOI `10.1016/j.tics.2018.02.001`):

@@ -1,6 +1,6 @@
 {
-  "id": "63564514-26a1-4e07-8ffd-a8985709dbba",
-  "prevId": "f828f71a-6fdc-4a84-94ba-e5dcb1c479d9",
+  "id": "5a581e4b-ecac-4121-815a-99401fbc990d",
+  "prevId": "260e6a5c-444d-43bd-a6f6-3f8e4f5c60e0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1497,7 +1497,7 @@
       "checkConstraints": {
         "bibliographic_services_service": {
           "name": "bibliographic_services_service",
-          "value": "\"spideryarn\".\"bibliographic_services\".\"service\" in ('crossref', 'datacite')"
+          "value": "\"spideryarn\".\"bibliographic_services\".\"service\" in ('crossref', 'datacite', 'openalex')"
         }
       },
       "isRLSEnabled": false
@@ -2897,6 +2897,224 @@
         "citation_finds_lookup_lengths": {
           "name": "citation_finds_lookup_lengths",
           "value": "coalesce(char_length(\"spideryarn\".\"citation_finds\".\"lookup_paper_does\"), 0) <= 240 and coalesce(char_length(\"spideryarn\".\"citation_finds\".\"lookup_support_quote\"), 0) <= 400 and coalesce(char_length(\"spideryarn\".\"citation_finds\".\"lookup_paper_does_quote\"), 0) <= 400 and coalesce(\"spideryarn\".\"citation_finds\".\"lookup_excerpt_words\", 0) >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.citation_index_citers": {
+      "name": "citation_index_citers",
+      "schema": "spideryarn",
+      "columns": {
+        "work_id": {
+          "name": "work_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "openalex_id": {
+          "name": "openalex_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "doi": {
+          "name": "doi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "authors": {
+          "name": "authors",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_count": {
+          "name": "author_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "venue": {
+          "name": "venue",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cited_by_count": {
+          "name": "cited_by_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "citation_index_citers_work_id_citation_index_lookups_work_id_fk": {
+          "name": "citation_index_citers_work_id_citation_index_lookups_work_id_fk",
+          "tableFrom": "citation_index_citers",
+          "tableTo": "citation_index_lookups",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "work_id"
+          ],
+          "columnsTo": [
+            "work_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "citation_index_citers_work_id_position_pk": {
+          "name": "citation_index_citers_work_id_position_pk",
+          "columns": [
+            "work_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "citation_index_citers_position": {
+          "name": "citation_index_citers_position",
+          "value": "\"spideryarn\".\"citation_index_citers\".\"position\" >= 0"
+        },
+        "citation_index_citers_openalex_id": {
+          "name": "citation_index_citers_openalex_id",
+          "value": "\"spideryarn\".\"citation_index_citers\".\"openalex_id\" ~ '^W[0-9]{1,15}$'"
+        },
+        "citation_index_citers_doi": {
+          "name": "citation_index_citers_doi",
+          "value": "\"spideryarn\".\"citation_index_citers\".\"doi\" is null or (\"spideryarn\".\"citation_index_citers\".\"doi\" = lower(\"spideryarn\".\"citation_index_citers\".\"doi\") and \"spideryarn\".\"citation_index_citers\".\"doi\" ~ '^10[.][0-9]{4,9}/[^[:space:]\"''<>?#]+$')"
+        },
+        "citation_index_citers_title": {
+          "name": "citation_index_citers_title",
+          "value": "length(\"spideryarn\".\"citation_index_citers\".\"title\") between 1 and 1000"
+        },
+        "citation_index_citers_authors": {
+          "name": "citation_index_citers_authors",
+          "value": "cardinality(\"spideryarn\".\"citation_index_citers\".\"authors\") <= 20 and array_position(\"spideryarn\".\"citation_index_citers\".\"authors\", null) is null\n          and \"spideryarn\".\"citation_index_citers\".\"author_count\" >= cardinality(\"spideryarn\".\"citation_index_citers\".\"authors\")"
+        },
+        "citation_index_citers_year": {
+          "name": "citation_index_citers_year",
+          "value": "\"spideryarn\".\"citation_index_citers\".\"year\" is null or \"spideryarn\".\"citation_index_citers\".\"year\" between 1500 and 2100"
+        },
+        "citation_index_citers_cited_by_count": {
+          "name": "citation_index_citers_cited_by_count",
+          "value": "\"spideryarn\".\"citation_index_citers\".\"cited_by_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.citation_index_lookups": {
+      "name": "citation_index_lookups",
+      "schema": "spideryarn",
+      "columns": {
+        "work_id": {
+          "name": "work_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "openalex_id": {
+          "name": "openalex_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cited_by_count": {
+          "name": "cited_by_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "returned": {
+          "name": "returned",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dropped": {
+          "name": "dropped",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "capped": {
+          "name": "capped",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_title": {
+          "name": "target_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_authors": {
+          "name": "target_authors",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "citation_index_lookups_work_id": {
+          "name": "citation_index_lookups_work_id",
+          "value": "length(\"spideryarn\".\"citation_index_lookups\".\"work_id\") <= 300 and \"spideryarn\".\"citation_index_lookups\".\"work_id\" = lower(\"spideryarn\".\"citation_index_lookups\".\"work_id\")\n          and \"spideryarn\".\"citation_index_lookups\".\"work_id\" ~ '^doi:10[.][0-9]{4,9}/[^[:space:]\"''<>?#]+$'"
+        },
+        "citation_index_lookups_state": {
+          "name": "citation_index_lookups_state",
+          "value": "\"spideryarn\".\"citation_index_lookups\".\"state\" in ('found', 'not-indexed')"
+        },
+        "citation_index_lookups_shape": {
+          "name": "citation_index_lookups_shape",
+          "value": "case\n            when \"spideryarn\".\"citation_index_lookups\".\"state\" = 'found' then\n              \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" is not null and \"spideryarn\".\"citation_index_lookups\".\"openalex_id\" ~ '^W[0-9]{1,15}$'\n              and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" is not null and \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"returned\" is not null and \"spideryarn\".\"citation_index_lookups\".\"returned\" >= 0\n              and \"spideryarn\".\"citation_index_lookups\".\"dropped\" is not null and \"spideryarn\".\"citation_index_lookups\".\"dropped\" between 0 and \"spideryarn\".\"citation_index_lookups\".\"returned\"\n              and \"spideryarn\".\"citation_index_lookups\".\"capped\" is not null\n              and \"spideryarn\".\"citation_index_lookups\".\"target_title\" is not null and length(\"spideryarn\".\"citation_index_lookups\".\"target_title\") between 1 and 1000\n              and \"spideryarn\".\"citation_index_lookups\".\"target_authors\" is not null and cardinality(\"spideryarn\".\"citation_index_lookups\".\"target_authors\") <= 20\n              and array_position(\"spideryarn\".\"citation_index_lookups\".\"target_authors\", null) is null\n            else num_nonnulls(\"spideryarn\".\"citation_index_lookups\".\"openalex_id\", \"spideryarn\".\"citation_index_lookups\".\"cited_by_count\", \"spideryarn\".\"citation_index_lookups\".\"returned\", \"spideryarn\".\"citation_index_lookups\".\"dropped\",\n                              \"spideryarn\".\"citation_index_lookups\".\"capped\", \"spideryarn\".\"citation_index_lookups\".\"target_title\", \"spideryarn\".\"citation_index_lookups\".\"target_authors\") = 0\n          end"
         }
       },
       "isRLSEnabled": false
