@@ -72,9 +72,11 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 /**
  * How many passes the jobs scheduler has COMPLETED, read off the injected `log`.
  *
- * Every pass plans each definition once and logs one verdict line for it —
- * `held`, `not due…`, `dispatched…` — whether or not it dispatches, so this
- * counts the callback a "nothing was dispatched" assertion is about. The sweep's
+ * On the paths this file's fixture takes (the store writes succeed), every
+ * pass plans each definition once and logs one verdict line for it — `held`,
+ * `not due…`, `dispatched…` — whether or not it dispatches, so this counts the
+ * callback a "nothing was dispatched" assertion is about. It is not exact in
+ * general: a failed start acknowledgement logs two lines for one pass. The sweep's
  * `STUCK` / `UNACCOUNTED` lines are extra lines in a pass, not passes, so they
  * are left out. NOT the heartbeat's tick count: that is a separate timer, and it
  * can advance while the scheduler never runs (plan 261004c, review finding F5).

@@ -165,6 +165,30 @@ Only if it stays small. Otherwise `report-artefacts.ts` stays on the list and th
     intervals), not a flat three intervals, which would have refused launches during every backoff.
   - **Left, and known:** the daemon's attention pass still calls the synchronous `capturePane` once
     per session (`pane.ts`, cluster 23), so that pass can still wedge the daemon.
+- 2026-10-04 — [GPT Sol's code review](261004c-review-2-gpt-sol-on-the-code.md) of stages 1–4: land
+  after fixes. It fixed four things itself, each red first (F10 a partly unreadable health reading
+  admitted a launch; F11 two unproven tmux generations in a row carried waits; F12 the guard missed
+  `import x = require(...)`; F13 an abort during the probe still asked the source for another
+  payload), and wrote three postmortems. `7c1544ca5`.
+- 2026-10-04 — stage 5: 33 sleeps converted in the four daemon test files, five kept with a comment
+  each. `b7e4848f3`. **Two cannot be converted without a daemon change:** "the heartbeat noticed the
+  lock was gone" has nothing to observe (the guard stops silently). A log line there would do it.
+- 2026-10-04 — **stage 6 not built, by decision.** Sol's F4 is right that an async report drain is
+  more than an adapter: the drain's promise has to be held and settled on both exit paths before the
+  store is released, and ownership rechecked after each awaited git call, with suspended-drain tests
+  for shutdown, a throwing source and lock loss. That is a job of its own on the daemon, not the tail
+  of a sweep cluster. `report-artefacts.ts` stays on the guard's list with that reason. Its exposure
+  is small meanwhile: a 2 s timeout, and the drain's own wall-clock limit between references.
+- 2026-10-04 — [round two](261004c-review-3-gpt-sol-round-two.md): **LAND**, no changes. F10–F13
+  hold; the stage 5 claims hold; one prose finding (F15, the pass-counter comment overstated), fixed.
+  Discovery is closed.
+
+## What is left on the guard's list, and why
+
+Ten files. Cluster 23's: `steer.ts`, `pane.ts`. A job of its own: `report-artefacts.ts`. Kept
+synchronous for a script or a CLI, with the long-running caller moved off it: `health.ts`,
+`readiness-git.ts`, `work-probe.ts`. Startup or CLI only: `revision.ts`, `diagnose.ts`,
+`launchers.ts`, `scripts/overseer.ts`.
 
 ---
 

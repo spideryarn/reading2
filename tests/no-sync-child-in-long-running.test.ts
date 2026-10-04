@@ -51,12 +51,12 @@ const MAY_STILL_BLOCK: Record<string, string> = {
   "tools/fleet/steer.ts": "the send transport; its synchrony is also its exclusion — umbrella 261003f cluster 23",
   "tools/fleet/pane.ts": "the sync capturePane the send transport uses — cluster 23",
   "tools/fleet/health.ts": "the sync collectHealth, kept for the CLI tick and two scripts; the server uses collectHealthAsync",
-  "tools/fleet/readiness-git.ts": "git on the readiness timer, shared with two scripts — plan 261004c stage 4",
+  "tools/fleet/readiness-git.ts": "the sync snapshotDev and relate, kept for scripts/readiness-{run,loop}.ts; the dashboard uses snapshotDevAsync",
   "tools/fleet/revision.ts": "runs once at startup, before the server listens",
   "tools/overseer/diagnose.ts": "a CLI",
   "tools/overseer/launchers.ts": "one tmux call per launch; its header argues the window",
-  "tools/overseer/report-artefacts.ts": "git in the daemon's report drain — plan 261004c stage 3",
-  "tools/overseer/work-probe.ts": "the sync process-table probe — plan 261004c stage 3",
+  "tools/overseer/report-artefacts.ts": "git in the daemon's report drain: STILL BLOCKING, and a job of its own — plan 261004c, stage 6 not built",
+  "tools/overseer/work-probe.ts": "the sync probeProcessTable, kept for scripts/fleet-collect-bench.ts; the daemon and the dashboard use probeProcessTableAsync",
   "scripts/overseer.ts": "the report CLI's own tmux-session lookup",
 };
 
