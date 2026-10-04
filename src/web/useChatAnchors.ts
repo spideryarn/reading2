@@ -159,6 +159,27 @@ export function askedQuestions(
 }
 
 /**
+ * **The margin's questions, less the one drawn as a card beside them.**
+ *
+ * While a block's conversation is a card in the Marginalia column
+ * (docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md § 6),
+ * that block's *Question · About this paragraph* line would sit directly above
+ * the card that is that question. So the margin's list goes without it, for as
+ * long as the card is up. **The margin's only**: the Comments drawer lists
+ * every question whether or not one is open.
+ *
+ * **The same array when nothing is dropped**, because the margin's notes are
+ * memoised on it and `memo(TableView)` on them.
+ */
+export function askedBesideCard<T extends { id: string }>(
+  asked: readonly T[],
+  cardThreadId: string | null,
+): readonly T[] {
+  if (cardThreadId === null || !asked.some((q) => q.id === cardThreadId)) return asked;
+  return asked.filter((q) => q.id !== cardThreadId);
+}
+
+/**
  * **The conversation a second press of "?" should open instead of buying.**
  *
  * The gutter's "?" spends a model call with no confirmation, so pressing it on

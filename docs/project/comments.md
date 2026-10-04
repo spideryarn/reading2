@@ -1371,9 +1371,48 @@ more than the column beside it, the panel is wider, up to 26rem.
 
 Docked or floating, the block the panel is about wears a 2px rule down its right edge
 (`td.text.chat-open`), because a panel fixed to the window does not otherwise say which paragraph it
-belongs to. A conversation about the whole piece marks nothing. The plan, and the option of a card
-level with the block that was passed over, is
+belongs to. A conversation about the whole piece marks nothing. The plan is
 [261003p](../plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md).
+
+### On trial since 2026-10-04: a card in the column, level with its block
+
+The dock was option A. Asked whether to try option B, a card beside the block:
+
+> Q-margin-chat I'm not sure what's best. Shall we try B, and see how it goes. Make it
+> expandable/collapsible.
+>
+> — Greg, 2026-10-04
+
+So while the column is showing, a conversation about a block is drawn **in the column, starting
+level with its block, and scrolls with the article**. The plan, the review and the screenshots are
+[261004k](../plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md).
+
+- **It is the same `ChatDialog`**, not a second chat. Its panel lives in one container element that
+  is moved between a host in the block's cell and its old place, so a half-typed question, the
+  transcript's position and a "?" already sent all survive a move.
+- **Expanded or collapsed, by the reader's press.** It opens expanded. The chevron in its header
+  collapses it to one button about a note tall: the title, and either *answering…* or the first
+  line of the latest answer. Pressing that, or anything that opens the conversation (the gutter
+  chip, "?", the Comments drawer), expands it. Nothing collapses by itself. Close and Esc are
+  unchanged.
+- **Its width is the room right of the prose**, up to 36rem (`chatCard` in `layout.ts`), not the
+  notes' 288px. Report `spya-ntb7p6`: on a very wide screen the docked panel was narrower than the
+  space beside it.
+- **Notes below it are pushed down** while it is expanded, like below any tall note, and return
+  when it collapses or closes. The block's own notes sit under the card. The margin's *Question*
+  line for the open conversation is left out while its card is up.
+- **Where there is no card, the panel is what it was**: docked if `chatDock` says so, else floating.
+  That covers Marginalia off, a phone, a narrow iPad portrait, a conversation about the whole
+  piece, a block inside a folded section, and the moment before the host exists.
+- **A link in a chat answer is not the paragraph's.** The card sits inside the block's row in the
+  DOM, so `blockOfLink` (`link-facts.ts`) answers "no block" inside it, as for the floating panel.
+
+**Going back to the dock is one word**: `BLOCK_CHAT_IN_COLUMN` in `layout.ts`, `"card"` to
+`"dock"`. Both are built and tested.
+
+Known costs of the card, for the trial: the composer and a streaming answer scroll away with the
+block; a reloaded `?thread=` whose block is off screen shows only the block's rule until you scroll
+to it; and the composer staying above an iPad keyboard has not been tried on an iPad.
 
 ## The other way to ask
 

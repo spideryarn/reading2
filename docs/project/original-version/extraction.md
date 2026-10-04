@@ -64,7 +64,7 @@ previously said "around 20 seconds", which was wrong), and **browser-like `User-
 headers**, because plenty of publishers serve something different to something that announces itself
 as a script.
 
-**Take the shape of all three and none of the numbers.** Our cap is 32 MB, because one of the three
+**Take the shape of all three and none of the numbers.** Our cap is 50 MB, the same as an upload's, and one of the three
 articles Greg named as a hard case is a 4.9 MB PDF that theirs would have refused
 ([fetching.md](../fetching.md#size-and-the-header-that-lies-about-it)). And their size check reads
 `Content-Length` first — which describes the *compressed* size, so it is a check on the wrong

@@ -247,7 +247,18 @@ It is not drawn where an open mode covers the prose on a narrow
 window, including after a band link steps that mode aside. **Beside an open mode on a wide window,
 the bar runs from the spine once it is stuck at the top, since 2026-10-04**: it used to start at the
 band's right edge and leave the strip above the band empty while the path was cut
-([261004a](../plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md)). The reasoning, the patterns looked at and
+([261004a](../plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md)). **It is not drawn
+while Structure is open or Marginalia's column has room on screen, since 2026-10-04**; each
+ordinarily says where you are itself. With Marginalia switched on but no room for its column, the
+breadcrumb stays. The empty-head and contained-failure exceptions are recorded in
+[261004k](../plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md):
+
+> We don't need to show that horizontal rail when either structure or annotations mode are on,
+> because they both provide that information too.
+>
+> — Greg, 2026-10-04 (spya-rx43ku)
+
+The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 

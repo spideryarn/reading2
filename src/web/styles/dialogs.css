@@ -71,6 +71,154 @@
   box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
 }
 
+/* **In the column: a card level with its block, scrolling with the article.**
+   On trial — layout.ts § `BLOCK_CHAT_IN_COLUMN`.
+   docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md.
+
+   Two boxes. `.chat-card-host` is `Reader`'s, in the anchor block's `td.text`
+   (which is `position: relative` — prose.css), and is what a `.marg-note` is:
+   absolutely positioned from the cell's top, just past its right edge, and
+   collected by `useMarginLayout`, which pushes the notes after it below it.
+   The panel is **in flow inside it**, so the host's height is the card's and
+   that is the height the collision pass reads (GPT Sol on the plan, F3). An
+   absolutely positioned panel would leave the host 0px tall.
+
+   **`--marg-gap` past the edge**, so the card starts on the column's one left
+   edge; `--chat-card-w` is layout.ts § `chatCard`, which has that gap and the
+   window's right gutter already out of it, written on the host by
+   ChatDialog.tsx.
+
+   **Not a note in two ways.** It can be selected and copied, where a note is
+   `user-select: none`. And it is inside the prose cell without being prose, so
+   the cell's reading type is put back to the app's here rather than
+   inherited. */
+.chat-card-host {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--marg-gap));
+  /* The fallback is the instant before the panel has written its width on a
+     host it has only just been handed: the notes' own. */
+  width: var(--chat-card-w, var(--marg-w));
+  box-sizing: border-box;
+  /* The first line of a 13px note sits level with its paragraph at 0.5rem
+     (marginalia.css § a note); the card's border starts a little above its
+     text, so it takes a little less. */
+  padding-top: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-align: left;
+  color: var(--ink);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+/* The mount point the panel goes home to, and the container that moves
+   (ChatDialog.tsx § One panel, one container, moved): neither is a box. */
+.chat-dialog-home,
+.chat-dialog-mount {
+  display: contents;
+}
+
+/* **Every piece of the fixed geometry is undone**, because the base rule
+   pins the panel to the window's corner. No bottom anchor: the card hangs from
+   its block. `max-height` is kept from the floating panel on purpose — 34rem,
+   or the visible viewport less the chrome with `--kb-inset` in it — so the
+   composer is never more than a card's height from the top of the transcript
+   and an iPad's keyboard still shrinks it (plan § 5; the keyboard itself is
+   unproved off an iPad, Sol F6). */
+.chat-dialog.in-column {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding-inline: 0.7rem;
+  /* Beside the article, not hovering over it: the docked panel's shadow. */
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  /* In the page's own order. The base rule's 70 would put a scrolling card
+     over the sticky bars. */
+  z-index: auto;
+}
+/* The floating panel takes a steady 34rem once there is a transcript, because
+   it grows upward from a bottom anchor and its header would otherwise move.
+   The card grows downward from its block, and at 34rem a one-line answer would
+   push every later note most of a screen away. */
+.chat-dialog.in-column:has(.chat-scroll) {
+  height: auto;
+}
+
+/* **Collapsed: about one note tall, and the whole card is one button**
+   (ChatDialog.tsx § The card collapses to one line). The rest of the panel is
+   hidden, not unmounted; said here as well as by `hidden`, because
+   `.chat-dialog header` below is `display: flex` and would outrank the
+   attribute. */
+.chat-dialog.collapsed {
+  padding: 0;
+}
+.chat-dialog.collapsed > :is(header, .chat-dialog-body, footer) {
+  display: none;
+}
+.chat-card-shut {
+  appearance: none;
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-card-shut:hover { background: var(--panel); }
+.chat-card-shut:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: -2px;
+}
+/* The header's own label, one line: the icon, the reader's title, and a
+   chevron saying there is more. */
+.chat-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+.chat-card-head > svg { flex: none; color: var(--ink-faint); }
+.chat-card-head > .chat-dialog-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Faint, one line: an answer arriving, the latest answer's first line, or how
+   many questions. */
+.chat-card-line {
+  /* A block, not a flex row: an ellipsis is not drawn on a flex container's
+     bare text. */
+  display: block;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-card-line > svg {
+  vertical-align: -0.125em;
+  margin-right: 0.3rem;
+}
+
 /* ------------------------------------------------------- the comment box --
    `AnnotateDialog` — what a selection opens since 2026-08-28. Same frame as the
    floating chat beside it, on purpose: they occupy the same corner and one
@@ -506,6 +654,33 @@
   cursor: pointer;
 }
 .chat-dialog-close:hover { color: var(--highlight-text); }
+
+/* The header's right-hand end: Collapse, in the column only, then the close.
+   8px apart, because on a finger's device the cross's target reaches 4px past
+   its box (close.css) and would otherwise take Collapse's taps. */
+.chat-dialog-tools {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* The cross's box, so the two read as a pair: 32px, in px for close.css's
+   reason (a 12px root). */
+.chat-dialog-collapse {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-dialog-collapse:hover { color: var(--highlight-text); }
 
 .chat-dialog-body {
   flex: 1 1 auto;

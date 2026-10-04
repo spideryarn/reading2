@@ -259,14 +259,29 @@ describe("splitLinks — how long it takes on hostile input", () => {
     return performance.now() - started;
   };
 
+  /* **The fastest of several runs, not one run.** A linear parse of these
+     inputs takes well under a millisecond, so a single timing is mostly whatever
+     else the machine was doing: on 2026-10-04 one run each gave a ratio of 12.7
+     at a load of 26, with no code change, and stopped a deploy. Being
+     descheduled adds time, so taking the minimum reduces interruption noise;
+     it does not guarantee an uninterrupted run. */
+  const fastest = (para: string): number =>
+    Math.min(...Array.from({ length: 7 }, () => time(para)));
+
   it("grows roughly linearly in the number of unclosed brackets", () => {
-    const small = `${"[".repeat(8_000)}x`;
-    const large = `${"[".repeat(32_000)}x`;
-    time(small); // warm, so the first call's compilation is not the measurement
-    const ratio = (time(large) + 0.01) / (time(small) + 0.01);
-    // Quadratic would be ~16×. Anything under 8 is comfortably not that.
-    expect(ratio).toBeLessThan(8);
-  });
+    const small = `${"[".repeat(2_000)}x`;
+    const large = `${"[".repeat(16_000)}x`;
+    time(small); // Give the parser a warm-up call before taking samples.
+    // Add 0.01 ms to avoid division by zero and soften ratios near the timer's
+    // resolution. It biases the ratio towards 1, but is negligible for the
+    // quadratic regression, whose small input already takes milliseconds.
+    const ratio = (fastest(large) + 0.01) / (fastest(small) + 0.01);
+    /* Eight times the input: linear work grows ~8×, quadratic ~64× if `[` is
+       allowed back into the Markdown label. Fixed overhead and the 0.01 ms
+       offset lower the measured ratios. 20 leaves room on both sides; the old
+       4× sizes and threshold of 8 left only a factor of 2 either way. */
+    expect(ratio).toBeLessThan(20);
+  }, 30_000);
 
   it.each([
     ["unclosed brackets", `${"[".repeat(60_000)}x`],

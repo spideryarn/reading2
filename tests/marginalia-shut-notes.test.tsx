@@ -193,6 +193,49 @@ describe("a shut line", () => {
     expect(opened).toEqual(["t1"]);
   });
 
+  /* Report spya-f6dpj5, plan 261004k § 7: the shut line un-truncates when it
+     opens, so a lone question's open half repeating its stamp and its words
+     said *Question · About this paragraph* twice, one above the other. */
+  it("says a lone question's words once when it is opened, and still opens its conversation", () => {
+    const opened: string[] = [];
+    const drawLone = (asked: { id: string; blockId: string; createdAt: string; quote?: string }) => {
+      const el = document.createElement("div");
+      host = el;
+      document.body.append(el);
+      const nextRoot = createRoot(el);
+      root = nextRoot;
+      act(() =>
+        nextRoot.render(
+          <MarginNotesSlot
+            viewer="owner"
+            onOpenAsked={(id) => opened.push(id)}
+            notes={[{ kind: "comment", items: [{ as: "question", asked }] }]}
+          />,
+        ),
+      );
+      act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+      return el;
+    };
+    const count = (el: HTMLElement, words: string) => (el.textContent ?? "").split(words).length - 1;
+
+    const bare = drawLone({ id: "t1", blockId: "spya-aaaaa1", createdAt: "t" });
+    expect(bare.querySelector(".marg-shut-button")?.getAttribute("aria-expanded")).toBe("true");
+    expect(count(bare, "About this paragraph")).toBe(1);
+    expect(count(bare, "Question")).toBe(1);
+    expect(bare.querySelector(".marg-open .marg-open-head")).toBeNull();
+    const open = [...bare.querySelectorAll<HTMLButtonElement>(".marg-open button")].find(
+      (b) => b.textContent === "Open the conversation",
+    );
+    act(() => open?.click());
+    expect(opened).toEqual(["t1"]);
+    act(() => root?.unmount());
+    host?.remove();
+
+    /* And the passage it was asked from, which the shut line already quotes. */
+    const quoted = drawLone({ id: "t2", blockId: "spya-aaaaa1", createdAt: "t", quote: "the bound holds" });
+    expect(count(quoted, "the bound holds")).toBe(1);
+  });
+
   it("shows the first lines of an AI answer under the reader's comment", () => {
     const comment = {
       id: "c",

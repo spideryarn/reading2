@@ -947,3 +947,61 @@ export function chatDock(fit: Fit, windowWidth: number): number | null {
   const room = windowWidth - fit.margLeft - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER;
   return room >= CHAT_DOCK_MIN ? room : null;
 }
+
+/**
+ * **Where the block chat goes while the marginalia column is showing** — on
+ * trial. `"card"` draws the conversation in the column, level with the block
+ * it is about and scrolling with it (option B); `"dock"` is the panel fixed
+ * over the bottom of the column (option A, `chatDock` above), which stays
+ * built and is what the card falls back to whenever it cannot be drawn.
+ * Read in one place, `Reader`; going back is this one word.
+ * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md § 8.
+ *
+ * The annotation is the point: without it the constant's type is the literal
+ * and the other arm reads as dead code to the compiler.
+ */
+export const BLOCK_CHAT_IN_COLUMN: "card" | "dock" = "card";
+
+/**
+ * The gutter between the prose cell and the column's text, in rem —
+ * marginalia.css § `--marg-gap`, which stays the stylesheet's to declare.
+ * tests/layout-margin.test.ts holds the two to one number.
+ */
+export const MARG_GAP_REM = 1.25;
+/** The widest the card gets: 36rem, a comfortable measure for chat text. The
+    notes themselves stay at `--marg-w`. */
+export const CHAT_CARD_MAX = 576;
+
+/**
+ * **How wide the chat card is, in px — or `null` for "no card here".** Pure,
+ * beside `chatDock` and from the same `Fit`.
+ *
+ * **The room right of the prose, not the notes' 288px** (report spya-ntb7p6):
+ * on a wide window the centred prose leaves far more beside it than the
+ * column, and a chat answer at 272px ran two to four words a line. So the
+ * card takes what is there, up to `CHAT_CARD_MAX`.
+ *
+ * **The gap comes off before the minimum and the cap.** The card starts
+ * `--marg-gap` past the cell's edge, on the column's one left edge, and that
+ * gap is rem, so it needs the root size. Left out, a card that just qualified
+ * ran 12px past a 1440px window (GPT Sol on the plan, F2). The right-hand
+ * gutter and the minimum are the dock's: below `CHAT_DOCK_MIN` there is no
+ * card, and `Reader` falls back to the dock or the floating panel.
+ *
+ * Gated on `margW` for `chatDock`'s reason.
+ */
+export function chatCard(
+  fit: Fit,
+  windowWidth: number,
+  rootFontPx = DEFAULT_ROOT_PX,
+): number | null {
+  if (fit.margW <= 0) return null;
+  const room = windowWidth - fit.margLeft - MARG_GAP_REM * rootFontPx - CHAT_DOCK_GUTTER;
+  return room >= CHAT_DOCK_MIN ? Math.min(room, CHAT_CARD_MAX) : null;
+}
+
+/** What marks the card's host in the DOM (`Reader` renders it into the anchor
+    block's cell). The card sits inside `td.text` and is not prose, so anything
+    that reads "which block is this in" off the nearest row asks for this
+    first — ProseHoverCard.tsx § `read`. */
+export const CHAT_CARD_HOST_ATTR = "data-chat-card-host";

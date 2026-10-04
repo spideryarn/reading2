@@ -32,7 +32,9 @@ vi.mock("../src/web/ChatDialog.js", async () => {
   };
 });
 
-import { chatDock, fitView } from "../src/web/layout.js";
+import type { ReactElement } from "react";
+import { clearFoldArticle, isFolded, setFoldArticle, toggleFold } from "../src/web/fold.js";
+import { chatCard, chatDock, fitView } from "../src/web/layout.js";
 import type { BlockId, ThreadSummary } from "../src/types.js";
 import {
   readerReadingProbe,
@@ -56,16 +58,21 @@ const WINDOW = 1600;
 
 type TableProps = {
   onChatAbout?: (id: BlockId) => void;
+  onHelp?: (id: BlockId) => void;
+  onOpenChat?: (threadId: string) => void;
   chatOpenBlock?: BlockId | null;
+  margin?: ReadonlyMap<BlockId, ReactElement> | null;
 };
 const table = () => readerReadingProbe.table.mock.lastCall?.[0] as TableProps;
-type DialogProps = { dockRoom: number | null; target: { kind: string } };
+type DialogProps = { dockRoom: number | null; target: { kind: string }; onClose: () => void };
 function dialogProps(): DialogProps {
   const props = dialog.props.mock.lastCall?.[0] as DialogProps | undefined;
   if (!props) throw new Error("the chat panel was never rendered");
   return props;
 }
 const dockRoom = () => dialogProps().dockRoom;
+type CardProps = { card: { host: HTMLElement; width: number } | null; reopen: number };
+const cardProps = () => dialogProps() as unknown as CardProps;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -161,5 +168,190 @@ describe("an open thread's block comes from its summary's anchor", () => {
     await act(async () => chatAbout(BLOCK));
     expect(dialogProps().target.kind).toBe("thread");
     expect(table().chatOpenBlock).toBe(BLOCK);
+  });
+});
+
+/**
+ * **`Reader`'s half of the card in the column** —
+ * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md. A
+ * `ChatDialog` test handed a host by hand cannot see whether `Reader` ever
+ * makes one (GPT Sol on that plan, as F4 was on the dock's).
+ *
+ * `TableView` is a probe here, so nothing draws the `margin` map it is handed.
+ * `cell()` does what the table does with it — renders this block's entry into
+ * the block's cell — which is what lets the host's ref land.
+ */
+describe("Reader draws the block chat as a card in the column", () => {
+  let cellRoot: Root;
+  let cellTable: HTMLTableElement;
+  let td: HTMLTableCellElement;
+
+  beforeEach(() => {
+    cellTable = document.createElement("table");
+    cellTable.innerHTML = `<tbody><tr data-block="${BLOCK}"><td class="text"></td></tr></tbody>`;
+    document.body.append(cellTable);
+    td = cellTable.querySelector("td") as HTMLTableCellElement;
+    cellRoot = createRoot(td);
+  });
+  afterEach(() => {
+    act(() => cellRoot.unmount());
+    cellTable.remove();
+    act(() => clearFoldArticle());
+  });
+
+  /** Draw `margin`'s entry for the block, as `TableView` would, and return the cell. */
+  async function cell(): Promise<HTMLTableCellElement> {
+    await act(async () => cellRoot.render(table().margin?.get(BLOCK) ?? null));
+    return td;
+  }
+  const hostIn = (el: Element) => el.querySelector<HTMLElement>("[data-chat-card-host]");
+  const card = () => cardProps().card;
+
+  const summary = (id: string, updatedAt: string): ThreadSummary =>
+    ({
+      id,
+      title: "A conversation",
+      createdAt: updatedAt,
+      updatedAt,
+      kind: "chat",
+      turns: 1,
+      anchor: { blockId: BLOCK },
+    }) as ThreadSummary;
+  const NEWER = summary("spya-crdnew", "2026-10-04T10:00:00.000Z");
+  const OLDER = summary("spya-crdold", "2026-10-04T09:00:00.000Z");
+
+  async function withThreads(margin = true) {
+    const base = readingHarnessOwner();
+    const owner = {
+      ...base,
+      chatAnchors: { ...base.chatAnchors, summaries: [NEWER, OLDER], loaded: true },
+    } as typeof base;
+    await act(async () => root.render(readingHarnessView(owner, margin)));
+    return owner;
+  }
+
+  it("falls back to the dock until the host is in hand, then hands the panel that host", async () => {
+    await open(true);
+    /* Never nothing: the card is wanted, nothing has drawn its host yet, and
+       the panel is docked exactly as before. */
+    expect(card()).toBeNull();
+    expect(dockRoom()).not.toBeNull();
+
+    const drawn = hostIn(await cell());
+    expect(drawn).not.toBeNull();
+    /* What `useMarginLayout` collects, so later notes are pushed below it. */
+    expect(drawn?.hasAttribute("data-marg-note")).toBe(true);
+    expect(card()?.host).toBe(drawn);
+    const expected = chatCard(fitView({ windowWidth: WINDOW, margin: true }), WINDOW, 16);
+    expect(expected).not.toBeNull();
+    expect(card()?.width).toBe(expected);
+    /* And the room stays on offer, for the moment the host goes. */
+    expect(dockRoom()).not.toBeNull();
+  });
+
+  it("makes no host with Marginalia off: there is no column to draw in", async () => {
+    await open(false);
+    expect(table().margin ?? null).toBeNull();
+    expect(card()).toBeNull();
+  });
+
+  it("goes back to the dock when the host leaves, without remounting the panel", async () => {
+    const owner = readingHarnessOwner();
+    await open(true, owner);
+    await cell();
+    expect(card()).not.toBeNull();
+    expect(dialog.mounts).toBe(1);
+    await act(async () => cellRoot.render(null));
+    expect(card()).toBeNull();
+    expect(dockRoom()).not.toBeNull();
+    expect(dialog.mounts).toBe(1);
+  });
+
+  /* Sol F3: after the block's own notes, an opened note would push the chat
+     away from its paragraph. */
+  it("puts the card first in the cell, above the block's own notes", async () => {
+    await withThreads();
+    const chatAbout = table().onChatAbout;
+    await act(async () => chatAbout?.(BLOCK));
+    const el = await cell();
+    expect(el.firstElementChild).toBe(hostIn(el));
+    /* The other question on this block is an ordinary note, under the card. */
+    expect(el.querySelector(".marg-note")?.previousElementSibling).toBe(hostIn(el));
+  });
+
+  it("drops the margin's line for the conversation the card is showing, and only that one", async () => {
+    await withThreads();
+    const before = await cell();
+    expect(hostIn(before)).toBeNull();
+    expect(before.textContent).toContain("2 questions");
+
+    /* The chip opens the newest whole-block conversation. */
+    await act(async () => table().onChatAbout?.(BLOCK));
+    expect(dialogProps().target).toEqual({ kind: "thread", threadId: NEWER.id });
+    const during = await cell();
+    expect(hostIn(during)).not.toBeNull();
+    expect(during.textContent).not.toContain("2 questions");
+    expect(during.querySelector(".marg-stamp")?.textContent).toBe("Question");
+  });
+
+  it("keeps the block's opened note open when a chat card arrives and leaves", async () => {
+    await withThreads();
+    const before = await cell();
+    const note = before.querySelector<HTMLButtonElement>(".marg-shut-button");
+    expect(note).not.toBeNull();
+    act(() => note?.click());
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => table().onChatAbout?.(BLOCK));
+    const during = await cell();
+    expect(hostIn(during)).not.toBeNull();
+    expect(during.querySelector(".marg-shut-button")).toBe(note);
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => dialogProps().onClose());
+    const after = await cell();
+    expect(hostIn(after)).toBeNull();
+    expect(after.querySelector(".marg-shut-button")).toBe(note);
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  /* Sol F1. The chip, the "?" and a mark all only write `?thread=`, so a press
+     that names the conversation already open is invisible to the panel unless
+     `Reader` counts it. */
+  it("counts every press that asks for a conversation, including the one already open", async () => {
+    await withThreads();
+    await act(async () => table().onChatAbout?.(BLOCK));
+    const first = cardProps().reopen;
+    await act(async () => table().onChatAbout?.(BLOCK));
+    expect(dialogProps().target).toEqual({ kind: "thread", threadId: NEWER.id });
+    expect(cardProps().reopen).toBe(first + 1);
+    await act(async () => table().onHelp?.(BLOCK));
+    expect(cardProps().reopen).toBe(first + 2);
+    await act(async () => table().onOpenChat?.(NEWER.id));
+    expect(cardProps().reopen).toBe(first + 3);
+    expect(dialog.mounts).toBe(1);
+  });
+
+  /* Sol F4: a fold hides the cell with `display: none`. A card in a hidden
+     cell is a chat that has vanished, so a folded anchor is the dock's. */
+  it("falls back to the dock while the block's section is folded, and returns when it opens", async () => {
+    await open(true);
+    await cell();
+    expect(card()).not.toBeNull();
+
+    const heading = { id: "spya-crdhd1", tag: "h2", kind: "heading" };
+    const blocks = [heading, ...readingHarnessArticle.blocks] as typeof readingHarnessArticle.blocks;
+    act(() => setFoldArticle("reading-harness", blocks));
+    await act(async () => toggleFold(heading.id as BlockId));
+    expect(isFolded(BLOCK)).toBe(true);
+    expect(card()).toBeNull();
+    expect(dockRoom()).not.toBeNull();
+    expect(hostIn(await cell())).toBeNull();
+
+    await act(async () => toggleFold(heading.id as BlockId));
+    expect(isFolded(BLOCK)).toBe(false);
+    expect(hostIn(await cell())).not.toBeNull();
+    expect(card()).not.toBeNull();
+    expect(dialog.mounts).toBe(1);
   });
 });
