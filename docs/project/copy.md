@@ -139,8 +139,8 @@ matters when somebody quotes one at you
 ([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
-server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is a citation's *Find it* refusing
-(`[cite-resting]`, its daily allowance spent). `dig-` is *Dig deeper*'s shared half:
+server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Citations' *Dig deeper* refusing
+([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)). `dig-` is *Dig deeper*'s shared half:
 `[dig-no-search]` when the web search it promises did not run, in any of its three modes, and
 `[dig-resting]` when the glossary's and comments' shared daily allowance is spent across every
 reader — Citations' own is `[cite-investigate-resting]`
@@ -489,8 +489,8 @@ Since 2026-09-24 a 5xx's message must pass the same `authoredSentence` test the
 streams use, or the reader gets `UNEXPECTED_FAILURE`; the error is in
 `logRequest`'s line either way. **Below 500 nothing changed**: a 4xx is a
 refusal a route chose to send, and many of those are deliberate uncoded
-sentences. The two deliberate uncoded 5xx sentences the audit found were given
-codes (`[jb-slot-held]`, `[cite-resting]`); a new one needs a code too, or it
+sentences. The surviving deliberate uncoded 5xx sentence the audit found was given
+`[jb-slot-held]`; the other went with the retired *Find it* route. A new one needs a code too, or it
 arrives as the generic sentence.
 [The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md) § Stage 2c.
 

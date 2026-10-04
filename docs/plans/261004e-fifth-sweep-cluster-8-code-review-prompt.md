@@ -8,10 +8,10 @@ Repo: this worktree, branch `worktree-sweep5-c8-routes-deletions` (TypeScript, E
 
 ## The candidate
 
-One commit, `__SHA__`, on top of `origin/dev` at `0a98b28ab`. See it with
-`git show --stat __SHA__` and `git diff 0a98b28ab __SHA__ -- <path>`. Changed paths:
-
-__PATHS__
+One commit, `f050be585`, on top of `origin/dev` at `0a98b28ab`. `git show --stat=200 f050be585`
+lists its 26 changed paths (five docs under `docs/project/`, nine files under `src/`, eight under
+`tests/` of which one is a rename, and four plan files); `git diff 0a98b28ab f050be585 -- <path>`
+shows any one.
 
 Start with `src/routes.ts`, `src/citation-find.ts`, `tests/authenticated-api-route-contract.test.ts`
 and `tests/citation-finds-read-back-pg.test.ts`; that does not limit scope.
@@ -36,7 +36,10 @@ The plan, with your own plan review's four findings and how each was answered:
 
 ## Evidence I ran (you have no Postgres or network; these are mine to hand over)
 
-- `npm test`: __TEST__
+- `npm test`: 33,089 passed and 6 failed on the uncommitted tree. Five were a fresh worktree
+  missing `api-dist/` and the fleet client build, and pass after `npm run build` and
+  `npm run build:fleet`. The sixth, `tests/styles-entry-is-imports-only.test.ts`, read a
+  deleted-but-still-tracked file and passes now the deletion is committed.
 - `npm run typecheck`: all four projects pass.
 - Red first, observed: the contract rule refused today's table at the first wrap (line 9071);
   the ENOENT test got 404 where it expects 500; both exact `"Not a slug"` assertions got the

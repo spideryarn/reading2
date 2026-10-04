@@ -3,11 +3,11 @@
  * dispatcher does the attributing — src/routes.ts § `ArticleAttribution` and
  * `dispatchAuthRoute`; docs/project/cost-tracking.md.
  *
- * Driven with rows of its own rather than through a real route, because every
- * real route that spends today also wraps itself by hand (the wraps predate the
- * field), so a real route would stay green with the dispatcher's half deleted.
- * Here the handler records a spend and nothing else, and the ledger row it
- * produces is the observation.
+ * Driven with rows of its own to isolate the dispatcher's attribution from
+ * each handler's work. The handler records a spend and nothing else, and the
+ * ledger row it produces is the observation. Redundant handler wraps were
+ * removed in plan 261004e; the route contract now refuses them in a
+ * `first-capture` row.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";

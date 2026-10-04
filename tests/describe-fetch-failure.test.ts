@@ -79,6 +79,10 @@ const REACT_185 =
   "non-minified dev environment for full errors and additional helpful warnings.";
 
 describe("an exception nobody wrote for a reader", () => {
+  it("does not recognise the retired Find it allowance code as an authored sentence", () => {
+    expect(authoredSentence(new Error("An obsolete allowance refusal. [cite-resting]"))).toBeNull();
+  });
+
   it("does not put React's own sentence in front of a reader", () => {
     const said = describeFetchFailure(new Error(REACT_185));
     expect(said).not.toContain("React");
