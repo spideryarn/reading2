@@ -94,6 +94,18 @@ from 8, 6, 8 passages over three runs to 1, 8, 2.
 
 Pick B if a short list where more was available bothers you more than a padded one.
 
+**Decided, A — as built.**
+
+> ok, go with your recommendation. I don't completely follow. The quick searches seem much worse
+> than the thorough searches, so I wonder if the best-of-all-worlds approach is to run a quick
+> search immediately, and and also kick off a thorough search in the background that will finish a
+> few seconds later.
+>
+> — Greg, 2026-10-04
+
+The second half is a new piece of work, not an answer to Q1; it was dispatched as its own session
+(`search-auto-thorough`).
+
 **Still open from 261003o**: Q2 (should a fallback list say that it is one) and Q3 (a line saying
 a question works better than a bare word). Lower floors make Q2 matter a little more, since a
 fallback list is now about half right.
