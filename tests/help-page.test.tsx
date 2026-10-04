@@ -235,6 +235,12 @@ describe("the page", () => {
     expect(MODES.some((m) => MODE_CATALOG[m].experimental)).toBe(true);
   });
 
+  it("names every reason Glossary can replace a list", () => {
+    mountAt("/help#mode-glossary");
+    const words = host.querySelector("#mode-glossary")?.textContent ?? "";
+    expect(words).toMatch(/cannot safely add.*article.*profile.*version of Spideryarn/is);
+  });
+
   /* `HelpRef` is typed, but the Experimental tag and anything written as a
      bare `<a href="#…">` are not — this is the check that covers both. */
   it("links only to places that exist on the page", () => {

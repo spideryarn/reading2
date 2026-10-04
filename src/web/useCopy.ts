@@ -40,7 +40,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * **The check, the state and the caller's `said` are one step.** `copy()`
  * returns nothing rather than a promise carrying "was this the current press?",
  * because a reset or an unmount can land between the hook answering that and
- * the caller reading the answer. Here nothing can come between them.
+ * the caller reading the answer. Here nothing can come between them. A caller
+ * may separately provide an `after` callback for an outcome whose effect must
+ * survive this component unmounting; unlike `said`, that callback runs for
+ * every completed press and must not set this component's state.
  * A synchronous throw from `said` is logged and contained: it must neither
  * escape the click nor reject a promise the hook has discarded, and it does
  * not change the clipboard outcome.
@@ -91,8 +94,14 @@ export function useCopy(revert: {
    * Start a write. Returns nothing: there is no promise for a caller to drop.
    * `said` is called once with the outcome, in the same step that sets `state`,
    * and only if this press is still the newest and the component is mounted.
+   * `after`, when supplied, is the durable action: it runs for every completed
+   * press even after unmount or reset, and therefore must not update local UI.
    */
-  copy(text: string, said?: (outcome: CopyOutcome) => void): void;
+  copy(
+    text: string,
+    said?: (outcome: CopyOutcome) => void,
+    after?: (outcome: CopyOutcome) => void,
+  ): void;
   /** Back to idle now, and any press still out is overtaken. */
   reset(): void;
 } {
@@ -143,25 +152,37 @@ export function useCopy(revert: {
   );
 
   const copy = useCallback(
-    (text: string, said?: (outcome: CopyOutcome) => void) => {
+    (
+      text: string,
+      said?: (outcome: CopyOutcome) => void,
+      after?: (outcome: CopyOutcome) => void,
+    ) => {
       const mine = ++newest.current;
+      const finish = (outcome: CopyOutcome) => {
+        settle(mine, outcome, said);
+        try {
+          after?.(outcome);
+        } catch (error) {
+          console.error("[useCopy] completion callback threw", error);
+        }
+      };
       /* A statement, not an optional chain. The header says why. */
       if (!navigator.clipboard) {
-        settle(mine, { result: "unavailable" }, said);
+        finish({ result: "unavailable" });
         return;
       }
       let write: Promise<void>;
       try {
         write = navigator.clipboard.writeText(text);
       } catch (error) {
-        settle(mine, { result: "refused", error }, said);
+        finish({ result: "refused", error });
         return;
       }
       /* Only the write's rejection is classified as refused. Notification
          errors are handled separately in settle. */
       void write.then(
-        () => settle(mine, { result: "copied" }, said),
-        (error: unknown) => settle(mine, { result: "refused", error }, said),
+        () => finish({ result: "copied" }),
+        (error: unknown) => finish({ result: "refused", error }),
       );
     },
     [settle],

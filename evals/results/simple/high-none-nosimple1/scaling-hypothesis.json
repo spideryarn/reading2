@@ -1,0 +1,280 @@
+{
+  "arm": "high-none-nosimple1",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/7",
+  "sourceSha256": "47354e59e368897c5b63c6030e6e2b60137c53458ba8c53f285f10f755eab59b",
+  "at": "2026-10-04T11:08:20.991Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "a517e085ff6f7ddcb776af033804dfa3c4a919138b87d1c52ad14cfb5ec6fa7c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 51084,
+  "costUsd": 0.2572288,
+  "tokens": {
+    "input": 16646,
+    "output": 5496,
+    "reasoning": 3174
+  },
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 409,
+  "briefWords": 133,
+  "fuller": [
+    {
+      "text": "This long essay by Gwern looks at GPT-3, a text-predicting neural network that OpenAI announced in May 2020. With 175 billion parameters, the adjustable numbers a network tunes as it learns, it was 117 times larger than GPT-2. Gwern uses it to argue for the scaling hypothesis: simply making networks bigger, with more data and computing power, leads toward general intelligence.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "This long essay by Gwern looks at GPT-3, a text-predicting neural network that OpenAI announced in May 2020.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "With 175 billion parameters, the adjustable numbers a network tunes as it learns, it was 117 times larger than GPT-2.",
+          "id": "spya-aqts9c",
+          "key": "175 billion parameters"
+        },
+        {
+          "text": "Gwern uses it to argue for the scaling hypothesis: simply making networks bigger, with more data and computing power, leads toward general intelligence.",
+          "id": "spya-ewxv9q",
+          "key": "scaling hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "The surprise was not just more facts but meta-learning: GPT-3 could pick up new tasks from a few examples, with no extra training. It tackled arithmetic, translation and anagrams this way, though it was only trained to predict the next word of Internet text. Training it cost an estimated $5 million, which Gwern calls cheap by government or military budgets, so much larger models are possible.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-dfjr4c"
+      ],
+      "sentences": [
+        {
+          "text": "The surprise was not just more facts but meta-learning: GPT-3 could pick up new tasks from a few examples, with no extra training.",
+          "id": "spya-ewxv9q",
+          "key": "meta-learning"
+        },
+        {
+          "text": "It tackled arithmetic, translation and anagrams this way, though it was only trained to predict the next word of Internet text.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Training it cost an estimated $5 million, which Gwern calls cheap by government or military budgets, so much larger models are possible.",
+          "id": "spya-dfjr4c"
+        }
+      ]
+    },
+    {
+      "text": "Making the model bigger did not run into shrinking returns. Its loss, a measure of prediction error, kept falling along the same smooth curve forecast for much smaller models. Gwern estimates loss fell from about 3.3 for GPT-2 to about 1.73 for GPT-3, and might reach about 1.24 with 100 to 1,000 times more compute.",
+      "ids": [
+        "spya-asr663",
+        "spya-edr6mj"
+      ],
+      "sentences": [
+        {
+          "text": "Making the model bigger did not run into shrinking returns.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Its loss, a measure of prediction error, kept falling along the same smooth curve forecast for much smaller models.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Gwern estimates loss fell from about 3.3 for GPT-2 to about 1.73 for GPT-3, and might reach about 1.24 with 100 to 1,000 times more compute.",
+          "id": "spya-edr6mj",
+          "key": "about 3.3 for GPT-2 to about 1.73"
+        }
+      ]
+    },
+    {
+      "text": "He calls this the blessings of scale: for neural networks, bigger and harder problems tend to be learned faster and better. His tentative explanation is that a big network holds countless small sub-models, which average out to favour simple solutions. Lazy sub-models that memorize win on small data, but Internet-scale data is too vast to memorize, so general rules like real arithmetic win.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ],
+      "sentences": [
+        {
+          "text": "He calls this the blessings of scale: for neural networks, bigger and harder problems tend to be learned faster and better.",
+          "id": "spya-sfkxh8",
+          "key": "blessings of scale"
+        },
+        {
+          "text": "His tentative explanation is that a big network holds countless small sub-models, which average out to favour simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "Lazy sub-models that memorize win on small data, but Internet-scale data is too vast to memorize, so general rules like real arithmetic win.",
+          "id": "spya-vkkfzh"
+        }
+      ]
+    },
+    {
+      "text": "Humans predict the next letter of text at about 0.7 bits per character, a measure of how much uncertainty is left. Gwern argues the last bits are deepest: closing that final gap needs reasoning, common sense and understanding of people. So a model that predicts as well as humans would need something like true understanding.",
+      "ids": [
+        "spya-rjwfkb",
+        "spya-g3b5y7",
+        "spya-kmyg3w"
+      ],
+      "sentences": [
+        {
+          "text": "Humans predict the next letter of text at about 0.7 bits per character, a measure of how much uncertainty is left.",
+          "id": "spya-rjwfkb"
+        },
+        {
+          "text": "Gwern argues the last bits are deepest: closing that final gap needs reasoning, common sense and understanding of people.",
+          "id": "spya-kmyg3w",
+          "key": "the last bits are deepest"
+        },
+        {
+          "text": "So a model that predicts as well as humans would need something like true understanding.",
+          "id": "spya-g3b5y7"
+        }
+      ]
+    },
+    {
+      "text": "Gwern admits this argument once felt to him like a magic trick. It might have needed more text than exists, or models might have stalled on surface patterns forever. He also says he does not know what further drops in loss would bring.",
+      "ids": [
+        "spya-e5n86h",
+        "spya-faees7",
+        "spya-f6zupy"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern admits this argument once felt to him like a magic trick.",
+          "id": "spya-e5n86h"
+        },
+        {
+          "text": "It might have needed more text than exists, or models might have stalled on surface patterns forever.",
+          "id": "spya-faees7"
+        },
+        {
+          "text": "He also says he does not know what further drops in loss would bring.",
+          "id": "spya-f6zupy"
+        }
+      ]
+    },
+    {
+      "text": "He argues most labs, including DeepMind, do not truly believe the hypothesis, and that expert critics rarely admit their failed forecasts. By contrast, Moravec forecast in 1998 that compute cheap enough to rival humans would arrive in the 2020s, which Gwern says is holding up. His conclusion is that networks may keep getting smarter as compute grows, leaving open whether progress levels off or takes off.",
+      "ids": [
+        "spya-scr8jb",
+        "spya-m9r8zx",
+        "spya-ad5qgy"
+      ],
+      "sentences": [
+        {
+          "text": "He argues most labs, including DeepMind, do not truly believe the hypothesis, and that expert critics rarely admit their failed forecasts.",
+          "id": "spya-m9r8zx"
+        },
+        {
+          "text": "By contrast, Moravec forecast in 1998 that compute cheap enough to rival humans would arrive in the 2020s, which Gwern says is holding up.",
+          "id": "spya-ad5qgy"
+        },
+        {
+          "text": "His conclusion is that networks may keep getting smarter as compute grows, leaving open whether progress levels off or takes off.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay is about GPT-3, a huge computer program trained to guess the next word in internet text. It argues for the scaling hypothesis: simple AI programs get smarter mostly by being made much bigger. The author says this matters because most AI experts doubted it and failed to predict GPT-3.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This essay is about GPT-3, a huge computer program trained to guess the next word in internet text.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It argues for the scaling hypothesis: simple AI programs get smarter mostly by being made much bigger.",
+          "id": "spya-suzdvz",
+          "key": "the scaling hypothesis"
+        },
+        {
+          "text": "The author says this matters because most AI experts doubted it and failed to predict GPT-3.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "GPT-3 is 117 times bigger than the version before it, and it kept improving as predicted. It could even pick up new tasks from just a few examples, without special training. To guess human writing well, a program may have to learn the logic and causes behind it.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-asr663",
+        "spya-h74fhr"
+      ],
+      "sentences": [
+        {
+          "text": "GPT-3 is 117 times bigger than the version before it, and it kept improving as predicted.",
+          "id": "spya-asr663",
+          "key": "117 times bigger"
+        },
+        {
+          "text": "It could even pick up new tasks from just a few examples, without special training.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "To guess human writing well, a program may have to learn the logic and causes behind it.",
+          "id": "spya-h74fhr"
+        }
+      ]
+    },
+    {
+      "text": "The author concludes that bigger programs could be built cheaply by world standards. Old forecasts put the first AI systems not quite as smart as humans in the 2020s, and they look on track.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-ad5qgy"
+      ],
+      "sentences": [
+        {
+          "text": "The author concludes that bigger programs could be built cheaply by world standards.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Old forecasts put the first AI systems not quite as smart as humans in the 2020s, and they look on track.",
+          "id": "spya-ad5qgy"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

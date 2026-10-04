@@ -178,6 +178,9 @@ describe("Tweets' copy buttons", () => {
     expect(status?.getAttribute("aria-atomic")).toBe("true");
     expect(status?.classList.contains("tw:sr-only")).toBe(false);
     expect(visibleText(thread.parentElement as Element)).toBe("Couldn't copy the thread");
+    /* The warning triangle every other failed copy draws; an x on a button
+       reads as "close" (plan 261004g). */
+    expect(thread.querySelector("svg")?.getAttribute("class")).toContain("lucide-triangle-alert");
     // And it goes back to quiet.
     act(() => vi.advanceTimersByTime(2000));
     expect(status?.textContent).toBe("");

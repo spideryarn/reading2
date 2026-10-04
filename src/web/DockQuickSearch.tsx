@@ -42,6 +42,18 @@
  * tap**. That is the accepted cost, written down rather than claimed away; the
  * browser check cannot show it (plan § Sol F9).
  *
+ * ## The cross
+ *
+ * > Can you add a little X to it so that after I've searched with it, I can
+ * > easily wipe it? Or maybe even automatically wipe it after I've searched
+ * > with it.
+ * >
+ * > — Greg, 2026-10-04
+ *
+ * Shown while the box has words in it. It is Escape's clear (`clear` below,
+ * one path for both) with the focus kept. The box does not wipe itself after
+ * a search: the words stay so the next keystroke refines them.
+ *
  * ## `/`
  *
  * The web's usual key for "jump to search" (GitHub, YouTube, Gmail). It
@@ -54,7 +66,7 @@
  * visitor's read-only band, would answer (Sol F8; Dock.tsx §
  * `hasQuickSearch`). So the `/` listener exists only there too.
  */
-import { Zap } from "lucide-react";
+import { X, Zap } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
 import { isImeComposing, isTyping } from "./key-chord.js";
 import { IDLE, PAUSE_MS, type QuickSession, stepQuickSession } from "./quick-session.js";
@@ -149,7 +161,7 @@ export function DockQuickSearch({
     let frame = 0;
     const check = () => {
       frame = 0;
-      if (document.activeElement === input.current && field.current &&
+      if (field.current?.contains(document.activeElement) &&
           getComputedStyle(field.current).display === "none") {
         latest.current.bolt();
       }
@@ -203,6 +215,13 @@ export function DockQuickSearch({
       : undefined;
   };
 
+  /** Empty the draft and end whatever session was listening — Escape's and the cross's one clear. */
+  const clear = () => {
+    stopWaiting();
+    draft.set("");
+    draft.band()?.edit("");
+  };
+
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !isImeComposing(e)) {
       e.preventDefault();
@@ -217,16 +236,36 @@ export function DockQuickSearch({
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      stopWaiting();
-      draft.set("");
-      draft.band()?.edit("");
+      clear();
       e.currentTarget.blur();
     }
   };
 
   return (
     <span className={`dock-qs${searching && !focused ? " dock-qs--bolt" : ""}`}>
-      <span className="dock-qs-field" ref={field}>
+      {/* biome-ignore lint/a11y/useSemanticElements: the dock's inline field groups its input and clear button without a fieldset's layout defaults. */}
+      <span
+        className={`dock-qs-field${text === "" ? "" : " dock-qs-field--filled"}`}
+        ref={field}
+        role="group"
+        aria-label="Quick search controls"
+        onFocus={() => {
+          setFocused(true);
+          draft.setBarFocused(true);
+          draft.band()?.focus();
+        }}
+        onBlur={(e) => {
+          // Moving to the clear button stays in this field, including with Tab.
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          setFocused(false);
+          draft.setBarFocused(false);
+          /* A pause still pending here is dropped: a reader who typed and
+             clicked away did not ask for Search mode to open behind them.
+             With the band listening, its own blur rule decides (Opus). */
+          if (timer.current !== undefined) stopWaiting();
+          draft.band()?.blur();
+        }}
+      >
         <Zap size={13} aria-hidden className="dock-qs-icon" />
         <input
           ref={input}
@@ -241,25 +280,31 @@ export function DockQuickSearch({
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          onFocus={() => {
-            setFocused(true);
-            draft.setBarFocused(true);
-            draft.band()?.focus();
-          }}
-          onBlur={() => {
-            setFocused(false);
-            draft.setBarFocused(false);
-            /* A pause still pending here is dropped: a reader who typed and
-               clicked away did not ask for Search mode to open behind them.
-               With the band listening, its own blur rule decides (Opus). */
-            if (timer.current !== undefined) stopWaiting();
-            draft.band()?.blur();
-          }}
         />
         {text === "" && !focused && (
           <kbd className="dock-qs-key" aria-hidden>
             /
           </kbd>
+        )}
+        {text !== "" && (
+          /* **The cross that empties the box** (plan 261004g). Escape's clear,
+             but the focus stays: the words are kept after a search so the
+             reader can refine them, and this is the one press that wipes them
+             for the next. Mousedown keeps the input focused; focus handling on
+             the field also lets keyboard and other input paths reach the cross
+             without collapsing it into the ⚡ (`dock-qs--bolt`). */
+          <button
+            type="button"
+            className="dock-qs-clear"
+            aria-label="Clear the search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              clear();
+              input.current?.focus({ preventScroll: true });
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
         )}
       </span>
       <button

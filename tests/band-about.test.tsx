@@ -113,6 +113,37 @@ describe("ModeSurface's about", () => {
     expect(document.querySelector(".band-about-card")).toBeNull();
   });
 
+  /* qi-9rk34gjz, plan 261004g. Pointing schedules a hover-open; the two presses
+     toggle through the button's own click, which Floating UI never hears of,
+     so the timer outlived them and reopened a card the reader had just shut. */
+  it.each([
+    ["with a Help link", <ModeSurface key="a" label="Tweets" mode="summary">body</ModeSurface>],
+    ["without one", <ModeSurface key="b" label="Tweets" about={<p>About.</p>}>body</ModeSurface>],
+  ])("stays shut after a quick double press, %s", async (_name, el) => {
+    vi.useFakeTimers();
+    draw(el);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    await act(async () => button.click());
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => button.click());
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded"), "the pending hover timer reopened it").toBe("false");
+    /* The dismissal lasts only until the pointer comes back. */
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseleave"));
+      button.dispatchEvent(new PointerEvent("pointerout", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded"), "a fresh hover opens it again").toBe("true");
+  });
+
   it("keeps a touch-open card available for the following tap on its Help link", async () => {
     vi.useFakeTimers();
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Chrome");

@@ -1,17 +1,21 @@
 /**
  * **What a finger's selection gets: one button, below the words.**
  *
- * Selecting prose opens the comment box from `mouseup` (TableView.tsx
- * § onMouseUp), and a long-press selection on iOS and iPadOS fires no `mouseup`
- * at all — so on an iPad nothing of ours ever appeared. Greg, 2026-10-03
- * (spya-ma5h9b): *"I tried highlighting a few words on my iPad and it didn't
- * seem to work. It just flashed up the usual iPad context menu."*
+ * Selecting prose highlights it from `mouseup` (TableView.tsx § onMouseUp), and
+ * a long-press selection on iOS and iPadOS fires no `mouseup` at all — so on an
+ * iPad nothing of ours ever appeared. Greg, 2026-10-03 (spya-ma5h9b): *"I tried
+ * highlighting a few words on my iPad and it didn't seem to work. It just
+ * flashed up the usual iPad context menu."*
  *
- * **A button and not the box opening by itself**, because a touch selection has
- * no "let go": the reader long-presses, then drags the two handles, and iOS
- * tells the page only that the selection changed. Opening the box on the first
- * settle would open it on a word they were still extending. So the selection
- * settles, a chip appears beside it, and the press is the reader's.
+ * **A button and not the highlight applying by itself**, because a touch
+ * selection has no "let go": the reader long-presses, then drags the two
+ * handles, and iOS tells the page only that the selection changed. Acting on
+ * the first settle would highlight a word they were still extending — and the
+ * same long-press is how a reader copies or looks a word up with the system's
+ * own menu. So the selection settles, a chip appears beside it, and the press
+ * is the reader's. **Since 2026-10-04 that press applies the highlight** and
+ * opens the comment's box on it; Reader.tsx § `selectProse` then clears the
+ * selection, which puts the OS handles and callout away.
  *
  * It is **not a dialog**: no focus, no Escape, no trap, nothing in the Escape
  * contract. It is one press that calls the same `onSelect` a mouseup calls.
@@ -48,6 +52,7 @@ import {
 
 import {
   readSelectionWithRange,
+  sameAnchor,
   type SelectionAnchor,
 } from "./selection.js";
 
@@ -72,10 +77,6 @@ interface ArmedPress {
   shown: Shown;
   /** A collapse after this press began may use the held anchor until here. */
   fallbackUntil: number;
-}
-
-function sameAnchor(a: SelectionAnchor, b: SelectionAnchor): boolean {
-  return a.blockId === b.blockId && a.start === b.start && a.quote === b.quote;
 }
 
 /**

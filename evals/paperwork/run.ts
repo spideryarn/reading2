@@ -91,9 +91,10 @@ export interface ArmFile {
   sourceSha256: Record<string, string>;
   versions: { toc: string; tweets: string; simple: string };
   gists: Line[] | { error: string };
-  simple: { brief: string[]; simple: string[]; fuller: string[] } | { error: string };
+  /** `simple`, the middle level, is in results written before 2026-10-04 only (plan 261004f). */
+  simple: { brief: string[]; simple?: string[]; fuller: string[] } | { error: string };
   /** Each paragraph's ids, per level; absent in results written before 261003c. */
-  simpleIds?: { brief: string[][]; simple: string[][]; fuller: string[][] };
+  simpleIds?: { brief: string[][]; simple?: string[][]; fuller: string[][] };
   /** Every block id's position in the article, for the abstract screen. */
   ordinals?: Record<string, number>;
   tweets: string[] | { error: string };
@@ -173,13 +174,15 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
               }),
               attempt(async () => {
                 const run = await simple.generateSimpleSummary({ article: withSlug, profile: null, power: "standard" });
-                const texts = (level: "brief" | "simple" | "fuller") =>
+                /* Three levels until 2026-10-04 (plan 261004f): result files
+                   from before also carry `simple`. */
+                const texts = (level: "brief" | "fuller") =>
                   run.simpleSummary.levels[level].map((p) => p.text);
-                const ids = (level: "brief" | "simple" | "fuller") =>
+                const ids = (level: "brief" | "fuller") =>
                   run.simpleSummary.levels[level].map((p) => [...p.ids]);
                 return {
-                  texts: { brief: texts("brief"), simple: texts("simple"), fuller: texts("fuller") },
-                  ids: { brief: ids("brief"), simple: ids("simple"), fuller: ids("fuller") },
+                  texts: { brief: texts("brief"), fuller: texts("fuller") },
+                  ids: { brief: ids("brief"), fuller: ids("fuller") },
                 };
               }),
               attempt(async () => {
@@ -250,7 +253,7 @@ function report(): void {
       if (!failed(r.simple)) {
         brief = `${words(r.simple.brief.join(" "))} words / ${r.simple.brief.length} paragraphs`;
         for (const level of ["brief", "simple", "fuller"] as const)
-          for (const p of r.simple[level]) for (const s of p.split(/(?<=[.!?])\s+/)) if (PAPERWORK.test(s)) hits.push(`summary.${level}: ${s}`);
+          for (const p of r.simple[level] ?? []) for (const s of p.split(/(?<=[.!?])\s+/)) if (PAPERWORK.test(s)) hits.push(`summary.${level}: ${s}`);
       }
       if (!failed(r.tweets)) for (const [i, t] of r.tweets.entries()) if (PAPERWORK.test(t)) hits.push(`tweet ${i + 1}/${r.tweets.length}: ${t}`);
       if (!failed(r.gists)) for (const g of r.gists) if (g.gist && PAPERWORK.test(g.gist)) hits.push(`gist d${g.depth}: ${g.gist}`);
@@ -277,9 +280,12 @@ function report(): void {
         const isAbstract = (id: string) => (at(id) ?? -1) >= lo && (at(id) ?? -1) <= hi;
         const parts: string[] = [];
         for (const level of ["brief", "simple", "fuller"] as const) {
-          const all = r.simpleIds[level].flat();
-          const paras = r.simpleIds[level].filter((ids) => ids.some(isAbstract)).length;
-          parts.push(`${level} ${all.filter(isAbstract).length}/${all.length} ids, ${paras}/${r.simpleIds[level].length} paragraphs`);
+          /* No `simple` in a result written since 2026-10-04 (plan 261004f). */
+          const idsAt = r.simpleIds[level];
+          if (!idsAt) continue;
+          const all = idsAt.flat();
+          const paras = idsAt.filter((ids) => ids.some(isAbstract)).length;
+          parts.push(`${level} ${all.filter(isAbstract).length}/${all.length} ids, ${paras}/${idsAt.length} paragraphs`);
         }
         inAbstract = `abstract ids: ${parts.join("; ")}`;
       }
@@ -302,7 +308,7 @@ function report(): void {
           frontBack.push(`${tag} d${g.depth} "${g.title}" [${first}..${last}]${g.question ? " +question" : ""}: ${g.gist ?? "(no gist)"}`);
         }
       }
-      console.log(`${r.slug} (${r.versions.toc}, ${r.versions.tweets}, ${simpleVersion}): Brief ${brief}; simple ${failed(r.simple) ? "-" : words(r.simple.simple.join(" "))}, fuller ${failed(r.simple) ? "-" : words(r.simple.fuller.join(" "))}; ${hits.length} paperwork hits`);
+      console.log(`${r.slug} (${r.versions.toc}, ${r.versions.tweets}, ${simpleVersion}): Brief ${brief}; simple ${failed(r.simple) || !r.simple.simple ? "-" : words(r.simple.simple.join(" "))}, fuller ${failed(r.simple) ? "-" : words(r.simple.fuller.join(" "))}; ${hits.length} paperwork hits`);
       console.log(`    ${inAbstract}`);
       for (const f of frontBack) console.log(`    ${f}`);
       for (const h of hits) console.log(`    ${h}`);
@@ -346,7 +352,7 @@ export function pairUp(
   const fields: [string, (r: ArmFile) => string | null][] = [
     ["Structure", structure],
     ["Brief summary", (r) => (failed(r.simple) ? null : r.simple.brief.join("\n\n"))],
-    ["Simple summary", (r) => (failed(r.simple) ? null : r.simple.simple.join("\n\n"))],
+    ["Simple summary", (r) => (failed(r.simple) ? null : (r.simple.simple?.join("\n\n") ?? null))],
     ["Fuller summary", (r) => (failed(r.simple) ? null : r.simple.fuller.join("\n\n"))],
     ["Thread", (r) => (failed(r.tweets) ? null : r.tweets.map((t, i) => `${i + 1}. ${t}`).join("\n"))],
   ];

@@ -88,6 +88,7 @@ function stubShelf(): Shelf {
   return {
     archive: vi.fn(async () => {}),
     report: vi.fn(),
+    copied: vi.fn(),
     renaming: null,
   } as unknown as Shelf;
 }

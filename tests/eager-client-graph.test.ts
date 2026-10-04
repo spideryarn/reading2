@@ -617,6 +617,11 @@ const SHARED_WITH_READER = [
      components before; it is a leaf whose only import is React. */
   "src/web/useCopy.ts",
   "src/web/useExperimental.ts",
+  /* Arrived 2026-10-04 (plan 261004g): `BandAbout`, here already, takes its
+     open state from it, and so does Referee's *How to read this*. The reader
+     downloaded the same few lines inline in `RefereeMode` before; it is a
+     leaf whose only import is React. */
+  "src/web/usePressToggle.ts",
   "src/web/useSession.ts",
   /* Arrived 2026-10-02 (plan 261002f) by the second predicted route:
      `TitleEditor`, `ShelfEntry` and `library-columns`, all here already, now

@@ -1,5 +1,26 @@
 /**
- * The box a selection opens — see docs/plans/260828a-comments-and-bookmarks.md.
+ * The box a selection opens **in Referee mode** — see
+ * docs/plans/260828a-comments-and-bookmarks.md.
+ *
+ * ## Referee only, since 2026-10-04
+ *
+ * Everywhere else, letting go of a selection now stores a yellow highlight at
+ * once and opens `CommentDialog` on it (Reader.tsx § `selectProse`,
+ * docs/project/comments.md § The box a selection opens). Greg, 2026-10-04:
+ *
+ * > how about if selecting text automatically applies the highlight and also
+ * > pops up the fuller box to allow the user to customise (or remove) it, and
+ * > they can just click off if they're happy with the highlighting
+ *
+ * This draft box stays for Referee mode because a selection there is evidence
+ * for a criterion, not a reading highlight: it opens on No colour, and the
+ * placement is part of the one save. Whether Referee should follow is a
+ * separate question; nothing here was removed in the change that replaced it
+ * elsewhere, on purpose. So "the box a selection opens", wherever it is said
+ * below, now means *in Referee mode*, and the non-Referee behaviour the
+ * sections below describe (Yellow picked on open) is reachable only by a
+ * caller that mounts this with `placing={false}`, which today is tests.
+ * docs/plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md.
  *
  * Select a sentence and this appears over the article: the words you chose, a
  * place to say something about them, and two buttons: **Save**, and **Ask AI**
@@ -138,6 +159,7 @@ import type { ChatAnchor, HighlightColour } from "../types.js";
 import { mintId } from "../ids.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { HighlightSwatches } from "./HighlightSwatches.js";
+import { DEFAULT_HIGHLIGHT } from "./fresh-highlight.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
@@ -273,8 +295,6 @@ interface Props {
   escapeEnabled?: boolean;
 }
 
-/** The colour the row opens on outside Referee mode. Greg, 2026-10-03 (spya-ur8kum). */
-const DEFAULT_HIGHLIGHT: HighlightColour = "yellow";
 
 /** The three things a reader can put in the box, and two things they can do. */
 interface Fields {

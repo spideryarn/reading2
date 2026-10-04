@@ -51,7 +51,12 @@ const CASES: {
   { name: "a profiled list, same profile", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p1", want: "append" },
   { name: "a profiled list, profile changed", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p2", want: "rewrite" },
   { name: "a profiled list, profile cleared", g: list({ profileHash: "p1" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
-  { name: "an outdated list", g: list({ version: "glossary/4" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
+  /* Appended to since plan 261004f (Greg, spya-try2v7): the label is *Find more*. */
+  { name: "an outdated list", g: list({ version: "glossary/4" }), sourceNow: SOURCE, nowHash: null, want: "append" },
+  { name: "an outdated profiled list, same profile", g: list({ version: "glossary/4", profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p1", want: "append" },
+  { name: "an outdated profiled list, profile changed", g: list({ version: "glossary/4", profileHash: "p1" }), sourceNow: SOURCE, nowHash: "p2", want: "rewrite" },
+  { name: "a glossary/1 list, another entry shape", g: list({ version: "glossary/1" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
+  { name: "a list a newer build wrote", g: list({ version: "glossary/999" }), sourceNow: SOURCE, nowHash: null, want: "rewrite" },
   { name: "a stale list", g: list(), sourceNow: "moved", nowHash: null, want: "rewrite" },
 ];
 
@@ -61,7 +66,6 @@ describe("panelRunKind", () => {
       const found = {
         glossary: c.g,
         stale: c.g.sourceHash !== c.sourceNow,
-        outdated: c.g.version !== PROMPT_VERSION,
       };
       expect(panelRunKind(found, c.nowHash)).toBe(c.want);
       expect(viaExistingFor(c.g, c.sourceNow, c.nowHash)).toBe(c.want);

@@ -204,8 +204,11 @@ describe("the reading view's wiring (source-level, and labelled as such)", () =>
     expect(call).toMatch(/\bterms,/);
     expect(call).not.toMatch(/\bterms: allTerms\b/);
     /* And the ask's move to Glossary is the plain setter, which arms no
-       generate-on-open (F1) — the Dock's `onMode` is the press that does. */
-    expect(call).toMatch(/openGlossary: \(\) => void setMode\("glossary"\),/);
+       generate-on-open (F1) — the Dock's `onMode` is the press that does.
+       Since plan 261004g it is `showBand`: the same plain setter, plus
+       bringing back a band that had stepped aside on a narrow window. */
+    expect(call).toMatch(/openGlossary: \(\) => showBand\("glossary"\),/);
+    expect(reader).toMatch(/const showBand = useCallback\([\s\S]*?if \(target !== mode\) void setMode\(target\);/);
     expect(reader).toMatch(/<Dock[\s\S]*?executor=\{executor\}/);
   });
 });

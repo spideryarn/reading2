@@ -161,11 +161,11 @@ function questionCount(n: number): string {
  * from a question that was kept.
  *
  * **It opens with Quiz's own sentence, not Remember's catalog words**: the
- * band is Remember's, but `MODE_CATALOG.remember.how` is about Recall ("waits
- * on you … nudges you to remember"), which is wrong on this half. So this band does not
- * pass `mode` to `ModeSurface`, and the card leads with the sub-mode's words
- * from `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every
- * state, as `mode` would have made it.
+ * catalog now describes the whole mode, so it would lead a Quiz card with the
+ * three conversation parts before reaching Quiz. This band therefore does not
+ * pass `mode` to `ModeSurface`; the card leads with Quiz's sub-mode words from
+ * `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every state,
+ * as `mode` would have made it.
  */
 function QuizAbout({ quiz }: { quiz: Quiz | null }) {
   const what = <p>{REMEMBER_SUB_MODES.quiz.description}.</p>;
@@ -213,6 +213,36 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  * enough to stand alone; "say what you took from it" versus "the article asks"
  * is not. GPT Sol's plan review, finding 4.
  */
+/**
+ * **The second paragraph of each chip's card**: what a press would not have
+ * told you. Greg, 2026-10-04 (spya-wbhrm7): *"Provide rich tooltips for the
+ * remember mode submode buttons"*, and the same day (spya-usyhwy) *"each
+ * submode button should have its own tooltip"*. The first paragraph is the
+ * command bar's line (`REMEMBER_SUB_MODES`).
+ *
+ * Recall's sentences were `MODE_CATALOG.remember.how` until that day, when the
+ * catalog's paragraph was cut to what is true of the whole mode. Each claim,
+ * against the source:
+ *  - Recall, Tutorial: no turn runs before the reader's first message; the
+ *    prompts are in src/converse.ts, and Tutorial is built for a reader who
+ *    has not read the piece (docs/project/remember-mode.md § Tutorial).
+ *  - Explore: highlights and notes go in the digest with every turn; earlier
+ *    conversations go as a list it may open, not as their text
+ *    (src/reader-notes.ts; GPT Sol's plan review, finding 1).
+ *  - Quiz: the press arms `quiz` (below), and the marker is given the whole
+ *    article with the question's evidence passages (src/quiz-mark.ts; finding 4).
+ * Exported for tests/remember-header-cards.test.tsx.
+ */
+export const REMEMBER_VIEW_HOW: Readonly<Record<RememberView, string>> = {
+  recall:
+    "The AI does not reply until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. It is asked to point its replies back to the passages they use.",
+  tutorial:
+    "It waits on you too. It is about what the author says, and it works even if you have not read the piece yet.",
+  explore:
+    "It is sent your highlights and notes, plus a list of your earlier conversations. It can open one of those and may search the web when useful.",
+  quiz: "Pressing it writes the questions if there are none yet. A model compares each answer with the article, using the question's reference passages.",
+};
+
 export function RememberSubModeToggle({
   slug,
   value,
@@ -235,43 +265,65 @@ export function RememberSubModeToggle({
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
     <div className="remember-submode">
-      {REMEMBER_VIEWS.map((view) => (
-        <button
-          key={view}
-          type="button"
-          className={`remember-submode-btn${value === view ? " on" : ""}`}
-          /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
-             buttons, not a tablist, and claiming to be a tablist without the
-             arrow-key handling a tablist promises is worse than not claiming
-             it. */
-          aria-pressed={value === view}
-          onClick={() => {
-            /* **The gesture seam for the questions.** Pressing Quiz with none
-               written writes them — Greg's rule about opening a mode, one level
-               down (src/web/activation.ts). Here, in a real `onClick`, and
-               deliberately *not* inside the `setBoth` the caller runs:
-               `?remember=` is query state, so Back and Forward move it too, and
-               retracing your steps through this toggle must not buy a model
-               call. Recall arms nothing — it is a conversation the reader
-               starts, and there is no empty artefact for a press to fill.
+      {/* A card on every chip, the way the other five sub-mode rows have one
+          (StructureMode.tsx § `StructureViewToggle`): `TooltipGroup` so that
+          reading along the row is one gesture, `keepSide` so a card is not
+          thrown onto the chips beside it. The card is for a pointer and for
+          keyboard focus; a finger's tap presses the chip, which is why the
+          band's (i) lists the four as well (RememberAbout.tsx §
+          `RememberSubModesAbout`). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {REMEMBER_VIEWS.map((view) => (
+          <Tooltip
+            key={view}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={REMEMBER_SUB_MODES[view].label}
+                what={`${REMEMBER_SUB_MODES[view].description}.`}
+                how={REMEMBER_VIEW_HOW[view]}
+              />
+            }
+          >
+            <button
+              type="button"
+              className={`remember-submode-btn${value === view ? " on" : ""}`}
+              /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
+                 buttons, not a tablist, and claiming to be a tablist without the
+                 arrow-key handling a tablist promises is worse than not claiming
+                 it. */
+              aria-pressed={value === view}
+              onClick={() => {
+                /* **The gesture seam for the questions.** Pressing Quiz with none
+                   written writes them — Greg's rule about opening a mode, one level
+                   down (src/web/activation.ts). Here, in a real `onClick`, and
+                   deliberately *not* inside the `setBoth` the caller runs:
+                   `?remember=` is query state, so Back and Forward move it too, and
+                   retracing your steps through this toggle must not buy a model
+                   call. Recall arms nothing — it is a conversation the reader
+                   starts, and there is no empty artefact for a press to fill.
 
-               **Armed before the `value === view` check, not after**, so that
-               pressing Quiz while already *in* Quiz mints a press. That is the
-               rule the bar's own mode buttons follow — pressing the mode you are
-               in re-arms it (tests/modes-that-start-themselves.test.tsx § "runs
-               it when the mode pressed is the one already open") — and it is the
-               only way back from a read that failed, because a failed read keeps
-               the press and re-reads, and nothing re-fires without a new nonce.
-               GPT Sol, 2026-09-06. */
-            if (view === "quiz") armActivation(slug, "quiz");
-            /* The sub-mode itself does not change, and writing the same value to
-               the URL would push a history entry that goes nowhere. */
-            if (value !== view) onChange(view);
-          }}
-        >
-          {REMEMBER_SUB_MODES[view].label}
-        </button>
-      ))}
+                   **Armed before the `value === view` check, not after**, so that
+                   pressing Quiz while already *in* Quiz mints a press. That is the
+                   rule the bar's own mode buttons follow — pressing the mode you are
+                   in re-arms it (tests/modes-that-start-themselves.test.tsx § "runs
+                   it when the mode pressed is the one already open") — and it is the
+                   only way back from a read that failed, because a failed read keeps
+                   the press and re-reads, and nothing re-fires without a new nonce.
+                   GPT Sol, 2026-09-06. */
+                if (view === "quiz") armActivation(slug, "quiz");
+                /* The sub-mode itself does not change, and writing the same value to
+                   the URL would push a history entry that goes nowhere. */
+                if (value !== view) onChange(view);
+              }}
+            >
+              {REMEMBER_SUB_MODES[view].label}
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
     </div>
   );
 }

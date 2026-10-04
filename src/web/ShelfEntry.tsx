@@ -627,9 +627,12 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
        browser that refuses the permission. */
     write(url, (outcome) => {
       if (outcome.result === "unavailable") {
-        shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.");
+        shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.", "copy");
       } else if (outcome.result === "refused") {
-        shelf.report(`Couldn't copy the link: ${refusal(outcome.error)}`);
+        shelf.report(`Couldn't copy the link: ${refusal(outcome.error)}`, "copy");
+      } else {
+        /* It worked: an earlier "Couldn't copy" is no longer true. */
+        shelf.copied();
       }
     });
   }, [entry.slug, shelf, write]);

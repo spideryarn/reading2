@@ -65,6 +65,7 @@ function stubShelf(): Shelf {
   return {
     archive: vi.fn(async () => {}),
     report: vi.fn(),
+    copied: vi.fn(),
     renaming: null,
   } as unknown as Shelf;
 }
@@ -328,6 +329,21 @@ describe("each item", () => {
     expect(String((writeText.mock.calls[0] as unknown[])[0])).toMatch(/\/read\/a-piece$/);
     expect(menu(), "the menu closed and took the confirmation with it").not.toBeNull();
     expect(item("Copied")).toBeTruthy();
+    /* The shelf is told, so it can take down a failed copy's notice
+       (qi-pnqc7eh4; tests/shelf-copy-notice.test.tsx is the hook's half). */
+    expect(shelf.copied).toHaveBeenCalledTimes(1);
+    expect(shelf.report).not.toHaveBeenCalled();
+  });
+
+  it("a refused copy is reported as a copy's failure, so a later good copy can clear it", async () => {
+    const writeText = vi.fn(() => Promise.reject(new Error("Document is not focused.")));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    click(tapOpen(FETCHED, "Copy link"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(shelf.report).toHaveBeenCalledWith("Couldn't copy the link: Document is not focused.", "copy");
+    expect(shelf.copied).not.toHaveBeenCalled();
   });
 
   it("Open the original is a link to the publisher's page, off in a new tab", () => {

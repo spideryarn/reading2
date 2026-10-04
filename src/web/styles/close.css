@@ -64,5 +64,6 @@
    the shelf's box showed two, the browser's bold and ours faint (spya-wzmvva).
    A rule here rather than a `tw:[&::-webkit-…]` variant, for the reason
    changelog.css gives. `.srch-input` and `.dock-qs-input` hide theirs in their
-   own files, having no cross of their own at all. */
+   own files: the first has no cross at all, the second a smaller one of its
+   own (dock-quick-search.css § `.dock-qs-clear`). */
 .own-clear::-webkit-search-cancel-button { display: none; }

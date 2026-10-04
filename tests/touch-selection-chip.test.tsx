@@ -9,9 +9,19 @@
  *
  * The harness below is `Reader.tsx`'s three arms in miniature — `TableView`,
  * `TouchSelectionChip` and `AnnotateDialog` around one `annotating` state and
- * one `selectProse` — because nothing in this repo mounts the whole `Reader`.
- * That makes it a replica of the wiring, so the last test reads `Reader.tsx`'s
- * source for the real one, as tests/one-escape-closes-one-surface.test.tsx does.
+ * one `selectProse`. That makes it a replica of the wiring, so the last test
+ * reads `Reader.tsx`'s source for the real one, as
+ * tests/one-escape-closes-one-surface.test.tsx does.
+ *
+ * **What the box is changed on 2026-10-04, and this file is about the chip.**
+ * Outside Referee mode the press now stores a yellow highlight and opens
+ * `CommentDialog` on it, and clears the selection; the draft box mounted here
+ * is what the press opens in Referee mode only. Every case below asks when the
+ * chip appears and which words its press hands to `onSelect`, and for that the
+ * draft box is as good a witness as any: it shows the quote it was given. What
+ * the press *does* in the real reader is
+ * tests/selecting-applies-the-highlight.test.tsx § a finger's selection, which
+ * mounts the whole app.
  *
  * **What this cannot show** is anything iOS does: jsdom has no long-press, no
  * selection handles, no callout and no range geometry. The events here are the
@@ -72,7 +82,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** `Reader.tsx` in miniature: the same three arms, the same gates. */
+/** `Reader.tsx` in miniature, as Referee mode wires it: the same three arms, the same gates. */
 function Harness({ article, owner }: { article: Article; owner: boolean }) {
   const [annotating, setAnnotating] = useState<SelectionAnchor | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -358,8 +368,9 @@ it("the chip is gone once the box is open, and does not come back over it", asyn
   tap(chip()!);
   expect(boxQuote()).not.toBeNull();
   expect(chip()).toBeNull();
-  /* The selection is deliberately left alone when the box opens (Reader.tsx
-     § selectProse), and the reader may nudge it. Still no chip. */
+  /* In Referee mode the selection is left alone when the box opens (Reader.tsx
+     § selectProse), and the reader may nudge it. Still no chip. Outside it the
+     press clears the selection, so there is nothing to nudge. */
   select(text, 25);
   wait(SETTLE_MS * 4);
   expect(chip()).toBeNull();
@@ -384,13 +395,20 @@ it("a touch tap on an existing mark still opens that comment and never leaves a 
   expect(chip()).toBeNull();
 });
 
+/* **`onSelect={selectProse}` until 2026-10-04.** The chip now hands its words to
+   `selectProseByTouch`, which is the same `selectProse` told that a finger made
+   the selection: that is what clears the selection after the highlight is
+   applied and keeps the mouse-only overlap rule off (plan 261004f, E4 and E8). */
 it("Reader.tsx mounts the chip for an owner only, off the same selectProse, and hides it behind every box", () => {
   const source = readFileSync("src/web/reader/Reader.tsx", "utf8");
   const at = source.indexOf("<TouchSelectionChip");
   expect(at, "Reader.tsx no longer mounts the chip — this test has lost its subject").toBeGreaterThan(-1);
   const tag = source.slice(at, source.indexOf("/>", at));
   expect(tag).toMatch(/key=\{`\$\{slug\}:\$\{mode\}`\}/);
-  expect(tag).toMatch(/onSelect=\{selectProse\}/);
+  expect(tag).toMatch(/onSelect=\{selectProseByTouch\}/);
+  expect(source, "the touch entry is the mouse's selectProse, said to be a finger's").toMatch(
+    /const selectProseByTouch = useCallback\(\s*\(anchor: SelectionAnchor\) => selectProse\(anchor, "touch"\),/,
+  );
   expect(tag).toMatch(/suppressed=\{Boolean\(annotating \|\| overlay \|\| openComment\)\}/);
   const before = source.slice(0, at).trimEnd();
   expect(before.endsWith("{owner && ("), "a visitor must not get the chip at all").toBe(true);

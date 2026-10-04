@@ -45,7 +45,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import type { Article, BlockId, SimpleSummary } from "../src/types.js";
+import type { Article, BlockId, ChatThread, SimpleSummary } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
 const who = vi.hoisted(() => {
@@ -271,7 +271,6 @@ const SIMPLE_BODY: { simpleSummary: SimpleSummary; stale: false; outdated: false
     profileHash: null,
     levels: {
       brief: [{ text: "It starts with a plain point.", ids: [BAND_TARGET as BlockId] }],
-      simple: [{ text: "It starts with a plain point, then builds on it.", ids: [BAND_TARGET as BlockId] }],
       fuller: [{ text: "It starts with a plain point, and the rest follows from it.", ids: [BAND_TARGET as BlockId] }],
     },
   },
@@ -629,11 +628,122 @@ describe("the citation card brings its band back", () => {
       mark?.dispatchEvent(event);
     });
     await until(() => document.querySelector(".prose-card-cite-dig") !== null, "the citation card did not open");
+    const pushed = vi.spyOn(history, "pushState");
     await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-dig")?.click());
     await settle();
+    /* `nuqs` does not elide a same-value push: writing the mode already open
+       added a Back step that changed nothing (GPT Sol, plan review 261004g F2). */
+    expect(pushed, "bringing the band back is not a history step").not.toHaveBeenCalled();
     expect(digs, "the card must start the same row verb").toBe(1);
     expect(document.querySelector(".prose-card")).toBeNull();
     expect(param("mode")).toBe("citations");
     expect(reader().classList.contains("band-away"), "Dig deeper left the answer in a hidden band").toBe(false);
+  });
+});
+
+/* qi-fs4qzzfm, plan 261004g: the same defect one feature over. A term's card
+   in the prose names the Glossary band as its destination; when Glossary is
+   already the mode and has stepped aside, setting the same mode reveals
+   nothing, and a dig's answer streamed into a band nobody could see. */
+describe("the term card brings its band back", () => {
+  const TERM_ID = "spya-fs4qzz";
+  const GLOSSARY_BODY = {
+    glossary: {
+      version: "test", generator: "test", slug: SLUG, sourceHash: "hash", profileHash: null,
+      entries: [{
+        id: TERM_ID, name: "first point", kind: "concept", aliases: [], blocks: [FIRST],
+        senseHere: "The claim the piece opens with.",
+      }],
+      passes: 1, generatedAt: "2026-10-04T00:00:00.000Z", elapsedMs: 1,
+    },
+    stale: false, outdated: false, profileChanged: false,
+  };
+
+  it.each([PHONE, 600])("Open glossary reveals a stepped-aside Glossary band at %ipx", async (width) => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/glossary/${SLUG}`) return Promise.resolve(json(GLOSSARY_BODY));
+      return Promise.resolve(reply(url, init?.method ?? "GET"));
+    });
+    await open(width, `?mode=glossary&sort=document&term=${TERM_ID}`);
+    expect(reader().classList.contains("band-covers")).toBe(true);
+    const bandLinkTo = `.mode-band a.block-ref[data-block-link="${FIRST}"]`;
+    await until(() => host.querySelector(bandLinkTo) !== null, "the Glossary band drew no passage link for its term");
+    await act(async () => host.querySelector<HTMLAnchorElement>(bandLinkTo)?.click());
+    await until(() => reader().classList.contains("band-away"), "the glossary jump did not step aside");
+
+    const mark = host.querySelector(".prose mark.term");
+    expect(mark, "the prose must carry the term's mark").not.toBeNull();
+    await act(async () => {
+      const event = new MouseEvent("pointerover", { bubbles: true, clientX: 10, clientY: 10 });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      mark?.dispatchEvent(event);
+    });
+    await until(() => document.querySelector(".prose-card .prose-card-open") !== null, "the term card did not open");
+    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card .prose-card-open")?.click());
+    await settle();
+    expect(param("mode")).toBe("glossary");
+    expect(param("term")).toBe(TERM_ID);
+    expect(reader().classList.contains("band-away"), "Open glossary left the band hidden").toBe(false);
+  });
+});
+
+/* Plan 261004g F1: opening a question from the drawer while Chat is already
+   stepped aside must reveal its band. These are stored transcripts, through
+   the real Chat UI; no chat hook or component is mocked. */
+describe("a drawer question brings the Chat band back", () => {
+  it.each([PHONE, 600])("reveals the selected conversation at %ipx", async (width) => {
+    const time = "2026-10-04T00:00:00.000Z";
+    const threads: ChatThread[] = [
+      {
+        id: "spya-chat03", title: "The opening claim", kind: "chat",
+        createdAt: time, updatedAt: time, anchor: { blockId: FIRST },
+        messages: [{
+          id: "spya-answer", role: "assistant", status: "done", createdAt: time,
+          text: `The piece starts with this claim [${FIRST}].`,
+        }],
+      },
+      {
+        id: "spya-chat02", title: "The follow-through", kind: "chat",
+        createdAt: time, updatedAt: time, anchor: { blockId: SECOND },
+        messages: [{
+          id: "spya-repqy2", role: "assistant", status: "done", createdAt: time,
+          text: "The second claim builds on the first.",
+        }],
+      },
+    ];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/chat/${SLUG}?summary=1`) return Promise.resolve(json({
+        threads: threads.map(({ messages, ...thread }) => ({
+          ...thread, turns: 1, lastLine: messages[0]?.text,
+        })),
+      }));
+      if (url === `/api/chat/${SLUG}`) return Promise.resolve(json({ threads }));
+      if (url === `/api/glossary/${SLUG}` || url === `/api/quiz/${SLUG}`) return Promise.resolve(new Response(null, { status: 404 }));
+      return Promise.resolve(reply(url, init?.method ?? "GET"));
+    });
+    await open(width, `?mode=chat&thread=${threads[0]?.id}`);
+    expect(reader().classList.contains("band-covers")).toBe(true);
+    const linkTo = `.mode-band a.block-ref[data-block-link="${FIRST}"]`;
+    await until(() => host.querySelector(linkTo) !== null, "Chat drew no passage link");
+    await act(async () => host.querySelector<HTMLAnchorElement>(linkTo)?.click());
+    await until(() => reader().classList.contains("band-away"), "the Chat jump did not step aside");
+
+    const comments = host.querySelector<HTMLButtonElement>('button[aria-label="Comments"]');
+    expect(comments, "the Dock must offer Comments").not.toBeNull();
+    await act(async () => comments?.click());
+    await until(() => host.querySelectorAll(".dock-question.asked").length === 2, "the drawer did not list the stored questions");
+    const question = [...host.querySelectorAll<HTMLButtonElement>(".dock-question.asked")]
+      .find((row) => row.textContent?.includes("The second point"));
+    expect(question, "the drawer must offer the second conversation").toBeDefined();
+    await act(async () => question?.click());
+    await until(() => param("thread") === threads[1]?.id, "the question did not select its conversation");
+
+    expect(param("panel"), "the drawer must close on the way through").toBeNull();
+    expect(param("mode")).toBe("chat");
+    expect(host.querySelector(".mode-band.chat")?.textContent).toContain("The second claim builds on the first.");
+    expect(reader().classList.contains("band-away"), "the drawer left the conversation in a hidden band").toBe(false);
+    expect(pill()).toBeNull();
   });
 });
