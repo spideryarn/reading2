@@ -166,7 +166,7 @@ export function useSimple(slug: string): UseSimple {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     rewriting: hold.rewriting,

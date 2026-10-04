@@ -360,6 +360,39 @@ describe("the sentence each stop says, and what stays on screen", () => {
     expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
     expect(latest?.attempt?.verdict).toBeUndefined();
   });
+
+  it.each(["stall", "body failure"] as const)("keeps the partial reply on a %s and leaves the question retryable", async (stop) => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    let cancelled = false;
+    markBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+        c.enqueue(frame("delta", { text: "You have " }));
+        c.enqueue(frame("delta", { text: "the first half of it. " }));
+      },
+      cancel() { cancelled = true; },
+    });
+    vi.useFakeTimers();
+    try {
+      let marking!: Promise<void>;
+      await act(async () => { marking = latest!.mark(Q1, "I think it claims a thing."); });
+      await settle();
+      expect(latest?.attempt?.status).toBe("marking");
+      expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+      await act(async () => {
+        if (stop === "stall") await vi.advanceTimersByTimeAsync(60_000);
+        else controller.error(new TypeError("socket broke"));
+        await marking;
+      });
+      expect(latest?.attempt?.status).toBe("failed");
+      expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+      expect(latest?.answered.has(Q1)).toBe(false);
+      expect(latest?.attempt?.error).toBe(stop === "stall" ? "the stream sent nothing for 60s" : "socket broke");
+      if (stop === "stall") expect(cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 /* ── the server half: `markAnswerStream` itself ──────────────────────────── */

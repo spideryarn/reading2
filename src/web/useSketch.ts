@@ -260,7 +260,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     rewriting: hold.rewriting,

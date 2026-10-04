@@ -290,7 +290,7 @@ export function useIdeas(slug: string): UseIdeas {
     slug,
     error: read.error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     rewriting: hold.rewriting,

@@ -297,3 +297,25 @@ so stage 2's code review is asked to check F9 and F10 specifically.
   - **2c took the one-parameter route.** One behaviour beyond the pinned ones: a stall or a body
     that dies mid-read now keeps the partial reply, as the other stops always did.
   - Not covered: a job-level *Retry* after a failed forced run makes a new job with no hold.
+
+- 2026-10-04 — stage 2 reviewer fixes, not committed:
+  - **F18 (P1)** — two forced clicks before React's next commit sent two POSTs. The shared verb now
+    fences synchronously; the six-mode click cases failed first.
+  - **F19 (P1)** — an older online observation released a press on a newer offline artefact, and a
+    different offline identity bypassed `rewriting`. Replacement evidence is now fenced to the
+    press with a read-start clock that survives remounts; offline identity changes remain held.
+    Two retained-reader cases and six offline-identity cases failed first.
+  - **F20 (P1)** — another job's failure released this press, while this press's own failure or
+    cancellation needed an online read after remount. `ended(id)` now returns the exact terminal
+    status. Unrelated failure controls are suppressed while held, preserving the read-only escape.
+    Six unrelated-job cases and twelve own-terminal offline cases failed first.
+  - **F21 (P2)** — a rejected start callback left an unposted hold. The rejection now drops its own
+    hold and propagates. One boundary test failed first; ordinary queue transport failures already
+    resolve to null.
+  - **F22 (P2)** — Quiz's new partial-preservation behaviour on a stall or broken body was unpinned.
+    Both stops are now tested for partial text, failed status and no answer tick; discarding the
+    partial made both tests fail. No marking behaviour was changed by the review.
+  - **F23 (P3)** — the Thread postmortem still described its retained regression and implemented fix
+    as temporary / future work. Corrected its evidence and countermeasures.
+  - Root cause and the countermeasures:
+    [a hold outliving its panel needs evidence owned by the same action](../postmortems/261004g-a-hold-outliving-its-panel-needs-evidence-owned-by-the-same-action.md).

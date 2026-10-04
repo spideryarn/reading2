@@ -558,7 +558,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: rewriting ? null : queue.failed,
     starting: queue.starting,
     stalled: queue.stalled,
     attempt,

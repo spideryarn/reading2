@@ -17,8 +17,8 @@ test, seen red first with the review's own message. `answered` keeps its meaning
 [useTweets](../../src/web/useTweets.ts) records `answered.current = true` for a thread or a clean
 404. Its recheck catch preserves the view whenever that flag is true. However, `retryRead` uses a
 different fact: `loaded === null` means move to `loading`. After a 404 both conditions are true.
-The retry moves to `loading`, fails, and its catch sets only the error because a previous request
-answered. The old answer cannot settle this new request's pending status.
+Before the fix, the retry moved to `loading`, failed, and its catch set only the error because a
+previous request answered. The old answer cannot settle this new request's pending status.
 
 `897020835`, *Tweets become a mode, with a wide band and a link from each post to its passage
 (260929f)*, introduced the flag, its 404 assignment, the status-preserving catch and the null-based
@@ -30,26 +30,18 @@ retry are unchanged.
 
 [The candidate matrix](../../tests/read-error-matrix.test.tsx) verifies an opening failure followed
 by success, and a retry that answers 404. Neither traverses 404 → failed recheck → failed retry.
-The temporary review reproduction did, and failed: *the GET rejected, so this is no longer
-loading: expected 'loading' not to be 'loading'*. The request had completed and the hook held
-`THREAD_RECHECK_FAILED`, so the loading state was stale, rather than a slow request. The temporary
-test was not retained as a failing gate in this scoped repair.
-
-Local evidence from this review is `/tmp/sweep5-review-thread-reported.log`; the removed test is
-preserved at `/tmp/sweep5-review-thread-reproduction.test.tsx`. These are temporary machine files,
-not repository artefacts. To reproduce elsewhere with the matrix's mocked network harness: mount
-a probe calling `useTweets`, answer its opening GET with 404 and assert `none`; fail `refresh()`
-with a transport error; fail `retryRead()` the same way; observe the recheck error and assert that
-the completed request is no longer `loading`. That last assertion failed until the fix above.
+The review reproduction did, and failed: *the GET rejected, so this is no longer loading:
+expected 'loading' not to be 'loading'*. The request had completed and the hook held
+`THREAD_RECHECK_FAILED`, so the loading state was stale, rather than a slow request. The retained
+regression is [tweets-retry-settles.test.tsx](../../tests/tweets-retry-settles.test.tsx), with a
+pending-then-success control beside the failure case.
 
 ## What would have caught it, ranked by ease against value
 
-1. **A missing-result → failed recheck → failed retry transition test** — cheap; the temporary
-   review reproduction already proved the defect. Retain it in the separately scoped repair and
+1. **A missing-result → failed recheck → failed retry transition test** — cheap and retained;
    require that every completed read settles its pending status.
 2. **Use current request state to settle failures** — preserve any accepted thread, but terminate
-   `loading` even when a previous read answered 404. This is the proposed narrow follow-up fix;
-   no implementation is included here.
+   `loading` even when a previous read answered 404. This is the implemented narrow fix.
 3. **A broader request state machine** — rejected for this report. The defect can be repaired
    locally, and a new abstraction would still need the same transition test.
 4. **Reset the historical answered flag on every retry** — rejected as the default remedy. The

@@ -86,6 +86,7 @@ export function useTweets(slug: string): UseTweets {
    * an answer, a failed read keeps what is on screen and says so.
    */
   const answered = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — read history belongs to this slug
   useEffect(() => {
     answered.current = false;
   }, [slug]);
@@ -198,7 +199,7 @@ export function useTweets(slug: string): UseTweets {
     profileChanged: loaded?.profileChanged ?? false,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     rewriting: hold.rewriting,

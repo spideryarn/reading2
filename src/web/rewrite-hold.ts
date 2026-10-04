@@ -31,7 +31,7 @@
  * ## What releases it — exactly three things
  *
  *  1. a **fresh** read shows a different identity: the replacement arrived;
- *  2. the job is known to have failed or been cancelled (`queue.failed`), or
+ *  2. this press's job is listed as failed or cancelled, or
  *     its POST was refused (the verb releases it there);
  *  3. the job this press made is seen **ended** in a loaded, idle job list, and
  *     a **fresh** read that *started after the band saw that* has landed: the
@@ -42,7 +42,9 @@
  *  - **Provenance.** A GET already in the air when the job finished can land
  *    after the list goes idle, carrying the old artefact. So a read carries the
  *    number it *started* with, and rule 3 counts only a read started after the
- *    mark taken when the ended job was first seen.
+ *    mark taken when the ended job was first seen. Rule 1 also needs a read
+ *    started after the press: an earlier online answer can remain in `latest`
+ *    after a different artefact arrives from the shared offline copy.
  *  - **Not an offline copy.** `apiFetch` answers a failed GET from the offline
  *    store with a real 200 marked `x-spideryarn-offline: copy`. That is not the
  *    server's word, so it is never a fresh read.
@@ -76,12 +78,17 @@ interface Hold {
   readonly identity: string;
   /** The job the press made, once its POST has answered. Null while it is in the air. */
   readonly posted: string | null;
+  /** Global read-start clock at the press, surviving a reader's remount. */
+  readonly afterRead: number;
   /** `jobEngine.epoch()` when it was made — see the header. */
   readonly epoch: number;
 }
 
 const holds = new Map<string, Hold>();
 const listeners = new Set<() => void>();
+/* Read instances come and go, so a press's fence cannot use a mount-local
+   counter. `begun()` still records only this reader's most recent start. */
+let readClock = 0;
 
 const keyOf = (slug: string, step: StepName) => `${slug}\n${step}`;
 
@@ -135,7 +142,7 @@ export interface FreshReads {
 export function useFreshReads(): FreshReads {
   const count = useRef(0);
   const [latest, setLatest] = useState<FreshReads["latest"]>(null);
-  const begin = useCallback(() => ++count.current, []);
+  const begin = useCallback(() => (count.current = ++readClock), []);
   const begun = useCallback(() => count.current, []);
   const landed = useCallback((started: number, res: Response, identity: string | null) => {
     /* Optional all the way down: a test's hand-built stub has no `headers`. */
@@ -182,16 +189,17 @@ export function useRewriteHold({
   );
   const { latest, begun } = fresh;
 
-  /* A previous press's failure is still on `queue.failed` while the next
-     press's POST is in the air; `starting` says which press it is about. */
-  const failed = queue.failed !== null && !queue.starting;
+  /* A remount can watch another tab's job while our POST is still in the air.
+     Only the outcome of the id this press made can release its hold. */
+  const outcome = hold?.posted ? queue.ended(hold.posted) : null;
+  const failed = outcome === "error" || outcome === "cancelled";
 
   /* Rule 1: the replacement arrived. */
   useEffect(() => {
-    if (hold && latest && latest.identity !== hold.identity) drop(key, hold);
+    if (hold && latest && latest.started > hold.afterRead && latest.identity !== hold.identity) drop(key, hold);
   }, [key, hold, latest]);
 
-  /* Rule 2: it failed, or was cancelled, as this mount saw it. */
+  /* Rule 2: this press failed or was cancelled, including while unmounted. */
   useEffect(() => {
     if (hold && failed) drop(key, hold);
   }, [key, hold, failed]);
@@ -211,7 +219,7 @@ export function useRewriteHold({
     hold.posted !== null &&
     queue.loaded &&
     queue.job === null &&
-    queue.ended(hold.posted);
+    outcome !== null;
   const mark = useRef<number | null>(null);
   if (!ended) mark.current = null;
   else if (mark.current === null) mark.current = begun();
@@ -232,13 +240,22 @@ export function useRewriteHold({
 
   const run = useCallback(
     async (start: () => Promise<string | null>) => {
+      /* The shared hold fences the verb before React can disable a control,
+         including a handler captured by another mount. */
+      if (holdAt(key)) return;
       let made: Hold | null = null;
       if (identity !== null) {
-        made = { identity, posted: null, epoch: jobEngine.epoch() };
+        made = { identity, posted: null, afterRead: readClock, epoch: jobEngine.epoch() };
         holds.set(key, made);
         emit();
       }
-      const jobId = await start();
+      let jobId: string | null;
+      try {
+        jobId = await start();
+      } catch (err) {
+        if (made) drop(key, made);
+        throw err;
+      }
       if (made === null || holds.get(key) !== made) return;
       if (jobId) holds.set(key, { ...made, posted: jobId });
       /* Refused: nothing was made, so there is nothing to wait for. */
@@ -249,7 +266,8 @@ export function useRewriteHold({
   );
 
   return {
-    rewriting: hold !== null && hold.identity === identity && !failed,
+    /* An offline copy with a different identity does not settle the hold. */
+    rewriting: hold !== null && !failed,
     run,
   };
 }

@@ -203,6 +203,7 @@ const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { SketchView } = await import("../src/web/SketchView.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
+const { useFreshReads, useRewriteHold } = await import("../src/web/rewrite-hold.js");
 
 /* Quiz and Glossary read above their band (ArticlePage.tsx § `OwnedReader`), so
    closing the band leaves the read mounted. The other four read inside it. */
@@ -498,7 +499,142 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("releases a refused press even if the start callback rejects", async () => {
+  let hold!: ReturnType<typeof useRewriteHold>;
+  function Probe() {
+    const fresh = useFreshReads();
+    hold = useRewriteHold({
+      slug: "throwing-press",
+      step: "quiz",
+      identity: "old",
+      queue: { job: null, loaded: true, starting: false, failed: null, ended: () => null },
+      fresh,
+      refresh: async () => {},
+    });
+    return null;
+  }
+  await act(async () => root.render(createElement(Probe)));
+  await act(async () => {
+    await expect(hold.run(async () => { throw new Error("start rejected"); })).rejects.toThrow("start rejected");
+  });
+  expect(hold.rewriting, "no posted job can ever settle a rejected start").toBe(false);
+});
+
 describe.each(ROWS)("$name", (mode) => {
+  it.each([true, false])("keeps the read-only escape on a stale offline copy (profiled=%s)", async (profiled) => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    showBand = false;
+    await paint();
+    cache.set(path, { body: mode.body("old", { stale: true, profiled }), savedAt: 2 });
+    serve = dropped;
+    finishJob();
+    showBand = true;
+    await paint();
+    expect(document.body.textContent).toContain(mode.waiting);
+    for (const label of mode.forced) {
+      expect(buttons(label).filter((b) => !b.disabled)).toHaveLength(0);
+    }
+    const before = reads;
+    serve = () => json(mode.body("new", { stale: true, profiled }));
+    await press(mode.readAgain);
+    expect(reads).toBe(before + 1);
+    expect(posted).toHaveLength(1);
+    expect(onScreen("new")).toBe(true);
+    expect(document.body.textContent).not.toContain(mode.waiting);
+  });
+
+  it("a different offline identity landing during the rewrite still keeps every forced control held", async () => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    showBand = false;
+    await paint();
+    cache.set(path, { body: mode.body("new", PROFILED), savedAt: 2 });
+    serve = dropped;
+    finishJob();
+    showBand = true;
+    await paint();
+    expect(onScreen("new")).toBe(true);
+    await expectHeld("a different offline identity is still not the server's word");
+    expect(document.body.textContent).toContain(mode.waiting);
+  });
+
+  it.each(["error", "cancelled"] as const)("a listed %s of this press releases even on an offline remount", async (outcome) => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    showBand = false;
+    await paint();
+    serve = dropped;
+    finishJob(outcome);
+    showBand = true;
+    await paint();
+    expect(await regenerate(), "this press is known to have stopped; no fresh GET is needed").toBe("enabled");
+  });
+
+  it("another job's failure cannot release a forced POST that is still in the air after remount", async () => {
+    start(mode);
+    await paint();
+    let land!: () => void;
+    postGate = new Promise((resolve) => { land = resolve; });
+    await pressRegenerate();
+    showBand = false;
+    await paint();
+    jobs = [{ ...job(mode.step, "running"), id: "another-tab" }];
+    showBand = true;
+    await paint();
+    jobs = [{ ...job(mode.step, "error"), id: "another-tab" }];
+    await paint();
+    await expectHeld("only the other tab's job failed");
+    expect(document.body.textContent).toContain(mode.waiting);
+    serve = dropped;
+    const before = reads;
+    await press(mode.readAgain);
+    expect(reads).toBe(before + 1);
+    expect(posted).toHaveLength(1);
+    await expectHeld("the unrelated failure must leave a read-only way out");
+    await act(async () => land());
+    await flush();
+    await expectHeld("our POST answered but our job has never been listed");
+  });
+
+  it("a different offline copy cannot use an older online answer to release the new hold", async () => {
+    start(mode);
+    await paint();
+    showBand = false;
+    await paint();
+    /* Another reader (Marginalia or another tab) has updated the shared copy.
+       Quiz and Glossary keep their read instance while the band is closed. */
+    cache.set(path, { body: mode.body("new", PROFILED), savedAt: 2 });
+    serve = dropped;
+    showBand = true;
+    await paint();
+    expect(onScreen("new")).toBe(true);
+    await pressRegenerate();
+    serve = broken;
+    finishJob();
+    await paint();
+    await expectHeld("the new hold cannot be settled by the earlier online answer");
+  });
+
+  it("holds the forced verb synchronously before the next render", async () => {
+    start(mode);
+    await paint();
+    const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
+    await act(async () => badge!.click());
+    await flush();
+    const [button] = buttons("Regenerate");
+    expect(button?.disabled).toBe(false);
+    await act(async () => {
+      button!.click();
+      button!.click();
+    });
+    await flush();
+    expect(posted, "the hold fences the verb before React disables its controls").toHaveLength(1);
+  });
+
   it("holds every forced control after the job finishes and the reload fails, and a fresh read of the new one lets go", async () => {
     start(mode);
     await paint();

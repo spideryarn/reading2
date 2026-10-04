@@ -317,11 +317,11 @@ export interface StepJob<S extends StepName = StepName> {
    */
   start(run?: StepRun<S>): Promise<string | null>;
   /**
-   * **This job is in the list and is over** — done, failed or cancelled. False
+   * **This job is in the list and is over** — done, failed or cancelled. Null
    * for one the list has not shown yet, which from here looks the same as one
    * that never existed: rewrite-hold.ts § Why the hold carries the job's id.
    */
-  ended(jobId: string): boolean;
+  ended(jobId: string): "done" | "error" | "cancelled" | null;
   cancel(id: string): void;
 }
 
@@ -796,7 +796,9 @@ export function useStepJob<S extends StepName>(
     start,
     ended: (jobId) => {
       const seen = queue.jobs.find((j) => j.id === jobId);
-      return seen !== undefined && seen.status !== "queued" && seen.status !== "running";
+      return seen && (seen.status === "done" || seen.status === "error" || seen.status === "cancelled")
+        ? seen.status
+        : null;
     },
     /* `void`, because the interface promises nothing to await: every surface
        fires this from a click and the outcome arrives through the polled list. */
