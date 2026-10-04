@@ -232,6 +232,21 @@ export function useDictationField<C>({
   const [sendingAfter, setSendingAfter] = useState(false);
   const key = useRef(doneKey);
   key.current = doneKey;
+  const previousKey = useRef(doneKey);
+  useEffect(() => {
+    if (previousKey.current === doneKey) return;
+    previousKey.current = doneKey;
+    /* A reused box now means something else. Withdraw both an offered second
+       press and one already accepted immediately, rather than merely refusing
+       it at the eventual ending: the new target must not accept the old
+       target's Stop, and the strip must not keep promising a send that cannot
+       happen. This also makes Feedback's shut render final even if it is
+       opened again before the transcript returns. */
+    wantSend.current = null;
+    delivered.current = false;
+    setSendingAfter(false);
+    closeAgain();
+  }, [doneKey, closeAgain]);
   /* **The send is an effect, not a call.** Every box's send closes over its
      render's value and refuses while `busy`; called from `onEnd` it would see
      the value from before the transcript, and refuse without a word. The bump
@@ -241,9 +256,16 @@ export function useDictationField<C>({
   const done = useRef(onDone);
   done.current = onDone;
   const sentTick = useRef(0);
+  const sendKey = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (sendTick === sentTick.current) return;
     sentTick.current = sendTick;
+    /* The action is deferred so it sees the landed transcript and idle phase.
+       That also gives a reused box one last chance to change targets: a parent
+       can move to the next question in the same React batch as `onEnd`, after
+       the check below but before this effect. Never call that target's latest
+       `onDone` for words spoken to the previous one. */
+    if (sendKey.current !== key.current) return;
     done.current?.();
   }, [sendTick]);
 
@@ -324,7 +346,10 @@ export function useDictationField<C>({
       delivered.current = false;
       setSendingAfter(false);
       closeAgain();
-      if (send) setSendTick((n) => n + 1);
+      if (send) {
+        sendKey.current = wish.key;
+        setSendTick((n) => n + 1);
+      }
       /* If the hook immediately restarts on a newly chosen device, it does so
          without another field-button press. Continue after the words this
          session kept, rather than reusing the caret from its original press and

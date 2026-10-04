@@ -317,7 +317,7 @@ the reader are one line of code with no branch to get wrong.
 
 ## A double press on Stop also sends
 
-Greg, 2026-10-05 (`spya-rp8676`): *"if I'm in a feedback report and I double click the stop button,
+Greg, 2026-10-04 (`spya-rp8676`): *"if I'm in a feedback report and I double click the stop button,
 then it should also click send afterwards for me. And if I'm in chat or whatever and I double click
 the stop button, then it should automatically send that message after it's finished transcribing"*.
 
@@ -350,7 +350,8 @@ chat (Send), the comment follow-up (Ask in chat), the quiz answer (Answer) and t
 - **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
   once its comments have loaded, so a press is never taken and then dropped.
 
-Tests: `tests/dictation-double-stop-sends.test.tsx`.
+Tests: `tests/dictation-double-stop-sends.test.tsx` for the field policy and button;
+`tests/dictation-double-stop-sends-real-hook.test.tsx` for the real hook ordering.
 
 ## When it hears nothing, and after
 

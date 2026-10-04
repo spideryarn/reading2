@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **A double press on Stop also sends.** Greg, spya-rp8676, 2026-10-05:
+ * **A double press on Stop also sends.** Greg, spya-rp8676, 2026-10-04:
  * *"if I'm in a feedback report and I double click the stop button, then it
  * should also click send afterwards for me."*
  * docs/plans/261005a-dictation-double-press-on-stop-also-sends.md.
@@ -24,7 +24,7 @@ import type { UseDictationField } from "../src/web/useDictationField.js";
 
 interface Options {
   onText(text: string): void;
-  onTranscript(text: string): boolean | void;
+  onTranscript(text: string): boolean | undefined;
   onEnd(): void;
 }
 const mic = vi.hoisted(() => ({
@@ -48,6 +48,7 @@ vi.mock("../src/web/useDictation.js", () => ({
 
 const { useDictationField, DOUBLE_PRESS_MS } = await import("../src/web/useDictationField.js");
 const { DictationButton } = await import("../src/web/DictationStrip.js");
+const { HELP_MODES } = await import("../src/web/help/help-modes.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -227,8 +228,60 @@ describe("a second press on Stop, in the field", () => {
     /* The reader moves on while the words are on their way. */
     doneKey = "question-2";
     draw();
+    expect(f().sendingAfter, "the strip must stop promising a send that was withdrawn").toBe(false);
     end("an answer to question one");
     expect(sent, "an answer is not sent to a question it was not said to").toEqual([]);
+  });
+
+  it("withdraws the second press when the target changes during the window", () => {
+    doneKey = "question-1";
+    draw();
+    start();
+    stop();
+
+    doneKey = "question-2";
+    draw();
+
+    expect(f().again, "question two must not accept a double press on question one's Stop").toBeUndefined();
+    end("an answer to question one");
+    expect(sent).toEqual([]);
+  });
+
+  it("does not revive a withdrawn wish when the same target key returns", () => {
+    doneKey = "open";
+    draw();
+    start();
+    stop();
+    pressAgain();
+
+    doneKey = "shut";
+    draw();
+    doneKey = "open";
+    draw();
+    end("a report from the earlier opening");
+
+    expect(sent, "closing Feedback withdraws the wish even after it is reopened").toEqual([]);
+  });
+
+  it("does not send to a target that changes in the same React batch as the ending", () => {
+    doneKey = "question-1";
+    draw();
+    start();
+    stop();
+    pressAgain();
+
+    /* `onEnd` schedules the done action for an effect. A parent can move the
+       reused box before that effect runs, in the same batch as the hook's own
+       state updates, so the target must be checked again at the effect. */
+    act(() => {
+      options().onTranscript("an answer to question one");
+      mic.transcribing = false;
+      options().onEnd();
+      doneKey = "question-2";
+      root.render(createElement(Box));
+    });
+
+    expect(sent, "the deferred action must not use question two's onDone").toEqual([]);
   });
 
   it("a press after the dictation has ended is an ordinary press", () => {
@@ -291,5 +344,16 @@ describe("the button, while the words are on their way", () => {
     const el = button({ toggle() {}, sendingAfter: true });
     expect(el.disabled).toBe(true);
     expect(el.getAttribute("aria-label")).toMatch(/then sending/);
+  });
+});
+
+describe("the reader's help", () => {
+  it("names every box where double Stop sends", () => {
+    act(() => root.render(HELP_MODES.chat.reading));
+    const words = host.textContent ?? "";
+    expect(words).toMatch(/Feedback/);
+    expect(words).toMatch(/follow-up/);
+    expect(words).toMatch(/quiz answer/);
+    expect(words).toMatch(/annotate a passage/);
   });
 });

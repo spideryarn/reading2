@@ -11,7 +11,7 @@ Report `spya-rp8676` (Sentry SPIDERYARN-READING2-CP, a suggestion from Greg, adm
 > for me. And if I'm in chat or whatever and I double click the stop button, then it should
 > automatically send that message after it's finished transcribing, obviously.
 >
-> — Greg, 2026-10-05
+> — Greg, 2026-10-04
 
 ## What it is for
 
