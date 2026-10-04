@@ -233,7 +233,7 @@ code review checks the result. **Where this section and the text above disagree,
 Where the code differs from the plan above, this section is what is true.
 
 - **The Hint button appears once the answer has finished arriving**, not while it streams. The
-  hint's text is hidden from the moment its marker arrives; only the button waits, for about a
+  hint's text is hidden once its marker and first word arrive; only the button waits, for about a
   second. See F12 and F17 below.
 - **The button is a toggle**: a hint can be closed again. Open is the reader's last press here, or
   else the stored press.
@@ -249,9 +249,10 @@ Where the code differs from the plan above, this section is what is true.
   outweighs the rule beside it.
 - **The eval** is written up in
   [261004c](../investigations/261004c-recall-hint-and-question-link-eval.md). The format holds
-  (13 of 13 hints hidden correctly, 12 of 13 questions with their own link). One revision stopped
-  hints stating the answer. Replies before the hint got longer, 6 of 13 over 120 words against 3,
-  and the revision did not bring that back.
+  (13 of 13 hints hidden correctly, 12 of 13 questions with their own link). One revision reduced,
+  but did not eliminate, hints that state the answer. The long tail stayed worse than before the
+  feature (6 of 13 over 120 words against 3), while run 2's total, mean and median improved from
+  run 1 and its total and mean returned to about the before run.
 
 ### The code review
 
@@ -274,3 +275,35 @@ commit `35ca72d7f`: **rework**, six findings; it fixed four in place.
   opened, and telling the attempts apart needs a generation carried through the stream and the
   request. `remember-mode.md` says exactly what the fence does and does not promise.
 
+**Round 2**, [261004h-recall-hint-code-review-2-sol.md](261004h-recall-hint-code-review-2-sol.md),
+on commit `a657d60a7`: **approve after my fixes**. F17 closed; withholding the button until the
+answer settles produces no wrong behaviour. Two fixes, both to prose and both kept:
+
+- **F18 (P2) the eval write-up overstated both of its conclusions.** I had written that no run-2
+  hint states the answer and that length did not improve. At least two run-2 hints still answer
+  their question, and run 2 is shorter overall than run 1 though six replies are still over 120
+  words. The write-up now says so.
+- **F19 (P3)** the bare `Hint:` marker can flash before the hint's first word arrives; the docs
+  said only `Hin`.
+
+Sol also added a test that pinned the write-up's sentences and numbers to the transcripts. It did
+its job as the red-first evidence for F18 and was not kept: a test that fails when an
+investigation's prose is reworded guards nothing a reader can meet.
+
+### The browser check
+
+A Sonnet subagent, Playwright on system Chrome, commit `a657d60a7`, at 1280, 820 and 390 wide: the
+question carries its chip; the button is closed, opens and closes; the first press's POST returned
+200 and the hint was still open after a reload; no button and no hint text while the answer
+arrived; Copy copies what is on screen; a retried answer's hint is closed; Chat has no button.
+Nothing overflows at 390. Screenshots: `261004h-shot-1` to `-8` in this folder.
+
+Two things it noticed, neither changed:
+
+- **The button is 41 × 24 px.** It is the same small size as the answer's other controls, and
+  [touch.md](../project/touch.md) keeps the 44px rule for the bottom bar and not for controls
+  inside a mode. If it proves hard to hit on a phone, this is the line to change.
+- **The hint it was given nearly stated the answer** (the storm inside a weather-forecasting
+  computer, for a question about uploading minds). That is the residue the eval write-up names.
+  How strong a hint should be is a matter of taste that a week of use will settle better than
+  another prompt revision now.

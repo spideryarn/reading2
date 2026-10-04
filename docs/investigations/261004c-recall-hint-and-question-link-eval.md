@@ -12,8 +12,10 @@ helps without giving the answer — and did the rest of the reply get worse?
 **Short answer.** The format holds: in both runs all 13 replies ended with a hint in the exact
 spelling the panel hides, and none would have been shown in the open. The question carried its own
 valid block id in 11 of 13 replies, then 12 of 13. The first prompt let three hints state the
-answer; after one revision none plainly does. **Replies got longer, and the revision did not fix
-that**: 6 of 13 ran over 120 words before the hint in both runs, against 3 of 13 before the change.
+answer; the revision improved that but did not eliminate it: at least two run-2 hints can still be
+read out as answers to their questions. **The long tail got worse than before the feature, but the
+revision did improve overall length**: 6 of 13 ran over 120 words before the hint in both new runs,
+against 3 of 13 before the change, while run 2 returned to about the before run's total and mean.
 
 ## Method
 
@@ -41,8 +43,11 @@ against their questions. No blind judge.
 | a hint over 25 words | | 0 | 0 |
 | a hint that is itself a question | | 0 | 1 |
 | a hint with no block id of its own | | not counted | 3 |
-| a hint that states the answer (my reading) | | 3 | 0 |
+| a hint that plainly states the answer (my reading) | | 3 | at least 2 |
 | over 120 words before the hint | 3 | 6 | 6 |
+| body words, total | 1,401 | 1,547 | 1,393 |
+| body words, mean | 108 | 119 | 107 |
+| body words, median | 106 | 116 | 88 |
 | a banned phrase | 8 | 7 | 7 |
 | citing no block at all | 0 | 0 | 0 |
 
@@ -58,19 +63,28 @@ experiment claims, which was the question.
 the hint is never the article's answering sentence or the word asked for, and one that could be
 read out as an answer is cut back; and the hint gives the reply no extra room.
 
-**Run 2.** The hints point and stop: "It's a kind of lab-grown tissue, not a digital system at
-all", "He compares it to the odds of a real storm forming inside a weather office's computers",
-"there's an example about neurons firing spikes to clear waste products". The one question without
-an id is `disagreement`, where the model asked the reader's own view rather than what the piece
-says, and its hint was a second question — the one hint that breaks its rules outright. Three hints
-carry no id of their own though they describe the article.
+**Run 2.** Several hints point and stop, such as "It's a kind of lab-grown tissue, not a digital
+system at all" and "there's an example about neurons firing spikes to clear waste products". But
+zero answer-giving hints was too generous under the prompt's own test — "If the hint could be read
+out as an answer to your question, it says too much." `partial` asks where Seth takes the idea when
+he applies it to mind uploading; its hint answers that he compares it to the odds of a storm forming
+inside a weather office's computers. `justTellMe` asks what is at stake for mind uploading; its hint
+answers that the reader's odds of surviving upload are like a hailstorm forming in those computers.
+Those two plainly answer, and several other hints sit close enough to the line that the exact count
+should not carry much weight. The one question without an id is `disagreement`, where the model
+asked the reader's own view rather than what the piece says, and its hint was a second question.
+Three hints carry no id of their own though they describe the article.
 
 ## What is still wrong
 
-- **Length.** The six long replies are the ones that tell before they ask (`lost`, `dontRemember`,
-  `justTellMe`, `ambiguous`, `disagreement`, `nudgeFailed`), at 121 to 168 words. The prompt allows
-  a direct answer to run over, and `lost` was 173 before any of this, but three more are over than
-  were. One sample each, so it may be noise; it is the first thing to check after a week of use.
+- **Length.** Six replies are over the ceiling in each new run. Five of the six are the same replies
+  in each run (`lost`, `dontRemember`, `justTellMe`, `ambiguous`, `disagreement`); `weak` is the
+  sixth in run 1 and `nudgeFailed` in run 2. That is three more over-length replies than before the
+  feature. Run 2 is shorter overall than run 1: 1,547 body words (mean 119, median 116) fell to
+  1,393 (mean 107, median 88), beside
+  1,401 before the feature (mean 108, median 106). The revision improved the distribution without
+  moving the over-120 count. One sample each, so either difference may be noise; length is the first
+  thing to check after a week of use.
 - **`justTellMe` and `nudgeFailed` still end on a question** after giving the answer. That predates
   this work and is allowed ("a smaller and easier nudge on a different point"), but with a hint
   under it the reply now reads as more of a quiz than it did.

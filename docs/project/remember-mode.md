@@ -496,13 +496,14 @@ question in the plan.
   is written and nothing claims it was, and the next press that opens the hint asks again. Until a
   write succeeds, a hint opened here is closed again after leaving and coming back.
 - **Copy** copies what is on screen: the body, and the hint only while it is open.
-- **While an answer is arriving** the hint is hidden as soon as the complete `Hint:` marker has
-  arrived, and there is no button; the button appears, closed, when the answer has settled. The
-  hint is the last paragraph, so that is about a second after it could first have been pressed. In
+- **While an answer is arriving** the hint is hidden as soon as the complete `Hint:` marker and
+  some hint text have arrived, and there is no button; the button appears, closed, when the answer
+  has settled. The hint is the last paragraph, so that is about a second after it could first have
+  been pressed. In
   exchange every press is on the final hint and is sent the moment it happens: the panel never
   holds a press waiting for the answer to land, where leaving the conversation would lose it (F12
-  and F17 in the code review). A flash of the letters `Hin` before the marker completes is
-  accepted.
+  and F17 in the code review). A flash through the bare `Hint:` marker before the first hint word
+  arrives is accepted.
 
 **Who reads an answer's text.** Storage, export and Recall's own later turns get the raw text: the
 model sees what it wrote, and its prompt says never to assume the hint was opened. Two readers were
