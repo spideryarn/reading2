@@ -196,8 +196,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           If a word you need is missing, type it into <strong>Look up a term…</strong>: that explains
           the passage it is in, and adds it to your list, marked as added by you. <strong>Find more</strong>, at the top
-          of the panel, looks for quieter terms; it says <strong>Find terms again</strong> instead
-          when a new run would write a fresh list rather than add to this one.{" "}
+          of the panel, looks for quieter terms and adds them to your list. If a new run cannot
+          safely add to this list — because the article or your profile has changed, or because
+          this version of Spideryarn cannot add to the saved list — it says{" "}
+          <strong>Write a new list</strong> instead. That run replaces the list rather than adding
+          to it.{" "}
           <strong>Dig deeper</strong> on an entry searches the web. On someone
           else’s shared article you see the glossary already made, but cannot add to it.
         </p>

@@ -405,8 +405,11 @@ function toEntries(
  * longer exists, so its entries are about text that has moved and appending to
  * them would produce a list half-describing each. That one is a real refusal.
  *
- * **A glossary written by an older prompt is refused too**, and this took three
- * goes to get right. Refusing on its own was a data-loss bug: null here means
+ * **A glossary written by an older prompt was refused too, until 2026-10-04**.
+ * Since then `appendableVersion` accepts the range whose shape and source-hash
+ * history are safe to mix; it has the rule and Greg's words. What follows is
+ * why `glossary/1` is refused, and it is still the reason: it took three goes
+ * to get right. Refusing on its own was a data-loss bug: null here means
  * `buildGlossary` gets no previous entries, so `taken` is empty and every id is
  * re-minted — every `?term=` link the reader holds goes dead, every stored
  * lookup is orphaned — while the file is overwritten and `passes` resets to 1,
@@ -447,12 +450,61 @@ export function existingFor(
   profileHash: string | null = null,
 ): Glossary | null {
   if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
-  if (onDisk.version !== PROMPT_VERSION) return null;
+  if (!appendableVersion(onDisk.version)) return null;
   /* `?? null` so that a list written before the field existed compares equal to
      one written without a profile. Those two really are the same thing to
      merge: neither was written for anybody in particular. */
   if ((onDisk.profileHash ?? null) !== profileHash) return null;
   return onDisk;
+}
+
+/**
+ * **May a list this prompt version wrote be added to by today's prompt?** One
+ * predicate for `existingFor` (the run) and `panelRunKind` (the label), so the
+ * button cannot say *Find more* over a run that rewrites.
+ *
+ * Until 2026-10-04 the test was equality with `PROMPT_VERSION`, and the prompt
+ * had been bumped five times in eight days — so on most of the shelf the one
+ * run button replaced the list. Greg, 2026-10-04 (spya-try2v7): *"In glossary,
+ * there's a find terms again button. I don't know what that does. I want a
+ * find more button that finds a bunch more."*
+ * docs/plans/261004f-glossary-find-more-always-adds-across-prompt-versions.md.
+ *
+ * **From `glossary/4` up to the current one.** The entry shape has not changed
+ * in that range: what moved is the register, who the entry is pitched to, and
+ * which things earn one. So an older entry beside a newer one is uneven, not
+ * wrong, and no label on it lies — which was the objection to appending onto
+ * `glossary/1`, and still is.
+ *
+ * - **Below 4 refuses.** `glossary/1` is another shape (one blended `gloss`).
+ *   `glossary/2` and early `glossary/3` were stamped with a blocks-only
+ *   `sourceHash`, so they fail `existingFor`'s source test first anyway. The
+ *   hash changed midway through version 3 without a version bump, so a `/3`
+ *   stamp cannot prove which hash it carries; version 4 is the first safe
+ *   floor (docs/project/glossary.md § Staleness, and the force cascade). GPT
+ *   Sol's plan review, F3.
+ * - **Newer than this build refuses**, as it always has: in a rollback an
+ *   older writer must not vouch for, or merge field by field with, entries
+ *   from a prompt it does not know (F4).
+ * - **Unreadable refuses.**
+ *
+ * The mixed list is stamped with the current version and says where its oldest
+ * entries came from: `Glossary.oldestVersion`, written by `buildGlossary`.
+ */
+export function appendableVersion(version: string): boolean {
+  const stored = versionNumber(version);
+  const current = versionNumber(PROMPT_VERSION);
+  return (
+    stored !== null && current !== null && stored >= FIRST_APPENDABLE_VERSION && stored <= current
+  );
+}
+
+/** `glossary/4`: the first version guaranteed to carry today's entry shape and source hash. */
+const FIRST_APPENDABLE_VERSION = 4;
+
+function versionNumber(version: string): number | null {
+  const match = /^glossary\/(\d+)$/.exec(version);
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -492,12 +544,15 @@ export function glossaryRunKind(
 
 /**
  * **What the glossary panel's own run button will do** — append or rewrite —
- * for its label: *Find more* or *Find terms again*. Plan 261003c § 1.
+ * for its label: *Find more* or *Write a new list*. Plan 261003c § 1; the
+ * second label and the version rule are plan 261004f.
  *
  * The same three tests as `existingFor`, read off what the glossary read
  * already has: `stale` is the source test (`isStale` compares the same
- * fingerprint `existingFor` does), `outdated` is the prompt test, and the
- * profile test is against **the press's** profile, which is not Metadata's.
+ * fingerprint `existingFor` does), `appendableVersion` is the prompt test
+ * (not `outdated`: since plan 261004f an appendable older prompt's list is
+ * added to), and the profile test is against **the press's** profile, which is
+ * not Metadata's.
  * The panel's press keeps the list's own setting (`more(profiled)` in
  * src/web/GlossaryPanel.tsx): a plain list is run plainly, so it matches; a
  * list written for a profile is run with today's, so it matches only if today's
@@ -508,12 +563,14 @@ export function glossaryRunKind(
  * `nowHash` is the hash of the reader's current profile, or null for none.
  */
 export function panelRunKind(
-  found: { glossary: Glossary; stale: boolean; outdated: boolean },
+  found: { glossary: Glossary; stale: boolean },
   nowHash: string | null,
 ): "append" | "rewrite" {
   const recorded = found.glossary.profileHash ?? null;
   const pressHash = recorded === null ? null : nowHash;
-  return found.stale || found.outdated || recorded !== pressHash ? "rewrite" : "append";
+  return found.stale || !appendableVersion(found.glossary.version) || recorded !== pressHash
+    ? "rewrite"
+    : "append";
 }
 
 /**
@@ -886,9 +943,21 @@ export function buildGlossary(
 
   const merged = dedupe([...previous, ...fresh]);
   const located = merged.map((entry) => ({ ...entry, blocks: findOccurrences(entry, opts.blocks) }));
+  /* **A list added to across a prompt bump says so.** The stamp below is the
+     prompt that wrote the latest pass, which is what the store's stamp checks
+     and the step's skip test compare (src/store/artifacts.ts §
+     `assertStampAgrees`, `sameStamp`) — keeping the older stamp instead would
+     have the write refused, and an unforced run append for ever. So the older
+     entries' provenance goes in a field of its own rather than being lost
+     under a current stamp. Carried forward until a rewrite, which has no
+     `existing`. `appendableVersion`; plan 261004f. */
+  const oldest = opts.existing
+    ? (opts.existing.oldestVersion ?? opts.existing.version)
+    : PROMPT_VERSION;
 
   return {
     version: PROMPT_VERSION,
+    ...(oldest === PROMPT_VERSION ? {} : { oldestVersion: oldest }),
     generator: generatorFor(opts.power),
     slug: opts.slug,
     sourceHash: opts.sourceHash,
@@ -900,6 +969,8 @@ export function buildGlossary(
     profileHash: runProfileHash(opts.profile ?? null),
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
+    /* After `dedupe`, so a fresh entry an old one absorbed is not counted. */
+    lastAdded: merged.length - previous.length,
     generatedAt: completedAt,
     elapsedMs: (opts.existing?.elapsedMs ?? 0) + opts.elapsedMs,
   };
@@ -1557,11 +1628,13 @@ export async function generateGlossary(opts: {
   const onDisk = opts.previous;
   /* Two questions, and they took three attempts to separate.
 
-     **Append** only to a list that describes this same text AND was written by
-     this same prompt. That is `existingFor`, and both halves are load-bearing:
-     a moved article makes the old entries claims about a piece that no longer
-     exists, and an older prompt makes them answers to a different question that
-     no current label can honestly describe.
+     **Append** only to a list that describes this same text AND whose entries
+     are the shape this prompt writes (`appendableVersion`: `glossary/4` on,
+     since 2026-10-04; the same prompt only, before). That is `existingFor`,
+     and both halves are load-bearing: a moved article makes the old entries
+     claims about a piece that no longer exists, and a `glossary/1` list makes
+     them answers to a different question that no current label can honestly
+     describe.
 
      **Inherit** the ids of a list we are replacing rather than appending to.
      That is the half whose absence made the refusal look like a data-loss bug
@@ -1582,7 +1655,8 @@ export async function generateGlossary(opts: {
      the same field and happening to reach the same answer. */
   const profile = opts.profile ?? null;
   const existing = existingFor(onDisk, sourceHash, runProfileHash(profile));
-  /* Nothing to append to, but a list to replace: same article, older prompt.
+  /* Nothing to append to, but a list to replace: same article, and another
+     profile or a prompt `appendableVersion` refuses.
      The prose is regenerated — that is what the banner offering "Find them
      again" promises — and the ids come across so the reader's links and their
      paid-for lookups survive it. */

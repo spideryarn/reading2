@@ -519,7 +519,7 @@ One press must not buy two rewrites. A finished job leaves the queue before its 
 read, and until that read lands the old text is still on screen with its old `profileChanged` — so
 Regenerate would be offered again. From the press until the new artefact is read, **every forced
 control in that mode is held**: the panel's Regenerate, and *Write it again*, *Find them again*,
-*Find more* / *Find terms again* beside the text, on a stale or unprofiled artefact too. Quiz,
+*Find more* / *Write a new list* beside the text, on a stale or unprofiled artefact too. Quiz,
 Summary, Thread, Ideas, Glossary and Sketch.
 
 The hold is kept outside the band, so closing the mode during the run and coming back does not lose

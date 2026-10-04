@@ -406,11 +406,12 @@ describe("the kind of a term", () => {
 
 /* **An older prompt is not announced** — Greg, 2026-09-29
    (SPIDERYARN-READING2-55): *"perhaps even don't bother showing it."* And with
-   no banner, *Find more* must not stand in for it: on an outdated list the run
-   it sends replaces the list rather than appending (src/glossary.ts §
-   existingFor). It was hidden until 2026-10-03; since then the run row at the
-   top of the column says *Find terms again* there instead (Greg, spya-s660yh;
-   plan 261003c). docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
+   no banner, *Find more* had to not stand in for it while the run it sent
+   replaced the list: hidden until 2026-10-03, then *Find terms again* (plan
+   261003c). Since 2026-10-04 the run adds to an appendable list from an older
+   prompt (src/glossary.ts § appendableVersion), so the row says *Find more*
+   and it is true (Greg, spya-try2v7; plan 261004f).
+   docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md. */
 describe("an outdated glossary", () => {
   const RUNNING: Job = {
     id: "job-glossary",
@@ -431,11 +432,12 @@ describe("an outdated glossary", () => {
   const findMore = () =>
     [...host.querySelectorAll("button")].some((b) => /find more/i.test(b.textContent ?? ""));
 
-  it("says nothing about it, and offers no Find more (it offers Find terms again)", async () => {
-    await mount(owner(glossary(null, SCORED), { outdated: true }));
+  it("says nothing about it, and offers Find more", async () => {
+    await mount(owner(glossary(null, SCORED), { outdated: true, panelRun: "append" }));
     expect(host.querySelector(".gloss-stale")).toBeNull();
     expect(host.textContent).not.toContain("different version of the glossary");
-    expect(findMore()).toBe(false);
+    expect(host.querySelector(".gloss-more-note")).toBeNull();
+    expect(findMore()).toBe(true);
   });
 
   it("still shows a running job, and a failure, in the run row", async () => {

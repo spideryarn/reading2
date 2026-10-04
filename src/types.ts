@@ -713,7 +713,19 @@ export interface AskedTermAnswer extends AskedTermFound {
  * `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS` (src/pipeline.ts).
  */
 export interface Glossary {
+  /** The prompt that wrote the **latest pass** — `PROMPT_VERSION` in src/glossary.ts. */
   version: string;
+  /**
+   * **The oldest prompt any entry here came from**, when that is not `version`.
+   *
+   * A *Find more* on an appendable list an older prompt wrote adds to it
+   * (src/glossary.ts § `appendableVersion`, plan 261004f), and the list is then
+   * stamped with the current version. This is what keeps that stamp from
+   * vouching for the older entries. Absent on a list one prompt wrote, which is
+   * every list from before 2026-10-04; a rewrite drops it. Nothing shows it: it
+   * is provenance, in the export.
+   */
+  oldestVersion?: string;
   generator: string;
   slug: string;
   /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
@@ -758,6 +770,13 @@ export interface Glossary {
    * See docs/project/original-version/glossary.md § Bug one.
    */
   passes: number;
+  /**
+   * How many entries the most recent pass added. As `Quotes.lastAdded`: the one
+   * number that tells a *Find more* that found nothing from a button that did
+   * nothing (docs/reusable/silent-success.md). Absent on a list written before
+   * 2026-10-04.
+   */
+  lastAdded?: number;
   generatedAt: string;
   /** Total across every pass. Timed from outside the SDK, whose own timings came back empty. */
   elapsedMs: number;
@@ -802,13 +821,14 @@ export interface GlossaryResponse {
   profileChanged: boolean;
   /**
    * **What the panel's own run button will do with this list** — `panelRunKind`
-   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
-   * again* when it rewrites. The route adds it, beside `profileChanged`,
+   * in src/glossary.ts, for the label: *Find more* when it appends, *Write a
+   * new list* when it rewrites. The route adds it, beside `profileChanged`,
    * because the profile half needs the reader's current profile. Plan 261003c.
    *
-   * Optional only so a hand-built response in a test need not carry it; the
-   * route always sends it. The panel reads absent as `rewrite` when the list is
-   * stale or outdated and `append` otherwise (useGlossary.ts).
+   * Optional for responses cached before the field existed, and so a hand-built
+   * response in a test need not carry it; the current route always sends it.
+   * The panel reads absent conservatively as `rewrite` when the list is stale
+   * or outdated and `append` otherwise (GlossaryPanel.tsx).
    */
   panelRun?: "append" | "rewrite";
 }
