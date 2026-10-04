@@ -221,12 +221,12 @@ describe("where the run row is, and what it says", () => {
 
   /* Greg, 2026-10-04, spya-try2v7: *"In glossary, there's a find terms again
      button. I don't know what that does. I want a find more button that finds
-     a bunch more."* An older prompt's list is added to now (src/glossary.ts §
-     `appendableVersion`), so it is *Find more* there, with no sentence under
-     it. Plan 261004f. */
+     a bunch more."* An appendable older prompt's list is added to now
+     (src/glossary.ts § `appendableVersion`), so it is *Find more* there, with
+     no sentence under it. Plan 261004f. */
   it("on an outdated list, offers Find more, and it sends the same forced run", async () => {
     const more = vi.fn(async () => {});
-    await mount(owner(glossary(null), { more, outdated: true }));
+    await mount(owner(glossary(null), { more, outdated: true, panelRun: "append" }));
     const button = moreButton();
     expect(button?.textContent).toMatch(/find more/i);
     expect(host.querySelector(".gloss-more-note")).toBeNull();
@@ -251,6 +251,13 @@ describe("where the run row is, and what it says", () => {
   it("says Find more when the server says the press appends, even on an outdated list", async () => {
     await mount(owner(glossary(null), { panelRun: "append", outdated: true }));
     expect(moreButton()?.textContent).toMatch(/find more/i);
+  });
+
+  it("does not promise an append when an older cached response has no server verdict", async () => {
+    await mount(
+      owner({ ...glossary(null), version: "glossary/1" }, { panelRun: undefined, outdated: true }),
+    );
+    expect(moreButton()?.textContent).toMatch(/write a new list/i);
   });
 
   /* A press that found nothing must not look like a button that did nothing

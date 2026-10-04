@@ -1366,8 +1366,8 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
        longer exists. A `glossary/1` list makes them one blended field no
        current label describes, and appending would hand the model a FORBIDDEN
        list naming every one of them — so it never rewrites them, and they
-       survive under labels that do not describe them. An older prompt of the
-       **same shape** is appended to since plan 261004f — the next describe. */
+       survive under labels that do not describe them. An appendable older
+       prompt is appended to since plan 261004f — the next describe. */
     expect(existingFor(v1, "deadbeefdeadbeef")).toBeNull();
     expect(existingFor({ ...v1, version: PROMPT_VERSION }, "deadbeefdeadbeef")).not.toBeNull();
     expect(existingFor({ ...v1, version: PROMPT_VERSION }, "a-different-hash")).toBeNull();
@@ -1460,11 +1460,12 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
   });
 });
 
-describe("Find more on a list an older prompt wrote (plan 261004f)", () => {
+describe("Find more on an appendable list an older prompt wrote (plan 261004f)", () => {
   /* Greg, 2026-10-04 (spya-try2v7): *"I want a find more button that finds a
      bunch more."* His list was `glossary/4` against `glossary/9`, so the one
-     run button replaced the list instead. From `glossary/2` on the entry shape
-     is the same, so the forced run appends, and the list keeps its own stamp. */
+     run button replaced the list instead. Version 4 is the first one guaranteed
+     to have both today's entry shape and source hash, so the forced run appends,
+     stamps the latest pass current, and records the older prompt separately. */
   const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1, power: "standard" as const };
 
   const v4: Glossary = {
@@ -1479,7 +1480,7 @@ describe("Find more on a list an older prompt wrote (plan 261004f)", () => {
     elapsedMs: 1,
   };
 
-  it("appends to a same-shape list from an older prompt, on the same article and profile", () => {
+  it("appends to an appendable list from an older prompt, on the same article and profile", () => {
     expect(existingFor(v4, "deadbeefdeadbeef")).toBe(v4);
     expect(existingFor({ ...v4, version: "glossary/8" }, "deadbeefdeadbeef")).not.toBeNull();
     // The other two refusals are untouched by the version.

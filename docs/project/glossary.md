@@ -193,7 +193,7 @@ glossary is the one of the five that already had this right: forcing this step *
 own one was deleted on 2026-09-01 as a second way to do this
 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
-### The run row: Find more
+### The run row: Find more, or Write a new list
 
 > There used to be a Find More button in Glossary mode. Add it back, at the top of the column
 >
@@ -214,22 +214,24 @@ which: `panelRun` on `GET /api/glossary/:slug`, from `panelRunKind` in
 [src/glossary.ts](../../src/glossary.ts), computed in the route beside `profileChanged` because the
 profile half needs the reader's current profile.
 
-**A list an older prompt wrote is added to, since 2026-10-04**
+**An appendable list an older prompt wrote is added to, since 2026-10-04**
 ([261004f](../plans/261004f-glossary-find-more-always-adds-across-prompt-versions.md)). Until then
 the version had to be the current one, the prompt was bumped five times in eight days, and so on
 most of the shelf the one button replaced the list under a label (*Find terms again*) Greg could not
 read. `appendableVersion` is the rule, in one place for the run and the label: `glossary/4` up to
-the current version. Below 4 the entries are another shape or the `sourceHash` was computed another
-way; above the current one, an older build must not add to a newer build's list. The list is
-stamped with the current version afterwards, because that stamp is what the store checks a write
-against and what lets an unforced run skip, and `oldestVersion` on the artefact records the oldest
-prompt an entry came from, so the stamp does not vouch for the older entries.
+the current version. Below 4 the code cannot safely establish both facts: version 1 has another
+entry shape, while version 2 and some version 3 lists used the old `sourceHash`; version 3 was not
+bumped when that hash changed, so its stamp cannot distinguish the two. Above the current version,
+an older build must not add to a newer build's list. The list is stamped with the current version
+afterwards, because that stamp is what the store checks a write against and what lets an unforced
+run skip, and `oldestVersion` on the artefact records the oldest prompt an entry came from, so the
+stamp does not vouch for the older entries.
 
-**What that gives up:** a prompt improvement no longer reaches an old list through this button.
-Its older entries stay as they were written, beside new ones, and nothing in the client rewrites a
-list whose article and profile have not changed. That was already so for a current list since
-*Start again* went ([below](#there-was-a-start-again-beside-it-and-it-went)). *Hide* takes an entry
-off the reader's own view.
+**What that gives up:** a prompt improvement no longer reaches an appendable old list through this button.
+Its older entries stay as they were written, beside new ones, and nothing in the client rewrites an
+appendable list whose article and profile have not changed. That was already so for a current list
+since *Start again* went ([below](#there-was-a-start-again-beside-it-and-it-went)). *Hide* takes an
+entry off the reader's own view.
 
 **The rewrite that is left says why, on screen**: under *Write a new list* is one sentence (the
 article, the profile or how we write glossaries has changed, so this replaces the list; terms you
@@ -658,7 +660,7 @@ gone and an outdated glossary is not announced — Greg, SPIDERYARN-READING2-55
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). It also hid
 *Find more* on such a list, because its run would replace rather than append; that hid the button
 on most lists, Greg's included, and since 2026-10-03 the button is back, at the top of the band,
-labelled for what it will do — [§ The run row](#the-run-row-find-more).
+labelled for what it will do — [§ The run row](#the-run-row-find-more-or-write-a-new-list).
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic
@@ -1156,10 +1158,11 @@ the prose; `idsByTerm` gives a fresh entry the id the old list used for the same
 name or alias, so `?term=` links and stored lookups survive a rewrite that the sentences do not. Names
 are display; ids are identity.
 
-**That refusal covered every older prompt until 2026-10-04, and no longer does.** From `glossary/4`
-on the entries are the same shape, the "certified rather than replaced" argument above does not
-apply (no label on an older entry lies; it is only written less plainly), and the list is added
-to — [§ The run row](#the-run-row-find-more).
+**That refusal covered every older prompt until 2026-10-04; now it covers only the versions outside
+the appendable range.** From `glossary/4` on the entries are the same shape, the "certified rather
+than replaced" argument above does not apply: no label on an older entry lies, though its register
+and the policy that selected it may differ. The list is added to —
+[§ The run row](#the-run-row-find-more-or-write-a-new-list).
 
 ### Where the previous list comes from, and the four answers it can give
 
@@ -1354,10 +1357,10 @@ hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md
 
 ## Finding more
 
-The [run row](#the-run-row-find-more) is the one button at the top of the
+The [run row](#the-run-row-find-more-or-write-a-new-list) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
-Each pass asks for `suggestedCount(words)` more, at most 20, and records how many it added
-(`lastAdded`).
+Each append pass asks for `suggestedCount(words)` more, at most 20, and every pass records how many
+entries it added (`lastAdded`).
 
 ### Each entry keeps the time it was added
 
@@ -1400,8 +1403,9 @@ wrong". Three things had made that argument weaker than it reads.
   than grouping — one gesture, no model call
   ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
 - **Some recovery survives**, because `existingFor` refuses to append when the source hash or the
-  profile differs (and, until 2026-10-04, the prompt version: [§ The run row](#the-run-row-find-more)).
-  An edit or a changed profile therefore
+  profile differs, or when the prompt version is outside the appendable range
+  ([§ The run row](#the-run-row-find-more-or-write-a-new-list)). An edit, a changed profile or a
+  pre-`glossary/4` list therefore
   rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's `?term=` links
   survive it. (This listed the *use my profile* checkbox too, until the checkbox was removed on
   2026-09-13 — [reader-profile.md](reader-profile.md#no-control-one-label).)

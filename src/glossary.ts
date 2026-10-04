@@ -405,11 +405,11 @@ function toEntries(
  * longer exists, so its entries are about text that has moved and appending to
  * them would produce a list half-describing each. That one is a real refusal.
  *
- * **A glossary written by an older prompt was refused too, until 2026-10-04**,
- * and since then only one of another *shape* is — `appendableVersion` below
- * has the rule and Greg's words. What follows is why `glossary/1` is refused,
- * and it is still the reason: it took three goes to get right. Refusing on its
- * own was a data-loss bug: null here means
+ * **A glossary written by an older prompt was refused too, until 2026-10-04**.
+ * Since then `appendableVersion` accepts the range whose shape and source-hash
+ * history are safe to mix; it has the rule and Greg's words. What follows is
+ * why `glossary/1` is refused, and it is still the reason: it took three goes
+ * to get right. Refusing on its own was a data-loss bug: null here means
  * `buildGlossary` gets no previous entries, so `taken` is empty and every id is
  * re-minted — every `?term=` link the reader holds goes dead, every stored
  * lookup is orphaned — while the file is overwritten and `passes` resets to 1,
@@ -478,10 +478,11 @@ export function existingFor(
  *
  * - **Below 4 refuses.** `glossary/1` is another shape (one blended `gloss`).
  *   `glossary/2` and early `glossary/3` were stamped with a blocks-only
- *   `sourceHash`, so they fail `existingFor`'s source test first anyway
- *   (docs/project/glossary.md § Staleness, and the force cascade); naming 4 as
- *   the floor says so rather than leaving it to that accident. GPT Sol's plan
- *   review, F3.
+ *   `sourceHash`, so they fail `existingFor`'s source test first anyway. The
+ *   hash changed midway through version 3 without a version bump, so a `/3`
+ *   stamp cannot prove which hash it carries; version 4 is the first safe
+ *   floor (docs/project/glossary.md § Staleness, and the force cascade). GPT
+ *   Sol's plan review, F3.
  * - **Newer than this build refuses**, as it always has: in a rollback an
  *   older writer must not vouch for, or merge field by field with, entries
  *   from a prompt it does not know (F4).
@@ -498,7 +499,7 @@ export function appendableVersion(version: string): boolean {
   );
 }
 
-/** `glossary/4`: the first version whose lists carry today's entry shape and today's `sourceHash`. */
+/** `glossary/4`: the first version guaranteed to carry today's entry shape and source hash. */
 const FIRST_APPENDABLE_VERSION = 4;
 
 function versionNumber(version: string): number | null {
@@ -549,8 +550,9 @@ export function glossaryRunKind(
  * The same three tests as `existingFor`, read off what the glossary read
  * already has: `stale` is the source test (`isStale` compares the same
  * fingerprint `existingFor` does), `appendableVersion` is the prompt test
- * (not `outdated`: since plan 261004f an older prompt's list is added to), and
- * the profile test is against **the press's** profile, which is not Metadata's.
+ * (not `outdated`: since plan 261004f an appendable older prompt's list is
+ * added to), and the profile test is against **the press's** profile, which is
+ * not Metadata's.
  * The panel's press keeps the list's own setting (`more(profiled)` in
  * src/web/GlossaryPanel.tsx): a plain list is run plainly, so it matches; a
  * list written for a profile is run with today's, so it matches only if today's

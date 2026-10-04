@@ -44,7 +44,7 @@ describe("glossaryRunKind", () => {
     /* Written before the field existed: the same as written without one. */
     const { profileHash: _gone, ...old } = list();
     expect(glossaryRunKind(old, SOURCE, null)).toBe("append");
-    /* An older prompt of the same entry shape: appended to since plan 261004f. */
+    /* An appendable older prompt: appended to since plan 261004f. */
     expect(glossaryRunKind(list({ version: "glossary/4" }), SOURCE, null)).toBe("append");
   });
 

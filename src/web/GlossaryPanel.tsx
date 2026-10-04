@@ -378,8 +378,8 @@ export function GlossaryPanel({
           it rewrites (`MoreRow`). The guard is the one the foot had: an owner
           whose glossary has arrived.
           docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1.
-          Since 2026-10-04 an older prompt's list is appended to, so the second
-          label is the rare one (plan 261004f). */}
+          Since 2026-10-04 an appendable older prompt's list is appended to, so
+          the second label is the rare one (plan 261004f). */}
       {glossary && owner?.status === "ready" && owner.glossary ? (
         <MoreRow
           job={owner.job}
@@ -387,11 +387,13 @@ export function GlossaryPanel({
           failed={owner.failed}
           stalled={owner.stalled}
           /* The server's verdict when it gave one (`panelRunKind`, which
-             also sees a changed or cleared profile); otherwise the one fact
-             the panel has that always rewrites. Not `outdated`: an older
-             prompt's list is added to (plan 261004f). Plan 261003c, GPT Sol's
-             plan review P1. */
-          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale}
+             also sees a changed or cleared profile). An older cached response
+             has no verdict and `outdated` cannot distinguish an appendable
+             glossary/4 list from an incompatible glossary/1 one, so that path
+             stays conservative and says rewrite. Current responses always
+             carry the precise answer. Plan 261003c, GPT Sol's plan review P1;
+             plan 261004f code review F7. */
+          rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
           foundNothing={owner.glossary.passes > 1 && owner.glossary.lastAdded === 0}
           /* **In the list's own recorded setting**, not the current profile.
              `existingFor` refuses to append across a profile difference, so
@@ -2280,10 +2282,10 @@ function MoreRow({
   onCancel(id: string): void;
 }) {
   /* *Find terms again* until 2026-10-04, when Greg could not tell what it did
-     (spya-try2v7). It is rare now — a list an older prompt wrote is added to
-     (src/glossary.ts § `appendableVersion`) — and what is left says what it
-     does in the label, and why in a sentence beside it rather than only in a
-     tooltip, which a touch screen never shows. Plan 261004f. */
+     (spya-try2v7). It is rare now — an appendable list an older prompt wrote
+     is added to (src/glossary.ts § `appendableVersion`) — and what is left
+     says what it does in the label, and why in a sentence beside it rather
+     than only in a tooltip, which a touch screen never shows. Plan 261004f. */
   const label = rewrites ? "Write a new list" : "Find more";
   const title = rewrites
     ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"

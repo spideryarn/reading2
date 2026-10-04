@@ -25,8 +25,9 @@ no *Find more* at all, only a button that replaces the list and whose name he co
 
 ## What we build
 
-**A list written by an older prompt is added to, not replaced.** Same article, same profile, prompt
-version `glossary/4` up to the current one: the press appends, and the button says **Find more**.
+**A compatible list written by an older prompt is added to, not replaced.** Same article, same
+profile, prompt version `glossary/4` up to the current one: the press appends, and the button says
+**Find more**.
 
 1. **`existingFor`** stops refusing on a version difference as such. One predicate,
    `appendableVersion(version)`, exported, used by `existingFor` and `panelRunKind`: true for
@@ -143,3 +144,38 @@ One stage: it is one function, one stamp, one label and their docs.
 - Lists from before `glossary/4` still rewrite.
 - Two optional fields are added to the stored glossary JSON (`oldestVersion`, `lastAdded`). No
   migration: both are absent on every existing list and read as such.
+
+## Code review
+
+GPT Sol's code review (`261004f-code-review-sol.md`) of 90b966a0d: *ship with the fixes I made*.
+F1 to F6 confirmed closed. Four new findings, all fixed by the reviewer inside the stage, read
+and accepted:
+
+- **F7 (P1).** A response cached before `panelRun` existed labelled every non-stale list *Find
+  more*, a `glossary/1` list included. The panel's fallback is `stale || outdated` again, so with
+  no server verdict it says *Write a new list*. Red-first test added.
+- **F8 (P1).** The Help page named only the article and the profile as reasons for a replace. It
+  names the incompatible saved list too. `tests/help-page.test.tsx`.
+- **F9 (P2).** The comments gave the wrong reason for the `glossary/4` floor: the source hash
+  changed part-way through version 3 with no bump, so 4 is the first version *guaranteed* to
+  carry today's hash.
+- **F10 (P3).** "An older list" tightened to "an appendable older list" in comments and docs.
+
+On my four suspicions it found nothing: `lastAdded` cannot go negative, a list with no
+`lastAdded` shows no line, an unforced run appends once and then skips, and the new fields pass
+through storage, export and the offline copy whole while the public projection leaves them out.
+
+## Browser check
+
+Playwright on the box at 90b966a0d, 1400px and 390px, light and dark. Four local articles, all
+`outdated`: `fowler-phrenology` and `useful-spya-zu5r34` answer `panelRun: append` and show
+*Find more* with no sentence; `smart-spya-fq4q5h` and `ds-spya-me0d4g` answer `rewrite` (profile
+changed) and show *Write a new list* with the sentence, which wraps inside the column and clears
+the (i) and the *Look up a term* box. *Find terms again* appears nowhere. The button was not
+pressed. No page errors. Four shots in `261004f-shots/`.
+
+## Not done
+
+The append was not run against a real model on a `glossary/4` list. It is driven through
+`generateGlossary` with a canned answer and the list read back out of the Postgres column
+(`tests/glossary-ideas-baseline.test.ts`), which stops short of the store's write.
