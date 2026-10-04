@@ -11,8 +11,8 @@
  * ```
  *
  * The arms are separated in time, not in code, as in evals/paperwork/run.ts: `generate` calls each
- * mode's production `generate*` (no profile, standard power) and records a hash of each prompt
- * source beside the answer. Illustrated is given the same arm's sketch and a stub painter, so only
+ * mode's production `generate*` (no profile, standard power) and records a source fingerprint
+ * (evals/plain-words/source-fingerprint.ts) beside the answer. Illustrated is given the same arm's sketch and a stub painter, so only
  * its brief is paid for.
  *
  * **The screen.** `itemsOf` knows where each mode keeps its anchors: passages, evidence,
@@ -28,10 +28,10 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "../../src/env.js";
-import { PAPERWORK as PAPERWORK_WORDS } from "./run.js";
+import { admitExclusions, type Exclusion, PAPERWORK as PAPERWORK_WORDS } from "./run.js";
 import { blindCoin } from "../plain-words/run.js";
+import { sourceFingerprint } from "../plain-words/source-fingerprint.js";
 
 const REPO = path.join(import.meta.dirname, "..", "..");
 const OUT = path.join(REPO, "evals", "results", "paperwork-modes");
@@ -59,9 +59,10 @@ export const PAPERWORK: Record<string, readonly string[]> = {
 
 const MODES = ["sketch", "illustrated", "faq", "quiz", "ideas", "quotes", "glossary", "timeline", "arc"] as const;
 type Mode = (typeof MODES)[number];
-const SOURCES = [...MODES.map((m) => `${m}.ts`), "paperwork.ts"];
+/** The prompt source files; source-fingerprint.ts adds the shared prompt modules they import. */
+export const SOURCES = MODES.map((m) => `${m}.ts`);
 
-interface ArmFile {
+export interface ArmFile {
   slug: string;
   arm: string;
   sourceSha256: Record<string, string>;
@@ -131,6 +132,7 @@ export function itemsOf(mode: Mode, output: J): Item[] {
 
 async function generate(arm: string, slugs: string[]): Promise<void> {
   loadEnvLocal();
+  const sourceSha256 = sourceFingerprint(SOURCES);
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
   const { closeDb } = await import("../../src/db/client.js");
@@ -144,12 +146,6 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   const { generateTimeline } = await import("../../src/timeline.js");
   const { generateArc } = await import("../../src/arc.js");
 
-  const sourceSha256 = Object.fromEntries(
-    SOURCES.filter((f) => fs.existsSync(path.join(REPO, "src", f))).map((f) => [
-      f,
-      createHash("sha256").update(fs.readFileSync(path.join(REPO, "src", f))).digest("hex"),
-    ]),
-  );
   const attempt = async <T>(f: () => Promise<T>): Promise<T | { error: string }> => {
     try {
       return await f();
@@ -200,46 +196,70 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   await closeDb();
 }
 
-function report(): void {
-  const arms = fs.existsSync(OUT) ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()) : [];
-  const rows: string[] = ["arm\tslug\tmode\titems\tpaperwork-by-id\tpaperwork-by-words"];
+export interface ModeTotal {
+  /** Articles the mode was run on, and how many of those runs failed. */
+  attempted: number;
+  failed: number;
+  items: number;
+  byId: number;
+  byWords: number;
+}
+
+/** The screens over a set of arm files: one row per cell, every hit, and the totals per arm and mode. */
+export function screenModes(files: ArmFile[]): { rows: string[]; hits: string[]; totals: Record<string, ModeTotal> } {
+  const rows: string[] = [];
   const hits: string[] = [];
-  const totals: Record<string, [number, number, number]> = {};
-  for (const arm of arms.sort()) {
-    for (const f of fs.readdirSync(path.join(OUT, arm)).filter((x) => x.endsWith(".json")).sort()) {
-      const file = JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as ArmFile;
-      const marked = new Set(PAPERWORK[file.slug] ?? []);
-      for (const mode of MODES) {
-        const output = file.outputs[mode];
-        if (failed(output)) {
-          rows.push(`${arm}\t${file.slug}\t${mode}\tERROR ${output.error.slice(0, 60)}`);
-          continue;
-        }
-        const items = itemsOf(mode, output);
-        let byId = 0;
-        let byWords = 0;
-        for (const { anchors, text } of items) {
-          if (anchors.length > 0 && marked.size > 0 && anchors.every((id) => marked.has(id))) {
-            byId++;
-            hits.push(`[id]    ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
-          } else if (PAPERWORK_WORDS.test(text)) {
-            byWords++;
-            hits.push(`[words] ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
-          }
-        }
-        rows.push(`${arm}\t${file.slug}\t${mode}\t${items.length}\t${byId}\t${byWords}`);
-        const k = `${arm}\t${mode}`;
-        totals[k] = totals[k] ?? [0, 0, 0];
-        const sum = totals[k];
-        sum[0] += items.length;
-        sum[1] += byId;
-        sum[2] += byWords;
+  const totals: Record<string, ModeTotal> = {};
+  for (const file of files) {
+    const { arm } = file;
+    const marked = new Set(PAPERWORK[file.slug] ?? []);
+    for (const mode of MODES) {
+      const output = file.outputs[mode];
+      const k = `${arm}\t${mode}`;
+      const sum = totals[k] ?? { attempted: 0, failed: 0, items: 0, byId: 0, byWords: 0 };
+      totals[k] = sum;
+      sum.attempted++;
+      if (failed(output)) {
+        sum.failed++;
+        rows.push(`${arm}\t${file.slug}\t${mode}\tERROR ${output.error.slice(0, 60)}`);
+        continue;
       }
+      const items = itemsOf(mode, output);
+      let byId = 0;
+      let byWords = 0;
+      for (const { anchors, text } of items) {
+        if (anchors.length > 0 && marked.size > 0 && anchors.every((id) => marked.has(id))) {
+          byId++;
+          hits.push(`[id]    ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
+        } else if (PAPERWORK_WORDS.test(text)) {
+          byWords++;
+          hits.push(`[words] ${arm} ${file.slug} ${mode}: ${text.slice(0, 240)}`);
+        }
+      }
+      rows.push(`${arm}\t${file.slug}\t${mode}\t${items.length}\t${byId}\t${byWords}`);
+      sum.items += items.length;
+      sum.byId += byId;
+      sum.byWords += byWords;
     }
   }
-  console.log(rows.join("\n"));
-  console.log("\nTotals over the articles:\narm\tmode\titems\tpaperwork-by-id\tpaperwork-by-words");
-  for (const [k, [n, a, b]] of Object.entries(totals).sort()) console.log(`${k}\t${n}\t${a}\t${b}`);
+  return { rows, hits, totals };
+}
+
+function report(): void {
+  const arms = fs.existsSync(OUT) ? fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory()) : [];
+  const files = arms.sort().flatMap((arm) =>
+    fs
+      .readdirSync(path.join(OUT, arm))
+      .filter((x) => x.endsWith(".json"))
+      .sort()
+      .map((f) => JSON.parse(fs.readFileSync(path.join(OUT, arm, f), "utf8")) as ArmFile),
+  );
+  const { rows, hits, totals } = screenModes(files);
+  console.log(["arm\tslug\tmode\titems\tpaperwork-by-id\tpaperwork-by-words", ...rows].join("\n"));
+  console.log("\nTotals over the articles:\narm\tmode\tattempted\tsucceeded\tfailed\titems\tpaperwork-by-id\tpaperwork-by-words");
+  for (const [k, t] of Object.entries(totals).sort()) {
+    console.log(`${k}\t${t.attempted}\t${t.attempted - t.failed}\t${t.failed}\t${t.items}\t${t.byId}\t${t.byWords}`);
+  }
   console.log("\nEvery hit, to be read:\n");
   console.log(hits.join("\n"));
 }
@@ -249,7 +269,7 @@ function report(): void {
  * the screen fired, because collateral loss shows in clean cells). Mode i is read on article
  * i mod 4, and Arc on every article, since Arc is where the `before` arm showed paperwork.
  */
-function pairs(a: string, b: string): void {
+function pairs(a: string, b: string, partial: boolean): void {
   const coin = blindCoin(261003);
   const slugs = Object.keys(PAPERWORK).concat("scaling-hypothesis");
   const read = (arm: string, slug: string) =>
@@ -264,6 +284,16 @@ function pairs(a: string, b: string): void {
   const key: { id: string; mode: Mode; slug: string; left: string; right: string }[] = [];
   const render = (mode: Mode, out: unknown) =>
     failed(out) ? null : itemsOf(mode, out).map((it) => `- ${it.text}`).join("\n");
+  /* A missing arm file throws in `read`; a failed cell is listed, and refused
+     unless --partial, before anything is written. */
+  const exclusions: Exclusion[] = cells.flatMap(([mode, slug]) => {
+    const why = [a, b].flatMap((arm) => {
+      const out = read(arm, slug).outputs[mode];
+      return failed(out) ? [`failed in ${arm}: ${out.error}`] : [];
+    });
+    return why.length > 0 ? [{ slug, field: mode, reason: why.join("; ") }] : [];
+  });
+  admitExclusions(exclusions, partial);
   for (const [mode, slug] of cells) {
     const xa = render(mode, read(a, slug).outputs[mode]);
     const xb = render(mode, read(b, slug).outputs[mode]);
@@ -278,6 +308,7 @@ function pairs(a: string, b: string): void {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "pairs.md"), lines.join("\n"));
   fs.writeFileSync(path.join(dir, "key.json"), `${JSON.stringify(key, null, 2)}\n`);
+  if (exclusions.length > 0) fs.writeFileSync(path.join(dir, "exclusions.json"), `${JSON.stringify(exclusions, null, 2)}\n`);
   const leftA = key.filter((k) => k.left === a).length;
   console.log(`${key.length} pairs in ${path.relative(REPO, dir)}; ${a} on the left in ${leftA}, on the right in ${key.length - leftA}`);
 }
@@ -295,8 +326,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (cmd === "pairs") {
     const fa = rest[rest.indexOf("--a") + 1];
     const fb = rest[rest.indexOf("--b") + 1];
-    if (!rest.includes("--a") || !rest.includes("--b") || !fa || !fb) throw new Error("pairs --a <arm> --b <arm>");
-    pairs(fa, fb);
+    if (!rest.includes("--a") || !rest.includes("--b") || !fa || !fb) throw new Error("pairs --a <arm> --b <arm> [--partial]");
+    pairs(fa, fb, rest.includes("--partial"));
   } else {
     throw new Error("usage: generate | report (see the header)");
   }

@@ -184,7 +184,7 @@ investigation was not kept; the previous one is still shown.*
 Six real streamed calls on four local articles, Exa pinned, `max_total_results: 8`,
 `max_results: 5`, the draft prompt. Full table and answers:
 [260930a-probe-results.md](260930a-probe-results.md); the script is
-`scripts/probes/260930a-investigate-probe.ts`. **$0.72 in all.**
+`scripts/probes/260930a-investigate-probe.ts`. **$0.72 in all.** (Both probe files were deleted on 2026-10-04 (plan 261004b § A5); read them with `git show 9b611dfe2:scripts/probes/260930a-investigate-probe.ts` and `…-prompt.ts`)
 
 - **$0.120 a press on average, $0.153 worst** (a ~49k-token article). The model reads the article
   twice per press (before and after its search), so cost scales with length: budget $0.30 for the
