@@ -82,10 +82,10 @@ import { link, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { retryAfterMs } from "./ai-call.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { WidthGate, allOrStop, sleepUnlessAborted, type GateWindow } from "./concurrency.js";
 import { log } from "./log.js";
+import { parseRetryAfter } from "./retry-after.js";
 import {
   CASCADE_RECIPE,
   ExpansionRefused,
@@ -854,7 +854,7 @@ export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): 
       message = await call.finalMessage();
     } catch (err) {
       if (err instanceof Anthropic.APIError && err.status === 429) {
-        throw new ExpansionRateLimited(err.headers ? retryAfterMs(err.headers) : null);
+        throw new ExpansionRateLimited(err.headers ? parseRetryAfter(err.headers.get("retry-after"), Date.now()) : null);
       }
       throw anthropicCallFailed(err);
     }

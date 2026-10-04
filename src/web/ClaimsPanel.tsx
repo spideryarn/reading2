@@ -407,7 +407,7 @@ export function ClaimsView({
            which is the shorter, more natural sentence and a finding we have no
            standing to make. An answer where the model *did* name claims and none
            of them could be found in the paper is a failed run
-           (`CLAIMS_UNUSABLE`, src/referee-claims-run.ts) and lands in the error
+           (`ANSWER_UNUSABLE`, src/messages.ts) and lands in the error
            branch above with a Try again, so this branch does not cover it.
            tests/referee-copy-is-about-the-model.test.ts. */
         <p className="gloss-quiet">

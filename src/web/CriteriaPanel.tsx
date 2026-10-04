@@ -1288,7 +1288,7 @@ function CriterionRow({
            **And this branch no longer covers a fourth thing it used to.** An
            answer where the model *did* point at passages and none of them could
            be kept — a diverging row with no valence, an invented block id — is
-           a failed run now (`ANSWER_UNUSABLE`, src/referee-criteria-run.ts) and
+           a failed run now (`ANSWER_UNUSABLE`, src/messages.ts) and
            lands in the `error` branch above with a Try again. It used to land
            here, where this sentence was false about it. GPT Sol's finding 4. */
         <p className="gloss-quiet">

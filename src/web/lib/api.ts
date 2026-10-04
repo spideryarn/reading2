@@ -1140,9 +1140,16 @@ const after = (ms: number) => new Promise<void>((go) => setTimeout(go, ms));
  * refused, and the save is lost. That is strictly better than the request never
  * being made — and the real fix is not to arrive here with unsaved work, which
  * is why useProfile.ts also flushes on `visibilitychange`. GPT Sol, 2026-08-26.
+ *
+ * **Answers with a promise that settles when the request does, and never
+ * rejects** — whether it was stored, refused, lost or never sent. Nobody may
+ * wait on it before the page goes; it is for a page that turns out to survive
+ * (an unmount, a bfcache restore) and has something to throw away once the
+ * write has landed: src/web/useProfile.ts § `leaveProfile`. Most callers
+ * ignore it.
  */
-export function leavingFetch(input: string, init: RequestInit = {}): void {
-  if (!input.startsWith("/api/")) return;
+export function leavingFetch(input: string, init: RequestInit = {}): Promise<void> {
+  if (!input.startsWith("/api/")) return Promise.resolve();
 
   /* **Browsers cap the total body of all in-flight `keepalive` requests at
      about 64KiB, and reject over it.** None of the current callers — reader
@@ -1172,7 +1179,7 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
       contentType: null,
       error: null,
     });
-    return;
+    return Promise.resolve();
   }
 
   const headers = new Headers(init.headers);
@@ -1186,22 +1193,25 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
      saved on the way out is a `PATCH /api/library/<slug>`, which may change
      what an article preload is holding. */
   noteRequest(input, method);
-  void fetch(input, { ...init, headers, keepalive: true })
+  return fetch(input, { ...init, headers, keepalive: true })
     .finally(() => noteRequest(input, method))
-    .catch((e: unknown) => {
-    recordLog({
-      kind: "api",
-      outcome: "transport-failed",
-      method,
-      path: input,
-      status: null,
-      ms: null,
-      vercelId: null,
-      bytes: null,
-      contentType: null,
-      error: e instanceof Error ? e.name : "Error",
-    });
-  });
+    .then(
+      () => undefined,
+      (e: unknown) => {
+        recordLog({
+          kind: "api",
+          outcome: "transport-failed",
+          method,
+          path: input,
+          status: null,
+          ms: null,
+          vercelId: null,
+          bytes: null,
+          contentType: null,
+          error: e instanceof Error ? e.name : "Error",
+        });
+      },
+    );
 }
 
 /** The browser's keepalive body budget, less a little for headers. */

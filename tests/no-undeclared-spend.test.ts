@@ -182,7 +182,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "tests/no-provider-calls-guard.test.ts":
     "The positive control for tests/setup/no-provider-calls.ts. It calls `fetch` at openrouter.ai on purpose, and the whole assertion is that the guard refuses it before a byte leaves — so the capability this scan sees is exactly the capability being proved absent. Listed by name for the same reason as the two above.",
 
-  /* **Nine that only ask whether the key is configured.** Each reads
+  /* **Five that only ask whether the key is configured.** Each reads
      `OPENROUTER_API_KEY` to fail with a sentence a person can act on, and then
      makes its request through the seam; none of them names an endpoint. Listed
      one by one rather than exempted by a rule, because *another* place learning
@@ -190,18 +190,19 @@ const ALLOWED: Readonly<Record<string, string>> = {
      parse `.env.local` with a regular expression, and that is worth one line of
      friction to find out about.
 
-     It was seven, and referee mode added three: `referee-criteria-run.ts`,
-     `referee-mirror.ts` and `referee-claims-run.ts`. The second of those landed
-     in `bd2f38e` without its line here and turned this test red for about an
-     hour, which is the test doing its job — a new paying file is exactly what it
-     exists to notice. */
-  "src/converse.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/explain.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/quiz-mark.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/search.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-criteria-run.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-claims-run.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-mirror.ts": "Presence check only; the call goes through openRouterStream.",
+     **It was twelve until 2026-10-04.** The seven streaming runners
+     (`converse.ts`, `explain.ts`, `quiz-mark.ts`, `search.ts` and referee
+     mode's `referee-criteria-run.ts`, `referee-claims-run.ts` and
+     `referee-mirror.ts`) each read the key, used it for nothing and threw the
+     sentence the gateway throws anyway. Those checks were deleted (plan
+     261004c § R3), the files no longer name the variable in code, and their
+     lines here went with them: an entry for a file that names no credential is
+     a standing permission for it to start.
+
+     One of those seven, `referee-mirror.ts`, had landed in `bd2f38e` without
+     its line here and turned this test red for about an hour, which is the
+     test doing its job — a new paying file is exactly what it exists to
+     notice. */
   "src/transcribe.ts": "Presence check only; the call goes through openRouterJson.",
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
   "src/shelf-topics.ts":

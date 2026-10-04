@@ -1079,6 +1079,57 @@ describe("the step", () => {
   });
 });
 
+describe("SPIDERYARN_PIPELINE_EFFORT at this call site", () => {
+  /* One of the three places that read the variable, each with its own fallback
+     (here `low`). All three go through `pipelineEffortOverride` in
+     src/models.ts since 2026-10-04; before that this one cast the raw string,
+     so an empty value or a typo went to the provider as the effort.
+     tests/pipeline-effort-override.test.ts has the parser's own table. */
+  const NAME = "SPIDERYARN_PIPELINE_EFFORT";
+  const effortSent = () => (sent[0]!.body as { output_config?: { effort?: unknown } }).output_config?.effort;
+  const withEnv = async (value: string | undefined, body: () => Promise<void>) => {
+    const before = process.env[NAME];
+    if (value === undefined) delete process.env[NAME];
+    else process.env[NAME] = value;
+    try {
+      await body();
+    } finally {
+      if (before === undefined) delete process.env[NAME];
+      else process.env[NAME] = before;
+    }
+  };
+
+  it("keeps its own low when the variable is unset or empty", async () => {
+    for (const value of [undefined, ""]) {
+      await withEnv(value, async () => {
+        sent.length = 0;
+        answer = JSON.stringify({ stops: goodRoute });
+        await STEPS.skim.run(ctx(), storeWith(quotesOf(10)), nullCheckpointStore());
+        expect(sent).toHaveLength(1);
+        expect(effortSent(), String(value)).toBe("low");
+      });
+    }
+  });
+
+  it("takes a valid override", async () => {
+    await withEnv("high", async () => {
+      sent.length = 0;
+      answer = JSON.stringify({ stops: goodRoute });
+      await STEPS.skim.run(ctx(), storeWith(quotesOf(10)), nullCheckpointStore());
+      expect(effortSent()).toBe("high");
+    });
+  });
+
+  it("refuses a typo before anything is sent", async () => {
+    await withEnv("hgih", async () => {
+      sent.length = 0;
+      answer = JSON.stringify({ stops: goodRoute });
+      await expect(STEPS.skim.run(ctx(), storeWith(quotesOf(10)), nullCheckpointStore())).rejects.toThrow(NAME);
+      expect(sent).toHaveLength(0);
+    });
+  });
+});
+
 describe("the labels the model answers in", () => {
   it("maps Q1… back to quote ids, and counts a mangled label as an unknown quote", async () => {
     const store = storeWith(quotesOf(10));

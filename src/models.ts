@@ -1735,8 +1735,54 @@ for (const task of PIPELINE_TASKS) {
   }
 }
 
-/** The reasoning levels `output_config.effort` accepts. */
-export type Effort = "low" | "medium" | "high";
+/**
+ * The reasoning levels this app asks for in `output_config.effort`.
+ *
+ * A tuple with the type derived from it, so there is a list to check a string
+ * against at run time (`pipelineEffortOverride` below). A bare union type is
+ * gone by then, which is how a cast came to stand in for a check.
+ */
+export const EFFORTS = ["low", "medium", "high"] as const;
+export type Effort = (typeof EFFORTS)[number];
+
+/**
+ * **`SPIDERYARN_PIPELINE_EFFORT`, checked.** The whole-run override, or
+ * `undefined` when it is unset or empty.
+ *
+ * The one place the variable is read. `effortFor` below, src/citations.ts and
+ * src/skim.ts each call this and supply their own fallback; until 2026-10-04
+ * each of the three read `process.env.SPIDERYARN_PIPELINE_EFFORT as Effort |
+ * undefined` for itself. A cast checks nothing, so a typo (`hgih`) went to the
+ * provider as the effort, and so did an empty string, because `"" ?? fallback`
+ * is `""`.
+ *
+ * **A value that is not one of the three throws**, naming the variable and the
+ * three values. It does not fall back. This is a developer's knob, set on
+ * purpose for an eval, and a run that silently used the default instead would
+ * be a wrong measurement with nothing to say it was one. No deployment sets it
+ * (tests/env-names-are-inventoried.test.ts), so no reader's request can meet
+ * the throw.
+ *
+ * Empty is unset, not an error: `NAME= npm run …` is how a shell clears a
+ * variable for one command.
+ *
+ * Read at call time, not at module load, like every other override in this
+ * file: an eval sets it around one run and restores it (evals/prompt-caching.ts,
+ * evals/thinking-effort/run.ts), and the message quotes the bad value, which is
+ * a developer's own typing and never article text.
+ */
+export function pipelineEffortOverride(): Effort | undefined {
+  const raw = process.env.SPIDERYARN_PIPELINE_EFFORT;
+  if (raw === undefined || raw === "") return undefined;
+  const known = EFFORTS.find((effort) => effort === raw);
+  if (known === undefined) {
+    throw new Error(
+      `SPIDERYARN_PIPELINE_EFFORT is ${JSON.stringify(raw)}, which is not an effort. ` +
+        `Set it to low, medium or high, or unset it to use each stage's own.`,
+    );
+  }
+  return known;
+}
 
 /**
  * The stages that read the whole article and could share one cached copy of it.
@@ -2007,7 +2053,12 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   simple: "ids",
 };
 
-/** One stage's effort, with the whole-run environment override applied. */
+/**
+ * One stage's effort, with the whole-run environment override applied.
+ *
+ * Throws if the override is set to something that is not an effort; see
+ * `pipelineEffortOverride`.
+ */
 export function effortFor(stage: ArticleStage): Effort {
-  return (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? STAGE_EFFORT[stage];
+  return pipelineEffortOverride() ?? STAGE_EFFORT[stage];
 }

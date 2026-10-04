@@ -39,7 +39,7 @@ import {
   walkAst,
 } from "./helpers/ts-ast.js";
 
-import { CLAIMS_UNUSABLE } from "../src/referee-claims-run.js";
+import { ANSWER_UNUSABLE } from "../src/messages.js";
 import {
   CLAIM_WITHHELD,
   CLAIMS_AT_CAP,
@@ -53,7 +53,6 @@ import {
   PASSAGES_UNUSABLE,
   REASONING_WITHHELD,
 } from "../src/referee-claims.js";
-import { ANSWER_UNUSABLE } from "../src/referee-criteria-run.js";
 import { ALL_DROPPED, COI_NOT_CHECKED, NO_NAMES_YET } from "../src/referee-candidates.js";
 import { REFEREE_VIEWS } from "../src/web/referee-views.js";
 
@@ -416,28 +415,49 @@ const ABOUT_THE_PAPER = [
  * finding 4.
  *
  * Its sentence does not live in a panel file, so the scan below cannot see it:
- * it is the stored `error` on the criterion, raised in
- * src/referee-criteria-run.ts, and it has to keep the same rule. Checked as a
- * value rather than as source text, which is the stronger check of the two.
+ * it is the stored `error` on the criterion or on the claims run, and it has to
+ * keep the same rule. Checked as a value rather than as source text, which is
+ * the stronger check of the two.
+ *
+ * **One sentence since 2026-10-04**, `ANSWER_UNUSABLE` in src/messages.ts,
+ * thrown by both runners. There were two, one in each runner's file, sharing
+ * the one code; Claims' was `CLAIMS_UNUSABLE`. The describe after this one
+ * holds the same constant to Claims' rules.
  */
 describe("what Referee says when the answer it got was unusable", () => {
   it("makes the model the subject, not the paper", () => {
-    expect(ANSWER_UNUSABLE.toLowerCase()).toMatch(/^the model /);
+    expect(ANSWER_UNUSABLE.message.toLowerCase()).toMatch(/^the model /);
     for (const phrase of ABOUT_THE_PAPER) {
-      expect(ANSWER_UNUSABLE.toLowerCase(), phrase).not.toContain(phrase);
+      expect(ANSWER_UNUSABLE.message.toLowerCase(), phrase).not.toContain(phrase);
     }
+  });
+
+  it("is a retry, and says so in the sentence", () => {
+    expect(ANSWER_UNUSABLE.kind).toBe("retry");
+    expect(ANSWER_UNUSABLE.message).toMatch(/asking again usually works/);
+  });
+
+  it("is true of every way a row is thrown away, not only of a passage that was pointed at", () => {
+    /* A Criteria row is dropped for a quote that is not in the paper, for a
+       block id that does not exist, and for having no anchor at all. The
+       wording before 2026-10-04 said "pointed at passages", which the third
+       never did; and Claims' said "found in the paper", which is not why a row
+       with no valence is dropped. */
+    expect(ANSWER_UNUSABLE.message).not.toMatch(/pointed at/i);
+    expect(ANSWER_UNUSABLE.message).not.toMatch(/found in the paper/i);
+    expect(ANSWER_UNUSABLE.message).toMatch(/nothing it returned could be used/);
   });
 
   it("says the model gave an answer, so it cannot be read as having found nothing", () => {
     /* The whole point of the sentence: "found nothing" and "found something
        and could not say anything usable about it" call for different actions,
        so they must not be one sentence. */
-    expect(ANSWER_UNUSABLE).not.toMatch(/did not find/i);
+    expect(ANSWER_UNUSABLE.message).not.toMatch(/did not find/i);
   });
 
   it("carries a bracketed code, so a referee can quote four characters", () => {
     // docs/project/copy.md § The bracketed code.
-    expect(ANSWER_UNUSABLE).toMatch(/\[[a-z0-9-]+\]$/);
+    expect(ANSWER_UNUSABLE.message).toMatch(/\[ai-unusable\]$/);
   });
 });
 
@@ -453,14 +473,16 @@ describe("what Referee says when the answer it got was unusable", () => {
  *   sentence for until GPT Sol's finding 4: the model named passages and none of
  *   them could be found in the paper. It must not be readable as "did not find",
  *   because those two call for different actions.
- * - `CLAIMS_UNUSABLE` is the same distinction at the level of the whole run.
+ * - `ANSWER_UNUSABLE` (src/messages.ts) is the same distinction at the level of
+ *   the whole run. It is the sentence Criteria throws too; Claims had its own,
+ *   `CLAIMS_UNUSABLE`, until 2026-10-04.
  * - `DOCUMENT_ORDER_NOTE` is the other half of the review's finding: the list is
  *   in the paper's order and is not a ranking, and a reader who assumes
  *   best-first reads the top and stops.
  */
 describe("what Claims says about an empty answer", () => {
   it("makes the model the subject of both empty states", () => {
-    for (const sentence of [NO_PASSAGE_FOUND, PASSAGES_UNUSABLE, CLAIMS_UNUSABLE]) {
+    for (const sentence of [NO_PASSAGE_FOUND, PASSAGES_UNUSABLE, ANSWER_UNUSABLE.message]) {
       expect(sentence.toLowerCase()).toMatch(/^the model /);
       for (const phrase of ABOUT_THE_PAPER) {
         expect(sentence.toLowerCase(), phrase).not.toContain(phrase);
@@ -474,12 +496,12 @@ describe("what Claims says about an empty answer", () => {
        on `Claim.discarded`. */
     expect(NO_PASSAGE_FOUND).toMatch(/did not find/i);
     expect(PASSAGES_UNUSABLE).not.toMatch(/did not find/i);
-    expect(CLAIMS_UNUSABLE).not.toMatch(/did not find/i);
+    expect(ANSWER_UNUSABLE.message).not.toMatch(/did not find/i);
   });
 
   it("carries a bracketed code on the run-level failure", () => {
     // docs/project/copy.md § The bracketed code.
-    expect(CLAIMS_UNUSABLE).toMatch(/\[[a-z0-9-]+\]$/);
+    expect(ANSWER_UNUSABLE.message).toMatch(/\[[a-z0-9-]+\]$/);
   });
 
   it("says the order is not a ranking, which is the other half of the finding", () => {
