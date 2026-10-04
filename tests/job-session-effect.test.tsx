@@ -39,6 +39,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /** Every URL asked for, in order, and the resolver for each still waiting. */
 let requests: string[] = [];
 let held: ((res: Response) => void)[] = [];
+/** The same requests with their method and body, for the one case that asks. */
+let sent: { url: string; method: string; body: string | null; answer: (res: Response) => void }[] = [];
+
+/* jsdom's `localStorage` is shadowed by Node's own global here (see
+   src/web/shelf-hidden-columns.ts), so the test brings its own. */
+const stored = new Map<string, string>();
+Object.defineProperty(window, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+    removeItem: (key: string) => void stored.delete(key),
+    clear: () => stored.clear(),
+  },
+});
 
 /* The real `readJson` and `statusOf`, because the 401 case below is about what
    they make of a refusal — a stand-in that threw a plain `Error` would take the
@@ -49,9 +64,17 @@ vi.mock("../src/web/lib/api.js", async () => {
   );
   return {
     ...real,
-    apiFetch: (url: string) => {
+    apiFetch: (url: string, init: RequestInit = {}) => {
       requests.push(url);
-      return new Promise<Response>((resolve) => held.push(resolve));
+      return new Promise<Response>((resolve) => {
+        held.push(resolve);
+        sent.push({
+          url,
+          method: init.method ?? "GET",
+          body: typeof init.body === "string" ? init.body : null,
+          answer: resolve,
+        });
+      });
     },
   };
 });
@@ -82,6 +105,8 @@ beforeEach(() => {
   jobEngine.reset();
   requests = [];
   held = [];
+  sent = [];
+  stored.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -184,5 +209,31 @@ describe("the session effect App runs", () => {
       requests: before,
       loaded: true,
     });
+  });
+
+  /**
+   * **A browser's old "off" for *generate the main modes* is handed to the
+   * server when the signed-in app starts** — plan 261004h, GPT Sol's F3. Here
+   * and not on the add page, because an import can start from a link's hover
+   * card without ever visiting it. The request, the key outliving a refusal and
+   * the forgetting are held by tests/auto-modes.test.tsx; this holds that the
+   * effect `App` runs is what makes the call.
+   */
+  it("hands an old off for the main modes to the server, and only for a signed-in reader", async () => {
+    stored.set("spideryarn.add.generate-main-modes", "off");
+    await show(null, null);
+    expect(requests, "a signed-out visitor wrote somebody's setting").toEqual([]);
+
+    await show("reader-a", "token-1");
+    const patches = sent.filter((r) => r.url === "/api/reader" && r.method === "PATCH");
+    expect(patches.length, "the session started and handed nothing over").toBeGreaterThan(0);
+    expect(patches.every((r) => r.body === JSON.stringify({ autoModes: false }))).toBe(true);
+    expect(stored.get("spideryarn.add.generate-main-modes"), "forgotten before the server answered").toBe("off");
+
+    for (const patch of patches) patch.answer(json({ profile: null, experimentalSince: null, autoModes: false }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(stored.has("spideryarn.add.generate-main-modes"), "the key outlived the hand-over").toBe(false);
   });
 });

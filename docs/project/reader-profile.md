@@ -782,7 +782,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
 | [`src/profile.ts`](../../src/profile.ts) | render, normalise, hash, the staleness rule, `PROFILE_RULES`, `profileSection` — the filesystem store was deleted 2026-09-05 |
 | [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — `purpose` writes moved to Postgres |
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `ReaderStore`, and `ShelfStore.patch`'s third key |
-| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | `reader_profiles`, one row per owner |
+| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | `reader_profiles`, one row per owner. It also holds two settings: the experimental switch, and `auto_modes_off_at`, whether an import generates the main modes ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)) |
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | `articles.purpose` — the per-article half |
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
 | [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |

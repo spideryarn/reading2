@@ -3507,7 +3507,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   for (let tries = 0; ; tries++) {
     const slug = allocation.slug;
     if (tries >= 20) {
-      throw Object.assign(new Error(`Too many articles already called "${request.slug}".`), {
+      throw Object.assign(new Error("Too many articles already have that name."), {
         status: 409,
       });
     }

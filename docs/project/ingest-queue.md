@@ -584,10 +584,10 @@ snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` 
 
 ***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
 `POST /api/jobs {slug, readThis: true}` through the engine's action seam, so the job is driven at
-once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
-promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
-queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may
-be long gone by then. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
+once from the shelf card or the paper's page. It posts nothing else: *Read this* is an import, so
+the publication that turns the paper full queues the main modes on the server, as for every import
+([§ The add page](#the-add-page)). Until 2026-10-04 this function watched the job and posted them
+itself. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
 has the card and the page.
 
 ## The add page
@@ -615,18 +615,39 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 *An article can be handed to us from outside.* A bookmarklet, a share sheet, or a shortcut is now
 `spideryarn/add/` plus wherever you are, with nothing to paste.
 
-**Since 2026-09-30 it can also start the main modes.** While the import runs, the page shows a tick
-box that is on by default. When the import finishes, the page opens the article and queues one job
-per main mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
-front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
-the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
-paper before `structure`):
-[260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
-[`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
+**Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
+it.** When an import's first full publication commits, the same transaction queues one job per main
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
+cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
+reader's profile as it stood at publication.
+
+It happens for every way an import starts: the add page, *add to Spideryarn* on a link's hover card,
+Retry on the shelf's job card, *Read this*, and an import whose add page was closed before it
+finished. It does not happen for a Rebuild, a Start again (which has its own list), a paper added
+with only its title and abstract, or a re-add of something already on the shelf, which publishes
+nothing. **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
+from any page, as it drives `labels`; with every tab closed the modes wait.
+
+The page's tick box, on by default, is the reader's setting rather than the page's:
+`reader_profiles.auto_modes_off_at`, read by the publication and written by
+`PATCH /api/reader { autoModes }` on each change. Publication uses the choice committed when it
+reads the setting; the box shows when a change is still being saved. It follows the account. The
+page itself posts no mode job. A purpose typed on
+the page and saved after the import ends reaches chat and anything generated later, not these first
+jobs.
+
+Which publication counts, the hand-over of the old per-browser choice and what that cannot cover,
+and what it costs: [261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md). The
+list is [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts), the trigger is `publishRevisionIn`
+in [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts), and
+`tests/publication-queues-the-main-modes.test.ts` holds each case. The first version, where the page
+queued them, and the deferred ideal (opening the paper before `structure`) are
+[260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md).
 
 **Since 2026-10-02 it can also switch the article to High-powered AI** — a second tick box, off by
 default and never remembered, which sends the Metadata switch's own request as soon as the job's slug
-is known; the main modes above wait for it to answer.
+is known. The main modes are not held for its answer; what is promised instead is in
 [high-powered-ai.md § Switching it on while the article is added](high-powered-ai.md).
 
 ### The three traps in a page whose whole job is one effect
@@ -1524,7 +1545,7 @@ error type rather than to this case — but nothing on the server puts a structu
 field** rather than spreading an error's own properties: a Drizzle failure's message carries bound
 parameters, and a provider's carries its own words.
 
-*`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
+*`Too many articles already have that name.` is a different sentence and stays.* It is the retry budget
 running out inside slug allocation, which is a fault rather than a queue state.
 
 ### One job in the app was asked for by nobody

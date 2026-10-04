@@ -125,6 +125,39 @@ const rawPgReaderStore: ReaderStore = {
       .returning({ since: readerProfiles.experimentalSince });
     return row?.since ? row.since.toISOString() : null;
   },
+
+  async readAutoModes(): Promise<boolean> {
+    const [row] = await getDb()
+      .select({ offAt: readerProfiles.autoModesOffAt })
+      .from(readerProfiles)
+      .where(eq(readerProfiles.ownerId, currentOwnerId()))
+      .limit(1);
+    // No row is on: the default, and what the publication reads it as too
+    // (src/store/pg-revisions.ts § `publishRevisionIn`).
+    return !row?.offAt;
+  },
+
+  async writeAutoModes(on: boolean): Promise<boolean> {
+    const ownerId = currentOwnerId();
+    const [row] = await getDb()
+      .insert(readerProfiles)
+      /* The database's clock, `clock_timestamp()` not `now()`, and `coalesce`
+         to keep the first time across a second "off" — each for the reason
+         `writeExperimental` above gives. The column is the inverse of that
+         one: a time means off. */
+      .values({ ownerId, autoModesOffAt: on ? null : sql`clock_timestamp()` })
+      .onConflictDoUpdate({
+        target: readerProfiles.ownerId,
+        set: {
+          autoModesOffAt: on
+            ? sql`null`
+            : sql`coalesce(${readerProfiles.autoModesOffAt}, clock_timestamp())`,
+          updatedAt: sql`now()`,
+        },
+      })
+      .returning({ offAt: readerProfiles.autoModesOffAt });
+    return !row?.offAt;
+  },
 };
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */

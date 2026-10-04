@@ -1,5 +1,5 @@
 {
-  "id": "e8cbdc0c-b9e4-4797-9bcd-28391a18238b",
+  "id": "6320f0b7-307b-4d85-a767-e392a822d009",
   "prevId": "6ffc6343-71a5-4cb1-afa9-23ea05002226",
   "version": "7",
   "dialect": "postgresql",
@@ -568,12 +568,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "published_year": {
-          "name": "published_year",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "requested_url": {
           "name": "requested_url",
           "type": "text",
@@ -931,14 +925,6 @@
         "article_revisions_authors_array": {
           "name": "article_revisions_authors_array",
           "value": "jsonb_typeof(\"spideryarn\".\"article_revisions\".\"authors\") = 'array'"
-        },
-        "article_revisions_published_year": {
-          "name": "article_revisions_published_year",
-          "value": "\"spideryarn\".\"article_revisions\".\"published_year\" between 1000 and 2999"
-        },
-        "article_revisions_published_day_or_year": {
-          "name": "article_revisions_published_day_or_year",
-          "value": "\"spideryarn\".\"article_revisions\".\"published_at\" is null or \"spideryarn\".\"article_revisions\".\"published_year\" is null"
         },
         "article_revisions_nav_label_status": {
           "name": "article_revisions_nav_label_status",
@@ -5007,6 +4993,12 @@
         },
         "experimental_since": {
           "name": "experimental_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auto_modes_off_at": {
+          "name": "auto_modes_off_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

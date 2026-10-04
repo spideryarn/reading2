@@ -19,9 +19,9 @@
  * length: it is copy, it will be edited, and a test spelling it out is a second
  * copy to keep in step. What has to hold is structural.
  *
- *  - **Every mode, in both arms.** The segment on the reading view and the
- *    fourteen loose links on the metadata and tweets pages are two different
- *    components, and the loose one is the one that had a `title` attribute for
+ *  - **Every mode, in both arms.** The buttons on the reading view and the
+ *    framed links on the metadata page are two different components, and the
+ *    links arm is the one that had a `title` attribute for
  *    a fortnight without anybody noticing.
  *  - **Two paragraphs, and the second is not the first again.** `restates`
  *    below catches a copy and cannot catch a paraphrase — its value is that it
@@ -115,7 +115,7 @@ function reading(props: Record<string, unknown> = {}): void {
   });
 }
 
-/** The bar off the reading view: loose links rather than a segment. */
+/** The bar off the reading view: links in the same frames, rather than buttons. */
 function loose(props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", "/read/a-piece/metadata");
   act(() => {
@@ -136,7 +136,7 @@ function modeControls(): HTMLElement[] {
   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',
+      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
     ),
   ];
 }
@@ -349,7 +349,7 @@ describe("the mode segment on the reading view", () => {
   });
 });
 
-describe("the loose mode links, off the reading view", () => {
+describe("the framed mode links, off the reading view", () => {
   /**
    * **The arm that was left behind.** These carried a `title` attribute until
    * 2026-09-07 while the segment had a card, so the same fourteen modes
@@ -539,7 +539,7 @@ describe("the three buttons in the bar that are not modes", () => {
    * **The arm that drifts.** Off the reading view both are `DockLink`s, and
    * Comments changes shape entirely: there is no drawer to open, so the button
    * goes back to the article with it already open. The card has to say so —
-   * exactly as the loose mode links say *back in the article itself* — and
+   * exactly as the framed mode links say *back in the article itself* — and
    * everything else in it must be the same words.
    */
   it("give Comments the same card off the reading view, plus where the press lands", async () => {
