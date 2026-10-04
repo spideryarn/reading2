@@ -91,7 +91,6 @@ Four clusters wait on a product answer as well as a lull; the Overseer put the d
 | H — one binary-response writer | six header set-sites, six deliberate differences to keep | a relevant route slice |
 | I — retire the obsolete revision alias | 13 test imports to repoint, then delete | a lull; XS |
 | J — one retry predicate for Search and criteria | share the decision, not the row | the next retry-rule edit |
-| K — one missing-key check for seven readers | leave the five distinct contracts alone | the next gateway edit |
 | L — unknown-throw mapper investigation | XS, may end with no change | a lull |
 | M — keyboard access to a passage's terms | try jumping to the glossary row before building a list | Greg: which interaction, or defer M |
 | N — retain PDF item boundaries through scoring | fidelity experiment before any heuristic change | a lull; L-sized |
