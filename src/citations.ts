@@ -48,7 +48,7 @@ import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { type Effort, generatorFor, type ModelPower } from "./models.js";
+import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -124,7 +124,8 @@ export { ENTRY_CAP } from "./citation-entry.js";
  * the stages in that table. Medium because this is careful extraction rather
  * than argument — the judgement it does make, relevance, is a reading of the
  * whole piece and not a chain of inference. `SPIDERYARN_PIPELINE_EFFORT` still
- * overrides it, as it does for every stage `effortFor` serves.
+ * overrides it, as it does for every stage `effortFor` serves, through the same
+ * checked reader (src/models.ts § `pipelineEffortOverride`).
  */
 const EFFORT: Effort = "medium";
 
@@ -1945,7 +1946,7 @@ export async function generateCitations(opts: {
 
   const answerTokens = answerEstimate();
   const maxTokens = budgetFor("citations", answerTokens);
-  const effort = (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? EFFORT;
+  const effort = pipelineEffortOverride() ?? EFFORT;
 
   let message: Anthropic.Message;
   try {

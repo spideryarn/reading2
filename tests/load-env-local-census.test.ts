@@ -191,7 +191,7 @@ describe("where `.env.local` is loaded under src/", () => {
 
   it("is exactly the edges on the list, call for call", () => {
     const actual: Record<string, string[]> = {};
-    for (const call of calls) (actual[call.file] ??= []).push(call.where);
+    for (const call of calls) actual[call.file] = [...(actual[call.file] ?? []), call.where];
     for (const where of Object.values(actual)) where.sort();
     const expected = Object.fromEntries(
       Object.entries(ALLOWED).map(([file, { where }]) => [file, [...where].sort()]),

@@ -874,6 +874,58 @@ describe("generateCitations", () => {
     expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: CITATIONS_OUTPUT_SCHEMA });
   });
 
+  describe("SPIDERYARN_PIPELINE_EFFORT at this call site", () => {
+    /* One of the three places that read the variable, each with its own
+       fallback (here `medium`). All three go through `pipelineEffortOverride`
+       in src/models.ts since 2026-10-04; before that this one cast the raw
+       string, so an empty value or a typo went to the provider as the effort.
+       tests/pipeline-effort-override.test.ts has the parser's own table. */
+    const NAME = "SPIDERYARN_PIPELINE_EFFORT";
+    const run = () => {
+      stop = "end_turn";
+      sent = null;
+      answer = JSON.stringify({
+        capped: false,
+        works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
+      });
+      return generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
+    };
+    const withEnv = async (value: string | undefined, body: () => Promise<void>) => {
+      const before = process.env[NAME];
+      if (value === undefined) delete process.env[NAME];
+      else process.env[NAME] = value;
+      try {
+        await body();
+      } finally {
+        if (before === undefined) delete process.env[NAME];
+        else process.env[NAME] = before;
+      }
+    };
+
+    it("keeps its own medium when the variable is unset or empty", async () => {
+      for (const value of [undefined, ""]) {
+        await withEnv(value, async () => {
+          await run();
+          expect(sent?.output_config?.effort, String(value)).toBe("medium");
+        });
+      }
+    });
+
+    it("takes a valid override", async () => {
+      await withEnv("high", async () => {
+        await run();
+        expect(sent?.output_config?.effort).toBe("high");
+      });
+    });
+
+    it("refuses a typo before anything is sent", async () => {
+      await withEnv("hgih", async () => {
+        await expect(run()).rejects.toThrow(NAME);
+        expect(sent).toBeNull();
+      });
+    });
+  });
+
   it("a truncated answer is a truncation failure, not a short list", async () => {
     stop = "max_tokens";
     answer = '{"works": [{"title": "Si';

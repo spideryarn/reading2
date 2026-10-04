@@ -55,7 +55,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { type Effort, generatorFor, type ModelPower } from "./models.js";
+import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -163,7 +163,8 @@ export const GROWTH_MIN_QUOTES = 8;
  * this is not an `ArticleStage`: it sends no article, so it shares no cached
  * prefix with the stages in that table. Low because the input is small and the
  * job is judgment about a list, not reading. `SPIDERYARN_PIPELINE_EFFORT`
- * still overrides it, as it does for `citations`.
+ * still overrides it, as it does for `citations`, through the same checked
+ * reader (src/models.ts § `pipelineEffortOverride`).
  */
 const EFFORT: Effort = "low";
 
@@ -1237,7 +1238,7 @@ export async function generateSkim(opts: {
   const parts = renderPromptParts({ input, profile: opts.profile });
   const started = Date.now();
   const maxTokens = budgetFor("skim", ANSWER_TOKENS);
-  const effort = (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? EFFORT;
+  const effort = pipelineEffortOverride() ?? EFFORT;
   const count = input.offered.length;
 
   let message: Anthropic.Message;
