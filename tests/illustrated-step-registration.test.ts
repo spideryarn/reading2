@@ -195,6 +195,7 @@ function ctxFor(illustrationNote?: string): StepContext {
     power: "standard",
     slug: SLUG,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
     ...(illustrationNote ? { illustrationNote } : {}),

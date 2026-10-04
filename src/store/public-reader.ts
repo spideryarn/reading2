@@ -182,7 +182,7 @@ function notShared(slug: string): Error {
 /** The same 400 the owner routes give, so a bad slug reads the same everywhere. */
 function requireSlug(slug: string): void {
   if (isSlug(slug)) return;
-  throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
+  throw Object.assign(new Error("Not a slug"), { status: 400 });
 }
 
 /**

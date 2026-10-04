@@ -1704,6 +1704,22 @@ export interface ReaderStore {
    * date: the first spell ended.
    */
   writeExperimental(on: boolean): Promise<string | null>;
+
+  /**
+   * **Whether an import queues the main-mode jobs for this reader.** `true`
+   * for a reader who has never chosen, including one with no row at all.
+   *
+   * A boolean here and a time in the row (`auto_modes_off_at`): nothing shows
+   * when it was switched off, so the contract carries only the answer.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  readAutoModes(): Promise<boolean>;
+
+  /**
+   * Switch it on or off, and answer with what is now stored. Off twice keeps
+   * the first time; on clears it.
+   */
+  writeAutoModes(on: boolean): Promise<boolean>;
 }
 
 /**
@@ -2696,7 +2712,9 @@ export type PreviewClaim =
 /* ------------------------------------------------------- fetch allowance -- */
 
 /**
- * The allowances there are. A closed set, matching the table's CHECK.
+ * The allowances a caller can spend. A closed set, and every member is in the
+ * table's CHECK; the CHECK also still allows the retired `citation-find`, for
+ * rows already written (src/db/schema.ts § `rate_limit_events_bucket`).
  *
  * They are separate buckets rather than one, because they bound different
  * things: `link-preview-fetch` bounds how much of somebody else's server a
@@ -2715,9 +2733,6 @@ export type PreviewClaim =
 export type RateBucket =
   | "link-preview-fetch"
   | "link-summary-fill"
-  /* Retired with POST …/find on 2026-10-04. Kept to match the database CHECK
-     and its historical rows; removing it needs a migration. */
-  | "citation-find"
   | "shelf-topics"
   | "upload-source-guess"
   /* Citations' *Investigate* — a streamed, web-searching answer over the whole

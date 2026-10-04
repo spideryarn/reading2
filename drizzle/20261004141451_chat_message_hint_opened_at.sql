@@ -1,2 +1,0 @@
-ALTER TABLE "spideryarn"."chat_messages" ADD COLUMN "hint_opened_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_hint_opened_assistant_only" CHECK ("spideryarn"."chat_messages"."hint_opened_at" is null or "spideryarn"."chat_messages"."role" = 'assistant');

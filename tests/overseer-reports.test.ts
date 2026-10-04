@@ -32,6 +32,7 @@ import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { ArtefactCheck, ArtefactRef } from "../tools/fleet/artefact-ref.js";
+import { probeOwner } from "../tools/fleet/child.js";
 import {
   DECISIONS_FILE,
   DECISIONS_LOCK_FILE,
@@ -54,6 +55,7 @@ import {
   REPORTS_INIT_FILE,
   SimulatedCrash,
   drainReports,
+  drainReportsAsync,
   foldReports,
   parseReportEvent,
   parseSubmission,
@@ -62,6 +64,7 @@ import {
   serializeSubmission,
   submitReport,
   type DrainBoundary,
+  type AsyncDrainOptions,
   type DrainOptions,
   type ReportEvent,
   type ReportSubmission,
@@ -1365,6 +1368,143 @@ describe("a transient failure leaves the item pending", () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * The same pass, with git awaited (plan 261004g).
+ * ------------------------------------------------------------------ */
+
+describe("the awaited drain is the same pass, and stops when it is no longer the owner's", () => {
+  /** Two submissions with one reference each, `first` the older in the inbox so the pass takes it first. */
+  function twoInOrder(root: string): { first: ReportSubmission; second: ReportSubmission } {
+    const first = submission({ summary: "the older one", artefacts: [{ kind: "commit", sha: "aaaa111" }] });
+    const second = submission({ summary: "the newer one", artefacts: [{ kind: "commit", sha: "bbbb222" }] });
+    submitReport(root, first);
+    submitReport(root, second);
+    utimesSync(join(root, INBOX_DIR, `${first.eventId}.json`), new Date(1_000_000), new Date(1_000_000));
+    utimesSync(join(root, INBOX_DIR, `${second.eventId}.json`), new Date(2_000_000), new Date(2_000_000));
+    return { first, second };
+  }
+
+  function asyncOptions(root: string, over: Partial<AsyncDrainOptions> = {}): AsyncDrainOptions {
+    return {
+      root,
+      register: register(entry("work-reports", TOKEN_A)),
+      now: () => FIRST_NOW,
+      checkArtefact: async () => ({ state: "on-dev" }),
+      decisionsRoot: tempRoot(),
+      stillOwner: () => true,
+      ...over,
+    };
+  }
+
+  test("it records the bytes the synchronous pass records", async () => {
+    const s = submission({ artefacts: [{ kind: "commit", sha: "abc1234" }, { kind: "path", path: "docs/a.md" }] });
+    const answer = (ref: ArtefactRef): ArtefactCheck => (ref.kind === "commit" ? { state: "on-dev" } : { state: "not-found" });
+    const syncRoot = tempRoot();
+    submitReport(syncRoot, s);
+    const syncOutcome = drainReports(options(syncRoot, { checkArtefact: answer }));
+    const asyncRoot = tempRoot();
+    submitReport(asyncRoot, s);
+    const asyncOutcome = await drainReportsAsync(asyncOptions(asyncRoot, { checkArtefact: async (ref) => answer(ref) }));
+    expect(asyncOutcome).toEqual(syncOutcome);
+    expect(asyncOutcome.recorded).toBe(1);
+    expect(readFileSync(join(asyncRoot, REPORTS_FILE), "utf8")).toBe(readFileSync(join(syncRoot, REPORTS_FILE), "utf8"));
+  });
+
+  test("ownership lost while a check is out: that report is untouched, the one before it stays recorded", async () => {
+    const root = tempRoot();
+    const { first, second } = twoInOrder(root);
+    let owner = true;
+    const asked: string[] = [];
+    const outcome = await drainReportsAsync(
+      asyncOptions(root, {
+        stillOwner: () => owner,
+        checkArtefact: async (ref) => {
+          if (ref.kind === "commit") asked.push(ref.sha);
+          // The lock goes, or the daemon is told to stop, while git is out for the second.
+          if (ref.kind === "commit" && ref.sha === "bbbb222") owner = false;
+          return { state: "on-dev" };
+        },
+      }),
+    );
+    expect(asked).toEqual(["aaaa111", "bbbb222"]);
+    expect(outcome.stoppedBy).toBe("abandoned");
+    expect(outcome.recorded).toBe(1);
+    expect(outcome.deferred).toBe(1);
+    expect(outcome.pending).toBe(0);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([first.eventId]);
+    // Nothing of the second was written anywhere: it is exactly as it was submitted.
+    expect(listed(root, PROCESSING_DIR)).toEqual([]);
+    expect(listed(root, INBOX_DIR)).toEqual([`${second.eventId}.json`]);
+    expect(listed(root, REFUSED_DIR)).toEqual([]);
+    // And the next owner's pass records it.
+    const next = await drainReportsAsync(asyncOptions(root));
+    expect(next.recorded).toBe(1);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([first.eventId, second.eventId]);
+  });
+
+  test("a pass that is not the owner's when it starts touches nothing", async () => {
+    const root = tempRoot();
+    const s = submission({ artefacts: [{ kind: "commit", sha: "abc1234" }] });
+    submitReport(root, s);
+    let asked = 0;
+    const outcome = await drainReportsAsync(
+      asyncOptions(root, {
+        stillOwner: () => false,
+        checkArtefact: async () => {
+          asked += 1;
+          return { state: "on-dev" };
+        },
+      }),
+    );
+    expect(outcome.stoppedBy).toBe("abandoned");
+    expect(asked).toBe(0);
+    expect(existsSync(join(root, REPORTS_FILE))).toBe(false);
+    expect(listed(root, INBOX_DIR)).toEqual([`${s.eventId}.json`]);
+  });
+
+  test("a check that rejects leaves its report pending, and the pass goes on to the next", async () => {
+    const root = tempRoot();
+    const { first, second } = twoInOrder(root);
+    const outcome = await drainReportsAsync(
+      asyncOptions(root, {
+        checkArtefact: async (ref) => {
+          if (ref.kind === "commit" && ref.sha === "aaaa111") throw new Error("the checker fell over");
+          return { state: "on-dev" };
+        },
+      }),
+    );
+    expect(outcome.pending).toBe(1);
+    expect(outcome.recorded).toBe(1);
+    expect(outcome.stoppedBy).toBe(null);
+    expect(outcome.notes.join("\n")).toMatch(/the checker fell over/);
+    expect(rows(root).rows.map((row) => row.event.eventId)).toEqual([second.eventId]);
+    expect(listed(root, INBOX_DIR)).toEqual([`${first.eventId}.json`]);
+  });
+
+  test("a check that rejects after ownership went is an abandoned pass, not a pending report and a next one", async () => {
+    const root = tempRoot();
+    const { first, second } = twoInOrder(root);
+    let owner = true;
+    const asked: string[] = [];
+    const outcome = await drainReportsAsync(
+      asyncOptions(root, {
+        stillOwner: () => owner,
+        checkArtefact: async (ref) => {
+          if (ref.kind === "commit") asked.push(ref.sha);
+          owner = false;
+          throw new Error("the checker fell over");
+        },
+      }),
+    );
+    // Throwing it into the pass would resume it, and it would go on to the second report.
+    expect(asked).toEqual(["aaaa111"]);
+    expect(outcome.stoppedBy).toBe("abandoned");
+    expect(outcome.pending).toBe(0);
+    expect(outcome.recorded).toBe(0);
+    expect(listed(root, INBOX_DIR).sort()).toEqual([`${first.eventId}.json`, `${second.eventId}.json`].sort());
+  });
+});
+
 describe("the three read arms", () => {
   test("never written, recorded, and lost are three different answers", () => {
     const root = tempRoot();
@@ -1485,29 +1625,77 @@ describe("makeArtefactChecker", () => {
   const repoDir = join(import.meta.dirname, "..");
   const empty = (): string => tempRoot();
 
-  test("git says no is not-found; could not run git is unchecked", () => {
+  test("git says no is not-found; could not run git is unchecked", async () => {
     const check = makeArtefactChecker({ repoDir, decisionsRoot: empty(), queueRoot: empty() });
-    expect(check({ kind: "commit", sha: "0000000" })).toEqual({ state: "not-found" });
-    expect(check({ kind: "path", path: "no/such/file-here.ts" })).toEqual({ state: "not-found" });
+    expect(await check({ kind: "commit", sha: "0000000" }, () => true)).toEqual({ state: "not-found" });
+    expect(await check({ kind: "path", path: "no/such/file-here.ts" }, () => true)).toEqual({ state: "not-found" });
     const gone = makeArtefactChecker({ repoDir: join(empty(), "missing"), decisionsRoot: empty(), queueRoot: empty() });
-    expect(gone({ kind: "commit", sha: "0000000" }).state).toBe("unchecked");
+    expect((await gone({ kind: "commit", sha: "0000000" }, () => true)).state).toBe("unchecked");
 
     const notRepo = empty();
     writeFileSync(join(notRepo, "local.ts"), "local but git cannot say whether it is on dev");
     const noGitAnswer = makeArtefactChecker({ repoDir: notRepo, decisionsRoot: empty(), queueRoot: empty() });
-    expect(noGitAnswer({ kind: "path", path: "local.ts" }).state).toBe("unchecked");
+    expect((await noGitAnswer({ kind: "path", path: "local.ts" }, () => true)).state).toBe("unchecked");
   });
 
-  test("a commit on origin/dev and a path in its tree are on-dev", () => {
+  test("a commit on origin/dev and a path in its tree are on-dev", async () => {
     const check = makeArtefactChecker({ repoDir, decisionsRoot: empty(), queueRoot: empty() });
     const sha = execFileSync("git", ["rev-parse", "refs/remotes/origin/dev"], { cwd: repoDir, encoding: "utf8" }).trim();
-    expect(check({ kind: "commit", sha })).toEqual({ state: "on-dev" });
-    expect(check({ kind: "path", path: "package.json" })).toEqual({ state: "on-dev" });
+    expect(await check({ kind: "commit", sha }, () => true)).toEqual({ state: "on-dev" });
+    expect(await check({ kind: "path", path: "package.json" }, () => true)).toEqual({ state: "on-dev" });
   });
 
-  test("a decision or queue item absent from a never-written record is not-found", () => {
+  test("a git that will not answer or die does not hold the event loop, and is unchecked", async () => {
+    // Deaf to TERM, as a git stuck on a lock or a dying disk is. The synchronous
+    // call sent one TERM at its timeout and then waited for this for as long as
+    // it liked, with the daemon's one thread — heartbeat and all — waiting too.
+    const bin = join(empty(), "git-that-hangs");
+    writeFileSync(bin, "#!/bin/sh\ntrap '' TERM\nsleep 4 &\nwait\nsleep 4\n");
+    chmodSync(bin, 0o755);
+    const check = makeArtefactChecker({
+      repoDir,
+      decisionsRoot: empty(),
+      queueRoot: empty(),
+      git: { bin, timeoutMs: 150, graceMs: 50, owner: probeOwner() },
+    });
+    let turns = 0;
+    const ticking = setInterval(() => (turns += 1), 10);
+    const startedMs = Date.now();
+    try {
+      const answer = await check({ kind: "commit", sha: "0000000" }, () => true);
+      expect(answer.state).toBe("unchecked");
+      expect(answer.state === "unchecked" ? answer.why : "").toMatch(/deadline/);
+    } finally {
+      clearInterval(ticking);
+    }
+    // The loop turned while git was out, and the caller was released at the
+    // deadline plus the grace rather than when the child chose to exit.
+    expect(turns).toBeGreaterThan(5);
+    expect(Date.now() - startedMs).toBeLessThan(2_000);
+  });
+
+  test("a check no longer wanted starts no second git", async () => {
+    // A commit is two git calls. The daemon can lose its lock, or be told to
+    // stop, during the first; the second would then be a child started by a
+    // daemon on its way out, and a second deadline for the shutdown to wait on.
+    const dir = empty();
+    const calls = join(dir, "calls");
+    const bin = join(dir, "git-that-says-yes");
+    writeFileSync(bin, `#!/bin/sh\necho "$1" >> ${calls}\nexit 0\n`);
+    chmodSync(bin, 0o755);
+    const check = makeArtefactChecker({ repoDir, decisionsRoot: empty(), queueRoot: empty(), git: { bin, owner: probeOwner() } });
+    expect(await check({ kind: "commit", sha: "0000000" }, () => true)).toEqual({ state: "on-dev" });
+    expect(readFileSync(calls, "utf8")).toBe("cat-file\nmerge-base\n");
+
+    writeFileSync(calls, "");
+    const answer = await check({ kind: "commit", sha: "0000000" }, () => false);
+    expect(answer.state).toBe("unchecked");
+    expect(readFileSync(calls, "utf8")).toBe("cat-file\n");
+  });
+
+  test("a decision or queue item absent from a never-written record is not-found", async () => {
     const check = makeArtefactChecker({ repoDir, decisionsRoot: empty(), queueRoot: empty() });
-    expect(check({ kind: "decision", id: "dec-22222222" })).toEqual({ state: "not-found" });
-    expect(check({ kind: "queue-item", id: "qi-22222222" })).toEqual({ state: "not-found" });
+    expect(await check({ kind: "decision", id: "dec-22222222" }, () => true)).toEqual({ state: "not-found" });
+    expect(await check({ kind: "queue-item", id: "qi-22222222" }, () => true)).toEqual({ state: "not-found" });
   });
 });

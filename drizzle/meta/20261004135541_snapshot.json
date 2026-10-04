@@ -1,5 +1,5 @@
 {
-  "id": "5e8657cf-99ec-4b5c-8618-261632157cee",
+  "id": "6320f0b7-307b-4d85-a767-e392a822d009",
   "prevId": "6ffc6343-71a5-4cb1-afa9-23ea05002226",
   "version": "7",
   "dialect": "postgresql",
@@ -2325,12 +2325,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "hint_opened_at": {
-          "name": "hint_opened_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -2402,10 +2396,6 @@
         "chat_messages_help_user_only": {
           "name": "chat_messages_help_user_only",
           "value": "\"spideryarn\".\"chat_messages\".\"help\" = false or \"spideryarn\".\"chat_messages\".\"role\" = 'user'"
-        },
-        "chat_messages_hint_opened_assistant_only": {
-          "name": "chat_messages_hint_opened_assistant_only",
-          "value": "\"spideryarn\".\"chat_messages\".\"hint_opened_at\" is null or \"spideryarn\".\"chat_messages\".\"role\" = 'assistant'"
         }
       },
       "isRLSEnabled": false
@@ -5003,6 +4993,12 @@
         },
         "experimental_since": {
           "name": "experimental_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "auto_modes_off_at": {
+          "name": "auto_modes_off_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

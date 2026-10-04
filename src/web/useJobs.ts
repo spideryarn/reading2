@@ -22,6 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, ResetResponse, StepName } from "../types.js";
+import { handOverAutoModesChoice } from "./auto-modes-setting.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { batchUpload } from "./batchUpload.js";
 import { uploadEngine } from "./uploadEngine.js";
@@ -225,7 +226,15 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
     /* And the batch (batchUpload.ts), for the same reason: it holds a reader's
        files and posts their jobs. */
     batchUpload.start(readerId);
+    /* **An old "off" for *generate the main modes*, handed to the server.** It
+       lived in this browser until plan 261004h; the server decides now, and
+       cannot see a browser's storage. Here rather than on the add page because
+       an import can start from a link's hover card without visiting it. The
+       signal binds the request to this reader (auto-modes-setting.ts). */
+    const handOver = new AbortController();
+    void handOverAutoModesChoice(handOver.signal);
     return () => {
+      handOver.abort();
       jobEngine.stop();
       uploadEngine.stop();
       batchUpload.stop();

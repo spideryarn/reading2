@@ -251,8 +251,8 @@ caching off — and on the numbers that is about right:
 
 - **The money is small.** $72 of spend in those thirty days, and the best any marking rule could have
   saved was a few dollars of it.
-- **The one recurring shape is the import burst** — the add page's tick box queues every main mode at
-  once ([`queueAutoModes`](../../src/web/auto-modes.ts)), and mode jobs on one article run in
+- **The one recurring shape is the import burst** — an import's publication queues every main mode at
+  once ([`autoModePosts`](../../src/auto-mode-steps.ts)), and mode jobs on one article run in
   parallel since 2026-09-29. Of the jobs it posts only **two pairs** can share an article —
   tweets with ideas, glossary with quotes — worth about **2.6¢ an import** on a 10,000-token article.
 - **Capturing it needs cross-job coordination**, and that has no honest signal: the moment an entry

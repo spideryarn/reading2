@@ -208,6 +208,28 @@ const DISAGREEMENTS: Record<string, Pair> = {
   "blocks:extractedHtml": { queue: false, page: true },
 };
 
+/**
+ * **Differences on a recorded field that are meant**, pinned as the exact pair
+ * so neither side can drift into the other's answer. Not findings.
+ *
+ * - **`simple:promptVersion`** — a summary written by an older prompt. The
+ *   queue says *done*: an unforced job never rewrites a stored summary for the
+ *   prompt's age, because `simple`'s stamp expects the stored summary's own
+ *   version (src/pipeline.ts § `simple`). The page says *not current*: Metadata
+ *   still shows it as out of date and its Rerun, which is forced, writes the
+ *   new one. docs/plans/261004f-stop-writing-the-simple-summary-level.md §
+ *   Stage 2, GPT Sol's S1. Until 2026-10-04 both said no, and any unforced job
+ *   naming `simple` rewrote every summary after a prompt bump.
+ * - **`simple:model`** — the same write-once rule for a usable summary from an
+ *   earlier model generation. The queue preserves it; Metadata still compares
+ *   its provenance against today's expected model. The article hash must
+ *   still match on both paths.
+ */
+const BY_DESIGN: Record<string, Pair> = {
+  "simple:promptVersion": { queue: true, page: false },
+  "simple:model": { queue: true, page: false },
+};
+
 /* -------------------------------------------------------------- fixture -- */
 
 let article: ScratchArticle | undefined;
@@ -220,6 +242,7 @@ function ctxFor(extra: Partial<StepContext> = {}): StepContext {
     power: "standard",
     slug: SLUG,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
     ...extra,
@@ -602,10 +625,13 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
     });
 
     for (const field of fields) {
-      const pinned = DISAGREEMENTS[`${step}:${field}`];
-      const name = pinned
-        ? `FINDING — disagree when the recorded ${field} is stale: queue ${pinned.queue}, page ${pinned.page}`
-        : `both call it stale when the recorded ${field} is stale`;
+      const meant = BY_DESIGN[`${step}:${field}`];
+      const pinned = DISAGREEMENTS[`${step}:${field}`] ?? meant;
+      const name = meant
+        ? `differ on purpose when the recorded ${field} is stale: queue ${meant.queue}, page ${meant.page}`
+        : pinned
+          ? `FINDING — disagree when the recorded ${field} is stale: queue ${pinned.queue}, page ${pinned.page}`
+          : `both call it stale when the recorded ${field} is stale`;
       it(name, async () => {
         const value = staleValue(step, field);
         /* The premise, so a "stale" value that happens to be today's cannot

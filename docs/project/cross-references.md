@@ -50,10 +50,10 @@ true, and the prose has nowhere to say "out of date".
 
 ## When it runs
 
-- **After an import**, when the add page's *generate the main modes* box is ticked
-  ([260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md)). It is added to that
-  list by hand, because the list is derived from modes and this is not one. It runs in the first,
-  parallel group.
+- **After an import**, queued by its publication unless the reader has switched *generate the main
+  modes* off ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)). It is added to that
+  list by hand, because the list is derived from modes and this is not one. It reads nothing, so
+  its job is one step and is stamped ahead of Skim's.
 - **On demand**, from Metadata's *AI processing* (`METADATA_RERUN_STEPS`).
 
 Not in the import itself, which stays as fast as it can be. The prose picks the links up as soon as

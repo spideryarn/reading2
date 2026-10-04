@@ -59,10 +59,19 @@ above are unchanged; only the moment is earlier. The build is
   for a web page, before `extract` for a PDF, whose front matter is read on the capable tier. Later
   than that, the line under the box says some of it *may* have used Sonnet; exactly which steps
   cannot be told from the page, because the runner reads the setting before it marks a step running.
-- **The main modes it queues at the end wait for the switch to answer**, so none of them claims
-  first and reads Sonnet. The navigation to the article does not wait.
-- **It is a page's intent**, like *Generate the main modes*: a tab closed before the job is claimed
-  sends nothing, and the article imports on Sonnet. An import that fails after the switch keeps the
+- **The main modes run on Opus when the switch was committed before the first of them starts.**
+  Each step reads the article's power as it starts (`readStepPower`), and no main-mode job starts
+  until the `labels` job ahead of it has ended. The page sends the switch as soon as the article row
+  exists, which is long before publication. **What is no longer promised**: until 2026-10-04 the
+  page held the modes until the switch request *answered*, however long that took. The server queues
+  them at publication now ([261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
+  so a mode step that starts before the switch commits uses the standard model; later steps read
+  the setting again. A late tick, or labels ending quickly after failure or cancellation, can leave
+  very little time for the switch to commit. A tick in the last second is still sent at completion,
+  and the navigation to the article does not wait for it.
+- **It is a page's intent**: a tab closed before the job is claimed
+  sends nothing, and the article imports on Sonnet. (*Generate the main modes* was one too until
+  2026-10-04; it is the reader's setting now.) An import that fails after the switch keeps the
   charge on its article row, under the never-refunded rule; its *Retry* does not charge again.
 
 Deferred, and a billing change if built: the charge riding the job itself (admitted at

@@ -99,6 +99,8 @@ async function run(
      * past.
      */
     outcome?: "stopped" | "lock-lost";
+    /** Collects what the daemon logs, for the one test that waits on a line of it. */
+    lines?: string[];
   } = {},
 ): Promise<{ notes: DaemonNote[]; events: OverseerEvent[] }> {
   const controller = new AbortController();
@@ -114,7 +116,7 @@ async function run(
     signal: controller.signal,
     now: clock.now,
     tickMs: options.tickMs ?? 5,
-    log: () => undefined,
+    log: (line) => void options.lines?.push(line),
     source: () => script(),
     // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
     // apart, and an ABSENT `jobs` is what makes the daemon build no scheduler.
@@ -829,9 +831,6 @@ describe("stopping", () => {
 });
 
 describe("the scheduler on the daemon's clock", () => {
-  /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
-  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
   /**
    * A RULE, since plan 260910f (scheduled dispatch): a session job starts
    * through the launch protocol, which this daemon does not hold until Stage C,
@@ -1063,6 +1062,7 @@ describe("the scheduler on the daemon's clock", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T02:48:40.000Z");
     let settleRun: ((code: number) => void) | null = null;
+    const lines: string[] = [];
     const { notes } = await run(
       root,
       async function* () {
@@ -1077,13 +1077,13 @@ describe("the scheduler on the daemon's clock", () => {
         );
         settleRun?.(0);
         await until("the lost completion to reach daemon.jsonl", () => notesIn(root).some((note) => note.kind === "job-record-lost"));
-        // A REAL WAIT, kept: it stands in for "the heartbeat noticed the lock was
-        // gone", which the daemon says through no seam a test can read until it
-        // returns `lock-lost`. Too short fails loudly on that outcome in `run`.
-        await sleep(40);
+        // Until a write has found the lock gone and said so. It was a fixed
+        // 40 ms while the daemon stopped without a word (plan 261004g).
+        await until("the daemon to say the lock is gone", () => lines.some((line) => line.includes("the lock is gone")));
       },
       {
         clock,
+        lines,
         // Taking the lock away is what refuses the append, and it correctly
         // stops the daemon a moment later — the note has to survive that.
         outcome: "lock-lost",

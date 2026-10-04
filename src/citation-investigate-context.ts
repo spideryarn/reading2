@@ -38,8 +38,14 @@ import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } 
  * in the second part and Opus throughout. An answer from before had neither,
  * and must not be drawn under the new name. The model alone could not detach
  * it: Sonnet and Opus are one generation (`generationKey`).
+ *
+ * `/8` is the paper-passages call fencing the article's own fields (plan
+ * 261004h, src/citation-paper-passages.ts). That call has no version of its
+ * own, and what it picks is sent on into the answer's prompt
+ * (src/citation-investigate.ts § `paperSection`), so an answer kept from the
+ * unfenced layout is not one today's prompts would write.
  */
-export const CITATION_INVESTIGATE_VERSION = "citation-investigate/7";
+export const CITATION_INVESTIGATE_VERSION = "citation-investigate/8";
 
 /** Each citing passage sent, in characters — *Look it up*'s `PASSAGE_CAP`. */
 export const INVESTIGATE_PASSAGE_CAP = 1_200;

@@ -74,7 +74,6 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const { CLIENT_MINIMAL_STEPS, isMinimalJob: clientIsMinimalJob } = await import(
   "../src/web/read-this.js"
 );
-const { writeAutoModes } = await import("../src/web/auto-modes.js");
 const { MINIMAL_STEPS, isMinimalJob: serverIsMinimalJob } = await import(
   "../src/minimal-paper.js"
 );
@@ -209,7 +208,12 @@ describe("the shelf card of a paper not read through yet", () => {
     expect(container.textContent).toContain("lost sight of this import");
   });
 
-  it("queues the main modes only after Read this finishes, and honours an unticked box", async () => {
+  it("posts no mode job when Read this finishes: the server queues them at publication", async () => {
+    /* Until plan 261004h this file's subject watched the job and posted the
+       main modes itself when the browser's stored choice said so. *Read this*
+       is an import, and its publication queues them on the server
+       (tests/publication-queues-the-main-modes.test.ts § Read this), so a
+       second set from here is what must not happen. */
     const queued = {
       id: "j-read",
       slug: "a-paper",
@@ -223,21 +227,9 @@ describe("the shelf card of a paper not read through yet", () => {
 
     await act(async () => jobEngine.receive([{ ...queued, status: "done" } as never]));
     await settle();
-    expect(calls.slice(1).length, "the modes were not queued after Read this").toBeGreaterThan(0);
-    expect(calls.slice(1).every((call) => Array.isArray((call.body as { steps?: unknown }).steps))).toBe(
-      true,
-    );
-
-    act(() => root.unmount());
-    root = createRoot(container);
-    calls.length = 0;
-    jobEngine.reset();
-    writeAutoModes(false);
-    render(card(MINIMAL));
-    await act(async () => buttonNamed(/^Read this$/)?.click());
-    await act(async () => jobEngine.receive([{ ...queued, status: "done" } as never]));
-    await settle();
-    expect(calls).toEqual([{ url: "/api/jobs", body: { slug: "a-paper", readThis: true } }]);
+    expect(calls, "Read this posted something after its own job").toEqual([
+      { url: "/api/jobs", body: { slug: "a-paper", readThis: true } },
+    ]);
   });
 
   it("says the server's refusal beside the button", async () => {

@@ -66,9 +66,6 @@ function fakeClock(startIso: string): { now: () => Date; advance(ms: number): vo
   return { now: () => new Date(ms), advance: (by) => (ms += by) };
 }
 
-/** Real milliseconds. One use is left: the lock-lost run, which has no pass to count — see there. */
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * How many passes the jobs scheduler has COMPLETED, read off the injected `log`.
  *
@@ -293,15 +290,20 @@ describe("a restarted daemon does not dispatch an occurrence twice", () => {
       return NEVER();
     });
 
-    const first = await runDaemon(root, fakeClock(T0), jobs, async () => {
-      await until("the first dispatch", () => dispatched.length >= 1);
-      // A REAL WAIT, and it cannot be a counted one without a daemon change. It
-      // stands in for "the heartbeat noticed the lock was gone", which halts the
-      // scheduler — so there is no further pass to count — and which the daemon
-      // announces through no seam a test can read until it returns `lock-lost`.
-      // Too short fails loudly on the outcome below, not silently.
-      await sleep(40);
-    });
+    const firstLines: string[] = [];
+    const first = await runDaemon(
+      root,
+      fakeClock(T0),
+      jobs,
+      async () => {
+        await until("the first dispatch", () => dispatched.length >= 1);
+        // Until a write has found the lock gone and said so, which halts the
+        // scheduler. It was a fixed 40 ms while the daemon stopped without a
+        // word (plan 261004g).
+        await until("the daemon to say the lock is gone", () => firstLines.some((line) => line.includes("the lock is gone")));
+      },
+      firstLines,
+    );
     // It lost its lock, so it stopped writing — which is the point of the lock.
     expect(first.kind).toBe("lock-lost");
     expect(dispatched).toHaveLength(1);

@@ -71,11 +71,13 @@ import {
   articleRevisions,
   articles,
   jobs,
+  readerProfiles,
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
 import { isReservedSlug, shortIdInSlug } from "../ingest.js";
 import { isAdmin } from "../admin.js";
+import { autoModePosts } from "../auto-mode-steps.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import {
@@ -86,6 +88,7 @@ import {
   type ReaderFacingFailure,
 } from "../messages.js";
 import { currentOwnerId } from "../owner.js";
+import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
@@ -922,15 +925,17 @@ async function fenceJob(
   jobId: string,
   attemptId: string,
   draftRevisionId: string | null,
-): Promise<{ reset: JobReset | null }> {
+): Promise<{ reset: JobReset | null; reservesName: boolean }> {
   /* `returning` the job's `reset` because publication has to know whether it
      is a reset's, and this statement already holds that row's lock — so the
-     answer comes off the fenced row itself rather than a second read (Sol F7). */
+     answer comes off the fenced row itself rather than a second read (Sol F7).
+     `reserves_name` for the same reason: it is what says the job is an import
+     (`firstFullPublicationOfAnImport` in `publishRevisionIn`). */
   const fenced = await tx
     .update(jobs)
     .set({ draftRevisionId })
     .where(liveAttempt(jobId, attemptId))
-    .returning({ reset: jobs.reset });
+    .returning({ reset: jobs.reset, reservesName: jobs.reservesName });
   // Exactly one row, never `>= 1` and never ignored: zero rows here is the
   // fence doing its job, and it must reach the caller as a failure.
   const [row] = fenced;
@@ -2060,6 +2065,15 @@ export interface PublishRevisionResult {
    */
   readonly regenerated: readonly SuccessorOutcome[];
   /**
+   * **The main-mode jobs an import's first full publication queued**, one
+   * outcome per request of `autoModePosts()` (src/auto-mode-steps.ts), in the
+   * order they were stamped. Empty for every other publication, and for a
+   * reader who has switched them off. `alreadyQueued` is the ordinary case of
+   * a reader's own identical press having got there first.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  readonly autoModes: readonly SuccessorOutcome[];
+  /**
    * **A tree landed on a minimal paper** — `processing` flipped to `'full'` in
    * this transaction. The caller holding the job's reservation must charge it
    * and then `supersedeMinimal` the paper's minimal row, in the same
@@ -2419,6 +2433,52 @@ export async function publishRevisionIn(
     }
   }
 
+  /**
+   * **An import's first full publication queues the main-mode jobs** — here,
+   * in the transaction that published, for the reason the labels successor is:
+   * every way an import can start ends at this line, and a browser that has
+   * gone away cannot forget to ask.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   *
+   * **Which publication**, off the job row the fence has just locked and the
+   * article row locked at the top:
+   *
+   * - not a reset, which has its own `regenerate` list above;
+   * - and either the job **reserved the article's name** (a new URL, an
+   *   upload, or a retry of either) while the article **served nothing** and
+   *   is **not a minimal paper** — or this publication is the one that turns a
+   *   minimal paper full (*Read this*).
+   *
+   * `reserves_name` rather than "there is a job": the test fixture loader
+   * publishes under a synthetic job that reserves nothing, and so does a job
+   * that adopted its slug from another live one (GPT Sol, F1 of the plan
+   * review). A mode job, a Rebuild and a job-less `publishRevision` fail the
+   * same clause or the next.
+   *
+   * **The reader's choice is read here, in this transaction**:
+   * `reader_profiles.auto_modes_off_at`, null or no row meaning on.
+   *
+   * **The jobs**: one per request, the single-step ones first and Skim's
+   * last, stamped one microsecond apart after the labels job — after the row
+   * that actually holds it, which `notBefore` is for (`enqueueSuccessorIn`).
+   * Unscoped, so a reader's own identical press joins the queued job; that
+   * needs the same profile in the key, so it is rendered here exactly as
+   * `resolveProfile` (src/routes.ts) renders it for a press — "about you" and
+   * this article's purpose — and left off when there is none.
+   *
+   * A successor insert that throws rolls the whole publication back, as the
+   * labels successor's does. Nothing is driven from here: the owner's browser
+   * drives every queued job they have, from any page.
+   */
+  const firstFullPublicationOfAnImport =
+    fenced !== null &&
+    reset === null &&
+    ((fenced.reservesName && article.currentRevisionId === null && processing !== "minimal") ||
+      upgradedFromMinimal);
+  const autoModes = firstFullPublicationOfAnImport
+    ? await queueMainModesIn(tx, article, successor)
+    : [];
+
   return {
     revisionId,
     previousRevisionId: article.currentRevisionId,
@@ -2428,8 +2488,57 @@ export async function publishRevisionIn(
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
     regenerated,
+    autoModes,
     upgradedFromMinimal,
   };
+}
+
+/**
+ * The main-mode jobs in the order they are queued: the ones that read nothing,
+ * then the rest (`autoModePosts`, src/auto-mode-steps.ts). One function so the
+ * insert loop and the log line index the same list.
+ */
+function autoModeJobs(): StepName[][] {
+  const { together, after } = autoModePosts();
+  return [...together, ...after];
+}
+
+/**
+ * Queue the main-mode jobs for `article`, unless its owner has switched them
+ * off. `publishRevisionIn` decides *whether this publication is one that
+ * queues them* and says why at the call; this is the reader's choice, the
+ * profile and the inserts.
+ *
+ * `labels` is what became of the labels successor, if this publication needed
+ * one: the modes are stamped after the job that holds it.
+ */
+async function queueMainModesIn(
+  tx: Tx,
+  article: typeof articles.$inferSelect,
+  labels: SuccessorOutcome | null,
+): Promise<SuccessorOutcome[]> {
+  const [reader] = await tx
+    .select({ profile: readerProfiles.profile, autoModesOffAt: readerProfiles.autoModesOffAt })
+    .from(readerProfiles)
+    .where(eq(readerProfiles.ownerId, article.ownerId))
+    .limit(1);
+  if (reader?.autoModesOffAt) return [];
+
+  const profile = renderProfile({ profile: reader?.profile ?? null, purpose: article.purpose });
+  const queued: SuccessorOutcome[] = [];
+  for (const [i, steps] of autoModeJobs().entries()) {
+    queued.push(
+      await enqueueSuccessorIn(tx, {
+        ownerId: article.ownerId as OwnerId,
+        slug: article.slug,
+        steps,
+        ...(profile ? { profile } : {}),
+        after: i + 1,
+        ...(labels ? { notBefore: labels.jobId } : {}),
+      }),
+    );
+  }
+  return queued;
 }
 
 /** `articles.processing` — the CHECK `articles_processing` holds it to these two. */
@@ -2840,6 +2949,18 @@ export function logPublication(
             regenerated: published.regenerated.map((outcome) => ({
               kind: outcome.kind,
               jobId: outcome.jobId,
+            })),
+          }
+        : {}),
+      /* Present only on an import's first full publication by a reader who
+         has not switched them off: the main-mode jobs, by outcome, id and
+         step names. No prose, and never the profile they carry. */
+      ...(published.autoModes.length
+        ? {
+            autoModes: published.autoModes.map((outcome, i) => ({
+              kind: outcome.kind,
+              jobId: outcome.jobId,
+              steps: autoModeJobs()[i],
             })),
           }
         : {}),
