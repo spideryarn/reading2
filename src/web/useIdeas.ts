@@ -35,6 +35,7 @@ import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type IdeasStatus = "loading" | "none" | "ready" | "error";
 
@@ -79,6 +80,11 @@ export interface UseIdeas {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
+  /**
+   * A forced run was pressed on the list still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /*
    * `automatic` — *the run in flight started itself* — lived here until
    * 2026-09-13, so the panel could say *Using your profile* instead of offering
@@ -133,6 +139,8 @@ export interface IdeasRead {
   outdated: boolean;
   profiled: boolean;
   profileChanged: boolean;
+  /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   error: string | null;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
@@ -150,6 +158,8 @@ export function useIdeasRead(slug: string): IdeasRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -158,6 +168,7 @@ export function useIdeasRead(slug: string): IdeasRead {
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/ideas/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -169,6 +180,7 @@ export function useIdeasRead(slug: string): IdeasRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -185,6 +197,7 @@ export function useIdeasRead(slug: string): IdeasRead {
          undefined` and only `null` and absent mean "written without one". */
       setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
+      landed(started, res, loaded.ideas.generatedAt);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -199,7 +212,7 @@ export function useIdeasRead(slug: string): IdeasRead {
          guard, same reason, as useGlossary.ts § `fetchNow`. */
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
@@ -221,7 +234,7 @@ export function useIdeasRead(slug: string): IdeasRead {
     void reload();
   }, [reload]);
 
-  return { status, ideas, stale, outdated, profiled, profileChanged, error, retryRead, reload, refresh };
+  return { status, ideas, stale, outdated, profiled, profileChanged, fresh, error, retryRead, reload, refresh };
 }
 
 export function useIdeas(slug: string): UseIdeas {
@@ -242,11 +255,22 @@ export function useIdeas(slug: string): UseIdeas {
     },
     [queue],
   );
+  /* The list's clock is its identity: a forced run replaces it and re-stamps
+     it. The hold is not this band's reader's — Marginalia makes a second. */
+  const hold = useRewriteHold({
+    slug,
+    step: "ideas",
+    identity: read.ideas?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(
     async () => {
-      await queue.start({ force: true });
+      await held(() => queue.start({ force: true }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* `reload`, not `ensure`, for the last argument: a read that failed is
@@ -269,6 +293,7 @@ export function useIdeas(slug: string): UseIdeas {
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     refresh,

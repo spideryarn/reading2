@@ -37,6 +37,7 @@ import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 export type TweetsStatus = "loading" | "none" | "ready" | "error";
 
@@ -57,6 +58,11 @@ export interface UseTweets {
   failed: StepFailure | null;
   stalled: boolean;
   starting: boolean;
+  /**
+   * A forced run was pressed on the thread still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /** Repeat only the GET after a failed read. Never spends. */
   retryRead(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
@@ -72,6 +78,8 @@ export function useTweets(slug: string): UseTweets {
   const [status, setStatus] = useState<TweetsStatus>("loading");
   const [loaded, setLoaded] = useState<ThreadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
   /**
    * Whether a read has ever answered for this slug — a thread or a clean 404.
    * Read by the catch, which is a stable callback and cannot see state; after
@@ -89,11 +97,13 @@ export function useTweets(slug: string): UseTweets {
    */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
         const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
         if (!current()) return;
         if (res.status === 404) {
           setLoaded(null);
+          landed(started, res, null);
           setError(null);
           answered.current = true;
           setStatus("none");
@@ -102,6 +112,8 @@ export function useTweets(slug: string): UseTweets {
         const found = await readJson<ThreadResponse>(res);
         if (!current()) return;
         setLoaded(found);
+        /* `?.`: a null thread is drawn as it always was, not thrown on here. */
+        landed(started, res, found.thread?.generatedAt ?? null);
         setError(null);
         answered.current = true;
         setStatus("ready");
@@ -123,13 +135,20 @@ export function useTweets(slug: string): UseTweets {
            fall back on. */
         if (answered.current) {
           setError(THREAD_RECHECK_FAILED.message);
+          /* **This read is over, so it is not `loading`.** `retryRead` goes to
+             `loading` when nothing is loaded, and after a clean 404 that is
+             true *and* `answered` is — so the earlier answer kept the view and
+             nothing ended the wait. Only a 404 gets here loading, and `none` is
+             what it said.
+             docs/postmortems/261004f-a-previous-404-cannot-settle-the-next-failed-retry.md. */
+          setStatus((was) => (was === "loading" ? "none" : was));
         } else {
           setError(describeFetchFailure(err as Error));
           setStatus("error");
         }
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
@@ -154,9 +173,19 @@ export function useTweets(slug: string): UseTweets {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* The thread's clock is its identity: a forced run replaces it and re-stamps it. */
+  const hold = useRewriteHold({
+    slug,
+    step: "tweets",
+    identity: loaded?.thread?.generatedAt ?? null,
+    queue,
+    fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
   /* Arrival spends, once per page load — see the header. `reload` is the way
      out of a failed read: useAutoRun.ts § A failed read is not an answer. */
@@ -172,6 +201,7 @@ export function useTweets(slug: string): UseTweets {
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     retryRead,
     refresh,
     ensure,

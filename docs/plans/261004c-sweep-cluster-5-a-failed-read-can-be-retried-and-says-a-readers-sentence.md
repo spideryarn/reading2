@@ -272,3 +272,28 @@ so stage 2's code review is asked to check F9 and F10 specifically.
 ## Log
 
 - 2026-10-04 — plan written against `ab8289e2a`.
+- 2026-10-04 — stage 2a, 2c and F17 built (not yet reviewed). What differs from § 2a as written:
+  - **The hold carries the job's id, not `posted: boolean`.** The boolean is set when the POST
+    answers, but the engine learns of the new job only on its next poll, so for one round trip the
+    list is still idle and the rule-3 read races that poll — F9's own sequence, half the time.
+    Rule 3 now needs the posted job *listed as over* (`StepJob.ended`, and `StepJob.start` returns
+    the id). Shown by a mutant: with the boolean, `tests/rewrite-hold.test.tsx` § F9 fails at
+    "the POST answered and the list has not shown the job". Cost: a finished job trimmed from the
+    list before any band saw it over leaves the hold until a new artefact or a reload.
+  - **Consequence for an existing test:** `quiz-regenerate-revalidation` § "lets go when the
+    rewrite failed while the band was closed" posed that as an empty job list; it now lists the
+    failed job, as the server does. The assertion is unchanged.
+  - **Rule 3's mark is taken in render, not in an effect**, or the post-job read `useStepJob` has
+    already started would be discounted and every rewrite would cost a second GET.
+  - **Rule 2 ignores `queue.failed` while `starting`**: a previous press's refusal is still on
+    `failed` during the next press's POST, and released the new hold at once (in Quiz's original
+    too).
+  - **Sketch's identity** is the client fingerprint: `JSON.stringify` of the stored `sketch` value
+    as sent. `Sketch` has no clock and no content fingerprint of its own (`sourceHash` is the
+    article's).
+  - **Sketch's badge never drew.** `readSketch` does not carry `profileHash`, so `profiled` was
+    always false and the redraw in the badge's panel was unreachable; `useSketch` now reads it off
+    the stored value. Found because the Sketch row could not find a Regenerate to press.
+  - **2c took the one-parameter route.** One behaviour beyond the pinned ones: a stall or a body
+    that dies mid-read now keeps the partial reply, as the other stops always did.
+  - Not covered: a job-level *Retry* after a failed forced run makes a new job with no hold.

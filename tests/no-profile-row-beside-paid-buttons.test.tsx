@@ -56,6 +56,7 @@ function owner(over: Partial<UseIdeas> = {}): UseIdeas {
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     ensure: async () => {},
     regenerate: async () => {},
     refresh: async () => {},

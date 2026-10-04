@@ -3,8 +3,14 @@
 The sweep cluster 5 review found a pre-existing Thread retry defect, reported as F17, P1. After a
 clean 404, a failed recheck and another failed retry, the hook stays `loading` although the request
 has finished. [Tweets](../../src/web/Tweets.tsx) then says *Looking for a thread…* beside the
-failure. No production incident was established. This is reported, not fixed, because the older
-Thread recheck policy is outside the two candidate commits' narrow repair.
+failure. No production incident was established. It was reported rather than fixed in that review,
+because the older Thread recheck policy was outside the two candidate commits' narrow repair.
+
+**Fixed 2026-10-04**, in stage 2 of the same plan, by countermeasures 1 and 2 below: the recheck
+catch now ends `loading` (back to `none`, which is what the earlier 404 said) while keeping the
+recheck sentence and anything already loaded, and
+[tests/tweets-retry-settles.test.tsx](../../tests/tweets-retry-settles.test.tsx) is the transition
+test, seen red first with the review's own message. `answered` keeps its meaning.
 
 ## The class: historical success is used to decide whether a new request must settle
 
@@ -34,7 +40,7 @@ preserved at `/tmp/sweep5-review-thread-reproduction.test.tsx`. These are tempor
 not repository artefacts. To reproduce elsewhere with the matrix's mocked network harness: mount
 a probe calling `useTweets`, answer its opening GET with 404 and assert `none`; fail `refresh()`
 with a transport error; fail `retryRead()` the same way; observe the recheck error and assert that
-the completed request is no longer `loading`. That last assertion currently fails.
+the completed request is no longer `loading`. That last assertion failed until the fix above.
 
 ## What would have caught it, ranked by ease against value
 
@@ -54,6 +60,7 @@ the completed request is no longer `loading`. That last assertion currently fail
 
 Separate the facts *a previous read answered* and *this read is still pending*. Historical success
 can choose recheck copy or preserve accepted content; it cannot excuse leaving a completed request
-in `loading`. This report leaves the defect unchanged and explicitly open for a Thread follow-up.
+in `loading`. The fix does the narrow half of that — the catch settles the request — without a
+second flag: only a 404 can leave the hook both answered and `loading`.
 
 Up: [Postmortems](../project/postmortems.md).

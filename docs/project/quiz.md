@@ -454,7 +454,10 @@ numbers and review conclusion:
   So a new batch clears the answers on screen, and the panel says so beside the button (*"Writes
   new questions for your profile; your answers so far are cleared."*). Regenerate stays held from
   the press until the new batch has been read — across leaving Quiz and coming back, because the
-  hold lives with the page's quiz read rather than the band. If that read fails, *Read the new
+  hold is kept outside the band (it was Quiz's own until 2026-10-04 and is now the one rule six
+  modes share:
+  [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+  If that read fails, *Read the new
   questions* retries the GET without paying for another rewrite. The quiz is kept
   out of the *make public* dialog (`NeverShared`, src/store/pg.ts), because a shared link carries
   no quiz. A quiz written before 2026-10-02 has no recorded profile hash; it shows no badge until

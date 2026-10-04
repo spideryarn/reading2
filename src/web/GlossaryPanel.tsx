@@ -119,6 +119,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 
@@ -305,7 +306,7 @@ export function GlossaryPanel({
         compact
         regenerate={{
           run: () => void owner.more(true),
-          busy: owner.job !== null || owner.starting,
+          busy: owner.job !== null || owner.starting || owner.rewriting,
           refresh: () => owner.refresh(),
         }}
       />
@@ -396,6 +397,8 @@ export function GlossaryPanel({
              the list's `profiled` is passed directly. useGlossary.ts § `more`;
              tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
           onMore={() => owner.more(owner.profiled)}
+          waiting={owner.rewriting ? (owner.error ? "held" : "read") : null}
+          onRead={owner.refresh}
           onCancel={owner.cancel}
         />
       ) : null}
@@ -2240,6 +2243,8 @@ function MoreRow({
   failed,
   stalled,
   rewrites,
+  waiting,
+  onRead,
   onMore,
   onCancel,
 }: {
@@ -2273,6 +2278,15 @@ function MoreRow({
    * on a term that does not come back has nothing to attach to.
    */
   rewrites: boolean;
+  /**
+   * **The run this row offers was pressed, has finished, and its list has not
+   * loaded** (`UseGlossary.rewriting`). `"read"` draws the read in the button's
+   * place; `"held"` only disables the button, because a failed re-read already
+   * has *Try again* beside its sentence.
+   */
+  waiting: "read" | "held" | null;
+  /** Read the list again. Never spends. */
+  onRead(): Promise<void>;
   onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -2299,10 +2313,27 @@ function MoreRow({
     );
   }
 
+  /* A forced run has finished and its list is not here yet: this gives way to
+     a read, never to a second paid run. rewrite-hold.ts. */
+  if (waiting === "read") {
+    return (
+      <div className="gloss-more">
+        <RewriteWaiting line="The new terms haven't loaded yet." onRead={onRead} className="tw:m-0" />
+      </div>
+    );
+  }
+
   return (
     <div className="gloss-more">
       <div className="gloss-actions">
-        <button type="button" className="gloss-btn" title={title} onClick={() => void onMore()}>
+        <button
+          type="button"
+          className="gloss-btn"
+          title={title}
+          /* Held with the retry elsewhere: `ReadError`, under a failed re-read. */
+          disabled={waiting === "held"}
+          onClick={() => void onMore()}
+        >
           <Search size={12} />
           {label}
         </button>

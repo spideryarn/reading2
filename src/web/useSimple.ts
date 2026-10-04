@@ -24,6 +24,7 @@ import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 export interface UseSimple {
   status: ArtefactStatus;
@@ -46,6 +47,11 @@ export interface UseSimple {
   stalled: boolean;
   /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
   starting: boolean;
+  /**
+   * A forced run was pressed on the paragraphs still on screen, and has neither
+   * replaced them nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   /**
@@ -68,11 +74,14 @@ export function useSimple(slug: string): UseSimple {
   const [outdated, setOutdated] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /* `current()` after every `await`, before any state is set: false means this
      reply is about an article the hook has since moved on from. */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
         const res = await apiFetch(`/api/simple/${encodeURIComponent(slug)}`);
         if (!current()) return;
@@ -82,6 +91,7 @@ export function useSimple(slug: string): UseSimple {
           setStale(false);
           setOutdated(false);
           setProfileChanged(false);
+          landed(started, res, null);
           setError(null);
           setStatus("none");
           return;
@@ -92,6 +102,8 @@ export function useSimple(slug: string): UseSimple {
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);
+        /* `?.`: a null artefact is drawn as it always was, not thrown on here. */
+        landed(started, res, loaded.simpleSummary?.generatedAt ?? null);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -102,7 +114,7 @@ export function useSimple(slug: string): UseSimple {
         setStatus((was) => (was === "loading" ? "error" : was));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   const { reload, refresh } = useOrderedRead(load);
@@ -126,9 +138,19 @@ export function useSimple(slug: string): UseSimple {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* The paragraphs' clock is their identity: a forced run re-stamps it. */
+  const hold = useRewriteHold({
+    slug,
+    step: "simple",
+    identity: simple?.generatedAt ?? null,
+    queue,
+    fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
   /* A press — Summary on the bar, its command-bar rows, the slider or either
      end button — spends; arrival never does. */
@@ -147,6 +169,7 @@ export function useSimple(slug: string): UseSimple {
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     retryRead,
     refresh,
     ensure,

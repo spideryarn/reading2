@@ -48,86 +48,30 @@ import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
-import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
+import { readAnswerStream } from "./lib/sse.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type QuizStatus = "loading" | "none" | "ready" | "error";
 
 /**
- * **The terminal contract, in one function.**
+ * **What a mark says when it stops with no reason of its own** — the two stops
+ * `readAnswerStream` (lib/sse.ts) has no words from the server for.
  *
- * Zero or more `delta` frames, then exactly one terminal frame — `done` or
- * `error`. Anything else that ends the body is a failure, including the body
- * simply ending, which is the case the whole design is arranged against: a
- * provider or a socket that stops cleanly looks **exactly** like one that
- * finished, and from inside a `for await` the two are the same event.
- *
- * Extracted from `mark` below so that the rule is readable on its own and so
- * that `finished` cannot be set from two places. Returns the whole reply;
- * throws, with whatever partial text arrived carried on the error, otherwise.
+ * The terminal contract itself is that function's: zero or more `delta` frames,
+ * then exactly one `done` or `error`, and anything else that ends the body is a
+ * failure — including the body simply ending, which a provider or a socket that
+ * stops cleanly makes look **exactly** like finishing. `mark` below had its own
+ * copy of the loop (`readMark`) until 2026-10-04; an `error` frame whose data
+ * was `null` was a `TypeError` in it. The sentences stayed here because they
+ * are the quiz's, pinned in tests/quiz-mark-stream.test.tsx.
  */
-class MarkStopped extends Error {
-  /** What had arrived before it stopped. The reader has already read it. */
-  readonly partial: string;
-  constructor(message: string, partial: string) {
-    super(message);
-    this.name = "MarkStopped";
-    this.partial = partial;
-  }
-}
-
-async function readMark(
-  body: ReadableStream<Uint8Array>,
-  onDelta: (text: string) => void,
-): Promise<{ reply: string; verdict: QuizVerdict | undefined }> {
-  let text = "";
-  for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
-    if (event.name === "delta") {
-      const piece = (event.data as { text?: unknown }).text;
-      if (typeof piece === "string" && piece) {
-        text += piece;
-        onDelta(text);
-      }
-      continue;
-    }
-    if (event.name === "done") {
-      const data = event.data as { reply?: unknown; verdict?: unknown };
-      const reply = data.reply;
-      /* **Validated rather than cast**, because this decides whether the next
-         step carries its premise and a stray string would decide it on
-         nonsense. Any other value is absence, which means *show the premise* —
-         the same outcome as the classifier having failed, and a perfectly
-         ordinary one. */
-      const verdict: QuizVerdict | undefined =
-        data.verdict === "right" || data.verdict === "wrong" ? data.verdict : undefined;
-      /* The server's own whole reply where it sent one, because it is the
-         trimmed text and the deltas are not. Falling back to the accumulator
-         rather than trusting the field blindly, so a malformed `done` still
-         hands back what the reader watched arrive. */
-      return {
-        reply: typeof reply === "string" && reply.trim() ? reply : text,
-        verdict,
-      };
-    }
-    if (event.name === "error") {
-      const message = (event.data as { error?: unknown }).error;
-      throw new MarkStopped(
-        typeof message === "string" && message
-          ? message
-          : "The mark stopped before it was finished.",
-        text,
-      );
-    }
-  }
+const MARK_STOPS = {
+  stopped: "The mark stopped before it was finished.",
   /* **The case a mocked complete transcript cannot reach.** The body ended
      cleanly with no terminal frame in it — a provider that stopped, an instance
      that was killed, a proxy that closed. */
-  throw new MarkStopped(
-    "The reply stopped arriving before it was finished. Nothing was lost — try again.",
-    text,
-  );
-}
-
-
+  ended: "The reply stopped arriving before it was finished. Nothing was lost — try again.",
+};
 
 /**
  * Where one attempt at one question has got to.
@@ -221,8 +165,8 @@ export interface UseQuiz {
    * replaced it nor failed. Covers the gap `job`/`starting` do not: a finished
    * job leaves `job` before its re-read lands, and a re-read that fails keeps
    * the old batch *and its old `profileChanged`*, so the badge's Regenerate
-   * would offer a second paid rewrite. A new batch, or a failed or cancelled
-   * job, releases it. GPT Sol's plan review of 261002f.
+   * would offer a second paid rewrite. GPT Sol's plan review of 261002f; the
+   * rule, and what releases it, is rewrite-hold.ts's since 2026-10-04.
    */
   rewriting: boolean;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
@@ -277,19 +221,12 @@ export interface QuizRead {
   /** `UseQuiz.profileChanged`. */
   profileChanged: boolean;
   /**
-   * **The batch a forced rewrite was pressed on**, until it is replaced or the
-   * rewrite is known to have ended without replacing it — `UseQuiz.rewriting`.
-   * Held up here rather than in the band because the band unmounts on Recall
-   * or any other mode while the paid job runs on; a hold that died with it
-   * re-offered Regenerate on the old batch (GPT Sol's code review of 261002f,
-   * docs/postmortems/261002f-a-band-local-hold-cannot-protect-a-job-that-outlives-the-band.md).
-   * A successful read of a different batch releases it here.
+   * Which reads the server itself answered, and when each started — what
+   * Regenerate's hold asks of a read (rewrite-hold.ts § `FreshReads`). The hold
+   * itself was here from 261002f until 2026-10-04 (`held`); it is in that
+   * module now, where it also survives a read that is not this one.
    */
-  held: string | null;
-  hold(batchId: string): void;
-  release(): void;
-  /** Successful reads so far — the band's "a read has landed since" clock. */
-  okReads: number;
+  fresh: FreshReads;
   error: string | null;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
@@ -306,15 +243,9 @@ export function useQuizRead(slug: string): QuizRead {
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
-  const [held, setHeld] = useState<string | null>(null);
-  const [okReads, setOkReads] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  /* A hold is about one article's batch. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new article
-  useEffect(() => {
-    setHeld(null);
-  }, [slug]);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -323,6 +254,7 @@ export function useQuizRead(slug: string): QuizRead {
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -335,8 +267,7 @@ export function useQuizRead(slug: string): QuizRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
-        setHeld(null);
-        setOkReads((n) => n + 1);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -352,9 +283,7 @@ export function useQuizRead(slug: string): QuizRead {
          (written for nobody) both mean no badge. */
       setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
-      /* The replacement has arrived: nothing left to wait for. */
-      setHeld((h) => (h !== null && h !== loaded.quiz.batchId ? null : h));
-      setOkReads((n) => n + 1);
+      landed(started, res, loaded.quiz.batchId);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -368,7 +297,7 @@ export function useQuizRead(slug: string): QuizRead {
          useTimeline.ts and useIdeas.ts. */
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
@@ -393,9 +322,6 @@ export function useQuizRead(slug: string): QuizRead {
     await reload();
   }, [quiz, reload]);
 
-  const hold = useCallback((batchId: string) => setHeld(batchId), []);
-  const release = useCallback(() => setHeld(null), []);
-
   return {
     status,
     quiz,
@@ -403,10 +329,7 @@ export function useQuizRead(slug: string): QuizRead {
     outdated,
     profiled,
     profileChanged,
-    held,
-    hold,
-    release,
-    okReads,
+    fresh,
     error,
     retryRead,
     reload,
@@ -453,51 +376,33 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     await queue.start();
   }, [queue]);
 
-  /* **`rewriting`: the hold lives in the read** (`QuizRead.held`), so it
-     survives this band unmounting while the job runs on. The band's part is
-     releasing it when the rewrite is known to have ended without a new batch:
-
-     - the job failed or was cancelled, as this tab saw it (`failed`);
-     - or the job list is loaded and idle, and a read has landed since it went
-       idle. That read is the server's word: a rewrite that succeeded would
-       have shown a new batch (which the read releases on its own), so one that
-       shows the same batch with no job running ended without replacing it —
-       the case of a job that failed while the band was closed, where `failed`
-       is not known to a fresh mount. A read that has not landed, or failed,
-       keeps the hold: that is the window the hold exists for. */
-  const { held, hold, release, okReads } = read;
-  const rewriting = held !== null && held === batchId && queue.failed === null;
-  useEffect(() => {
-    if (held !== null && queue.failed !== null) release();
-  }, [held, queue.failed, release]);
-  const idle = queue.loaded && queue.job === null && !queue.starting;
-  const readsAtIdle = useRef<number | null>(null);
-  useEffect(() => {
-    if (!idle) {
-      readsAtIdle.current = null;
-      return;
-    }
-    if (readsAtIdle.current === null) {
-      readsAtIdle.current = okReads;
-      return;
-    }
-    if (held !== null && okReads > readsAtIdle.current) release();
-  }, [idle, okReads, held, release]);
+  /* **`rewriting`: the hold is not this band's**, so it survives the band
+     unmounting while the job runs on — rewrite-hold.ts, which owns what
+     releases it. The batch is the identity: a new `batchId` is the replacement. */
+  const { rewriting, run: held } = useRewriteHold({
+    slug,
+    step: "quiz",
+    identity: batchId ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
 
   const write = useCallback(async () => {
-    if (batchId) hold(batchId);
-    await queue.start({
-      /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
-         offered beside questions that are current, so an unforced run would skip
-         and the reader would watch a job start and finish having changed
-         nothing. Forcing is safe because this step replaces rather than appends.
+    await held(() =>
+      queue.start({
+        /* **Always forced**, for `useIdeas.regenerate`'s reason: the button is
+           offered beside questions that are current, so an unforced run would skip
+           and the reader would watch a job start and finish having changed
+           nothing. Forcing is safe because this step replaces rather than appends.
 
-         It also mints a new `batchId`, which is deliberate and is why the mark
-         route answers 409 rather than falling forward: the reference answers
-         have genuinely been rewritten. */
-      force: true,
-    });
-  }, [queue, batchId, hold]);
+           It also mints a new `batchId`, which is deliberate and is why the mark
+           route answers 409 rather than falling forward: the reference answers
+           have genuinely been rewritten. */
+        force: true,
+      }),
+    );
+  }, [queue, held]);
 
   /* **The reader pressed Quiz and there is nothing there — write the questions.**
      `ensure` and not `write`, for the double-charge reason on the interface; and
@@ -560,6 +465,10 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
 
       setAttempt({ questionId, answer, status: "marking", reply: "", error: null });
 
+      /* What has arrived so far, held here because the stream reader throws a
+         plain sentence and the catch below still owes the reader the half they
+         have read — on every stop, a stall included. */
+      let partial = "";
       try {
         const res = await apiFetch(`/api/quiz/${encodeURIComponent(slug)}/mark`, {
           method: "POST",
@@ -574,11 +483,35 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           await readJson(res);
           throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
-        /* **The reply is what `readMark` returns**, and it returns only on a
-           `done` frame. There is no other road to the two lines below, which is
-           the whole of the terminal contract as the client keeps it. */
-        const { reply, verdict } = await readMark(res.body, (text) =>
-          setAttempt({ questionId, answer, status: "marking", reply: text, error: null }),
+        /* **The reply is what `readAnswerStream` returns**, and it returns only
+           on a `done` frame. There is no other road to the two lines below,
+           which is the whole of the terminal contract as the client keeps it. */
+        const { reply, verdict } = await readAnswerStream(
+          res.body,
+          {
+            delta: (text) => {
+              partial = text;
+              setAttempt({ questionId, answer, status: "marking", reply: text, error: null });
+            },
+            done: (data) => {
+              const sent = data as { reply?: unknown; verdict?: unknown } | null;
+              /* **Validated rather than cast**, because this decides whether the
+                 next step carries its premise and a stray string would decide it
+                 on nonsense. Any other value is absence, which means *show the
+                 premise* — the same outcome as the classifier having failed, and
+                 a perfectly ordinary one. */
+              const verdict: QuizVerdict | undefined =
+                sent?.verdict === "right" || sent?.verdict === "wrong" ? sent.verdict : undefined;
+              /* The server's own whole reply where it sent one, because it is
+                 the trimmed text and the deltas are not. Falling back to what
+                 arrived rather than trusting the field blindly, so a malformed
+                 `done` still hands back what the reader watched arrive — and is
+                 never the "could not read" refusal an `undefined` here means. */
+              const whole = sent?.reply;
+              return { reply: typeof whole === "string" && whole.trim() ? whole : partial, verdict };
+            },
+          },
+          MARK_STOPS,
         );
         setAttempt({
           questionId,
@@ -607,7 +540,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           questionId,
           answer,
           status: "failed",
-          reply: err instanceof MarkStopped ? err.partial : "",
+          reply: partial,
           error: (err as Error).message,
         });
       } finally {

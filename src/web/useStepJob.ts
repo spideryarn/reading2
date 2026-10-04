@@ -264,7 +264,7 @@ export interface StepJob<S extends StepName = StepName> {
   /**
    * The job list has been read at least once, so `job === null` means *no job*
    * rather than *not looked yet*. A pass-through of `useJobs().loaded`; the
-   * quiz's Regenerate hold reads it (useQuiz.ts § `rewriting`).
+   * Regenerate hold reads it (rewrite-hold.ts § What releases it).
    */
   loaded: boolean;
   /**
@@ -310,8 +310,18 @@ export interface StepJob<S extends StepName = StepName> {
    * the moment the id `start` returned turns up in a list.
    */
   starting: boolean;
-  /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
-  start(run?: StepRun<S>): Promise<void>;
+  /**
+   * Ask for a run. Resolves once the POST has been answered, not when the job
+   * has — with the new job's id, or null when nothing was made. The id is for
+   * Regenerate's hold, which outlives the mount that pressed (rewrite-hold.ts).
+   */
+  start(run?: StepRun<S>): Promise<string | null>;
+  /**
+   * **This job is in the list and is over** — done, failed or cancelled. False
+   * for one the list has not shown yet, which from here looks the same as one
+   * that never existed: rewrite-hold.ts § Why the hold carries the job's id.
+   */
+  ended(jobId: string): boolean;
   cancel(id: string): void;
 }
 
@@ -663,12 +673,13 @@ export function useStepJob<S extends StepName>(
       if (started) {
         setWatchedId(started.id);
         startedId.current = started.id;
-        return;
+        return started.id;
       }
       /* Nothing was made, so there is nothing to wait for and the button is the
          right thing to show — with the reason under it. */
       startedId.current = null;
       setStarting(false);
+      return null;
     },
     [queue, slug, step],
   );
@@ -783,6 +794,10 @@ export function useStepJob<S extends StepName>(
        spinner over a spinner is a state nobody can read. */
     starting: starting && job === null,
     start,
+    ended: (jobId) => {
+      const seen = queue.jobs.find((j) => j.id === jobId);
+      return seen !== undefined && seen.status !== "queued" && seen.status !== "running";
+    },
     /* `void`, because the interface promises nothing to await: every surface
        fires this from a click and the outcome arrives through the polled list. */
     cancel: (id) => void queue.cancel(id),

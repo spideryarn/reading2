@@ -49,6 +49,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -226,6 +227,8 @@ export interface GlossaryRead {
   profileChanged: boolean;
   /** `GlossaryResponse.panelRun`, passed through; absent when the server did not say. */
   panelRun?: "append" | "rewrite" | undefined;
+  /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   error: string | null;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
@@ -328,6 +331,8 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [profileChanged, setProfileChanged] = useState(false);
   const [panelRun, setPanelRun] = useState<"append" | "rewrite" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
   /* The hide write may outlive the article it started on. Kept beside the
      other per-article state so the render-time slug reset below can clear it
      before the next article's children see a pending id from this one. */
@@ -348,6 +353,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
    */
   const load = useCallback(
     async (current: () => boolean): Promise<void> => {
+      const started = begin();
       try {
         const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
         if (!current()) return;
@@ -360,6 +366,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setProfiled(false);
           setProfileChanged(false);
           setPanelRun(undefined);
+          landed(started, res, null);
           setError(null);
           setStatus("none");
           return;
@@ -378,6 +385,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         setProfiled(profiled);
         setProfileChanged(loaded.profileChanged);
         setPanelRun(loaded.panelRun);
+        landed(started, res, loaded.glossary.generatedAt);
         setError(null);
         setStatus("ready");
       } catch (err) {
@@ -399,7 +407,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         setStatus((was) => (was === "loading" ? "error" : was));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
@@ -697,6 +705,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     profiled,
     profileChanged,
     panelRun,
+    fresh,
     error,
     retryRead,
     reload,
@@ -758,6 +767,11 @@ export interface UseGlossary {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
+  /**
+   * A forced run (`more`) was pressed on the list still on screen, and has
+   * neither replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /**
    * Write the list — always for the reader's profile, if they have one. The
    * *Use your profile* checkbox that could ask for a plain list was removed on
@@ -906,8 +920,23 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * nowhere else. The automatic run below therefore posts the identical request
    * this button does, without anything having to be changed to make it true.
    */
-  const find = useCallback(() => run(false), [run]);
-  const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
+  const find = useCallback(async () => {
+    await run(false);
+  }, [run]);
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts).
+     The list's clock is the identity, and an append re-stamps it as a rewrite
+     does — which is all the release claims: the job wrote. It is not read as
+     proof the list was rewritten. */
+  const hold = useRewriteHold({
+    slug,
+    step: "glossary",
+    identity: glossary?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
+  const more = useCallback((useProfile = true) => held(() => run(true, useProfile)), [held, run]);
 
   /* `reload` rather than `refresh`: the way out of a failed read is to read
      again, and `reload` joins a request already in flight rather than making a
@@ -1097,6 +1126,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     find,
     more,
     refresh,

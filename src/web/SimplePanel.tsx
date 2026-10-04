@@ -41,6 +41,7 @@ import type { UseSimple } from "./useSimple.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 
@@ -96,7 +97,13 @@ export function SimplePanel({
      reader has changed their profile, so *Write it again* picks up the new one
      (the quiz's rule; the badge in the row says why, in its card). */
   const showJob =
-    owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed || owner.profileChanged);
+    owner !== null &&
+    ready &&
+    !owner.stale &&
+    (owner.job || owner.starting || owner.failed || owner.profileChanged || owner.rewriting);
+  /* A rewrite has finished and its paragraphs are not here yet: the forced
+     button gives way to a read, never to a second paid run. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
 
   /**
    * @param again whether this is the button beside paragraphs already there.
@@ -104,13 +111,17 @@ export function SimplePanel({
    *   request the automatic run makes — or it buys a second model call.
    */
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+      <RewriteWaiting line="The new summary hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
       <JobProgress
         job={owner.job}
         starting={owner.starting}
         failed={owner.failed}
         stalled={owner.stalled}
         onRun={() => (again ? owner.regenerate() : owner.ensure())}
+        /* With `error` set the retry is `ReadError`'s, above; the button stays held. */
+        runDisabled={again && owner.rewriting}
         onCancel={owner.cancel}
         label={label}
         step="simple"

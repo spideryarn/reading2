@@ -83,6 +83,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     find: async () => {},
     more: async () => {},
     refresh: async () => {},

@@ -86,6 +86,7 @@ import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { useSketch } from "./useSketch.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 
@@ -291,7 +292,7 @@ function OwnerSketch({
       compact
       regenerate={{
         run: () => void view.regenerate(),
-        busy: view.job !== null || view.starting,
+        busy: view.job !== null || view.starting || view.rewriting,
         refresh: () => view.refresh(),
       }}
     />
@@ -332,6 +333,12 @@ function OwnerSketch({
           was drawn only in the empty branch above — so here it was silent, with
           no way to ask again. */}
       {view.error && <ReadError error={view.error} onRetry={view.retryRead} />}
+      {/* A redraw finished and its picture is not here yet — a re-read answered
+          from the offline copy leaves no error to put a button beside. The
+          read, never a second paid redraw. rewrite-hold.ts. */}
+      {view.rewriting && !view.job && !view.starting && !view.failed && !view.error && (
+        <RewriteWaiting line="The new picture hasn't loaded yet." onRead={view.refresh} />
+      )}
     </>
   );
 
