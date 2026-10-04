@@ -1649,7 +1649,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
               } catch (failure) {
                 // The note log is what broke. Said here so the rejection is
                 // not an unhandled one, which would take the process down.
-                log(`the report drain failed and that could not be noted: ${failure instanceof Error ? failure.message : String(failure)}`);
+                try {
+                  log(`the report drain failed and that could not be noted: ${failure instanceof Error ? failure.message : String(failure)}`);
+                } catch {
+                  /* Both logs are broken. Settlement and lock release must still run. */
+                }
               }
             })
             .finally(() => {

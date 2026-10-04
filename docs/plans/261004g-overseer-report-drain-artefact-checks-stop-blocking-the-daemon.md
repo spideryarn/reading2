@@ -169,4 +169,14 @@ code; four accepted, one answered.
     fixes; the settle line and the abandoned-pass line each proven by removing them;
   - the awaited drain's tests proven by removing its ownership check (two go red);
   - the two `sleep(40)`s waited 20 s by name before the log line existed.
+- 2026-10-04 — [GPT Sol's code review](261004g-code-review-sol.md): **land after fixes (made)**.
+  - **F6, fixed by Sol, red first:** the drain's last-resort log line could itself throw and reject
+    the promise the shutdown waits on, so the store was never closed.
+    [Postmortem](../postmortems/261004j-a-fallback-logger-rejects-the-promise-that-shutdown-must-settle.md).
+    It notes the same unguarded fallback in the attention and recovery handlers; not touched here.
+  - **F7, left, and not clearly a defect:** `stopHere()` writes the `daemon-stopped` note even
+    after the lock is lost. That is on `dev` already, and looks deliberate: its `why` has a branch
+    for exactly that case ("another Overseer took the lock"), and the note log is append-only and
+    not the lock's. Reported to the Overseer as a question rather than changed.
+  - Sol broke the code eight ways and each went red. It would keep the generator for now.
 - **Restart needed:** the Overseer daemon, to pick any of this up. Not the dashboard.

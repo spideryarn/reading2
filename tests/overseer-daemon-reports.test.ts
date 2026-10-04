@@ -6,13 +6,14 @@
  * that is green on its own and never called by the daemon is the class
  * `tests/overseer-daemon-usage-pass.test.ts` exists for.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
 import { runOverseer } from "../tools/overseer/daemon.js";
 import { readNotes } from "../tools/overseer/notes.js";
+import * as noteLogs from "../tools/overseer/notes.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import type { ReportDrainOutcome } from "../tools/overseer/reports.js";
 import { LOCK_FILE, type SessionRegister } from "../tools/overseer/store.js";
@@ -21,6 +22,7 @@ import { rawFixture } from "./overseer-fixtures.js";
 
 const roots: string[] = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -114,6 +116,54 @@ test("a throwing drain becomes a note and the daemon keeps running", async () =>
   const degraded = read.notes.find((note) => note.kind === "condition-degraded" && note.condition === "reports");
   expect(degraded?.kind === "condition-degraded" ? degraded.why : "").toMatch(/on fire/);
   expect(read.notes.some((note) => note.kind === "condition-restored" && note.condition === "reports")).toBe(true);
+});
+
+test("a failed drain with broken note and fallback logs still settles and releases the lock", async () => {
+  const root = tempRoot();
+  const controller = new AbortController();
+  const realOpen = noteLogs.openNoteLog;
+  vi.spyOn(noteLogs, "openNoteLog").mockImplementation((directory) => {
+    const notes = realOpen(directory);
+    return {
+      ...notes,
+      append(note) {
+        if (note.kind === "condition-degraded" && note.condition === "reports") throw new Error("ENOSPC");
+        notes.append(note);
+      },
+    };
+  });
+  let endSource: () => void = () => {};
+  const sourceEnded = new Promise<void>((resolve) => {
+    endSource = resolve;
+  });
+  let fallbackAttempted = false;
+  const running = runOverseer({
+    root,
+    baseUrl: "http://127.0.0.1:1",
+    signal: controller.signal,
+    tickMs: 60_000,
+    log: (line) => {
+      if (line.includes("could not be noted")) {
+        fallbackAttempted = true;
+        throw new Error("EPIPE");
+      }
+    },
+    source: async function* (): AsyncGenerator<SourceMessage> {
+      yield* [];
+      await sourceEnded;
+    },
+    reports: {
+      intervalMs: 5,
+      drain: async () => {
+        // Put shutdown in flight before the drain's rejection is handled.
+        endSource();
+        throw new Error("the inbox is on fire");
+      },
+    },
+  });
+  await expect(running).resolves.toMatchObject({ kind: "stopped" });
+  expect(fallbackAttempted).toBe(true);
+  expect(existsSync(join(root, LOCK_FILE))).toBe(false);
 });
 
 /* ------------------------------------------------------------------ *
