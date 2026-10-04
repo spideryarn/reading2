@@ -447,11 +447,13 @@ describe("a mode a visitor cannot have", () => {
  * read it back through the rendered card rather than by importing it, so what
  * is asserted is what a reader is shown.
  *
- * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5): one
- * link in both arms, whose href follows the mode — tests/dock-help-link.test.tsx
- * holds that; this list holds its card to the same shape as its neighbours'.
+ * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5) and left
+ * every bar but a visitor's on 2026-10-04 (spya-dev7pf, plan 261004j), so it
+ * is not in this list: these cases render the owner's bar, which has no Help
+ * control. Its card is held to the same shape by the last case below, on a
+ * visitor's bar; tests/dock-help-link.test.tsx holds who gets the link.
  */
-const NOT_MODES = ["Comments", "Metadata", "Help"] as const;
+const NOT_MODES = ["Comments", "Metadata"] as const;
 
 /** The bar's button with this accessible name, in whichever arm is rendered. */
 function barControl(label: string): HTMLElement {
@@ -482,7 +484,7 @@ function withDrawer(drawer: Record<string, unknown> = {}): void {
   });
 }
 
-describe("the three buttons in the bar that are not modes", () => {
+describe("the buttons in the bar that are not modes", () => {
   it("each open a card of two paragraphs, headed with their own name", async () => {
     withDrawer();
     for (const label of NOT_MODES) {
@@ -555,6 +557,26 @@ describe("the three buttons in the bar that are not modes", () => {
     expect(offIt.paras[1], "the second paragraph differs between the arms").toBe(
       onReadingView.paras[1],
     );
+  });
+
+  /**
+   * **Help, on the one bar that still draws it** — a visitor's, since
+   * 2026-10-04 (plan 261004j). The same four claims the list above makes of
+   * Comments and Metadata, in both arms of the bar.
+   */
+  it("hold a visitor's Help card to the same shape, in either arm", async () => {
+    for (const render of [reading, loose]) {
+      render({ visitor: true });
+      const help = barControl("Help");
+      expect(help.hasAttribute("title"), "Help carries a `title`").toBe(false);
+      const { head, paras } = await cardFor(help);
+      expect(head).toBe("Help");
+      expect(paras.length, "Help's card is not two paragraphs").toBe(2);
+      const [what, how] = paras as [string, string];
+      expect(restates(what, how), "Help: the second paragraph is the first again").toBe(false);
+      expect(restates("Help", what), "Help: the first paragraph is the label again").toBe(false);
+      expect(paras.join(" "), "Help names a price").not.toMatch(/[$£€]\s*\d/);
+    }
   });
 });
 

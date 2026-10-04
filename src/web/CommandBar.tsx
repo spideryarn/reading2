@@ -213,7 +213,8 @@ export interface CommandBarArticle {
    * **Where the Help row goes from here** — the section for the mode the band
    * is in, already built by the Dock (`helpHrefFor` in Dock.tsx) and handed
    * down, for the reason `slug` and `search` are: the Dock's Help link and this
-   * row then cannot open on different sections. A finished href rather than
+   * row then cannot open on different sections. (Since 2026-10-04 the link is
+   * drawn only on a visitor's bar, where this row is not; one rule all the same.) A finished href rather than
    * the mode, because this file imports nothing from Dock.tsx (see the import
    * there) and the rule for which section is the Dock's to own.
    *
@@ -912,7 +913,10 @@ function experimentalOutcome(result: ExperimentalSaveOutcome): ActionOutcome {
 /**
  * **The Help page, opened at the part about where you are standing** —
  * docs/plans/261002b-help-page.md § After GPT Sol's plan review, R8: the
- * footer, this row and the Dock's Help link are the three ways in.
+ * footer, this row and the Dock's Help link were the three ways in. Since
+ * 2026-10-04 this row is **the** way in from the bar for anyone who has it:
+ * the Dock's link is drawn only for a visitor, who does not (Dock.tsx §
+ * `DockHelp`, plan 261004j).
  *
  * Not in `APP_PAGES` because its href is not the same everywhere: it is the
  * section for the mode the band is in (`CommandBarArticle` § `help`). And

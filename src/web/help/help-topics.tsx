@@ -142,9 +142,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>The bottom bar</strong> holds the way home (the Spideryarn wordmark), the{" "}
-            <kbd>⌘</kbd> button for commands, one button per mode, then <strong>Comments</strong>,{" "}
-            <strong>Metadata</strong> and <strong>Help</strong>. When you are signed in, it also has{" "}
-            the <strong>Experimental</strong> switch and <strong>Feedback</strong>.
+            <kbd>⌘</kbd> button for commands, one button per mode, then <strong>Comments</strong>{" "}
+            and <strong>Metadata</strong>. When you are signed in, it also has the{" "}
+            <strong>Experimental</strong> switch and <strong>Feedback</strong>. To come back to
+            this page from your own article, press <kbd>⌘</kbd> and type <em>help</em>, or follow{" "}
+            <strong>More in Help</strong> in a panel’s (i). On an article somebody shared with
+            you there is no <kbd>⌘</kbd> button, and the bar has a <strong>Help</strong> link
+            instead.
           </li>
         </ul>
         <p>
