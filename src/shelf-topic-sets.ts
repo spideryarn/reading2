@@ -117,6 +117,15 @@ export const FILE_MAX = 200;
 export const TOPIC_SET_LEASE_MS = Math.max(10 * 60 * 1000, TOPIC_CALL_TIMEOUT_MS * 3);
 
 /**
+ * How long before the lease ends a re-think's widening pass must be finished
+ * (`RethinkOptions.deadline`). A re-think that would run past it fails and
+ * backs off with the stored tree kept, rather than writing after another
+ * request may have claimed the row. The naming calls before it have no such
+ * limit yet; the write is fenced by the claim either way.
+ */
+export const RETHINK_DEADLINE_MARGIN_MS = 30_000;
+
+/**
  * How much work one reader may cause: the scores' numbers, with the longer
  * lease. A filing or a re-think each count once, however many calls it makes.
  * With `MAX_WORKS` a re-think is at most about two cents (measured: $0.02 at
@@ -482,6 +491,9 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
       const set = await rethink(fresh.works.map(asTopicWork), deps.calls, {
         profile: normaliseProfileText(fresh.profile),
         previous: fresh.stored?.result?.topics ?? [],
+        /* The claim was taken a moment before `started`; the margin covers
+           that and the write. Past it another request may claim the row. */
+        deadline: started + TOPIC_SET_LEASE_MS - RETHINK_DEADLINE_MARGIN_MS,
       });
       const unplaced = fresh.works.filter((w) => (set.members.get(w.id) ?? []).length === 0).length;
       const written = await deps.store.writeTopicSet(claim, {
