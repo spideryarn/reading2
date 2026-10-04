@@ -249,7 +249,7 @@ interface Props {
   subMode?: React.ReactNode;
   /**
    * **An unsent question for one conversation**, handed over from another mode
-   * — today, the glossary's *Ask in chat*. Used as that keyed composer's initial
+   * — the glossary's *Ask in chat*, or a Summary paragraph's ask button. Used as that keyed composer's initial
    * draft, so it is exactly what the reader would have had if they had typed it:
    * in the box, editable, cleared by Escape, and enough to stop `leave`
    * discarding the conversation. Sent only by Send.

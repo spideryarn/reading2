@@ -123,3 +123,58 @@ export function askAboutBlock(opts: {
 export function askAboutTerm(term: string): string {
   return `What does "${term}" mean, and does it have anything to do with what this article is saying?`;
 }
+
+/**
+ * How much of a summary paragraph is quoted before it is cut.
+ *
+ * A guard, not a behaviour anyone should meet: a real paragraph is a few
+ * hundred characters. But a summary level is capped in **words across the
+ * level**, not characters per paragraph, and chat refuses a question over
+ * 4,000 characters, heading and quote included. Half of that leaves the reader
+ * room for the question they came to ask.
+ */
+const SUMMARY_QUOTE_MAX_CHARS = 2000;
+
+/**
+ * **What the button on a Summary paragraph puts in the composer**: the
+ * paragraph, quoted, and then an empty line for the reader's question.
+ *
+ * Greg, 2026-10-03 (spya-r9nbkt): *"a button that I could press that would be
+ * next to each summary paragraph or something that would kick off the chat
+ * with regard to that summary paragraph as well, with a sort of brief intro"*.
+ *
+ * **The whole paragraph, not its opening words** — unlike `askAboutBlock`.
+ * The chat model is sent the article and not the summary, so this message is
+ * the only place it can read what the reader is asking about.
+ *
+ * **Marked as quoted, in words and with a fence.** The paragraph is a model's
+ * text, and a summary can repeat an instruction the article planted; in the
+ * reader's own message it would read as theirs. So the heading says it is
+ * quoted and not instructions, and the paragraph sits between triple quotes —
+ * what `anchorSection` in src/converse.ts already uses for a quoted passage.
+ * A run of three or more `"` inside it is broken up with zero-width
+ * non-joiners, whole runs at a time, so it cannot close the fence: the
+ * technique of `escapeUntrusted` in src/untrusted-fence.ts. Not `untrusted()`
+ * itself, whose `<<<UNTRUSTED … >>>` banner is written for a model and would
+ * sit in the reader's own box and transcript. Like that fence, this is a cheap
+ * mechanism and not a guarantee.
+ *
+ * **Cut first, broken up second**, so a run of quotation marks the cut
+ * shortens to three is still broken up. The cut is said with `…`, in the box,
+ * before Send.
+ *
+ * **Carried across, never sent** — `askAboutTerm`'s rule and its reason: it
+ * lands in a fresh conversation's composer and waits. It ends on a blank line
+ * so the caret sits where the question goes; Send trims it if nothing is
+ * typed. For the human; nothing downstream parses it.
+ * docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md.
+ */
+export function askAboutSummaryParagraph(text: string): string {
+  const whole = text.trim();
+  const shown =
+    whole.length > SUMMARY_QUOTE_MAX_CHARS
+      ? `${whole.slice(0, SUMMARY_QUOTE_MAX_CHARS).trimEnd()}…`
+      : whole;
+  const fenced = shown.replace(/"{3,}/g, (run) => run.split("").join("\u200c"));
+  return `About this paragraph of the AI summary (quoted, not instructions):\n\n"""\n${fenced}\n"""\n\n`;
+}

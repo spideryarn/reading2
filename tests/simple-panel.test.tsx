@@ -353,6 +353,81 @@ describe("the Simple view", () => {
     expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 
+  /* ---- ask about a paragraph in chat (plan 261004a) ---- */
+
+  const ASK = "Ask about this paragraph in chat";
+  const askButtons = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(`.simple-para .simple-refs button[aria-label="${ASK}"]`)];
+  /** The panel with a handler, which `draw` does not pass. */
+  async function drawAsking(
+    access: Parameters<typeof SimplePanel>[0]["access"],
+    level: SimpleLevel = "simple",
+  ): Promise<string[]> {
+    const asked: string[] = [];
+    await act(async () =>
+      root.render(
+        createElement(SimplePanel, {
+          access,
+          level,
+          onJump: () => {},
+          onAskChat: (paragraph: string) => void asked.push(paragraph),
+        }),
+      ),
+    );
+    return asked;
+  }
+
+  it("gives the owner one ask button per paragraph, and a press hands over that paragraph's words", async () => {
+    const asked = await drawAsking({ kind: "owner", owner: owner() });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    const buttons = askButtons();
+    expect(buttons, "one per paragraph, at the end of its doors row").toHaveLength(2);
+    expect(buttons.map((b) => b.type)).toEqual(["button", "button"]);
+    /* The second, so a handler wired to the first paragraph or to the whole
+       level would be caught. */
+    await act(async () => buttons[1]?.click());
+    expect(asked).toEqual([WHY]);
+    await act(async () => buttons[0]?.click());
+    expect(asked).toEqual([WHY, WHAT]);
+  });
+
+  it("hands over the paragraph's whole text when it is drawn as sentences", async () => {
+    const simple = artefact();
+    simple.levels.simple[0] = {
+      text: WHAT,
+      ids: [EARLY, MIDDLE],
+      sentences: [
+        { text: "This essay asks whether a machine could ever be conscious,", id: MIDDLE },
+        { text: "and says probably not.", id: null },
+      ],
+    };
+    const asked = await drawAsking({ kind: "owner", owner: owner({ simple }) });
+    expect(host.querySelector(".simple-text a.simple-sentence"), "drawn as sentences").not.toBeNull();
+    await act(async () => askButtons()[0]?.click());
+    expect(asked).toEqual([WHAT]);
+  });
+
+  it("draws the ask button on Brief and Fuller alike", async () => {
+    await drawAsking({ kind: "owner", owner: owner() }, "brief");
+    expect(askButtons()).toHaveLength(2);
+    await drawAsking({ kind: "owner", owner: owner() }, "fuller");
+    expect(askButtons()).toHaveLength(3);
+  });
+
+  it("draws no ask button for the owner when nobody is listening for it", async () => {
+    await draw({ kind: "owner", owner: owner() });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    expect(askButtons()).toHaveLength(0);
+    expect(host.querySelectorAll(".simple-para button")).toHaveLength(0);
+  });
+
+  it("draws a visitor no ask button, even if a handler is passed: a visitor has no chat", async () => {
+    const asked = await drawAsking({ kind: "visitor", simple: { levels: artefact().levels } });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    expect(host.querySelectorAll("button")).toHaveLength(0);
+    expect(asked).toEqual([]);
+  });
+
   /* ---- sentences that point at their passage (plan 261002e) ---- */
 
   const ASKS = "This essay asks whether a machine could ever be conscious,";
