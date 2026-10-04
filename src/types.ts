@@ -5202,12 +5202,46 @@ export interface SimpleParagraph {
    * that skips it.
    */
   sentences?: unknown;
+  /**
+   * **`true` when the paragraph is a list**: its first sentence a lead-in, each
+   * later one a bullet (docs/plans/261004b-summary-fuller-longer-and-bold-and-bullets.md).
+   * Stored only when true; absent on every paragraph written before
+   * `simple-prompt/7`. Typed `unknown` for `sentences`' reason: whether a list
+   * is drawn is `paragraphShape`'s answer, never this field read directly.
+   */
+  list?: unknown;
 }
 
 /** One sentence of a paragraph, and the one passage it rests on, or `null` for none in particular. */
 export interface SimpleSentence {
   text: string;
   id: BlockId | null;
+  /**
+   * A few of this sentence's own words, drawn bold: the finding, number or
+   * term a skimming reader should catch (plan 261004b). Present only when
+   * `simpleKey` accepts it, so absent on most sentences.
+   */
+  key?: string;
+}
+
+/** The most words a sentence's `key` may have — a phrase to catch, never a clause to read. */
+export const SIMPLE_KEY_MAX_WORDS = 8;
+
+/**
+ * **Is this a key phrase for this sentence? One answer, for the writer's
+ * validation and for every read** (plan 261004b): the trimmed key when it is a
+ * string with something in it, found in the sentence's text exactly, at most
+ * `SIMPLE_KEY_MAX_WORDS` words, and shorter than the sentence; otherwise
+ * `null`. Formatting is never a reason to refuse a sentence, so a caller that
+ * gets `null` draws the sentence without bold.
+ *
+ * @param text the sentence's text, already trimmed.
+ */
+export function simpleKey(key: unknown, text: string): string | null {
+  if (typeof key !== "string") return null;
+  const trimmed = key.trim();
+  if (trimmed === "" || trimmed.length >= text.length || !text.includes(trimmed)) return null;
+  return trimmed.split(/\s+/).length <= SIMPLE_KEY_MAX_WORDS ? trimmed : null;
 }
 
 /**
@@ -5223,7 +5257,9 @@ export interface SimpleSentence {
  * rest of the summary is untouched. Never a reason to refuse the artefact.
  *
  * Returns fresh objects with trimmed text, so a caller can hand them on
- * without carrying anything else the stored entries had.
+ * without carrying anything else the stored entries had. A `key` rides along
+ * only when `simpleKey` accepts it; one that fails is left off and the sentence
+ * is still usable.
  */
 export function usableSentences(paragraph: SimpleParagraph): SimpleSentence[] | null {
   const raw = paragraph.sentences;
@@ -5232,14 +5268,39 @@ export function usableSentences(paragraph: SimpleParagraph): SimpleSentence[] | 
   const out: SimpleSentence[] = [];
   for (const entry of raw as unknown[]) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
-    const { text, id } = entry as { text?: unknown; id?: unknown };
+    const { text, id, key: rawKey } = entry as { text?: unknown; id?: unknown; key?: unknown };
     if (typeof text !== "string") return null;
     const trimmed = text.trim();
     if (trimmed === "") return null;
     if (id !== null && (typeof id !== "string" || !ids.has(id))) return null;
-    out.push({ text: trimmed, id: id as BlockId | null });
+    const key = simpleKey(rawKey, trimmed);
+    out.push({ text: trimmed, id: id as BlockId | null, ...(key === null ? {} : { key }) });
   }
   return out.map((s) => s.text).join(" ") === paragraph.text ? out : null;
+}
+
+/**
+ * What to draw for one paragraph. `list` carries its lead-in and at least two
+ * bullets by construction, so no caller can draw a list of one.
+ */
+export type SimpleParagraphShape =
+  /** No usable sentences: draw `text`, as before `simple-prompt/4`. */
+  | { kind: "text" }
+  | { kind: "prose"; sentences: SimpleSentence[] }
+  | { kind: "list"; lead: SimpleSentence; items: SimpleSentence[] };
+
+/**
+ * **How a paragraph is drawn — one answer for the owner's panel and the
+ * visitor's payload** (plan 261004b). A list needs `list: true` and three or
+ * more usable sentences, a lead-in and two bullets; anything less is prose,
+ * which is always a correct way to draw the same sentences.
+ */
+export function paragraphShape(paragraph: SimpleParagraph): SimpleParagraphShape {
+  const sentences = usableSentences(paragraph);
+  if (!sentences) return { kind: "text" };
+  const [lead, ...items] = sentences;
+  if (paragraph.list === true && lead && items.length >= 2) return { kind: "list", lead, items };
+  return { kind: "prose", sentences };
 }
 
 /**
@@ -5274,11 +5335,17 @@ export interface SimpleLevelLimits {
  * orientation and a digest, not a length target, and with three calls a tight
  * one loses all three for one level's ten words. The prompt's asks are what
  * set the length.
+ *
+ * Fuller's were 5 paragraphs and 480 words until 2026-10-04. The limits rose
+ * for the first, twice-as-long arm and deliberately stayed there when the
+ * smaller fallback shipped, so a longer Fuller later remains a prompt-only
+ * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
+ * stored before then still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
   simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
-  fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
+  fuller: { minParagraphs: 3, maxParagraphs: 8, maxWords: 850 },
 };
 
 /** Passages per paragraph, at every level. */

@@ -32,7 +32,7 @@
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
  */
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
@@ -71,6 +71,8 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import {
+  survivesThreshold,
+  floorToGateStep,
   applyThreshold,
   canThreshold,
   GATE_STEP,
@@ -403,6 +405,29 @@ function descending(a: number | undefined, b: number | undefined): number {
   if (a === undefined) return 1;
   if (b === undefined) return -1;
   return b - a;
+}
+
+/**
+ * **The bar that puts a hidden work back**, or null when nothing is hiding it —
+ * `gateToReveal` (GlossaryPanel.tsx) over this list's score, for the same
+ * press: the prose card's *Dig deeper* opens the band on a row, and a row the
+ * prioritised order is hiding cannot be opened. **Lowered, never cleared**, so
+ * the slider visibly moves; null in any other order, where the bar is dormant
+ * and must not be moved behind the reader's back; and floored to the step, so
+ * the value the URL prints is not above the work it was set to reveal. Plan
+ * 261004b.
+ */
+export function barToReveal(
+  works: readonly ShownWork[],
+  id: string,
+  order: CiteOrder,
+  bar: number,
+): number | null {
+  if (effectiveOrder(works, order) !== "prioritised") return null;
+  const work = works.find((w) => w.id === id);
+  const p = work ? priorityOf(work) : undefined;
+  if (p === undefined || survivesThreshold(p, bar)) return null;
+  return floorToGateStep(p);
 }
 
 /**
@@ -772,9 +797,35 @@ interface Props {
   onBar(bar: number | null): void;
   /** `passage` is `citePassageKey(work.id)` when the row names the citing words (rows.ts). */
   onJump(id: BlockId, passage?: string): void;
+  /**
+   * **One work to bring into view, once** — the prose card's *Dig deeper* has
+   * just opened this band for it (plan 261004b). Not a selection: the row has
+   * no selected state and there is no `?cite=`. `n` tells two presses on the
+   * same work apart. The panel lowers the bar if it is hiding the row
+   * (`barToReveal`), scrolls to the row once it is drawn, and calls
+   * `onFocusTaken` so that coming back to the band later does not scroll again.
+   */
+  focus?: CiteFocus | null;
+  /** Handed the request it served, so an older one's answer cannot clear a newer one. */
+  onFocusTaken?(focus: CiteFocus): void;
 }
 
-export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
+/** `Props.focus`. */
+export interface CiteFocus {
+  id: string;
+  n: number;
+}
+
+export function CitationsPanel({
+  access,
+  order: chosenOrder,
+  onOrder,
+  bar: chosenBar,
+  onBar,
+  onJump,
+  focus = null,
+  onFocusTaken,
+}: Props) {
   useRenderCount("CitationsPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
@@ -791,6 +842,59 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   /* Empty with fewer than two works or two orders, and then there is no order
      row and an empty head row holds the top of the band instead. */
   const orders = citations && all.length > 1 ? orderOptions(all) : [];
+
+  /* **Bring the focused work into view** — `Props.focus`. Three steps, each a
+     render apart, which is why this is an effect over what is drawn rather than
+     one call at the press: the list may still be loading (nothing is taken
+     then), the bar may be hiding the row, and the bar's new value comes back
+     through the URL on a later render. A work the ready list does not have is
+     dropped rather than waited for. The row is looked for inside this panel's
+     own list. `nearest`, so a row already on screen does not move. */
+  const list = useRef<HTMLOListElement>(null);
+  const focusDrawn = focus !== null && shown.some((w) => w.id === focus.id);
+  useEffect(() => {
+    if (focus === null || !ready) return;
+    if (!all.some((w) => w.id === focus.id)) {
+      onFocusTaken?.(focus);
+      return;
+    }
+    const lowered = barToReveal(all, focus.id, chosenOrder, bar);
+    if (lowered !== null) {
+      onBar(lowered);
+      return;
+    }
+    if (!focusDrawn) return;
+    for (const item of list.current?.querySelectorAll("[data-citation-id]") ?? []) {
+      if (item.getAttribute("data-citation-id") !== focus.id) continue;
+      /* Optional call: jsdom has no `scrollIntoView`. */
+      item.scrollIntoView?.({ block: "nearest" });
+      break;
+    }
+    onFocusTaken?.(focus);
+  }, [focus, ready, all, chosenOrder, bar, focusDrawn, onBar, onFocusTaken]);
+
+  /* **A row being dug stays drawn, and so does its answer.** A dig changes the
+     row's priority under the reader: the `finding` step detaches the kept
+     answer, and with it a web influence that may have been what held the row
+     above the bar; the new answer can score lower too. Without this the row,
+     its stage line and its stream vanish mid-press (GPT Sol, plan review of
+     261004b, F1 — true of a press on the row itself before the card had one).
+     So whenever the priority of the last work dug here changes, the bar is
+     lowered to it if it would hide it. **Keyed on that priority and not on the
+     bar**, so a reader who drags the bar above the row afterwards is not
+     fought. */
+  const digging = owner?.investigating ?? null;
+  const lastDug = useRef<string | null>(null);
+  if (digging !== null) lastDug.current = digging;
+  const keptId = lastDug.current;
+  const kept = keptId === null ? undefined : all.find((w) => w.id === keptId);
+  const keptPriority = kept ? priorityOf(kept) : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the work's priority is the trigger; the bar and the order are read, not watched
+  useEffect(() => {
+    if (keptId === null || !ready) return;
+    const lowered = barToReveal(all, keptId, chosenOrder, bar);
+    if (lowered !== null) onBar(lowered);
+  }, [keptId, keptPriority, ready]);
   /* What the band's (i) adds after the mode's own words: the two sentences
      about the whole list (plan 261001l moved them off the foot), the count, and
      who made it — only once the list is ready and has something in it, which
@@ -915,7 +1019,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
 
           {all.length > 0 && (
             <div className="tl-scroll">
-              <ol className="tl-list cite-list">
+              <ol className="tl-list cite-list" ref={list}>
                 {shown.map((work) => (
                   <WorkRow
                     key={work.id}

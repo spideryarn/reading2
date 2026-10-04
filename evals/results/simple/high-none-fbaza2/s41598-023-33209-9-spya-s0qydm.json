@@ -1,0 +1,385 @@
+{
+  "arm": "high-none-fbaza2",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s41598-023-33209-9-spya-s0qydm",
+  "version": "simple-prompt/7",
+  "sourceSha256": "0e7f1dbc6490bd626f21c893705e01f154790d023dea239d4809000ac6076f7c",
+  "at": "2026-10-04T01:14:07.522Z",
+  "bodyWords": 8829,
+  "bodyBlocks": 181,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "9ca47252d14dfcf0",
+  "systemsSha256": "467759b35d95cc1bed572363ebd773abcd0237dae2aeb6ef54859df10032a3d5",
+  "power": "high",
+  "guard": true,
+  "wallMs": 59841,
+  "costUsd": 0.2873712,
+  "tokens": {
+    "input": 18692,
+    "output": 6844,
+    "reasoning": 3561
+  },
+  "ok": true,
+  "reader": "none",
+  "words": 206,
+  "fullerWords": 469,
+  "briefWords": 97,
+  "paragraphs": [
+    {
+      "text": "This is a lab experiment on rats about rearing: standing up on the hind legs to look around. It asks whether the hippocampus, a brain area long known to be needed for remembering places, matters while rats rear. The team used light to switch the hippocampus off only during rearing, while rats were learning a maze.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a lab experiment on rats about rearing: standing up on the hind legs to look around.",
+          "id": "spya-k5rtta",
+          "key": "rearing"
+        },
+        {
+          "text": "It asks whether the hippocampus, a brain area long known to be needed for remembering places, matters while rats rear.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "The team used light to switch the hippocampus off only during rearing, while rats were learning a maze.",
+          "id": "spya-nbwfy3"
+        }
+      ]
+    },
+    {
+      "text": "Most studies of the hippocampus look at rats walking around or resting quietly. Rearing is common but little studied, and its role in remembering places was unknown. Standing up may let rats take in more of their surroundings, such as far-off landmarks.",
+      "ids": [
+        "spya-j4jhsc",
+        "spya-gwzqgg",
+        "spya-dmvnt0"
+      ],
+      "sentences": [
+        {
+          "text": "Most studies of the hippocampus look at rats walking around or resting quietly.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "Rearing is common but little studied, and its role in remembering places was unknown.",
+          "id": "spya-gwzqgg"
+        },
+        {
+          "text": "Standing up may let rats take in more of their surroundings, such as far-off landmarks.",
+          "id": "spya-dmvnt0"
+        }
+      ]
+    },
+    {
+      "text": "Rats first visited four open arms of an eight-arm maze, then later had to find food in the other four. Switching off the hippocampus during rearing cut correct first choices from 77.7% to 65.7%. Switching it off for the same time, but 6 seconds late, caused no clear drop. Rats whose brain cells could not respond to the light showed no change.",
+      "ids": [
+        "spya-r7w9n4",
+        "spya-jnzefy",
+        "spya-b6gdg3"
+      ],
+      "sentences": [
+        {
+          "text": "Rats first visited four open arms of an eight-arm maze, then later had to find food in the other four.",
+          "id": "spya-r7w9n4"
+        },
+        {
+          "text": "Switching off the hippocampus during rearing cut correct first choices from 77.7% to 65.7%.",
+          "id": "spya-jnzefy",
+          "key": "from 77.7% to 65.7%"
+        },
+        {
+          "text": "Switching it off for the same time, but 6 seconds late, caused no clear drop.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "Rats whose brain cells could not respond to the light showed no change.",
+          "id": "spya-jnzefy"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that hippocampus activity during rearing is important for remembering places. They suggest rearing may help the brain update its inner model of the surroundings. They add that more work is needed to fully explain how rearing and this kind of memory are linked.",
+      "ids": [
+        "spya-p02v0g",
+        "spya-ehqntm",
+        "spya-jvweez"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that hippocampus activity during rearing is important for remembering places.",
+          "id": "spya-p02v0g"
+        },
+        {
+          "text": "They suggest rearing may help the brain update its inner model of the surroundings.",
+          "id": "spya-ehqntm"
+        },
+        {
+          "text": "They add that more work is needed to fully explain how rearing and this kind of memory are linked.",
+          "id": "spya-jvweez"
+        }
+      ]
+    }
+  ],
+  "fuller": [
+    {
+      "text": "This research article asks whether the hippocampus, a brain area needed for remembering places, must be working while a rat rears up on its hind legs. The authors switched off the top (dorsal) part of the hippocampus only during rearing, then tested how well the rats remembered places afterwards.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      "sentences": [
+        {
+          "text": "This research article asks whether the hippocampus, a brain area needed for remembering places, must be working while a rat rears up on its hind legs.",
+          "id": "spya-k5rtta",
+          "key": "rears up on its hind legs"
+        },
+        {
+          "text": "The authors switched off the top (dorsal) part of the hippocampus only during rearing, then tested how well the rats remembered places afterwards.",
+          "id": "spya-nbwfy3"
+        }
+      ]
+    },
+    {
+      "text": "Most work on how the hippocampus stores memories of places looks at times when animals walk around or rest quietly, such as grooming or eating. But rats often stop and rear up, which lets them see and smell more of their surroundings, especially distant landmarks. During rearing, the hippocampus shows strong theta activity, a 7–12 Hz brain rhythm linked to storing and recalling memories. Even so, nobody had tested whether rearing matters for memory of places.",
+      "ids": [
+        "spya-j4jhsc",
+        "spya-dmvnt0",
+        "spya-v3e727"
+      ],
+      "sentences": [
+        {
+          "text": "Most work on how the hippocampus stores memories of places looks at times when animals walk around or rest quietly, such as grooming or eating.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "But rats often stop and rear up, which lets them see and smell more of their surroundings, especially distant landmarks.",
+          "id": "spya-dmvnt0"
+        },
+        {
+          "text": "During rearing, the hippocampus shows strong theta activity, a 7–12 Hz brain rhythm linked to storing and recalling memories.",
+          "id": "spya-v3e727",
+          "key": "theta activity"
+        },
+        {
+          "text": "Even so, nobody had tested whether rearing matters for memory of places.",
+          "id": "spya-v3e727"
+        }
+      ]
+    },
+    {
+      "text": "Rats learned a task on a maze with eight arms, called the delayed win-shift task. In a study phase, four random arms opened and held sugar pellets; after a 4-minute break, all eight opened, but only the other four held food. A 3D camera on the ceiling spotted rearing as it happened and switched on a laser at once. The laser shone light through implanted fibres onto halorhodopsin, a light-driven protein that silences nerve cells.",
+      "ids": [
+        "spya-r7w9n4",
+        "spya-r8kwhk",
+        "spya-z5mpge"
+      ],
+      "sentences": [
+        {
+          "text": "Rats learned a task on a maze with eight arms, called the delayed win-shift task.",
+          "id": "spya-r7w9n4",
+          "key": "delayed win-shift task"
+        },
+        {
+          "text": "In a study phase, four random arms opened and held sugar pellets; after a 4-minute break, all eight opened, but only the other four held food.",
+          "id": "spya-r7w9n4"
+        },
+        {
+          "text": "A 3D camera on the ceiling spotted rearing as it happened and switched on a laser at once.",
+          "id": "spya-r8kwhk"
+        },
+        {
+          "text": "The laser shone light through implanted fibres onto halorhodopsin, a light-driven protein that silences nerve cells.",
+          "id": "spya-z5mpge"
+        }
+      ]
+    },
+    {
+      "text": "Each rat ran three kinds of trials in mixed order, with the laser used only in the study phase. Off: no light at all, to measure each rat's normal performance. Rear: light on for exactly as long as each rear lasted. Delay: the same amount of light, but starting and stopping 6 seconds after each rear.",
+      "ids": [
+        "spya-c24tea",
+        "spya-f4z675"
+      ],
+      "sentences": [
+        {
+          "text": "Each rat ran three kinds of trials in mixed order, with the laser used only in the study phase.",
+          "id": "spya-f4z675"
+        },
+        {
+          "text": "Off: no light at all, to measure each rat's normal performance.",
+          "id": "spya-c24tea"
+        },
+        {
+          "text": "Rear: light on for exactly as long as each rear lasted.",
+          "id": "spya-f4z675"
+        },
+        {
+          "text": "Delay: the same amount of light, but starting and stopping 6 seconds after each rear.",
+          "id": "spya-f4z675"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "In the six experimental rats, silencing during rearing cut test accuracy on the first four choices from 77.7% to 65.7% correct. They also needed more arm visits to find all the food, 6.5 versus 5.1. The Delay trials caused no significant drop in accuracy (72.0%), and only a borderline rise in arm visits (5.9). In seven control rats, which carried only a glowing marker protein and no halorhodopsin, light had no effect in any condition.",
+      "ids": [
+        "spya-jnzefy",
+        "spya-bjwjv6",
+        "spya-b6gdg3"
+      ],
+      "sentences": [
+        {
+          "text": "In the six experimental rats, silencing during rearing cut test accuracy on the first four choices from 77.7% to 65.7% correct.",
+          "id": "spya-jnzefy",
+          "key": "from 77.7% to 65.7% correct"
+        },
+        {
+          "text": "They also needed more arm visits to find all the food, 6.5 versus 5.1.",
+          "id": "spya-bjwjv6"
+        },
+        {
+          "text": "The Delay trials caused no significant drop in accuracy (72.0%), and only a borderline rise in arm visits (5.9).",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "In seven control rats, which carried only a glowing marker protein and no halorhodopsin, light had no effect in any condition.",
+          "id": "spya-jnzefy"
+        }
+      ]
+    },
+    {
+      "text": "The authors name several limits. The 6-second delay did not fully separate light from rearing: the laser still overlapped about 35.5% of rearing time in Delay trials. Nearly all rears in the narrow maze had a front paw on a wall, so the study cannot compare rearing with and without that support. It also cannot say whether every rear helps memory, or whether the same storing could happen during other looking-around habits, such as side-to-side head scanning.",
+      "ids": [
+        "spya-b6gdg3",
+        "spya-p0b8zk",
+        "spya-jvweez"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name several limits.",
+          "id": null
+        },
+        {
+          "text": "The 6-second delay did not fully separate light from rearing: the laser still overlapped about 35.5% of rearing time in Delay trials.",
+          "id": "spya-b6gdg3",
+          "key": "35.5% of rearing time"
+        },
+        {
+          "text": "Nearly all rears in the narrow maze had a front paw on a wall, so the study cannot compare rearing with and without that support.",
+          "id": "spya-p0b8zk"
+        },
+        {
+          "text": "It also cannot say whether every rear helps memory, or whether the same storing could happen during other looking-around habits, such as side-to-side head scanning.",
+          "id": "spya-jvweez"
+        }
+      ]
+    },
+    {
+      "text": "The authors suggest rearing may let the hippocampus update its inner map of the surroundings, using distant landmarks. Because the rats already knew the maze well, they think this updating serves memory of that day's events, like recalling where you parked today. Their conclusion is that rearing is a moment when the hippocampus does work needed to store memories of places.",
+      "ids": [
+        "spya-ehqntm",
+        "spya-z65dtg",
+        "spya-sxyqjf"
+      ],
+      "sentences": [
+        {
+          "text": "The authors suggest rearing may let the hippocampus update its inner map of the surroundings, using distant landmarks.",
+          "id": "spya-ehqntm"
+        },
+        {
+          "text": "Because the rats already knew the maze well, they think this updating serves memory of that day's events, like recalling where you parked today.",
+          "id": "spya-z65dtg"
+        },
+        {
+          "text": "Their conclusion is that rearing is a moment when the hippocampus does work needed to store memories of places.",
+          "id": "spya-sxyqjf",
+          "key": "rearing is a moment when the hippocampus"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "Rats often stop and stand up on their back legs to look around, which scientists call rearing. This study asked whether the hippocampus, a brain part needed for remembering places, matters during those moments. Most past work looked only at times when rats walk or rest.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-gwzqgg"
+      ],
+      "sentences": [
+        {
+          "text": "Rats often stop and stand up on their back legs to look around, which scientists call rearing.",
+          "id": "spya-gwzqgg",
+          "key": "rearing"
+        },
+        {
+          "text": "This study asked whether the hippocampus, a brain part needed for remembering places, matters during those moments.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "Most past work looked only at times when rats walk or rest.",
+          "id": "spya-k5rtta"
+        }
+      ]
+    },
+    {
+      "text": "In a maze experiment, researchers switched off that brain area only while rats reared. The rats later remembered worse which maze arms they had already visited. Switching it off at other times did not clearly hurt memory. So rearing seems to be a key moment when the brain stores place memories.",
+      "ids": [
+        "spya-nbwfy3",
+        "spya-sxyqjf"
+      ],
+      "sentences": [
+        {
+          "text": "In a maze experiment, researchers switched off that brain area only while rats reared.",
+          "id": "spya-nbwfy3"
+        },
+        {
+          "text": "The rats later remembered worse which maze arms they had already visited.",
+          "id": "spya-nbwfy3",
+          "key": "remembered worse"
+        },
+        {
+          "text": "Switching it off at other times did not clearly hurt memory.",
+          "id": "spya-nbwfy3"
+        },
+        {
+          "text": "So rearing seems to be a key moment when the brain stores place memories.",
+          "id": "spya-sxyqjf"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "simple": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

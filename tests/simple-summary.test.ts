@@ -37,7 +37,7 @@ import {
   SIMPLE_CHECK_SYSTEM,
   SIMPLE_CHECK_VERSION,
 } from "../src/simple-check.js";
-import { isUsableSimpleSummary, usableSentences } from "../src/types.js";
+import { isUsableSimpleSummary, paragraphShape, SIMPLE_KEY_MAX_WORDS, usableSentences } from "../src/types.js";
 import { hashProfile, PROFILE_RULES, renderProfile } from "../src/profile.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -301,10 +301,29 @@ describe("buildSimpleSummary", () => {
   it("fails on more paragraphs than a level allows rather than cutting", () => {
     const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
     expect(() => build(five)).toThrow(/5 "simple" paragraphs and the limit is 4/);
-    /* Five is Fuller's ceiling, not a failure there; six is. */
+    /* Five is no failure in Fuller, nor is its ceiling of eight; nine is (plan 261004b). */
     expect(build(SIMPLE, emptyDropped(), five).levels.fuller).toHaveLength(5);
-    const six = [...five, para("Six.", WHY.id)];
-    expect(() => build(SIMPLE, emptyDropped(), six)).toThrow(/6 "fuller" paragraphs and the limit is 5/);
+    const eight = [...five, para("Six.", WHY.id), para("Seven.", RESULT.id), para("Eight.", METHOD.id)];
+    expect(build(SIMPLE, emptyDropped(), eight).levels.fuller).toHaveLength(8);
+    const nine = [...eight, para("Nine.", WHY.id)];
+    expect(() => build(SIMPLE, emptyDropped(), nine)).toThrow(/9 "fuller" paragraphs and the limit is 8/);
+  });
+
+  it("keeps a Fuller of eight paragraphs and 800 words, and refuses one of 851 (plan 261004b)", () => {
+    const eightOf = (each: number, last: number) =>
+      [INTRO, WHY, RESULT, METHOD, INTRO, WHY, RESULT, METHOD].map((b, i) => para(words(i === 7 ? last : each), b.id));
+    const stored = build(SIMPLE, emptyDropped(), eightOf(100, 100));
+    expect(stored.levels.fuller).toHaveLength(8);
+    expect(isUsableSimpleSummary(stored)).toBe(true);
+    /* The ceiling exactly, and one word past it. */
+    expect(SIMPLE_LIMITS.fuller).toEqual({ minParagraphs: 3, maxParagraphs: 8, maxWords: 850 });
+    expect(build(SIMPLE, emptyDropped(), eightOf(100, 150)).levels.fuller).toHaveLength(8);
+    expect(() => build(SIMPLE, emptyDropped(), eightOf(100, 151))).toThrow(/851 "fuller" words and the limit is 850/);
+    /* The read boundary enforces the same two numbers. */
+    const over = { ...stored, levels: { ...stored.levels, fuller: eightOf(100, 151) } };
+    expect(isUsableSimpleSummary(over)).toBe(false);
+    const nine = { ...stored, levels: { ...stored.levels, fuller: [...stored.levels.fuller, para("Nine.", WHY.id)] } };
+    expect(isUsableSimpleSummary(nine)).toBe(false);
   });
 
   it("fails over a level's word ceiling rather than cutting", () => {
@@ -470,11 +489,15 @@ describe("sentences that point at their passage (plan 261002e)", () => {
 
   it("states the answer shape in the schema: sentences with a required, nullable id and no enum", () => {
     const paragraph = SIMPLE_SUMMARY_OUTPUT_SCHEMA.properties.paragraphs.items;
-    expect(paragraph.required).toEqual(["ids", "sentences"]);
-    expect(Object.keys(paragraph.properties)).toEqual(["ids", "sentences"]);
+    expect(paragraph.required).toEqual(["ids", "list", "sentences"]);
+    expect(Object.keys(paragraph.properties)).toEqual(["ids", "list", "sentences"]);
+    expect(paragraph.properties.list).toEqual({ type: "boolean" });
     const one = paragraph.properties.sentences.items;
-    expect(one.required).toEqual(["text", "id"]);
+    expect(one.required).toEqual(["text", "id", "key"]);
+    expect(Object.keys(one.properties)).toEqual(["text", "id", "key"]);
     expect(one.properties.id).toEqual({ type: ["string", "null"] });
+    /* Nullable, and never empty when it is a string (Sol's plan review of 261004b, F5). */
+    expect(one.properties.key).toEqual({ type: ["string", "null"], pattern: "\\S" });
     expect(one.additionalProperties).toBe(false);
   });
 
@@ -497,7 +520,7 @@ describe("sentences that point at their passage (plan 261002e)", () => {
     for (const system of Object.values(SIMPLE_SYSTEMS)) {
       expect(system).toContain("Then write the paragraph as its sentences");
       expect(system).toContain("A sentence never names an id its paragraph did not list.");
-      expect(system).toContain('{"text": "...", "id": null}');
+      expect(system).toContain('{"text": "...", "id": null, "key": null}');
       expect(system).not.toContain('{"text": "...", "ids"');
     }
   });
@@ -506,6 +529,182 @@ describe("sentences that point at their passage (plan 261002e)", () => {
     const maxParagraphs = Math.max(...Object.values(SIMPLE_LIMITS).map((l) => l.maxParagraphs));
     /* Two ids' and four sentences' JSON a paragraph at the very least, on top of the old budget. */
     expect(ANSWER_TOKENS).toBeGreaterThanOrEqual(1_200 + maxParagraphs * (3 * 10 + 4 * 15));
+  });
+});
+
+/* --------------------------------- bold and bullets (plan 261004b) -- */
+
+describe("a key phrase and a list are two fields, never markup in the text (plan 261004b)", () => {
+  const ASKS = "It asks whether a model can read.";
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+  /** A Simple level whose first paragraph is these sentences. */
+  const first = (sentences: unknown[], extra: Record<string, unknown> = {}, dropped = emptyDropped()) =>
+    build([{ ids: [INTRO.id, RESULT.id], sentences, ...extra }, para("Why.", WHY.id)], dropped).levels.simple[0]!;
+
+  it("keeps a key that is a few of its sentence's own words, trimmed, and stores no field without one", () => {
+    const dropped = emptyDropped();
+    const p = first(
+      [
+        { text: ASKS, id: INTRO.id, key: " a model can read " },
+        { text: "It read 38% faster.", id: RESULT.id, key: null },
+        { text: "That is all.", id: null },
+      ],
+      {},
+      dropped,
+    );
+    expect(p.sentences).toEqual([
+      { text: ASKS, id: INTRO.id, key: "a model can read" },
+      { text: "It read 38% faster.", id: RESULT.id },
+      { text: "That is all.", id: null },
+    ]);
+    /* A null key, and a missing one, are not refusals. */
+    expect(dropped.keys).toBe(0);
+    expect(usableSentences(p)).toEqual(p.sentences);
+  });
+
+  it.each([
+    ["not a substring of its sentence", "a model can write"],
+    ["another sentence's words", "38% faster"],
+    ["empty", ""],
+    ["only whitespace", " \n\t"],
+    ["the whole sentence", ASKS],
+    ["not a string", 7],
+  ])("omits and counts a key that is %s, and keeps the sentence", (_label, key) => {
+    const dropped = emptyDropped();
+    const p = first([{ text: ASKS, id: INTRO.id, key }, sentence("It read 38% faster.", RESULT.id)], {}, dropped);
+    expect(p.sentences).toEqual([
+      { text: ASKS, id: INTRO.id },
+      { text: "It read 38% faster.", id: RESULT.id },
+    ]);
+    expect(dropped.keys).toBe(1);
+    expect(p.text).toBe(`${ASKS} It read 38% faster.`);
+  });
+
+  it("omits and counts a key of more than eight words, and keeps one of eight", () => {
+    expect(SIMPLE_KEY_MAX_WORDS).toBe(8);
+    const long = "One two three four five six seven eight nine ten.";
+    const dropped = emptyDropped();
+    const p = first(
+      [
+        { text: long, id: null, key: "One two three four five six seven eight nine" },
+        { text: long, id: null, key: "One two three four five six seven eight" },
+      ],
+      {},
+      dropped,
+    );
+    expect(p.sentences).toEqual([
+      { text: long, id: null },
+      { text: long, id: null, key: "One two three four five six seven eight" },
+    ]);
+    expect(dropped.keys).toBe(1);
+  });
+
+  it("stores `list` only when the model said true", () => {
+    const three = [sentence("These are the findings:"), sentence("It read.", INTRO.id), sentence("It read faster.", RESULT.id)];
+    expect(first(three, { list: true }).list).toBe(true);
+    for (const list of [false, null, "true", 1, undefined]) expect("list" in first(three, { list })).toBe(false);
+  });
+
+  it("draws a list only with a lead and two bullets: two sentences read as prose", () => {
+    const lead = { text: "These are the findings:", id: null };
+    const a = { text: "It read.", id: INTRO.id };
+    const b = { text: "It read faster.", id: RESULT.id, key: "faster" };
+    const two = first([lead, a], { list: true });
+    expect(two.list).toBe(true);
+    expect(paragraphShape(two)).toEqual({ kind: "prose", sentences: [lead, a] });
+    expect(paragraphShape(first([lead, a, b], { list: true }))).toEqual({ kind: "list", lead, items: [a, b] });
+    /* The same three sentences without the field are prose. */
+    expect(paragraphShape(first([lead, a, b]))).toEqual({ kind: "prose", sentences: [lead, a, b] });
+    /* Anything but `true` in a stored row is not a list. */
+    expect(paragraphShape({ ...first([lead, a, b]), list: "true" }).kind).toBe("prose");
+  });
+
+  it("reads a row from before either field as it always did: usable, and prose or plain text", () => {
+    const old = {
+      text: "It asks. It answers.",
+      ids: [INTRO.id],
+      sentences: [
+        { text: "It asks.", id: INTRO.id },
+        { text: "It answers.", id: null },
+      ],
+    };
+    expect(paragraphShape(old)).toEqual({ kind: "prose", sentences: old.sentences });
+    expect(paragraphShape({ text: old.text, ids: old.ids })).toEqual({ kind: "text" });
+    /* Sentences that are not the text: plain text, even when it claims to be a list. */
+    expect(paragraphShape({ ...old, text: "Something else.", list: true })).toEqual({ kind: "text" });
+  });
+
+  it.each([
+    ["not in the sentence", "It replies"],
+    ["empty", " "],
+    ["the whole sentence", "It asks."],
+    ["not a string", 7],
+    ["null", null],
+  ])("still reads a stored sentence whose key is %s, without the key", (_label, key) => {
+    const paragraph = {
+      text: "It asks. It answers.",
+      ids: [INTRO.id],
+      sentences: [
+        { text: "It asks.", id: INTRO.id, key },
+        { text: "It answers.", id: null, key: "answers" },
+      ],
+    };
+    expect(usableSentences(paragraph)).toEqual([
+      { text: "It asks.", id: INTRO.id },
+      { text: "It answers.", id: null, key: "answers" },
+    ]);
+  });
+
+  it("asks Brief and Fuller for the key, only Fuller for lists, and Simple for neither", () => {
+    for (const level of ["brief", "fuller"] as const) {
+      expect(flat(SIMPLE_SYSTEMS[level])).toContain('at most two sentences have a "key"');
+      expect(flat(SIMPLE_SYSTEMS[level])).toContain("never the whole sentence");
+      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain('Always write "key": null');
+    }
+    /* Simple is written and not shown (plan 261003l), and its first answers
+       were flagged twice in six once it was asked for keys (plan 261004b). */
+    expect(flat(SIMPLE_SYSTEMS.simple)).toContain('Always write "key": null');
+    expect(flat(SIMPLE_SYSTEMS.simple)).not.toContain('at most two sentences have a "key"');
+    expect(SIMPLE_SYSTEMS.simple).not.toContain('"key": "..."');
+    for (const level of ["brief", "simple", "fuller"] as const) {
+      const system = flat(SIMPLE_SYSTEMS[level]);
+      expect(system).toContain('"list": false');
+      /* The text itself stays free of markup: the two fields are the only formatting. */
+      expect(system).toContain("no markdown");
+      expect(system).not.toContain("no markdown, no bullet points, no headings");
+    }
+    for (const level of ["brief", "simple"] as const) {
+      expect(flat(SIMPLE_SYSTEMS[level])).toContain('Always write "list": false');
+      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain("lead-in");
+    }
+    const fuller = flat(SIMPLE_SYSTEMS.fuller);
+    expect(fuller).not.toContain('Always write "list": false');
+    expect(fuller).toContain("At most two paragraphs are lists");
+    expect(fuller).toContain("lead-in");
+  });
+
+  it("asks Fuller for about 350 words and never more than 430, and leaves the other two as they were", () => {
+    const fuller = flat(SIMPLE_SYSTEMS.fuller);
+    expect(fuller).toContain("Four to seven paragraphs, each two to five sentences. Every sentence under 30 words.");
+    expect(fuller).toContain("About 350 words in all, and never more than 430.");
+    expect(fuller).not.toContain("leave detail to the article");
+    expect(fuller).toContain("the limits the piece itself names");
+    expect(flat(SIMPLE_SYSTEMS.brief)).toContain("About 80 words in all, and never more than 130.");
+    expect(flat(SIMPLE_SYSTEMS.simple)).toContain("About 170 words in all, and never more than 220.");
+    for (const level of ["brief", "simple"] as const) {
+      /* Byte for byte, line break included. */
+      expect(SIMPLE_SYSTEMS[level]).toContain(
+        "Shorter is fine; this is an\norientation, not a digest, so leave detail to the article.",
+      );
+      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain("the limits the piece itself names");
+    }
+  });
+
+  it("budgets the answer from Fuller's own limits", () => {
+    /* 850 words at 0.75 words a token, and the JSON of twice the five sentences
+       asked for in each of eight paragraphs, at the very least. The old budget
+       (2,150) was under this. */
+    expect(ANSWER_TOKENS).toBeGreaterThan(Math.ceil(SIMPLE_LIMITS.fuller.maxWords / 0.75) + 8 * 2 * 5 * 20);
   });
 });
 
@@ -1285,7 +1484,7 @@ describe("the prompt version (plans 261001p and 261003c)", () => {
     expect(out.version).toBe("simple/2");
     /* A literal pin, not a value derived from the output under test: otherwise
        changing both the producer and this imported constant stays green. */
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/6");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/7");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
     /* Pipeline freshness and artefact copies read this generic stamp. If they
