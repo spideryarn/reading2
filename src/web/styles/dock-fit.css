@@ -12,8 +12,12 @@
    toggles you could turn on together. A hairline box around them
    says "one of these", which is what the markup already promises a screen
    reader via `role="radiogroup"` — this is the sighted half of the same claim.
-   Since 2026-10-02 the box is three (`.dock-frame` below), and this element is
-   the unframed row that holds them. */
+   Since 2026-10-02 there are up to three non-empty boxes (`.dock-frame` below),
+   and this element is the unframed row that holds them.
+
+   **On the metadata page the same row holds links, and none is on**
+   (`DockModeLinks`, since 2026-10-04): no mode is open there, so the frames
+   only group, and the markup promises no radiogroup. */
 .dock-modes {
   display: inline-flex;
   align-items: stretch;
@@ -43,11 +47,12 @@
   gap: 0.3rem;
 }
 
-/* **Three frames, not one**: Plain, the bands, and Marginalia — Greg,
+/* **Up to three non-empty frames, not one**: Plain, the bands, and Marginalia — Greg,
    2026-10-02: *"move the Plain and Marginalia modes into their own
    icon-groups"* (spya-ba8kqp). Each hairline box says what the one box said
    before, for its own part: Plain or one of the bands is on (one
-   radiogroup, two frames), and the notes are a switch of their own.
+   radiogroup, two frames), and the notes are a switch of their own. Marginalia's
+   frame is absent when Experimental is off and the notes are closed.
    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
 
    **Never shrink, for the reason `.dock-modes` gives above**: this clips its
@@ -75,21 +80,18 @@
 
    `dock-group-start` is on the first *drawn* button of each run except the first
    — `groupStarts` in Dock.tsx, computed from the visible list, so a run the
-   switch has hidden leaves no stray line. In the segmented control the rule
-   replaces an internal adjoining border; in the loose-link form it adds 1px.
-   Both are included in the normal post-render width measurement. Visible-mode
-   identity already participates in the fit signature, so no separate group
-   signature is needed.
+   switch has hidden leaves no stray line. It is included in the normal
+   post-render width measurement. Visible-mode identity already participates
+   in the fit signature, so no separate group signature is needed.
 
-   The loose links on the metadata page get the same rule at the
-   same places, so both faces of the bar group alike.
-   `--rule-strong`, the frame's own colour, on both faces. The old
+   The links on the metadata page sit in the same frames (`DockModeLinks`,
+   since 2026-10-04), so this one rule draws the line on both faces of the bar.
+   `--rule-strong`, the frame's own colour. The old
    between-buttons `--rule` was tried first, for *subtle*, and measured in a
    browser it is oklch 0.27 on a bar of 0.26 — invisible, even zoomed 2x
    (2026-09-29). One hairline in the frame's colour, a few per bar, is as quiet
    as a line can be and still be seen. */
 .dock-modes .dock-btn.dock-group-start { border-left: 1px solid var(--rule-strong); }
-.dock-mode.dock-group-start { border-left: 1px solid var(--rule-strong); }
 
 .dock-modes .dock-btn {
   /* The inset top-border marker belongs to the bar's *other* buttons, where it
@@ -245,16 +247,14 @@
    segmented control rather than as loose glyphs. **This was rung 1 until
    2026-09-06** and is still the old `max-width: 1100px` rule's job.
 
-   **Two selectors because the bar has two shapes.** On the reading view the
-   modes are one `.dock-modes` segment; on the metadata page they
-   are thirteen loose `DockLink`s with no segment around them (Dock.tsx). A rung
-   that only knew the segment did nothing on those pages, so the ladder skipped
-   past it to the next rung and took every label. GPT Sol found it in the
-   design. */
-.dock.dock-fit-2 .dock-modes .dock-btn-label,
-.dock.dock-fit-2 .dock-mode .dock-btn-label { display: none; }
-.dock.dock-fit-2 .dock-modes .dock-btn,
-.dock.dock-fit-2 .dock-mode { padding-inline: 0.6rem; }
+   **One selector, because the bar has one outer CSS shape since 2026-10-04.** The
+   metadata page drew its modes as loose `DockLink`s with no segment around
+   them, and each rule here carried a `.dock-mode` twin for them; a rung that
+   forgot the twin did nothing on that page (GPT Sol found one in the design).
+   `DockModeLinks` draws the segment and its frames now, so the links match
+   this selector exactly as the radios do. Plan 261004h. */
+.dock.dock-fit-2 .dock-modes .dock-btn-label { display: none; }
+.dock.dock-fit-2 .dock-modes .dock-btn { padding-inline: 0.6rem; }
 
 /* **Rung 3 is 0.55rem rather than 0.45, since 2026-10-01, and rung 2 stayed
    at 0.6.** Greg, twice in a day (spya-bumjmy, spya-ng89zf): *"Add a teeny bit
@@ -298,11 +298,12 @@
 /* The exception, on every rung — `keepLabel` in Dock.tsx for which and why.
 
    **Last, and it ties on specificity with the rules above deliberately**, so
-   source order is what makes it win. That is why the mode-link selector above
-   is `.dock-mode .dock-btn-label` and not `.dock-btn.dock-mode
-   .dock-btn-label`: the extra class made the hide (0,5,0) against this rule's
-   (0,4,0), and Plain lost its word on the metadata page at one rung while
-   keeping it at the next. Caught in a browser pass, 2026-09-02.
+   source order is what makes it win. A hide with one class more loses it: the
+   metadata page's mode links once had a selector of their own,
+   `.dock-btn.dock-mode .dock-btn-label`, (0,5,0) against this rule's (0,4,0),
+   and Plain lost its word there at one rung while keeping it at the next.
+   Caught in a browser pass, 2026-09-02; that selector is gone since
+   2026-10-04, when those links moved inside `.dock-modes`.
 
    **Rung 1 is in the list even though nothing there hides a `keepLabel` word.**
    It costs nothing, it keeps "on every rung" a true sentence rather than one

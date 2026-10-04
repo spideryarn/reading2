@@ -39,7 +39,7 @@
  *    politeness: the mode segment is a `role="radiogroup"` and exactly one
  *    button must be checked, so `?mode=timeline` with the switch off and no
  *    Timeline button leaves a radiogroup asserting one-of-these with none of
- *    them on. It applies to the loose-link arm on the metadata and tweets pages
+ *    them on. It applies to the links arm on the metadata page
  *    too — those carry `?mode=` in their URL, so the way back to the mode the
  *    reader came from stays in the bar.
  *
@@ -146,7 +146,7 @@ function reading(props: Record<string, unknown>): void {
   });
 }
 
-/** The bar off the reading view: fourteen loose links, or ten of them. */
+/** The bar off the reading view: framed links for the visible modes. */
 function loose(search: string, props: Record<string, unknown> = {}): void {
   history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
@@ -170,11 +170,18 @@ function radioModes(): string[] {
   );
 }
 
-/** The loose mode links, by the word on each. */
+/** The mode links (the metadata page), by the word on each. */
 function linkModes(): string[] {
-  return [...host.querySelectorAll<HTMLElement>(".dock-mode")].map(
+  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")].map(
     (a) => a.getAttribute("aria-label") ?? a.textContent ?? "",
   );
+}
+
+/** Which of those links carry the visitor's visible unavailable mark. */
+function markedLinkModes(): string[] {
+  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")]
+    .filter((a) => a.classList.contains("tw:opacity-55"))
+    .map((a) => a.getAttribute("aria-label") ?? a.textContent ?? "");
 }
 
 /** Which radios say they are on. Exactly one, always. */
@@ -227,7 +234,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    * into the prop (params.ts § modeParam). GPT Sol, reviewing stage 2: the name
    * claimed a state the test does not enter.
    *
-   * The URL half is real and is tested where it happens — the loose-link arm
+   * The URL half is real and is tested where it happens — the links arm
    * below reads `?mode=` itself, because off the reading view there is no prop.
    */
   it("a reading view in Timeline draws it, checked, with the switch off", () => {
@@ -261,7 +268,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
   });
 
   /**
-   * The loose-link arm, which the plan's first draft missed (GPT Sol, finding
+   * The links arm, which the plan's first draft missed (GPT Sol, finding
    * 9). `carriedSearch` strips only `?panel=`, so `?mode=` is still in the
    * string the bar builds its links out of — which is how the bar on the
    * metadata page knows which mode the reader came from.
@@ -285,7 +292,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     it(`the metadata page translates ?mode=${word} before following either axis`, () => {
       loose(`?mode=${word}`);
       const hrefFor = (mode: Mode) => {
-        const link = [...host.querySelectorAll<HTMLAnchorElement>("a.dock-mode")].find(
+        const link = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
           (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
         );
         expect(link, `${mode} link`).toBeDefined();
@@ -461,15 +468,20 @@ describe("marked × experimental, in both arms", () => {
           expect(radioModes(), what).toContain(MODE_LABEL[mode]);
         });
 
-        it(`the loose arm keeps the mode it came from — ${what}`, () => {
+        it(`the links arm keeps the mode and its visitor marks — ${what}`, () => {
           loose(`?mode=${mode}`, {
             experimental: flip.experimental,
             marked: reader.marked,
             visitor: reader.visitor,
             signedIn: reader.signedIn,
           });
-          expect(linkModes().length, what).toBeGreaterThan(0);
-          expect(linkModes(), what).toContain(MODE_LABEL[mode]);
+          const drawn = linkModes();
+          expect(drawn.length, what).toBeGreaterThan(0);
+          expect(drawn, what).toContain(MODE_LABEL[mode]);
+          const expectedMarked = reader.marked
+            ? labels([...reader.marked.keys()]).filter((label) => drawn.includes(label))
+            : [];
+          expect(markedLinkModes().sort(), what).toEqual(expectedMarked.sort());
         });
       }
     }

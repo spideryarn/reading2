@@ -271,7 +271,7 @@ describe("the stylesheet backs the ladder", () => {
   it("carries the new loose-control gap and keeps rung 3 tighter than rung 2", () => {
     expect(CSS_NO_COMMENTS).toMatch(/\.dock\s*\{[^}]*gap:\s*0\.3rem/);
     const rung2 =
-      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn,\s*\.dock\.dock-fit-2 \.dock-mode\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
         CSS_NO_COMMENTS,
       );
     const rung3 =
@@ -324,16 +324,19 @@ describe("the stylesheet backs the ladder", () => {
   });
 
   /**
-   * The bar has two shapes — one `.dock-modes` segment on the reading view,
-   * fourteen loose `.dock-mode` links on the metadata and tweets pages. The
-   * mode rung knew only the first until GPT Sol found it, so on those pages it
-   * did nothing and the ladder went straight past it, taking every label with
-   * it. (Rung 1 until 2026-09-06, rung 2 since.)
+   * **One outer CSS shape, so one selector.** Until 2026-10-04 the metadata page
+   * drew loose `.dock-mode` links outside any segment, and every rule here needed a
+   * twin for them; the mode rung forgot its twin once (GPT Sol) and took every
+   * label on that page. Both arms draw `.dock-modes` now (plan 261004h), so the
+   * twin is gone, and a `.dock-mode` selector coming back would match nothing.
    */
-  it("the mode rung knows both of the bar's shapes", () => {
+  it("the mode rung is written for the segment, and no loose-link twin is left", () => {
+    const loose = /\.dock-mode(?![\w-])/;
     const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-2"));
     expect(hiders.some((x) => x.includes(".dock-modes"))).toBe(true);
-    expect(hiders.some((x) => x.includes(".dock-mode "))).toBe(true);
+    expect(CSS_NO_COMMENTS).not.toMatch(loose);
+    expect(".dock.dock-fit-2 .dock-mode .dock-btn-label").toMatch(loose);
+    expect(".dock.dock-fit-2 .dock-modes .dock-btn-label").not.toMatch(loose);
   });
 
   /**
@@ -470,9 +473,6 @@ describe("the stylesheet backs the ladder", () => {
       `),
     ).toHaveLength(1);
 
-    const segmentOnly = ".dock.dock-fit-1 .dock-modes .dock-btn-label { display: none; }";
-    expect(labelHiders(segmentOnly).some((x) => x.includes(".dock-mode "))).toBe(false);
-
     expect(floorIsUnconditional("@media (max-width: 731px) {\n  .dock { overflow-x: auto; }\n}")).toBe(
       false,
     );
@@ -531,28 +531,78 @@ describe("Dock gives the ladder something to work with", () => {
   });
 
   /**
-   * Off the reading view the modes are loose links. Both of these were missing
-   * until GPT Sol's review: without `dock-mode` the mode rung does nothing here, and
-   * without the `always` label Plain lost its word on the page you are most
-   * likely to be looking for the way back from.
+   * **Off the reading view the modes are links, in the reading view's frames.**
+   * Greg, 2026-10-04 (spya-qerga4): *"Why does the bottom bar look different in
+   * metadata mode?"* They were loose links with no frame, the half of the bar
+   * that kept being left behind; now both arms draw `.dock-modes` and its
+   * `.dock-frame`s, so one set of selectors styles both.
+   * docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md.
    *
-   * **The count is the visible set, not "more than ten".** Five modes went
-   * behind the experimental switch on 2026-09-03, so a default reader's bar has
-   * eight loose links and the old `> 10` was a statement about a bar nobody
-   * sees. Asserted against `visibleModes` rather than against `8`, so the
-   * number moves with the rule instead of pinning today's count — the point
-   * here is that the ladder has links to act on, and that count is not this
-   * file's subject. tests/dock-experimental-modes.test.tsx owns the eight.
+   * **The count is the visible set**, asserted against `visibleModes` so the
+   * number moves with the rule; tests/dock-experimental-modes.test.tsx owns
+   * what that set is. **Links, not radios**: a press here leaves the page, and
+   * no mode is open on it, so nothing may claim to be the selected one.
    */
-  it("the metadata page: loose links that say they are modes", () => {
+  it("the metadata page: links, in the same frames as the reading view", () => {
     render({ view: "metadata" });
-    expect(host.querySelector(".dock-modes")).toBeNull();
-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(
-      visibleModes(false, undefined).length,
-    );
-    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(1);
+    const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
+    expect(links).toHaveLength(visibleModes(false, undefined).length);
+    expect(links.length).toBeGreaterThan(1);
+    expect(
+      host.querySelector('.dock-modes [role="radiogroup"], .dock-modes [role="radio"]'),
+    ).toBeNull();
+    expect(
+      host.querySelector(
+        ".dock-modes .on, .dock-modes [aria-current], .dock-modes [aria-checked], .dock-modes [aria-pressed]",
+      ),
+    ).toBeNull();
     expect(host.querySelector(".dock-tail")).not.toBeNull();
     expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+  });
+
+  /**
+   * **The two arms draw the same boxes.** The claim the report is about, held
+   * directly: the same visible list gives the same frames holding the same
+   * buttons in the same order, the same hairlines between runs and the same
+   * flex shares, whichever arm drew them. The reading arm's radio wrapper gets
+   * the sum of the shares inside it; the links arm gives those shares straight
+   * to the frames.
+   */
+  it("both arms: the same frames, the same lines between runs, the same shares", () => {
+    const drawn = () => ({
+      frames: [...host.querySelectorAll(".dock-modes .dock-frame")].map((f) =>
+        [...f.querySelectorAll(".dock-btn")].map((b) => b.getAttribute("aria-label")),
+      ),
+      starts: [...host.querySelectorAll(".dock-modes .dock-group-start")].map((b) =>
+        b.getAttribute("aria-label"),
+      ),
+      shares: [...host.querySelectorAll<HTMLElement>(".dock-modes, .dock-modes .dock-frame")].map(
+        (e) =>
+          e.style.getPropertyValue("--dock-mode-count") ||
+          e.style.getPropertyValue("--dock-frame-count"),
+      ),
+    });
+    const cases = [
+      { experimental: EXPERIMENTAL_OFF, margin: false, search: "" },
+      { experimental: EXPERIMENTAL_ON, margin: false, search: "" },
+      /* The carried state keeps Marginalia visible with Experimental off. */
+      { experimental: EXPERIMENTAL_OFF, margin: true, search: "?margin=1" },
+    ];
+    for (const { experimental, margin, search } of cases) {
+      history.replaceState(null, "", "/read/x");
+      render({ mode: "plain", onMode: () => {}, experimental, margin });
+      const reading = drawn();
+      expect(reading.frames.length).toBeGreaterThan(1);
+      expect(reading.shares.every((x) => x !== "")).toBe(true);
+      const radios = host.querySelector<HTMLElement>(".dock-modes-radios");
+      const enclosedShares = [...(radios?.querySelectorAll<HTMLElement>(".dock-frame") ?? [])]
+        .map((frame) => Number(frame.style.getPropertyValue("--dock-frame-count")))
+        .reduce((sum, share) => sum + share, 0);
+      expect(radios?.style.getPropertyValue("--dock-radio-count")).toBe(String(enclosedShares));
+      history.replaceState(null, "", `/read/x/metadata${search}`);
+      render({ view: "metadata", experimental });
+      expect(drawn()).toEqual(reading);
+    }
   });
 
   /**
@@ -570,11 +620,11 @@ describe("Dock gives the ladder something to work with", () => {
   });
 
   /**
-   * **And the loose arm too, which is the half that was left untested.**
+   * **And the links arm too, which is the half that was left untested.**
    *
    * The metadata assertion above is measured against `visibleModes`, which is
    * the function the component itself calls — so it holds however the filter
-   * behaves, and a loose arm that ignored the switch entirely would pass it.
+   * behaves, and a links arm that ignored the switch entirely would pass it.
    * GPT Sol's review of stage 2 named the surviving mutation: *"make the loose
    * arm always filter as Experimental off while leaving the radiogroup
    * correct"*.
@@ -583,9 +633,10 @@ describe("Dock gives the ladder something to work with", () => {
    * rule — an independent number the filter cannot move. It is the only
    * assertion in this file that would notice the two arms disagreeing.
    */
-  it("the metadata page with the switch on: every mode, as loose links", () => {
+  it("the metadata page with the switch on: every mode, as links", () => {
     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
-    expect(host.querySelector(".dock-modes")).toBeNull();
-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(MODES.length);
+    expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
+      MODES.length,
+    );
   });
 });
