@@ -336,7 +336,7 @@ const rawPgShelfStore: ShelfStore = {
    * and — worse on the route side — a chance to write the first and reject the
    * second. See `ShelfStore.patch`.
    */
-  async patch(slug, change): Promise<LibraryEntry> {
+  async patch(slug, change): Promise<LibraryEntry | null> {
     requireSlug(slug);
 
     const title = change.title === undefined ? undefined : (change.title?.trim() ?? "");
@@ -548,19 +548,14 @@ const db = () => getDb();
  * A second way of building a `LibraryEntry` is the divergence this seam exists
  * to make impossible — and it is worth the extra query at this size.
  */
-async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> {
+async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry | null> {
   const entries = await pgArticleReader.listArticles({ archived });
-  const entry = entries.find((e) => e.slug === slug);
-  if (!entry) {
-    // The write above already proved the row exists, so this is "not a complete
-    // article" (no tree, no blocks), not "no such article". Different problem,
-    // different place to look.
-    throw Object.assign(
-      new Error(`No shelf entry for ${slug} after writing — is it a complete article?`),
-      { status: 404 },
-    );
-  }
-  return entry;
+  /* `null`: the write above proved the row exists, so no card means the
+     article is not on the shelf yet, which is every article while it is being
+     imported. The add page saves the purpose then (plan 261004l), and until
+     2026-10-05 this threw 404 after the UPDATE had committed: a request that
+     reported failure and changed the data. `ShelfStore.patch`. */
+  return entries.find((e) => e.slug === slug) ?? null;
 }
 
 

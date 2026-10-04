@@ -291,6 +291,18 @@ more than five minutes never restarted at completion (`completed()`), and `useAu
 a refusal over words that were no longer the refused ones, which with the timer armed only on
 `dirty` would have left them unsent until the next keystroke.
 
+**Browser check, first run** (Sonnet subagent, Playwright on the box, local stack, sha 75cd1531a
+at start and end). It found the bug the unit tests could not: on four of four fresh imports the
+first PATCH wrote `articles.purpose` and was answered 404, because `ShelfStore.patch` builds its
+answer from the shelf list and an article mid-import is not on it. The box said *Not saved* over
+saved words. Fixed in the store (`patch` answers `null` for *written, not on the shelf yet*), red
+first in `tests/store-shelf-pg.test.ts`; written up as
+[261005a](../postmortems/261005a-a-write-that-answers-with-a-view-fails-where-the-view-is-empty.md).
+What that run did establish: on two fresh imports every first-mode job's profile carried the typed
+purpose (saved 77 s before the jobs were created on one); a focused box held the page at *Ready*
+and **Open the article** saved and opened; a re-add showed the stored purpose and sent nothing;
+nothing scrolled sideways at 390 px.
+
 ## Stages
 
 One stage: one page and one small class. Plan review (GPT Sol, read-only), build, code review

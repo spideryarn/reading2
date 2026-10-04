@@ -705,12 +705,15 @@ export interface ShelfStore {
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
-   * assuming what the write did.
+   * assuming what the write did. **`null` means written, and not on the shelf
+   * yet**: the row exists and has no published revision, which is an article
+   * mid-import. Not an error, because the write happened. A slug with no row
+   * still rejects with not-found.
    */
   patch(
     slug: string,
     change: { archived?: boolean; title?: string | null; purpose?: string | null },
-  ): Promise<LibraryEntry>;
+  ): Promise<LibraryEntry | null>;
 
   /**
    * One more open.
