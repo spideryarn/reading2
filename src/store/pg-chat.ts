@@ -454,11 +454,9 @@ const rawPgChatStore: ChatStore = {
       await lockArticleRow(tx, articleId);
       /* **The thread's clock moves whether or not the message matched.**
 
-         The filesystem does this unconditionally — its `map` rebuilds the
-         thread object with a new `updatedAt` even when no message inside it has
-         the given id — and the panel sorts threads by `updatedAt`. An
-         `if (rowCount)` guard around this would look like an optimisation and
-         would be a real divergence in what the reader sees. */
+         The panel sorts threads by `updatedAt`, and a finish has always moved
+         that clock even when no message matches. Guarding this on the message
+         update's row count would change the order the reader sees. */
       await tx
         .update(chatThreads)
         .set({ updatedAt: at })

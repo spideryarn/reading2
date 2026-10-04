@@ -410,16 +410,16 @@ const rawPgSearchStore: SearchStore = {
     /* `id` and `criterion` are deliberately not settable — src/searches.ts pins
        them back after the spread, and building the SET explicitly is the same
        guarantee without depending on key order. */
+    const fields: Partial<Pick<SearchRun, "hits" | "model" | "error">> = patch;
     const rows = await db
       .update(searchRuns)
       .set({
         status: patch.status,
-        /* One arm or the other, and a field the arm does not name is left as
-           `begin` set it: a failure does not touch `hits`, an answer does not
-           touch `error`. */
-        ...(patch.status === "done"
-          ? { hits: patch.hits, ...(patch.model === undefined ? {} : { model: patch.model }) }
-          : { error: patch.error }),
+        /* Preserve defined-field writes. A structurally typed variable can
+           carry fields beyond its union arm, and those were always written. */
+        ...(fields.hits === undefined ? {} : { hits: fields.hits }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // on the table says so, and half an attempt is a run that can never be
         // swept or never be finished.

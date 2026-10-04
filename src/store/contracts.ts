@@ -1011,14 +1011,14 @@ export interface LibrarySearchOptions {
  * What a stale `pending` row looks like, for both sweeps.
  *
  * **`keep` is this process's live work and `graceMs` is everybody else's.**
- * That split is the whole shape of the problem. The filesystem stores decide
- * staleness from an in-memory `Set` in `src/routes.ts`, which is exactly right
- * for one server on one disk and silently wrong the moment two processes share
+ * That split is the whole shape of the problem. The former filesystem stores
+ * decided staleness from an in-memory `Set` in `src/routes.ts`, which was right
+ * for one server on one disk and silently wrong the moment two processes shared
  * a database: process B sees process A's live row in nobody's set and errors
  * an answer that is still arriving. On Vercel that is not an edge case, it is
  * the ordinary shape.
  *
- * So the Postgres stores take both — spare what this process is doing, and
+ * So the stores take both — spare what this process is doing, and
  * spare anything young enough that some *other* process is plausibly still on
  * it. `keep` alone is a cross-process bug; `graceMs` alone would error a run
  * this very process has been streaming for four minutes.
@@ -1033,7 +1033,6 @@ export interface SweepOptions {
   readonly keep: ReadonlySet<string>;
   /**
    * How old an attempt must be before another process may declare it dead.
-   * The filesystem stores ignore this — they have no attempt clock to read.
    */
   readonly graceMs: number;
 }
@@ -1131,8 +1130,8 @@ export interface ChatStore {
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's
-   * `updatedAt` whenever the *thread* matches — even if the message does not,
-   * which is what the filesystem does and what the panel's ordering depends on.
+   * `updatedAt` whenever the *thread* matches — even if the message does not.
+   * The panel's ordering depends on that clock.
    *
    * **Pass the `attempt` this answer belongs to.** A retry keeps the message
    * id, so identity cannot say which call is reporting: without the attempt, a
@@ -1488,8 +1487,7 @@ export interface RefereeClaimsStore {
    * and on Vercel it is the ordinary shape. So the Postgres store applies its
    * own window against `referee_claims.created_at`, which `begin` stamps and
    * `finish` never touches (`CLAIMS_ORPHAN_GRACE_MS`,
-   * src/store/pg-referee-claims.ts). The filesystem store needs none: two
-   * servers sharing one `data/` directory is a thing nobody does.
+   * src/store/pg-referee-claims.ts).
    */
   sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
 }

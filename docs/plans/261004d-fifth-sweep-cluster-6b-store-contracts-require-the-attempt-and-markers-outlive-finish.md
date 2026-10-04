@@ -32,10 +32,11 @@ made strict by 6a.
 handlers drop the marker when the model call ends, **before** the answer is stored, and they add it
 before a step that could throw. Search had both shapes and they were fixed in `1714d1aa3`: one outer
 `finally` from the marker to the stored answer, and a map from key to holder so that an older run
-finishing cannot drop a newer run's marker. The Opus review found the harm narrow for Criteria (a
-run has to have outlived its own timeout plus thirty seconds), so this is a **consistency repair**,
-not a counted defect. For Claims the overlap is reachable in one process: two tabs each start a run
-for the same article, and the first to finish removes the marker the second still needs.
+finishing cannot drop a newer run's marker. The Opus review found the model-to-store gap narrow for
+Criteria (a run has to have outlived its own timeout plus thirty seconds). The holder check fixes
+overlap in both handlers: Claims allows two tabs to start runs for the same article; Criteria
+allows a pending row to be deleted and its supplied id reused while the deleted request still
+runs. The first request to finish must not remove the marker the second still needs.
 
 ## What changes
 
@@ -56,12 +57,14 @@ row past the grace so only the marker can spare it:
 3. **Claims: an older run finishing does not release a newer one.** Two overlapping POSTs; the first
    finishes; the run is aged; a `GET` must still find it `pending`. Today it is swept to `error`.
 4. **Criteria and Claims: a response that throws while the stream is opened does not pin the
-   marker.** A fake response whose `writeHead` throws; afterwards an aged `pending` row must be
+   marker.** A fake response whose `on` throws; afterwards an aged `pending` row must be
    swept. Today the marker stays for the life of the process.
 
-Not tested: a Criteria holder overlap. One process cannot produce it (a retry needs the row to be
-`error`, and only another process's sweep can make it so while this one holds the marker). The map
-is still used, so the three handlers have one shape.
+5. **Criteria: an older deleted run finishing does not release its replacement's marker.** DELETE
+   can remove a pending row without cancelling its model call, and POST can reuse that now-absent
+   supplied id. Those requests overlap in one process. The holder map is a fix here too, rather
+   than only consistency with Search. This case was added during code review; its execution is
+   pending because the review sandbox denies connections to local Postgres.
 
 ### Stage 2: D3, the contracts
 
@@ -91,8 +94,9 @@ type, and the audit says to handle Chat separately. Named here so it is a decisi
 
 Red first: a new `tests/store-contracts-require-attempts.test.ts` of `@ts-expect-error` lines, one
 per signature above: a call with no attempt, a `pending` finish, a `finish` that sets `criterion`,
-and reading `.attempt` off `appendSpoken`'s result. It is red today under `npm run typecheck` (every
-directive is unused) and cannot go red under `npm test`, which does not type-check; the file says
+and reading `.attempt` off `appendSpoken`'s result. It is red against the old contracts under
+`npm run typecheck`: newly enforced calls leave unused directives and required return guarantees
+fail their typed assignments. It cannot go red under `npm test`, which does not type-check; the file says
 so. Existing tests that exercise the run-time refusals keep doing so through an explicit cast.
 
 Comments (`contracts.ts`, the four adapters, the handlers) that explain the optional token by the
@@ -113,10 +117,11 @@ about it. The baseline diagnostic of each line was read, not only the exit code.
 ## The simpler option passed over
 
 **Only delete the `?`**, leaving the `Partial` patches. It is most of the value for a third of the
-diff. Passed over because the umbrella names the `Partial` patch as part of the item, the callers
-already build exactly the two shapes the union names, and a union lets the adapters drop four
-`=== undefined` spreads each. If the union turns out to cost more than that at the call sites, this
-falls back to `Pick` plus a required status, which is what `AnswerFinish` is.
+diff. Passed over because the umbrella names the `Partial` patch as part of the item and the callers
+already build exactly the two shapes the union names. The adapters keep independent defined-field
+writes: structurally typed variables can carry additional writable fields, and narrowing the types
+must not silently discard fields the store previously persisted. If the union costs more at call
+sites, this falls back to `Pick` plus a required status, which is what `AnswerFinish` is.
 
 ## Not here
 
@@ -135,4 +140,49 @@ GPT Sol reviews this plan read-only, then the code with write access.
 
 ## What landed
 
-(filled in at the end)
+2026-10-04, in two commits: `37a078408` (both stages) and the review fixes after it.
+
+- **X5:** `refereeing` and `pullingClaims` are maps to a holder; both handlers hold the marker from
+  the pending row to the stored answer. Six cases in `tests/referee-stream-lifetime.test.ts`.
+- **D3:** the table above, as written, with one change from review: the Search and Criteria
+  adapters still write every defined field of a patch, so the union constrains what a caller may
+  build and not what the store does with a value that got past it.
+- **For cluster 8:** nothing in `src/routes.ts` moved except inside `runRefereeCriterion`,
+  `runRefereeClaims`, the two marker declarations, three type annotations and one import. No route
+  row, pattern or `withSpendAttribution` wrap was touched.
+- **Left over:** the marker's ordering assumption (above), and the fingerprint order in Criteria and
+  Search (§ Not here).
+
+## Code review, 2026-10-04
+
+The Search and Criteria union-arm SET clauses changed accepted writes: a variable satisfying an
+arm can also carry writable fields from the other arm. An isolated probe executing each old and
+new `finish` method with a captured query showed four differences (error and done, both adapters).
+Restoring defined-field writes made all four comparisons pass. Store regression cases were added
+in `store-searches-pg.test.ts` and `referee-stream-lifetime.test.ts`; no existing production caller
+with mixed fields was found.
+
+Criteria's one-process overlap was incorrectly ruled out; the DELETE/reuse path is described in
+Stage 1 and now has a test. Obsolete filesystem explanations on the affected signatures were
+removed. Removing all fourteen compiler directives produced exactly the diagnostics they name.
+
+The review sandbox could not reach local Postgres, so the reviewer could not run its own database
+tests or the mutation checks. **They were run afterwards, outside the sandbox:** `npm run typecheck`
+green; the lifetime file, `store-searches-pg`, `referee-criteria-store`, `comment-sweep`,
+`store-chat-pg` and `routes` green (248 tests). Two mutations, each put back: releasing the Criteria
+marker without the holder check turns *a deleted run finishing does not release its replacement's
+lock* red (`expected 'error' to be 'pending'`), and writing `error` only on the error arm turns
+Search's *keeps carried writable fields* red. The five original marker cases were each seen red
+before the fix existed, which is the stronger form of the same check.
+
+A wider, pre-existing scheduling risk remains for the shared Search/Referee marker design:
+`begin` responses need not resolve in database commit order. A delayed older response could replace
+a newer request's marker and then remove it when its fenced finish matches nothing. This is
+reasoned, not reproduced against Postgres here. Tracking every active request per key would avoid
+that ordering assumption; this review leaves that shared design change for the parent to decide.
+
+**Decided: not here.** It is in `search` as much as in the two Referee handlers, it predates this
+plan, and the harm needs two `begin` calls to answer out of order *and* the newer run to outlive
+its grace. The repair is small and would replace the holder with a count per key (live while any
+request holds it), in all three handlers at once. It goes to the Overseer's queue with that
+recommendation, so `routes.ts` is free for cluster 8.

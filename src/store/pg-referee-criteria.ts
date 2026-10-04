@@ -336,14 +336,15 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
     /* `id`, `criterion` and the config columns are deliberately not settable
        here — a finish reports an answer, and changing the question while
        answering it is what `begin` is for. */
+    const fields: Partial<Pick<SavedCriterion, "results" | "model" | "error">> = patch;
     const rows = await db
       .update(refereeCriteria)
       .set({
         status: patch.status,
-        // One arm or the other — pg-searches.ts § finish.
-        ...(patch.status === "done"
-          ? { results: patch.results, ...(patch.model === undefined ? {} : { model: patch.model }) }
-          : { error: patch.error }),
+        // Preserve defined-field writes — pg-searches.ts § finish.
+        ...(fields.results === undefined ? {} : { results: fields.results }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // says so, and half an attempt is a row that can never be swept or
         // never be finished.

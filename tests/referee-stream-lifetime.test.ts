@@ -66,7 +66,7 @@
  * ## What this file does not do
  *
  * Nothing here reaches a model: all three generators are stubbed. It is about
- * plumbing — who awaits whom, and when a key leaves a `Set` — not about what a
+ * plumbing — who awaits whom, and when a live marker is released — not about what a
  * referee is told. The answers themselves are
  * tests/referee-criteria-run.test.ts and its siblings.
  */
@@ -363,6 +363,32 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
   });
 
   describe("POST /api/referee/criteria/:slug", () => {
+    it("keeps carried writable fields on either terminal status", async () => {
+      await asTestOwner(async () => {
+        const failed = await refereeCriteriaStore.begin(SLUG, "Methods?", { kind: "single" });
+        const failure = {
+          status: "error" as const,
+          error: "failed",
+          model: "failure-model",
+          results: [{
+            kind: "single" as const,
+            blockId: "spya-k3m9qt",
+            quote: "methods",
+            confidence: 70,
+            reasoning: "Names the methods",
+          }],
+        };
+        const error = await refereeCriteriaStore.finish(SLUG, failed.row.id, failure, failed.attempt);
+        expect(error?.model).toBe("failure-model");
+        expect(error?.results).toEqual(failure.results);
+
+        const begun = await refereeCriteriaStore.begin(SLUG, "Controls?", { kind: "single" });
+        const answer = { status: "done" as const, results: [], error: "carried error" };
+        const done = await refereeCriteriaStore.finish(SLUG, begun.row.id, answer, begun.attempt);
+        expect(done?.error).toBe("carried error");
+      });
+    });
+
     it("holds the request open until the stream is finished, and only then answers", async () => {
       const call = begin("POST", `/api/referee/criteria/${SLUG}`, {
         criterion: "Are the methods reproducible?",
@@ -393,7 +419,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
       /* **The row is now older than the grace**, so the age guard cannot be
          what spares it. Only `keep` — `liveCriteria(slug)`, built from the
-         `refereeing` set — is left. Without this line the assertion below
+         `refereeing` map — is left. Without this line the assertion below
          passes with the lock deleted, which is what the first draft did. */
       await ageTheCriteria(article.articleId);
       const mid = await get(`/api/referee/criteria/${SLUG}`);
@@ -475,6 +501,41 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         );
       } finally {
         spy.mockRestore();
+      }
+    });
+
+    it("a deleted run finishing does not release its replacement's lock", async () => {
+      const body = { criterion: "Are the methods reproducible?", kind: "single" };
+      const older = begin("POST", `/api/referee/criteria/${SLUG}`, body);
+      await reachedOrSettled(gates.criterion, older, "POST /api/referee/criteria/:slug (older)");
+      const releaseOlder = gates.criterion.handOver();
+      let newer: ReturnType<typeof begin> | undefined;
+      try {
+        const [row] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        if (!row) throw new Error("the older request never wrote its pending row");
+        const removed = begin("DELETE", `/api/referee/criteria/${SLUG}/${row.id}`);
+        await removed.promise;
+        expect(JSON.parse(removed.written()).criteria).toEqual([]);
+
+        // An absent supplied id is reusable, even while its deleted run is still answering.
+        newer = begin("POST", `/api/referee/criteria/${SLUG}`, { ...body, id: row.id });
+        await reachedOrSettled(gates.criterion, newer, "POST /api/referee/criteria/:slug (newer)");
+        const [replacement] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        expect(replacement?.id, "the requests did not share a marker key").toBe(row.id);
+
+        releaseOlder();
+        await older.promise;
+        expect(newer.settled(), "the replacement finished too, so nothing was tested").toBe(false);
+        await ageTheCriteria(article.articleId);
+        const mid = await get(`/api/referee/criteria/${SLUG}`);
+        expect(
+          (mid.criteria as { status: string }[])[0]?.status,
+          "the deleted run took its replacement's lock with it",
+        ).toBe("pending");
+      } finally {
+        releaseOlder();
+        gates.criterion.release();
+        await Promise.all([older.promise, newer?.promise]);
       }
     });
 

@@ -5,7 +5,7 @@
  * Every write went to Postgres on 2026-09-05, and the file-writing half of this
  * module went with `src/store/fs.ts`
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
- * What is left is the vocabulary — `NewComment`, `MarkPatch`, `AnswerPatch`,
+ * What is left is the vocabulary — `NewComment`, `MarkPatch`, `AnswerFinish`,
  * `CommentIdTaken`, `NotAnExplanation`, `COMMENT_SWEPT` — plus `loadComments`,
  * which now has exactly one caller: `tests/helpers/seed-reader-state.ts`, which
  * reads a fixture's `data/<slug>/comments.json` into Postgres rows. It is a

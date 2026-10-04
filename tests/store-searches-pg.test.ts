@@ -108,6 +108,26 @@ describe("the Postgres searches store", () => {
     expect(attempt).toBeTruthy();
   });
 
+  it("keeps carried writable fields on either terminal status", async () => {
+    // A variable can satisfy SearchFinish structurally with additional fields.
+    // Tightening that type must not change which defined fields reach the store.
+    const failed = await pgSearchStore.begin(SLUG, "about time", "meaning");
+    const failure = {
+      status: "error" as const,
+      error: "failed",
+      model: "failure-model",
+      hits: [{ blockId: "spya-k3m9qt", quote: "time", confidence: 70, reasoning: "Names time" }],
+    };
+    const error = await pgSearchStore.finish(SLUG, failed.run.id, failure, failed.attempt);
+    expect(error?.model).toBe("failure-model");
+    expect(error?.hits).toEqual(failure.hits);
+
+    const begun = await pgSearchStore.begin(SLUG, "about space", "meaning");
+    const answer = { status: "done" as const, hits: [], error: "carried error" };
+    const done = await pgSearchStore.finish(SLUG, begun.run.id, answer, begun.attempt);
+    expect(done?.error).toBe("carried error");
+  });
+
   it("resets a failed run rather than minting a second one — all three conditions", async () => {
     const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning", "spya-runaa2");
     await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "the model fell over" }, attempt);

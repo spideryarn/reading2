@@ -4614,9 +4614,7 @@ export function liveRuns(slug: string): Set<string> {
  *
  * As with `sweepChat`, the rule is the store's and only the two things a
  * running server knows are here: what this process is writing, and how long
- * another process's row may stay silent. The filesystem store ignores the
- * grace window — it has no other processes to be wrong about, and giving it
- * one would be an improvement smuggled in under a migration.
+ * another process's row may stay silent.
  */
 function sweepSearches(slug: string): Promise<SearchRun[]> {
   return searchStore.sweepPending(slug, {
@@ -4830,9 +4828,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
  * model call precisely so a crash leaves evidence.
  *
  * A map to the request holding the key, as `searching` is and for its reason.
- * One process cannot overlap two runs of one criterion today (a retry needs
- * the row to be `error`), so here the holder is the same shape rather than a
- * fix; `pullingClaims` below is where it is a fix.
+ * A retry needs an `error` row, but deleting a pending criterion and posting
+ * its id again can overlap two requests in this process. The deleted run's
+ * answer cannot be stored, and it must not release the replacement's marker.
  */
 const refereeing = new Map<string, symbol>();
 
