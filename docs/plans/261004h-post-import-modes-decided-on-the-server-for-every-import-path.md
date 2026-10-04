@@ -46,26 +46,42 @@ main-mode jobs, in the transaction that published, with `enqueueSuccessorIn`
 ([`src/store/pg-successor.ts`](../../src/store/pg-successor.ts)). That is how the `labels` job and a
 reset's regenerations are already queued, and it is in `publishRevisionIn` for the reason they are.
 
-- *First full publication* is `opts.job` present **and** (`article.currentRevisionId === null` and
-  the article is not minimal, **or** `upgradedFromMinimal`). So it covers a URL from any front door,
-  an upload, a retry, *Read this*; and it leaves out Rebuild, Start again (which has its own
-  `regenerate` list), a minimal paper, a mode job's publication, and a standalone `publishRevision`
-  with no job (the fixture loader).
+- *First full publication of an import* is, off the job row the fence has just locked: not a reset,
+  **and** either the job reserved the article's name (`reserves_name`, true for a new URL, an upload
+  and a retry of either) while the article served nothing and is not minimal, **or**
+  `upgradedFromMinimal` (*Read this*). So it leaves out Rebuild, Start again (which has its own
+  `regenerate` list), a minimal paper, a mode job's publication, a job-less `publishRevision`, and
+  the test fixture loader, whose synthetic job reserves no name (Sol F1: `opts.job` alone would
+  have let it in and left seven undriven jobs blocking the next test's exclusive steps). A job that
+  adopted its slug from another live job and happens to publish first reserves no name and queues
+  nothing; rare, and it fails towards a Generate button. An import run from the CLI counts: it is an
+  import, and its jobs wait for the owner's browser like any queued job.
 - **Which jobs**: exactly today's requests — one job per step, and Skim's as
   `["quotes", "ideas", "skim"]`. The list moves to a shared leaf, `src/auto-mode-steps.ts`, that
   both sides import. It is written out there rather than derived, because the derivation reads
   `modeStep` in `src/web/activation.ts`, which imports the browser's job engine.
   `tests/auto-modes.test.tsx` already derives the list from the mode catalogue and now asserts the
   written list equals it, so a mode moved in or out of the experimental switch fails a test.
-- **Order**: stamped after the labels successor, one microsecond apart (`after`), single-step jobs
-  first and Skim last. Skim's job carries Quotes and Ideas, so its correctness does not depend on
-  that order.
+- **Order**: stamped after the labels job, one microsecond apart, single-step jobs first and Skim
+  last. *After the labels job* means after the row that actually holds it: when the labels successor
+  collapses onto a job already queued, that holder's `created_at` came from an app server's clock
+  and can be later than this transaction's `now()`, so the modes are stamped from the later of the
+  two (`enqueueSuccessorIn` gains `notBefore: jobId`; Sol F5). Skim's job carries Quotes and Ideas,
+  so its correctness does not depend on the order among the modes.
 - **Profile**: each job gets the reader's profile as it stands at publication — "about you" and the
   article's purpose if one is already saved — rendered by `renderProfile`, read inside the
   transaction. See § The purpose box for what this gives up.
-- **Work key**: unscoped, so a mode job the page or the reader posts for the same step and profile
-  joins the queued one rather than adding a second. An older client still open across the deploy
-  therefore collapses onto the server's jobs.
+- **Work key**: unscoped, so an identical unforced request with the same rendered profile joins the
+  queued job while it is active, rather than adding a second. Two exceptions, both carried from
+  260930c (Sol F4): the Skim panel posts a narrower request once Quotes or Ideas exist, a second row
+  whose Skim step then skips as current; and a request posted after the purpose changed has a
+  different profile, so it is a second job, and for Ideas (whose freshness includes the profile) a
+  second paid run. An older client still open across the deploy posts identical requests and
+  collapses, unless it saved a purpose first.
+- **It is one transaction with the publication**, as the labels successor is. A successor insert
+  that throws rolls back the pointer, the earlier successors and the charge together.
+- **Queued is not run.** Nothing on the server drives a queued job; the owner's browser does, from
+  any page. With every tab closed the modes wait, as `labels` does today.
 - **Cost accounting**: unchanged. A successor reserves nothing (as a mode press reserves nothing
   today) and every model call it makes is written to `ai_calls` against its job and step.
 
@@ -76,16 +92,23 @@ the default is on). One additive migration. `GET /api/reader` returns `autoModes
 
 **The add page** keeps the tick box, same words, now reading and writing that setting: a PATCH on
 each change, so it can still be changed right up to the moment the import finishes. A browser whose
-old `localStorage` choice is `off` sends that once and then forgets the key, so nobody's opt-out is
-lost. `openArticle` no longer queues anything; `read-this.ts` stops watching and queueing.
+old `localStorage` choice is `off` hands it over when the signed-in app starts (not only on the add
+page, since a hover-card add never visits it), and forgets the key only once the server has answered
+(Sol F3). **What this cannot cover:** a tab still running the old client across the deploy, with the
+box off, sends nothing, and the server then queues the modes for its next import. The server cannot
+see a browser's storage. Accepted: two accounts exist, and the cost is one article's modes. `openArticle` no longer queues anything; `read-this.ts` stops watching and queueing.
 `queueAutoModes`, `readAutoModes` and `writeAutoModes` are deleted.
 
-**High-powered AI.** The page used to hold the modes until the switch answered. On the server the
-same end is reached two ways that already exist: the mode jobs are queued behind the `labels`
-successor, which is exclusive, so none claims until it ends; and each step reads the article's power
-as it starts (`readStepPower`). The add page sends the switch as soon as the article row exists, so
-it is normally in long before publication, and a tick in the last seconds still has the length of
-`labels` (5 to 30 s in production) to land. `settle` stays, minus its caller's `then`.
+**High-powered AI: what is guaranteed, and what no longer is** (Sol F2). Each step reads the
+article's power as it starts (`readStepPower`), and no mode starts until the `labels` job ahead of
+it has ended. So a switch **committed** before the first mode step starts is respected, and the add
+page sends it as soon as the article row exists, which is long before publication. What is given
+up: the page used to hold the modes until the switch request *answered*, however long that took. A
+request still unanswered when `labels` ends now loses, and those modes run on the standard model.
+That needs a request hung for the length of `structure` plus `labels`. A server-side hold for a
+pending intent would mean a route to mark a running job, which is the machinery this plan passed
+over; the weaker guarantee is stated here and in high-powered-ai.md instead. `settle` stays, so a
+tick in the last second is still sent at completion.
 
 ### What changes for the reader, said plainly
 
@@ -124,8 +147,11 @@ the reader is one read at publication and needs no route to change a running job
   exactly the listed jobs, after the labels successor, each free (no `ingest_event_id`, no
   `reserves_name`), with the reader's profile; the opted-out reader gets none; a second publication
   (Rebuild), a reset, a mode job's publication, a minimal paper and a job-less publication get none;
-  *Read this* gets them; a rolled-back publication leaves none; a reader's own press of the same step
-  joins the queued job.
+  *Read this* gets them; a retried import and the administrator's import get them; the fixture
+  loader's job gets none; a throw on a later mode successor rolls back the pointer, the earlier
+  successors and the settlement; a labels holder stamped later than the publication still sorts
+  before every mode; a mode queued behind `labels` reads a power switched on while `labels` ran; a
+  reader's own identical press joins the queued job.
 - Route: `PATCH /api/reader { autoModes }` round-trips and stamps the time.
 - `tests/auto-modes.test.tsx`: the shared list equals the derived one; the box reads and writes the
   setting; completion posts no mode job; the one-time `localStorage` hand-over.
@@ -177,4 +203,10 @@ total rises by the imports that were missed.
 
 ## Review record
 
-(to be filled)
+**GPT Sol on the plan** (commit b29a4c166, read-only, exit 0, answer file fresh):
+[plan-review-sol](261004h-post-import-modes-decided-on-the-server-for-every-import-path-plan-review-sol.md).
+Verdict *build with changes*. F1 (the fixture loader's job met the trigger), F3 (the opt-out
+hand-over), F4 (work-key wording) and F5 (a labels holder stamped later) are taken as written above.
+F2 (waiting behind labels is not awaiting the switch) is taken as the stated weaker guarantee, which
+Sol offered as the alternative to a mechanism. Its two closing notes, the wider rollback and that
+queued is not run, are in § Stage 1.
