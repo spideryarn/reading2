@@ -210,10 +210,12 @@ article, one `[n] entry` a line, and names each work's entry **by number**. Code
   the context even for a marker inside the quote: `dose5` quoted from `dose5mg` is no citation.
   `gluedNumbers` excludes quantities and delimited maths. A note the extraction left out or did
   not recognise leaves no block, so `hasNotes` cannot prove there are none; the licence therefore
-  also needs **at least half of the list's entries cited by a glued number somewhere in the body**
+  also needs **glued numbers in the body to match at least half of the list's numbers**
   (`citesMostOfListGlued`: 69 of 69 and 26 of 27 on the two papers measured, against one or two for
-  a stray footnote). What that leaves open is a paper with as many unrecognised numbered footnotes
-  as half its references —
+  a stray footnote). That counts matching numbers, not citations, and it narrows the gap without
+  closing it: a paper that cites by superscript and also has an unrecognised numbered footnote, or
+  labels such as `sample1–20`, can still pair a work with the entry of a footnote's number, if the
+  model names that entry with its own title —
   [review postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md);
   [261004j](../plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md);
 - the model's title is in the entry — else the entry is dropped as disagreeing.

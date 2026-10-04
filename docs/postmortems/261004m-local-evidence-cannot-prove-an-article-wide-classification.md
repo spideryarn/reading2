@@ -97,13 +97,21 @@ gap remains unresolved and belongs beside these regressions until it has a check
 
 ## What was done after the review
 
-Countermeasure 4 is the long-term one and is not built. What closed the demonstrated consequence
+Countermeasure 4 is the real fix and is not built. What **narrowed** the demonstrated consequence
 the same day is a sixth, which the class itself suggests: **when one place cannot decide an
 article-wide question, ask the whole article.** `citesMostOfListGlued` in `src/citations.ts` lets a
 glued number count as a reference number only when the body cites at least half of the numbered
 list that way. A paper that cites by superscript does (69 of 69 and 26 of 27 entries on the two
 real papers); a paper whose stray glued numbers are footnotes does not (53 of 292 on the paper
 whose 62 endnotes started this). The probe now asserts the wrong entry is refused against a
-ten-entry list. It still passes against a one-entry list, and a paper with as many unrecognised
-numbered footnotes as half its references would pass too. That residue is stated in the function's
-comment.
+ten-entry list. It still passes against a one-entry list.
+
+**It does not close the gap**, and Sol's second review
+([round two](../plans/261004j-footnote-digits-code-review-2-sol.md)) showed two inputs that pass:
+a paper that really cites by superscript and also has one unrecognised numbered footnote (C7), and
+labels that are not citations, `sample1–20`, matching half the list (C8). The check counts glued
+numbers that are also list numbers; it does not establish that they cite anything. Both need the
+model to name the footnote's number as an entry with that entry's own title. The licence was kept
+on those terms after an Opus arbitration: refusing it loses every entry on every
+superscript-citing paper, which is measured and certain, against a row for a work the bibliography
+does list, first cited at the wrong sentence. The function's comment carries the residue.

@@ -240,12 +240,18 @@ with a failing test first, and left one open:
 - **Maths** between TeX delimiters gave false numbers.
 - **Left open (C5):** a note the extraction dropped or did not recognise leaves no trace in the
   blocks, so "this article has no notes" could be wrong, and a footnote's number could pair a work
-  with the wrong entry. Closed afterwards with a check over the whole article: glued numbers count
-  only when they cite **at least half of the reference list**. On the two real papers that is 69 of
+  with the wrong entry. **Narrowed** afterwards with a check over the whole article: glued numbers
+  count only when they match **at least half of the reference list's numbers**. On the two real
+  papers that is 69 of
   69 and 26 of 27; on the *Entropy* paper, whose glued numbers are endnotes, 53 of 292. Sol's probe
   ([`source-notes-absence.ts`](../../evals/footnote-digits/source-notes-absence.ts)) now asserts
-  the wrong entry is refused against a ten-entry list, and still accepted against a one-entry list,
-  which is the residue.
+  the wrong entry is refused against a ten-entry list, and still accepted against a one-entry list.
+  Sol's [second review](../plans/261004j-footnote-digits-code-review-2-sol.md) showed it is not
+  closed: a paper that cites by superscript *and* has one unrecognised numbered footnote still
+  passes (C7), and so do labels like `sample1–20` (C8). Both were shown with made-up inputs; neither
+  was seen in production. An Opus arbitration kept the change on those terms: without it every
+  superscript-citing paper loses every entry, and the wrong case yields a row for a work the
+  bibliography does list, first cited at the wrong sentence.
 
 Citations run once more on both papers with the final code, the half-the-list check included:
 `s41598-023` **62 of 69** entries kept (6 dropped by the title check, none by the number);

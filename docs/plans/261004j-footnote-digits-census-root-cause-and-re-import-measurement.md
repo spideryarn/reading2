@@ -170,10 +170,20 @@ stages above disagree, this table is the plan.**
 four P1s itself, red first: C1 numbered body lists retyped as endnotes, C2 notes continued across a
 page, C3 a quote ending inside a number, C4 maths read as numbers. Its diff was read and kept. It
 left **C5** open as wider work: `hasNotes` cannot see a note the extraction dropped. C5 was then
-closed here rather than overruled, with `citesMostOfListGlued` (glued numbers count only when they
-cite at least half the reference list) and a red test; the residue is in that function's comment
-and in the [postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md)
-Sol wrote. That last fix was written after the review and has not itself been reviewed by Sol.
+narrowed with `citesMostOfListGlued` (glued numbers count only when they match at least half the
+reference list's numbers) and a red test.
+
+**Round two** (read-only, that one fix —
+[261004j-footnote-digits-code-review-2-sol.md](261004j-footnote-digits-code-review-2-sol.md)):
+C5 *still open*. C7, a paper that cites by superscript and has one unrecognised numbered footnote;
+C8, labels such as `sample1–20` opening the gate; C9, docs that said "closed". C9 is fixed.
+**Sol still objects to C7 and C8; overruled, after an Opus arbitration (option A of three), because**
+refusing glued numbers loses every reference entry on every superscript-citing paper, measured at
+27 of 27 and 69 of 70, while the wrong case needs a dropped footnote and the model naming that
+entry with its own title, and yields a row for a work the bibliography does list, first cited at
+the wrong sentence. No guard computable from the blocks removes C7. What would is extraction
+recording whether the source had notes at all (the [postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md)'s
+countermeasure 4): not built, and named here so it is not mistaken for done.
 
 The numbers, the method and the per-article table are in
 [261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).

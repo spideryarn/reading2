@@ -877,15 +877,24 @@ export function hasNotes(blocks: readonly Block[]): boolean {
  * recognise, and such a note's marker reads exactly like a reference number
  * (GPT Sol's C5, review of plan 261004j;
  * docs/postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md).
- * One place cannot tell them apart; the whole article can. A paper that cites
- * by superscript does so for most of its list — 69 of 69 and 27 of 27 entries
- * on the two measured — while a stray footnote or two cover one or two numbers
- * of a list of dozens.
+ * One place cannot tell them apart; the whole article narrows it. A paper that
+ * cites by superscript does so for most of its list — glued numbers matched 69
+ * of 69 and 26 of 27 list numbers on the two measured — while a stray footnote
+ * or two match one or two numbers of a list of dozens.
  *
- * Half, not most: a range or list is read only where its first number is
- * glued, and the transcription drops some superscripts. What it does not
- * close is a paper with as many unrecognised numbered footnotes as half its
- * references; the title check in `locateInEntry` is still behind it.
+ * **It counts glued numbers that are also list numbers, not citations, and it
+ * narrows the gap without closing it.** Still open, both shown by GPT Sol's
+ * second review: a paper that really cites by superscript *and* has an
+ * unrecognised numbered footnote, whose marker is then one more glued number
+ * (C7); and labels that are not citations opening the gate, `sample1–20` (C8).
+ * Either needs the model to name that entry with that entry's own title, and
+ * the row it yields is a work the bibliography does list, first cited at the
+ * wrong sentence. Kept on those terms after arbitration; what would close it
+ * is extraction recording whether the source had notes at all (postmortem
+ * 261004m, countermeasure 4), which is not built.
+ *
+ * Half, not most: the transcription drops some superscripts. Below half the
+ * licence is refused for the whole article and the bracket rule stands.
  */
 export function citesMostOfListGlued(blocks: readonly Block[], list: NumberedReferenceList): boolean {
   return list.entries.size > 0 && entriesCitedGlued(blocks, list) * 2 >= list.entries.size;
