@@ -82,11 +82,13 @@
    (`border-box`, and px like the cross, for the 12px root).
 
    Not `.close-x` (styles/close.css): that is a 32px box, and this field is
-   about 24px tall inside a bar that must not grow. The finger target is the
-   same 40px, made the same invisible way and on the same `any-pointer` query —
+   about 24px tall inside a bar that must not grow. The declared finger target
+   is 40px, made the same invisible way and on the same `any-pointer` query —
    an iPad with a trackpad reports `pointer: fine`, so it draws this box, and
    its reader still taps the glass. It reaches left over the input rather than
-   right, so it takes no taps from the button beside the field. */
+   right, so it takes no taps from the button beside the field. The dock's
+   overflow-y clips that target vertically (at most 29px at a 12px root,
+   39px at 16px); the declared target does not enlarge the bar. */
 .dock-qs-field { position: relative; }
 .dock-qs-input { box-sizing: border-box; }
 .dock-qs-field--filled .dock-qs-input { padding-right: 20px; }
@@ -109,7 +111,7 @@
 }
 .dock-qs-clear:hover { color: var(--ink); }
 .dock-qs-clear:focus-visible {
-  outline: 2px solid var(--highlight);
+  outline: 2px solid var(--highlight-text);
   outline-offset: -1px;
 }
 @media (any-pointer: coarse) {

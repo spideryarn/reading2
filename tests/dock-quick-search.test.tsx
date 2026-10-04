@@ -396,6 +396,59 @@ describe("the clear cross", () => {
     expect(barBox().value).toBe("");
     expect(document.activeElement).toBe(barBox());
   });
+
+  it("keeps the field visible when keyboard focus moves to its cross in Search mode", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    expect(document.activeElement).toBe(cross());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+    // Staying on the cross is staying in this control, not a long blur ending the session.
+    await pause();
+    type(barBox(), "why replication fails");
+    await pause();
+    expect(posted[1]?.revises).toBe(true);
+    act(() => cross()!.focus());
+    act(() => cross()!.click());
+    expect(barBox().value).toBe("");
+    expect(panelBox()?.value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+  });
+
+  it("collapses and ends the session when keyboard focus leaves through the cross", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    act(() => must<HTMLInputElement>("input.elsewhere").focus());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(true);
+    await pause();
+    type(panelBox()!, "sample size");
+    await pause();
+    expect(posted.map((p) => [p.criterion, p.revises ?? false])).toEqual([
+      ["why replication", false],
+      ["sample size", false],
+    ]);
+  });
+
+  it("moves keyboard focus from the cross to the panel if responsive CSS hides the field", async () => {
+    server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    act(() => {
+      must<HTMLElement>(".dock-qs-field").style.display = "none";
+      window.dispatchEvent(new Event("resize"));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
+  });
 });
 
 describe("handoffs before the band mounts", () => {

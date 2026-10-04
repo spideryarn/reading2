@@ -161,7 +161,7 @@ export function DockQuickSearch({
     let frame = 0;
     const check = () => {
       frame = 0;
-      if (document.activeElement === input.current && field.current &&
+      if (field.current?.contains(document.activeElement) &&
           getComputedStyle(field.current).display === "none") {
         latest.current.bolt();
       }
@@ -243,7 +243,29 @@ export function DockQuickSearch({
 
   return (
     <span className={`dock-qs${searching && !focused ? " dock-qs--bolt" : ""}`}>
-      <span className={`dock-qs-field${text === "" ? "" : " dock-qs-field--filled"}`} ref={field}>
+      {/* biome-ignore lint/a11y/useSemanticElements: the dock's inline field groups its input and clear button without a fieldset's layout defaults. */}
+      <span
+        className={`dock-qs-field${text === "" ? "" : " dock-qs-field--filled"}`}
+        ref={field}
+        role="group"
+        aria-label="Quick search controls"
+        onFocus={() => {
+          setFocused(true);
+          draft.setBarFocused(true);
+          draft.band()?.focus();
+        }}
+        onBlur={(e) => {
+          // Moving to the clear button stays in this field, including with Tab.
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          setFocused(false);
+          draft.setBarFocused(false);
+          /* A pause still pending here is dropped: a reader who typed and
+             clicked away did not ask for Search mode to open behind them.
+             With the band listening, its own blur rule decides (Opus). */
+          if (timer.current !== undefined) stopWaiting();
+          draft.band()?.blur();
+        }}
+      >
         <Zap size={13} aria-hidden className="dock-qs-icon" />
         <input
           ref={input}
@@ -258,20 +280,6 @@ export function DockQuickSearch({
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          onFocus={() => {
-            setFocused(true);
-            draft.setBarFocused(true);
-            draft.band()?.focus();
-          }}
-          onBlur={() => {
-            setFocused(false);
-            draft.setBarFocused(false);
-            /* A pause still pending here is dropped: a reader who typed and
-               clicked away did not ask for Search mode to open behind them.
-               With the band listening, its own blur rule decides (Opus). */
-            if (timer.current !== undefined) stopWaiting();
-            draft.band()?.blur();
-          }}
         />
         {text === "" && !focused && (
           <kbd className="dock-qs-key" aria-hidden>
@@ -282,9 +290,9 @@ export function DockQuickSearch({
           /* **The cross that empties the box** (plan 261004g). Escape's clear,
              but the focus stays: the words are kept after a search so the
              reader can refine them, and this is the one press that wipes them
-             for the next. `preventDefault` on the mousedown keeps the focus in
-             the input throughout — a blur in Search mode turns this field into
-             the ⚡ (`dock-qs--bolt`), and the click would land on nothing. */
+             for the next. Mousedown keeps the input focused; focus handling on
+             the field also lets keyboard and other input paths reach the cross
+             without collapsing it into the ⚡ (`dock-qs--bolt`). */
           <button
             type="button"
             className="dock-qs-clear"
