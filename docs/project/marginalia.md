@@ -42,7 +42,8 @@ one would otherwise be missed; it would not be, so it is not
   [§ Relation words](#relation-words).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
-  spya-rczgjb).
+  spya-rczgjb). While it is on screen the headings breadcrumb in the top bar is not drawn
+  ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
 - **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments

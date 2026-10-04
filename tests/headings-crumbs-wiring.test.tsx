@@ -459,4 +459,68 @@ describe("the headings breadcrumb", () => {
 
     expect(layoutKeys.at(-1), "the 44px bar and article geometry did not change").toBe(without);
   });
+
+  /**
+   * **Not while something else on screen already says where you are.** Greg,
+   * 2026-10-04 (spya-rx43ku): *"We don't need to show that horizontal rail when
+   * either structure or annotations mode are on, because they both provide
+   * that information too."* Annotations is Marginalia. The Summary case is the
+   * control: without it the others pass on a breadcrumb that is merely broken.
+   * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
+   */
+  describe("steps aside for Structure and for Marginalia's head", () => {
+    beforeEach(() => {
+      vi.stubGlobal("innerWidth", 1400);
+      experimentalSince = "2026-10-02T00:00:00.000Z";
+    });
+
+    it("beside another mode's band it is drawn", async () => {
+      await open("?mode=summary");
+      expect(crumbs()).not.toBeNull();
+    });
+
+    it("with Structure open there is no breadcrumb, and an owner has no bar", async () => {
+      await open("?mode=structure");
+      expect(host.textContent, "the article is up").toContain(PARAGRAPH);
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+      expect(host.querySelector(".reader > .controls")).toBeNull();
+      expect(host.querySelector(".bar-sentinel"), "nothing watches a bar that is not there").toBeNull();
+    });
+
+    it("with Structure open a visitor keeps the chip's bar, without the breadcrumb", async () => {
+      owns = false;
+      await open("?mode=structure");
+      expect(host.querySelector(".reader > .controls > .mode.on"), "the View-only chip").not.toBeNull();
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+    });
+
+    it("with Marginalia's column drawn its head says it instead", async () => {
+      /* The first part reaches up to the first block for this case. jsdom has
+         no layout, so the reader is at the very top, and there the fixture's
+         first block is above every part: the head would have no path to draw
+         and the test would pass on an empty column (GPT Sol, plan review of
+         261004k, TEST-HEAD). */
+      const part = TREE.nodes.n1;
+      if (!part) throw new Error("the fixture lost its first part");
+      const range = part.range;
+      part.range = ["spya-aaaaaa", range[1]];
+      try {
+        await open("?margin=1");
+      } finally {
+        part.range = range;
+      }
+      expect(host.querySelector(".marg-narrow"), "there is room for the column").toBeNull();
+      expect(host.querySelector(".marg-head .marg-path")?.textContent, "the head names the part").toContain(
+        "The argument it makes",
+      );
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+    });
+
+    it("with Marginalia on but no room for its column, the breadcrumb stays", async () => {
+      vi.stubGlobal("innerWidth", 600);
+      await open("?margin=1");
+      expect(host.querySelector(".marg-narrow"), "the column is not drawn, and says so").not.toBeNull();
+      expect(crumbs()).not.toBeNull();
+    });
+  });
 });
