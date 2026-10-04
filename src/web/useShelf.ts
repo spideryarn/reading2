@@ -145,8 +145,22 @@ export interface Shelf {
    * Exposed so the card's own buttons — copy, re-run — report through the same
    * line as archive and rename, rather than each inventing a place to put an
    * error or, as both of those did at first, swallowing it.
+   *
+   * `"copy"` marks the notice as a copy's, which is what lets `copied` take it
+   * down again.
    */
-  report: (message: string) => void;
+  report: (message: string, from?: "copy") => void;
+  /**
+   * Say that a Copy link worked. **Clears the notice only if a copy set it**:
+   * until 2026-10-04 a copy that failed and then worked left "Couldn't copy"
+   * up over a clipboard that held the link (qi-pnqc7eh4). An archive's or a
+   * re-run's failure stays, because the reader has not dealt with that one.
+   *
+   * **Any row's copy clears any row's copy failure.** The notice is one line
+   * for the whole shelf and names no article, and there is one clipboard: once
+   * it holds a link, "Couldn't copy the link" is no longer what happened last.
+   */
+  copied: () => void;
 }
 
 /**
@@ -160,11 +174,23 @@ export interface Shelf {
  * lib/api.ts). Nothing leaks either way — the rows stay partitioned — but a
  * hook that draws a reader's titles should be told which reader.
  */
+/** The shelf's one notice, with who set it — `Shelf.copied` reads `from`. */
+interface Notice {
+  message: string;
+  from: "copy" | "other";
+}
+/** A notice from any button but Copy link. */
+const byButton = (message: string): Notice => ({ message, from: "other" });
+
 export function useShelf(readerId: string): Shelf {
   const [articles, setArticles] = useState<LibraryEntry[] | null>(null);
   const [liveArticlesLoaded, setLiveArticlesLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  /* The one notice, and **who set it**: a copy that works may take down a
+     copy's failure and nothing else (`copied` below). Every other writer
+     sets it with `byButton`, which marks the notice as not a copy's. */
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const actionError = notice?.message ?? null;
   const [undoable, setUndoable] = useState<LibraryEntry | null>(null);
   const [archived, setArchived] = useState<LibraryEntry[] | null>(null);
   /* Writes can succeed while the archived listing is missing, or while a
@@ -370,7 +396,7 @@ export function useShelf(readerId: string): Shelf {
     setArchivedFailed(false);
     loadingArchived.current = false;
     setRenaming(null);
-    setActionError(null);
+    setNotice(null);
     archiving.current.clear();
     if (undoTimer.current) clearTimeout(undoTimer.current);
 
@@ -411,7 +437,7 @@ export function useShelf(readerId: string): Shelf {
 
   const patch = useCallback(
     async (slug: string, body: Record<string, unknown>): Promise<LibraryEntry> => {
-      setActionError(null);
+      setNotice(null);
       const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -455,7 +481,7 @@ export function useShelf(readerId: string): Shelf {
         if (undoTimer.current) clearTimeout(undoTimer.current);
         undoTimer.current = setTimeout(() => setUndoable(null), UNDO_MS);
       } catch (e) {
-        if (stillOurs(asked)) setActionError(readableFailure(e));
+        if (stillOurs(asked)) setNotice(byButton(readableFailure(e)));
       } finally {
         archiving.current.delete(slug);
       }
@@ -484,7 +510,7 @@ export function useShelf(readerId: string): Shelf {
       setUndoable(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     } catch (e) {
-      if (stillOurs(asked)) setActionError(readableFailure(e));
+      if (stillOurs(asked)) setNotice(byButton(readableFailure(e)));
     }
   }, [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads, undoable]);
 
@@ -507,7 +533,7 @@ export function useShelf(readerId: string): Shelf {
         setArticles(swap);
         setArchived(swap);
       } catch (e) {
-        if (stillOurs(asked)) setActionError(readableFailure(e));
+        if (stillOurs(asked)) setNotice(byButton(readableFailure(e)));
       }
     },
     [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
@@ -545,7 +571,7 @@ export function useShelf(readerId: string): Shelf {
     if (loadingArchived.current) return;
     loadingArchived.current = true;
     const asked = reader.current;
-    setActionError(null);
+    setNotice(null);
     setArchivedFailed(false);
     try {
       const r = await apiFetch("/api/library?archived=1");
@@ -564,7 +590,7 @@ export function useShelf(readerId: string): Shelf {
       setArchivedEdits(new Map());
     } catch (e) {
       if (stillOurs(asked)) {
-        setActionError(readableFailure(e));
+        setNotice(byButton(readableFailure(e)));
         setArchivedFailed(true);
       }
     } finally {
@@ -593,13 +619,17 @@ export function useShelf(readerId: string): Shelf {
            stays on screen and both arrays make one commit. */
         setArticles((list) => (list ? [entry, ...list.filter((a) => a.slug !== slug)] : list));
       } catch (e) {
-        if (stillOurs(asked)) setActionError(readableFailure(e));
+        if (stillOurs(asked)) setNotice(byButton(readableFailure(e)));
       }
     },
     [patch, recordArchivedEdit, stillOurs, supersedeEarlierReads],
   );
 
-  const report = useCallback((message: string) => setActionError(message), []);
+  const report = useCallback(
+    (message: string, from?: "copy") => setNotice({ message, from: from ?? "other" }),
+    [],
+  );
+  const copied = useCallback(() => setNotice((was) => (was?.from === "copy" ? null : was)), []);
 
   /* Memoised, and that became load-bearing on 2026-08-26.
      
@@ -628,6 +658,7 @@ export function useShelf(readerId: string): Shelf {
       editTags,
       actionError,
       report,
+      copied,
       archived,
       archivedVisible,
       archivedFailed,
@@ -651,6 +682,7 @@ export function useShelf(readerId: string): Shelf {
       editTags,
       actionError,
       report,
+      copied,
       archived,
       archivedVisible,
       archivedFailed,

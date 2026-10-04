@@ -61,7 +61,7 @@
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
 import { type ReactNode, useMemo } from "react";
-import { Check, Copy, PenLine, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, PenLine, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
@@ -145,7 +145,6 @@ export function TweetsPanel({
             written={owner.thread.profileHash != null}
             changed={owner.profileChanged}
             slug={slug}
-            compact
             /* The forced run replaces the thread (plan 261002b). */
             regenerate={{
               run: () => void owner.regenerate(),
@@ -530,7 +529,7 @@ function CopyButton({
           {state === "copied" ? (
             <Check size={12} aria-hidden="true" className="tw:text-highlight-text" />
           ) : state === "failed" ? (
-            <X size={12} aria-hidden="true" className="tw:text-destructive" />
+            <TriangleAlert size={12} aria-hidden="true" className="tw:text-destructive" />
           ) : (
             <Copy size={12} aria-hidden="true" />
           )}

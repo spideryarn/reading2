@@ -223,7 +223,7 @@ export function ModeSurface({
    */
   about?: ReactNode;
   /**
-   * **The owner's *written for you* badge**, already rendered (`WrittenForYou`),
+   * **The owner's profile icon**, already rendered (`WrittenForYou`),
    * which this puts in the corner beside the (i) — the same place and the same
    * size in every mode. Greg, 2026-10-02 (spya-hf4svm): *"We've added (i) and
    * profile icons to every mode. Great. But their position/sizing/alignment

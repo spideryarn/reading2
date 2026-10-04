@@ -289,6 +289,11 @@ describe("pair 1 — Annotate is behind Comment", () => {
    * The reader selects a passage, which opens Annotate, and then clicks a
    * comment mark inside the same prose — `openCommentDialog` sets `note` and
    * clears nothing, so both are up, both at z-70, Comment painted on top.
+   *
+   * **In Referee mode only, since 2026-10-04** (plan 261004f, GPT Sol's E8):
+   * that is the one place a selection still opens Annotate. Elsewhere it opens
+   * `CommentDialog` itself, and a second comment replaces the first in the one
+   * slot, so there is no pair to arbitrate. The rule is unchanged.
    */
   function both(): void {
     paint(

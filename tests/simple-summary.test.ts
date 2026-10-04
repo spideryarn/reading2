@@ -58,15 +58,20 @@ let meteredAttempts = 1;
 const abortSettled = new Set<SimpleLevel>();
 const sent: { task: string; body: unknown; options: unknown; aborted: () => boolean }[] = [];
 
+/** Which level a writer request is for. One that is for neither is a bug, so it throws. */
 const levelOf = (body: unknown): SimpleLevel => {
   const text = (body as { system?: { text?: string }[] }).system?.[1]?.text ?? "";
-  return text.includes("eighteen-year-old") ? "fuller" : text.includes("twelve-year-old") ? "brief" : "simple";
+  if (text.includes("eighteen-year-old")) return "fuller";
+  if (text.includes("twelve-year-old")) return "brief";
+  throw new Error("a writer request that is for neither Brief nor Fuller");
 };
 
 /** A level the case does not name gets a good answer, so each case is about the level it names. */
 /** A list is handed out one answer per call, in order — a level asked twice gets the second. */
-const answerFor = (level: SimpleLevel): string => {
+/* `null` is a request from another step (Ideas, in one case), which only ever gets the one answer. */
+const answerFor = (level: SimpleLevel | null): string => {
   if (typeof answer === "string") return answer;
+  if (level === null) throw new Error("a request from another step needs the one answer for every call");
   const given = answer[level];
   if (Array.isArray(given)) return (given.length > 1 ? given.shift() : given[0]) ?? "";
   return given ?? JSON.stringify({ paragraphs: GOOD[level] });
@@ -84,7 +89,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         options: JSON.parse(JSON.stringify(options)),
         aborted: () => signal?.aborted ?? false,
       });
-      const level = levelOf(body);
+      const level = task === "simple" ? levelOf(body) : null;
       const text = answerFor(level);
       const message = {
         id: "msg_stub",
@@ -114,7 +119,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
               /* Deliberately later than the failing sibling's rejection. A
                  bare Promise.all returns before this and makes the test red. */
               setTimeout(() => {
-                abortSettled.add(level);
+                if (level) abortSettled.add(level);
                 reject(Object.assign(new Error("aborted sibling"), { name: "AbortError" }));
               }, 0);
             };
@@ -217,18 +222,16 @@ const para = (text: string, ...ids: string[]) => ({ text, ids, sentences: [{ tex
 /** One sentence of an answer. */
 const sentence = (text: string, id: unknown = null) => ({ text, id });
 
-/** A good Fuller level, for the cases that are about Simple. */
+/** A good Fuller level, for the cases that are about Brief. */
 const FULLER = [
   para("It asks whether a model can learn to read, and how.", INTRO.id),
   para("Reading matters because most knowledge is written.", WHY.id),
   para("Trained on ten thousand pages, it read 38% faster in this sample.", RESULT.id, METHOD.id),
 ];
-/** A good Simple level, for the cases that are about Fuller. */
-const SIMPLE = [para("It asks whether a model can read.", INTRO.id), para("It read faster.", RESULT.id)];
-/** A good Brief level. */
+/** A good Brief level, for the cases that are about Fuller. */
 const BRIEF = [para("Can a model read?", INTRO.id), para("It read faster.", RESULT.id)];
 /** A good answer at every level. */
-const GOOD: Record<SimpleLevel, ReturnType<typeof para>[]> = { brief: BRIEF, simple: SIMPLE, fuller: FULLER };
+const GOOD: Record<SimpleLevel, ReturnType<typeof para>[]> = { brief: BRIEF, fuller: FULLER };
 
 const opts = (dropped = emptyDropped(), profile: string | null = null) => ({
   slug: "s",
@@ -243,8 +246,8 @@ const opts = (dropped = emptyDropped(), profile: string | null = null) => ({
 /** Each level's answer, as its own call returns it. */
 const answerOf = (paragraphs: unknown) => ({ paragraphs });
 
-function build(simple: unknown, dropped = emptyDropped(), fuller: unknown = FULLER) {
-  return buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(simple), fuller: answerOf(fuller) }, opts(dropped));
+function build(brief: unknown, dropped = emptyDropped(), fuller: unknown = FULLER) {
+  return buildSimpleSummary({ brief: answerOf(brief), fuller: answerOf(fuller) }, opts(dropped));
 }
 
 const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
@@ -258,7 +261,7 @@ describe("buildSimpleSummary", () => {
       para("It matters because most knowledge is written.", WHY.id),
       para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
     ]);
-    expect(out.levels.simple).toEqual([
+    expect(out.levels.brief).toEqual([
       para("It asks whether a model can read.", INTRO.id),
       para("It matters because most knowledge is written.", WHY.id),
       para("It read 38% faster, in this sample.", RESULT.id, METHOD.id),
@@ -274,51 +277,55 @@ describe("buildSimpleSummary", () => {
   it("records the profile it was written for as its hash, never the words", () => {
     const profile = renderProfile({ profile: "I build software.", purpose: "Methods." });
     if (!profile) throw new Error("fixture needs a profile");
-    const out = buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts(emptyDropped(), profile));
+    const out = buildSimpleSummary({ brief: answerOf(BRIEF), fuller: answerOf(FULLER) }, opts(emptyDropped(), profile));
     expect(out.profileHash).toBe(hashProfile(profile));
     expect(JSON.stringify(out)).not.toContain("I build software");
   });
 
   it("fails on an answer missing any level, naming it — all or none", () => {
-    expect(() => buildSimpleSummary({ simple: answerOf(SIMPLE), fuller: answerOf(FULLER) }, opts())).toThrow(
-      /"brief" answer has no `paragraphs` array/,
-    );
-    const missing = /"simple" answer has no `paragraphs` array/;
-    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), fuller: answerOf(FULLER) }, opts())).toThrow(missing);
-    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: answerOf(SIMPLE) }, opts())).toThrow(
+    const missing = /"brief" answer has no `paragraphs` array/;
+    expect(() => buildSimpleSummary({ fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF) }, opts())).toThrow(
       /"fuller" answer has no `paragraphs` array/,
     );
-    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: null, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
-    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), simple: { summary: "x" }, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: null, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: { summary: "x" }, fuller: answerOf(FULLER) }, opts())).toThrow(missing);
+    expect(() => buildSimpleSummary({ brief: answerOf(BRIEF), fuller: null }, opts())).toThrow(
+      /"fuller" answer has no `paragraphs` array/,
+    );
   });
 
   it("fails the whole run when only Fuller is bad", () => {
-    expect(() => build(SIMPLE, emptyDropped(), [para("Only one.", INTRO.id)])).toThrow(
+    expect(() => build(BRIEF, emptyDropped(), [para("Only one.", INTRO.id)])).toThrow(
       /Only 1 of the model's 1 "fuller" paragraphs/,
     );
   });
 
   it("fails on more paragraphs than a level allows rather than cutting", () => {
     const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
-    expect(() => build(five)).toThrow(/5 "simple" paragraphs and the limit is 4/);
-    /* Five is no failure in Fuller, nor is its ceiling of eight; nine is (plan 261004b). */
-    expect(build(SIMPLE, emptyDropped(), five).levels.fuller).toHaveLength(5);
+    const four = five.slice(0, 4);
+    expect(() => build(four)).toThrow(/4 "brief" paragraphs and the limit is 3/);
+    /* Three, Brief's ceiling, is kept. */
+    expect(build(five.slice(0, 3)).levels.brief).toHaveLength(3);
+    /* Four and five are no failure in Fuller, nor is its ceiling of eight; nine is (plan 261004b). */
+    expect(build(BRIEF, emptyDropped(), four).levels.fuller).toHaveLength(4);
+    expect(build(BRIEF, emptyDropped(), five).levels.fuller).toHaveLength(5);
     const eight = [...five, para("Six.", WHY.id), para("Seven.", RESULT.id), para("Eight.", METHOD.id)];
-    expect(build(SIMPLE, emptyDropped(), eight).levels.fuller).toHaveLength(8);
+    expect(build(BRIEF, emptyDropped(), eight).levels.fuller).toHaveLength(8);
     const nine = [...eight, para("Nine.", WHY.id)];
-    expect(() => build(SIMPLE, emptyDropped(), nine)).toThrow(/9 "fuller" paragraphs and the limit is 8/);
+    expect(() => build(BRIEF, emptyDropped(), nine)).toThrow(/9 "fuller" paragraphs and the limit is 8/);
   });
 
   it("keeps a Fuller of eight paragraphs and 800 words, and refuses one of 851 (plan 261004b)", () => {
     const eightOf = (each: number, last: number) =>
       [INTRO, WHY, RESULT, METHOD, INTRO, WHY, RESULT, METHOD].map((b, i) => para(words(i === 7 ? last : each), b.id));
-    const stored = build(SIMPLE, emptyDropped(), eightOf(100, 100));
+    const stored = build(BRIEF, emptyDropped(), eightOf(100, 100));
     expect(stored.levels.fuller).toHaveLength(8);
     expect(isUsableSimpleSummary(stored)).toBe(true);
     /* The ceiling exactly, and one word past it. */
     expect(SIMPLE_LIMITS.fuller).toEqual({ minParagraphs: 3, maxParagraphs: 8, maxWords: 850 });
-    expect(build(SIMPLE, emptyDropped(), eightOf(100, 150)).levels.fuller).toHaveLength(8);
-    expect(() => build(SIMPLE, emptyDropped(), eightOf(100, 151))).toThrow(/851 "fuller" words and the limit is 850/);
+    expect(build(BRIEF, emptyDropped(), eightOf(100, 150)).levels.fuller).toHaveLength(8);
+    expect(() => build(BRIEF, emptyDropped(), eightOf(100, 151))).toThrow(/851 "fuller" words and the limit is 850/);
     /* The read boundary enforces the same two numbers. */
     const over = { ...stored, levels: { ...stored.levels, fuller: eightOf(100, 151) } };
     expect(isUsableSimpleSummary(over)).toBe(false);
@@ -327,19 +334,19 @@ describe("buildSimpleSummary", () => {
   });
 
   it("fails over a level's word ceiling rather than cutting", () => {
-    const max = SIMPLE_LIMITS.simple.maxWords;
+    const max = SIMPLE_LIMITS.brief.maxWords;
     expect(() => build([para(words(max), INTRO.id), para("And one more.", WHY.id)])).toThrow(
-      new RegExp(`${max + 3} "simple" words and the limit is ${max}`),
+      new RegExp(`${max + 3} "brief" words and the limit is ${max}`),
     );
     /* At the ceiling exactly is fine. */
-    expect(build([para(words(max - 2), INTRO.id), para("Two words.", WHY.id)]).levels.simple).toHaveLength(2);
-    /* Fuller has its own, higher ceiling: Simple's is not a failure there. */
+    expect(build([para(words(max - 2), INTRO.id), para("Two words.", WHY.id)]).levels.brief).toHaveLength(2);
+    /* Fuller has its own, higher ceiling: Brief's is not a failure there. */
     const fullerMax = SIMPLE_LIMITS.fuller.maxWords;
     expect(fullerMax).toBeGreaterThan(max);
     const roomy = [para(words(max), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
-    expect(build(SIMPLE, emptyDropped(), roomy).levels.fuller).toHaveLength(3);
+    expect(build(BRIEF, emptyDropped(), roomy).levels.fuller).toHaveLength(3);
     const over = [para(words(fullerMax), INTRO.id), para("Two.", WHY.id), para("Three.", RESULT.id)];
-    expect(() => build(SIMPLE, emptyDropped(), over)).toThrow(/"fuller" words and the limit is/);
+    expect(() => build(BRIEF, emptyDropped(), over)).toThrow(/"fuller" words and the limit is/);
   });
 
   it("drops and counts an unknown id, a supplement's id and a non-string id", () => {
@@ -348,7 +355,7 @@ describe("buildSimpleSummary", () => {
       [para("One.", "spya-zzzzzz", INTRO.id), { ids: [NOTE.id, 42, WHY.id], sentences: [sentence("Two.")] }],
       dropped,
     );
-    expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
+    expect(out.levels.brief.map((p) => p.ids)).toEqual([[INTRO.id], [WHY.id]]);
     expect(dropped.unknownIds).toBe(3);
   });
 
@@ -358,7 +365,7 @@ describe("buildSimpleSummary", () => {
       [para("One.", INTRO.id, INTRO.id, WHY.id, RESULT.id, METHOD.id, METHOD.id), para("Two.", WHY.id)],
       dropped,
     );
-    expect(out.levels.simple[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
+    expect(out.levels.brief[0]?.ids).toEqual([INTRO.id, WHY.id, RESULT.id]);
     expect(dropped.duplicateIds).toBe(2);
     expect(dropped.overCap).toBe(1);
   });
@@ -366,31 +373,32 @@ describe("buildSimpleSummary", () => {
   it("drops a paragraph with no surviving id — every paragraph is a door, at either level", () => {
     const dropped = emptyDropped();
     const out = build(
-      [
-        para("About.", INTRO.id),
-        para("Why it matters, resting on nothing.", "spya-zzzzzz"),
-        { sentences: [sentence("No ids at all.")] },
-        para("Key idea.", RESULT.id),
-      ],
+      /* Three, which is all Brief may be sent; the unknown id is Fuller's. */
+      [para("About.", INTRO.id), { sentences: [sentence("No ids at all.")] }, para("Key idea.", RESULT.id)],
       dropped,
-      [...FULLER, para("A fourth, resting on nothing.", "spya-yyyyyy")],
+      [
+        ...FULLER,
+        para("Why it matters, resting on nothing.", "spya-zzzzzz"),
+        para("A fifth, resting on nothing.", "spya-yyyyyy"),
+      ],
     );
-    expect(out.levels.simple.map((p) => p.text)).toEqual(["About.", "Key idea."]);
+    expect(out.levels.brief.map((p) => p.text)).toEqual(["About.", "Key idea."]);
     expect(out.levels.fuller).toEqual(FULLER);
     expect(dropped.unanchored).toBe(3);
   });
 
   it("drops an empty paragraph and a non-object, and counts them", () => {
     const dropped = emptyDropped();
-    const out = build([para("  ", INTRO.id), "a string", para("About.", INTRO.id), para("Why.", WHY.id)], dropped);
-    expect(out.levels.simple).toHaveLength(2);
+    /* In Fuller, which has room for five: Brief may be sent three at most. */
+    const out = build(BRIEF, dropped, [para("  ", INTRO.id), "a string", ...FULLER]);
+    expect(out.levels.fuller).toEqual(FULLER);
     expect(dropped.empty).toBe(1);
     expect(dropped.malformed).toBe(1);
   });
 
   it("fails with fewer surviving paragraphs than a level needs, saying why", () => {
     expect(() => build([para("About.", INTRO.id), para("Why.", "spya-zzzzzz")])).toThrow(
-      /Only 1 of the model's 2 "simple" paragraphs.*1 with no usable passage/,
+      /Only 1 of the model's 2 "brief" paragraphs.*1 with no usable passage/,
     );
     expect(() => build([])).toThrow(/Only 0 of the model's 0/);
   });
@@ -411,7 +419,7 @@ describe("sentences that point at their passage (plan 261002e)", () => {
       },
       para("It matters because most knowledge is written.", WHY.id),
     ]);
-    expect(out.levels.simple[0]).toEqual({
+    expect(out.levels.brief[0]).toEqual({
       text: "It asks whether a model can read. That is the question. It read 38% faster.",
       ids: [INTRO.id, RESULT.id],
       sentences: [
@@ -421,7 +429,7 @@ describe("sentences that point at their passage (plan 261002e)", () => {
       ],
     });
     /* What is written is what the shared accessor will show. */
-    expect(usableSentences(out.levels.simple[0]!)).toEqual(out.levels.simple[0]!.sentences);
+    expect(usableSentences(out.levels.brief[0]!)).toEqual(out.levels.brief[0]!.sentences);
   });
 
   it("ignores any text the model put on the paragraph itself — the guard reads the sentences' words", () => {
@@ -429,7 +437,7 @@ describe("sentences that point at their passage (plan 261002e)", () => {
       { text: "Something else entirely.", ids: [INTRO.id], sentences: [sentence("It asks.", INTRO.id)] },
       para("Why.", WHY.id),
     ]);
-    expect(out.levels.simple[0]?.text).toBe("It asks.");
+    expect(out.levels.brief[0]?.text).toBe("It asks.");
   });
 
   it("nulls and counts a sentence id its paragraph did not keep, and never adds it to the paragraph's ids", () => {
@@ -453,8 +461,8 @@ describe("sentences that point at their passage (plan 261002e)", () => {
       ],
       dropped,
     );
-    expect(out.levels.simple.map((p) => p.ids)).toEqual([[INTRO.id, WHY.id, RESULT.id], [WHY.id]]);
-    expect(out.levels.simple.map((p) => p.sentences)).toEqual([
+    expect(out.levels.brief.map((p) => p.ids)).toEqual([[INTRO.id, WHY.id, RESULT.id], [WHY.id]]);
+    expect(out.levels.brief.map((p) => p.sentences)).toEqual([
       [
         { text: "One.", id: null },
         { text: "Two.", id: null },
@@ -465,22 +473,21 @@ describe("sentences that point at their passage (plan 261002e)", () => {
       [{ text: "Six.", id: null }],
     ]);
     expect(dropped.sentenceIds).toBe(5);
-    expect(out.levels.simple.map((p) => p.text)).toEqual(["One. Two. Three. Four. Five.", "Six."]);
+    expect(out.levels.brief.map((p) => p.text)).toEqual(["One. Two. Three. Four. Five.", "Six."]);
   });
 
   it("leaves out an empty or malformed sentence, and drops a paragraph with no sentence that has words", () => {
     const dropped = emptyDropped();
-    const out = build(
-      [
-        { ids: [INTRO.id], sentences: [sentence("  "), "a string", { id: INTRO.id }, sentence("About.", INTRO.id)] },
-        { ids: [RESULT.id], sentences: [sentence(" ", RESULT.id)] },
-        { ids: [RESULT.id] },
-        para("Why.", WHY.id),
-      ],
-      dropped,
-    );
-    expect(out.levels.simple.map((p) => p.text)).toEqual(["About.", "Why."]);
-    expect(out.levels.simple[0]?.sentences).toEqual([{ text: "About.", id: INTRO.id }]);
+    /* In Fuller, which has room for five: Brief may be sent three at most. */
+    const out = build(BRIEF, dropped, [
+      { ids: [INTRO.id], sentences: [sentence("  "), "a string", { id: INTRO.id }, sentence("About.", INTRO.id)] },
+      { ids: [RESULT.id], sentences: [sentence(" ", RESULT.id)] },
+      { ids: [RESULT.id] },
+      para("Why.", WHY.id),
+      para("How.", METHOD.id),
+    ]);
+    expect(out.levels.fuller.map((p) => p.text)).toEqual(["About.", "Why.", "How."]);
+    expect(out.levels.fuller[0]?.sentences).toEqual([{ text: "About.", id: INTRO.id }]);
     /* The second paragraph's empty sentence is not counted: an empty
        paragraph's tally never was. */
     expect(dropped.emptySentences).toBe(3);
@@ -537,9 +544,9 @@ describe("sentences that point at their passage (plan 261002e)", () => {
 describe("a key phrase and a list are two fields, never markup in the text (plan 261004b)", () => {
   const ASKS = "It asks whether a model can read.";
   const flat = (s: string) => s.replace(/\s+/g, " ");
-  /** A Simple level whose first paragraph is these sentences. */
+  /** A Brief level whose first paragraph is these sentences. */
   const first = (sentences: unknown[], extra: Record<string, unknown> = {}, dropped = emptyDropped()) =>
-    build([{ ids: [INTRO.id, RESULT.id], sentences, ...extra }, para("Why.", WHY.id)], dropped).levels.simple[0]!;
+    build([{ ids: [INTRO.id, RESULT.id], sentences, ...extra }, para("Why.", WHY.id)], dropped).levels.brief[0]!;
 
   it("keeps a key that is a few of its sentence's own words, trimmed, and stores no field without one", () => {
     const dropped = emptyDropped();
@@ -655,49 +662,37 @@ describe("a key phrase and a list are two fields, never markup in the text (plan
     ]);
   });
 
-  it("asks Brief and Fuller for the key, only Fuller for lists, and Simple for neither", () => {
+  it("asks Brief and Fuller for the key, and only Fuller for lists", () => {
     for (const level of ["brief", "fuller"] as const) {
-      expect(flat(SIMPLE_SYSTEMS[level])).toContain('at most two sentences have a "key"');
-      expect(flat(SIMPLE_SYSTEMS[level])).toContain("never the whole sentence");
-      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain('Always write "key": null');
-    }
-    /* Simple is written and not shown (plan 261003l), and its first answers
-       were flagged twice in six once it was asked for keys (plan 261004b). */
-    expect(flat(SIMPLE_SYSTEMS.simple)).toContain('Always write "key": null');
-    expect(flat(SIMPLE_SYSTEMS.simple)).not.toContain('at most two sentences have a "key"');
-    expect(SIMPLE_SYSTEMS.simple).not.toContain('"key": "..."');
-    for (const level of ["brief", "simple", "fuller"] as const) {
       const system = flat(SIMPLE_SYSTEMS[level]);
+      expect(system).toContain('at most two sentences have a "key"');
+      expect(system).toContain("never the whole sentence");
+      expect(system).not.toContain('Always write "key": null');
       expect(system).toContain('"list": false');
       /* The text itself stays free of markup: the two fields are the only formatting. */
       expect(system).toContain("no markdown");
       expect(system).not.toContain("no markdown, no bullet points, no headings");
     }
-    for (const level of ["brief", "simple"] as const) {
-      expect(flat(SIMPLE_SYSTEMS[level])).toContain('Always write "list": false');
-      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain("lead-in");
-    }
+    expect(flat(SIMPLE_SYSTEMS.brief)).toContain('Always write "list": false');
+    expect(flat(SIMPLE_SYSTEMS.brief)).not.toContain("lead-in");
     const fuller = flat(SIMPLE_SYSTEMS.fuller);
     expect(fuller).not.toContain('Always write "list": false');
     expect(fuller).toContain("At most two paragraphs are lists");
     expect(fuller).toContain("lead-in");
   });
 
-  it("asks Fuller for about 350 words and never more than 430, and leaves the other two as they were", () => {
+  it("asks Fuller for about 350 words and never more than 430, and leaves Brief as it was", () => {
     const fuller = flat(SIMPLE_SYSTEMS.fuller);
     expect(fuller).toContain("Four to seven paragraphs, each two to five sentences. Every sentence under 30 words.");
     expect(fuller).toContain("About 350 words in all, and never more than 430.");
     expect(fuller).not.toContain("leave detail to the article");
     expect(fuller).toContain("the limits the piece itself names");
     expect(flat(SIMPLE_SYSTEMS.brief)).toContain("About 80 words in all, and never more than 130.");
-    expect(flat(SIMPLE_SYSTEMS.simple)).toContain("About 170 words in all, and never more than 220.");
-    for (const level of ["brief", "simple"] as const) {
-      /* Byte for byte, line break included. */
-      expect(SIMPLE_SYSTEMS[level]).toContain(
-        "Shorter is fine; this is an\norientation, not a digest, so leave detail to the article.",
-      );
-      expect(flat(SIMPLE_SYSTEMS[level])).not.toContain("the limits the piece itself names");
-    }
+    /* Byte for byte, line break included. */
+    expect(SIMPLE_SYSTEMS.brief).toContain(
+      "Shorter is fine; this is an\norientation, not a digest, so leave detail to the article.",
+    );
+    expect(flat(SIMPLE_SYSTEMS.brief)).not.toContain("the limits the piece itself names");
   });
 
   it("budgets the answer from Fuller's own limits", () => {
@@ -760,7 +755,7 @@ describe("usableSentences — the one accessor the owner's panel and the visitor
     const paragraph = { ...P, sentences };
     expect(usableSentences(paragraph)).toBeNull();
     const stored = build([para("It asks.", INTRO.id), para("Why.", WHY.id)]);
-    const withBad = { ...stored, levels: { ...stored.levels, simple: [paragraph, ...stored.levels.simple.slice(1)] } };
+    const withBad = { ...stored, levels: { ...stored.levels, brief: [paragraph, ...stored.levels.brief.slice(1)] } };
     expect(isUsableSimpleSummary(withBad)).toBe(true);
   });
 });
@@ -770,34 +765,37 @@ describe("usableSentences — the one accessor the owner's panel and the visitor
 describe("the store boundary", () => {
   it("refuses a level with the wrong paragraph count, and a missing level", () => {
     const one = [para("Only one.", INTRO.id)];
-    const five = [INTRO, WHY, RESULT, METHOD, INTRO].map((b, i) => para(`Paragraph ${i}.`, b.id));
-    const stored = build(SIMPLE);
+    const four = [INTRO, WHY, RESULT, METHOD].map((b, i) => para(`Paragraph ${i}.`, b.id));
+    const stored = build(BRIEF);
     expect(whyUnusable("simple", stored)).toBeNull();
-    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: one, fuller: FULLER } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: five, fuller: FULLER } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: SIMPLE, fuller: SIMPLE } })).toBe('no usable "levels"');
-    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, simple: SIMPLE } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: one, fuller: FULLER } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: four, fuller: FULLER } })).toBe('no usable "levels"');
+    /* Brief's ceiling of three is usable, so the line above is about the fourth. */
+    expect(whyUnusable("simple", { ...stored, levels: { brief: four.slice(0, 3), fuller: FULLER } })).toBeNull();
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF, fuller: BRIEF } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { brief: BRIEF } })).toBe('no usable "levels"');
+    expect(whyUnusable("simple", { ...stored, levels: { fuller: FULLER } })).toBe('no usable "levels"');
     expect(whyUnusable("simple", { ...stored, levels: null })).toBe('no usable "levels"');
   });
 
   it("reads every simple/1 row as unusable, even one with valid-looking levels", () => {
-    const stored = build(SIMPLE);
-    expect(whyUnusable("simple", { ...stored, version: "simple/1", paragraphs: SIMPLE })).toBe('no usable "levels"');
+    const stored = build(BRIEF);
+    expect(whyUnusable("simple", { ...stored, version: "simple/1", paragraphs: BRIEF })).toBe('no usable "levels"');
   });
 
   it("refuses a simple/2 row without its required profile provenance", () => {
-    const { profileHash: _missing, ...malformed } = build(SIMPLE);
+    const { profileHash: _missing, ...malformed } = build(BRIEF);
     expect(whyUnusable("simple", malformed)).toBe('no usable "levels"');
   });
 
   it("refuses malformed stored paragraphs and the same word ceiling", () => {
-    for (const simple of [
+    for (const brief of [
       [para("", INTRO.id), para("Two.", WHY.id)],
       [para("One.", INTRO.id, INTRO.id), para("Two.", WHY.id)],
       [para("One.", INTRO.id, WHY.id, RESULT.id, METHOD.id), para("Two.", WHY.id)],
-      [para(words(SIMPLE_LIMITS.simple.maxWords), INTRO.id), para("One more.", WHY.id)],
+      [para(words(SIMPLE_LIMITS.brief.maxWords), INTRO.id), para("One more.", WHY.id)],
     ]) {
-      expect(whyUnusable("simple", { ...build(SIMPLE), levels: { brief: BRIEF, simple, fuller: FULLER } })).toBe('no usable "levels"');
+      expect(whyUnusable("simple", { ...build(BRIEF), levels: { brief, fuller: FULLER } })).toBe('no usable "levels"');
     }
   });
 });
@@ -818,7 +816,7 @@ const PROFILE = renderProfile({
 describe("the request", () => {
   const article = (): Article => ({ ...example, slug: "simple-test", blocks: BLOCKS });
   const good = () => ({
-    simple: JSON.stringify(answerOf(SIMPLE)),
+    brief: JSON.stringify(answerOf(BRIEF)),
     fuller: JSON.stringify(answerOf(FULLER)),
   });
   const userMessage = (i = 0) =>
@@ -851,36 +849,36 @@ describe("the request", () => {
   it("makes one call per level, side by side, each with its own system prompt and the same article", async () => {
     answer = good();
     const out = await run();
-    expect(sent).toHaveLength(3);
-    expect(sent.map((c) => c.task)).toEqual(["simple", "simple", "simple"]);
+    expect(sent).toHaveLength(2);
+    expect(sent.map((c) => c.task)).toEqual(["simple", "simple"]);
     const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
     expect(systems[0]?.[0]).toEqual(systems[1]?.[0]);
     expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS)));
     const outputConfigs = sent.map(
       (c) => (c.body as { output_config?: { effort?: string; format?: unknown } }).output_config,
     );
-    expect(outputConfigs).toHaveLength(3);
+    expect(outputConfigs).toHaveLength(2);
     expect(outputConfigs.every((config) => config?.effort === "high")).toBe(true);
     expect(outputConfigs.every((config) => config?.format !== undefined)).toBe(true);
     expect(outputConfigs.map((config) => config?.format)).toEqual(
-      Array.from({ length: 3 }, () => ({ type: "json_schema", schema: SIMPLE_SUMMARY_OUTPUT_SCHEMA })),
+      Array.from({ length: 2 }, () => ({ type: "json_schema", schema: SIMPLE_SUMMARY_OUTPUT_SCHEMA })),
     );
     expect(out.simpleSummary.levels).toEqual(GOOD);
   });
 
-  it("counts every network attempt inside the three logical writer calls", async () => {
+  it("counts every network attempt inside the two logical writer calls", async () => {
     answer = good();
     meteredAttempts = 2;
 
     const out = await run();
 
-    expect(sent).toHaveLength(3);
-    expect(out.calls).toBe(6);
+    expect(sent).toHaveLength(2);
+    expect(out.calls).toBe(4);
   });
 
-  it("fails the whole run when one level's call fails, aborts the others, and waits for them to settle", async () => {
+  it("fails the whole run when one level's call fails, aborts the other, and waits for it to settle", async () => {
     waitForAbort = "brief";
-    answer = { simple: JSON.stringify(answerOf(SIMPLE)), fuller: JSON.stringify(answerOf([para("One.", INTRO.id)])) };
+    answer = { fuller: JSON.stringify(answerOf([para("One.", INTRO.id)])) };
     await expect(run()).rejects.toThrow(/"fuller" paragraphs/);
     /* The sibling's signal is aborted, and the run did not return while its
        finalMessage (and therefore its spend record) was still pending. */
@@ -893,7 +891,7 @@ describe("the request", () => {
     answer = { brief: [JSON.stringify(overCeiling), JSON.stringify(answerOf(BRIEF))] };
     const out = await run();
     expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
-    expect(out.calls).toBe(4);
+    expect(out.calls).toBe(3);
     expect(sent.filter((c) => levelOf(c.body) === "brief")).toHaveLength(2);
     expect(
       sent.every(
@@ -905,7 +903,7 @@ describe("the request", () => {
       ),
     ).toBe(true);
     /* The rejected attempt's tokens were spent, so they are counted. */
-    expect(out.outputTokens).toBe(4);
+    expect(out.outputTokens).toBe(3);
   });
 
   it("does not ask a third time: a level that fails twice fails the run", async () => {
@@ -918,19 +916,19 @@ describe("the request", () => {
     stop = "refusal";
     answer = "";
     await expect(run()).rejects.toThrow();
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
   });
 
   it("reports what it dropped on the run, and does not store it", async () => {
     answer = {
-      simple: JSON.stringify(answerOf([para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)])),
+      brief: JSON.stringify(answerOf([para("About.", INTRO.id, "spya-zzzzzz"), para("Why.", WHY.id, WHY.id)])),
       fuller: JSON.stringify(answerOf(FULLER)),
     };
     const out = await run();
     expect(out.dropped.unknownIds).toBe(1);
     expect(out.dropped.duplicateIds).toBe(1);
-    expect(out.words.simple).toBe(2);
-    expect(out.words.fuller).toBeGreaterThan(out.words.simple);
+    expect(out.words.brief).toBe(2);
+    expect(out.words.fuller).toBeGreaterThan(out.words.brief);
     expect("dropped" in out.simpleSummary).toBe(false);
   });
 
@@ -940,7 +938,6 @@ describe("the request", () => {
     if (!first || !second || !third) throw new Error("fixture needs three body blocks");
     answer = {
       brief: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
-      simple: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id)])),
       fuller: JSON.stringify(answerOf([para("About.", first.id), para("Why.", second.id), para("How.", third.id)])),
     };
     const out = await generateSimpleSummary({ power: "standard", article: noMeta, cacheArticle: true, profile: null });
@@ -949,7 +946,7 @@ describe("the request", () => {
     const { generateIdeas } = await import("../src/ideas.js");
     await generateIdeas({ power: "standard", article: noMeta, previous: null, cacheArticle: true }).catch(() => undefined);
 
-    const [call, , , ideasCall] = sent;
+    const [call, , ideasCall] = sent;
     if (!call || !ideasCall) throw new Error("expected three calls");
     const body = call.body as {
       max_tokens: number;
@@ -993,7 +990,7 @@ describe("the request", () => {
   });
 
   it("carries the shared profile rules in the constant half of both levels", () => {
-    expect(SIMPLE_SYSTEMS.simple).toContain(PROFILE_RULES);
+    expect(SIMPLE_SYSTEMS.brief).toContain(PROFILE_RULES);
     expect(SIMPLE_SYSTEMS.fuller).toContain(PROFILE_RULES);
   });
 
@@ -1004,7 +1001,8 @@ describe("the request", () => {
     const a = await run(PROFILE);
     const b = await run(other);
     const none = await run(null);
-    expect(userMessage(0)).not.toBe(userMessage(3));
+    /* Each run is two calls, so the second run starts at 2. */
+    expect(userMessage(0)).not.toBe(userMessage(2));
     expect(a.simpleSummary.profileHash).not.toBe(b.simpleSummary.profileHash);
     /* What `STEPS.simple.stamp` computes: the same function, with no profile. */
     const stamp = inputFingerprint(BLOCKS, example.tree, example.meta);
@@ -1016,7 +1014,7 @@ describe("the request", () => {
   it("sends high power to the gateway and stamps the model that wrote the artefact", async () => {
     answer = good();
     const out = await run(null, "high");
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
     for (const call of sent) expect(call.options).toMatchObject({ power: "high" });
     expect(out.model).toBe(HIGH_POWER_MODEL);
     expect(out.simpleSummary.generator).toBe(HIGH_POWER_MODEL);
@@ -1033,16 +1031,17 @@ describe("the request", () => {
     );
   });
 
-  it("pitches Simple at fifteen and Fuller at eighteen, and both keep the plain-words rule", () => {
-    expect(SIMPLE_SYSTEMS.simple).toContain("fifteen-year-old");
+  it("pitches Brief at twelve and Fuller at eighteen, and both keep the plain-words rule", () => {
+    expect(SIMPLE_SYSTEMS.brief).toContain("twelve-year-old");
     expect(SIMPLE_SYSTEMS.fuller).toContain("eighteen-year-old");
-    expect(SIMPLE_SYSTEMS.simple).not.toContain("eighteen-year-old");
-    for (const level of ["simple", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
+    expect(SIMPLE_SYSTEMS.brief).not.toContain("eighteen-year-old");
+    expect(SIMPLE_SYSTEMS.fuller).not.toContain("twelve-year-old");
+    for (const level of ["brief", "fuller"] as const) expect(SIMPLE_SYSTEMS[level]).toContain("PLAIN WORDS");
   });
 
   /* Plan 261002h (Greg, spya-rpqqxb): Brief is for a reader in a hurry from
      outside the field, whatever the profile claims. His own profiled Brief was
-     denser in jargon than the Simple beside it. */
+     denser in jargon than the middle level then beside it. */
   it("writes Brief for an outsider even when the reader claims the field, and only Brief", () => {
     const flat = (s: string) => s.replace(/\s+/g, " ");
     const brief = flat(SIMPLE_SYSTEMS.brief);
@@ -1054,11 +1053,9 @@ describe("the request", () => {
     );
     expect(SIMPLE_SYSTEMS.brief.indexOf(PROFILE_RULES)).toBeGreaterThan(-1);
     expect(brief).not.toContain("counts as everyday words for them");
-    for (const level of ["simple", "fuller"] as const) {
-      const system = flat(SIMPLE_SYSTEMS[level]);
-      expect(system).not.toContain("even when the request below describes a reader who does");
-      expect(system).toContain("counts as everyday words for them");
-    }
+    const fuller = flat(SIMPLE_SYSTEMS.fuller);
+    expect(fuller).not.toContain("even when the request below describes a reader who does");
+    expect(fuller).toContain("counts as everyday words for them");
     for (const system of Object.values(SIMPLE_SYSTEMS)) expect(flat(system)).toContain("its goal or question");
   });
 });
@@ -1084,8 +1081,8 @@ describe("the fidelity guard (plan 261001i)", () => {
 
   it("checks every level once, on its own job, each paragraph with only its own cited passages", async () => {
     const out = await run();
-    expect(checks).toHaveLength(3);
-    expect(checks.map((c) => c.job)).toEqual(["simple-check", "simple-check", "simple-check"]);
+    expect(checks).toHaveLength(2);
+    expect(checks.map((c) => c.job)).toEqual(["simple-check", "simple-check"]);
     for (const c of checks) expect((c.body as { model: string }).model).toBe(modelFor("simple-check", "standard"));
     expect(messagesOf(0)[0]).toEqual({
       role: "system",
@@ -1100,9 +1097,9 @@ describe("the fidelity guard (plan 261001i)", () => {
     expect(out.simpleSummary.check).toEqual({
       checker: SIMPLE_CHECK_VERSION,
       requestedModel: modelFor("simple-check", "standard"),
-      levels: { brief: passed, simple: passed, fuller: passed },
+      levels: { brief: passed, fuller: passed },
     });
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
   });
 
   it("asks a flagged level again and stores the second when it passes", async () => {
@@ -1112,9 +1109,9 @@ describe("the fidelity guard (plan 261001i)", () => {
     expect(writerCalls("brief")).toBe(2);
     expect(out.simpleSummary.levels.brief).toEqual(BRIEF_AGAIN);
     expect(out.simpleSummary.check?.levels.brief).toEqual({ result: "passed", attempts: 2, retriedAfterFlag: true, stored: 2 });
-    expect(out.simpleSummary.check?.levels.simple).toEqual(passed);
-    expect(checks).toHaveLength(4);
-    expect(out.calls).toBe(4);
+    expect(out.simpleSummary.check?.levels.fuller).toEqual(passed);
+    expect(checks).toHaveLength(3);
+    expect(out.calls).toBe(3);
   });
 
   it("stores the second attempt when it is flagged too, and records its flags — the press is not lost", async () => {
@@ -1130,9 +1127,9 @@ describe("the fidelity guard (plan 261001i)", () => {
       stored: 2,
       flags: [{ paragraph: 0, why: "turned round 1" }],
     });
-    expect(checks).toHaveLength(4);
-    expect(out.calls).toBe(4);
-    expect(out.checkCalls).toBe(4);
+    expect(checks).toHaveLength(3);
+    expect(out.calls).toBe(3);
+    expect(out.checkCalls).toBe(3);
   });
 
   it("does not buy a third writer call when validation spent the first attempt", async () => {
@@ -1150,7 +1147,7 @@ describe("the fidelity guard (plan 261001i)", () => {
       flags: [{ paragraph: 0, why: "turned round 1" }],
     });
     /* The invalid answer was never checked: only valid text is. */
-    expect(checks).toHaveLength(3);
+    expect(checks).toHaveLength(2);
   });
 
   it("stores a level unchecked when the checker call fails, and does not spend the writer retry", async () => {
@@ -1200,9 +1197,9 @@ describe("the fidelity guard (plan 261001i)", () => {
       failure: "call",
     });
     expect(writerCalls("brief")).toBe(2);
-    expect(checks).toHaveLength(4);
-    expect(out.calls).toBe(4);
-    expect(out.checkCalls).toBe(4);
+    expect(checks).toHaveLength(3);
+    expect(out.calls).toBe(3);
+    expect(out.checkCalls).toBe(3);
   });
 
   it("keeps the flagged first attempt when the retry it bought fails validation — the press is not lost", async () => {
@@ -1236,16 +1233,16 @@ describe("the fidelity guard (plan 261001i)", () => {
       retryFailure: "call",
     });
     /* The refused response was still a writer request with reported usage. */
-    expect(out.calls).toBe(4);
-    expect(out.inputTokens).toBe(4);
-    expect(out.outputTokens).toBe(4);
+    expect(out.calls).toBe(3);
+    expect(out.inputTokens).toBe(3);
+    expect(out.outputTokens).toBe(3);
   });
 
   it("switched off: no checker call, no retry for a flag, and no record", async () => {
     checkerReply = flagFirst;
     const out = await run({ guard: false });
     expect(checks).toHaveLength(0);
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
     expect("check" in out.simpleSummary).toBe(false);
     expect(out.checkCalls).toBe(0);
   });
@@ -1256,11 +1253,11 @@ describe("the fidelity guard (plan 261001i)", () => {
 
   it("reports the checker's calls and tokens beside the writer's, never summed into them", async () => {
     const out = await run();
-    expect(out.calls).toBe(3);
-    expect(out.outputTokens).toBe(3);
-    expect(out.checkCalls).toBe(3);
-    expect(out.checkInputTokens).toBe(300);
-    expect(out.checkOutputTokens).toBe(30);
+    expect(out.calls).toBe(2);
+    expect(out.outputTokens).toBe(2);
+    expect(out.checkCalls).toBe(2);
+    expect(out.checkInputTokens).toBe(200);
+    expect(out.checkOutputTokens).toBe(20);
   });
 
   it("an aborted job stops at the check rather than storing an unchecked level", async () => {
@@ -1276,7 +1273,7 @@ describe("the fidelity guard (plan 261001i)", () => {
     const job = new AbortController();
     await run({ signal: job.signal });
     job.abort();
-    expect(checks).toHaveLength(3);
+    expect(checks).toHaveLength(2);
     for (const c of checks) expect(c.signal?.aborted).toBe(true);
   });
 
@@ -1288,7 +1285,7 @@ describe("the fidelity guard (plan 261001i)", () => {
   });
 });
 
-/* ------------------------------------------------- one cache, three levels -- */
+/* --------------------------------------------------- one cache, two levels -- */
 
 describe("the staggered fan-out (plan 261001j)", () => {
   /* The same ids as the small fixture, with enough words to clear the cache floor. */
@@ -1315,7 +1312,7 @@ describe("the staggered fan-out (plan 261001j)", () => {
     answer = {};
   });
 
-  it("on a long article, writes Fuller first with the article marked, and the others once it has begun", async () => {
+  it("on a long article, writes Fuller first with the article marked, and Brief once it has begun", async () => {
     const start = gate();
     const final = gate();
     startGate = start.promise;
@@ -1325,26 +1322,27 @@ describe("the staggered fan-out (plan 261001j)", () => {
     expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
     start.open();
     await tick();
-    expect(sent.map((c) => levelOf(c.body)).sort()).toEqual(["brief", "fuller", "simple"]);
+    expect(sent.map((c) => levelOf(c.body)).sort()).toEqual(["brief", "fuller"]);
     final.open();
     const out = await pending;
-    expect([0, 1, 2].map(marked)).toEqual([true, true, true]);
+    expect(sent).toHaveLength(2);
+    expect([0, 1].map(marked)).toEqual([true, true]);
     expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
   });
 
-  it("does not leave the others waiting when the first never says it has begun", async () => {
+  it("does not leave Brief waiting when the first never says it has begun", async () => {
     neverStart = true;
     const out = await run(LONG);
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
     expect(out.simpleSummary.levels.fuller).toEqual(FULLER);
   });
 
   it("keeps a validation retry on the shared cache and stores the same result", async () => {
-    answer = { simple: ["{ not json", JSON.stringify(answerOf(SIMPLE))] };
+    answer = { brief: ["{ not json", JSON.stringify(answerOf(BRIEF))] };
     const out = await run(LONG);
-    expect(sent).toHaveLength(4);
-    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true, true]);
-    expect(out.simpleSummary.levels.simple).toEqual(SIMPLE);
+    expect(sent).toHaveLength(3);
+    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true]);
+    expect(out.simpleSummary.levels.brief).toEqual(BRIEF);
   });
 
   it("keeps a guard retry on the shared cache and stores the checked replacement", async () => {
@@ -1359,14 +1357,14 @@ describe("the staggered fan-out (plan 261001j)", () => {
       return okFor(user);
     };
     const out = await run(LONG, { guard: true });
-    expect(sent).toHaveLength(4);
-    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true, true]);
+    expect(sent).toHaveLength(3);
+    expect(sent.map((_, i) => marked(i))).toEqual([true, true, true]);
     expect(out.simpleSummary.levels.brief).toEqual(replacement);
     expect(out.simpleSummary.check?.levels.brief).toMatchObject({ retriedAfterFlag: true, stored: 2 });
   });
 
   /* Sol's plan review, P1: the wait used to end on the failure itself, and the
-     other two could open (billable) calls before the press was aborted. */
+     waiting levels could open (billable) calls before the press was aborted. */
   it("opens no other call when the first call fails before it begins", async () => {
     neverStart = true;
     failCall = "fuller";
@@ -1392,24 +1390,25 @@ describe("the staggered fan-out (plan 261001j)", () => {
     await expect(run(LONG)).rejects.toThrow();
   });
 
-  it("below the cache floor, asks all three at once and marks nothing — there is no cache to share", async () => {
+  it("below the cache floor, asks both at once and marks nothing — there is no cache to share", async () => {
     startGate = gate().promise;
     const pending = run(BLOCKS);
     await tick();
-    expect(sent).toHaveLength(3);
-    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+    expect(sent).toHaveLength(2);
+    expect([0, 1].map(marked)).toEqual([false, false]);
     await pending;
   });
 
   it("does not let cacheArticle mark a prefix below the model's physical cache floor", async () => {
     await run(BLOCKS, { cacheArticle: true });
-    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+    expect(sent).toHaveLength(2);
+    expect([0, 1].map(marked)).toEqual([false, false]);
   });
 
   it("uses Opus's lower cache floor for both marking and staggering", async () => {
     await run(MIDDLE, { cacheArticle: true });
-    expect(sent).toHaveLength(3);
-    expect([0, 1, 2].map(marked)).toEqual([false, false, false]);
+    expect(sent).toHaveLength(2);
+    expect([0, 1].map(marked)).toEqual([false, false]);
 
     sent.length = 0;
     const start = gate();
@@ -1543,7 +1542,7 @@ describe("the step", () => {
       store,
       nullCheckpointStore(),
     );
-    expect(sent).toHaveLength(3);
+    expect(sent).toHaveLength(2);
     for (const call of sent) expect(call.options).toMatchObject({ power: "high" });
     expect(result.parts?.simple).toMatchObject({ generator: HIGH_POWER_MODEL });
   });

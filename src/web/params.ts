@@ -1157,9 +1157,9 @@ export const diagramHueParam = createParser<ScatterHue>({
  * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  *
  * A vocabulary of its own rather than `SIMPLE_LEVELS` (src/types.ts), which
- * names what the `simple` step **writes** and still has three members: the
- * Simple level is written and stored and no longer shown, and the thread is a
- * different step's artefact altogether.
+ * names what the `simple` step **writes**: Brief and Fuller, and since
+ * 2026-10-04 no middle level (plan 261004f). The thread is a different step's
+ * artefact altogether.
  */
 export const SUMMARY_VIEWS = ["brief", "fuller", "thread"] as const;
 export type SummaryView = (typeof SUMMARY_VIEWS)[number];

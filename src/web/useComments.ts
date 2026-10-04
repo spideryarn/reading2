@@ -1,9 +1,10 @@
 /**
  * The client half of comments — see docs/project/comments.md.
  *
- * Selecting text opens `AnnotateDialog`, whose Save, close and Ask AI paths all
- * create the same free comment here. Ask AI then opens a separate conversation;
- * it does not make this create a paid request. This hook also reads existing
+ * Selecting text creates a free comment here: at once, as a yellow highlight
+ * (Reader.tsx § `selectProse`, since 2026-10-04), or in Referee mode from
+ * `AnnotateDialog`'s Save, close and Ask AI paths. Ask AI then opens a separate
+ * conversation; it does not make this create a paid request. This hook also reads existing
  * comments, edits their reader-owned fields, and offers `retry` and `deepen` for
  * the older explanations that are still stored on comments.
  *
@@ -75,9 +76,10 @@ interface NewCommentInputFields {
    */
   mark?: Mark;
   /**
-   * A highlight's colour, if the saved selection has one. Yellow is the default
-   * in `AnnotateDialog`, so it need not have been picked explicitly. Only on a
-   * selection: the server refuses a colour on a whole-block bookmark.
+   * A highlight's colour, if the saved selection has one. Yellow is what a
+   * selection is stored in (`DEFAULT_HIGHLIGHT`, fresh-highlight.ts), so it
+   * need not have been picked explicitly. Only on a selection: the server
+   * refuses a colour on a whole-block bookmark.
    */
   colour?: HighlightColour;
 }

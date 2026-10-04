@@ -61,30 +61,28 @@
  * would lengthen the list and leave the badge saying *changed*. Plan 261002b
  * § Deferred.
  *
- * ## `compact`: an icon without words, in Glossary and Summary (2026-09-29)
+ * ## Always an icon, with a card (2026-10-04)
  *
- * > Perhaps hide "written for you" as a tooltip on something or just an icon.
+ * > In remember mode, you don't need the words written for you at the top.
+ * > Just the little profile icon should be sufficient with a rich tooltip, and
+ * > the same goes for any other modes.
  * >
- * > — Greg, 2026-09-29, `[SPIDERYARN-READING2-4G]`
+ * > — Greg, 2026-10-04, `spya-pmjy40`
  *
- * **Originally Glossary only**, because the phone-space argument was made about Glossary,
- * and because an icon alone says less than the words: *older profile* is a
- * fact a reader would otherwise have to guess from a colour. GPT Sol's review
- * of the plan made that point and it holds, so Quotes, Ideas and Tweets keep
- * their words. The two states stay apart without them — `UserRound` for
- * *written for you*, `UserRoundPen` in the warmer `.changed` colour for the
- * other — and **the panel says which one it is, in words, at its top**
- * (`note`), because the panel is where a compact badge's reader goes to find
- * out, and until now it only described the profile as it is today. There is
- * still no hover `title`: ProfilePanel.tsx says why.
- * docs/plans/260929a-compact-glossary-header-and-kind-icons.md.
+ * It was words (*written for you*, *older profile*) everywhere until
+ * 2026-09-29, when Glossary's became an icon behind a `compact` prop
+ * (Greg: *"Perhaps hide "written for you" as a tooltip on something or just an
+ * icon"*, SPIDERYARN-READING2-4G; plan 260929a), and mode by mode the rest
+ * followed. Quiz was the last with words. The prop is gone, because a switch
+ * nobody sets is a second way to draw the badge waiting to be used by accident.
  *
- * **And Summary's plain words, since 2026-10-01**, for the same space argument
- * made harder: Greg asked for Summary's controls in one row with no wasted
- * vertical space (SPIDERYARN-READING2-7A), and the badge sits at that row's
- * end. A changed profile is also said in words there — a *Write it again*
- * button appears under the paragraphs — so the colour is not the only signal.
- * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+ * GPT Sol's objection to the first icon still holds — *older profile* is a
+ * fact a reader would otherwise have to guess from a colour — and three things
+ * answer it: `UserRound` against `UserRoundPen` in the warmer `.changed`
+ * colour; **the card on hover or focus** (`tip`, drawn by `ProfilePanel`,
+ * which owns the button); and the panel's first line (`note`), which is what
+ * a finger gets, since a tap opens the panel and never the card.
+ * docs/plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md.
  *
  * docs/project/reader-profile.md.
  */
@@ -107,7 +105,7 @@ export interface ProfileState {
 }
 
 /**
- * "Written for you", or "written for a profile you've changed".
+ * A profile provenance icon: current, or written for a profile since changed.
  *
  * Renders nothing when the artefact was written without a profile, which is the
  * common case and is not a state worth a line of interface. Absence here means
@@ -117,22 +115,34 @@ export function WrittenForYou({
   written,
   changed,
   slug,
-  compact = false,
   regenerate,
 }: ProfileState & {
   slug: string;
-  compact?: boolean;
   /** The mode's forced run, for the panel's Regenerate. See the header for who passes one. */
   regenerate?: Regenerate | undefined;
 }) {
   if (!written) return null;
-  const Icon = compact && changed ? UserRoundPen : UserRound;
+  const Icon = changed ? UserRoundPen : UserRound;
+  const shows = "Shows your profile, to read or edit here";
   return (
     <ProfilePanel
       slug={slug}
       changed={changed}
       regenerate={regenerate}
-      className={`prof-badge${changed ? " changed" : ""}${compact ? " icon-only" : ""}`}
+      /* `icon-only` is what the stylesheets size (profile.css, and the finger
+         floor in narrow-window.css); it is every badge now. */
+      className={`prof-badge icon-only${changed ? " changed" : ""}`}
+      tip={{
+        head: changed ? "Written for an older profile" : "Written for your profile",
+        what: changed
+          ? "The AI used an earlier version of what you had written under About you, Why you're reading this one, or both."
+          : "The AI used what you had written under About you, Why you're reading this one, or both, when it wrote this.",
+        /* The half nobody could guess, as the Help page has it. */
+        how: changed
+          ? "Nothing is rewritten by itself when your profile changes."
+          : "A profile is used to shape what is chosen and how it is put to you. The AI is told never to change what the article says.",
+        press: changed && regenerate ? `${shows}, and offers to write this again for it.` : `${shows}.`,
+      }}
       label={
         changed
           ? "Written for a profile you have changed since — see what it says now"
@@ -144,8 +154,7 @@ export function WrittenForYou({
           : "This was written for your profile."
       }
     >
-      <Icon size={compact ? 13 : 11} />
-      {!compact && (changed ? "older profile" : "written for you")}
+      <Icon size={13} />
     </ProfilePanel>
   );
 }

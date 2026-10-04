@@ -208,7 +208,11 @@ full and the pass condition is a person reading them.
 > account anything from the user profile or the why are you reading this information. … lots of
 > small increments is probably better than big, slow increments.
 
-The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=tutorial`). Where Recall is closest to
+The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=tutorial`). **Each chip has its
+own card** since 2026-10-04 (`REMEMBER_VIEW_HOW` in
+[`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx)), and the band's (i) is two short sentences
+and a four-line list rather than one paragraph, because a chip's card never opens under a finger
+([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). Where Recall is closest to
 testing — the reader brings what they have — Tutorial is closest to teaching: each turn is a brief
 reaction, **one** small cited piece of the article, and **one** task (say it back, explain why, give
 an example, apply it, push back), climbing as the reader succeeds and stepping down when they do

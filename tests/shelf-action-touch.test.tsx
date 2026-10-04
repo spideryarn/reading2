@@ -74,6 +74,7 @@ function stubShelf(): Shelf {
   return {
     archive: vi.fn(async () => {}),
     report: vi.fn(),
+    copied: vi.fn(),
     renaming: null,
   } as unknown as Shelf;
 }
@@ -650,7 +651,7 @@ describe("copying the link", () => {
     press(copyControl(), "mouse");
     await settle(() => writes[1]?.reject(new Error("denied")));
     expect(shelf.report).toHaveBeenCalledTimes(1);
-    expect(shelf.report).toHaveBeenCalledWith("Couldn't copy the link: denied");
+    expect(shelf.report).toHaveBeenCalledWith("Couldn't copy the link: denied", "copy");
     expect(ticked(), "Copied was still showing beside the notice that it failed").toBe(false);
   });
 
