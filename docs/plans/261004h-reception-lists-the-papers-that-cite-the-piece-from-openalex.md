@@ -2,7 +2,7 @@
 
 Up: [debate.md](../project/debate.md)
 
-**Status:** plan, awaiting GPT Sol's review. This is stage 2 of
+**Status:** built (2026-10-04); § What landed. This is stage 2 of
 [261002i](261002i-debate-leads-with-who-has-cited-this-article.md), queue item `qi-aabv7jjy`.
 
 ## What Greg decided
@@ -258,7 +258,56 @@ out of the stored Debate artefact.
 
 ## Code review
 
-[The code review](261004h-reception-lists-citers-code-review-sol.md) covers `e8de3e851` and its
-uncommitted review fixes: nine stage findings fixed, one wider DOI-link finding left for separate
-work, and the exact validation results and remaining database checks. Verdict: **land with the
-fixes made in review**.
+[The prompt](261004h-reception-lists-citers-code-review-prompt.md),
+[the review](261004h-reception-lists-citers-code-review-sol.md), of `e8de3e851`. Nine findings,
+each fixed by the reviewer with a test seen red, committed as `34176bcf2` after I read the diff and
+ran the gates. Verdict: **land with the fixes made in review**. All nine kept.
+
+| | Finding | Fix |
+|---|---|---|
+| C1 | an author name with a suffix (`Jr.`), in `Family, Given` order, or with a long compound family name failed the author check | the adapter recognises each before falling back to the last word |
+| C2 | the hook's ask-once mark outlived the read it described ([postmortem 261004j](../postmortems/261004j-a-request-mark-must-expire-with-the-request-it-describes.md)) | cleared when the article changes |
+| C3 | a malformed citer row would throw while drawing | each row's fields are checked; anything else is `unavailable` |
+| C4 | a DOI was put into the link address as written | each path segment is encoded |
+| C5 | an oversized *target* record was `unavailable`, with a Try again that could never work | it is `too-large` |
+| C6 | before a search, the list was outside the band's scroller | it is inside it |
+| C7–C9 | copy: the dropped-record sentence, the (i) naming the contact address, the privacy page saying when each service is asked | reworded |
+
+**C10, wider than this stage, reported and not fixed:** three older call sites put a DOI into an
+address unencoded (`src/source-guess.ts`, `src/paper-evidence.ts`, `src/citations.ts`). It belongs
+to Citations and goes to the Overseer's queue.
+
+One review round. The fixes are small, each came with its test, and none was overruled, so no
+second round.
+
+## What landed (2026-10-04)
+
+Built as planned by an Opus subagent, in one stage. Departures from the plan, kept:
+
+- The result and the cache carry `returned`, `dropped` and `capped` (F5), and the count sentence is
+  built from them (`citersLines` in `src/messages.ts`).
+- Before a debate exists there is no sub-mode control, so the section is drawn under the
+  not-searched screen whatever `?debate=` says.
+- For the owner the Scholar link reads "Also: search Google Scholar" under the list. A visitor
+  keeps today's link and wording.
+- A citer's title is in the app's own face, like the source titles above it:
+  [fonts.md](../project/fonts.md) leaves third-party text undecided.
+- A stale list is also served after `too-large`, never after `unconfirmed`.
+- The hook checks the shape of the route's answer, because a `{}` would otherwise take the whole
+  Debate band down through the exhaustive switch.
+- The privacy page links each service's home page, not its privacy policy.
+- The politeness in `src/bibliographic.ts` was pulled out into `inServiceTurn` and `coolAfter`,
+  which Crossref, DataCite and OpenAlex now all go through.
+
+Checks:
+
+- **The real OpenAlex**, through the finished `citersOf` with the real fetcher (in-memory cache):
+  `found`, count 39, 39 listed; a second call made no request; another article carrying the same
+  DOI was answered `unconfirmed` off the cache.
+- **Mutations** the suite noticed: no title check; no author check; no check on a cached row; a
+  count stored when the list failed; the DOI string taken from the response; no ask-once guard.
+- **The full suite**, in tmux, on `53ef7b8af`: 1562 files passed, 1 skipped; 33,617 tests passed.
+- **Browser, with the route's answer stubbed** (Sonnet, Playwright, 1440, 820 and 390 wide): every
+  state's sentence, the first 10 then all 39, links, no horizontal overflow, the list and the
+  Scholar link reachable by scrolling, Try again, a malformed answer and a 500, the (i). Arriving
+  by URL started no job. No defects. Screenshots: `261004h-shot-<width>-<found|no-doi>.png`.
