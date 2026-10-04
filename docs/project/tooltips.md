@@ -48,6 +48,19 @@ that, and the gutter's controls — the mark, permalink, chat, bookmark, help an
 on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
 [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
 
+## Short paragraphs or bullets, not one block
+
+> for the rich tooltip for the remember mode information, it's like one big paragraph. Prefer smaller
+> paragraphs or bullet points because it's much clearer.
+>
+> — Greg, 2026-10-04 (`spya-usyhwy`)
+
+A card that has several things to say says them as several short paragraphs or a list. And when a
+card is describing a row of controls, each control gets its own card instead (the same report: *"each
+submode button should have its own tooltip"*). Remember's (i) was the case: 110 words walking through
+three sub-modes, now two sentences and a four-line list, with the detail on each chip
+([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)).
+
 ## What we chose
 
 **[Floating UI](https://floating-ui.com) — `@floating-ui/react`**, v0.27.20, added 2026-08-25.
@@ -121,6 +134,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
 | [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
+| [`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) | **the *written for you* badge's card**, since 2026-10-04 — the one card on a button that also opens a panel about the same subject. It is `enabled` only while the panel is closed, and controlled, so a finger's tap opens the panel and never the card |
 | [`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `HowToRead` | **the same controlled shape on a panel rather than a band**: Referee's *How to read this* button, which holds the sentences that say a list of passages is not a verdict. A tap toggles it, because those sentences must reach a phone ([referee-mode.md](referee-mode.md) § How to read a panel) |
 | [`src/web/BackLink.tsx`](../../src/web/BackLink.tsx) | the icon-only way back (an arrow) or home (a house) at the top of a page, since 2026-09-29 — the card says the destination and opens to the *right*, because a card below covered the heading. Name in `aria-label`, words in a `TipNote` |
 | [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |

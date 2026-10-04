@@ -349,7 +349,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   remember: {
     description:
       "Work the piece into memory through Recall, a short Tutorial or a Quiz, or Explore what you think of it — not saved notes or flashcards",
-    how: "Recall waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words. Explore is about your own thinking: it is sent what you have highlighted, noted and discussed on this article, starts from that, and may search the web to show where the piece stands.",
+    /* **Two sentences about the whole mode, since 2026-10-04.** It was a
+       110-word walk through Recall, Tutorial and Explore; Greg (spya-usyhwy):
+       *"it's like one big paragraph. Prefer smaller paragraphs or bullet
+       points"*, and *"each submode button should have its own tooltip"*. So
+       what each part does is on its chip (QuizPanel.tsx § `REMEMBER_VIEW_HOW`)
+       and listed in the band's (i) (BandAbout.tsx § `RememberSubModesAbout`).
+       Claims: no conversation turn runs before the reader's first message;
+       Quiz's questions are one stored batch written from the article, and
+       each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It
+       describes the mode, not a press, so it is true for the Help page too. */
+    how: "Recall, Tutorial and Explore are conversations, and each waits on you: nothing runs until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 

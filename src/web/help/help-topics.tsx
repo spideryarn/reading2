@@ -728,8 +728,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         <ul>
           <li>Both boxes save themselves a couple of seconds after you stop typing.</li>
           <li>
-            Text written with your profile has a small <strong>written for you</strong> label. After
-            you edit your profile, older text says <strong>older profile</strong> instead.{" "}
+            Text written with your profile has a small <strong>person icon</strong> in the corner
+            of its mode; point at it to see what it means, or press it to read and edit your
+            profile there. After you edit your profile, the icon on older text gains a pencil and
+            a warmer colour.{" "}
             <strong>Nothing is rewritten by itself</strong>; each mode offers to rewrite when you
             want. Even a one-letter fix counts as an edit.
           </li>

@@ -289,7 +289,6 @@ function OwnerSketch({
       written
       changed={view.profileChanged}
       slug={slug}
-      compact
       regenerate={{
         run: () => void view.regenerate(),
         busy: view.job !== null || view.starting || view.rewriting,

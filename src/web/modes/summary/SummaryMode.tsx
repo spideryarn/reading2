@@ -146,7 +146,6 @@ function OwnerSimple({
         written
         changed={owner.profileChanged}
         slug={slug}
-        compact
         regenerate={{
           run: () => void owner.regenerate(),
           busy: owner.job !== null || owner.starting || owner.rewriting,

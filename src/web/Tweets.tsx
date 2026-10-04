@@ -145,7 +145,6 @@ export function TweetsPanel({
             written={owner.thread.profileHash != null}
             changed={owner.profileChanged}
             slug={slug}
-            compact
             /* The forced run replaces the thread (plan 261002b). */
             regenerate={{
               run: () => void owner.regenerate(),

@@ -137,6 +137,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import { type SaveState, useAutosavedText } from "./useAutosavedText.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import { leaveProfile, saveProfile } from "./useProfile.js";
 
 /**
@@ -233,9 +234,17 @@ export function ProfilePanel({
   note,
   changed = false,
   regenerate,
+  tip,
   children,
 }: {
   slug: string;
+  /**
+   * **The trigger's card**, on hover or keyboard focus, while the panel is
+   * closed — Greg, 2026-10-04 (spya-pmjy40): *"Just the little profile icon
+   * should be sufficient with a rich tooltip"*. `ControlTip`'s four slots; the
+   * words are the caller's, because they are about the text the badge is on.
+   */
+  tip: { head: string; what: string; how: string; press: string };
   /** The trigger's class. It is a `<button>` whatever it looks like. */
   className: string;
   /** What a screen reader is told the button does. */
@@ -245,7 +254,7 @@ export function ProfilePanel({
   /**
    * What the trigger was saying, in a sentence at the top of the panel — for a
    * trigger that is only an icon, this is the one place its words are read
-   * (WrittenForYou.tsx § `compact`).
+   * (WrittenForYou.tsx § Always an icon).
    */
   note?: string | undefined;
   /** The server says the text was written for a profile the reader has since changed. */
@@ -254,6 +263,13 @@ export function ProfilePanel({
   regenerate?: Regenerate | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * The card's own open state, held here so the `Tooltip` is *controlled*.
+   * That is what makes its hover `mouseOnly` (Tooltip.tsx): a finger's
+   * synthesised `mouseenter` never opens the card, so a tap raises the panel
+   * and nothing else.
+   */
+  const [tipOpen, setTipOpen] = useState(false);
   /**
    * **Whether the panel may close now** — asked by every way of closing it
    * except a Regenerate press, which is only enabled when the answer is yes.
@@ -299,18 +315,32 @@ export function ProfilePanel({
 
   return (
     <>
-      <button
-        type="button"
-        ref={refs.setReference}
-        className={`${className}${open ? " open" : ""}`}
-        /* Not `title`: a native tooltip on a button that opens a panel about
-           the same subject is two explanations racing each other. The panel is
-           the explanation. */
-        aria-label={label}
-        {...getReferenceProps()}
+      {/* **A card before the press, the panel after it.** Until 2026-10-04
+          there was no card at all, for a reason that still binds: an
+          explanation on a button that opens a panel about the same subject is
+          two explanations racing each other. So the card is `enabled` only
+          while the panel is closed — opening the panel starts the card
+          closing, and hovering the trigger under an open panel opens nothing.
+          `Tooltip` merges its ref and handlers with the ones below rather
+          than replacing them (Tooltip.tsx § `useMergeRefs`). Plan 261004f. */}
+      <Tooltip
+        placement="bottom"
+        className="tip-soon"
+        enabled={!open}
+        open={tipOpen}
+        onOpenChange={setTipOpen}
+        content={<ControlTip head={tip.head} what={tip.what} how={tip.how} press={tip.press} />}
       >
-        {children}
-      </button>
+        <button
+          type="button"
+          ref={refs.setReference}
+          className={`${className}${open ? " open" : ""}`}
+          aria-label={label}
+          {...getReferenceProps()}
+        >
+          {children}
+        </button>
+      </Tooltip>
       {open && (
         <FloatingPortal>
           {/* **Focus goes to the panel, not into the first box.** The default

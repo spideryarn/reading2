@@ -303,7 +303,6 @@ export function GlossaryPanel({
         written
         changed={owner.profileChanged}
         slug={owner.slug}
-        compact
         regenerate={{
           run: () => void owner.more(true),
           busy: owner.job !== null || owner.starting || owner.rewriting,

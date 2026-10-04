@@ -321,11 +321,17 @@ extra you ask for, so absent means no; the profile is the default this app now w
 > — Greg, 2026-09-12, from an iPad, reading an article in summary mode
 
 **Every new run uses the profile, and nothing in a reading view offers to change that.** The one
-thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
-([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
-below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
-to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
-keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+thing on screen about the profile is a *label* on the text
+([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)), and it opens the profile panel
+below. **It is an icon without words, in every mode, since 2026-10-04**: a person, or a person with
+a pencil in a warmer colour for text written for a profile you have since changed. Glossary's went
+first, on 2026-09-29, to save a phone a row
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)); Quiz's was the last with
+the words *written for you* / *older profile*, which the diagrams below still draw. Greg, 2026-10-04
+(`spya-pmjy40`): *"Just the little profile icon should be sufficient with a rich tooltip, and the
+same goes for any other modes."* So the icon has a card on hover and focus, while the panel is
+closed, saying which of the two it is; the panel says the same sentence at its top, which is where a
+finger reads it ([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
 the per-article half, on the metadata page — and, since 2026-10-02, in the panel the label opens
 (below). The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
