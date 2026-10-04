@@ -323,6 +323,81 @@ describe("typing in the bar's box", () => {
   });
 });
 
+/**
+ * **The cross that empties the box** — plan 261004g. Greg, 2026-10-04: *"Can
+ * you add a little X to it so that after I've searched with it, I can easily
+ * wipe it?"* It is Escape's clear with the focus kept rather than let go.
+ */
+describe("the clear cross", () => {
+  const cross = () => host.querySelector<HTMLButtonElement>("button.dock-qs-clear");
+  const press = (el: HTMLElement): MouseEvent => {
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    act(() => {
+      el.dispatchEvent(down);
+      el.click();
+    });
+    return down;
+  };
+
+  it("is there only while the box has words in it", () => {
+    server();
+    mount();
+    expect(cross()).toBeNull();
+    type(barBox(), "why");
+    expect(cross()?.getAttribute("aria-label")).toBe("Clear the search");
+    type(barBox(), "");
+    expect(cross()).toBeNull();
+  });
+
+  it("empties the box, drops the pending pause and keeps the focus in it", async () => {
+    server();
+    mount();
+    type(barBox(), "why replication");
+    const down = press(cross()!);
+    // Pressing it must not blur the box: in Search mode a blurred bar becomes the ⚡ under the pointer.
+    expect(down.defaultPrevented).toBe(true);
+    expect(barBox().value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(cross()).toBeNull();
+    await pause();
+    expect(opened, "a cleared box still opened Search mode").toBe(0);
+  });
+
+  it("after a search, clears the band's session as Escape does and leaves the box ready for the next one", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    expect(posted).toHaveLength(1);
+    press(cross()!);
+    await flush();
+    expect(barBox().value).toBe("");
+    expect(panelBox()?.value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+    await pause();
+    expect(posted, "clearing asked something").toHaveLength(1);
+    // The next words are a new search, not a revision of the wiped one — Escape's rule.
+    type(barBox(), "sample size");
+    await pause();
+    expect(posted.map((p) => [p.criterion, p.revises ?? false])).toEqual([
+      ["why replication", false],
+      ["sample size", false],
+    ]);
+  });
+
+  it("puts the cursor in a box that did not have it", () => {
+    server();
+    mount();
+    type(barBox(), "why");
+    act(() => barBox().blur());
+    expect(document.activeElement).not.toBe(barBox());
+    press(cross()!);
+    expect(barBox().value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+  });
+});
+
 describe("handoffs before the band mounts", () => {
   it("carries Enter through StrictMode effect replay and delayed loading", async () => {
     const posted = server();
