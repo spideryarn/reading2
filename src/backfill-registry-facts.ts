@@ -52,11 +52,12 @@ import { publishedYearOf, type Author, type Meta } from "./types.js";
 
 /* ------------------------------------------------------------ the target -- */
 
-/** Which database, in the three facts that tell two apart. Never a password. */
+/** Which database, including the username that routes a shared Supabase pooler. Never a password. */
 export interface BackfillTarget {
   host: string;
   port: string;
   database: string;
+  user: string;
 }
 
 /**
@@ -64,16 +65,30 @@ export interface BackfillTarget {
  * (scripts/stripe-target.ts § `whyNotProduction` has the reason).
  */
 export function backfillTargetOf(url: string): BackfillTarget {
-  const parsed = parse(url);
-  return { host: (parsed.host ?? "").toLowerCase(), port: parsed.port ?? "", database: parsed.database ?? "" };
+  let parsed: ReturnType<typeof parse>;
+  try {
+    parsed = parse(url);
+  } catch {
+    throw new PlanRefused("the database URL cannot be parsed");
+  }
+  /* No ambient PGUSER/PGPORT/PGDATABASE defaults: the plan must identify
+     exactly what a later process will dial. On a shared pooler the username,
+     not the host or database name, identifies the project. */
+  if (
+    !parsed.host || !parsed.user || !parsed.database || !parsed.port ||
+    !/^\d+$/.test(parsed.port) || Number(parsed.port) < 1 || Number(parsed.port) > 65535
+  ) {
+    throw new PlanRefused("the database URL must explicitly name its host, port, database and user");
+  }
+  return { host: parsed.host.toLowerCase(), port: String(Number(parsed.port)), database: parsed.database, user: parsed.user };
 }
 
 export function sameTarget(a: BackfillTarget, b: BackfillTarget): boolean {
-  return a.host === b.host && a.port === b.port && a.database === b.database;
+  return a.host === b.host && a.port === b.port && a.database === b.database && a.user === b.user;
 }
 
 export function targetLabel(t: BackfillTarget): string {
-  return `${t.host}${t.port ? `:${t.port}` : ""}/${t.database}`;
+  return `${t.user}@${t.host}:${t.port}/${t.database}`;
 }
 
 /* --------------------------------------------------------------- the plan -- */
@@ -471,8 +486,11 @@ export function parsePlan(json: unknown): Pick<Plan, "version" | "target" | "mad
     throw new PlanRefused("this is not a version 1 backfill plan file");
   }
   const target = plan.target as Partial<BackfillTarget> | undefined;
-  if (!target || typeof target.host !== "string" || typeof target.port !== "string" || typeof target.database !== "string") {
-    throw new PlanRefused("the plan file names no target");
+  if (
+    !target || typeof target.host !== "string" || typeof target.port !== "string" ||
+    typeof target.database !== "string" || typeof target.user !== "string" || target.user === ""
+  ) {
+    throw new PlanRefused("the plan file needs a target with host, port, database and user; make a new dry-run plan");
   }
   if (!Array.isArray(plan.rows)) throw new PlanRefused("the plan file has no rows");
   const rows = plan.rows.map((raw: Partial<PlanRow>, i): PlanRow => {
@@ -593,17 +611,23 @@ export async function applyPlan(
   const rows: ApplyRowResult[] = [];
   await db.query("begin");
   try {
+    /* The app's multi-article sweeps lock in actual slug order under C
+       collation. Plan order and plan labels are editable, so neither is a
+       lock-order authority. Acquire every article lock before revision locks. */
+    const locked = await db.query(
+      'select id, current_revision_id from spideryarn.articles where id = any($1::uuid[]) order by slug collate "C" for update',
+      [[...new Set(todo.map((row) => row.articleId))]],
+    );
+    const articles = new Map(locked.rows.map((raw) => {
+      const article = raw as { id: string; current_revision_id: string | null };
+      return [article.id, article];
+    }));
     for (const row of todo) {
-      /* The article row first, and `for update`: a publication moves
-         `current_revision_id` under this same lock, and a new draft is begun
-         under it too (src/store/pg-revisions.ts § `beginDraftIn`), so neither
-         can land between these checks and the write. */
-      const article = await db.query(
-        "select current_revision_id from spideryarn.articles where id = $1 for update",
-        [row.articleId],
-      );
-      const current = (article.rows[0] as { current_revision_id: string | null } | undefined)?.current_revision_id;
-      if (article.rows.length === 0) {
+      /* Publication and beginDraftIn take this same article lock, so neither
+         can land between the pointer/draft checks and commit. */
+      const article = articles.get(row.articleId);
+      const current = article?.current_revision_id;
+      if (article === undefined) {
         rows.push({ slug: row.slug, outcome: "refused", reason: "article-gone" });
         continue;
       }

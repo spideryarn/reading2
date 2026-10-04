@@ -123,6 +123,20 @@ function row(a: { slug: string; articleId: string; revisionId: string }, write: 
 const FACTS = { doi: "10.1038/nn.4304", journal: "Nature Neuroscience", published_at: "2016-05-16" } as const;
 const NOTHING: Held = { doi: null, journal: null, published_at: null, published_year: null };
 
+/** Observe a real lock wait, rather than assuming a 400ms delay proves one. */
+async function waitForBlock(blockedPid: number, blockerPid: number, settled: () => boolean): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const result = await pool!.query<{ blocked: boolean }>(
+      "select $2::integer = any(pg_blocking_pids($1::integer)) as blocked", [blockedPid, blockerPid],
+    );
+    if (result.rows[0]?.blocked) return;
+    if (settled()) throw new Error("apply completed without waiting for the article lock");
+    await new Promise((done) => setTimeout(done, 20));
+  }
+  throw new Error("did not observe the expected article lock wait");
+}
+
 describe("applyPlan", () => {
   it("fills the empty columns the plan names", async () => {
     const a = await given("fills");
@@ -180,18 +194,20 @@ describe("applyPlan", () => {
     const newer = await revisionFor(a.articleId);
     /* A publication: the article row locked, the pointer moved, not yet committed. */
     const publisher = await pool.connect();
+    let applying: ReturnType<typeof applyPlan> | undefined;
     try {
       await publisher.query("begin");
       await publisher.query("select id from spideryarn.articles where id = $1 for update", [a.articleId]);
       await publisher.query("update spideryarn.articles set current_revision_id = $1 where id = $2", [newer, a.articleId]);
 
+      const applyPid = (await db.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      const publisherPid = (await publisher.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
       let settled = false;
-      const applying = applyPlan(db, { target: TARGET, rows: [row(a, FACTS)] }, TARGET).finally(() => {
+      applying = applyPlan(db, { target: TARGET, rows: [row(a, FACTS)] }, TARGET).finally(() => {
         settled = true;
       });
-      await new Promise((done) => setTimeout(done, 400));
-      /* Without the lock it would have read the old pointer and written by now. */
-      expect(settled).toBe(false);
+      void applying.catch(() => {});
+      await waitForBlock(applyPid, publisherPid, () => settled);
       await publisher.query("commit");
 
       const result = await applying;
@@ -199,6 +215,67 @@ describe("applyPlan", () => {
     } finally {
       await publisher.query("rollback").catch(() => {});
       publisher.release();
+      await applying?.catch(() => {});
+    }
+    expect(await held(a.revisionId)).toEqual(NOTHING);
+  });
+
+  it("uses actual slug lock order even when plan labels and order lie", async () => {
+    const low = await given("ordered-a");
+    const high = await given("ordered-z");
+    const sweep = await pool.connect();
+    let applying: ReturnType<typeof applyPlan> | undefined;
+    try {
+      await sweep.query("begin");
+      await sweep.query("set local lock_timeout = '2s'");
+      await sweep.query("select id from spideryarn.articles where id = $1 for update", [low.articleId]);
+      const applyPid = (await db.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      const sweepPid = (await sweep.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      let settled = false;
+      applying = applyPlan(db, {
+        target: TARGET,
+        rows: [row({ ...high, slug: low.slug }, FACTS), row({ ...low, slug: high.slug }, FACTS)],
+      }, TARGET).finally(() => { settled = true; });
+      // Attach a handler immediately: an assertion can fail before we await the result.
+      void applying.catch(() => {});
+      await waitForBlock(applyPid, sweepPid, () => settled);
+      // The app takes low then high. Apply must not already hold high while waiting for low.
+      await sweep.query("select id from spideryarn.articles where id = $1 for update", [high.articleId]);
+      await sweep.query("commit");
+      expect((await applying).written).toBe(2);
+    } finally {
+      await sweep.query("rollback").catch(() => {});
+      sweep.release();
+      await applying?.catch(() => {});
+    }
+    expect(await held(low.revisionId)).toEqual({ ...NOTHING, ...FACTS });
+    expect(await held(high.revisionId)).toEqual({ ...NOTHING, ...FACTS });
+  });
+
+  it("waits for a new draft in flight, then refuses the article", async () => {
+    const a = await given("draft-in-flight");
+    const drafter = await pool.connect();
+    let applying: ReturnType<typeof applyPlan> | undefined;
+    try {
+      await drafter.query("begin");
+      // beginDraftIn takes the article lock before copying its current revision.
+      await drafter.query("select id from spideryarn.articles where id = $1 for update", [a.articleId]);
+      await drafter.query(
+        "insert into spideryarn.article_revisions (article_id, status, based_on_revision_id) values ($1, 'draft', $2)",
+        [a.articleId, a.revisionId],
+      );
+      const applyPid = (await db.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      const drafterPid = (await drafter.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]!.pid;
+      let settled = false;
+      applying = applyPlan(db, { target: TARGET, rows: [row(a, FACTS)] }, TARGET).finally(() => { settled = true; });
+      void applying.catch(() => {});
+      await waitForBlock(applyPid, drafterPid, () => settled);
+      await drafter.query("commit");
+      expect((await applying).rows).toEqual([{ slug: a.slug, outcome: "refused", reason: "unfinished-draft" }]);
+    } finally {
+      await drafter.query("rollback").catch(() => {});
+      drafter.release();
+      await applying?.catch(() => {});
     }
     expect(await held(a.revisionId)).toEqual(NOTHING);
   });

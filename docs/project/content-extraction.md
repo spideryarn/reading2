@@ -722,21 +722,26 @@ npx tsx scripts/backfill-registry-facts.ts --prod --apply <plan.json>
   the article's own address. It asks the registries through `lookupWork` with an in-memory store,
   so the spacing and the cooldown are the shipped ones and the registry cache table is neither
   read nor written. `withRegistryFacts` decides, unchanged. It prints a table and saves a plan
-  file with one row per article.
+  file with one row per article. A fatal idle connection error while the registries are being asked
+  is handled, so it does not discard that in-memory plan; the rollback can fail on a dead session
+  without losing the plan. The transaction pins a pooler backend until it ends.
 - **A missing document is its own outcome.** `no-source` (the revision references none) and
   `source-unreadable` (it references one that is missing, corrupt or not a PDF pdf.js can open)
   are reported apart from `no-candidate`.
 - **Apply writes the plan file and asks no registry**, so what was read is what is written. It
   refuses a plan made against another database, and a plan that fills a year on a database with
-  no `published_year` column. Then, in one transaction and per article, it locks the article row,
-  refuses if the plan's revision is no longer current, refuses if the article has an unfinished
+  no `published_year` column. In one transaction, it first locks the articles by their actual
+  database slugs in the app's `C` order, then per article refuses if the plan's revision is no longer
+  current, refuses if the article has an unfinished
   draft (the draft would publish later without the facts), and fills only empty columns. A day or
   a year is written only when both date columns are empty. Each row is `written`, `already`, or
   `refused` with a reason; a refused row is left exactly as it was. It exits non-zero when nothing
   was written and nothing was already there.
 - **Which database.** With no flag, the local one in `.env.local`, and a `DATABASE_URL` in the
   shell is not read. `--prod` is the only way to production: it takes the database and the
-  bucket's credentials together from `.env.prod`. Read the `Target:` line
+  bucket's credentials together from `.env.prod`. The plan identifies host, port, database and
+  username: the username distinguishes projects sharing a Supabase pooler. All four must be explicit
+  in the database URL; plans without a username must be regenerated. Read the `Target:` line
   ([database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)).
 - **Nothing else needs refreshing.** The Shelf reads the publication date from the revision row.
   An article that gains a `published_at` and has a Timeline shows that Timeline as out of date

@@ -62,7 +62,7 @@ import {
   type PlanRow,
 } from "../src/backfill-registry-facts.js";
 import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
-import { loadEnvLocal, readEnvProd, resolveTargetUrl } from "../src/env.js";
+import { loadEnvLocal, parseEnvFile, readEnvProd } from "../src/env.js";
 import { postgresBlobStore } from "../src/store/blobs.js";
 import { readRawDocument } from "../src/store/raw-document.js";
 import { whyNotProduction } from "./stripe-target.js";
@@ -105,11 +105,11 @@ function parseArgs(argv: readonly string[]): Args {
 /* ---------------------------------------------------------------- target -- */
 
 /** The database URL, and where it came from. Refuses rather than falling back. */
-function chooseTarget(args: Args): { url: string; from: string } {
-  loadEnvLocal();
+function chooseTarget(args: Args): { url: string; from: string; values?: Record<string, string> } {
   if (!args.prod) {
     /* The file, not the shell: without `--prod` the only valid target is local. */
-    const url = resolveTargetUrl({ shellWins: false });
+    const file = path.resolve(import.meta.dirname, "../.env.local");
+    const url = fs.existsSync(file) ? parseEnvFile(fs.readFileSync(file, "utf8")).DATABASE_URL : undefined;
     if (!url) fail("DATABASE_URL is not set. Locally: npm run db:start, then it comes from .env.local.");
     if (!isLocalDatabaseUrl(url)) {
       fail(
@@ -132,8 +132,7 @@ function chooseTarget(args: Args): { url: string; from: string } {
   /* `postgresBlobStore` reads these three from the environment and checks the
      database and the bucket name one project. Assigned after `loadEnvLocal`,
      which memoises, so `.env.local` cannot put its own back. */
-  for (const name of needed) process.env[name] = found.values[name];
-  return { url, from: found.file };
+  return { url, from: found.file, values: found.values };
 }
 
 /* -------------------------------------------------------------- printing -- */
@@ -181,18 +180,31 @@ function printPlan(plan: Plan): void {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
-  const { url, from } = chooseTarget(args);
+  const { url, from, values } = chooseTarget(args);
   const target = backfillTargetOf(url);
   const local = isLocalDatabaseUrl(url);
 
+  console.log(`Target: ${targetLabel(target)}`);
+  console.log(`        ${local ? "local" : "REMOTE — PRODUCTION"}, from ${from}`);
+  console.log(`        ${args.apply === null ? "dry run: BEGIN READ ONLY, nothing is written" : `APPLY: writing ${args.apply}`}\n`);
+  loadEnvLocal();
+  /* Set the selected database explicitly even when .env.local is pinned.
+     Production's bucket credentials must come from the same file. */
+  process.env.DATABASE_URL = url;
+  if (values) {
+    for (const name of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
+      if (values[name]) process.env[name] = values[name];
+    }
+  }
   const client = new Client({ connectionString: url, ssl: sslDecisionFor(url).ssl });
+  /* pg emits fatal idle errors outside any query promise. A listener keeps
+     a read-only session's death from discarding a plan being built in memory.
+     During apply a dead connection makes the next query/commit reject. */
+  client.on("error", () => {
+    console.warn("Database connection ended unexpectedly. Apply cannot commit on it; a dry-run plan can still be saved.");
+  });
   await client.connect();
   try {
-    const where = (await client.query<{ db: string }>("select current_database() db")).rows[0];
-    console.log(`Target: ${withoutPassword(url) ?? "(unparsable)"}  (database=${where?.db})`);
-    console.log(`        ${local ? "local" : "REMOTE — PRODUCTION"}, from ${from}`);
-    console.log(`        ${args.apply === null ? "dry run: BEGIN READ ONLY, nothing is written" : `APPLY: writing ${args.apply}`}\n`);
-
     if (args.apply !== null) {
       const plan = parsePlan(JSON.parse(fs.readFileSync(args.apply, "utf8")));
       const result = await applyPlan(client, plan, target);

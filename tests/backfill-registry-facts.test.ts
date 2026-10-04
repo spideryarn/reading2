@@ -14,6 +14,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  backfillTargetOf,
+  sameTarget,
+  applyPlan,
   buildPlan,
   memoryBibliographicStore,
   parsePlan,
@@ -29,7 +32,7 @@ import { FetchFailure } from "../src/fetch.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const ARXIV_PDF = new Uint8Array(fs.readFileSync(path.join(ROOT, "evals/pdf/titles/arxiv-arnn-eeg-stamp/source.pdf")));
 
-const TARGET = { host: "127.0.0.1", port: "54362", database: "postgres" };
+const TARGET = { host: "127.0.0.1", port: "54362", database: "postgres", user: "postgres" };
 
 const PAPER = "Hippocampo-cortical coupling mediates memory consolidation during sleep";
 const PREPRINT = "Attentive recurrent networks for seizure detection in long recordings";
@@ -385,5 +388,47 @@ describe("parsePlan", () => {
     ["an id that is not a uuid", plan([{ ...row(), revisionId: "1; drop table" }])],
   ])("refuses %s", (_name, file) => {
     expect(() => parsePlan(file)).toThrow(PlanRefused);
+  });
+});
+
+
+describe("target identity", () => {
+  it("distinguishes projects using the same Supabase pooler", () => {
+    const a = backfillTargetOf("postgres://postgres.projecta:secret@aws-0-eu-west-2.pooler.supabase.com:6543/postgres");
+    const b = backfillTargetOf("postgres://postgres.projectb:secret@aws-0-eu-west-2.pooler.supabase.com:6543/postgres");
+    expect(sameTarget(a, b)).toBe(false);
+    expect(JSON.stringify(a)).not.toContain("secret");
+  });
+
+  it("refuses URLs whose target depends on pg environment defaults", () => {
+    expect(() => backfillTargetOf("postgres://postgres@localhost/postgres")).toThrow(PlanRefused);
+    expect(() => backfillTargetOf("postgres://localhost:54362/postgres")).toThrow(PlanRefused);
+  });
+
+  it("refuses old plans that cannot distinguish pooler projects", () => {
+    const { user: _missing, ...oldTarget } = TARGET;
+    expect(() => parsePlan({ version: 1, target: oldTarget, rows: [] })).toThrow(PlanRefused);
+  });
+});
+
+describe("apply lock ordering", () => {
+  it("locks articles by their actual slug in C order before touching revisions", async () => {
+    const a = article({ slug: "z" });
+    const b = article({ slug: "a" });
+    const statements: string[] = [];
+    await applyPlan({
+      query: async (sql) => {
+        statements.push(sql);
+        if (sql.includes("information_schema")) return { rows: [{}], rowCount: 1 };
+        if (sql.includes("from spideryarn.articles")) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      },
+    }, {
+      target: TARGET,
+      rows: [a, b].map((r) => ({ ...r, title: "", sourceKind: "html", outcome: "agreed", candidates: [], asked: [], write: { journal: "J" } } as PlanRow)),
+    }, TARGET);
+    const locks = statements.filter((sql) => sql.includes("from spideryarn.articles"));
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatch(/order by slug collate "C" for update/i);
   });
 });

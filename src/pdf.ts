@@ -743,24 +743,52 @@ export async function firstPagesText(
 
 /**
  * One page of `frontPagesWithStamps`, from pdf.js's items: the upright runs
- * joined as `firstPagesText` joins them, then the sideways runs on a line of
- * their own. **After, not in place**: pdf.js can hand a margin stamp over in
+ * joined as `firstPagesText` joins them, then the sideways runs with a
+ * non-whitespace boundary between independent regions. **After, not in place**:
+ * pdf.js can hand a margin stamp over in
  * the middle of a word (`isSideways` has the example), and an identifier
  * spliced into "normalization" is two broken strings. Split out so the
  * ordering can be tested without a PDF that happens to interleave them.
+ * Sideways fragments join only when their geometry makes them adjacent on
+ * the same baseline; unrelated labels and digits cannot become an identifier.
  */
 export function frontPageRecord(page: number, items: readonly unknown[]): { page: number; text: string } {
   let upright = "";
   let sideways = "";
+  let previous: { transform: number[]; width: number; eol: boolean } | undefined;
+  /* Whitespace alone is not a boundary: the arXiv matcher allows whitespace
+     after its label. A non-text marker prevents it crossing independent runs. */
+  const boundary = "\n\uFFFC\n";
   for (const item of items) {
     if (typeof item !== "object" || item === null || !("str" in item) || typeof item.str !== "string") continue;
     const transform = "transform" in item && Array.isArray(item.transform) ? (item.transform as number[]) : [];
     const run = item.str + ("hasEOL" in item && item.hasEOL ? "\n" : "");
-    if (isSideways(transform)) sideways += run;
-    else upright += run;
+    if (isSideways(transform)) {
+      const width = "width" in item && typeof item.width === "number" ? item.width : NaN;
+      let adjacent = false;
+      if (previous && !previous.eol && transform.length === 6 && previous.transform.length === 6) {
+        const p = previous.transform;
+        const length = Math.hypot(p[0]!, p[1]!);
+        const nextLength = Math.hypot(transform[0]!, transform[1]!);
+        const dx = p[0]! / length;
+        const dy = p[1]! / length;
+        const offsetX = transform[4]! - p[4]!;
+        const offsetY = transform[5]! - p[5]!;
+        adjacent = (
+          Number.isFinite(previous.width) && length > 0 && nextLength > 0 &&
+          Math.abs(transform[0]! / nextLength - dx) < 0.01 &&
+          Math.abs(transform[1]! / nextLength - dy) < 0.01 &&
+          Math.abs(offsetX * dy - offsetY * dx) < 1 &&
+          Math.abs(offsetX * dx + offsetY * dy - previous.width) < 2
+        );
+      }
+      if (sideways !== "" && !adjacent) sideways += boundary;
+      sideways += run;
+      previous = { transform, width, eol: "hasEOL" in item && item.hasEOL === true };
+    } else upright += run;
   }
   const tidy = (text: string) => text.replace(/[ \t]+/g, " ").trim();
-  return { page, text: [tidy(upright), tidy(sideways)].filter((part) => part !== "").join("\n") };
+  return { page, text: [tidy(upright), tidy(sideways)].filter((part) => part !== "").join(boundary) };
 }
 
 /**

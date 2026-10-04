@@ -63,7 +63,8 @@ describe("frontPageRecord", () => {
       { str: "arXiv:1607.06450v1 [stat.ML] 21 Jul 2016", transform: rotated, hasEOL: false },
       { str: "tion", transform: upright, hasEOL: true },
     ]);
-    expect(record).toEqual({ page: 1, text: "Layer normalization\narXiv:1607.06450v1 [stat.ML] 21 Jul 2016" });
+    expect(record.text).toContain("Layer normalization");
+    expect(ownIdsOfPdf([record])).toEqual(["arxiv:1607.06450"]);
   });
 
   it("is the upright text alone when nothing is sideways", () => {
@@ -75,5 +76,32 @@ describe("frontPageRecord", () => {
 
   it("skips an item that is not a text run", () => {
     expect(frontPageRecord(1, [{ type: "beginMarkedContent" }, { str: "x", transform: upright, hasEOL: false }]).text).toBe("x");
+  });
+});
+
+
+describe("identifier boundaries", () => {
+  it("cannot combine an upright arXiv label with unrelated sideways digits", () => {
+    const record = frontPageRecord(1, [
+      { str: "arXiv:", transform: [12, 0, 0, 12, 72, 700] },
+      { str: "2403.03276", transform: [0, 12, -12, 0, 20, 300] },
+    ]);
+    expect(ownIdsOfPdf([record])).toEqual([]);
+  });
+
+  it("cannot combine sideways runs on different baselines", () => {
+    const record = frontPageRecord(1, [
+      { str: "arXiv:", transform: [0, 12, -12, 0, 20, 300], width: 36 },
+      { str: "2403.03276", transform: [0, 12, -12, 0, 500, 336], width: 60 },
+    ]);
+    expect(ownIdsOfPdf([record])).toEqual([]);
+  });
+
+  it("keeps adjacent pieces of one sideways identifier", () => {
+    const record = frontPageRecord(1, [
+      { str: "arXiv:", transform: [0, 12, -12, 0, 20, 300], width: 36 },
+      { str: "2403.03276", transform: [0, 12, -12, 0, 20, 336], width: 60 },
+    ]);
+    expect(ownIdsOfPdf([record])).toEqual(["arxiv:2403.03276"]);
   });
 });

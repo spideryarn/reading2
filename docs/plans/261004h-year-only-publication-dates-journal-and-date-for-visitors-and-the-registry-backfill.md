@@ -208,6 +208,39 @@ Built as planned, in commit `698c9052d`. What differs from the text above:
   year-only paper and a visitor's `published`. A follow-up: the marker wants a day, and what a year
   should draw there is a product question.
 
+## Stage 2 as built, and GPT Sol's code review of it
+
+Built in commit `af716df39`. What differs from the plan:
+
+- `--prod` is the only way to production. With no flag the target is `.env.local` and must be local.
+- Candidates are wider than the import's: an id in a fetched article's own address is also asked
+  about. Title and author must still agree.
+- Sideways text is added after a page's upright text, not in place.
+- A conflict on one column refuses the whole row.
+- A lookup the registry did not answer is recorded and counted, so a cooled-down registry does not
+  read as "nothing agreed".
+- Only the PDF reader's tests were seen red before the code. The plan builder and apply were
+  proven by mutation afterwards.
+
+[The review](261004h-year-visitor-backfill-code-review-2-sol.md): five findings, each fixed by the
+reviewer with a test. I read the diff, ran the Postgres tests it could not, and kept all five.
+
+- **F9, P1.** The plan's target left out the username, which is what tells two projects apart on
+  Supabase's shared pooler. It is in the target now, and a plan without one is refused.
+- **F10, P1.** Apply locked articles in the plan file's order, which could deadlock with the app's
+  sweeps. It now locks them all first, in the app's own slug order.
+- **F11, P1.** A database connection that died while the registries were being asked could end the
+  process and lose the plan. It no longer does.
+- **F12, P2.** Joining a page's text regions could manufacture an identifier from two unrelated
+  fragments. Regions are kept apart.
+- **F13, P1.** Warnings and a connection attempt came before the `Target:` line. It is printed
+  first now.
+- [The postmortem](../postmortems/261004l-a-safe-query-does-not-prove-a-safe-production-script.md).
+
+What the reviewer says stays true and is accepted: a hand-edited plan file can put any allowed
+value in the four columns. Validation stops other columns and SQL; it does not prove the registry
+agreed. The plan file is what a person reads before applying, so this is the design.
+
 ## Log
 
-- 2026-10-04: plan written.
+- 2026-10-04: plan written, reviewed, built in two stages, each code-reviewed.
