@@ -343,7 +343,7 @@ async function claimWithSession(slug: string, names: StepName[]): Promise<Claime
 }
 
 function contextFor(slug: string): StepContext {
-  return { slug, report: () => {}, signal: new AbortController().signal, cacheArticle: false, power: "standard" };
+  return { slug, report: () => {}, preview: () => {}, signal: new AbortController().signal, cacheArticle: false, power: "standard" };
 }
 
 /** Run the job's one step to a `done` ending — the last commit of a walk. */

@@ -448,6 +448,7 @@ describe("the blocks step reports itself done under a Postgres-shaped store", ()
     slug: "empty-blocks-probe",
     url: "https://example.test/empty",
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   });

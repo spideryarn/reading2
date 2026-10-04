@@ -609,6 +609,7 @@ describe("the step", () => {
         power: "standard",
         slug: "a",
         report: () => {},
+        preview: () => {},
         signal: new AbortController().signal,
         cacheArticle: false,
       },

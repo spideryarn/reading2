@@ -211,6 +211,7 @@ describe("what a step counts as done", () => {
       power: "standard",
       slug: "nothing-here",
       report: () => {},
+      preview: () => {},
       signal: new AbortController().signal,
       // Nothing here sends the article anywhere, so there is no prefix to pay for.
       cacheArticle: false,

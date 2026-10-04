@@ -980,6 +980,8 @@ export type OverseerStore = {
    */
   setRecoveryResume(projection: RecoveryResumeProjection): boolean;
   append(events: readonly OverseerEvent[]): AppendResult;
+  /** Whether the lock is still this store's — the check every write makes, without the write. */
+  checkOwnership(): { ok: true } | { ok: false; reason: "lock-lost"; holder: LockHolder | null };
   checkpoint(update: CheckpointUpdate): CheckpointResult;
   readEvents(fromByte?: number): ReadEvents;
   close(): void;
@@ -3877,6 +3879,18 @@ class Store implements OverseerStore {
     if (stillOurs(this.lock, path)) return { ours: true };
     const read = readLock(path);
     return { ours: false, holder: read.kind === "held" ? read.holder : null };
+  }
+
+  /**
+   * The same check a write makes, for a caller that has been away and is about
+   * to write files of its own under this lock — the report drain, after each
+   * awaited git call. A result like a write's, so the daemon's `guard` treats a
+   * lost lock here exactly as it treats one found by `append`.
+   */
+  checkOwnership(): { ok: true } | { ok: false; reason: "lock-lost"; holder: LockHolder | null } {
+    this.assertOpen();
+    const owned = this.ownership();
+    return owned.ours ? { ok: true } : { ok: false, reason: "lock-lost", holder: owned.holder };
   }
 
   private assertOpen(): void {
