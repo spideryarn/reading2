@@ -173,4 +173,43 @@ green; a Sol code review per stage; the umbrella's two rows updated with the com
 
 ## What landed
 
-(filled in at the end of each stage)
+**Stage A, cluster 13 — `6d22232d0`, review fixes `91c303fd8`.** As planned, with these differences:
+
+- **The red control copies the repo's own config.** The first build used a scratch one-rule config,
+  because `--config-path` at the repo's file makes Biome ignore every path outside the repo. Sol's
+  code review (C1) showed the hole: with the rule configured *off*, `--only=` still runs it, at
+  `info`, and exits 0 — so a weakened `biome.jsonc` would have hidden behind the control. The
+  control now copies `biome.jsonc`, `.gitignore` and `package.json` into the scratch directory and
+  must fail under both the gate command and ordinary lint.
+- **The census is by AST, with a floor rather than an exact count** (15 callers, plus named
+  anchors), so a new compliant stage does not turn it red. Sol's C2 closed four bypasses (a cast, a
+  non-null assertion, a static computed property, a computed variable miscounted as a call).
+- **Knip reaches zero unused files in a full run.** `vitest.witness.config.ts` is an entry too (a
+  string handed to a spawned vitest). The two Vite configs are reported only by `--include files`,
+  not by a full run; the cause of that mode difference is not established, and `knip.jsonc` says so.
+  **Not done, on purpose:** making Knip's files check a gate.
+- `release-notes.ts` already exited 1 on a rejection, through Node's default; the handler makes it
+  explicit. Biome treats any function named `use…` as a hook, which the census helper tripped over.
+
+**Stage B, cluster 18 — `d7a6e64bf`, review fixes `b32e23b88`.** As planned, with these differences:
+
+- **Twelve dictation pairs, not eleven.** One on Quiz's Answer button was written across several
+  lines, so the single-line grep missed it (Sol, D1).
+- **Exporting `withPanel` broke ten tests** that mock Dock with a factory naming only `Dock`; they
+  now spread the real module. **Thirteen tests hand-build the dictation hook's result** and gained
+  `busy`; the next field on that hook meets the same stubs.
+- `GateSlider` and `BarSlider` survive as thin wrappers that hold each panel's own max, noun, title
+  and note. Nothing differed between either copy and the shared component.
+- An invalid date draws nothing, as before: the callers refuse it before formatting.
+
+**Reviews.** One plan round and one code round per stage; no P0 or P1 in either code review, so no
+second round. **Browser check:** a Sonnet subagent drove Chrome through
+Playwright against `d7a6e64bf`, at 1400px and 400px, on an article with 10 glossary terms and 8
+citations. Both sliders pass: label, value and count, arrow keys, the foot note, reset, the focus
+ring, and the same markup in both bands. Metadata's times read as sentences on four articles
+("fetched on Aug 26, 2026", "ran 29 days ago"); no console errors. **Not checked:** the FAQ band's
+slider beside them (that article's FAQ has none), and Sol's one-line Quiz fix, which landed after
+the server started. **One oddity, not from this change:** a stamp between 29.5 and 30 days old reads
+"30 days ago", because the shared `relativeAgo` rounds the label and cuts over on the exact age. It
+is the same everywhere that helper is used.
+
