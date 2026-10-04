@@ -40,11 +40,28 @@
  * scrolls so the header then leaves out of the top. So: three parts, only the
  * middle one scrolls, and a stable height once there is a transcript. The
  * matching rules are in styles.css § the floating panels.
+ *
+ * ## Three places, one panel
+ *
+ * Floating in the corner; docked over the Marginalia column (plan 261003p);
+ * or, on trial since 261004k, a card in that column level with the block it
+ * is about. `Reader` decides and this component is told (`dockRoom`, `card`).
+ * It is the same `<aside>` in all three, drawn through one portal whose
+ * container is moved — § One panel, one container, moved, below — so a
+ * change of place never remounts the conversation.
  */
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, MessageSquare, Square, X } from "lucide-react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, LoaderCircle, MessageSquare, Square, X } from "lucide-react";
 
-import type { BlockId, ChatAnchor, ThreadSummary } from "../types.js";
+import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation } from "./ChatPanel.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
@@ -59,6 +76,7 @@ import { CHAT_DOCK_INSET } from "./layout.js";
 import { useChat } from "./useChat.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
+import { withVoice } from "./voice.js";
 
 /**
  * What the panel is open on.
@@ -158,6 +176,94 @@ interface Props {
    * Optional, so a caller with no column has nothing to say.
    */
   dockRoom?: number | null;
+  /**
+   * **The card: a host in the anchor block's cell to be drawn in, and how wide
+   * — or `null` for the panel above** (docked if `dockRoom` says so, else
+   * floating). `Reader` decides, and hands a host only when it has one in
+   * hand, so "no card" always falls back to something visible.
+   * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md.
+   *
+   * It wins over `dockRoom` rather than replacing it: `Reader` passes both, and
+   * the room is what the panel falls back to the moment the host goes.
+   */
+  card?: ChatCardPlace | null;
+  /**
+   * **A count of the presses that asked for a conversation to be open** —
+   * the gutter's chip, the "?", a mark, the margin's line, the Comments drawer.
+   * They write `?thread=` and nothing else, so a press naming the conversation
+   * already open changes nothing this panel could otherwise see, and a
+   * collapsed card would sit there ignoring it (GPT Sol on the plan, F1).
+   */
+  reopen?: number;
+}
+
+/** Where the card goes: `Reader`'s host element, and layout.ts § `chatCard`'s width. */
+export interface ChatCardPlace {
+  host: HTMLElement;
+  width: number;
+}
+
+/**
+ * **The three places the one panel can be**, decided on every render from the
+ * two props. A union so that a card cannot also carry a dock's room, and the
+ * class, the style and the attach point are read off one value.
+ */
+type Placement =
+  | { kind: "float" }
+  | { kind: "dock"; room: number }
+  | { kind: "card"; host: HTMLElement; width: number };
+
+/**
+ * **What a move would lose, read before it happens.** Re-parenting a DOM node
+ * keeps React's state and drops the browser's: the focused element blurs, and
+ * every scroller under it goes back to the top.
+ */
+interface Kept {
+  focus: HTMLElement | null;
+  scroll: (readonly [HTMLElement, number])[];
+}
+
+function scrollOffsets(root: HTMLElement): Kept["scroll"] {
+  const out: (readonly [HTMLElement, number])[] = [];
+  for (const el of root.querySelectorAll<HTMLElement>("*")) if (el.scrollTop > 0) out.push([el, el.scrollTop]);
+  return out;
+}
+
+function keep(root: HTMLElement): Kept {
+  const at = document.activeElement;
+  return {
+    focus: at instanceof HTMLElement && root.contains(at) ? at : null,
+    scroll: scrollOffsets(root),
+  };
+}
+
+function putBack(kept: Kept): void {
+  for (const [el, top] of kept.scroll) if (el.scrollTop !== top) el.scrollTop = top;
+  /* `preventScroll`: the panel has moved, the reader has not. */
+  if (kept.focus?.isConnected && document.activeElement !== kept.focus)
+    kept.focus.focus({ preventScroll: true });
+}
+
+/**
+ * **The collapsed card's second line**: an answer on its way, else the first
+ * line of the latest answer, else how many questions there are. The cut is the
+ * one `summarise` makes for a summary's `lastLine` (src/routes.ts) — but this
+ * reads the live transcript, so it is right while the summary is still stale.
+ */
+type CardLine =
+  | { kind: "answering" }
+  | { kind: "answer"; text: string }
+  | { kind: "questions"; count: number };
+
+function cardLine(thread: ChatThread, streaming: boolean): CardLine {
+  if (streaming) return { kind: "answering" };
+  for (let i = thread.messages.length - 1; i >= 0; i--) {
+    const m = thread.messages[i];
+    if (m?.role !== "assistant") continue;
+    const first = m.text.trim().split(/\n/)[0]?.trim();
+    if (first) return { kind: "answer", text: first };
+  }
+  return { kind: "questions", count: thread.messages.filter((m) => m.role === "user").length };
 }
 
 export function ChatDialog({
@@ -173,6 +279,8 @@ export function ChatDialog({
   onCreated,
   onDropped,
   dockRoom = null,
+  card = null,
+  reopen = 0,
 }: Props) {
   const {
     threads,
@@ -415,9 +523,101 @@ export function ChatDialog({
    * reader has just typed, and the composer is where they are.
    */
   const [openedAs] = useState(() => target.kind);
-  /** The panel itself, so the cleanup can ask whether the focus it is about to destroy was inside it. */
+  /** The panel itself, so the draft → thread swap can ask whether the caret was inside it. */
   const box = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * ## One panel, one container, moved
+   *
+   * The `<aside>` is **always** drawn through a portal into one `<div>` this
+   * component makes once, and that `<div>` is what moves: into the card's host
+   * in the anchor block's cell, or back to `home` — a mount point where the
+   * panel has always been in the tree, inside `.reader`, so the docked rule
+   * still finds `--marg-left`. Plan 261004k § 1.
+   *
+   * **The portal's target never changes, so nothing under it remounts.** The
+   * first design switched `createPortal` on and off, and GPT Sol's probe (F5)
+   * showed what that costs: React keeps this component and remounts everything
+   * drawn through the portal, so `Conversation` lost its scroll position and an
+   * open question editor, and a running dictation was aborted by its own
+   * cleanup. A window dragged across the threshold with a question half typed,
+   * a section folded over an open chat, Marginalia switched off — each is a
+   * move, and none of them may be a remount.
+   *
+   * **Events are unaffected by where the container sits.** React bubbles
+   * through the React tree, so a click or a mouse-up in the card never reaches
+   * `TableView`'s handlers on the cell it is physically inside: no row is
+   * selected, no selection is read, no comment opens.
+   */
+  const [container] = useState(() => {
+    if (typeof document === "undefined") return null;
+    const el = document.createElement("div");
+    el.className = "chat-dialog-mount";
+    return el;
+  });
+  const home = useRef<HTMLDivElement | null>(null);
+  /**
+   * **Attached as the mount point's ref lands, not in an effect.** React
+   * attaches a ref before it runs the layout effects of the siblings after it,
+   * and the portal is the sibling after: so the panel is in the document by the
+   * time the composer inside it measures its own `scrollHeight` to size itself
+   * (ChatPanel.tsx § Height follows content). A detached textarea measures 0.
+   * tests/chat-dialog-in-column.test.tsx holds the order.
+   */
+  const setHome = useCallback(
+    (el: HTMLDivElement | null) => {
+      home.current = el;
+      if (el && container && container.parentNode === null) el.appendChild(container);
+    },
+    [container],
+  );
+
+  /* **A host that has left the document is not somewhere to draw** (plan § 3,
+     never nothing). `Reader` learns its host has gone from a ref callback, one
+     commit after the cell that held it was unmounted. */
+  const place: Placement =
+    card?.host.isConnected === true
+      ? { kind: "card", host: card.host, width: card.width }
+      : dockRoom !== null
+        ? { kind: "dock", room: dockRoom }
+        : { kind: "float" };
+  const cardHost = place.kind === "card" ? place.host : null;
+  const cardWidth = place.kind === "card" ? place.width : null;
+
+  /**
+   * **Read on the render that is about to move it**, for `caretWasInside`'s
+   * reason below: it is the only moment the answer exists. When the card's
+   * cell is unmounted in the same commit that takes the card away (Marginalia
+   * switched off, a resize under the threshold), the container has left the
+   * document — and the focus and every scroll offset with it — before any
+   * effect of this component runs.
+   */
+  const bound = cardHost ?? home.current;
+  const kept =
+    container !== null && bound !== null && container.parentNode !== null && container.parentNode !== bound
+      ? keep(container)
+      : null;
+  /* **No dependency list, on purpose**: the host can leave the document
+     without any prop of this component changing, so where the container is has
+     to be checked after every commit. It is two comparisons when nothing has
+     moved. */
+  useLayoutEffect(() => {
+    if (!container) return;
+    /* Asked again here: the host can be unmounted by the very commit this
+       effect belongs to. */
+    const to = cardHost?.isConnected ? cardHost : home.current;
+    if (!to) return;
+    /* The width is the host's to carry: it is the positioned box
+       `useMarginLayout` measures, and the panel is in flow inside it. */
+    if (to === cardHost && cardWidth !== null) {
+      const width = `${cardWidth}px`;
+      if (to.style.getPropertyValue("--chat-card-w") !== width)
+        to.style.setProperty("--chat-card-w", width);
+    }
+    if (container.parentNode !== to) to.appendChild(container);
+    if (kept) putBack(kept);
+  });
 
   /**
    * ## Opening an existing conversation lands the keyboard somewhere
@@ -442,7 +642,12 @@ export function ChatDialog({
    */
   useEffect(() => {
     if (openedAs !== "thread") return;
-    closeRef.current?.focus();
+    /* **`preventScroll`, for the card.** The floating and docked panels are
+       fixed to the window, where focus scrolls nothing. The card is in the
+       page: a cold `?thread=` with `at=` somewhere else would be dragged to
+       the card by this focus, against the position the address asked for
+       (plan 261004k § Focus must not scroll the page). */
+    closeRef.current?.focus({ preventScroll: true });
   }, [openedAs]);
 
   /**
@@ -486,7 +691,12 @@ export function ChatDialog({
     box.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
   }, [target.kind, caretWasInside]);
   useEffect(() => {
-    const panel = box.current;
+    /* **The mount point, not the `<aside>`**, since 261004k: the aside is in a
+       container that may be sitting in the card's host, which this component
+       does not own and React will not detach. `home` is React's, so it is the
+       element whose leaving the document means this dialog has. With no
+       document there is no portal and the aside is drawn in place. */
+    const panel: HTMLElement | null = container ? home.current : box.current;
     const back = opened.opener;
     const row = opened.row;
     return () => {
@@ -501,8 +711,8 @@ export function ChatDialog({
          real must be left on it. Here "real" means anything outside this
          panel. */
       const at = document.activeElement;
-      const ours = at === null || at === document.body || panel?.contains(at) === true;
-      if (!ours) return;
+      const ours =
+        at === null || at === document.body || (container ?? panel)?.contains(at) === true;
       /**
        * **Deferred, because a cleanup is not proof of an unmount.**
        *
@@ -526,6 +736,13 @@ export function ChatDialog({
        */
       queueMicrotask(() => {
         if (panel?.isConnected !== false) return;
+        /* A real unmount. The container goes with it — React removed the
+           `<aside>` from it, but in the card it is sitting in `Reader`'s host,
+           which nobody else will empty. Here rather than in a cleanup of its
+           own for the reason this is deferred: StrictMode's cycle must not
+           detach a panel that is staying. */
+        container?.remove();
+        if (!ours) return;
         if (back?.isConnected) {
           back.focus();
           return;
@@ -540,7 +757,7 @@ export function ChatDialog({
         document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
       });
     };
-  }, [opened]);
+  }, [opened, container]);
 
   /**
    * The answer currently arriving, if one is.
@@ -560,6 +777,72 @@ export function ChatDialog({
    * they have been having, and the button changes meaning accordingly.
    */
   const firstAnswer = streaming && thread?.messages.length === 2;
+
+  /**
+   * ## The card collapses to one line, and only the reader collapses it
+   *
+   * Plan 261004k § 5. An expanded card pushes every later note down the
+   * column; collapsed, it is about one note tall and they go back beside their
+   * blocks. **Nothing collapses by itself**: it opens expanded, always, and
+   * stays that way until the reader presses Collapse.
+   *
+   * **The conversation it was pressed on and the `reopen` count at the time,
+   * not a flag.** An id, for `timedOut`'s reason above: a boolean would carry
+   * over to the next conversation opened in the slot. And the count, so that
+   * any press asking for a conversation to be open — including this one, which
+   * is already open and so changes no other prop — makes the comparison below
+   * false, with no effect to reset anything (GPT Sol on the plan, F1).
+   *
+   * **Only the card, and only a conversation that has loaded.** The floating
+   * and docked panels have nothing to collapse to, so a card that falls back
+   * to one (a folded section, a narrower window) is shown whole and collapses
+   * again when it returns. A draft has no collapsed state: it is already
+   * short, and collapsing it would hide the box it was opened to type in.
+   */
+  const [shut, setShut] = useState<{ threadId: string; reopen: number } | null>(null);
+  const collapsible = place.kind === "card" && thread !== undefined;
+  const collapsed = collapsible && shut?.threadId === thread.id && shut.reopen === reopen;
+  const shutRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  /** The transcript's offsets at the press: a hidden scroller forgets its own. */
+  const shutScroll = useRef<Kept["scroll"]>([]);
+  const wasCollapsed = useRef(collapsed);
+  useLayoutEffect(() => {
+    if (wasCollapsed.current === collapsed) return;
+    wasCollapsed.current = collapsed;
+    if (!collapsed) putBack({ focus: null, scroll: shutScroll.current });
+    /* **The keyboard follows the press**, because the control that was pressed
+       has just been hidden: Collapse → the card, the card → Collapse. Only
+       when the focus was ours to move — a card expanded by a press on the
+       gutter's chip leaves the reader on the chip. */
+    const at = document.activeElement;
+    const ours = at === null || at === document.body || container?.contains(at) === true;
+    if (ours) (collapsed ? shutRef : collapseRef).current?.focus({ preventScroll: true });
+  }, [collapsed, container]);
+
+  /**
+   * **The composer is brought into view when it is typed in, in the card.**
+   *
+   * The fixed panel stays above an iPad's keyboard by its bottom anchor
+   * (`--kb-inset`); the card has none. It is page content, which Safari scrolls
+   * a focused field into view for, and its height is capped to the visible
+   * viewport — and this asks as well, on focus and whenever the visible
+   * viewport changes under a focused composer. `nearest`, so a composer already
+   * in view moves nothing. **Not proved on the box**: desktop Chrome at an
+   * iPad's size has no Safari keyboard (GPT Sol on the plan, F6).
+   */
+  const foot = useRef<HTMLElement>(null);
+  const inCard = place.kind === "card";
+  const showComposer = useCallback(() => {
+    const el = foot.current;
+    /* jsdom has no `scrollIntoView`. */
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is the re-run trigger — the keyboard arriving or leaving is a new visible viewport, and the effect reads the DOM.
+  useEffect(() => {
+    if (!inCard || !foot.current?.contains(document.activeElement)) return;
+    showComposer();
+  }, [inCard, visible, showComposer]);
 
   const ask = useCallback(
     (question: string) => {
@@ -704,12 +987,15 @@ export function ChatDialog({
     </button>
   );
 
-  return (
+  const line = collapsed ? cardLine(thread, streaming) : null;
+  const placeClass = place.kind === "card" ? " in-column" : place.kind === "dock" ? " docked" : "";
+
+  const aside = (
     <aside
       ref={box}
       /* The template form, like `.cmt-dialog`'s: tests/linky-is-scoped.test.ts
          looks for the scoping class at the start of a `className`. */
-      className={`chat-dialog${dockRoom === null ? "" : " docked"}`}
+      className={`chat-dialog${placeClass}${collapsed ? " collapsed" : ""}`}
       /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
          bottom of the layout viewport, which on iOS is behind the keyboard —
          and this one has a composer in it, so the keyboard is the normal state.
@@ -717,20 +1003,56 @@ export function ChatDialog({
 
          Docked, it keeps all of that and moves sideways only: the room and the
          inset are written here for dialogs.css § `.chat-dialog.docked` to read,
-         the inset from layout.ts so the stylesheet has no second copy of it. */
+         the inset from layout.ts so the stylesheet has no second copy of it.
+
+         In the column it has no geometry of its own to write — the host
+         carries the width — and keeps `--kb-inset` for its `max-height`. */
       style={
-        dockRoom === null
+        place.kind !== "dock"
           ? keyboardInsetStyle(visible)
           : ({
               ...keyboardInsetStyle(visible),
-              "--chat-dock-room": `${dockRoom}px`,
+              "--chat-dock-room": `${place.room}px`,
               "--chat-dock-inset": `${CHAT_DOCK_INSET}px`,
             } as CSSProperties)
       }
       role="dialog"
       aria-label="Chat about this passage"
     >
-      <header>
+      {/* **Collapsed, the whole card is this one button** — and the rest of the
+          panel is hidden rather than unmounted, because `Conversation` owns an
+          open question editor and a running dictation, and a press on Collapse
+          should cost the reader neither. The title is the reader's own words
+          and the answer's line the model's, each in its face (fonts.md). */}
+      {collapsed && line && (
+        <button
+          ref={shutRef}
+          type="button"
+          className="chat-card-shut"
+          aria-expanded={false}
+          title="Open this conversation again"
+          onClick={() => setShut(null)}
+        >
+          <span className="chat-card-head">
+            <MessageSquare size={12} aria-hidden="true" />
+            <span className="chat-dialog-title">{thread.title}</span>
+            <ChevronDown size={14} aria-hidden="true" />
+          </span>
+          {line.kind === "answering" ? (
+            <span className="chat-card-line">
+              <LoaderCircle className="chat-dialog-spinner" size={12} aria-hidden="true" />
+              answering…
+            </span>
+          ) : line.kind === "answer" ? (
+            <span className={withVoice("chat-card-line", "ai")}>{line.text}</span>
+          ) : (
+            <span className="chat-card-line">
+              {line.count} {line.count === 1 ? "question" : "questions"}
+            </span>
+          )}
+        </button>
+      )}
+      <header hidden={collapsed}>
         <span className="chat-dialog-label">
           <MessageSquare size={12} aria-hidden="true" />
           {target.kind === "draft" ? (
@@ -744,10 +1066,28 @@ export function ChatDialog({
             )
           )}
         </span>
-        {stopControl}
+        <span className="chat-dialog-tools">
+          {collapsible && (
+            <button
+              ref={collapseRef}
+              type="button"
+              className="chat-dialog-collapse"
+              aria-expanded={true}
+              aria-label="Collapse"
+              title="Collapse to one line. The conversation stays open."
+              onClick={() => {
+                if (container) shutScroll.current = scrollOffsets(container);
+                setShut({ threadId: thread.id, reopen });
+              }}
+            >
+              <ChevronUp size={18} aria-hidden="true" />
+            </button>
+          )}
+          {stopControl}
+        </span>
       </header>
 
-      <div className="chat-dialog-body">
+      <div className="chat-dialog-body" hidden={collapsed}>
         {target.kind === "draft" && target.help ? (
           /* **A help draft is a draft for one paintless instant, and must not
               say so.** The auto-send is a passive effect, and React does not
@@ -856,7 +1196,8 @@ export function ChatDialog({
         )}
       </div>
 
-      <footer>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: not an interaction — the footer only hears the focus that bubbles from the composer inside it, to bring that composer into view (§ showComposer). */}
+      <footer ref={foot} hidden={collapsed} onFocus={inCard ? showComposer : undefined}>
         {/* Nothing under a help draft either, for the reason the body gives:
             the question is already sent, so a composer offering to send it is
             the same contradiction one row down. */}
@@ -961,5 +1302,15 @@ export function ChatDialog({
         {error && <p className="chat-dialog-error">{error}</p>}
       </footer>
     </aside>
+  );
+
+  /* No document, no container to portal into: drawn in place. */
+  if (!container) return aside;
+  return (
+    <>
+      {/* Before the portal, on purpose — `setHome` above. */}
+      <div ref={setHome} className="chat-dialog-home" />
+      {createPortal(aside, container)}
+    </>
   );
 }

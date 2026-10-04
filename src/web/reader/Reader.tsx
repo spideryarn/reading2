@@ -23,6 +23,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
@@ -144,7 +145,17 @@ import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
 import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, chatDock, fitView, NARROW_WINDOW_MAX } from "../layout.js";
+import {
+  bandCoversProse,
+  bandShapeFor,
+  BLOCK_CHAT_IN_COLUMN,
+  CHAT_CARD_HOST_ATTR,
+  chatCard,
+  chatDock,
+  fitView,
+  NARROW_WINDOW_MAX,
+} from "../layout.js";
+import { isFolded, subscribeFold } from "../fold.js";
 import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
@@ -154,9 +165,10 @@ import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
 import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
-import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
+import { type ChatCardPlace, ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
   anchored,
+  askedBesideCard,
   askedQuestions,
   countByBlock,
   helpThreadFor,
@@ -1700,6 +1712,57 @@ export function Reader({
      subtractions, and the panel must get a new value on a resize without
      being remounted. */
   const chatDockRoom = chatDock(fit, windowWidth);
+  /**
+   * **The block chat as a card in the column, level with its block** —
+   * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md. On
+   * trial; `BLOCK_CHAT_IN_COLUMN` is the switch, read here and nowhere else,
+   * and on `"dock"` everything below is `null` and the panel is 261003p's.
+   *
+   * **Never nothing** (§ 3). The card needs all of: the switch, the column
+   * showing with room (`chatCard`), a chat anchored to a block, that block not
+   * folded away, and a host element actually in hand. Any one missing and
+   * `ChatDialog` is handed no card, so it is docked if `chatDockRoom` says so
+   * and floating otherwise — an unanchored thread, a block the table is not
+   * drawing, and the one commit before the host's ref lands all show the
+   * panel they showed before.
+   *
+   * **A fold hides a cell with `display: none` and unmounts nothing**
+   * (fold.ts § `foldCss`), so "is there a host" cannot be the test for it: the
+   * host would still be in hand, inside a cell nobody can see. Asked of the
+   * fold store directly, and subscribed, because folding re-renders nothing
+   * here otherwise (GPT Sol on the plan, F4). A boolean, so a fold elsewhere
+   * in the article does not wake `Reader`.
+   */
+  const chatCardWidth =
+    BLOCK_CHAT_IN_COLUMN === "card" && marginRoom ? chatCard(fit, windowWidth, rootFontPx) : null;
+  const chatBlockFolded = useSyncExternalStore(
+    subscribeFold,
+    () => chatOpenBlock !== null && isFolded(chatOpenBlock),
+    () => false,
+  );
+  /** The block whose cell gets the card's host, or `null` for no card. */
+  const chatCardBlock = chatCardWidth !== null && !chatBlockFolded ? chatOpenBlock : null;
+  /* The host's DOM node, handed up by its ref. A `useState` setter, so the ref
+     is one function for the life of the reader and `marginNotes` below can
+     depend on it without ever changing because of it. */
+  const [chatCardHost, setChatCardHost] = useState<HTMLDivElement | null>(null);
+  const chatCardPlace: ChatCardPlace | null =
+    chatCardBlock !== null && chatCardHost !== null && chatCardWidth !== null
+      ? { host: chatCardHost, width: chatCardWidth }
+      : null;
+  /* The conversation the card is showing, so the margin can leave out its own
+     line for it (§ 6). From `chatCardBlock`, not the host: the line and the
+     card swap in one render rather than the line outliving it by a commit. */
+  const chatCardThread = chatCardBlock !== null && overlay?.kind === "thread" ? overlay.threadId : null;
+  /**
+   * **A count of the presses that asked for a conversation to be open** —
+   * `ChatDialog.reopen`. The chip, the "?", a mark and the drawer only write
+   * `?thread=`, so a press that names the conversation already open changes
+   * nothing the panel could see, and a card the reader had collapsed would sit
+   * there ignoring it (GPT Sol on the plan, F1). Only the setter is used by
+   * the callbacks below, so none of them changes identity because of it.
+   */
+  const [chatReopen, setChatReopen] = useState(0);
   /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
      questions the reader asked sit in the margin too and open through it
      (plan 261002j). */
@@ -1969,6 +2032,7 @@ export function Reader({
       setChatDraft(null);
       void setNote(null);
       void setThread(id);
+      setChatReopen((n) => n + 1);
     },
     [setNote, setThread],
   );
@@ -2035,7 +2099,9 @@ export function Reader({
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
-      asked: marginViewer === "owner" ? askedList : null,
+      /* Less the conversation drawn as a card on its block, which would
+         otherwise say *Question* directly above itself (plan 261004k § 6). */
+      asked: marginViewer === "owner" ? askedBesideCard(askedList, chatCardThread) : null,
     });
     const out = new Map<BlockId, ReactElement>();
     for (const [blockId, notes] of byBlock)
@@ -2043,6 +2109,34 @@ export function Reader({
         blockId,
         <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
       );
+    /* **The card's host: first in its block's cell, above the block's own
+       notes**, so the card is the thing level with the paragraph and an opened
+       note cannot push the chat away from it (GPT Sol on the plan, F3). Where
+       an earlier block's notes already run down past this one, the card is
+       pushed below them like any note.
+
+       `data-marg-note` is what `useMarginLayout` collects, so the notes after
+       it are pushed below the card and come back when it collapses or closes;
+       its ResizeObserver already re-runs as a streamed answer grows. The host
+       is the positioned, measured box (dialogs.css § `.chat-card-host`) and
+       `ChatDialog` attaches its panel inside it, in flow, so the host's height
+       is the card's. Nothing here depends on the panel's callbacks, which
+       change on every render: the memo holds, and `memo(TableView)` with it. */
+    if (chatCardBlock !== null) {
+      const notes = out.get(chatCardBlock);
+      out.set(
+        chatCardBlock,
+        <>
+          <div
+            ref={setChatCardHost}
+            className="chat-card-host"
+            {...{ [CHAT_CARD_HOST_ATTR]: "" }}
+            data-marg-note=""
+          />
+          {notes}
+        </>,
+      );
+    }
     return out;
   }, [
     marginRoom,
@@ -2059,6 +2153,8 @@ export function Reader({
     askedList,
     marginViewer,
     openAskedFromMargin,
+    chatCardBlock,
+    chatCardThread,
   ]);
   useMarginLayout(marginRoom, marginNotes);
 
@@ -2127,6 +2223,8 @@ export function Reader({
         setChatDraft(null);
         void setNote(null);
         void setThread(existing.id);
+        /* It may be the one already open, collapsed in the column. */
+        setChatReopen((n) => n + 1);
         return;
       }
       startChatAboutBlock(blockId);
@@ -2195,6 +2293,8 @@ export function Reader({
         setChatDraft(null);
         void setNote(null);
         void setThread(existing.id);
+        /* As the chip: the answer they already bought may be collapsed. */
+        setChatReopen((n) => n + 1);
         return;
       }
       void setNote(null);
@@ -3674,6 +3774,10 @@ export function Reader({
                would do nothing. ChatDialog.tsx § `onNewConversation`. */
             onNewConversation={startChatAboutBlock}
             dockRoom={chatDockRoom}
+            /* The card in the column, when there is one to draw in; it wins
+               over the room, and the room is what it falls back to. */
+            card={chatCardPlace}
+            reopen={chatReopen}
             onCreated={owner.chatAnchors.add}
             onDropped={owner.chatAnchors.drop}
           />

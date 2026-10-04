@@ -9,10 +9,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  BLOCK_CHAT_IN_COLUMN,
+  CHAT_CARD_MAX,
   CHAT_DOCK_GUTTER,
   CHAT_DOCK_INSET,
   CHAT_DOCK_MIN,
+  chatCard,
   chatDock,
+  MARG_GAP_REM,
   fitView,
   MARG_IDEAL,
   MARG_MIN,
@@ -288,5 +292,100 @@ describe("the chat panel's dock in the marginalia column", () => {
     }
     expect(docked).toBeGreaterThan(500);
     expect(floated).toBeGreaterThan(500);
+  });
+});
+
+/**
+ * `chatCard` — the block chat as a card in the column, level with its block
+ * (option B), and how wide it is there.
+ * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md § 4.
+ */
+describe("the chat card in the marginalia column", () => {
+  const MARG_CSS = readFileSync(
+    new URL("../src/web/styles/marginalia.css", import.meta.url),
+    "utf8",
+  );
+
+  it("is on trial as the card, and the way back is one word", () => {
+    expect(BLOCK_CHAT_IN_COLUMN).toBe("card");
+  });
+
+  /* The card starts `--marg-gap` past the cell's edge, so the gap comes out of
+     its room. The stylesheet's value and the arithmetic's are one number. */
+  it("takes the same gap out of the room that the stylesheet puts before the card", () => {
+    expect(MARG_CSS).toContain(`--marg-gap: ${MARG_GAP_REM}rem;`);
+  });
+
+  it("is no card without a column, however much room there is", () => {
+    for (const windowWidth of [390, 820, 1440, 2560]) {
+      const fit = fitView({ windowWidth });
+      expect(fit.margW).toBe(0);
+      expect(chatCard(fit, windowWidth)).toBeNull();
+    }
+    expect(chatCard(fitView({ windowWidth: 390, margin: true }), 390)).toBeNull();
+  });
+
+  /* Greg's layout, and GPT Sol's F2 on the plan: without the gap the card was
+     280px starting 20px past 1152, and ran 12px over a 1440px window. */
+  it("fits the column's room beside a Structure band at 1440px, gap and gutter out", () => {
+    const windowWidth = 1440;
+    const fit = fitView({ windowWidth, modeBand: true, bandShape: "structure", margin: true });
+    expect(fit.margLeft).toBe(1152);
+    const width = chatCard(fit, windowWidth);
+    expect(width).toBe(1440 - 1152 - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER);
+    expect(fit.margLeft + MARG_GAP_REM * 16 + (width ?? 0) + CHAT_DOCK_GUTTER).toBe(windowWidth);
+  });
+
+  /* Report spya-ntb7p6: on a very wide screen the card is wider than the
+     notes' 288px, up to a measure for chat text and no further. */
+  it("is wider than the notes on a very wide window, capped at 36rem", () => {
+    expect(CHAT_CARD_MAX).toBe(576);
+    const windowWidth = 2560;
+    const width = chatCard(fitView({ windowWidth, margin: true }), windowWidth);
+    expect(width).toBe(CHAT_CARD_MAX);
+    expect(width).toBeGreaterThan(MARG_IDEAL);
+  });
+
+  it("is no card one pixel under the dock's minimum, and one at it", () => {
+    const windowWidth = 1600;
+    const fit = fitView({ windowWidth, margin: true });
+    const withRoom = (room: number) => ({
+      ...fit,
+      margLeft: windowWidth - MARG_GAP_REM * 16 - CHAT_DOCK_GUTTER - room,
+    });
+    expect(chatCard(withRoom(CHAT_DOCK_MIN - 1), windowWidth)).toBeNull();
+    expect(chatCard(withRoom(CHAT_DOCK_MIN), windowWidth)).toBe(CHAT_DOCK_MIN);
+  });
+
+  it("measures the gap in the reader's root size, as the stylesheet's rem does", () => {
+    const windowWidth = 1600;
+    const fit = { ...fitView({ windowWidth, margin: true }), margLeft: 1200 };
+    expect(chatCard(fit, windowWidth, 20)).toBe(1600 - 1200 - MARG_GAP_REM * 20 - CHAT_DOCK_GUTTER);
+  });
+
+  /* Never past the window's right edge: gap + card + gutter is at most what is
+     right of the column, at every width, band or none, and every root. */
+  it("never overruns the window", () => {
+    let cards = 0;
+    const SHAPES = ["standard", "structure", "wide", "roomy"] as const;
+    for (const c of CASES) {
+      const fits = [
+        fitView({ ...c, margin: true }),
+        ...SHAPES.map((bandShape) => fitView({ ...c, modeBand: true, bandShape, margin: true })),
+      ];
+      for (const fit of fits) {
+        const width = chatCard(fit, c.windowWidth, c.rootFontPx);
+        if (width === null) continue;
+        cards += 1;
+        expect(fit.margW, JSON.stringify(c)).toBeGreaterThan(0);
+        expect(width, JSON.stringify(c)).toBeGreaterThanOrEqual(CHAT_DOCK_MIN);
+        expect(width, JSON.stringify(c)).toBeLessThanOrEqual(CHAT_CARD_MAX);
+        expect(
+          fit.margLeft + MARG_GAP_REM * c.rootFontPx + width + CHAT_DOCK_GUTTER,
+          JSON.stringify(c),
+        ).toBeLessThanOrEqual(c.windowWidth + 1e-6);
+      }
+    }
+    expect(cards).toBeGreaterThan(500);
   });
 });
