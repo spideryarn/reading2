@@ -246,13 +246,67 @@ It also confirmed the entry-point sweep, that the unified sentence is true of bo
 that `Meter.saw` overwrites rather than accumulates (no double count), and that the leaf module, the
 census and the effort helper are each worth their keep.
 
+## What landed
+
+| Stage | Commit | Red first |
+|---|---|---|
+| 1, R2 | `8398d68a5` | the table failed 9 rows on the gateway's old parser and 11 on the fetcher's |
+| 2, R3 | `7cc5c3cb1` | the census (13 files against 4) and the operator line (0 against 1); the seven no-key cases were green before and after |
+| 3, F11 | `9dfdc96e5` | a priced 429 left `source: "none"` on both seams |
+| 4, R6 | `17ac8705e` | both runners threw their old sentences |
+| 5, X13a | `46b94d73f` | empty and `hgih` went through at all three sites |
+| review fixes | `20507c82d` | below |
+
+Built by an Opus subagent from this plan; I read the diffs and ran the gates.
+
+**Decided while building, beyond the plan:**
+
+- The census pins the *enclosing function* of each `loadEnvLocal()` call, not only a count per file,
+  and reports an aliased import or a renamed re-export as a finding.
+- F11 is one shared function, `meterBody`, used by `openRouterJson` and by `refuse`.
+- `tests/messages.test.ts` needed no list edit: it round-trips every exported `ReaderFacingFailure`.
+- `docs/project/copy.md` never named either constant, so it is unchanged.
+
+## GPT Sol's code review
+
+[The review](261004c-fifth-sweep-cluster-12-code-review-sol.md), verdict *land after these fixes*.
+It ran eight mutations; the suite missed two, and it closed both.
+
+- **F5 (P1, fixed by Sol):** the builder had widened the UTC rule to "append `GMT` to any date
+  whose zone is not recognised", which broke a date naming some other zone. `GMT` now goes only on
+  the complete zone-less shapes. Kept as written.
+- **F6 (P2, fixed by Sol):** the census missed a renamed re-export. Kept.
+- **F7 (P2, reported):** `evals/simple/probe.ts` offered a `max` arm that only ever worked through
+  the unchecked cast. `Effort` never included `max` and no recorded run used that arm, so I removed
+  it from the probe. Widening `EFFORTS` to four values is the option passed over: nothing in
+  production asks for `max`, and the day an eval wants it is the day to add it, with its budget.
+- **F8 (P2, fixed by Sol):** the no-key runner tests now also assert no *pending* spend entry.
+
+One round. Nothing was overruled.
+
+## Known and left
+
+- With no key, a runner now logs two lines: the gateway's, which names the variable, and its own
+  generic "no reply from …" failure line. Sol judged that acceptable; the first line carries the
+  diagnosis.
+- `docs/project/overseer-queue.md` row K ("one missing-key check for seven readers") is done by
+  stage 2. The queue is the Overseer's; reported in the debrief, not edited here.
+- No refusal on the chat wire has been observed carrying `usage`. F11 is a proof about our code.
+
+## Gates
+
+- `npm run typecheck`: green, on the tree merged with `origin/dev`.
+- Full suite (`npm test`, in tmux, on the merged tree with the review fixes in): green, 1518 files
+  passed and 1 skipped, 32,669 tests passed and 37 skipped, exit 0.
+- `npm run check` was not run separately: it is the same suite again.
+
 ## Progress
 
 - [x] GPT Sol review of this plan
-- [ ] Stage 1 (R2)
-- [ ] Stage 2 (R3)
-- [ ] Stage 3 (F11)
-- [ ] Stage 4 (R6)
-- [ ] Stage 5 (X13a)
-- [ ] GPT Sol code review
-- [ ] Gates, umbrella row, push
+- [x] Stage 1 (R2)
+- [x] Stage 2 (R3)
+- [x] Stage 3 (F11)
+- [x] Stage 4 (R6)
+- [x] Stage 5 (X13a)
+- [x] GPT Sol code review
+- [x] Gates, umbrella row, push
