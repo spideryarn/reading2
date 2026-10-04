@@ -61,7 +61,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     if (url.startsWith("/api/library/") && init?.method === "PATCH") return patchAnswer(body);
     return new Response(null, { status: 404 });
   };
-  return { ...real, apiFetch, leavingFetch: () => {} };
+  return { ...real, apiFetch, leavingFetch: () => Promise.resolve() };
 });
 
 /* The microphone is not what this file is about; feedback-dialog.test.tsx stubs it the same way. */

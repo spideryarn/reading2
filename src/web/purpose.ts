@@ -48,13 +48,17 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
  *
  * One copy, for the box on Metadata, the first-open prompt and the profile
  * panel, which until 2026-10-02 each wrote this request out for themselves.
+ *
+ * Forgets the link summaries as it sends and again when the write settles —
+ * useProfile.ts § `leaveProfile` says why it takes both.
  */
 export function leavePurpose(slug: string, text: string): void {
-  leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
+  forgetSummaries();
+  void leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ purpose: text === "" ? null : text }),
-  });
+  }).then(forgetSummaries);
 }
 
 /**

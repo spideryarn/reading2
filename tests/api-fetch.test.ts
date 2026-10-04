@@ -38,6 +38,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { apiFetch, leavingFetch } = await import("../src/web/lib/api.js");
+const { writeCount } = await import("../src/web/lib/writes.js");
 
 /** The last `fetch` we were handed, so a test can look at what went out. */
 function stubFetch(...responses: Response[]) {
@@ -255,6 +256,45 @@ describe("leavingFetch", () => {
     const calls = stubFetch(ok());
     leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
     expect(calls[0]![1].keepalive).toBe(true);
+  });
+
+  /**
+   * **It answers with a promise that settles when the request does, and never
+   * rejects.** `leaveProfile` and `leavePurpose` throw the link summaries away
+   * again at that moment (src/web/useProfile.ts), and both halves matter: one
+   * that resolved at once would forget before the write had landed, and one
+   * that rejected would be an unhandled rejection on a page that is leaving.
+   */
+  it("settles when the request does, and not before", async () => {
+    let land!: (res: Response) => void;
+    vi.stubGlobal("fetch", () => new Promise<Response>((resolve) => (land = resolve)));
+    let settled = false;
+    const before = writeCount();
+    void leavingFetch("/api/reader", { method: "PATCH", body: "{}" }).then(() => (settled = true));
+    expect(writeCount()).toBe(before + 1);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(writeCount()).toBe(before + 1);
+    land(ok());
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(settled).toBe(true);
+    expect(writeCount()).toBe(before + 2);
+  });
+
+  it("resolves, rather than rejecting, when the request fails or is never sent", async () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const before = writeCount();
+    const sent = leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
+    expect(writeCount()).toBe(before + 1);
+    await expect(sent).resolves.toBeUndefined();
+    expect(writeCount()).toBe(before + 2);
+    /* The two refusals that send nothing: somebody else's origin, and a body
+       over the keepalive budget. */
+    await expect(leavingFetch("https://evil.test/collect", { method: "POST" })).resolves.toBeUndefined();
+    await expect(
+      leavingFetch("/api/reader", { method: "PATCH", body: "x".repeat(70 * 1024) }),
+    ).resolves.toBeUndefined();
+    expect(writeCount()).toBe(before + 2);
   });
 
   /**

@@ -59,9 +59,21 @@ export async function saveProfile(text: string): Promise<string> {
    be killed inside that await — no error, no request in the network tab, just a
    lost sentence. `leavingFetch` uses the token the SDK already holds and starts
    at once; a token that expired in the last few seconds is refused, which is
-   strictly better than not sending. GPT Sol, 2026-08-26. */
+   strictly better than not sending. GPT Sol, 2026-08-26.
+
+   **And it forgets the link summaries, twice** (2026-10-04). This fires on
+   unmount as well as `pagehide`, so the page is usually still here afterwards
+   — and a `pagehide` can be a bfcache suspend that brings it back, cache and
+   all. Once as the write leaves, so the old answers stop being shown; and again
+   when it settles, which is the one that counts: a summary asked for in between
+   was written from the profile the server still had, and the second call
+   throws that away too. `saveProfile` needs only the one because it calls
+   after the response. tests/link-summary-forget.test.tsx. */
 export function leaveProfile(text: string): void {
-  leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) });
+  forgetSummaries();
+  void leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) }).then(
+    forgetSummaries,
+  );
 }
 
 export type UseProfile = AutosavedText;
