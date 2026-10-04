@@ -622,11 +622,17 @@ export type DaemonOptions = {
    * Injected, like the passes above, because the drain shells out to git and
    * this file does not. It is handed `store.register` — the live one — so its
    * execution comparison is against what this daemon verified, which is the
-   * whole reason the daemon rather than the CLI is the writer. It is synchronous
-   * and relies on this process holding `overseer.lock` for its exclusion, so
-   * there is nothing to await on the way out.
+   * whole reason the daemon rather than the CLI is the writer.
+   *
+   * **AWAITED, since plan 261004g: the drain waits on git.** It still relies on
+   * this process holding `overseer.lock` for its exclusion, and it writes files
+   * of its own under that lock, so three things follow and the daemon owns all
+   * three: one drain at a time; the one in flight is settled before the store
+   * is released, on every way out; and it is handed `stillOwner`, which it must
+   * ask after every await and before it writes, because the lock can go — or
+   * the daemon be told to stop — while it was away.
    */
-  reports?: { intervalMs?: number; drain: (register: SessionRegister) => ReportDrainOutcome };
+  reports?: { intervalMs?: number; drain: (register: SessionRegister, stillOwner: () => boolean) => Promise<ReportDrainOutcome> };
 };
 
 /**
@@ -839,9 +845,36 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * to retry: it means two daemons, and the loser stops rather than interleaves
    * its events with the winner's.
    */
+  // THE SOURCE'S OWN SIGNAL: the caller's, plus this daemon finding its lock
+  // gone. Setting `stopped` halts every timer's work but wakes nothing, and the
+  // main loop is usually parked in `source.next()` — which, between payloads,
+  // can stay parked for as long as the dashboard only pings. Without this a
+  // daemon that lost its lock stopped writing and then never returned: no
+  // settlement, no exit, and systemd with nothing to replace. GPT Sol's F1 on
+  // plan 261004g.
+  const sourceStop = new AbortController();
+  if (options.signal.aborted) sourceStop.abort();
+  else options.signal.addEventListener("abort", () => sourceStop.abort(), { once: true });
+
   const guard = (result: { ok: true } | { ok: false; reason: "lock-lost"; holder: LockHolder | null }): boolean => {
     if (result.ok) return true;
+    // SAID ONCE, at the write that found it. The daemon used to stop here
+    // without a word until it returned, so a log reader saw a daemon go quiet
+    // and a test had nothing to wait on but a clock. A log line and not a note:
+    // the note log is the store's, and the store is no longer ours to write.
+    // HALT FIRST, SAY IT SECOND: a log that throws must not be the reason a
+    // daemon without its lock goes on believing it has one.
+    const first = stopped === null;
     stopped = { kind: "lock-lost", holder: result.holder };
+    sourceStop.abort();
+    if (first) {
+      try {
+        const holder = result.holder === null ? "nobody readable" : `pid ${result.holder.pid}, instance ${result.holder.instanceId}`;
+        log(`${now().toISOString()} the lock is gone (now held by ${holder}): this daemon writes nothing more and stops`);
+      } catch {
+        /* Nothing to say it with. The outcome the daemon returns says it too. */
+      }
+    }
     return false;
   };
 
@@ -1573,21 +1606,55 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * fleet. A pass that refused or left something pending says so once.
    */
   const reportOptions = options.reports;
+  /**
+   * What the drain asks after every await, before it writes. Three ways to have
+   * lost the right: a write already found the lock gone; the daemon was told to
+   * stop; or the lock went while the drain was out and nothing has written
+   * since — which only looking finds, and finding it halts the daemon through
+   * `guard` exactly as a refused write would.
+   *
+   * `leaving` is the second of those said by the daemon itself: a source that
+   * ended or threw aborts no signal and sets no `stopped`, and a drain that
+   * went on recording through the settlement would be a daemon that is on its
+   * way out and still taking work (GPT Sol's F2 on plan 261004g).
+   */
+  let leaving = false;
+  const stillOwner = (): boolean => halted() === null && !leaving && !options.signal.aborted && guard(store.checkOwnership());
+  // ONE AT A TIME, and held so `settleInFlight` can wait for it: the drain's
+  // exclusion is this process's lock, which must not be released under it.
+  let reportsRunning: Promise<void> | null = null;
   const reportsTicker =
     reportOptions === undefined
       ? null
       : setInterval(() => {
-          if (halted() !== null) return;
+          if (halted() !== null || reportsRunning !== null) return;
           const at = now().toISOString();
-          try {
-            const outcome = reportOptions.drain(store.register);
-            write(conditions.restore("reports", at, "a report drain pass completed"));
-            if (outcome.refused > 0 || outcome.pending > 0) {
-              log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
-            }
-          } catch (cause) {
-            write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
-          }
+          reportsRunning = (async () => reportOptions.drain(store.register, stillOwner))()
+            .then((outcome) => {
+              // THE LOCK IS SOMEBODY ELSE'S: the note log is theirs too.
+              if (halted() !== null) return;
+              // A pass cut short because the daemon is stopping is neither a
+              // completed pass nor a failed one, so it says nothing about the
+              // condition either way.
+              if (outcome.stoppedBy === "abandoned") return;
+              write(conditions.restore("reports", at, "a report drain pass completed"));
+              if (outcome.refused > 0 || outcome.pending > 0) {
+                log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
+              }
+            })
+            .catch((cause: unknown) => {
+              if (halted() !== null) return;
+              try {
+                write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
+              } catch (failure) {
+                // The note log is what broke. Said here so the rejection is
+                // not an unhandled one, which would take the process down.
+                log(`the report drain failed and that could not be noted: ${failure instanceof Error ? failure.message : String(failure)}`);
+              }
+            })
+            .finally(() => {
+              reportsRunning = null;
+            });
         }, reportOptions.intervalMs ?? REPORTS_INTERVAL_MS);
   reportsTicker?.unref?.();
 
@@ -1611,6 +1678,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
     }
+    // THE REPORT DRAIN, which writes `reports.jsonl` and its inbox under this
+    // process's lock and nothing else (plan 261004g). It is out for one git
+    // call at most — about three seconds, deadline plus grace — and comes back
+    // to a `stillOwner` that says no, so it stops before its next write.
+    if (reportsRunning !== null) await reportsRunning;
     // THE VIEW PASS, in a loop: one that finishes with a request pending starts
     // the next, and that one writes through the store too.
     while (viewRunning !== null || recoveryRunning !== null || resumeRunning !== null) {
@@ -1665,6 +1737,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and systemd unable to replace the process. So the timers stop BEFORE any
   // settlement, and again in `finally`, where clearing twice is harmless.
   const stopTimers = (): void => {
+    // Every way out comes through here before it settles anything.
+    leaving = true;
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
     if (usageTicker !== null) clearInterval(usageTicker);
@@ -1685,7 +1759,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // should be: an absent option means the module's own default.
     for await (const message of makeSource({
       baseUrl: options.baseUrl,
-      signal: options.signal,
+      signal: sourceStop.signal,
       ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
       ...(options.streamRetryAfterMs === undefined ? {} : { streamRetryAfterMs: options.streamRetryAfterMs }),
     })) {

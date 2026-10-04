@@ -16,20 +16,31 @@
  * realpath and all, so a symlink cannot point the check outside the checkout —
  * as a regular file in the working tree.
  *
- * **Every git call is `execFileSync` with an argv**, never a shell, with a 2 s
- * timeout. The inputs have already passed `parseArtefactRef` (hex shas, paths of
- * plain segments), but an argv is what makes that belt rather than the braces.
+ * **Every git call is an argv**, never a shell, with a 2 s deadline. The inputs
+ * have already passed `parseArtefactRef` (hex shas, paths of plain segments),
+ * but an argv is what makes that belt rather than the braces.
+ *
+ * ## Git is awaited, through the process's one child owner (plan 261004g)
+ *
+ * This ran `execFileSync` until 2026-10-04. Its timeout sends one TERM and then
+ * waits, so a git stuck on a lock held the daemon's only thread — heartbeat and
+ * all — for as long as git liked. `ProbeOwner.run` releases the caller at the
+ * deadline plus a short grace whether or not the child has died, and refuses to
+ * start a second git while one is unaccounted for. The drain asks one reference
+ * at a time, so the one key below is the whole of the exclusion, and a refusal
+ * is `unchecked` like any other *could not look*.
  */
-import { execFileSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { untrustedTextProblem, type ArtefactCheck, type ArtefactRef } from "../fleet/artefact-ref.js";
+import { processProbeOwner, type ProbeOwner } from "../fleet/child.js";
 import { readDecisions } from "./decisions.js";
 import { readQueue } from "./idea-queue.js";
 
 const DEV = "refs/remotes/origin/dev";
 const GIT_TIMEOUT_MS = 2_000;
+const GIT_PROBE_KEY = "reports:artefact-git";
 
 type GitResult =
   | { kind: "ok" }
@@ -37,7 +48,10 @@ type GitResult =
   | { kind: "no"; status: number; stderr: string }
   | { kind: "could-not-run"; why: string };
 
-export type GitRun = (args: readonly string[]) => GitResult;
+type GitRun = (args: readonly string[]) => Promise<GitResult>;
+
+/** TEST SEAMS, all of them: production passes none and gets `git`, 2 s, and the process's shared owner. */
+export type GitProbeOptions = { bin?: string; timeoutMs?: number; graceMs?: number; owner?: ProbeOwner };
 
 /** One line of somebody else's words, short and clean enough to store in a `why`. */
 function clip(text: string): string {
@@ -45,30 +59,53 @@ function clip(text: string): string {
   return [...first.slice(0, 120)].map((char) => (untrustedTextProblem(char, 1) === null ? char : "?")).join("");
 }
 
-function gitIn(repoDir: string): GitRun {
-  return (args) => {
-    try {
-      execFileSync("git", [...args], { cwd: repoDir, timeout: GIT_TIMEOUT_MS, stdio: "pipe" });
-      return { kind: "ok" };
-    } catch (cause) {
-      const e = cause as { status?: number | null; signal?: string | null; code?: string; stderr?: Buffer | string };
-      if (typeof e.status === "number" && (e.signal ?? null) === null) {
-        return { kind: "no", status: e.status, stderr: String(e.stderr ?? "") };
+function gitIn(repoDir: string, probe: GitProbeOptions = {}): GitRun {
+  const timeoutMs = probe.timeoutMs ?? GIT_TIMEOUT_MS;
+  return async (args) => {
+    const outcome = await (probe.owner ?? processProbeOwner()).run({
+      key: GIT_PROBE_KEY,
+      cmd: probe.bin ?? "git",
+      args,
+      timeoutMs,
+      cwd: repoDir,
+      ...(probe.graceMs === undefined ? {} : { graceMs: probe.graceMs }),
+    });
+    switch (outcome.kind) {
+      case "ok":
+        return { kind: "ok" };
+      case "failed":
+        // GIT RAN AND SAID NO only when it exited by itself with a status. The
+        // owner's sentence ends with git's stderr, whole, which is what the
+        // callers' patterns read. No status, or a signal, is not an answer.
+        if (outcome.exitCode !== null && outcome.signal === null) return { kind: "no", status: outcome.exitCode, stderr: outcome.why };
+        return { kind: "could-not-run", why: `git could not be run here: ${clip(outcome.why)}` };
+      case "timed-out":
+        return { kind: "could-not-run", why: `git did not answer within its ${timeoutMs}ms deadline` };
+      case "refused":
+        return { kind: "could-not-run", why: "an earlier git check has not exited yet, so no second one was started" };
+      case "overflowed":
+        return { kind: "could-not-run", why: "git wrote more than a check should and was stopped" };
+      default: {
+        const never: never = outcome;
+        throw new Error(String(never));
       }
-      if (e.code === "ETIMEDOUT" || (e.signal ?? null) !== null) return { kind: "could-not-run", why: `git did not answer within ${GIT_TIMEOUT_MS / 1000} s` };
-      return { kind: "could-not-run", why: `git could not be run here: ${e.code ?? "unknown error"}` };
     }
   };
 }
 
-function checkCommit(git: GitRun, sha: string): ArtefactCheck {
-  const exists = git(["cat-file", "-e", `${sha}^{commit}`]);
+async function checkCommit(git: GitRun, sha: string, stillWanted: () => boolean): Promise<ArtefactCheck> {
+  const exists = await git(["cat-file", "-e", `${sha}^{commit}`]);
   if (exists.kind === "could-not-run") return { state: "unchecked", why: exists.why };
   if (exists.kind === "no") {
     if (/not a valid object name|bad object|does not exist/i.test(exists.stderr)) return { state: "not-found" };
     return { state: "unchecked", why: `git could not say whether ${sha} is a commit: ${clip(exists.stderr)}` };
   }
-  const ancestor = git(["merge-base", "--is-ancestor", sha, DEV]);
+  // BETWEEN THE TWO CALLS, because the first was awaited: the daemon may have
+  // lost its lock or been told to stop meanwhile, and a second git would be a
+  // child started on the way out and a second deadline for the exit to wait on.
+  // The drain discards this answer — it asks the same question when it resumes.
+  if (!stillWanted()) return { state: "unchecked", why: "the daemon was stopping before this could be looked for on origin/dev" };
+  const ancestor = await git(["merge-base", "--is-ancestor", sha, DEV]);
   if (ancestor.kind === "ok") return { state: "on-dev" };
   // Exit 1 is git's "no"; anything else (no origin/dev, say) is not an answer.
   if (ancestor.kind === "no" && ancestor.status === 1) return { state: "found-locally" };
@@ -81,8 +118,8 @@ function checkCommit(git: GitRun, sha: string): ArtefactCheck {
   };
 }
 
-function checkPath(git: GitRun, repoDir: string, relative: string): ArtefactCheck {
-  const onDev = git(["cat-file", "-e", `${DEV}:${relative}`]);
+async function checkPath(git: GitRun, repoDir: string, relative: string): Promise<ArtefactCheck> {
+  const onDev = await git(["cat-file", "-e", `${DEV}:${relative}`]);
   if (onDev.kind === "ok") return { state: "on-dev" };
   // "not in the tree" is an answer; "no origin/dev", or no git at all, is not.
   const devUnknown =
@@ -119,12 +156,17 @@ function checkQueueItem(root: string, id: string): ArtefactCheck {
 }
 
 /** The real checker the daemon's drain is given. `repoDir` is the checkout the daemon runs from. */
-export function makeArtefactChecker(options: { repoDir: string; decisionsRoot: string; queueRoot: string }): (ref: ArtefactRef) => ArtefactCheck {
-  const git = gitIn(options.repoDir);
-  return (ref) => {
+export function makeArtefactChecker(options: {
+  repoDir: string;
+  decisionsRoot: string;
+  queueRoot: string;
+  git?: GitProbeOptions;
+}): (ref: ArtefactRef, stillWanted: () => boolean) => Promise<ArtefactCheck> {
+  const git = gitIn(options.repoDir, options.git);
+  return async (ref, stillWanted) => {
     switch (ref.kind) {
       case "commit":
-        return checkCommit(git, ref.sha);
+        return checkCommit(git, ref.sha, stillWanted);
       case "path":
         return checkPath(git, options.repoDir, ref.path);
       case "decision":

@@ -200,14 +200,14 @@ describe("runReport", () => {
     expect(c.err.join("\n")).toMatch(/overseer-decisions add/);
   });
 
-  test("the daemon's drain, as `run` composes it, puts a session's decision in OVERSEER_DECISIONS_DIR", () => {
+  test("the daemon's drain, as `run` composes it, puts a session's decision in OVERSEER_DECISIONS_DIR", async () => {
     const root = tempRoot();
     const decisions = tempRoot();
     const c = deps({ readFile: () => decisionTemplate() });
     const argv = ["report", "decision", "--summary", "chose the small shape", "--session", "work-reports", "--file", "d.json"];
     expect(runReport(root, report(argv).report, c.deps), c.err.join("\n")).toBe(0);
-    const drainOnce = makeReportDrain(root, { OVERSEER_DECISIONS_DIR: decisions }, () => ({ state: "not-found" }));
-    const outcome = drainOnce(new Map([[`$7 name:work-reports` as SessionKey, entry("work-reports", "boot-cli:80:5555")]]));
+    const drainOnce = makeReportDrain(root, { OVERSEER_DECISIONS_DIR: decisions }, async () => ({ state: "not-found" }));
+    const outcome = await drainOnce(new Map([[`$7 name:work-reports` as SessionKey, entry("work-reports", "boot-cli:80:5555")]]), () => true);
     expect(outcome.recorded).toBe(1);
     expect(existsSync(join(decisions, DECISIONS_FILE))).toBe(true);
     const read = readDecisions(decisions);
