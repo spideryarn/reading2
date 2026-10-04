@@ -1590,8 +1590,11 @@ function outgoing(
  * `NOT_CONFIGURED.message` rather than the variable's name, for the split
  * docs/project/logging.md describes: the name of an environment variable is
  * useful to whoever runs the server and useless to a reader, who has not got the
- * repository. Callers log the operator's half themselves, because they know
- * which feature just failed.
+ * repository. The operator's half is logged here, once, in fixed words with
+ * nothing interpolated. Until 2026-10-04 seven runners each logged their own
+ * version first, from a pre-check of a key they never used; those are gone
+ * (plan 261004c § R3), so this is the only place a missing key is said. Which
+ * feature it was is on the caller's own failure line.
  *
  * **`loadEnvLocal()` is deliberately not called here** — same reason as
  * [`messagesClient`](messages-stream.ts), which learned it the expensive way: a
@@ -1610,7 +1613,10 @@ function apiKey(override: string | undefined): string {
      names the key prefix, which is the fastest way to tell two OpenRouter
      accounts apart. */
   const key = override ?? process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error(NOT_CONFIGURED.message);
+  if (!key) {
+    log("model").error("OPENROUTER_API_KEY is not set, so every model call on this wire will fail");
+    throw new Error(NOT_CONFIGURED.message);
+  }
   return key;
 }
 
@@ -1622,9 +1628,12 @@ function apiKey(override: string | undefined): string {
  * an inverse the first version got wrong: **no attempt, no record.** The meter
  * used to be constructed first, so a missing key or an unserialisable body — a
  * `BigInt`, a circular reference — produced a spend row for a call that never
- * left the process. Every caller happens to validate its own key first today,
- * which is exactly why nothing caught it. Raised by a GPT Sol review of the
- * code.
+ * left the process. Every caller validated its own key first at the time, which
+ * is exactly why nothing caught it. Raised by a GPT Sol review of the code.
+ *
+ * Since 2026-10-04 the streaming runners no longer check the key themselves, so
+ * `apiKey` below is the only check on their road and this order is what stands
+ * between a missing key and a phantom row (tests/no-key-runners.test.ts).
  */
 function prepare(
   job: ChatJob,

@@ -695,8 +695,10 @@ describe("one record per call, however the call ends", () => {
   it("writes no record at all when there was no attempt to record", async () => {
     /* The inverse of *one record, one call*. A missing key fails before a
        request exists, and a row for a call that never left the process is a
-       phantom in the bill. Every caller happens to check its own key first,
-       which is why nothing caught this. */
+       phantom in the bill. Every caller checked its own key first when this
+       was written, which is why nothing had caught it. The streaming runners
+       no longer do (tests/no-key-runners.test.ts), so this is now the only
+       guard on their road. */
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const sent = stubTransport(() => streamed("data: [DONE]\n\n"));
     const { report } = await collectSpend(async () => {

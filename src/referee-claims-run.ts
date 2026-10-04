@@ -98,9 +98,8 @@ import {
   type OpenRouterMessage,
   underCacheFloor,
 } from "./article-prompt.js";
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
-import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
+import { ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import { type ModelPower, modelFor } from "./models.js";
 import {
   explainAbort,
@@ -447,15 +446,6 @@ export async function* runClaimsStream({
   stallMs = CLAIMS_STALL_MS,
 }: ClaimsRequest): AsyncGenerator<ClaimEvent> {
   const line = log("model");
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences — NOT_CONFIGURED in src/messages.ts. This one
-    // names the variable because it is for whoever runs the server.
-    line.error("OPENROUTER_API_KEY is not set — every referee claims run will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   const messages = buildClaimsMessages(meta, blocks);
   const tooShortToCache = underCacheFloor(cachedText(messages), model);

@@ -41,7 +41,6 @@
  * themselves — src/similar.ts is the current example, and says so.
  */
 import type { EmbeddingReason } from "./types.js";
-import { loadEnvLocal } from "./env.js";
 import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
 
 /**
@@ -503,13 +502,22 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * The key, the way every other OpenRouter caller in this repo gets it —
- * `loadEnvLocal()` first, because `.env.local` beats what the shell exported
- * and the two are different accounts (src/env.ts, and the 404 clause above is
- * what it looks like when the wrong one is used).
+ * The key, read from the environment as it stands.
+ *
+ * Read here rather than left to the gateway because this module uses it: the
+ * key is passed to the gateway as an explicit override, and its prefix goes in
+ * the "no endpoints available" message (the 404 clause above), which is the
+ * fastest way to tell two OpenRouter accounts apart.
+ *
+ * **`.env.local` is not loaded here.** It was until 2026-10-04, with a comment
+ * saying that was how every other caller got the key. It is not: the file is
+ * loaded at the program's edge (src/db/client.ts at import for the server, a
+ * CLI's own `main` otherwise), and a library function that re-reads it hands
+ * back a key a test deleted on purpose (src/ai-call.ts § `apiKey`). That the
+ * file beats the shell, and that the two can be different accounts, is still
+ * true and is src/env.ts's business.
  */
 function apiKeyFromEnv(): string {
-  loadEnvLocal();
   const key = process.env.OPENROUTER_API_KEY;
   /* `config`, the same reason an account that may not use the model is: both
      are somebody having to change a setting, both are permanent until they do,

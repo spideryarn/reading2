@@ -74,7 +74,6 @@
  * covers a transcript exactly as well. docs/project/logging.md.
  */
 import { stripFillers } from "./dictation-fillers.js";
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { canRetry, providerHttpFailure } from "./messages.js";
 import { DICTATION_MODEL } from "./models.js";
@@ -200,7 +199,12 @@ export async function transcribe(
   where: Where,
   signal?: AbortSignal,
 ): Promise<Transcription> {
-  loadEnvLocal();
+  /* Its own check, kept, because its answer is not the gateway's: a 503 and
+     `[mic-not-set-up]`, which the dictation client reads. The environment is
+     read as it stands. `.env.local` is loaded at the program's edge
+     (src/db/client.ts, for the server), never here: a request path that
+     re-reads the file hands back a key a test deleted on purpose
+     (src/ai-call.ts § `apiKey`). */
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     line.error("OPENROUTER_API_KEY is not set — every dictation will fail");

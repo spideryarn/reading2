@@ -84,11 +84,9 @@ import {
   type OpenRouterMessage,
   underCacheFloor,
 } from "./article-prompt.js";
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import {
   ENDED_UNFINISHED,
-  NOT_CONFIGURED,
   PROVIDER_UNREADABLE,
   saidNothing,
 } from "./messages.js";
@@ -556,15 +554,6 @@ export async function* runCriterionStream({
   const clocks = clocksFor(config.kind);
   const deadlineMs = timeoutMs ?? clocks.timeoutMs;
   const silenceMs = stallMs ?? clocks.stallMs;
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences — NOT_CONFIGURED in src/messages.ts. This
-    // one names the variable because it is for whoever runs the server.
-    line.error("OPENROUTER_API_KEY is not set — every referee criterion will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   const messages = buildCriterionMessages(meta, blocks, criterion, config);
   const tooShortToCache = underCacheFloor(cachedText(messages), model);
