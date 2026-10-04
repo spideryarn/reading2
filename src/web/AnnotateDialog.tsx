@@ -431,6 +431,11 @@ export function AnnotateDialog({
     transcribe: sendForTranscription,
     /* One box per passage, as the draft itself is. */
     keep: keepDictation(`annotate:${anchor.blockId}:${anchor.start}`),
+    /* A double press on Stop also saves: Save is what ⌘+Enter does here, and
+       never Ask AI (dictation.md § A double press). Only once `loaded`: `press`
+       refuses before that, and a double press must not be taken and then
+       quietly dropped. */
+    ...(loaded ? { onDone: () => press(false) } : {}),
   });
 
   useEffect(() => {
@@ -677,7 +682,7 @@ export function AnnotateDialog({
 
           <div className="annotate-actions">
             {dictate.dictation.supported && (
-              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} />
             )}
             {/* **Discard, not Cancel**: it is the only control here that throws
                 the reader's words away, and it says so. */}
@@ -704,7 +709,7 @@ export function AnnotateDialog({
               Save
             </button>
           </div>
-          <DictationStrip dictation={dictate.dictation} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
         </form>
 
         {/* Said out loud, because the two behaviours this box has replaced both

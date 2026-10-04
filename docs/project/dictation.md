@@ -315,6 +315,43 @@ live phrases extend it, the transcript replaces it. On Safari and Firefox the sp
 sits at the caret, so "replace" is an insertion — two situations that look entirely different to
 the reader are one line of code with no branch to get wrong.
 
+## A double press on Stop also sends
+
+Greg, 2026-10-05 (`spya-rp8676`): *"if I'm in a feedback report and I double click the stop button,
+then it should also click send afterwards for me. And if I'm in chat or whatever and I double click
+the stop button, then it should automatically send that message after it's finished transcribing"*.
+
+A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
+and `sendingAfter` on to `DictationButton` and `DictationStrip`. Five boxes do: Feedback (Send),
+chat (Send), the comment follow-up (Ask in chat), the quiz answer (Answer) and the annotate box
+(Save, never Ask AI). The plan, with what was deferred and why, is
+[261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
+
+- **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
+  with `onDone`, **for 600 ms after Stop** (`DOUBLE_PRESS_MS`), the button stays enabled and is
+  named "Send when the words arrive"; its only press there is `again()`, and it never starts a
+  dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
+  returns `again` only while a second press would count, which is the whole of how the button
+  knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+- **Once taken, the strip says** *"Turning that into text, then sending…"*.
+- **It sends only where it was said.** A box that is reused across things — one comment dialog for
+  every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
+  not honoured on another. Feedback's key is whether it is open.
+- **It sends only a real transcript.** The done action runs only if that ending put the transcript
+  in the box. A failed upload, `[mic-silent]`, a recording too short to send, a transcript refused
+  because the box changed, and a later **Try again** send nothing, and the wish to send ends with
+  the ending it was made for.
+- **`onDone` runs from an effect, one render after the ending**, because every box's send closes
+  over its render's value and refuses while `busy`. Called from `onEnd` it would see the box from
+  before the transcript and refuse in silence.
+- **The box's own rules still apply.** `onDone` is the same function the Send button calls, so a
+  double press cannot send what a Send press would refuse. A box that stays mounted when shut must
+  refuse there too; Feedback checks `open`.
+- **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
+  once its comments have loaded, so a press is never taken and then dropped.
+
+Tests: `tests/dictation-double-stop-sends.test.tsx`.
+
 ## When it hears nothing, and after
 
 **While the microphone is on and hears nothing**, the strip says *"No sound detected yet"* — ten seconds
@@ -368,6 +405,11 @@ microphone actually being on. Guard only the first and ⌘+Enter mid-sentence se
 guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol found it in the
 Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
 example.
+
+**If the box sends, give it the double press**: `onDone: send` on the field (and `doneKey` if the
+box is reused across things), and
+`again={dictate.again} sendingAfter={dictate.sendingAfter}` on the button and the strip
+([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)).
 
 **And disable the button too, not only the guard.** A correct guard behind a lit button is a press
 that does nothing and says nothing — the worse half of the pair, because the reader has no way to

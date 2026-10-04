@@ -692,6 +692,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
        see it. One box for the whole site: a recording is offered back on
        whichever page Feedback is next opened. Plan 260929h. */
     ...(open ? { keep: keepDictation("feedback") } : {}),
+    /* A double press on Stop also sends (dictation.md § A double press). `send`
+       refuses by itself on Earlier, over length, or with nothing said. **Not
+       when shut**: this dialog stays mounted, and a reader who closed it while
+       the words were on their way did not ask for a report to be filed unseen. */
+    onDone: () => {
+      if (open) void send();
+    },
+    /* And shutting it, even for a moment, withdraws the wish. */
+    doneKey: open ? "open" : "shut",
   });
 
   /**
@@ -1161,6 +1170,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 dictation={dictate.dictation}
                 toggle={dictate.toggle}
                 disabled={stage.kind === "sending"}
+                again={dictate.again}
+                sendingAfter={dictate.sendingAfter}
               />
             )}
             {/* **"Not sure what to write?" used to open here**, and it is gone —
@@ -1173,7 +1184,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 the next person to want help text here will reach for a tooltip
                 too. */}
           </div>
-          <DictationStrip dictation={dictate.dictation} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
           {over ? (
             <span className="fb-over">
