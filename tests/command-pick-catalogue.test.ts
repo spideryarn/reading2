@@ -87,6 +87,8 @@ const CONTEXTS: readonly Context[] = [
   { name: "no-article", experimentalOn: true, comments: false },
 ];
 
+const closes = () => ({ kind: "close" }) as const;
+
 /** The `commands` memo in CommandBar.tsx, called with stub closures. */
 function rowsIn(context: Context): readonly Command[] {
   const modes = context.article ? visibleModes(context.experimentalOn, undefined).map((m) => m.mode) : [];
@@ -115,6 +117,15 @@ function rowsIn(context: Context): readonly Command[] {
             view: context.article.view,
             help: "/help#glossary",
             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
+            /* What the reading view hands the owner when both lists can be
+               added to — the widest bar, so both *Find more* rows are in the
+               catalogue. Without it a sentence could never be answered with
+               one: the server drops a key this file does not hold (plan
+               261004k, GPT Sol's F4). The Metadata page hands in none. */
+            executor:
+              context.article.owner && context.article.view === "article"
+                ? { runners: {}, sources: {}, findMore: { glossary: closes, quotes: closes } }
+                : undefined,
           }
         : undefined,
       openComments: context.comments ? () => {} : undefined,
@@ -219,6 +230,19 @@ describe("src/command-pick-catalogue.generated.json", () => {
       "Put this article back",
     ]);
     expect(built.filter((o) => o.id === "action:experimental")).toHaveLength(2);
+  });
+
+  it("holds both Find more rows in the owner's reading-view slice, as rows that generate — and nowhere they are not drawn", () => {
+    for (const id of ["action:find-more-glossary", "action:find-more-quotes"]) {
+      const entry = built.find((o) => o.id === id);
+      expect(entry, id).toBeDefined();
+      expect(entry?.contexts, id).toContain("owner-article");
+      expect(entry?.contexts, id).not.toContain("owner-metadata");
+      expect(entry?.contexts, id).not.toContain("reader-on-someone-elses-article");
+      expect(entry?.generates, id).toBe(true);
+    }
+    expect(built.find((o) => o.id === "action:find-more-glossary")?.label).toBe("Glossary › Find more");
+    expect(built.find((o) => o.id === "action:find-more-quotes")?.label).toBe("Quotes › Find more");
   });
 
   it("never holds two different rows under one (id, label), and no id names an article", () => {

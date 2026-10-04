@@ -113,8 +113,13 @@ export interface SearchApi {
    * *thorough* uses to hand a quick row's colour to the meaning row that
    * replaces it (plan 261003i B2). It is this tab's choice like any other
    * (`chosen`), and it is stored once `begin` has said which row to write.
+   *
+   * `quiet` is for a search the reader did not press for: the thorough search
+   * a settled quick answer starts by itself (plan 261004l, review F7). Its
+   * start does not clear the shared `error` line and its transport failure
+   * does not set it. The failure is still on the row, as `status: "error"`.
    */
-  ask(criterion: string, kind: SearchKind, colour?: number): string;
+  ask(criterion: string, kind: SearchKind, colour?: number, options?: { quiet?: boolean }): string;
   /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
@@ -145,7 +150,11 @@ export interface SearchApi {
    * (plan 261002e, review F5).
    */
   isRunning(criterion: string, kind: SearchKind): boolean;
-  remove(id: string): void;
+  /**
+   * `quiet`: a failed DELETE says nothing either. For throwing away a row the
+   * reader never saw (plan 261004l, review F7).
+   */
+  remove(id: string, options?: { quiet?: boolean }): void;
   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
   /**
@@ -420,7 +429,7 @@ export function useSearch(
   }, []);
 
   const forget = useCallback(
-    async (id: string) => {
+    async (id: string, quiet = false) => {
       try {
         // A DELETE that 500s used to remove the row from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
@@ -430,7 +439,7 @@ export function useSearch(
           { method: "DELETE" },
         );
       } catch (e) {
-        setError(describeFetchFailure(e as Error));
+        if (!quiet) setError(describeFetchFailure(e as Error));
       }
     },
     [slug],
@@ -517,7 +526,7 @@ export function useSearch(
       criterion: string,
       kind: SearchKind,
       createdAt: string,
-      { revises = false }: { revises?: boolean } = {},
+      { revises = false, quiet = false }: { revises?: boolean; quiet?: boolean } = {},
     ) => {
       // Drop whatever the previous attempt left behind, so a retry shows a
       // spinner rather than the old error with a spinner under it. `kind` on
@@ -546,7 +555,10 @@ export function useSearch(
         // a typing session never brings back a row the reader deleted.
         deleted.current.delete(id);
       }
-      setError(null);
+      /* A quiet request is one the reader did not press for (plan 261004l,
+         review F7): it neither clears a foreground failure's line here nor
+         writes its own below. */
+      if (!quiet) setError(null);
 
       /* This row's lane — see `lanes`. Any request it already had out is
          superseded; `revise` only gets here once that request has begun. */
@@ -742,7 +754,7 @@ export function useSearch(
           if (!belongsHere() || me.superseded) return;
           if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
-          setError(message);
+          if (!quiet) setError(message);
           me.failed = !me.begun;
           put(
             { id: liveId, criterion: me.queued ?? criterion, kind, createdAt, status: "error", hits: [], error: message },
@@ -786,14 +798,14 @@ export function useSearch(
   reviseRef.current = revise;
 
   const ask = useCallback(
-    (criterion: string, kind: SearchKind, colour?: number) => {
+    (criterion: string, kind: SearchKind, colour?: number, { quiet = false }: { quiet?: boolean } = {}) => {
       const id = mintId();
       // Before `send`, so the pending row is painted in it — `put` reads `chosen`.
       if (colour !== undefined) {
         chosen.current.set(id, colour);
         pendingColours.current.add(id);
       }
-      send(id, criterion.trim(), kind, new Date().toISOString());
+      send(id, criterion.trim(), kind, new Date().toISOString(), { quiet });
       return id;
     },
     [send],
@@ -819,7 +831,7 @@ export function useSearch(
   );
 
   const remove = useCallback(
-    (id: string) => {
+    (id: string, { quiet = false }: { quiet?: boolean } = {}) => {
       deleted.current.add(id);
       pendingColours.current.delete(id);
       setRuns((prev) => prev.filter((r) => r.id !== id));
@@ -829,7 +841,7 @@ export function useSearch(
       // If a POST is still out, its `.then` re-sends the DELETE once the write
       // it is racing has definitely landed. Doing it only here would let the
       // POST write the row back after we deleted it.
-      void forget(id);
+      void forget(id, quiet);
     },
     [forget, flown],
   );

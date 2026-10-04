@@ -117,8 +117,8 @@ letters or the meaning, until 2026-10-02; *quick* sits between them:
 |---|---|---|---|
 | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
 | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
-| what it costs | nothing | about $0.0004, and about a second | a few cents, and 15–40 seconds |
-| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find** |
+| what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and 15–40 seconds |
+| when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find**, and [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled |
 | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
 | is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
 
@@ -148,7 +148,9 @@ The practical difference the panel is at pains to make obvious is *what pressing
 words mode the results are already there as you type. In meaning mode nothing happens until you
 submit, because submitting spends money. Quick sits between them since 2026-10-02: it asks when you
 pause, because a pause costs about $0.0004 and one typing session keeps one saved row —
-[§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). A box that quietly billed you per keystroke would be the
+[§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar). Since 2026-10-04 a quick
+answer that has settled also starts one meaning search without a press, which Greg asked for; what
+it costs is measured in [§ A quick search starts the thorough one by itself](#a-quick-search-starts-the-thorough-one-by-itself). A box that quietly billed you per keystroke would be the
 worst possible version of this feature — so there is a **find** button in one mode and deliberately
 none in the other, rather than a disabled one that invites you to wonder what you did wrong.
 
@@ -265,7 +267,9 @@ from that shape:
   yet. It travels through export and the public reader, so a visitor sees the tag and the hits, and
   never *thorough*.
 - **Thorough**, on a finished quick row, runs the full meaning search on the same words and
-  **replaces** the quick row (below). Kind is part of a run's identity — retry resends with its own
+  **replaces** the quick row (below). It is a button on the row, and since 2026-10-04 it also
+  starts by itself once the quick answer has settled
+  ([§ A quick search starts the thorough one by itself](#a-quick-search-starts-the-thorough-one-by-itself)). Kind is part of a run's identity — retry resends with its own
   kind, and the guard against a duplicate in-flight search is per kind and criterion — which is
   what lets the meaning search start while a quick one with the same words is still on screen.
 
@@ -320,6 +324,83 @@ endpoint answers in one body, so all the hits arrive together, under one deadlin
 Why a third arm of the toggle rather than a new mode or a separate quick-search bar, and why it is
 saved rather than thrown away: the plan's § The decision.
 
+### A quick search starts the thorough one by itself
+
+**Built 2026-10-04.** The plan, its review and the options passed over are
+[261004l](../plans/261004l-quick-search-starts-a-thorough-search-in-the-background-and-swaps-it-in.md).
+
+> The quick searches seem much worse than the thorough searches, so I wonder if the
+> best-of-all-worlds approach is to run a quick search immediately, and and also kick off a thorough
+> search in the background that will finish a few seconds later.
+>
+> — Greg, 2026-10-04
+
+A quick search shows its paragraphs in about a second, as before. Once the words have settled, the
+thorough search for the same words starts unseen. The quick row shows a spinner, exactly the button's size,
+where its *thorough* button was. When the thorough answer is complete it takes the quick row's
+place: same colour, same tick, same place in the list, no press. If it fails, the quick row stays,
+its button comes back, and nothing is said.
+
+**When it starts.** One thorough search per settled quick answer, because a thorough search cannot
+be cancelled once begun and quick asks at every pause. A quick row this tab's typing made is
+upgraded when all of these hold:
+
+- its quick answer has landed. A failed quick search is not upgraded; it has its own retry.
+- Enter or *find* was pressed for this row's current words, which starts it at once. Otherwise the row has stayed
+  finished with the same words for `SETTLE_MS` (2 seconds).
+- the box does not hold an edit that has not been asked yet. If it does, it looks again 2 seconds
+  later.
+- no thorough search for the same words is already out from this tab, and this row has not already
+  been tried with these words. A failure is not retried by itself.
+
+An older finished thorough row for the same words is not reused: it asks again.
+
+**What it costs.** From `ai_calls` in production, the 30 days to 2026-10-04, successful calls, one
+row per provider call:
+
+| purpose | calls | mean | median | 90th centile | time (median) |
+|---|---|---|---|---|---|
+| `search-quick` | 16 | $0.0006 | $0.0006 | $0.0008 | 0.4 s |
+| `search` (meaning) | 25 | $0.059 | $0.060 | $0.113 | 9.1 s |
+
+The mean meaning provider call in this sample costs roughly a hundred times the mean quick
+provider call. That is not a per-search or per-typing-session ratio: a long article's quick search
+uses several calls, and typing can trigger several quick searches. The sample is small (25 and 16
+calls), and `search` includes chat's meaning tool. Each settled quick answer can start a thorough
+search, so a typing session with several long pauses can pay for several thorough searches too.
+
+**How.** In the browser only, with no server change. The two decisions are pure functions and the
+hook that carries them out is beside them, in
+[`auto-thorough.ts`](../../src/web/modes/search/auto-thorough.ts); `SearchBand` wires it.
+
+- The thorough search is asked *quietly*: not ticked, and neither its start nor its failure touches
+  the panel's error line.
+- Its row is hidden until it is complete: not listed, not counted, not coloured, and its passages
+  are not drawn as they arrive. It still counts as running, so *find* on the meaning matcher for the
+  same words is disabled rather than silently refused.
+- At the swap the thorough row takes the colour the quick row is drawn in at that moment, replaces
+  its id in `?runs=` where it was, and is listed at the quick row's time so it does not jump above
+  rows asked meanwhile. Then the quick row is deleted. Nothing scrolls. A result that was pressed
+  open closes, as on any change of list.
+  As with the manual button, inheriting the resolved colour stores it as a pin, even when the quick
+  colour was automatic. Reserving that pin can change other automatic rows' colours when the palette
+  is full; see [`assignSlots`](../../src/web/hit-colours.ts).
+- If the quick row's words change, it goes back to searching, or it is deleted while the thorough
+  search is out, the answer is thrown away when it lands. It is not removed sooner, so the same
+  words cannot be asked twice while the first request is still running.
+- A manual press of *thorough* on any other quick row does what it did before.
+
+**The limits, all from keeping it in one tab.** The swap happens only in the tab that asked, while
+Search mode stays open.
+
+- Leave Search mode, reload, or close the tab mid-search: the thorough search still finishes on the
+  server, and usually both rows are in the list afterwards, the thorough one unticked.
+- After a reload a swapped row sorts by its own time, not the quick row's.
+- With 30 saved searches the server's trim may already have dropped the quick row; the swap's
+  delete then names a row that is gone, which is harmless.
+- The quick row is deleted without the server checking it is still the answer this tab saw. The
+  swap requires the row to be finished here, and another tab cannot reset a finished quick row.
+
 ## Search as you type, and the box in the bottom bar
 
 **Built 2026-10-02**, the same evening, from two asks of Greg's:
@@ -345,7 +426,7 @@ including shorter words, and ends the session; explicit submissions wait for the
 words sealed. The previous answer's marks stay on screen until the revision's arrive. The rules are a
 pure reducer, [`src/web/quick-session.ts`](../../src/web/quick-session.ts), and its header is the
 list; in short, a session **ends** on Enter or *find*, the box emptied, a matcher switch, ↺, ✕ or
-*thorough* on its row, leaving the mode or the article, and the box blurred for longer than a
+*thorough* on its row (pressed, or swapped in by itself), leaving the mode or the article, and the box blurred for longer than a
 pause — so a reader who searches, reads for five minutes and types again starts a new row rather
 than overwriting one they may want. Words left in a box are inert: remounting never asks.
 
@@ -1595,8 +1676,9 @@ a hope.
 - **Is a faint top edge enough of a confidence signal?** Since 2026-10-03 a hit is an outline and
   its confidence is how firmly the box is closed (§ An outline). The alternative is one strength of
   outline, with confidence only on the row. Greg has been asked; not decided.
-- **A failed thorough search has already cost the quick answer.** Accepted for v1, because it is a
-  second to ask again; the alternative is in the plan (261003i, B2).
+- **A failed thorough search has already cost the quick answer**, when *thorough* was pressed.
+  Accepted for v1, because it is a second to ask again; the alternative is in the plan (261003i,
+  B2). The thorough search a quick answer starts by itself keeps the quick row if it fails.
 - **Quick scores wobble from run to run** — up to 0.17 between identical requests in the spike — so
   the order of close hits, and whether a block near the floor makes it in, is not stable. Another reason
   the row says *quick*. Its known failure is *about* versus *against*: "things Claude should never
