@@ -225,3 +225,10 @@ thing it noticed that is not new: with the caret in the text field, the first Es
 words and the second closes (and saves).
 Shots: [the box](261004a-shot-desktop-box.png), [the wash](261004a-shot-yellow-wash.png),
 [a phone](261004a-shot-phone-box.png).
+
+**The full suite, after merging dev** (`npm test` through `scripts/tmux-job.ts`, pushed on the fast
+gates first as `2720ea9e9`): 32,377 passed, 4 tests in 5 files failed, none of them this change.
+All five are the fresh-worktree reds that ask for a build this worktree never made
+(`cold-start-lazy-imports` and `pdf-bundle-trace`: "has a build to inspect";
+`fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route`: the fleet client build).
+Not re-run after a build; `npm run typecheck` and the box's own suites are green.
