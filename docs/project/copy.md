@@ -136,7 +136,14 @@ older version of the piece
 `up-` is the upload record — a file the server took delivery of and then refused — and `pick-` is
 the file picker in the browser refusing before anything is sent, which is the distinction that
 matters when somebody quotes one at you
-([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
+([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `fetch-` is a document
+asked for by address that did not arrive: one code for each way the fetch can fail, from
+`[fetch-not-found]` and `[fetch-login]`, which are `blocked` and say what to do instead, to
+`[fetch-slow]` and `[fetch-unreachable]`, which are `retry`. The map is `fetchFailed` in
+`src/messages.ts`, total over the fetcher's own codes, and no sentence in it names the address, the
+host or the status
+([ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under)).
+`pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
 server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Citations' *Dig deeper* refusing
