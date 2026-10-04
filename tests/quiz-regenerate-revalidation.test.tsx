@@ -54,7 +54,11 @@ vi.mock("../src/web/lib/api.js", () => ({
     return nextRead ?? response("old-batch", openingStale);
   },
   readJson: async (res: Response) => {
-    if (!res.ok) throw new Error("Couldn't read the questions.");
+    /* Declared for a reader, as the real `readJson`'s `HttpError` is. */
+    if (!res.ok) {
+      const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+      throw new ReaderFacingError("Couldn't read the questions.");
+    }
     return res.json();
   },
 }));

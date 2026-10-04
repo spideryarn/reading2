@@ -89,6 +89,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     profileChanged: false,
     slug: "constitution",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,

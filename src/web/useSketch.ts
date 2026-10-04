@@ -30,6 +30,7 @@ import { useCallback, useEffect, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -84,6 +85,8 @@ export interface UseSketch {
   regenerate(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -161,7 +164,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
       setStatus((was) => (was === "loading" ? "error" : was));
@@ -178,6 +181,15 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. A picture already on screen stays there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (sketch === null) setStatus("loading");
+    await reload();
+  }, [sketch, reload]);
 
   const queue = useStepJob(slug, "sketch", refresh, "watches-queue");
 
@@ -220,6 +232,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     ensure,
     regenerate,
     refresh,
+    retryRead,
     cancel: queue.cancel,
   };
 }

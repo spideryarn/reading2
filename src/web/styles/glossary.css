@@ -265,6 +265,12 @@
   color: var(--highlight-ink);
   font-size: 0.88rem;
 }
+/* A failed read and its *Try again* (ReadError.tsx) — every band's, so it sits
+   here beside the sentence it wraps. It was `.faq-read-error`, with a copy in
+   skim.css and summary.css. The wrapper carries the gutter; the sentence gives
+   its own up and keeps a gap above the button. */
+.read-error { margin: 0.4rem 0.7rem 0; }
+.read-error .gloss-error { margin: 0 0 0.5rem; }
 
 .gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
 .gloss-empty p { margin: 0 0 0.5rem; }

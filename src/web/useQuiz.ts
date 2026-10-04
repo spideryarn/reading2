@@ -46,6 +46,8 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 
 type QuizStatus = "loading" | "none" | "ready" | "error";
@@ -245,6 +247,8 @@ export interface UseQuiz {
    * a job start and finish having changed nothing.
    */
   write(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
   /** Mark one answer. Resolves when the stream ends, however it ends. */
   mark(questionId: QuizQuestionId, answer: string): Promise<void>;
@@ -287,6 +291,8 @@ export interface QuizRead {
   /** Successful reads so far — the band's "a read has landed since" clock. */
   okReads: number;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Read again, joining a read in flight. `OrderedRead.reload`. */
   reload(): Promise<void>;
   /** Read again because a job has just written a new batch. `OrderedRead.refresh`. */
@@ -351,7 +357,7 @@ export function useQuizRead(slug: string): QuizRead {
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the questions away.** `load` is
          not only the opening read — `onFinished` calls it again every time a
          job finishes — and the panel renders under `status === "ready"`, so an
@@ -376,6 +382,15 @@ export function useQuizRead(slug: string): QuizRead {
     void reload();
   }, [reload]);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Questions already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (quiz === null) setStatus("loading");
+    await reload();
+  }, [quiz, reload]);
+
   const hold = useCallback((batchId: string) => setHeld(batchId), []);
   const release = useCallback(() => setHeld(null), []);
 
@@ -391,6 +406,7 @@ export function useQuizRead(slug: string): QuizRead {
     release,
     okReads,
     error,
+    retryRead,
     reload,
     refresh,
   };
@@ -554,7 +570,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
              before it opens the stream, so a stale batch is a 409 with a
              sentence rather than an error frame. `readJson` throws it. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         /* **The reply is what `readMark` returns**, and it returns only on a
            `done` frame. There is no other road to the two lines below, which is
@@ -616,6 +632,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     profileChanged,
     rewriting,
     refresh,
+    retryRead: read.retryRead,
     ensure,
     write,
     cancel: queue.cancel,

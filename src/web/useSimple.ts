@@ -23,6 +23,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export interface UseSimple {
   status: ArtefactStatus;
@@ -45,7 +46,7 @@ export interface UseSimple {
   stalled: boolean;
   /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
   starting: boolean;
-  /** Repeat only the GET after a failed read. This never starts a model job. */
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   /**
    * Read again because something it depends on has changed — the profile
@@ -95,7 +96,7 @@ export function useSimple(slug: string): UseSimple {
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the paragraphs away — only the
            opening read has nothing to fall back on. useFaq.ts, useDebate.ts. */
         setStatus((was) => (was === "loading" ? "error" : was));

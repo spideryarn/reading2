@@ -235,14 +235,11 @@
 }
 .skim-pip.on { background: var(--ink-faint); }
 
-.skim-read-error { margin: 0.4rem 0.7rem 0; }
-.skim-read-error .gloss-error { margin: 0 0 0.5rem; }
-
 /* Before a route has a pinned head, its status or error is the top row. */
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-quiet,
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-empty,
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-stale,
-.mode-band.skim.has-about:not(:has(> .band-head)) > .skim-read-error {
+.mode-band.skim.has-about:not(:has(> .band-head)) > .read-error {
   padding-right: calc(0.7rem + var(--band-about-room));
 }
 

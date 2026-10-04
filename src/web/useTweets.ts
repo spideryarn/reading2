@@ -36,6 +36,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export type TweetsStatus = "loading" | "none" | "ready" | "error";
 
@@ -123,7 +124,7 @@ export function useTweets(slug: string): UseTweets {
         if (answered.current) {
           setError(THREAD_RECHECK_FAILED.message);
         } else {
-          setError((err as Error).message);
+          setError(describeFetchFailure(err as Error));
           setStatus("error");
         }
       }

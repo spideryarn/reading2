@@ -97,6 +97,7 @@ const READ: GlossaryRead = {
   profiled: false,
   profileChanged: false,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
   patchEntry: () => {},
@@ -118,6 +119,7 @@ const QUOTES_READ: QuotesRead = {
   profiled: false,
   profileChanged: false,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };
@@ -135,6 +137,7 @@ const QUIZ_READ: QuizRead = {
   release: () => {},
   okReads: 0,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };

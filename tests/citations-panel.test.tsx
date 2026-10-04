@@ -389,6 +389,7 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     outdated: false,
     slug: "a-piece",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,

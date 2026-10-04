@@ -481,7 +481,13 @@ function reply(url: string, method: string): Response {
   if (notBuilt !== null && url.startsWith(notBuilt)) return new Response(null, { status: 404 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
-  if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  /* **The three reads `OwnedReader` makes for every article, answered the way
+     the server answers "nobody has made one": 404.** They used to get a body no
+     route sends (`{ glossary: null }`, and `{}` from the fall-through), which
+     each hook threw a `TypeError` on. Nothing noticed until 2026-10-04, when the
+     read catches began reporting an unauthored exception as the page's own
+     fault (plan 261004c § 1a) — three reports beside the one this file counts. */
+  if (/^\/api\/(glossary|quotes|quiz)\//.test(url)) return new Response(null, { status: 404 });
   if (url.startsWith("/api/ideas/")) return json(IDEAS_BODY);
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});

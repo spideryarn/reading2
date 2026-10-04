@@ -133,7 +133,12 @@ vi.mock("../src/web/lib/api.js", () => {
     readJson: async (res: Response) => {
       const text = await res.text();
       const data = (text ? JSON.parse(text) : {}) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? String(res.status));
+      /* The server's own sentence, declared as the real `readJson` declares
+         it (`HttpError` is a `ReaderFacingError`). */
+      if (!res.ok) {
+        const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+        throw new ReaderFacingError(data.error ?? String(res.status));
+      }
       return data;
     },
     failure: async (res: Response) => new Error(String(res.status)),

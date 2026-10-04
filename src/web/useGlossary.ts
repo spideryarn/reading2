@@ -46,6 +46,8 @@ import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
@@ -225,6 +227,8 @@ export interface GlossaryRead {
   /** `GlossaryResponse.panelRun`, passed through; absent when the server did not say. */
   panelRun?: "append" | "rewrite" | undefined;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /**
    * Fetch again **only if nothing is already fetching** — the band's mount.
    *
@@ -381,7 +385,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            and nothing rendered the message — but the panel renders it, and it
            is now the same read. The prose simply draws no underlines when there
            are no entries, which is what it already did. */
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away.** The panel
            renders entries only when `status` is `ready`, so setting `error`
            unconditionally meant a reader who opened the band over a perfectly
@@ -397,6 +401,15 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Terms already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (glossary === null) setStatus("loading");
+    await reload();
+  }, [glossary, reload]);
+
   /* A run that finishes after the reader left the band still reaches the prose.
      useCitations.ts § An always-mounted read is not an
      always-fresh read. */
@@ -550,7 +563,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           /* The 404 and the two 409s are decided before the stream opens, so
              they are ordinary JSON and `readJson` throws their sentence. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         opened = true;
         const done = await readAnswerStream(res.body, {
@@ -656,8 +669,11 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         await refresh();
       } catch (err) {
         if (!current()) return;
-        throw new Error(
-          `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${(err as Error).message}`,
+        /* The panel and the hover card print this as it is thrown, so the
+           cause goes through the one rule first: the server's own refusal
+           stays, and the browser's words for a dropped connection do not. */
+        throw new ReaderFacingError(
+          `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${describeFetchFailure(err as Error)}`,
         );
       } finally {
         /* A request for the new article may already own the same entry id.
@@ -680,6 +696,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     profileChanged,
     panelRun,
     error,
+    retryRead,
     reload,
     refresh,
     patchEntry,
@@ -760,6 +777,8 @@ export interface UseGlossary {
   more(useProfile?: boolean): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
   /** Dig deeper into one term — `GlossaryRead.look`, passed through. Resolves `false` if not admitted. */
   look(id: string): Promise<boolean>;
@@ -979,7 +998,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
              before the server opens the stream, so it is an ordinary JSON error
              and `readJson` throws its sentence. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         /* **`asked` is what `readAnswerStream` returns, and it returns only on a
            `done` frame.** Every other ending throws, so the draft can never be
@@ -1079,6 +1098,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     find,
     more,
     refresh,
+    retryRead: read.retryRead,
     cancel: queue.cancel,
     look,
     lookDraft,

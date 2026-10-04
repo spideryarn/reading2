@@ -61,7 +61,7 @@
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Check, Copy, PenLine, RotateCw, TriangleAlert, X } from "lucide-react";
+import { Check, Copy, PenLine, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
 import type { PublicTweets } from "../public-types.js";
@@ -74,6 +74,7 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
 /** How long a copy button says it worked before going back to normal. */
@@ -160,21 +161,11 @@ export function TweetsPanel({
       {hasControls && <div className="summ-controls">{controls}</div>}
       {hasControls && head && <div className="band-head">{head}</div>}
       {owner?.error && (
-        <div className="tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3">
-          <p className="gloss-error tw:m-0" role="alert">
-            {owner.error}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="tw:mt-2"
-            onClick={() => void owner.retryRead()}
-          >
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
+        <ReadError
+          error={owner.error}
+          onRetry={owner.retryRead}
+          className="tw:m-0 tw:pl-4 tw:pr-[calc(1rem_+_var(--band-about-room))] tw:pt-3"
+        />
       )}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for a thread…</p>}

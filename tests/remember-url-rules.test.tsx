@@ -196,6 +196,7 @@ const QUIZ_READ: QuizRead = {
   release: () => {},
   okReads: 0,
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };

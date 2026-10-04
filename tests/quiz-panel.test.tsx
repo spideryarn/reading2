@@ -140,6 +140,7 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     outdated: false,
     slug: "a-piece",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     /* Nothing pressed, so nothing is in flight. The case where this is true is

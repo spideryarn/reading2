@@ -34,6 +34,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type IdeasStatus = "loading" | "none" | "ready" | "error";
 
@@ -109,6 +110,8 @@ export interface UseIdeas {
   regenerate(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -131,6 +134,8 @@ export interface IdeasRead {
   profiled: boolean;
   profileChanged: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Join a read in flight, or start one. `OrderedRead.reload`. */
   reload(): Promise<void>;
   /** Read again because the list has just changed. `OrderedRead.refresh`. */
@@ -181,7 +186,7 @@ export function useIdeasRead(slug: string): IdeasRead {
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
          job finishes — and `IdeasPanel` renders the list only under
@@ -200,11 +205,20 @@ export function useIdeasRead(slug: string): IdeasRead {
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Ideas already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (ideas === null) setStatus("loading");
+    await reload();
+  }, [ideas, reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { status, ideas, stale, outdated, profiled, profileChanged, error, reload, refresh };
+  return { status, ideas, stale, outdated, profiled, profileChanged, error, retryRead, reload, refresh };
 }
 
 export function useIdeas(slug: string): UseIdeas {
@@ -255,6 +269,7 @@ export function useIdeas(slug: string): UseIdeas {
     ensure,
     regenerate,
     refresh,
+    retryRead: read.retryRead,
     cancel: queue.cancel,
   };
 }

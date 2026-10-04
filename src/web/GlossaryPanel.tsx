@@ -118,6 +118,7 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 
@@ -440,7 +441,7 @@ export function GlossaryPanel({
         <GateSlider entries={all} gate={gate} moved={chosenGate !== null} onGate={onGate} />
       )}
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
       {hideFailed && <p className="gloss-error">{hideFailed}</p>}
 
       {orphanedLookup && (

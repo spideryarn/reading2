@@ -85,6 +85,7 @@ import { JobProgress } from "./JobProgress.js";
 import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
+import { ReadError } from "./ReadError.js";
 import { useSketch } from "./useSketch.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 
@@ -217,11 +218,17 @@ function OwnerSketch({
   if (view.status === "none" || view.status === "error") {
     return (
       <div className="sk-empty">
-        <p>
-          {view.status === "error"
-            ? (view.error ?? "Could not ask for this picture.")
-            : "Nobody has drawn this one yet."}
-        </p>
+        {/* A failed read is not "nobody has drawn one": say which, and offer
+            the read again before the paid button below it. ReadError.tsx. */}
+        {view.status === "error" ? (
+          <ReadError
+            error={view.error ?? "Could not ask for this picture."}
+            onRetry={view.retryRead}
+            className="tw:m-0 tw:mb-2"
+          />
+        ) : (
+          <p>Nobody has drawn this one yet.</p>
+        )}
         {/* **What it costs, before the press rather than after it** — the same
             rule the chips' hover cards follow, and it matters more here than
             anywhere: this is about a minute's wait, and a reader who presses a
@@ -320,6 +327,11 @@ function OwnerSketch({
         </p>
       )}
       {!view.job && view.failed && <p className="sk-failed">{view.failed.message}</p>}
+      {/* **A re-read that failed, beside the picture it could not replace.** The
+          picture stays (useSketch.ts § load), and until 2026-10-04 the failure
+          was drawn only in the empty branch above — so here it was silent, with
+          no way to ask again. */}
+      {view.error && <ReadError error={view.error} onRetry={view.retryRead} />}
     </>
   );
 

@@ -42,6 +42,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type TimelineStatus = "loading" | "none" | "ready" | "error";
 
@@ -94,6 +95,8 @@ export interface UseTimeline {
    * step replaces rather than appends.
    */
   regenerate(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -112,6 +115,8 @@ export interface TimelineRead {
   stale: boolean;
   outdated: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Join a read in flight, or start one. `OrderedRead.reload`. */
   reload(): Promise<void>;
   /** Read again because the list has just changed. `OrderedRead.refresh`. */
@@ -155,7 +160,7 @@ export function useTimelineRead(slug: string): TimelineRead {
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
          job finishes — and the panel renders the events only under
@@ -174,11 +179,20 @@ export function useTimelineRead(slug: string): TimelineRead {
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Events already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (timeline === null) setStatus("loading");
+    await reload();
+  }, [timeline, reload]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { status, timeline, stale, outdated, error, reload, refresh };
+  return { status, timeline, stale, outdated, error, retryRead, reload, refresh };
 }
 
 export function useTimeline(slug: string): UseTimeline {
@@ -214,6 +228,7 @@ export function useTimeline(slug: string): UseTimeline {
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

@@ -51,6 +51,7 @@ function owner(over: Partial<UseIdeas> = {}): UseIdeas {
     profileChanged: false,
     slug: "constitution",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
