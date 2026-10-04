@@ -7,6 +7,8 @@ import {
   expectedSeconds,
   firstOnScreen,
   gutterCss,
+  READ_REACH_FROM,
+  READ_REACH_FULL,
   type ReadLevel,
   readLevel,
   readReach,
@@ -61,7 +63,7 @@ describe("readLevel", () => {
 
 /**
  * `readReach` — how far across the rail a block's reading time reaches, in
- * sixteenths. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ * sixteenths. docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
  */
 describe("readReach", () => {
   /** The representable doubles either side of `x`. */
@@ -83,60 +85,69 @@ describe("readReach", () => {
   });
 
   /* Zero words is one expected second, so seconds *is* the ratio. */
-  const boundaries: [number, number][] = [
-    [0.35, 4],
-    [0.7, 8],
-    [1.4, 12],
-    [2.8, 16],
-  ];
-  it.each(boundaries)("at %s of the reading time the reach is %s sixteenths, and one fewer just under", (ratio, reach) => {
-    expect(readReach(ratio, 0)).toBe(reach);
-    expect(readReach(above(ratio), 0)).toBe(reach);
-    /* GPT Sol's F1: the bare log formula answers 12 at 1.3999999999999997 and
-       16 at 2.7999999999999994, a step ahead of `readLevel`. */
-    expect(readReach(below(ratio), 0)).toBe(reach === 4 ? 0 : reach - 1);
+  it("starts a quarter of the way across at the glance threshold, where the gutter's line starts", () => {
+    expect(readReach(below(READ_REACH_FROM), 0)).toBe(0);
+    expect(readReach(READ_REACH_FROM, 0)).toBe(4);
+    expect(readReach(above(READ_REACH_FROM), 0)).toBe(4);
   });
 
-  it("holds the same boundaries against a real word count", () => {
-    /* 230 words take 60 s, so the boundaries are 21, 42, 84 and 168 s. */
+  it("fills the rail only at 128 times the glance threshold — about 45 times the reading time", () => {
+    expect(READ_REACH_FULL).toBe(READ_REACH_FROM * 128);
+    expect(readReach(below(READ_REACH_FULL), 0)).toBe(15);
+    expect(readReach(READ_REACH_FULL, 0)).toBe(16);
+    expect(readReach(above(READ_REACH_FULL), 0)).toBe(16);
+    expect(readReach(1e9, 0)).toBe(16);
+  });
+
+  it("is rarely full: what filled the rail until 2026-10-04 is now a little over a third of it", () => {
+    /* Greg: "make it a bit logarithmic so it's rarer that the reading-time
+       fills up completely all the way to the right". 2.8 of the reading time
+       was full width; on his own reading 43% of the drawn passages reached it. */
+    expect(readReach(1, 0)).toBe(6);
+    expect(readReach(2.8, 0)).toBe(9);
+    expect(readReach(10, 0)).toBe(12);
+    expect(readReach(40, 0)).toBe(15);
+  });
+
+  it("holds the same scale against a real word count", () => {
+    /* 230 words take 60 s: drawn from 21 s, full at 2688 s. */
     expect(readReach(below(21), 230)).toBe(0);
     expect(readReach(21, 230)).toBe(4);
-    expect(readReach(below(42), 230)).toBe(7);
-    expect(readReach(42, 230)).toBe(8);
-    expect(readReach(below(84), 230)).toBe(11);
-    expect(readReach(84, 230)).toBe(12);
-    expect(readReach(below(168), 230)).toBe(15);
-    expect(readReach(168, 230)).toBe(16);
-    expect(readReach(10_000, 230)).toBe(16);
+    expect(readReach(60, 230)).toBe(6);
+    expect(readReach(2687, 230)).toBe(15);
+    expect(readReach(2688, 230)).toBe(16);
   });
 
-  it("steps through every sixteenth between the levels, a quarter of a doubling each", () => {
-    /* 0.35 × 2^(k/4), nudged off the boundary so the test is about the steps
-       and not about how a power rounds. */
+  it("steps through every sixteenth, each the same share of a doubling", () => {
+    /* Twelve steps over seven doublings, probed mid-step so the test is about
+       the steps and not about how a power rounds. */
     for (let k = 0; k < 12; k++) {
-      expect(readReach(0.35 * 2 ** ((k + 0.5) / 4), 0), `step ${k}`).toBe(4 + k);
+      expect(readReach(READ_REACH_FROM * 2 ** ((7 * (k + 0.5)) / 12), 0), `step ${k}`).toBe(4 + k);
     }
   });
 
-  it("never disagrees with readLevel: the level is the reach's quarter, for every input", () => {
-    const probe = (seconds: number, words: number) => {
-      const reach = readReach(seconds, words);
-      const ok = Number.isInteger(reach) && (reach === 0 || (reach >= 4 && reach <= 16));
-      if (!ok || Math.floor(reach / 4) !== readLevel(seconds, words)) {
-        throw new Error(`${seconds} s on ${words} words: reach ${reach}, level ${readLevel(seconds, words)}`);
-      }
-    };
+  it("never goes back as time passes, and draws exactly when the gutter's line does", () => {
     for (const words of [0, 1, 7, 230, 300, 1234]) {
-      for (let i = 0; i <= 4000; i++) probe((i / 1000) * expectedSeconds(words), words);
-      for (const edge of [0.35, 0.7, 1.4, 2.8]) {
-        let lo = edge * expectedSeconds(words);
-        let hi = lo;
-        for (let n = 0; n < 50; n++) {
-          probe(lo, words);
-          probe(hi, words);
-          lo = below(lo);
-          hi = above(hi);
+      let last = 0;
+      for (let i = 0; i <= 6000; i++) {
+        const seconds = (i / 100) * expectedSeconds(words);
+        const reach = readReach(seconds, words);
+        if (!Number.isInteger(reach) || !(reach === 0 || (reach >= 4 && reach <= 16)) || reach < last) {
+          throw new Error(`${seconds} s on ${words} words: reach ${reach} after ${last}`);
         }
+        /* The two scales share only their start (the plan § What it gives up). */
+        expect(reach > 0).toBe(readLevel(seconds, words) > 0);
+        last = reach;
+      }
+      expect(last).toBe(16);
+      /* The doubles either side of the start: a bare logarithm could disagree with `readLevel` there. */
+      let lo = READ_REACH_FROM * expectedSeconds(words);
+      let hi = lo;
+      for (let n = 0; n < 50; n++) {
+        expect(readReach(lo, words) > 0).toBe(readLevel(lo, words) > 0);
+        expect(readReach(hi, words) > 0).toBe(readLevel(hi, words) > 0);
+        lo = below(lo);
+        hi = above(hi);
       }
     }
   });

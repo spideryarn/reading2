@@ -49,7 +49,7 @@
  *
  * Seconds live in plain variables inside the effect. React state is two maps:
  * `levels`, set only when some block crosses one of the four steps, and
- * `reach`, the spine's finer measure (reading-time.ts § `readReach`), set when
+ * `reach`, the spine's own measure (reading-time.ts § `readReach`), set when
  * one crosses a sixteenth. **Each keeps its identity when only the other
  * moved**, so the gutter's style sheet and the quiz, which read `levels`, are
  * not woken by a reach step. `Reader` itself re-renders on either — more often
