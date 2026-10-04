@@ -95,11 +95,12 @@ failed took Brief and Fuller with it.
   That is [the door rule](#three-levels-one-row-shaped-by-the-reader-since-2026-10-01) below,
   unchanged.
 - **A row written before then still has the middle level in it**, in `levels.simple` and in the
-  guard's `check.levels.simple`. Nothing reads either: the guards in
+  guard's `check.levels.simple`. The reader ignores both: the guards in
   [`types.ts`](../../src/types.ts) ask about Brief and Fuller only, so such a row is usable exactly
   when those two are. A visitor is never sent it, the owner's read returns it and draws nothing
   from it, and an export still carries it. The stored shape's version stays `simple/2`: a new one
-  would have made every stored summary read as absent and be written again.
+  would have made every stored summary read as absent and be written again. The historical
+  [`simple-check-report.ts`](../../scripts/simple-check-report.ts) still counts valid middle checks.
 - **The names stayed.** The step is `simple`, the artefact `SimpleSummary`, the column
   `simple_summary`. Only the level went.
 - **What it saved** is in [§ Cost of a write](#cost-of-a-write-since-2026-10-04).
@@ -120,16 +121,17 @@ files are `evals/results/simple/high-none-fbazc1|c2` and `high-none-nosimple1|3`
 | the wait, median of six | 30.9 s | 31.3 s |
 | the wait, range | 29.3 to 41.2 s | 27.9 to 51.1 s |
 
-- **About 16% cheaper, and no faster.** Most of a cold write's cost is the first call putting the
+- **About 16% cheaper in these six cold writes.** A cold write still pays for the first call putting the
   article in the cache at Opus's price, which both shapes pay once. The removed call was a cache
   read and about a thousand tokens of answer.
-- **The wait is Fuller's**, with or without the middle level: it goes first and is the longest to
-  write. How long it thinks varies from one write to the next by more than the removed call ever
-  cost, which is the spread in the last row.
+- **The median wait barely changed; the tail grew.** Mean wait rose from 33.7 s to 35.8 s,
+  and the maximum from 41.2 s to 51.1 s. The files record total reasoning tokens across calls,
+  not each level's timing, so they cannot establish which call caused the slow writes or rule
+  out a latency effect from this change. Six writes a side are too few to settle that.
 - **What it does remove is a way to fail or stall.** In the six writes before, one waited on a
   retry of the middle level; none can now.
 - A third pass of two-level writes ran inside the cache's five minutes and cost $0.084 to $0.213.
-  It is not in the table: a reader's write is nearly always cold. One of those three waited 87 s,
+  It is kept apart because its cache state differs. One of those three waited 87 s,
   on a Fuller the guard flagged and asked for again.
 
 ## Simple — a plain-words orientation

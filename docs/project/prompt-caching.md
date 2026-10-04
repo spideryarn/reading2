@@ -282,7 +282,8 @@ since 2026-10-04): the slowest level goes first with the article marked, the res
 stream has begun (`MeteredCall.onStart` in
 [`src/messages-stream.ts`](../../src/messages-stream.ts)), and a press fell from $0.142 to $0.090.
 **A new call site that fans out over one article should reuse that, not build a second one** — and
-should measure it cold, the way `evals/simple/fanout-spike.ts --cold` does, or a cache left warm by
+should measure it cold, the way the historical `evals/simple/fanout-spike.ts` paid arms did with
+`--cold` (since 2026-10-04 it supports only `report`; the paid arms are at `1698c6448`), or a cache left warm by
 an earlier run fakes the saving.
 
 **An open question, not chased:** Debate shows cache reads in production with no breakpoint of its

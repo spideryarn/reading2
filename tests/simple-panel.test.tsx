@@ -50,6 +50,7 @@ const WHAT = "This essay asks whether a machine could ever be conscious, and say
 const WHY = "It matters because people are starting to treat chatbots as if they had feelings.";
 
 const FULLER_TEXT = "The fuller one keeps the essay's own term, the hard problem, and says what it means.";
+const OLD_MIDDLE_TEXT = "The removed middle level is still in this historical row.";
 
 function artefact(): SimpleSummary {
   return {
@@ -70,6 +71,11 @@ function artefact(): SimpleSummary {
         { text: WHY, ids: [LATER] },
         { text: "And it says where the argument stops.", ids: [MIDDLE] },
       ],
+      /* The owner's GET may still carry this old key. Nothing draws it. */
+      ...{ simple: [
+        { text: OLD_MIDDLE_TEXT, ids: [EARLY] },
+        { text: "Why the old middle version mattered.", ids: [LATER] },
+      ] },
     },
   };
 }
@@ -924,16 +930,22 @@ describe("Summary's band, arriving on an old link", () => {
   /* The Simple level was a view until 2026-10-03 and stopped being written on
      2026-10-04 (plan 261004f). A link that names it degrades to the default
      like any unknown value. */
-  it("reads an old ?summary=simple as Brief", async () => {
+  it.each(["owner", "visitor"] as const)("reads an old ?summary=simple as Brief and never draws its stored middle level (%s)", async (which) => {
     const { NuqsAdapter } = await import("nuqs/adapters/react");
+    artefactStatus = 200;
     history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
     await act(async () => {
-      root.render(createElement(NuqsAdapter, null, visitorBand()));
+      const inner = which === "owner"
+        ? createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} })
+        : visitorBand();
+      root.render(createElement(NuqsAdapter, null, inner));
     });
     await settle();
     expect(chosen()).toBe("Brief");
     expect(text()).toContain(WHAT);
     expect(text()).not.toContain(FULLER_TEXT);
+    expect(text()).not.toContain(OLD_MIDDLE_TEXT);
+    expect(posts, "a stored historical row is never rewritten on arrival").toEqual([]);
   });
 
   it("names its three choices in words, in one row", async () => {

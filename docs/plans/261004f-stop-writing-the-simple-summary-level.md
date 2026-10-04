@@ -184,9 +184,12 @@ Two cold writes on each of three articles, before (`high-none-fbazc1|c2`) and af
 | entropy (8.6k) | 0.258, 0.256 | 0.175, 0.211 | 41.2, 39.8 | 28.7, 45.0 |
 | scaling-hypothesis (12.6k) | 0.275, 0.274 | 0.257, 0.252 | 31.7, 30.1 | 51.1, 33.9 |
 
-Mean $0.256 to $0.216, about 16% cheaper. Median wait 30.9 s to 31.3 s: no change. **The expected
-"moves little" held, and "cheaper" is smaller than a third**, because a cold write is mostly the
-one cache write of the article. The slow after-writes (51.1 s, 45.0 s) are Fuller thinking longer
-(2.6k to 3.2k reasoning tokens against about 1k on the fast ones), not anything this change did:
-the prompts are the same bytes. Six writes a side cannot show a difference in wait smaller than
-that spread.
+Mean $0.256 to $0.216, about 16% cheaper in these six cold writes. Median wait 30.9 s to 31.3 s
+moved little, but mean wait rose from 33.7 s to 35.8 s and the maximum from 41.2 s to 51.1 s.
+The slow after-writes (51.1 s, 45.0 s) recorded 2.6k to 3.2k total reasoning tokens against about
+1k on the fast ones. Those totals cover every writer and checker call; the files do not record
+per-level timings, so they cannot attribute the delay to Fuller or rule out an effect from this
+change. Identical retained prompts establish prompt preservation, not unchanged latency.
+Six writes a side are too few to settle a latency effect. `nosimple2` is kept apart because it
+ran within the cache's five minutes; its 87.2 s Fuller retry remains evidence that a retained
+level can still stall the press.

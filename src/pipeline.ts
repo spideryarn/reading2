@@ -4225,7 +4225,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ...run.dropped,
           /* The fidelity guard (plan 261001i): its calls and chat-wire tokens,
              kept apart from the writer's, and each level's outcome as
-             "passed/flagged", Brief then Fuller. Never the
+             "passed/flagged/unchecked", Brief then Fuller. Never the
              checker's reasons, which quote the article's claims. */
           checkCalls: run.checkCalls,
           checkInputTokens: run.checkInputTokens,

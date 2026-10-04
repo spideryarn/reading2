@@ -40,7 +40,7 @@ import { Pool } from "pg";
 import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { resolveTargetUrl } from "../src/env.js";
 import { tallyChecks } from "../src/simple-check.js";
-import { isUsableSimpleSummary, type SimpleLevelCheck } from "../src/types.js";
+import { isLevelCheck, isUsableSimpleSummary, type SimpleLevelCheck } from "../src/types.js";
 
 /**
  * The levels a stored check record can hold. `simple`, the middle level, is in
@@ -93,6 +93,16 @@ try {
         if (!isUsableSimpleSummary(s) || !s.check) {
           unusable += 1;
           continue;
+        }
+        /* The reader no longer validates the middle level, but this report
+           still consumes its check. Validate it here before trusting its tally. */
+        const historical = (s.check.levels as Record<string, unknown>).simple;
+        const middle = (s.levels as Record<string, unknown>).simple;
+        if (historical !== undefined || middle !== undefined) {
+          if (!Array.isArray(middle) || !isLevelCheck(historical, middle.length)) {
+            unusable += 1;
+            continue;
+          }
         }
         /* Every level the record holds, the removed middle one included: a
            summary written before 2026-10-04 was checked at three levels, and

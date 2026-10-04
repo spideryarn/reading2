@@ -5312,9 +5312,10 @@ export function paragraphShape(paragraph: SimpleParagraph): SimpleParagraphShape
  * docs/plans/261004f-stop-writing-the-simple-summary-level.md.
  *
  * **A row stored before then still has `levels.simple`, and `check.levels.simple`.**
- * Nothing reads either: every guard below asks about the levels in this list
- * and no others, so such a row is usable exactly when its Brief and Fuller
- * are. The stored JSON is not rewritten.
+ * The reader ignores both: every guard below asks about the levels in this
+ * list and no others, so such a row is usable exactly when its Brief and
+ * Fuller are. The historical check report still reads the middle check and
+ * validates it separately. The stored JSON is not rewritten.
  *
  * The step and the artefact are still named `simple`; only the level went.
  */
@@ -5474,7 +5475,8 @@ export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, Simple
   );
 }
 
-function isLevelCheck(value: unknown, paragraphs: number): boolean {
+/** Shared with the historical report, which also reads the removed middle level. */
+export function isLevelCheck(value: unknown, paragraphs: number): value is SimpleLevelCheck {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   const storedLatest =

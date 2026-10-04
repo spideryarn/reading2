@@ -74,7 +74,7 @@ export function SimplePanel({
   onAskChat,
 }: {
   access: SimpleAccess;
-  /** Which level to draw. The band's control offers Brief and Fuller; Simple is stored and not offered (plan 261003l). */
+  /** Which level to draw. The band's control offers Brief and Fuller; old rows may also retain the removed middle level (plan 261004f). */
   level: SimpleLevel;
   onJump(id: BlockId): void;
   /**

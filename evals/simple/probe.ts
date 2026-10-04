@@ -17,7 +17,7 @@
  *
  * **Since `simple/2`** (plan 261001b) an arm is `<effort>-<reader>[-<tag>]`,
  * the reader being `none`, `about`, `goalA` or `goalB` from readers.json, and
- * all three levels are recorded; the ELI12 knob went with the real levels. The
+ * all levels are recorded (Brief and Fuller since 2026-10-04); the ELI12 knob went with the real levels. The
  * `…-15-…` arms under evals/results/simple/ are the older prompt, kept as the
  * `before` side. What follows describes the first probe.
  *
@@ -80,7 +80,7 @@ interface ArmFile {
    * Since plan 261001h, three things that could move between time-separated arms
    * (Sol's plan review there): the model id actually selected for the call,
    * Simple's input fingerprint (rendered article plus profile-free user prompt),
-   * and a hash of the three rendered system prompts. These live on failed files
+   * and a hash of the rendered system prompts. These live on failed files
    * too.
    */
   model?: string;
@@ -192,7 +192,7 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
         let file: ArmFile;
         let spent: { costUsd: number | null; tokens: ArmFile["tokens"] } = { costUsd: null, tokens: null };
         const onDone = (report: { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number }; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }[] }) => {
-          /* Summed over every call: since `simple/2` a run is three, one per level. */
+          /* Summed over every writer and checker call, including retries. */
           if (report.calls.length === 0) return;
           let nanosTotal: number | null = 0;
           const tokens = { input: 0, output: 0, reasoning: 0 as number | null };
