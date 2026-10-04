@@ -1,65 +1,47 @@
-# Plan review: 261004g, the Overseer's report drain checks git without blocking the daemon
+# Plan review: 261004g, four small client fixes
 
-You are reviewing a **plan**, read-only. Nothing is built yet. Do not change any file.
+You are reviewing a plan before it is built. Read-only: change no file.
 
-## The candidate
+**Candidate (live, pre-commit).** Base SHA: the worktree's HEAD (`git rev-parse HEAD`). One
+untracked file, which is the whole candidate:
 
-- Base: this worktree's HEAD (`git rev-parse HEAD`).
-- Untracked file, the plan itself:
-  `docs/plans/261004g-overseer-report-drain-artefact-checks-stop-blocking-the-daemon.md`.
-- It describes changes to: `tools/overseer/report-artefacts.ts`, `tools/overseer/reports.ts`
-  (`drainReports`), `tools/overseer/daemon.ts` (the reports ticker, `guard`, `settleInFlight`),
-  `tools/overseer/store.ts` (one private method made public), `scripts/overseer.ts`
-  (`makeReportDrain`), `tests/no-sync-child-in-long-running.test.ts`, the daemon and reports tests,
-  and one row of `docs/plans/261003f-fifth-codebase-sweep-umbrella.md`. Where to start, not a limit.
+- `docs/plans/261004g-four-small-touch-and-narrow-window-fixes-structure-list-card-band-about-double-press-glossary-band-comes-back-shelf-copy-notice.md`
 
-## Context
-
-This is the Overseer daemon: orchestrator code, held to a higher bar than the rest of dev. It is
-the thing reached for when something else is broken. Small changes, each proven by a test.
-
-The parent is `docs/plans/261004c-sweep-cluster-11-no-blocking-child-process-on-the-dashboard-or-the-daemon.md`.
-Your own finding F4 on that plan said an async report drain is more than an adapter: the drain's
-promise has to be held and settled on both exit paths before the store is released, and ownership
-rechecked after each awaited git call, with suspended-drain tests for shutdown, a throwing source
-and lock loss. Stage 6 was therefore not built there. This plan is that job.
-
-The owned child is `tools/fleet/child.ts` (`processProbeOwner`, `ProbeOwner.run`, `OwnedOutcome`).
-Sibling conversions to compare with: `tools/overseer/attention-probe.ts`, `tools/fleet/readiness-git.ts`
-(`snapshotDevAsync`), and the daemon's `takeProbed`.
+Read it, then read the code it names. Start with, without that limiting scope:
+`src/web/OutlinePanel.tsx` § `Row`, `src/web/StructurePanel.tsx` § `CardRow`, `src/web/Tooltip.tsx`,
+`src/web/BandAbout.tsx`, `src/web/modes/referee/RefereeMode.tsx` § `HowToRead`,
+`src/web/useTapReveal.ts` if it exists, `src/web/reader/Reader.tsx` (every `setMode(` and every
+`setBandAway(`), `src/web/useShelf.ts`, `src/web/ShelfEntry.tsx` § `useShelfActions`,
+`src/web/useCopy.ts`, `tests/a-band-link-steps-the-band-aside-on-a-phone.test.tsx`,
+`tests/band-about.test.tsx`.
 
 ## What to do
 
-Independent pass first. Attack the plan: is any claim in it false against the code? What breaks
-that it does not name? Is there a simpler version? Trace the real code paths rather than trusting
-the plan's or a comment's account of them.
+Make an independent pass first. For each of the four items: is the stated cause the real cause, is
+the fix the right one for the long term, will the proposed red test really be red on today's code
+for the stated reason, and is there a simpler design? Check the table in item 3 row by row against
+the code: a wrong "No" there is a bug left in.
 
-Grade by consequence: **P0** data loss, a second writer, a daemon that cannot stop or restart;
-**P1** wrong recorded state or an authoritative contract violated; **P2** design or maintainability
-risk; **P3** prose. Give every finding an ID (F1, F2, …), a file:line, and say whether it is
-*established* (direct evidence) or *reasoned*. End with a one-line verdict:
-`VERDICT: build as planned` / `VERDICT: build with changes` / `VERDICT: do not build`.
+You may run one test file yourself if it needs nothing outside the tree (no Postgres, no network).
+
+## Severity, fixed
+
+| | |
+|---|---|
+| P0 | data loss, exploitable security, incorrect charging, or the service broadly unusable |
+| P1 | user-visible wrong behaviour, or an authoritative contract violated |
+| P2 | design or maintainability risk with no wrong behaviour today |
+| P3 | non-behavioural prose or comment defect |
+
+Give every finding an ID (`F1`, `F2`, …), its severity, and the file and line it rests on. Finish
+with one line: **Verdict:** `build it`, `build it with changes`, or `do not build`.
 
 ## My own suspicions (already mine, worth less; spend most of the run elsewhere)
 
-1. The plan claims `drainReports` has exactly one call out and that nothing has been written for
-   the current report when it is made. Check every write and every in-memory change between the
-   top of the candidate loop and `options.checkArtefact(ref)`, and what state an abandoned pass
-   leaves for the next daemon's drain (the `files`, `bytesRead`, `probes` counters; `inFlight`).
-2. A generator suspended at a `yield` inside a `try`/`catch` inside two `for` loops: is sending a
-   value, throwing into it, and returning from it each as the plan says? Is a generator the right
-   call here against a plain `async` function, given this is orchestrator code people must read?
-3. The mapping from `OwnedOutcome` to `GitResult`: is the owner's `why` on a failed exit really the
-   text the stderr regexes in `checkCommit` / `checkPath` need, in every case (`stderrSuffix`)?
-   Exit code 128 from git when the directory is not a repo; a `failed` with a null exit code.
-4. While the drain is suspended the daemon's other timers run. Does anything they do (the
-   heartbeat's checkpoint, the jobs ticker, a payload's fold moving `store.register`, the recovery
-   passes) conflict with a drain resumed afterwards? The drain reads `options.register` after its
-   checks: is "the register as it is after the checks" still the right reading for `receivedAt`?
-5. `guard(store.checkOwnership())` called from inside the drain's driver sets `stopped`. Is setting
-   `lock-lost` from there safe with respect to the main loop and `stopHere`?
-6. The wall-clock limit (`wallMs` 5 s) used to bound a blocked daemon. With awaits, is it still the
-   right bound, and can a `refused` child make every later reference in a pass `unchecked` in a way
-   that is worse than today's behaviour?
-7. Is the shutdown wait (2 s + 1 s grace) acceptable against systemd's stop timeout and the other
-   settlements already in `settleInFlight`?
+- Item 1: whether dropping `keepSide` changes anything for a mouse on a wide window, and whether the
+  jsdom tripwire is worth having at all.
+- Item 2: whether refusing an open while `dismissedByPress` is set interferes with Tooltip's
+  `byTouch` handling or with the `interactive` card's focus rules.
+- Item 3: whether `setMode` to the mode already open pushes a history entry (Reader.tsx says nuqs
+  does not elide a same-value push), which 261004b's `citeActions.dig` would then already be doing.
+- Item 4: whether a copy on one row should clear a copy failure reported by another row.

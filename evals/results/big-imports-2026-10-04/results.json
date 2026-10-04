@@ -1,0 +1,1503 @@
+{
+  "m1": {
+    "ranAt": "2026-10-04T11:07:09.375Z",
+    "question": "At what size does each model step refuse before calling?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m1,m3,fetch --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "constants": {
+      "MODEL_MAX_TOKENS": 128000,
+      "STRUCTURE_HEADROOM": 64000,
+      "THINKING_HEADROOM": 40000,
+      "MAX_PAGES": 250
+    },
+    "densities": [
+      {
+        "name": "dense paper",
+        "blocksPerPage": 14.4,
+        "headingsPerPage": 1.8,
+        "source": "Kuhn, measured: 142 pages, 2,025–2,046 blocks, 254 headings (plan 260904b)"
+      },
+      {
+        "name": "book",
+        "blocksPerPage": 5,
+        "headingsPerPage": 0.1,
+        "source": "assumed. The Order of Time is 1,041 blocks (docs/user-feedback/261001_1829); its page count is not in that report, so 5 blocks a page is a guess that puts it at about 208 pages"
+      },
+      {
+        "name": "headingless prose",
+        "blocksPerPage": 14.4,
+        "headingsPerPage": 0,
+        "source": "the dense paper's block rate with every heading removed"
+      }
+    ],
+    "contextWindow": "No constant for the structure model's context window exists in src/. Input tokens below are characters / 4 of system + user, an estimate. The one real figure: Kuhn's whole-document call reported 365,930 input tokens at 2,025 blocks (src/structure.ts § STRUCTURE_HEADROOM), about 181 a block.",
+    "budgetCallers": [
+      {
+        "file": "src/structure.ts",
+        "exercised": "yes: wholeDocumentRequest, the real request builder"
+      },
+      {
+        "file": "src/relations.ts",
+        "exercised": "partly: eligibleParagraphs and answerTokens are the real exported functions, but the line that hands them to budgetFor is inside generateRelations and is re-typed here (no formula copied, one composition is). A pure relationsRequest(blocks) would close it"
+      },
+      {
+        "file": "src/crossrefs.ts",
+        "exercised": "partly, as relations: linkCap and answerTokens are real, the composition is re-typed; capped by MAX_LINKS so it cannot refuse on length"
+      },
+      {
+        "file": "src/labels.ts",
+        "exercised": "no: the budget is two lines inside runBatch, straight before the call. Needs a pure export (say labelBatchBudget(count, headroom)) that runBatch also calls. planBatches was run for the batch count only"
+      },
+      {
+        "file": "src/structure-expand.ts",
+        "exercised": "no: needs a real tree's section targets (expectedChildren); off by default behind SPIDERYARN_DEEPEN_STRUCTURE as far as the plan says"
+      },
+      {
+        "file": "src/arc.ts",
+        "exercised": "no: 300 + parts × 80 is inline in generateArc, and parts come off a model-built tree"
+      },
+      {
+        "file": "src/tweets.ts",
+        "exercised": "no: inline in the generator; the answer is capped by suggestedLength"
+      },
+      {
+        "file": "src/glossary.ts",
+        "exercised": "no: 600 + count × 340 is inline in the generator"
+      },
+      {
+        "file": "src/ideas.ts",
+        "exercised": "no: 400 + count × 420 is inline in the generator"
+      },
+      {
+        "file": "src/quotes.ts",
+        "exercised": "no: answerTokensFor(count) is exported but count is settled inside the generator"
+      },
+      {
+        "file": "src/citations.ts",
+        "exercised": "no: answerEstimate() is a closure inside the generator"
+      },
+      {
+        "file": "src/faq.ts",
+        "exercised": "no: a constant answer (ANSWER_TOKENS), so it cannot refuse on length"
+      },
+      {
+        "file": "src/skim.ts",
+        "exercised": "no: a constant answer"
+      },
+      {
+        "file": "src/simple-summary.ts",
+        "exercised": "no: a constant answer"
+      },
+      {
+        "file": "src/timeline.ts",
+        "exercised": "no: a constant answer"
+      },
+      {
+        "file": "src/sketch.ts",
+        "exercised": "no: a constant answer (12,000)"
+      },
+      {
+        "file": "src/illustrated.ts",
+        "exercised": "no: a constant answer (32,000)"
+      },
+      {
+        "file": "src/quiz.ts",
+        "exercised": "no: a module constant, QUIZ_MAX_TOKENS"
+      },
+      {
+        "file": "src/referee-claims-run.ts",
+        "exercised": "no: a module constant"
+      },
+      {
+        "file": "src/referee-criteria-run.ts",
+        "exercised": "no: two module constants"
+      }
+    ],
+    "grid": [
+      {
+        "density": "dense paper",
+        "pages": 100,
+        "blocks": 1440,
+        "headings": 180,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 100200,
+          "answerEstimate": 36200,
+          "inputChars": 908968,
+          "estimatedInputTokens": 227242
+        },
+        "relations": {
+          "paragraphs": 1259,
+          "accepts": true,
+          "maxTokens": 77970
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 26,
+          "largestBatch": 56,
+          "blocksInBatches": 1440,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "dense paper",
+        "pages": 142,
+        "blocks": 2045,
+        "headings": 256,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 115250,
+          "answerEstimate": 51250,
+          "inputChars": 1286291,
+          "estimatedInputTokens": 321573
+        },
+        "relations": {
+          "paragraphs": 1788,
+          "accepts": true,
+          "maxTokens": 93840
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 37,
+          "largestBatch": 56,
+          "blocksInBatches": 2045,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "dense paper",
+        "pages": 180,
+        "blocks": 2592,
+        "headings": 324,
+        "structure": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 64,375 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 64375,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relations": {
+          "paragraphs": 2267,
+          "accepts": true,
+          "maxTokens": 108210
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 47,
+          "largestBatch": 56,
+          "blocksInBatches": 2592,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "dense paper",
+        "pages": 200,
+        "blocks": 2880,
+        "headings": 360,
+        "structure": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 71,550 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 71550,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relations": {
+          "paragraphs": 2519,
+          "accepts": true,
+          "maxTokens": 115770
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 52,
+          "largestBatch": 56,
+          "blocksInBatches": 2880,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "dense paper",
+        "pages": 250,
+        "blocks": 3600,
+        "headings": 450,
+        "structure": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 89,225 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 89225,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relations": {
+          "paragraphs": 3149,
+          "accepts": false,
+          "error": "TooLongForOnePass: The relations needs about 94,670 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]"
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 65,
+          "largestBatch": 56,
+          "blocksInBatches": 3600,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "book",
+        "pages": 100,
+        "blocks": 500,
+        "headings": 10,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 80425,
+          "answerEstimate": 16425,
+          "inputChars": 356046,
+          "estimatedInputTokens": 89012
+        },
+        "relations": {
+          "paragraphs": 489,
+          "accepts": true,
+          "maxTokens": 54870
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 10,
+          "largestBatch": 50,
+          "blocksInBatches": 500,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "book",
+        "pages": 142,
+        "blocks": 710,
+        "headings": 15,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 80425,
+          "answerEstimate": 16425,
+          "inputChars": 500674,
+          "estimatedInputTokens": 125169
+        },
+        "relations": {
+          "paragraphs": 694,
+          "accepts": true,
+          "maxTokens": 61020
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 14,
+          "largestBatch": 60,
+          "blocksInBatches": 710,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "book",
+        "pages": 180,
+        "blocks": 900,
+        "headings": 18,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 84625,
+          "answerEstimate": 20625,
+          "inputChars": 632899,
+          "estimatedInputTokens": 158225
+        },
+        "relations": {
+          "paragraphs": 881,
+          "accepts": true,
+          "maxTokens": 66630
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 18,
+          "largestBatch": 50,
+          "blocksInBatches": 900,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "book",
+        "pages": 200,
+        "blocks": 1000,
+        "headings": 20,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 86900,
+          "answerEstimate": 22900,
+          "inputChars": 701763,
+          "estimatedInputTokens": 175441
+        },
+        "relations": {
+          "paragraphs": 979,
+          "accepts": true,
+          "maxTokens": 69570
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 20,
+          "largestBatch": 50,
+          "blocksInBatches": 1000,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "book",
+        "pages": 250,
+        "blocks": 1250,
+        "headings": 25,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 92150,
+          "answerEstimate": 28150,
+          "inputChars": 874921,
+          "estimatedInputTokens": 218731
+        },
+        "relations": {
+          "paragraphs": 1224,
+          "accepts": true,
+          "maxTokens": 76920
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 25,
+          "largestBatch": 50,
+          "blocksInBatches": 1250,
+          "oversizedSiblingSets": 0,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "headingless prose",
+        "pages": 100,
+        "blocks": 1440,
+        "headings": 0,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 96175,
+          "answerEstimate": 32175,
+          "inputChars": 1024841,
+          "estimatedInputTokens": 256211
+        },
+        "relations": {
+          "paragraphs": 1439,
+          "accepts": true,
+          "maxTokens": 83370
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 1,
+          "largestBatch": 1440,
+          "blocksInBatches": 1440,
+          "oversizedSiblingSets": 1,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "headingless prose",
+        "pages": 142,
+        "blocks": 2045,
+        "headings": 0,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 109650,
+          "answerEstimate": 45650,
+          "inputChars": 1451352,
+          "estimatedInputTokens": 362838
+        },
+        "relations": {
+          "paragraphs": 2044,
+          "accepts": true,
+          "maxTokens": 101520
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 1,
+          "largestBatch": 2045,
+          "blocksInBatches": 2045,
+          "oversizedSiblingSets": 1,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "headingless prose",
+        "pages": 180,
+        "blocks": 2592,
+        "headings": 0,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 121375,
+          "answerEstimate": 57375,
+          "inputChars": 1836476,
+          "estimatedInputTokens": 459119
+        },
+        "relations": {
+          "paragraphs": 2591,
+          "accepts": true,
+          "maxTokens": 117930
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 1,
+          "largestBatch": 2592,
+          "blocksInBatches": 2592,
+          "oversizedSiblingSets": 1,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "headingless prose",
+        "pages": 200,
+        "blocks": 2880,
+        "headings": 0,
+        "structure": {
+          "accepts": true,
+          "maxTokens": 127675,
+          "answerEstimate": 63675,
+          "inputChars": 2039371,
+          "estimatedInputTokens": 509843
+        },
+        "relations": {
+          "paragraphs": 2879,
+          "accepts": true,
+          "maxTokens": 126570
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 1,
+          "largestBatch": 2880,
+          "blocksInBatches": 2880,
+          "oversizedSiblingSets": 1,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      },
+      {
+        "density": "headingless prose",
+        "pages": 250,
+        "blocks": 3600,
+        "headings": 0,
+        "structure": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 79,425 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 79425,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relations": {
+          "paragraphs": 3599,
+          "accepts": false,
+          "error": "TooLongForOnePass: The relations needs about 108,170 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]"
+        },
+        "crossrefs": {
+          "cap": 60,
+          "accepts": true,
+          "maxTokens": 43540
+        },
+        "labels": {
+          "batches": 1,
+          "largestBatch": 3600,
+          "blocksInBatches": 3600,
+          "oversizedSiblingSets": 1,
+          "budget": "not measurable without a src change: extract the answer estimate and budgetFor call out of runBatch (src/labels.ts)"
+        }
+      }
+    ],
+    "thresholds": [
+      {
+        "density": "dense paper",
+        "structureFirstRefusedAtBlocks": 2569,
+        "headingsAtThatPoint": 322,
+        "pagesAtThatPoint": 178.4,
+        "lastAccepted": {
+          "blocks": 2568,
+          "accepts": true,
+          "maxTokens": 127850,
+          "answerEstimate": 63850,
+          "inputChars": 1612703,
+          "estimatedInputTokens": 403176
+        },
+        "firstRefused": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 64,025 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 64025,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relationsFirstRefusedAtBlocks": 3347,
+        "relationsPagesAtThatPoint": 232.4,
+        "streamLengthSearched": 3600
+      },
+      {
+        "density": "book",
+        "structureFirstRefusedAtBlocks": 2890,
+        "headingsAtThatPoint": 58,
+        "pagesAtThatPoint": 578,
+        "lastAccepted": {
+          "blocks": 2889,
+          "accepts": true,
+          "maxTokens": 127850,
+          "answerEstimate": 63850,
+          "inputChars": 2008433,
+          "estimatedInputTokens": 502109
+        },
+        "firstRefused": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 64,025 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 64025,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relationsFirstRefusedAtBlocks": 2988,
+        "relationsPagesAtThatPoint": 597.6,
+        "streamLengthSearched": 5000
+      },
+      {
+        "density": "headingless prose",
+        "structureFirstRefusedAtBlocks": 2890,
+        "headingsAtThatPoint": 0,
+        "pagesAtThatPoint": 200.7,
+        "lastAccepted": {
+          "blocks": 2889,
+          "accepts": true,
+          "maxTokens": 127850,
+          "answerEstimate": 63850,
+          "inputChars": 2045730,
+          "estimatedInputTokens": 511433
+        },
+        "firstRefused": {
+          "accepts": false,
+          "error": "TooLongForOnePass: The table of contents needs about 64,025 tokens for this article, and one model response holds 128,000 including the model's own reasoning. This article has to be processed in sections, which is not built yet — see docs/project/structure-step.md#long-articles.",
+          "readerMessage": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "answerEstimate": 64025,
+          "inputChars": null,
+          "estimatedInputTokens": null
+        },
+        "relationsFirstRefusedAtBlocks": 2928,
+        "relationsPagesAtThatPoint": 203.3,
+        "streamLengthSearched": 3600
+      }
+    ],
+    "instrumentCheck": {
+      "tenBlockDocument": {
+        "accepts": true,
+        "maxTokens": 80425,
+        "answerEstimate": 16425,
+        "inputChars": 16334,
+        "estimatedInputTokens": 4084
+      }
+    },
+    "cannotDetect": "Whether a request the budget ACCEPTS fits the model's context window or finishes inside its max_tokens: the budget functions and this measurement share the same estimate of the answer, and no model is called. The labels columns are a batch count over a heading tree, not the tree the model would build, and say nothing about the labels budget. Relations and crossrefs re-type one line of composition."
+  },
+  "about": {
+    "plan": "docs/plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md",
+    "harness": "scripts/eval-big-imports.ts",
+    "statedLimits": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+    "paidCalls": 0,
+    "networkCallsRefusedInTheParent": []
+  },
+  "m3": {
+    "ranAt": "2026-10-04T11:10:04.385Z",
+    "question": "Does the blocks step scale?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m3 --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "rows": [
+      {
+        "elements": 500,
+        "blocks": 524,
+        "htmlBytes": 317369,
+        "freshMs": 1204,
+        "freshMsPerBlock": 2.298,
+        "rerunMs": 1180,
+        "rerunMsPerBlock": 2.252,
+        "rerunStats": {
+          "total": 524,
+          "reused": 0,
+          "carried": 524,
+          "minted": 0,
+          "retargeted": 0,
+          "gistable": 506
+        },
+        "idsCarried": true,
+        "kinds": {
+          "heading": 42,
+          "text": 431,
+          "quote": 33,
+          "media": 18
+        }
+      },
+      {
+        "elements": 1000,
+        "blocks": 1050,
+        "htmlBytes": 634151,
+        "freshMs": 2009,
+        "freshMsPerBlock": 1.913,
+        "rerunMs": 2014,
+        "rerunMsPerBlock": 1.918,
+        "rerunStats": {
+          "total": 1050,
+          "reused": 0,
+          "carried": 1050,
+          "minted": 0,
+          "retargeted": 0,
+          "gistable": 1014
+        },
+        "idsCarried": true,
+        "kinds": {
+          "heading": 84,
+          "text": 863,
+          "quote": 67,
+          "media": 36
+        }
+      },
+      {
+        "elements": 2000,
+        "blocks": 2100,
+        "htmlBytes": 1270220,
+        "freshMs": 4511,
+        "freshMsPerBlock": 2.148,
+        "rerunMs": 4605,
+        "rerunMsPerBlock": 2.193,
+        "rerunStats": {
+          "total": 2100,
+          "reused": 0,
+          "carried": 2100,
+          "minted": 0,
+          "retargeted": 0,
+          "gistable": 2027
+        },
+        "idsCarried": true,
+        "kinds": {
+          "heading": 167,
+          "text": 1727,
+          "quote": 133,
+          "media": 73
+        }
+      },
+      {
+        "elements": 4000,
+        "blocks": 4200,
+        "htmlBytes": 2540739,
+        "freshMs": 11173,
+        "freshMsPerBlock": 2.66,
+        "rerunMs": 11771,
+        "rerunMsPerBlock": 2.803,
+        "rerunStats": {
+          "total": 4200,
+          "reused": 0,
+          "carried": 4200,
+          "minted": 0,
+          "retargeted": 0,
+          "gistable": 4054
+        },
+        "idsCarried": true,
+        "kinds": {
+          "heading": 334,
+          "text": 3453,
+          "quote": 267,
+          "media": 146
+        }
+      },
+      {
+        "elements": 6000,
+        "blocks": 6300,
+        "htmlBytes": 3812216,
+        "freshMs": 23734,
+        "freshMsPerBlock": 3.767,
+        "rerunMs": 28300,
+        "rerunMsPerBlock": 4.492,
+        "rerunStats": {
+          "total": 6300,
+          "reused": 0,
+          "carried": 6300,
+          "minted": 0,
+          "retargeted": 0,
+          "gistable": 6080
+        },
+        "idsCarried": true,
+        "kinds": {
+          "heading": 500,
+          "text": 5180,
+          "quote": 400,
+          "media": 220
+        }
+      }
+    ],
+    "growth": {
+      "freshPerBlockAt6000OverAt1000": 1.97,
+      "rerunPerBlockAt6000OverAt1000": 2.34
+    },
+    "worseThanLinear": true,
+    "note": "One run per size on a shared box, so a ratio near 1 is 'linear within noise', not a precise slope. The plan's 36 s on 2,046 blocks was a real PDF's HTML in production, which this is not.",
+    "instrumentCheck": {
+      "emptyArticleIsRefused": {
+        "name": "NoBlocksProduced",
+        "message": "blocks \"eval-big-imports-m3\": this run produced no blocks at all, so there is no article here to write. Every later stage — the table of contents, the summaries, the gists, and every comment or search a reader can anchor — is built from the blocks, so writing this would record an empty article as a finished one (docs/project/block-ids.md).\nNothing has been written — the HTML is still stage 2's and any previous blocks are still the previous run's, so there is nothing to restore.\nThe usual causes are a paywall, an error page, or a page whose text only appears once its JavaScript has run, and in ",
+        "readerMessage": "blocks did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+        "readerKind": "retry",
+        "causes": []
+      }
+    },
+    "cannotDetect": "A cost that depends on what real extracted HTML contains and this does not: deep nesting, tables, maths, thousands of footnote links, a PDF transcript's markup; and a re-import whose text has CHANGED (here the second run's text is identical, the easy case for carrying ids)."
+  },
+  "fetch": {
+    "ranAt": "2026-10-04T11:07:09.375Z",
+    "question": "Does a PDF fetched by address get the 50 MB the dialog states?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m1,m3,fetch --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "statedLimit": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+    "fetchDefaultMaxBytes": 33554432,
+    "uploadMaxBytes": 52428800,
+    "rows": [
+      {
+        "size": "32 MiB exactly",
+        "bytes": 33554432,
+        "contentLengthDeclared": true,
+        "accepted": true,
+        "kind": "pdf",
+        "gotBytes": 33554432,
+        "ms": 339,
+        "fetchImplCalls": 1
+      },
+      {
+        "size": "32 MiB + 1",
+        "bytes": 33554433,
+        "contentLengthDeclared": true,
+        "accepted": false,
+        "failure": {
+          "name": "FetchFailure",
+          "message": "That page is over the 32 MB limit.",
+          "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": []
+        },
+        "ms": 99,
+        "fetchImplCalls": 1
+      },
+      {
+        "size": "50 MiB (the stated limit)",
+        "bytes": 52428800,
+        "contentLengthDeclared": true,
+        "accepted": false,
+        "failure": {
+          "name": "FetchFailure",
+          "message": "That page is over the 32 MB limit.",
+          "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": []
+        },
+        "ms": 144,
+        "fetchImplCalls": 1
+      },
+      {
+        "size": "32 MiB exactly",
+        "bytes": 33554432,
+        "contentLengthDeclared": false,
+        "accepted": true,
+        "kind": "pdf",
+        "gotBytes": 33554432,
+        "ms": 208,
+        "fetchImplCalls": 1
+      },
+      {
+        "size": "32 MiB + 1",
+        "bytes": 33554433,
+        "contentLengthDeclared": false,
+        "accepted": false,
+        "failure": {
+          "name": "FetchFailure",
+          "message": "That page is over the 32 MB limit.",
+          "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": []
+        },
+        "ms": 155,
+        "fetchImplCalls": 1
+      },
+      {
+        "size": "50 MiB (the stated limit)",
+        "bytes": 52428800,
+        "contentLengthDeclared": false,
+        "accepted": false,
+        "failure": {
+          "name": "FetchFailure",
+          "message": "That page is over the 32 MB limit.",
+          "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": []
+        },
+        "ms": 244,
+        "fetchImplCalls": 1
+      }
+    ],
+    "cannotDetect": "Anything about a real server: a slow body, a redirect chain, a wrong content-type. And whether the pipeline passes fetchDocument a larger maxBytes somewhere: this calls it with the default, as read."
+  },
+  "m2": {
+    "ranAt": "2026-10-04T11:21:49.136Z",
+    "question": "Does the store take a long document?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m2,m5 --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "target": {
+      "host": "127.0.0.1",
+      "urlPort": "54362",
+      "database": "postgres",
+      "addr": "172.18.0.2/32",
+      "port": 5432
+    },
+    "parametersPerBlockRow": 17,
+    "parametersPerIdentityRow": 2,
+    "postgresParameterLimit": 65535,
+    "runs": [
+      {
+        "blocks": 1000,
+        "slug": "eval-big-imports-1000-spyahykx",
+        "wrote": true,
+        "writeBlocksMs": 2033,
+        "writeStructureMs": 1786,
+        "publishMs": 72,
+        "successorQueued": false,
+        "loadMs": 1282,
+        "loadedBlocks": 1000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 2000,
+        "slug": "eval-big-imports-2000-spyarhpv",
+        "wrote": true,
+        "writeBlocksMs": 3626,
+        "writeStructureMs": 3459,
+        "publishMs": 109,
+        "successorQueued": false,
+        "loadMs": 2736,
+        "loadedBlocks": 2000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3000,
+        "slug": "eval-big-imports-3000-spyak0ca",
+        "wrote": true,
+        "writeBlocksMs": 5417,
+        "writeStructureMs": 5318,
+        "publishMs": 135,
+        "successorQueued": false,
+        "loadMs": 3804,
+        "loadedBlocks": 3000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3800,
+        "slug": "eval-big-imports-3800-spyauzf0",
+        "wrote": true,
+        "writeBlocksMs": 7625,
+        "writeStructureMs": 7653,
+        "publishMs": 255,
+        "successorQueued": false,
+        "loadMs": 5126,
+        "loadedBlocks": 3800,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3900,
+        "slug": "eval-big-imports-3900-spyatu3u",
+        "wrote": false,
+        "writeBlocksMs": null,
+        "writeStructureMs": null,
+        "publishMs": null,
+        "successorQueued": null,
+        "loadMs": null,
+        "loadedBlocks": null,
+        "orderPreserved": null,
+        "error": {
+          "during": "the blocks step's write (writeArtefacts → writeBlocks)",
+          "name": "Error",
+          "message": "Failed query: insert into \"spideryarn\".\"revision_blocks\" (\"article_id\", \"revision_id\", \"block_id\", \"ordinal\", \"tag\", \"kind\", \"level\", \"text\", \"words\", \"html\", \"gistable\", \"note\", \"role\", \"treatment\", \"note_id\", \"context_id\", \"context_type\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17), ($18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34), ($35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51), ($52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68), ($69, $70, $7",
+          "readerMessage": "blocks did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": [
+            "error [08P01]: bind message has 764 parameter formats but 0 parameters"
+          ]
+        }
+      },
+      {
+        "blocks": 4000,
+        "slug": "eval-big-imports-4000-spyatyr6",
+        "wrote": false,
+        "writeBlocksMs": null,
+        "writeStructureMs": null,
+        "publishMs": null,
+        "successorQueued": null,
+        "loadMs": null,
+        "loadedBlocks": null,
+        "orderPreserved": null,
+        "error": {
+          "during": "the blocks step's write (writeArtefacts → writeBlocks)",
+          "name": "Error",
+          "message": "Failed query: insert into \"spideryarn\".\"revision_blocks\" (\"article_id\", \"revision_id\", \"block_id\", \"ordinal\", \"tag\", \"kind\", \"level\", \"text\", \"words\", \"html\", \"gistable\", \"note\", \"role\", \"treatment\", \"note_id\", \"context_id\", \"context_type\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17), ($18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34), ($35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51), ($52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68), ($69, $70, $7",
+          "readerMessage": "blocks did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": [
+            "error [08P01]: bind message has 2464 parameter formats but 0 parameters"
+          ]
+        }
+      },
+      {
+        "blocks": 6000,
+        "slug": "eval-big-imports-6000-spyap3gj",
+        "wrote": false,
+        "writeBlocksMs": null,
+        "writeStructureMs": null,
+        "publishMs": null,
+        "successorQueued": null,
+        "loadMs": null,
+        "loadedBlocks": null,
+        "orderPreserved": null,
+        "error": {
+          "during": "the blocks step's write (writeArtefacts → writeBlocks)",
+          "name": "Error",
+          "message": "Failed query: insert into \"spideryarn\".\"revision_blocks\" (\"article_id\", \"revision_id\", \"block_id\", \"ordinal\", \"tag\", \"kind\", \"level\", \"text\", \"words\", \"html\", \"gistable\", \"note\", \"role\", \"treatment\", \"note_id\", \"context_id\", \"context_type\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17), ($18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34), ($35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51), ($52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68), ($69, $70, $7",
+          "readerMessage": "blocks did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+          "readerKind": "retry",
+          "causes": [
+            "error [08P01]: bind message has 36464 parameter formats but 0 parameters"
+          ]
+        }
+      }
+    ],
+    "boundary": {
+      "firstFailingBlocks": 3856,
+      "parametersAtFirstFailure": 65552,
+      "lastPassingBlocks": 3855,
+      "parametersAtLastPass": 65535,
+      "lastPassWrote": true,
+      "error": {
+        "during": "the blocks step's write (writeArtefacts → writeBlocks)",
+        "name": "Error",
+        "message": "Failed query: insert into \"spideryarn\".\"revision_blocks\" (\"article_id\", \"revision_id\", \"block_id\", \"ordinal\", \"tag\", \"kind\", \"level\", \"text\", \"words\", \"html\", \"gistable\", \"note\", \"role\", \"treatment\", \"note_id\", \"context_id\", \"context_type\") values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17), ($18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34), ($35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51), ($52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68), ($69, $70, $7",
+        "readerMessage": "blocks did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+        "readerKind": "retry",
+        "causes": [
+          "error [08P01]: bind message has 16 parameter formats but 0 parameters"
+        ]
+      }
+    },
+    "otherWrites": "Read, not run: the only multi-row inserts on the import path are the two in writeBlocks (block_identities, 2 parameters a row; revision_blocks). The tree, labels, assets and arc are one jsonb column each (src/store/artifact-storage.ts), and a checkpoint is one row per write. The structure step's write was exercised here (it calls writeBlocks again, plus the tree and a pending labels manifest). block_identities alone would pass 65,535 at 32,768 blocks; not run, because revision_blocks fails long before.",
+    "leftBehind": {
+      "articles": 0,
+      "jobs": 0
+    },
+    "instrumentCheck": "The instrument is seen both passing and failing in this same run (see runs and boundary); a load is counted only when every block id comes back in the order written. successorQueued is false on every published run: publishing queued no job a worker could have paid for.",
+    "cannotDetect": "Anything about production's Postgres that differs from the local one (statement timeouts, the pooler in front of it, row-size limits under real load), and any write a model step makes that this did not call. Blocks here are ~90-word paragraphs; a block with a very large html is not tried."
+  },
+  "m5": {
+    "ranAt": "2026-10-04T11:21:49.136Z",
+    "question": "Does the reader get the article back?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m2,m5 --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "limitBytes": 4718592,
+    "lifecycle": "jobs row → openOrBeginJobDraft → pgArtifactsIn(ref, tx).beginStep/write/finishStep for `blocks` then `structure` → publishRevision → loadArticle (src/store/index.ts, what the route calls) → JSON.stringify, which is all send() in src/routes.ts does.",
+    "rows": [
+      {
+        "blocks": 1000,
+        "responseBytes": 1470201,
+        "responseMb": 1.4,
+        "gzipBytes": 173458,
+        "overLimit": false
+      },
+      {
+        "blocks": 2000,
+        "responseBytes": 2939011,
+        "responseMb": 2.8,
+        "gzipBytes": 345402,
+        "overLimit": false
+      },
+      {
+        "blocks": 3000,
+        "responseBytes": 4407678,
+        "responseMb": 4.2,
+        "gzipBytes": 517164,
+        "overLimit": false
+      },
+      {
+        "blocks": 3800,
+        "responseBytes": 5583537,
+        "responseMb": 5.32,
+        "gzipBytes": 654829,
+        "overLimit": true
+      }
+    ],
+    "noRowFor": [
+      3900,
+      4000,
+      6000
+    ],
+    "missing": "These articles have a heading tree with no gists, questions or nav labels, no arc, no assets and almost no meta, so a real article of the same block count is larger. Blocks are plain ~90-word paragraphs: no links, maths, tables or figures in their html. send() in src/routes.ts does not compress; whether Vercel counts the body before or after its own compression was not checked.",
+    "instrumentCheck": {
+      "note": "the same comparison against a 100 KB limit, to show it can say 'over'",
+      "blocks": 1000,
+      "overA100KbLimit": true
+    },
+    "cannotDetect": "What Vercel actually does with a body over its limit, and the size of a real article: this measures bytes of a synthetic one on this machine."
+  },
+  "m4": {
+    "ranAt": "2026-10-04T11:30:16.608Z",
+    "question": "Does the PDF front half cope at the caps?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m4 --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness",
+    "caps": {
+      "uploadLimits": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+      "MAX_PAGES": 250,
+      "MAX_UPLOAD_BYTES": 52428800,
+      "fetchMaxBytes": 33554432,
+      "uploadAtTheCap": null,
+      "uploadOneByteOver": "That's 50 MB, and the limit is 50 MB. [pick-big]"
+    },
+    "vercelMemory": "vercel.json sets maxDuration (800) and no memory for api/**, so the function's memory ceiling is whatever the plan's default is: not readable from the repo, not measured.",
+    "cases": [
+      {
+        "generated": {
+          "case": "a",
+          "what": "250 pages of embedded text, ~450 words a page",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness/case-a.pdf",
+          "bytes": 533272,
+          "mb": 0.51,
+          "generateMs": 1335,
+          "childWallMs": 7135
+        },
+        "measured": {
+          "case": "a",
+          "what": "250 pages of embedded text, ~450 words a page",
+          "baselineRssMb": 322.84,
+          "fileBytes": 533272,
+          "fileMb": 0.51,
+          "uploadProblem": null,
+          "pages": 250,
+          "countPagesMs": 1856,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 587.85,
+          "pass0": {
+            "ms": 1781,
+            "pages": 250,
+            "isScan": false,
+            "words": 110250,
+            "nonEmptyLines": 10050
+          },
+          "rssAfterPass0Mb": 568.95,
+          "plan": {
+            "ms": 778,
+            "chunks": 42,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 6,
+            "withContextPage": 41,
+            "largestMeasuredPageMb": 0,
+            "smallestMeasuredPageMb": 0
+          },
+          "rssAfterPlanMb": 614.92,
+          "extract": {
+            "ms": 31472,
+            "pages": 250,
+            "chunks": 42,
+            "records": 10050,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "htmlBytes": 901404,
+            "blocksFromThisHtml": 10050
+          },
+          "rssAfterExtractMb": 711.47,
+          "reader": {
+            "asks": 42,
+            "mostInFlight": 42,
+            "largestChunks": [
+              {
+                "pages": [
+                  241,
+                  242,
+                  243,
+                  244,
+                  245,
+                  246
+                ],
+                "rawBytes": 15781,
+                "rawMb": 0.02
+              },
+              {
+                "pages": [
+                  181,
+                  182,
+                  183,
+                  184,
+                  185,
+                  186
+                ],
+                "rawBytes": 15751,
+                "rawMb": 0.02
+              },
+              {
+                "pages": [
+                  97,
+                  98,
+                  99,
+                  100,
+                  101,
+                  102
+                ],
+                "rawBytes": 15732,
+                "rawMb": 0.02
+              }
+            ],
+            "totalChunkMb": 0.62,
+            "requestSizeGuard": "NOT EXERCISED BY THIS SEAM. The encoded-size check (MAX_ENCODED_BYTES, [pdf-chunk-big]) and the concurrency gate (WidthGate at CHUNK_CONCURRENCY) both live inside openRouterReader (src/pdf-read.ts), which an injected PdfExtractOptions.reader replaces whole. So a chunk too heavy for one request is transcribed here where production would refuse it, and this run says nothing about that refusal. To reach it for free, one of: (1) export the size policy as a pure function the real reader calls, e.g. refuseAnOversizedChunk(pdf) or encodedChunkProblem(bytes); (2) give openRouterReader a transport parameter beneath it (the openRouterJson call it makes), so a test can run the real reader with a fake wire."
+          },
+          "peakRssMb": 711.6,
+          "networkCallsRefused": 0,
+          "childWallMs": 41495
+        }
+      },
+      {
+        "generated": {
+          "case": "b",
+          "what": "251 pages of embedded text (must be refused)",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness/case-b.pdf",
+          "bytes": 535741,
+          "mb": 0.51,
+          "generateMs": 1142,
+          "childWallMs": 5987
+        },
+        "measured": {
+          "case": "b",
+          "what": "251 pages of embedded text (must be refused)",
+          "baselineRssMb": 325.32,
+          "fileBytes": 535741,
+          "fileMb": 0.51,
+          "uploadProblem": null,
+          "pages": 251,
+          "countPagesMs": 1506,
+          "pageCountRefusal": {
+            "name": "TooManyPages",
+            "message": "This PDF has 251 pages and the limit is 250.",
+            "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+            "readerKind": "retry",
+            "causes": []
+          },
+          "rssAfterCountMb": 589.61,
+          "pass0": {
+            "ms": 53,
+            "refused": {
+              "name": "TooManyPages",
+              "message": "This PDF has 251 pages and the limit is 250.",
+              "readerMessage": "extract did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+              "readerKind": "retry",
+              "causes": []
+            }
+          },
+          "rssAfterPass0Mb": 590.48,
+          "extract": {
+            "ms": 103,
+            "refused": {
+              "name": "Error",
+              "message": "This PDF has 251 pages and the limit is 250. That is a cost cap, not a technical one — see docs/plans/260826c-pdf-ingestion.md. [pdf-pages]",
+              "readerMessage": "This PDF has 251 pages, and this app takes documents of at most 250. That is a limit on what reading a document is allowed to cost rather than a technical one, so the same file will be refused the same way — a shorter document, or the part of this one you actually want, will go through. [pdf-pages]",
+              "readerKind": "blocked",
+              "causes": []
+            }
+          },
+          "rssAfterExtractMb": 600.86,
+          "reader": {
+            "asks": 0,
+            "mostInFlight": 0,
+            "largestChunks": [],
+            "totalChunkMb": 0,
+            "requestSizeGuard": "NOT EXERCISED BY THIS SEAM. The encoded-size check (MAX_ENCODED_BYTES, [pdf-chunk-big]) and the concurrency gate (WidthGate at CHUNK_CONCURRENCY) both live inside openRouterReader (src/pdf-read.ts), which an injected PdfExtractOptions.reader replaces whole. So a chunk too heavy for one request is transcribed here where production would refuse it, and this run says nothing about that refusal. To reach it for free, one of: (1) export the size policy as a pure function the real reader calls, e.g. refuseAnOversizedChunk(pdf) or encodedChunkProblem(bytes); (2) give openRouterReader a transport parameter beneath it (the openRouterJson call it makes), so a test can run the real reader with a fake wire."
+          },
+          "peakRssMb": 600.86,
+          "networkCallsRefused": 0,
+          "childWallMs": 6136
+        }
+      },
+      {
+        "generated": {
+          "case": "c",
+          "what": "250 pages, each with a JPEG and ~90 words, just under 50 MiB",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness/case-c.pdf",
+          "bytes": 50881631,
+          "mb": 48.52,
+          "generateMs": 4437,
+          "childWallMs": 9566
+        },
+        "measured": {
+          "case": "c",
+          "what": "250 pages, each with a JPEG and ~90 words, just under 50 MiB",
+          "baselineRssMb": 324.01,
+          "fileBytes": 50881631,
+          "fileMb": 48.52,
+          "uploadProblem": null,
+          "pages": 250,
+          "countPagesMs": 1853,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 741.13,
+          "pass0": {
+            "ms": 1013,
+            "pages": 250,
+            "isScan": false,
+            "words": 24500,
+            "nonEmptyLines": 2300
+          },
+          "rssAfterPass0Mb": 659.97,
+          "plan": {
+            "ms": 1222,
+            "chunks": 42,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 6,
+            "withContextPage": 41,
+            "largestMeasuredPageMb": 0.19,
+            "smallestMeasuredPageMb": 0.19
+          },
+          "rssAfterPlanMb": 739.75,
+          "extract": {
+            "ms": 7857,
+            "pages": 250,
+            "chunks": 42,
+            "records": 2300,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "htmlBytes": 196441,
+            "blocksFromThisHtml": 2300
+          },
+          "rssAfterExtractMb": 767.06,
+          "reader": {
+            "asks": 42,
+            "mostInFlight": 42,
+            "largestChunks": [
+              {
+                "pages": [
+                  181,
+                  182,
+                  183,
+                  184,
+                  185,
+                  186
+                ],
+                "rawBytes": 1425437,
+                "rawMb": 1.36
+              },
+              {
+                "pages": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72
+                ],
+                "rawBytes": 1425436,
+                "rawMb": 1.36
+              },
+              {
+                "pages": [
+                  121,
+                  122,
+                  123,
+                  124,
+                  125,
+                  126
+                ],
+                "rawBytes": 1425436,
+                "rawMb": 1.36
+              }
+            ],
+            "totalChunkMb": 56.51,
+            "requestSizeGuard": "NOT EXERCISED BY THIS SEAM. The encoded-size check (MAX_ENCODED_BYTES, [pdf-chunk-big]) and the concurrency gate (WidthGate at CHUNK_CONCURRENCY) both live inside openRouterReader (src/pdf-read.ts), which an injected PdfExtractOptions.reader replaces whole. So a chunk too heavy for one request is transcribed here where production would refuse it, and this run says nothing about that refusal. To reach it for free, one of: (1) export the size policy as a pure function the real reader calls, e.g. refuseAnOversizedChunk(pdf) or encodedChunkProblem(bytes); (2) give openRouterReader a transport parameter beneath it (the openRouterJson call it makes), so a test can run the real reader with a fake wire."
+          },
+          "peakRssMb": 810.61,
+          "networkCallsRefused": 0,
+          "childWallMs": 16916
+        },
+        "figures": {
+          "case": "c",
+          "baselineRssMb": 321.66,
+          "figures": {
+            "ms": 4130,
+            "markers": 250,
+            "entries": 250,
+            "stored": 100,
+            "drawn": 0,
+            "failed": 150,
+            "deduped": 0,
+            "storedMb": 18.44,
+            "elapsedMs": 4129,
+            "storageErrors": 0,
+            "outcomes": {
+              "stored": 100,
+              "failed: budget": 150
+            },
+            "blobsHeld": 100
+          },
+          "peakRssMb": 704.56,
+          "networkCallsRefused": 0,
+          "childWallMs": 10836
+        }
+      },
+      {
+        "generated": {
+          "case": "d",
+          "what": "3 pages, the middle one carrying a ~25 MiB JPEG",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness/case-d.pdf",
+          "bytes": 26220437,
+          "mb": 25.01,
+          "generateMs": 1288,
+          "childWallMs": 6693
+        },
+        "measured": {
+          "case": "d",
+          "what": "3 pages, the middle one carrying a ~25 MiB JPEG",
+          "baselineRssMb": 324.94,
+          "fileBytes": 26220437,
+          "fileMb": 25.01,
+          "uploadProblem": null,
+          "pages": 3,
+          "countPagesMs": 1748,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 663.05,
+          "pass0": {
+            "ms": 142,
+            "pages": 3,
+            "isScan": false,
+            "words": 973,
+            "nonEmptyLines": 89
+          },
+          "rssAfterPass0Mb": 689.55,
+          "plan": {
+            "ms": 562,
+            "chunks": 3,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 1,
+            "withContextPage": 2,
+            "largestMeasuredPageMb": 25,
+            "smallestMeasuredPageMb": 0
+          },
+          "rssAfterPlanMb": 656.37,
+          "extract": {
+            "ms": 2816,
+            "pages": 3,
+            "chunks": 3,
+            "records": 89,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "htmlBytes": 8033,
+            "blocksFromThisHtml": 89
+          },
+          "rssAfterExtractMb": 684.16,
+          "reader": {
+            "asks": 3,
+            "mostInFlight": 3,
+            "largestChunks": [
+              {
+                "pages": [
+                  2
+                ],
+                "rawBytes": 26218244,
+                "rawMb": 25
+              },
+              {
+                "pages": [
+                  3
+                ],
+                "rawBytes": 26218201,
+                "rawMb": 25
+              },
+              {
+                "pages": [
+                  1
+                ],
+                "rawBytes": 2884,
+                "rawMb": 0
+              }
+            ],
+            "totalChunkMb": 50.01,
+            "requestSizeGuard": "NOT EXERCISED BY THIS SEAM. The encoded-size check (MAX_ENCODED_BYTES, [pdf-chunk-big]) and the concurrency gate (WidthGate at CHUNK_CONCURRENCY) both live inside openRouterReader (src/pdf-read.ts), which an injected PdfExtractOptions.reader replaces whole. So a chunk too heavy for one request is transcribed here where production would refuse it, and this run says nothing about that refusal. To reach it for free, one of: (1) export the size policy as a pure function the real reader calls, e.g. refuseAnOversizedChunk(pdf) or encodedChunkProblem(bytes); (2) give openRouterReader a transport parameter beneath it (the openRouterJson call it makes), so a test can run the real reader with a fake wire."
+          },
+          "peakRssMb": 780.66,
+          "networkCallsRefused": 0,
+          "childWallMs": 10579
+        }
+      }
+    ],
+    "cannotDetect": "Anything the model does: a slow, short or wrong transcription, a provider's own size or page limit, rate limits at this width. Peak RSS is sampled every 20 ms in a Node process on this box, so a short spike can be missed, and it is not the memory of a Vercel function. The fake reader returns in 5 ms, so nothing about a 740 s step deadline is tested."
+  }
+}

@@ -1252,6 +1252,29 @@ td.text.has-hit[data-hues="8"] {
 .cmt-delete { margin-left: auto; }
 .cmt-deepen { white-space: nowrap; }
 
+/* The fresh box (CommentDialog.tsx § The fresh box): the line that says the
+   words are already highlighted, the Copy button, and what the copy came to.
+   The footer wraps here because a narrow box cannot hold "Copy, don't
+   highlight", a refusal and "Remove highlight" on one line. */
+.cmt-fresh-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.77rem;
+  color: var(--ink-faint);
+}
+.cmt-dialog footer:has(.cmt-copy) { flex-wrap: wrap; }
+.cmt-copy,
+.cmt-delete { white-space: nowrap; }
+/* **A finger's size on a finger's device**, as `.annotate-actions` in
+   dialogs.css. "Remove highlight" and "Copy, don't highlight" were 19px tall on
+   an iPad and "Ask in chat" 25px (browser check, 2026-10-04), in the box a touch
+   highlight now always opens. docs/project/controls.md § The numbers. */
+@media (pointer: coarse) {
+  .cmt-dialog button.linky,
+  .cmt-dialog .cmt-followup button {
+    min-height: var(--control-h-lg);
+  }
+}
+
 .cmt-transport-error {
   font-family: var(--font-mono);
   font-size: 0.74rem;

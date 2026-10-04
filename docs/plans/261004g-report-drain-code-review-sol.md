@@ -8,7 +8,7 @@ I would keep the generator for this stage, while preferring a plain async drain 
 
 Validation: 140 scoped tests passed; typechecking passed through the direct Node invocation. Full-suite database setup and two synchronous subprocess fixtures were blocked by sandbox restrictions.
 
-[Full review](/home/greg/code/spideryarn2/.claude/worktrees/overseer-report-drain-async/docs/plans/261004g-code-review-sol.md) · [Postmortem](/home/greg/code/spideryarn2/.claude/worktrees/overseer-report-drain-async/docs/postmortems/261004j-a-fallback-logger-rejects-the-promise-that-shutdown-must-settle.md)
+[Full review](/home/greg/code/spideryarn2/.claude/worktrees/overseer-report-drain-async/docs/plans/261004g-report-drain-code-review-sol.md) · [Postmortem](/home/greg/code/spideryarn2/.claude/worktrees/overseer-report-drain-async/docs/postmortems/261004j-a-fallback-logger-rejects-the-promise-that-shutdown-must-settle.md)
 
 Changed the daemon, its regression test and those two docs. No commits, restarts or deployment. The verdict covers this candidate; F7 remains a wider issue.
 

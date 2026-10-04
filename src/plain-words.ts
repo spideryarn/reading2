@@ -134,6 +134,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "a one-off probe; it runs production's own Investigate press, whose prompts are production's (INVESTIGATE_SYSTEM carries plainWords(\"explain\"); the passages call is exempt above)",
   "scripts/probes/261001h-fidelity-guard-probe.ts":
     "a one-off measurement; it asks for per-paragraph verdicts in JSON, which no reader sees",
+  "scripts/eval-big-imports.ts":
+    "calls no model: it runs the real PDF reader over a fake wire that answers from the PDF's own text layer",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
   "evals/dig-deeper/answer.ts":
     "an eval that sends production's own Dig deeper prompts (explain's SYSTEM and INVESTIGATE_SYSTEM carry plainWords(\"explain\")) to other models, and production's search step, which is exempt as src/dig-deeper.ts",

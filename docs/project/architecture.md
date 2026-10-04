@@ -409,6 +409,9 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   `src/labels.ts` still exports an older `allOrStop` with a different contract, and `src/pdf-read.ts`
   and `src/embeddings.ts` each have their own abortable sleep (the embeddings one resolves on abort
   rather than rejecting).
+- **`src/db/insert-batches.ts` § `inBatches`** — a many-row insert, cut so no statement passes
+  Postgres' 65,535 parameters. An unbatched one fails at a row count nobody chose, with an error
+  that reads like a network blip.
 - **`src/retry-after.ts` § `parseRetryAfter`** — a `Retry-After` header, as milliseconds or `null`.
   The only parser: the gateway, the page fetcher and the deepening wave all call it. A wait that is
   not positive (`0`, a date already past) is `null`, so the caller's own backoff applies.

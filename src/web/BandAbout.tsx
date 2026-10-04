@@ -13,15 +13,17 @@
  * § No description line in the band says what goes in the card.
  *
  * Controlled, as Skim's *About this route* was, so a tap toggles it on a
- * touch device with no hover; hover and focus open it too.
+ * touch device with no hover; hover and focus open it too. `usePressToggle`
+ * is that state, and says why a press that closes has to be remembered.
  */
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { MODE_CATALOG } from "../mode-catalog.js";
 import type { Mode } from "../modes.js";
 import { exactly, howLong, relativeAgo } from "./relative-time.js";
 import { Link } from "./Link.js";
 import { Tooltip } from "./Tooltip.js";
+import { usePressToggle } from "./usePressToggle.js";
 
 export function BandAbout({
   label,
@@ -39,7 +41,7 @@ export function BandAbout({
   help?: string | undefined;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const { open, onOpenChange, trigger } = usePressToggle();
   const content = help ? (
     <>
       {children}
@@ -55,7 +57,7 @@ export function BandAbout({
       content={content}
       placement="bottom"
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={onOpenChange}
       interactive={help === undefined ? undefined : { label }}
       className="band-about-card"
     >
@@ -64,7 +66,7 @@ export function BandAbout({
         className={`band-about${open ? " on" : ""}`}
         aria-label={label}
         aria-expanded={open}
-        onClick={() => setOpen((was) => !was)}
+        {...trigger}
       >
         <Info size={14} />
       </button>

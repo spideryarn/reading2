@@ -24,6 +24,14 @@
  * - nothing is sent twice: Ask–Ask, Ask–Save, Save–Save, Save-then-unmount,
  *   pagehide-then-unmount.
  *
+ * **Since 2026-10-04 this box is what a selection opens in Referee mode only**
+ * (plan 261004f): everywhere else the selection stores a yellow highlight at
+ * once and opens `CommentDialog`, which is
+ * tests/selecting-applies-the-highlight.test.tsx. Nothing asked here changed.
+ * The cases that mount it with `placing={false}` still describe the component,
+ * which keeps its Yellow default for a caller outside Referee mode; in the app
+ * no such caller is left.
+ *
  * Every "nothing was saved" has a positive control beside it in the same
  * describe — the same exit with words typed does save — so a harness that had
  * stopped reaching the handler could not pass as a refusal.

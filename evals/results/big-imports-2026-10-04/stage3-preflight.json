@@ -1,0 +1,106 @@
+{
+ "s3-doctorow-250p.pdf": {
+  "fileMB": 0.8,
+  "pages": 250,
+  "isScan": false,
+  "words": 113059,
+  "chunks": 43,
+  "CHUNK_CONCURRENCY": 100,
+  "chunkShape0": [
+   "pages"
+  ],
+  "largestChunkPages": 6,
+  "withContext": 42,
+  "largestPageMiB": 0.06,
+  "sumPageMiB": 10.3,
+  "maxEncodedMiB": 40,
+  "model": "openai/gpt-5.6-luna",
+  "top5_encodedMiB": [
+   {
+    "first": 173,
+    "pages": 6,
+    "withCtx": 0.4,
+    "own": 0.4
+   },
+   {
+    "first": 54,
+    "pages": 6,
+    "withCtx": 0.4,
+    "own": 0.4
+   },
+   {
+    "first": 179,
+    "pages": 6,
+    "withCtx": 0.4,
+    "own": 0.4
+   },
+   {
+    "first": 120,
+    "pages": 6,
+    "withCtx": 0.4,
+    "own": 0.4
+   },
+   {
+    "first": 191,
+    "pages": 6,
+    "withCtx": 0.4,
+    "own": 0.4
+   }
+  ],
+  "chunksOver30MiBEst": 0,
+  "chunksOver32MBEst": 0,
+  "chunksOver40MiBEst": 0
+ },
+ "s3-gdl-45mb.pdf": {
+  "fileMB": 45.09,
+  "pages": 160,
+  "isScan": false,
+  "words": 59485,
+  "chunks": 36,
+  "CHUNK_CONCURRENCY": 100,
+  "chunkShape0": [
+   "pages"
+  ],
+  "largestChunkPages": 6,
+  "withContext": 35,
+  "largestPageMiB": 16.74,
+  "sumPageMiB": 79.7,
+  "maxEncodedMiB": 40,
+  "model": "openai/gpt-5.6-luna",
+  "top5_encodedMiB": [
+   {
+    "first": 95,
+    "pages": 1,
+    "withCtx": 22.8,
+    "own": 22.3
+   },
+   {
+    "first": 96,
+    "pages": 1,
+    "withCtx": 22.7,
+    "own": 0.4
+   },
+   {
+    "first": 51,
+    "pages": 1,
+    "withCtx": 10.4,
+    "own": 4.4
+   },
+   {
+    "first": 50,
+    "pages": 1,
+    "withCtx": 6.5,
+    "own": 6
+   },
+   {
+    "first": 52,
+    "pages": 1,
+    "withCtx": 4.9,
+    "own": 0.5
+   }
+  ],
+  "chunksOver30MiBEst": 0,
+  "chunksOver32MBEst": 0,
+  "chunksOver40MiBEst": 0
+ }
+}

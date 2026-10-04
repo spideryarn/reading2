@@ -48,8 +48,10 @@
  * ## Mounted, and where that stops
  *
  * Criteria and Search mount their real bands (`CriteriaBand`, `SearchBand`),
- * hook and all. Comments mounts the real `AnnotateDialog` over the real
- * `useComments`, wired the way `Reader` wires them; `Reader` itself needs a whole
+ * hook and all. Comments mounts the real `AnnotateDialog` (Referee mode's box
+ * since 2026-10-04; elsewhere a selection calls `create` directly, whose own
+ * wait is tests/use-comments-create-waits-for-the-opening-read.test.ts) over
+ * the real `useComments`, wired the way `Reader` wires them; `Reader` itself needs a whole
  * article, a session and a text selection to open the dialog, so the one line of
  * wiring this cannot see — that `Reader` passes the hook's `loaded` — is read
  * from its source at the end, the precedent being

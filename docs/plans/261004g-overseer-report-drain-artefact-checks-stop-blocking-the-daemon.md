@@ -135,7 +135,7 @@ restart, which is the Overseer's to do.
 
 ## What the plan review changed
 
-[GPT Sol's review](261004g-plan-review-sol.md): build with changes. Each finding checked against the
+[GPT Sol's review](261004g-report-drain-plan-review-sol.md): build with changes. Each finding checked against the
 code; four accepted, one answered.
 
 - **F1, accepted.** Setting `lock-lost` wakes nothing, and the main loop is usually parked in
@@ -169,7 +169,7 @@ code; four accepted, one answered.
     fixes; the settle line and the abandoned-pass line each proven by removing them;
   - the awaited drain's tests proven by removing its ownership check (two go red);
   - the two `sleep(40)`s waited 20 s by name before the log line existed.
-- 2026-10-04 — [GPT Sol's code review](261004g-code-review-sol.md): **land after fixes (made)**.
+- 2026-10-04 — [GPT Sol's code review](261004g-report-drain-code-review-sol.md): **land after fixes (made)**.
   - **F6, fixed by Sol, red first:** the drain's last-resort log line could itself throw and reject
     the promise the shutdown waits on, so the store was never closed.
     [Postmortem](../postmortems/261004j-a-fallback-logger-rejects-the-promise-that-shutdown-must-settle.md).

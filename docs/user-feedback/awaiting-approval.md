@@ -13,6 +13,21 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-04 · SPIDERYARN-READING2-C6 (spya-bac46a; the report itself shipped as measurements and
+  two fixes, this is what they found and could not fix) · a PDF of 250 pages is promised and most
+  are refused: the structure step stops any document over about 2,890 blocks, after transcription
+  is paid for. A real 250-page book and a dense paper past about 178 pages both hit it. Five ways
+  out, A to E. Recommended: when one answer will not fit, build the tree from the document's own
+  headings so the reader can read (D), then fill it in a section at a time (E) · qi-kbkbw4rp ·
+  [261004f § The decision](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#the-decision-this-will-probably-end-on) ·
+  [note](261004_1033-big-pdfs-and-long-documents-up-to-our-limits.md)
+
+- 2026-10-04 · SPIDERYARN-READING2-C6 (spya-bac46a, the same report) · the dialog says "PDF or web
+  page, up to 50 MB", but a document pasted as an address stops at 32 MB. The cap is a listed
+  security defence, so it was left. Raise it to 50 MB, or make the dialog say both numbers? ·
+  qi-bv9nbj5z ·
+  [261004f § Decisions](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#decisions)
+
 - 2026-10-03 · SPIDERYARN-READING2-BV (spya-c2qmbg; the report itself shipped as *Dig deeper* on
   the citation card, this is its larger half) · should Citations become a sub-mode of Debate
   (Reception, Claims, Cited works, under one name), and should a cited work be listed beside the
@@ -27,16 +42,6 @@ in this directory records which, and the line comes off.
   search chooses)? A quick eval says a chosen claim works with the search as it is; qi-k9deez4b ·
   [261003o § Questions for Greg](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md#questions-for-greg-not-waited-on) ·
   [note](261003_1016-debate-reception-and-claims-sub-modes.md)
-
-- 2026-09-29 · SPIDERYARN-READING2-AA (spya-rze8qh and its repeat spya-xhvxue; **still `unresolved`
-  in Sentry and with no note yet**, so this line is what keeps it visible) · span highlights with a
-  colour are on `dev` and work by mouse and on an iPad; what is left is whether selecting words
-  should show a small floating menu (four colour dots that save a highlight in one press, plus
-  *Comment…* for the box) instead of opening the box straight away, as now. The question went
-  through the Overseer on 2026-10-03 and session `fbrze8qh-span-highlights` is idle waiting on it;
-  the later `spya-ur8kum` (default yellow, closing saves) changed the box in the meantime ·
-  [261003e § The menu](../plans/261003e-span-highlights-with-a-colour.md) · added by the feedback
-  sweep, 2026-10-04
 
 - 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
   reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
