@@ -54,7 +54,10 @@ export function ownIdsOfPdf(records: readonly { page: number; text: string }[]):
   for (const r of records) {
     if (r.page < first + FRONT_PAGES) {
       for (const m of r.text.matchAll(DOI_IN_TEXT)) {
-        found.push({ at: base + m.index, id: parseWorkId(unwrappedIdentifier(m[0])) });
+        /* A text layer can print the journal's address straight after the
+           DOI with no space, and a DOI's own suffix never starts a new one. */
+        const doi = m[0].replace(/(?:www\.|https?:).*$/i, "");
+        found.push({ at: base + m.index, id: parseWorkId(unwrappedIdentifier(doi)) });
       }
       for (const m of r.text.matchAll(ARXIV_IN_TEXT)) {
         found.push({ at: base + m.index, id: m[1] ? parseWorkId(`arxiv:${m[1]}`) : null });

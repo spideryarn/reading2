@@ -68,6 +68,15 @@ describe("ownIdsOfPdf", () => {
     expect(ids).toEqual(["arxiv:1706.03762"]);
   });
 
+  it("cuts a web address run onto the end of a DOI", () => {
+    /* A text layer can print a footer's DOI and the journal's address with
+       no space between them. Seen in production's dry run, plan 261004h. */
+    expect(
+      ownIdsOfPdf([{ page: 1, text: "https://doi.org/10.1038/s41598-023-33209-9www.nature.com/scientificreports/" }]),
+    ).toEqual(["doi:10.1038/s41598-023-33209-9"]);
+    expect(ownIdsOfPdf([{ page: 1, text: "10.1000/ownhttps://example.org/x" }])).toEqual(["doi:10.1000/own"]);
+  });
+
   it("keeps at most three", () => {
     const ids = ownIdsOfPdf([{ page: 1, text: "10.1000/a 10.1000/b 10.1000/c 10.1000/d" }]);
     expect(ids).toHaveLength(MAX_OWN_IDS);
