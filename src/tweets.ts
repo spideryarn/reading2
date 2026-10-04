@@ -37,10 +37,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
   articleFingerprint,
@@ -50,7 +48,7 @@ import {
   hashBlocks,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -740,28 +738,8 @@ export async function generateTweets(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is deliberately neither thrown nor logged — it is the
-       provider's own words about a request that carried the whole article,
-       and this error is copied onto the job and shown on the progress card.
-       See MODEL_REFUSED in src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("thread", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "thread", maxTokens, answerTokens);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyPostBlocksDropped();
   const thread = buildThread(parseJson(raw), {

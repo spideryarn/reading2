@@ -17,12 +17,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { APIUserAbortError } from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
+import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
+import { MODEL_REFUSED } from "../src/messages.js";
 import {
   MESSAGES_PROVIDER,
+  finishedText,
+  messageText,
   messagesClient,
   streamMessage,
   wasRefused,
 } from "../src/messages-stream.js";
+import { truncationFailure } from "../src/token-budget.js";
 
 /* Captured from a live streamed call through https://openrouter.ai/api/v1/messages,
    2026-08-27. Trimmed only of the content blocks. */
@@ -604,6 +609,93 @@ describe("wasRefused", () => {
     expect(wasRefused({ stop_reason: "end_turn" } as unknown as Parameters<typeof wasRefused>[0])).toBe(
       false,
     );
+  });
+});
+
+/* ── Reading a finished answer (plan 261004d) ────────────────────────────────
+
+   Until 2026-10-04 every stage wrote this ending out by hand, 32 copies of the
+   text-block filter in 18 files, and one of them (src/illustrated.ts) threw its
+   refusal undeclared for a month. These pin the one copy. */
+
+describe("messageText and finishedText", () => {
+  type Message = Parameters<typeof finishedText>[0];
+  const answer = (over: Record<string, unknown>): Message =>
+    ({
+      stop_reason: "end_turn",
+      stop_details: null,
+      usage: { input_tokens: 10, output_tokens: 900 },
+      content: [
+        { type: "thinking", thinking: "x".repeat(5000), signature: "s" },
+        { type: "text", text: '{"a":' },
+        { type: "text", text: "1}" },
+      ],
+      ...over,
+    }) as unknown as Message;
+
+  const thrownBy = (fn: () => unknown): Error => {
+    try {
+      fn();
+    } catch (err) {
+      return err as Error;
+    }
+    throw new Error("nothing was thrown");
+  };
+
+  it("joins the text blocks in order and leaves the thinking out", () => {
+    expect(messageText(answer({}))).toBe('{"a":1}');
+    expect(messageText(answer({ content: [] }))).toBe("");
+  });
+
+  it("returns the text of an ordinary finish", () => {
+    expect(finishedText(answer({}), "arc", 50_000, 10_000)).toBe('{"a":1}');
+  });
+
+  it.each([
+    ["Anthropic's spelling", { stop_reason: "refusal" }],
+    ["OpenRouter's spelling", { stop_details: { type: "refusal" } }],
+  ])("throws the declared refusal, on %s", (_name, over) => {
+    const err = thrownBy(() => finishedText(answer(over), "arc", 50_000, 10_000));
+    expect(err.message).toBe("the model answered with stop_reason: refusal [ai-model-refused]");
+    /* Declared, so the reader gets the refusal sentence and not the generic
+       one. `new Error(MODEL_REFUSED.message)` would pass a check on the code
+       alone and fail this (tests/stop-details.test.ts on why). */
+    expect(readerFailureOf(err, "arc")).toBe(MODEL_REFUSED);
+    expect(failureKindOf(err)).toBe(MODEL_REFUSED.kind);
+  });
+
+  it("says a truncation the way truncationFailure says it, counting only the text", () => {
+    const err = thrownBy(() =>
+      finishedText(answer({ stop_reason: "max_tokens" }), "thread", 50_000, 10_000),
+    );
+    const want = truncationFailure("thread", 50_000, 10_000, { outputTokens: 900, answerChars: 7 });
+    expect(err.message).toBe(want.message);
+    expect(readerFailureOf(err, "tweets")).toBe(readerFailureOf(want, "tweets"));
+    expect(failureKindOf(err)).toBe("bug");
+  });
+
+  it("passes a stage's own headroom through to the sentence", () => {
+    const err = thrownBy(() =>
+      finishedText(answer({ stop_reason: "max_tokens" }), "table of contents", 50_000, 10_000, 12_345),
+    );
+    expect(err.message).toContain("plus 12,345 for reasoning");
+    expect(
+      thrownBy(() => finishedText(answer({ stop_reason: "max_tokens" }), "arc", 50_000, 10_000)).message,
+    ).not.toContain("12,345");
+  });
+
+  it("calls a refused answer refused even when it also stopped at max_tokens", () => {
+    /* Every hand-written copy judged the refusal first. The other order would
+       tag a refusal `bug` and tell the reader a setting of ours is wrong. */
+    const err = thrownBy(() =>
+      finishedText(
+        answer({ stop_reason: "max_tokens", stop_details: { type: "refusal" } }),
+        "arc",
+        50_000,
+        10_000,
+      ),
+    );
+    expect(readerFailureOf(err, "arc")).toBe(MODEL_REFUSED);
   });
 });
 

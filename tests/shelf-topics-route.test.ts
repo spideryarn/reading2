@@ -164,7 +164,7 @@ async function makeArticle(owner: OwnerId, slug: string, title: string, gist: st
         blockId: ids[i] ?? "",
         ordinal: i,
         tag: "p",
-        kind: "text",
+        kind: "text" as const,
         text,
         words: text.split(/\s+/).length,
         html: `<p>${text}</p>`,

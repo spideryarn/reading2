@@ -5,7 +5,7 @@
  * Every write went to Postgres on 2026-09-05, and the file-writing half of this
  * module went with `src/store/fs.ts`
  * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md § G).
- * What is left is the vocabulary — `NewComment`, `MarkPatch`, `AnswerPatch`,
+ * What is left is the vocabulary — `NewComment`, `MarkPatch`, `AnswerFinish`,
  * `CommentIdTaken`, `NotAnExplanation`, `COMMENT_SWEPT` — plus `loadComments`,
  * which now has exactly one caller: `tests/helpers/seed-reader-state.ts`, which
  * reads a fixture's `data/<slug>/comments.json` into Postgres rows. It is a
@@ -219,7 +219,15 @@ export class ColourNeedsWords extends Error {
  * patch reach the anchor, the reader's words and the linked conversation, which
  * is exactly what the named operations exist to prevent.
  */
-export type AnswerPatch = Pick<Partial<Comment>, "status" | "answer" | "citations" | "searches" | "model" | "error">;
+type AnswerPatch = Pick<Partial<Comment>, "status" | "answer" | "citations" | "searches" | "model" | "error">;
+
+/**
+ * An `AnswerPatch` that **ends the answer**, which is the only kind
+ * `CommentStore.patch` takes: the attempt is released whatever the patch says,
+ * so one that left the comment `pending` would strip the fence off a row still
+ * waiting. The store refused that at run time; since 2026-10-04 the type does.
+ */
+export type AnswerFinish = AnswerPatch & { status: "done" | "error" };
 
 /**
  * What both comment sweeps write. One constant, so they cannot drift.

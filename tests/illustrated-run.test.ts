@@ -37,12 +37,11 @@ const streamMessage = vi.fn(
   },
 );
 
-/** Whether the posed `wasRefused` says the provider declined the brief. */
-let refused = false;
-
-vi.mock("../src/messages-stream.js", () => ({
+/* Only the transport is replaced. `finishedText` and `wasRefused` stay real, so
+   a refusal here is a message that really is one, not a toggle on a fake. */
+vi.mock("../src/messages-stream.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/messages-stream.js")>()),
   streamMessage,
-  wasRefused: () => refused,
 }));
 
 const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST, ILLUSTRATED_BRIEF_OUTPUT_SCHEMA } =
@@ -182,7 +181,6 @@ function abortError(): Error {
 beforeEach(() => {
   streamMessage.mockClear();
   lastBriefRequest = undefined;
-  refused = false;
   answerWith(BRIEF);
 });
 
@@ -464,7 +462,7 @@ describe("generateIllustrated", () => {
    * passed over the defect.
    */
   it("declares a refused brief, so the reader gets the refusal sentence and not the generic one", async () => {
-    refused = true;
+    answerWith(BRIEF, { stop_reason: "refusal" });
     const { draw, calls } = drawer();
     const err: unknown = await generateIllustrated({
       power: "standard",

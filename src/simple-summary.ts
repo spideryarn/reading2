@@ -86,7 +86,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { stageFailure } from "./job-failure.js";
 import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { messageText, streamMessage, wasRefused } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower, modelFor } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -1095,17 +1095,12 @@ export async function generateSimpleSummary(opts: {
       return {
         failure: truncationFailure("simple", maxTokens, ANSWER_TOKENS, {
           outputTokens: message.usage.output_tokens,
-          answerChars: message.content
-            .filter((b): b is Anthropic.TextBlock => b.type === "text")
-            .reduce((n, b) => n + b.text.length, 0),
+          answerChars: messageText(message).length,
         }),
         usage: message.usage,
       };
     }
-    const raw = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
+    const raw = messageText(message);
     /* A complete usable response is the fallback for a provider/SDK path that
        succeeds without exposing `message_start`: the cache write is finished,
        so the other two calls cannot be stranded. */

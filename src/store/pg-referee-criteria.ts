@@ -49,7 +49,12 @@ import {
 import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
-import { MissingAttempt, type RefereeCriteriaStore, type SweepOptions } from "./contracts.js";
+import {
+  MissingAttempt,
+  type CriterionFinish,
+  type RefereeCriteriaStore,
+  type SweepOptions,
+} from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
@@ -145,7 +150,7 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
     config: RefereeCriterionConfig,
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
-  ): Promise<{ row: SavedCriterion; attempt: string | undefined }> {
+  ): Promise<{ row: SavedCriterion; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
@@ -282,23 +287,26 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
   async finish(
     slug: string,
     id: string,
-    patch: Partial<SavedCriterion>,
-    attempt?: string,
+    patch: CriterionFinish,
+    attempt: string,
   ): Promise<SavedCriterion | undefined> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
     /* Refused without an attempt rather than falling back to identity — the
-       token is optional in the interface because the filesystem store has none,
-       and accepting `undefined` here would silently reopen the cross-process
-       race the column exists to close. pg-searches.ts § finish. */
+       interface requires the token, and this is the same rule for a caller the
+       compiler did not see: accepting `undefined` here would silently reopen
+       the cross-process race the column exists to close. pg-searches.ts §
+       finish. */
     if (attempt === undefined) {
       throw new MissingAttempt("RefereeCriteriaStore.finish", "begin()");
     }
     /* And the status has to be one this run can end on: the attempt is released
        below whatever the patch says, so a patch leaving the row `pending` would
-       strip the fence off a row still waiting for an answer. */
-    if (patch.status !== "done" && patch.status !== "error") {
+       strip the fence off a row still waiting for an answer. `CriterionFinish`
+       says so in the type; a plain string here, as in pg-searches.ts. */
+    const status: string = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -318,7 +326,7 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `RefereeCriteriaStore.finish must end a criterion: status was ${JSON.stringify(patch.status)}, ` +
+          `RefereeCriteriaStore.finish must end a criterion: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -328,13 +336,15 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
     /* `id`, `criterion` and the config columns are deliberately not settable
        here — a finish reports an answer, and changing the question while
        answering it is what `begin` is for. */
+    const fields: Partial<Pick<SavedCriterion, "results" | "model" | "error">> = patch;
     const rows = await db
       .update(refereeCriteria)
       .set({
-        ...(patch.status === undefined ? {} : { status: patch.status }),
-        ...(patch.results === undefined ? {} : { results: patch.results }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        status: patch.status,
+        // Preserve defined-field writes — pg-searches.ts § finish.
+        ...(fields.results === undefined ? {} : { results: fields.results }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // says so, and half an attempt is a row that can never be swept or
         // never be finished.

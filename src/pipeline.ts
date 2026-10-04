@@ -1690,7 +1690,9 @@ async function acquireUpload(
      then the document's own `<meta charset>`, then windows-1252 — which is what
      a browser does with a file off a disk too. */
   const decoded = kind === "html" ? decodeHtml(got, null) : null;
-  const storedBytes = storedDocumentBytes({ kind, bytes: got, text: decoded?.text ?? null });
+  const storedBytes = storedDocumentBytes(
+    decoded === null ? { kind: "pdf", bytes: got } : { kind: "html", text: decoded.text },
+  );
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it

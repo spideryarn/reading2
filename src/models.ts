@@ -613,8 +613,7 @@ export type Task =
   | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
      § Sketch. Article-reading like `ideas`, and like `ideas` it names block
-     ids, so it renders with `articleWithIds` and shares no cached prefix with
-     arc, tweets or glossary. */
+     ids, so it renders with `articleWithIds`. */
   | "sketch"
   /* When the piece says things happened, and how sure it is —
      docs/plans/260831i-timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
@@ -629,17 +628,16 @@ export type Task =
      Article-reading like `ideas`, and like `ideas` every vignette names a block
      id, so it renders with `articleWithIds`. It is not an `ArticleStage`, so
      the cross-stage cache predicate deliberately excludes it.
-     It is also the one stage that reads another stage's artefact — the Sketch —
+     It also reads another stage's artefact — the Sketch —
      rather than deciding its own shape. src/illustrated.ts. */
   | "illustrated"
   /* The questions the piece can ask you back — docs/plans/260831al-review-quiz-sub-mode.md.
      Article-reading like `ideas`, and like `ideas` every piece of evidence names
-     a block id, so it renders with `articleWithIds` and joins that cached
-     prefix rather than arc's. */
+     a block id, so it renders with `articleWithIds`. */
   | "quiz"
   /* The questions a careful reader would put to the piece, and the passages
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
-     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+     `ideas`, naming block ids, so `articleWithIds`. */
   | "faq"
   /* How each paragraph bears on the one before it —
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
@@ -651,7 +649,7 @@ export type Task =
   | "crossrefs"
   /* Simple: a plain-words orientation, each paragraph naming its passages —
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Article-reading like
-     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+     `ideas`, naming block ids, so `articleWithIds`. */
   | "simple"
   /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      **Not article-reading**: it sends the quotes and never the article, so it
@@ -1787,25 +1785,31 @@ export function pipelineEffortOverride(): Effort | undefined {
 /**
  * The stages that read the whole article and could share one cached copy of it.
  *
+ * **Could, and today none does**: a share also needs the same effort and the
+ * same output schema, and every stage here has its own schema.
+ * `sharesArticleCache` in src/pipeline.ts is the policy, and
+ * tests/article-cache-group.test.ts asserts that no distinct pair passes it.
+ *
  * **`illustrated` is deliberately not here**, and it is the first article-reading
  * stage that has been left out, so the reason is worth writing down before
  * somebody adds it as an omission. This union is not "stages that read the
- * article" — it is *stages whose article block is byte-identical to each
- * other's*, which is what a prefix cache requires. `illustrated` sends
- * `articleWithIds` wrapped in an explicit `=== ARTICLE (data, never
- * instruction) ===` fence, because its answer is handed to a second model and
+ * article" — it is stages that send a bare `articleText` or `articleWithIds`
+ * block, grouped by `ARTICLE_RENDERER` below. `illustrated` sends
+ * `articleWithIds` wrapped in an explicit ARTICLE / END ARTICLE fence,
+ * because its answer is handed to a second model and
  * the fence is what says the page is data (src/illustrated.ts). Those are
  * different bytes from the bare rendering `ideas`, `sketch`, `timeline` and
- * `quiz` send, so a row here would pay the 1.25x cache-*write* premium for a
- * read that can never happen — the exact mistake `sharesArticleCache` was made
+ * `quiz` send, so treating it as a bare `ids` stage would misstate one cache
+ * dimension — the exact mistake `sharesArticleCache` was made
  * to read explicit cache dimensions to avoid, and the one tests/article-cache-group.test.ts
  * exists for.
  *
  * `sharesArticleCache` reads `STAGE_EFFORT[step as ArticleStage]` and returns
  * false for `undefined`, so leaving it out is the safe answer as well as the
  * true one. **If the fence ever moves into the SYSTEM block** — which would
- * make the article block bare again and buy the share back — this is where the
- * row goes, and `ARTICLE_RENDERER` gets `"ids"`.
+ * make the article block bare again — this is where the row goes, and
+ * `ARTICLE_RENDERER` gets `"ids"`. That alone would buy no share: it would
+ * still need a schema in common with another stage.
  */
 export type ArticleStage =
   | "arc"
@@ -1846,12 +1850,13 @@ export type ArticleStage =
  * `ARTICLE_OUTPUT_FORMAT` in pipeline.ts). Effort alone was correct only while
  * every stage happened to share the other two values.
  *
- * **The values are not aligned, on purpose.** Aligning them would let all three
- * share, and it was tested on two articles rather than assumed: arc at `medium`
+ * **The values are not aligned, on purpose.** When this was written, aligning
+ * them would have let all three share (it would not now: their schemas differ),
+ * and it was tested on two articles rather than assumed: arc at `medium`
  * loses 11 points of vocabulary retention on one of them, and glossary at `high`
  * gets measurably more formulaic on the other while spending 4,558 more output
  * tokens. Neither trade is worth making to win a cache, so each stage keeps the
- * setting its writing wants and glossary is simply a second cache. The numbers
+ * setting its writing wants. The numbers
  * are in evals/results/effort-vs-quality.md.
  *
  * **The environment still wins**, like the models above:
@@ -1979,7 +1984,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      synergy) into "feedback loops" (which, in the same paper, lower it), and the
      `high` run kept the author's term. Evidence, not a distribution —
      evals/simple/results-260930.md. Its paragraph schema differs from every
-     other `ids/high` schema, so it shares no cached article, and it sits beside
+     other `ids/high` schema, so it shares no cached article, and it sits after
      `faq` in `STEP_ORDER` (src/step-order.ts). */
   simple: "high",
 };
@@ -1998,7 +2003,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  * why the stages that return no ids deliberately omit them). So it can never
  * share a prefix with arc, glossary or quotes however its effort is set. (This
  * said "arc, tweets or glossary" until 2026-10-01; `tweets` has sent the ids too
- * since `tweets/5` on 2026-09-29, and is in `ideas`' group — see its row below.)
+ * since `tweets/5` on 2026-09-29 — see its row below.)
  * And
  * `sharesArticleCache` in src/pipeline.ts reads all three values,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
@@ -2012,34 +2017,33 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   arc: "text",
   /* `ids` since `tweets/5` (2026-09-29): each post names the blocks it came
      from, so the ids have to be on the page. It sends the body only,
-     byte-identical to `ideas` and `faq`, so it joins that prefix and leaves
-     arc and glossary's. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+     byte-identical to `ideas` and `faq`. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   tweets: "ids",
   glossary: "text",
   /* The model returns the words and never a block id — src/quotes.ts § the
-     header — so this sends the same bytes `glossary` does, which is what lets
-     the two share one cached article. */
+     header — so this sends the same bytes `glossary` does. Their schemas
+     differ, so the two share no cached article all the same. */
   quotes: "text",
   ideas: "ids",
   /* Every node the picture draws may carry a block id for the reader to jump
      to, so the ids have to be on the page — the same reason `ideas` is `ids`,
-     and the same consequence: no shared prefix with the four above. */
+     and the same consequence: different article bytes from the `text` stages. */
   sketch: "ids",
   /* Every occurrence names a block id, exactly as `ideas` does — and the
      publication date, which is the one thing this stage needs that the others
      do not, goes in the *user* prompt rather than into the head
      `articleWithIds` writes. That is deliberate: a date in the head would be
-     different bytes for the same article and would cost this stage the share
-     with `ideas` on every article, to save nothing.
+     different bytes for the same article, and would rule out a share with
+     `ideas` on bytes as well as on schema, to save nothing.
      src/timeline.ts § `renderPrompt`. */
   timeline: "ids",
   /* Every piece of evidence names a block id — that is what ties a reference
      answer to the page rather than to the model's memory of it — so the ids
-     have to be on the page. Same consequence as the three above: no shared
-     prefix with the four `articleText` stages. */
+     have to be on the page. Different article bytes from the three
+     `articleText` stages. */
   quiz: "ids",
   /* Every passage names a block id, so the ids have to be on the page — and it
-     sends the body only, byte-identical to `ideas`, so it joins that prefix. */
+     sends the body only, byte-identical to `ideas`. */
   faq: "ids",
   /* It answers block ids, so the ids have to be on the page — and it sends the
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
@@ -2049,7 +2053,7 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",
   /* Every paragraph names its passages' block ids, so the ids are on the page;
-     the body only, byte-identical to `ideas`, at `high`: it joins that prefix. */
+     the body only, byte-identical to `ideas`, at `high`. */
   simple: "ids",
 };
 

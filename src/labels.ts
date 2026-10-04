@@ -62,7 +62,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash } from "node:crypto";
 import { underCacheFloor } from "./article-prompt.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { messageText, streamMessage, wasRefused } from "./messages-stream.js";
 import { generatorFor, type ModelPower, modelFor } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { codeOfMessage, kindOfMessage, MODEL_REFUSED } from "./messages.js";
@@ -1941,10 +1941,7 @@ async function runBatch(
     throw anthropicCallFailed(err);
   }
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+  const raw = messageText(message);
 
   /* Built here, above every throw below it, because a call that failed still
      cost what it cost. Without this the tokens of a truncated attempt, or of a
@@ -1982,7 +1979,8 @@ async function runBatch(
      * The one truncation in the pipeline that is **not** tagged `bug`, and the
      * only place that still takes the bare sentence.
      *
-     * The other five stages throw `truncationFailure`, which carries a
+     * The ordinary stages throw `truncationFailure` (through `finishedText`,
+     * src/messages-stream.ts), which carries a
      * `failureKind` so the job card withholds Retry (src/job-failure.ts). This
      * one must not, for two reasons, and either alone would be enough:
      *

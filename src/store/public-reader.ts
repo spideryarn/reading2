@@ -750,10 +750,10 @@ export const pgPublicReader: PublicArticleReader = {
           (row): PublicBlock => ({
             id: row.blockId,
             tag: row.tag,
-            /* The one cast, and the same one the owner reader makes: `kind` is a
-               `text` column with a CHECK on it, so Postgres guarantees the value
-               and TypeScript cannot see the guarantee. */
-            kind: row.kind as PublicBlock["kind"],
+            /* No cast on `kind`, `role` or `treatment`: the columns carry the
+               unions (`$type` in src/db/schema.ts § revisionBlocks), on the
+               strength of the CHECK each one has. */
+            kind: row.kind,
             /* Conditional spreads, because `exactOptionalPropertyTypes` is on:
                Postgres hands back `null` where the shape simply has no key. */
             ...(row.level === null ? {} : { level: row.level }),
@@ -761,13 +761,8 @@ export const pgPublicReader: PublicArticleReader = {
             words: row.words,
             html: row.html,
             gistable: row.gistable,
-            /* The same cast `kind` gets, and for the same reason: `role` and
-               `treatment` are `text` columns with a CHECK on them, so Postgres
-               guarantees the value and TypeScript cannot see the guarantee. */
-            ...(row.role === null ? {} : { role: row.role as NonNullable<PublicBlock["role"]> }),
-            ...(row.treatment === null
-              ? {}
-              : { treatment: row.treatment as NonNullable<PublicBlock["treatment"]> }),
+            ...(row.role === null ? {} : { role: row.role }),
+            ...(row.treatment === null ? {} : { treatment: row.treatment }),
             ...(row.noteId === null ? {} : { noteId: row.noteId }),
             ...(row.contextId === null || row.contextType === null
               ? {}

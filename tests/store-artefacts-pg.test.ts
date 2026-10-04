@@ -388,7 +388,7 @@ async function makeFixture(): Promise<void> {
       blockId: b.blockId,
       ordinal: b.ordinal,
       tag: "p",
-      kind: "text",
+      kind: "text" as const,
       text: b.text,
       words: 1,
       html: `<p>${b.text}</p>`,
