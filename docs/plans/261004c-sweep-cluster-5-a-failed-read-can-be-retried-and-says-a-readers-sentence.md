@@ -319,3 +319,15 @@ so stage 2's code review is asked to check F9 and F10 specifically.
     as temporary / future work. Corrected its evidence and countermeasures.
   - Root cause and the countermeasures:
     [a hold outliving its panel needs evidence owned by the same action](../postmortems/261004g-a-hold-outliving-its-panel-needs-evidence-owned-by-the-same-action.md).
+
+- 2026-10-04 — landed. Sol's stage 2 fixes committed as `d18af7c10` after I read the diff and ran
+  the gates; they are the reviewer's own code and had no second cross-family round (two plan rounds
+  and one code round per stage were run). `origin/dev` merged cleanly. Browser check (Sonnet,
+  Playwright, 1440 / 820 / 390): six modes' failed read shows the sentence and *Try again*, nothing
+  clipped, recovery without a reload; the button is the house 32 px control on a phone, as FAQ's
+  already was. The hold's waiting line was not browser-checked — it needs a job to finish and its
+  re-read to fail, which the jsdom table covers and a click-through does not reach easily.
+- For Greg, with a recommendation each: (1) four hooks say *"The server replied 500."* on an odd
+  status — breaks copy.md rule 1; recommend a coded sentence in a later copy pass. (2) Sketch's
+  *written for you* badge is visible for the first time; recommend keeping it, it is what 261002b
+  built. (3) Sol F16, unchecked response casts in the read hooks; recommend the next sweep sizes it.
