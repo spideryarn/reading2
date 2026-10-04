@@ -88,6 +88,23 @@ How the mode was evaluated, and what that found:
 spike that showed a web search never comes back empty in
 [260905f-debate-mode-stage-0-spike-results.md](../plans/260905f-debate-mode-stage-0-spike-results.md).
 
+## Not decided: folding Citations into Debate
+
+Greg suggested it (spya-c2qmbg): the works a paper cites and what others say about it are two halves
+of one question, and from one cited work he would like to see where it sits in the wider debate. On
+2026-10-04 he deferred it:
+
+> needs more thought. Write up somewhere, and we'll come back to it
+
+The options, with a diagram, are in
+[261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md): keep two modes
+linked by buttons; one mode with Reception, Claims and Cited works; list beside each claim the works
+cited in its paragraph (no model call); or a model filing each cited work under a debate thread. The
+Overseer recommended the second then the third. Open with it: the merged mode's name, and whether it
+comes out from behind the experimental switch, which Debate is behind and Citations is not. The
+first small step, a Dig deeper button on a citation's card, shipped. It is part of the wider wish to
+declutter the bottom bar ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
+
 ## Where the code is
 
 Each module's header comment says what it owns and why; start with `src/debate.ts`'s.
