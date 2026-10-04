@@ -310,4 +310,17 @@ Checks:
 - **Browser, with the route's answer stubbed** (Sonnet, Playwright, 1440, 820 and 390 wide): every
   state's sentence, the first 10 then all 39, links, no horizontal overflow, the list and the
   Scholar link reachable by scrolling, Try again, a malformed answer and a 500, the (i). Arriving
-  by URL started no job. No defects. Screenshots: `261004h-shot-<width>-<found|no-doi>.png`.
+  by URL started no Debate job. No defects.
+- **Browser, end to end, nothing stubbed** (Sonnet, Playwright, a local article given the Entropy
+  paper's title, byline and DOI and put back afterwards): 39 citers at 1440, 820 and 390 wide,
+  10 then all 39, every title a `doi.org` link. One request to OpenAlex, then seven answers from
+  the cache; 1 lookup row and 39 citer rows in the local database. With only the title changed,
+  the cached list was refused as `unconfirmed`. An article with no DOI made no request. Signed out,
+  the route answers 401. Screenshots: `261004h-shot-<width>-found.png` (real),
+  `261004h-shot-<width>-no-doi.png` (stubbed).
+- **The migration was rebuilt once before landing.** Two peers' migrations reached `dev` first, the
+  second stamped after this one and already applied to the shared local database, so this one
+  would have been skipped below the watermark. It had been applied nowhere, so it was regenerated
+  on top of the trunk ([database.md § Repairing a fork](../project/database.md#repairing-a-fork-what-the-losing-migration-is-decides-everything))
+  as `20261004164715`, byte-identical to the first. The full suite ran before that merge; after
+  it, typecheck and the thirteen files that hold lists or the stage's own tests.
