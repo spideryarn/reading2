@@ -163,6 +163,13 @@ and has no Help. Not checked in a browser: a signed-in visitor, which the unit t
 `npm run typecheck` is red on `origin/dev` in `src/backfill-registry-facts.ts` (six errors), a
 file this work does not touch; nothing else is reported.
 
+**The full suite found what both reviews and I missed.** `src/command-pick-catalogue.generated.json`
+lists the bar's rows in `visibleModes` order, so the swap made it stale and
+`tests/command-pick-catalogue.test.ts` went red. Regenerated with the command that test names; the
+diff is the four rows changing places and nothing else. The other five reds in that run
+(1567 files passed) are the tests that ask for `npm run build` or `npm run build:fleet`, which a
+fresh worktree has not run.
+
 ## Deferred
 
 Nothing. A help glyph of its own in each mode's corner was weighed and not built (above); it is
