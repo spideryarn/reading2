@@ -514,8 +514,9 @@ on 2026-09-10, when its nested list became Structure's narrow face
 1. **Take the word out of `MODES` and put it in `RETIRED_MODES`** ([`src/modes.ts`](../../src/modes.ts)),
    pointing at the mode that took it over, so links readers already have land somewhere.
    `modeFromParam` is the one place both the view and the tab title read it.
-2. **Give the successor the retired name as an alias** in `MODE_CATALOG`, so a reader who types the
-   old word in the command bar lands on the new mode, and rewrite any `description` or `how` —
+2. **Give the successor the retired name as an alias** in `MODE_CATALOG` — on the sub-mode row when
+   the successor is a sub-mode, so the old word opens the view that replaced it — and rewrite any
+   `description` or `how` —
    the successor's and its neighbours' — that named it.
 3. **The compiler lists the totals**: every table in [§ The client](#the-client), and in tests
    `BAND_SAYS`, `SPENDS`, `DRAWS` and `GENERATES`.
