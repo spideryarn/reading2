@@ -6,9 +6,8 @@
  * for the two seconds afterwards while the transcript is on its way
  * (`readOnly`). They are different moments, never both true, and guarding one
  * alone is the bug docs/project/dictation.md § "the guard everybody forgets"
- * records twice. Until 2026-10-04 each caller wrote the pair out — eleven
- * times in seven files, in both orders — so the field is here to be the only
- * place it is written.
+ * records twice. The field is here so callers do not have to write the pair
+ * out for themselves.
  *
  * `useDictation` is stubbed: what is under test is the derivation, over each of
  * the phases the real hook can be in. Watched fail before `busy` existed

@@ -78,9 +78,8 @@ export interface UseDictationField {
    * Safari and Firefox nothing that was said at all (docs/project/dictation.md
    * § Adding it to another box).
    *
-   * Use this rather than writing the pair out. Eleven sites in seven files did
-   * until 2026-10-04, in both orders, and the guard that names only one half
-   * is the bug this file's docs record twice. Not for the box itself — that
+   * Use this rather than writing the pair out: the guard that names only one
+   * half is the bug this file's docs record twice. Not for the box itself — that
    * takes `readOnly`, so the reader can still type while the microphone is on.
    * tests/dictation-field-busy.test.tsx.
    */

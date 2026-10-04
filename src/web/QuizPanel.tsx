@@ -877,13 +877,7 @@ export function QuizPanel({
     return i >= 0 && included[i] === true;
   };
 
-  const cannotAnswer =
-    !typed.trim() ||
-    tooLong ||
-    marking ||
-    owner.stale ||
-    dictate.readOnly ||
-    dictate.dictation.armed;
+  const cannotAnswer = !typed.trim() || tooLong || marking || owner.stale || dictate.busy;
   const answerName = marking ? "Marking…" : mine?.status === "failed" && !superseded ? "Try again" : "Answer";
 
   const submit = () => {
