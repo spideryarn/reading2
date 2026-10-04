@@ -5843,8 +5843,7 @@ interface DebateRowBase {
  * - `partly` — it bears on part of it, or on something close;
  * - `loosely` — same topic, little direct bearing.
  *
- * Three words rather than a number for the reason the identification bar gave
- * (src/web/debate-levels.ts): a reader shown *0.73* reads a measurement, and
+ * Three words rather than a number: a reader shown *0.73* reads a measurement, and
  * this is one model's judgment of a stranger's page.
  */
 export type DebateBears = "directly" | "partly" | "loosely";

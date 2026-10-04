@@ -241,7 +241,10 @@ piece of sticky chrome, and the bar stops sliding away while it holds the breadc
 crumbs on a phone in portrait
 ([261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md)).
 It is not drawn where an open mode covers the prose on a narrow
-window, including after a band link steps that mode aside. The reasoning, the patterns looked at and
+window, including after a band link steps that mode aside. **Beside an open mode on a wide window,
+the bar runs from the spine once it is stuck at the top, since 2026-10-04**: it used to start at the
+band's right edge and leave the strip above the band empty while the path was cut
+([261004a](../plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md)). The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 

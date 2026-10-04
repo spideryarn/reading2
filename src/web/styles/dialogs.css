@@ -1,7 +1,8 @@
 /* dialogs.css — the floating panels that share the bottom-right corner: the
    chat dialog (ChatDialog.tsx), the annotate box a selection opens
    (AnnotateDialog.tsx), and PlaceOnCriterion inside both. It ends with
-   `mark.chat`, the mark a corner conversation leaves in the prose.
+   `mark.chat`, the mark a corner conversation leaves in the prose, and
+   `td.text.chat-open`, the rule on the block an open one is about.
 
    The panel they are shaped after is `.cmt-dialog`, in annotations.css. */
 
@@ -36,6 +37,38 @@
   /* Same layer as the explanation panel: above the sticky bars and the spine,
      below the tooltip layer, for the reasons written on `.cmt-dialog`. */
   z-index: 70;
+}
+
+/* **Docked: over the marginalia column, not over the prose.** A class
+   ChatDialog.tsx adds when layout.ts § `chatDock` says the column is showing
+   and there is at least `CHAT_DOCK_MIN` of room right of the prose; without it
+   this panel is the floating one above, unchanged — Marginalia off, a phone, a
+   narrow iPad.
+   docs/plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md.
+
+   **Sideways only.** `left` is the expression `.marg-head` uses for the
+   column's edge (`--marg-left` is on `.reader`, which this panel is inside),
+   plus an inset so the prose's gutter icons stay clear. `--chat-dock-inset` and
+   `--chat-dock-room` are written on the panel itself from layout.ts's numbers,
+   so the inset `chatDock` subtracts and the one added here are one constant.
+   The room already has the inset and the right gutter (`CHAT_DOCK_GUTTER`) out of it.
+
+   **No `bottom`, `height` or `max-height` here, on purpose**: the bottom anchor
+   and `--kb-inset` are how this panel stays above the iOS keyboard, and a dock
+   that re-anchored it to the top of the column would drop that (GPT Sol on the
+   plan, F1). So it sits in the lower part of the column, and `.marg-head`
+   stays uncovered. tests/chat-dialog-docks.test.tsx holds both halves. */
+.chat-dialog.docked {
+  left: calc(var(--safe-left) + var(--marg-left) + var(--chat-dock-inset));
+  right: auto;
+  width: min(26rem, var(--chat-dock-room));
+  /* Tighter than the floating panel's 1.1rem: at a full column this is 272px
+     wide, and the browser check (2026-10-03) had the answer at two to four
+     words a line. */
+  padding-inline: 0.7rem;
+  /* Lighter than the floating panel's: it is beside the article now rather
+     than hovering over it. */
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
 }
 
 /* ------------------------------------------------------- the comment box --
@@ -598,4 +631,30 @@ mark.chat[data-chat-end]::before {
   vertical-align: super;
   margin-left: 0.15em;
   color: var(--chat-mark);
+}
+
+/* -------------------------------------------- the block a chat is open on -- */
+/* While the chat panel is open on a block — floating or docked, any width —
+   that block's cell wears `chat-open` (TableView.tsx § `chatOpenBlock`): a 2px
+   rule down its right edge, the side the gutter icons and the column are on.
+   The panel is fixed to the window, so this is what says which paragraph it is
+   about. A rule rather than a wash, because the flash and a search hit already
+   use the wash.
+
+   **A pseudo-element, not a border and not the cell's `box-shadow`.** A border
+   would narrow the cell and re-wrap the paragraph as the panel opened; the
+   shadow is already the search bar's (`td.text.has-hit`) and the flash's
+   (`block-flash-still`), and a third declaration would replace whichever lost
+   the cascade. `td.text` is `position: relative` for its gutter, so this hangs
+   off the same box. `pointer-events: none` because the gutter's controls are a
+   few pixels to its left. */
+td.text.chat-open::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: var(--chat-mark);
+  pointer-events: none;
 }

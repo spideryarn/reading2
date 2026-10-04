@@ -71,10 +71,10 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` — the default, and absent, since 2026-09-15 ([search.md](search.md)) | push | `?order=document` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
-| `name` | the bar debate mode's group-one rows hide under — **the word, not a number**: `named`, `quoted` or `linked`, the name of the strongest evidence that a page is about this piece. **Absent means nobody has touched it**, which the panel reads as `DEBATE_LEVEL_DEFAULT` ([`debate-levels.ts`](../../src/web/debate-levels.ts)); rows answering what the article *claims* carry no level and are never under it | **replace** | `?name=linked` |
-| `debateby` | how debate mode's list is ordered: `prioritised` (the default, and absent), `claim` (*by claim* — grouped under the claim in the piece each row answers, in article order), `date` or `stance` (most critical first). An order the rows cannot support — `prioritised` and `date` on any debate from before stage 2 of [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md), and on every visitor's — draws *by claim* instead, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveDebateOrder`). Its own key for `citeby`'s reason. Independent of `name`: the bar filters, the order arranges | push | `?debateby=stance` |
-| `bears` | debate mode's **relevance bar**, shown only while `prioritised` is the order drawn: how directly the AI judged a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only, so it and `name` never hide the same row; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
-| `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
+| `debate` | which of debate mode's two sub-modes is showing: `reception` (the default, and absent — what others have written about the piece itself) or `claims` (what has been written about the claims it makes). An unknown value reads as Reception. Both draw the one stored search, so writing it never spends ([`params.ts`](../../src/web/params.ts) § `debateParam`, [debate.md](debate.md)) | push | `?debate=claims` |
+| `debateby` | how debate's **Reception** list is ordered: `prioritised` (*as found* — the default, and absent), `date` or `stance` (most critical first), each within Reception's two groups. An order the rows cannot support, or one that would draw the same list, draws *as found*, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveReceptionOrder`). Claims ignores it: that sub-mode is always grouped by claim. Its own key for `citeby`'s reason. **`claim` was a fourth value until 2026-10-03**; `?debateby=claim` is rewritten to `?debate=claims` at boot and on Back ([`router.ts`](../../src/web/router.ts) § `liftLegacyDebateBy`) | push | `?debateby=stance` |
+| `bears` | debate mode's **relevance bar**, shown in Claims when some row carries the AI's judgment: how directly a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
+| `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — as does one with no stored row in the sub-mode on screen — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
 | `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance`, `influence` or `date` (oldest first; a list with no year draws first cited) — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
 | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
 | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
@@ -314,13 +314,20 @@ links are unaffected — they all say what they want — and a glossary whose sc
 prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
-**`?name=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
-The other three sit on scores, so a number is the fact itself; debate's sits on the *name of the
-strongest evidence* a page gave that it is about this piece — a link, a quotation, a title — and there
-is a rank inside the panel only because `applyThreshold` needs one. Putting that rank in the URL would
-be our arithmetic dressed as a measurement, which is the composite the feature refused
+**`?bears=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
+The others sit on scores, so a number is the fact itself; debate's sits on one of three named
+judgments — *loosely*, *partly*, *directly* — and there is a rank inside the panel only because
+`applyThreshold` needs one. Putting that rank in the URL would be our arithmetic dressed as a
+measurement, which is the composite the feature refused
 ([260906b § 2](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)). A word also needs
 none of `snapToStop`'s machinery: it is a stop or it is nothing, and anything else reads as untouched.
+
+**`?name=` was the first such threshold, and it is retired** (2026-10-03): debate's identification
+bar — `named`, `quoted` or `linked` — whose default, `quoted`, hid the citing papers and published
+replies the search was changed to find
+([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).
+Nothing reads it now, so a link carrying it shows every row; Reception draws the title-only rows
+under their own heading instead ([`debate-levels.ts`](../../src/web/debate-levels.ts)).
 
 **`?gate=`, `?bar=` and `?conf=` are deliberately left without parser defaults**, which is the same
 call `?cols=` makes and for a related reason. Each carries the threshold its mode hides under, and
@@ -332,7 +339,7 @@ asked for and one that simply arrived
 ([glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is)). All
 three replace rather than push, and are debounced, for the reason `?at=` and `?find=` are: a range
 input writes on every pixel of a drag, and Back should undo the decision that got you here rather
-than the drag. **`?name=` makes the same call about the default and, alone, is not debounced**: it
+than the drag. **`?bears=` makes the same call about the default and, alone, is not debounced**: it
 has three stops, so a drag across the whole track writes twice and there is nothing to rate-limit.
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its

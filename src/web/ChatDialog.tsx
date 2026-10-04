@@ -41,7 +41,7 @@
  * middle one scrolls, and a stable height once there is a transcript. The
  * matching rules are in styles.css § the floating panels.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle, MessageSquare, Square, X } from "lucide-react";
 
 import type { BlockId, ChatAnchor, ThreadSummary } from "../types.js";
@@ -54,6 +54,7 @@ import { shortBlockId } from "./BlockRef.js";
    quietly stop being true. src/web/chat/effects.ts says why it is three
    minutes. */
 import { OPEN_TIMEOUT_MS } from "./chat/effects.js";
+import { CHAT_DOCK_INSET } from "./layout.js";
 import { useChat } from "./useChat.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
@@ -145,6 +146,17 @@ interface Props {
   /** Told when a thread appears or goes, so the prose can draw or drop its mark. */
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
+  /**
+   * **The room the panel has over the marginalia column, in px — or `null` to
+   * float in the corner as it always has.** layout.ts § `chatDock` decides;
+   * `Reader` passes it.
+   *
+   * A class and two custom properties on the same `<aside>`, and nothing else:
+   * a window dragged across the threshold with a question half typed must keep
+   * it, so docking can never be a different element or a different branch.
+   * Optional, so a caller with no column has nothing to say.
+   */
+  dockRoom?: number | null;
 }
 
 export function ChatDialog({
@@ -159,6 +171,7 @@ export function ChatDialog({
   onNewConversation,
   onCreated,
   onDropped,
+  dockRoom = null,
 }: Props) {
   const {
     threads,
@@ -671,12 +684,26 @@ export function ChatDialog({
   return (
     <aside
       ref={box}
-      className="chat-dialog"
+      /* The template form, like `.cmt-dialog`'s: tests/linky-is-scoped.test.ts
+         looks for the scoping class at the start of a `className`. */
+      className={`chat-dialog${dockRoom === null ? "" : " docked"}`}
       /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
          bottom of the layout viewport, which on iOS is behind the keyboard —
          and this one has a composer in it, so the keyboard is the normal state.
-         See CommentDialog.tsx and useVisualViewport.ts. */
-      style={keyboardInsetStyle(visible)}
+         See CommentDialog.tsx and useVisualViewport.ts.
+
+         Docked, it keeps all of that and moves sideways only: the room and the
+         inset are written here for dialogs.css § `.chat-dialog.docked` to read,
+         the inset from layout.ts so the stylesheet has no second copy of it. */
+      style={
+        dockRoom === null
+          ? keyboardInsetStyle(visible)
+          : ({
+              ...keyboardInsetStyle(visible),
+              "--chat-dock-room": `${dockRoom}px`,
+              "--chat-dock-inset": `${CHAT_DOCK_INSET}px`,
+            } as CSSProperties)
+      }
       role="dialog"
       aria-label="Chat about this passage"
     >

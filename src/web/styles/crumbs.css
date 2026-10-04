@@ -4,9 +4,9 @@
    while you read.
 
    **One line in the 44px bar, and the ancestors give way first.** Each crumb
-   shrinks to an ellipsis rather than wrapping, and the outer ones shrink a
-   hundred times faster than the last, so the section the reader is in keeps
-   its words longest. The whole of every title is in its card. **On a narrow
+   shrinks to an ellipsis rather than wrapping, and the outer ones take effectively
+   all of the shrinking until they have none left to give, so the section the reader
+   is in keeps its words longest. The whole of every title is in its card. **On a narrow
    window it is three lines in a taller bar** — § a narrow window, at the end.
    docs/plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md */
 
@@ -32,7 +32,16 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 0 100 auto;
+  /* **A million, not a hundred.** Shrinking is shared in proportion to each
+     crumb's length times this number, so at 100 the current section still
+     paid about 1% of the shortfall: 6px at 1180 wide, which is an ellipsis
+     and two letters lost from a title that otherwise fitted. At this ratio
+     its share of the worst case measured is about a thousandth of a pixel.
+     **Not 100000**: WebKit rounds a size to 1/64px, and a hundredth of a
+     pixel can round up to one unit and draw the ellipsis anyway (GPT Sol,
+     2026-10-04). Measured 2026-10-04,
+     docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+  flex: 0 1000000 auto;
 }
 
 .crumbs li:last-child {
@@ -90,6 +99,40 @@
   color: var(--ink-faint);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ § above the band -----
+   **Once the bar is stuck at the top, it starts at the spine, not at the band.**
+
+   > the headings rail spans the whole width of the screen, but the bit showing
+   > the headings actually only spans the middle column, and so it's wasting
+   > space either side
+   >
+   > — Greg, 2026-10-03 (spya-ft2cgg)
+
+   Measured at 1180 with Summary and the marginalia open: the bar ran from the
+   band's right edge to the window's, and the 336px above the band held
+   nothing while the current section was cut by 123px.
+
+   **Only while stuck.** The band is fixed from `--bar-bottom` at every scroll
+   position, and the bar is in flow under the masthead: at the top of an
+   article the two are level, and a bar that started at the spine would have
+   its first words behind the band. `data-bar-stuck` is scroll.ts §
+   `watchBarStuck`. The path moves sideways once as the masthead leaves; there
+   is no transition, because one on `left` and `width` would also run every
+   time a mode opened.
+
+   **The negative margin is what moves it.** `left` on a sticky box is a floor,
+   and the bar's place in flow is after `.reader`'s `--mode-w` of padding. The
+   margin and the wider `width` cancel, so the page is no wider for it.
+
+   No query: with no band beside the prose `--mode-w` is `0px` and this is
+   shell.css's own rule. (0,4,0), over `.controls` there.
+   docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+:root[data-bar-stuck] :where(.reader) > .controls:has(> .crumbs) {
+  margin-left: calc(-1 * var(--mode-w));
+  left: calc(var(--spine-w) + var(--safe-left));
+  width: calc(var(--page-w) - var(--spine-w));
 }
 
 /* ---------------------------------------------------- § a narrow window ------
