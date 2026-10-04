@@ -189,7 +189,7 @@ import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
-import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
+import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Quick search (plan 261002e): the same events from Jev, so `search` below
    takes one generator or the other. */
@@ -352,7 +352,13 @@ import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
 import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
-import type { ClaimsFinish, NewFeedback, Visibility } from "./store/contracts.js";
+import type {
+  ClaimsFinish,
+  CriterionFinish,
+  NewFeedback,
+  SearchFinish,
+  Visibility,
+} from "./store/contracts.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   decodeFeedbackCursor,
@@ -1861,7 +1867,7 @@ async function answer(
    * the comment was deleted mid-answer, and `useComments` already knows what to
    * do with a `done` frame for an id it has deleted.
    */
-  const settle = async (patch: AnswerPatch): Promise<void> => {
+  const settle = async (patch: AnswerFinish): Promise<void> => {
     const kept = await commentStore.patch(slug, comment.id, patch, attempt);
     if (kept) {
       frame("done", { ...comment, ...patch });
@@ -3279,8 +3285,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the answer they were watching; it never leaves this process. This one comes
      out of the store and goes back into `finish`, and it is what stops a call
      some *other* process's sweep already declared dead from landing on top of
-     the retry the reader is now watching. `undefined` from the filesystem
-     store, which has no attempts — see `Turn` in src/store/contracts.ts. */
+     the retry the reader is now watching. See `Turn` in
+     src/store/contracts.ts. */
   const storeAttempt = begun.attempt;
   /* **The question that was stored is the question that gets asked** — one rule
      for all three kinds of turn, rather than "the request's text, except on a
@@ -4719,7 +4725,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     const { frame, gone } = sse(res);
     frame("begin", run);
 
-    let patch: Partial<SearchRun>;
+    let patch: SearchFinish;
     try {
       const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
@@ -4773,7 +4779,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
          its id across a retry — that is what makes it the same question — so
          identity alone cannot say which model call is reporting, and a call a
          sweep already buried would otherwise land on top of the retry the reader
-         is watching. `undefined` on the filesystem, which has no attempts. */
+         is watching. */
       const stored = await searchStore.finish(slug, run.id, patch, attempt);
       /* `undefined` now means one of two things and both are silence. The reader
          deleted this run while the model was thinking — see the docstring above,
@@ -4822,14 +4828,19 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
  * The same job `searching` does above, for the same reason: `pending` in the
  * store does not mean "an answer is coming", because it is written *before* the
  * model call precisely so a crash leaves evidence.
+ *
+ * A map to the request holding the key, as `searching` is and for its reason.
+ * One process cannot overlap two runs of one criterion today (a retry needs
+ * the row to be `error`), so here the holder is the same shape rather than a
+ * fix; `pullingClaims` below is where it is a fix.
  */
-const refereeing = new Set<string>();
+const refereeing = new Map<string, symbol>();
 
 /** What this process is running *in this article*, as bare ids — `liveRuns`. */
 function liveCriteria(slug: string): Set<string> {
   const prefix = `${slug}/`;
   const ids = new Set<string>();
-  for (const key of refereeing) {
+  for (const key of refereeing.keys()) {
     if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
   }
   return ids;
@@ -5001,56 +5012,60 @@ async function runRefereeCriterion(
   await refuseAPaperNotReadYet(slug);
   const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
   const key = `${slug}/${row.id}`;
-  refereeing.add(key);
-
-  const { frame } = sse(res);
-  frame("begin", row);
-
-  let patch: Partial<SavedCriterion>;
+  const holder = Symbol(row.id);
+  refereeing.set(key, holder);
   try {
-    const article = await loadArticle(slug);
-    let results: RefereeResult[] = [];
-    let model = "";
-    for await (const event of runCriterionStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      criterion: row.criterion,
-      config: row.config,
-    })) {
-      if (event.type === "result") {
-        frame("result", { result: event.result });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", row);
+
+    let patch: CriterionFinish;
+    try {
+      const article = await loadArticle(slug);
+      let results: RefereeResult[] = [];
+      let model = "";
+      for await (const event of runCriterionStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        criterion: row.criterion,
+        config: row.config,
+      })) {
+        if (event.type === "result") {
+          frame("result", { result: event.result });
+          continue;
+        }
+        results = event.outcome.results;
+        model = event.outcome.model;
       }
-      results = event.outcome.results;
-      model = event.outcome.model;
+      patch = { status: "done", results, model };
+    } catch (err) {
+      captureFailure(err, { route: "referee-criteria", slug, id: row.id });
+      patch = { status: "error", error: sayToReader(err, { route: "referee-criteria", slug }) };
     }
-    patch = { status: "done", results, model };
-  } catch (err) {
-    captureFailure(err, { route: "referee-criteria", slug, id: row.id });
-    patch = { status: "error", error: sayToReader(err, { route: "referee-criteria", slug }) };
-  } finally {
-    refereeing.delete(key);
-  }
 
-  try {
-    /* The attempt goes back with the answer, and the Postgres store refuses a
-       `finish` without one rather than falling back to identity. A criterion
-       keeps its id across a retry — that is what makes it the same question —
-       so identity alone cannot say which model call is reporting. */
-    const stored = await refereeCriteriaStore.finish(slug, row.id, patch, attempt);
-    /* `undefined` means one of two things and both are silence: the referee
-       deleted this criterion while the model was thinking, or this attempt is
-       no longer the live one and a newer answer is on its way. */
-    if (stored) frame("done", stored);
-  } catch (storeErr) {
-    log("store").error(
-      { ...errorFields(storeErr), slug, id: row.id },
-      `could not record a referee criterion for ${slug}`,
-    );
-    captureFailure(storeErr, { route: "referee-criteria", slug, phase: "record-result" });
+    try {
+      /* The attempt goes back with the answer, and the Postgres store refuses a
+         `finish` without one rather than falling back to identity. A criterion
+         keeps its id across a retry — that is what makes it the same question —
+         so identity alone cannot say which model call is reporting. */
+      const stored = await refereeCriteriaStore.finish(slug, row.id, patch, attempt);
+      /* `undefined` means one of two things and both are silence: the referee
+         deleted this criterion while the model was thinking, or this attempt is
+         no longer the live one and a newer answer is on its way. */
+      if (stored) frame("done", stored);
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug, id: row.id },
+        `could not record a referee criterion for ${slug}`,
+      );
+      captureFailure(storeErr, { route: "referee-criteria", slug, phase: "record-result" });
+    } finally {
+      res.end();
+    }
   } finally {
-    res.end();
+    /* Held from the pending row to the stored answer, and released only by its
+       holder — `search`'s `finally` above says why, for both halves. */
+    if (refereeing.get(key) === holder) refereeing.delete(key);
   }
 }
 
@@ -5073,8 +5088,13 @@ async function runRefereeCriterion(
  * `pending` in the store does not mean "an answer is coming", because it is
  * written *before* the model call precisely so a crash leaves evidence. A slug
  * rather than a `slug/id` because there is only ever one run per article.
+ *
+ * **A map to the request holding the slug, not a set.** One run per article is
+ * what the *store* keeps; two tabs can each have a request in flight, and both
+ * hold this one key. With a set the first to finish deleted it, and a sweep
+ * could then bury the newer run while this process was still answering it.
  */
-const pullingClaims = new Set<string>();
+const pullingClaims = new Map<string, symbol>();
 
 /**
  * The run a request should ask for, and a 400 saying why not.
@@ -5152,73 +5172,77 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
      store that read the revision itself could stamp a newer one than the model
      was shown, if the article was re-extracted since the line above. */
   const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
-  pullingClaims.add(slug);
-
-  const { frame } = sse(res);
-  frame("begin", row);
-
-  let patch: ClaimsFinish;
+  const holder = Symbol(slug);
+  pullingClaims.set(slug, holder);
   try {
-    let claims: Claim[] = [];
-    let model = "";
-    /* The one `dropped` count that **is** stored, and the exception is narrow on
-       purpose. The others describe answers we threw away, which is our business
-       and the log's. This one describes claims the paper made that the referee
-       will never see, cut from the end of the document because the cap is
-       positional — so without it the list looks complete and position has
-       quietly become the ranking this sub-mode is built to have none of.
-       GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
-    let claimsOmitted = 0;
-    for await (const event of runClaimsStream({
-      meta: article.meta,
-      blocks: article.blocks,
-      power: powerOf(article),
-    })) {
-      if (event.type === "claim") {
-        frame("claim", { claim: event.claim });
-        continue;
-      }
-      claims = event.outcome.claims;
-      model = event.outcome.model;
-      claimsOmitted = event.outcome.dropped.truncated;
-    }
-    patch = { status: "done", claims, model, claimsOmitted };
-  } catch (err) {
-    captureFailure(err, { route: "referee-claims", slug });
-    patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
-  } finally {
-    pullingClaims.delete(slug);
-  }
+    const { frame } = sse(res);
+    frame("begin", row);
 
-  try {
-    const stored = await refereeClaimsStore.finish(slug, patch, attempt);
-    /* `null` means the run is not this call's to finish any more, and what the
-       reader is told depends on what is there instead. Nothing: the article's
-       data went away, and silence is right. A finished row about the same
-       blocks: a newer run (or the sweep) got there first, so `done` carries it.
-       Different blocks: this tab still displays the original article, so the
-       newer answer's citations need a reload to resolve against its prose.
-       A `pending` row: a newer run is still out, this tab cannot
-       follow its stream, and saying so beats a stream that just stops — the
-       panel would call that a dropped connection. Never a resurrection, never
-       an overwrite. */
-    if (stored) frame("done", stored);
-    else {
-      const current = await refereeClaimsStore.load(slug);
-      if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
-        frame("done", current);
-      } else if (current) {
-        frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+    let patch: ClaimsFinish;
+    try {
+      let claims: Claim[] = [];
+      let model = "";
+      /* The one `dropped` count that **is** stored, and the exception is narrow on
+         purpose. The others describe answers we threw away, which is our business
+         and the log's. This one describes claims the paper made that the referee
+         will never see, cut from the end of the document because the cap is
+         positional — so without it the list looks complete and position has
+         quietly become the ranking this sub-mode is built to have none of.
+         GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
+      let claimsOmitted = 0;
+      for await (const event of runClaimsStream({
+        meta: article.meta,
+        blocks: article.blocks,
+        power: powerOf(article),
+      })) {
+        if (event.type === "claim") {
+          frame("claim", { claim: event.claim });
+          continue;
+        }
+        claims = event.outcome.claims;
+        model = event.outcome.model;
+        claimsOmitted = event.outcome.dropped.truncated;
       }
+      patch = { status: "done", claims, model, claimsOmitted };
+    } catch (err) {
+      captureFailure(err, { route: "referee-claims", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
     }
-  } catch (storeErr) {
-    log("store").error(
-      { ...errorFields(storeErr), slug },
-      `could not record a claims run for ${slug}`,
-    );
-    captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+
+    try {
+      const stored = await refereeClaimsStore.finish(slug, patch, attempt);
+      /* `null` means the run is not this call's to finish any more, and what the
+         reader is told depends on what is there instead. Nothing: the article's
+         data went away, and silence is right. A finished row about the same
+         blocks: a newer run (or the sweep) got there first, so `done` carries it.
+         Different blocks: this tab still displays the original article, so the
+         newer answer's citations need a reload to resolve against its prose.
+         A `pending` row: a newer run is still out, this tab cannot
+         follow its stream, and saying so beats a stream that just stops — the
+         panel would call that a dropped connection. Never a resurrection, never
+         an overwrite. */
+      if (stored) frame("done", stored);
+      else {
+        const current = await refereeClaimsStore.load(slug);
+        if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
+          frame("done", current);
+        } else if (current) {
+          frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+        }
+      }
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug },
+        `could not record a claims run for ${slug}`,
+      );
+      captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+    } finally {
+      res.end();
+    }
   } finally {
-    res.end();
+    /* Held from the pending row to the stored answer, and released only by its
+       holder — `search`'s `finally` above says why, for both halves. */
+    if (pullingClaims.get(slug) === holder) pullingClaims.delete(slug);
   }
 }
 

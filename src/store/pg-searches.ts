@@ -58,7 +58,7 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
 import { type SearchHit, type SearchKind, type SearchRun, isSearchKind } from "../types.js";
-import { MissingAttempt, type SearchStore, type SweepOptions } from "./contracts.js";
+import { MissingAttempt, type SearchFinish, type SearchStore, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
@@ -144,7 +144,7 @@ const rawPgSearchStore: SearchStore = {
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
     options: { revises?: boolean } = {},
-  ): Promise<{ run: SearchRun; attempt: string | undefined }> {
+  ): Promise<{ run: SearchRun; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
@@ -355,20 +355,20 @@ const rawPgSearchStore: SearchStore = {
   async finish(
     slug: string,
     runId: string,
-    patch: Partial<SearchRun>,
-    attempt?: string,
+    patch: SearchFinish,
+    attempt: string,
   ): Promise<SearchRun | undefined> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
     /* **Refused without an attempt, rather than falling back to identity.**
 
-       The token is optional in the interface because the filesystem store has
-       none. Letting it be optional *here* would mean a caller that simply
-       forgot to carry it through got the whole cross-process race back — A's
-       buried answer landing on B's retry — with nothing anywhere reporting it.
-       The column exists to close that; accepting `undefined` would reopen it
-       silently. GPT Sol, 2026-08-26. */
+       The interface requires the token (since 2026-10-04; it was optional for
+       the filesystem store). This is the same rule for a caller the compiler
+       did not see: one that dropped the token would get the whole
+       cross-process race back — A's buried answer landing on B's retry — with
+       nothing anywhere reporting it. The column exists to close that;
+       accepting `undefined` would reopen it silently. GPT Sol, 2026-08-26. */
     if (attempt === undefined) {
       throw new MissingAttempt("SearchStore.finish", "begin()");
     }
@@ -376,8 +376,11 @@ const rawPgSearchStore: SearchStore = {
     /* **And the status has to be one this run can end on.** The attempt is
        released below whatever the patch says, so a patch that leaves the run
        `pending` would strip the fence off a row that is still waiting for an
-       answer — after which anybody's late write can land on it. */
-    if (patch.status !== "done" && patch.status !== "error") {
+       answer — after which anybody's late write can land on it. `SearchFinish`
+       says so in the type; read as a plain string here so the refusal below
+       can still name what an untyped caller sent. */
+    const status: string = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -397,7 +400,7 @@ const rawPgSearchStore: SearchStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `SearchStore.finish must end a run: status was ${JSON.stringify(patch.status)}, ` +
+          `SearchStore.finish must end a run: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -410,10 +413,13 @@ const rawPgSearchStore: SearchStore = {
     const rows = await db
       .update(searchRuns)
       .set({
-        ...(patch.status === undefined ? {} : { status: patch.status }),
-        ...(patch.hits === undefined ? {} : { hits: patch.hits }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        status: patch.status,
+        /* One arm or the other, and a field the arm does not name is left as
+           `begin` set it: a failure does not touch `hits`, an answer does not
+           touch `error`. */
+        ...(patch.status === "done"
+          ? { hits: patch.hits, ...(patch.model === undefined ? {} : { model: patch.model }) }
+          : { error: patch.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // on the table says so, and half an attempt is a run that can never be
         // swept or never be finished.

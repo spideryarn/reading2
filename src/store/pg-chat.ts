@@ -407,7 +407,7 @@ const rawPgChatStore: ChatStore = {
           messageRow(articleId, thread.id, user, base),
           messageRow(articleId, thread.id, reply, base + 1),
         ]);
-      return { thread, user, reply, attempt: undefined };
+      return { thread, user, reply };
     }, READ_COMMITTED);
 
     logger.info(
@@ -423,7 +423,17 @@ const rawPgChatStore: ChatStore = {
     return out;
   },
 
-  async finish(slug, threadId, messageId, patch, opts = {}): Promise<void> {
+  async finish(
+    slug,
+    threadId,
+    messageId,
+    patch,
+    /* Looser than `ChatStore.finish`, which requires both the options and the
+       attempt: the default and the `?` are for a caller the compiler did not
+       see, so that it reaches `MissingAttempt` below and not a `TypeError` on
+       `undefined.now`. */
+    opts: { attempt?: string; now?: (() => string) | undefined } = {},
+  ): Promise<void> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = new Date((opts.now ?? (() => new Date().toISOString()))());
@@ -432,7 +442,7 @@ const rawPgChatStore: ChatStore = {
 
        A retry keeps the message id — that is what makes it a retry — so
        identity cannot say which model call is reporting. Accepting `undefined`
-       here would mean a caller that simply forgot to carry the token got the
+       here would mean a caller that dropped the token got the
        old race back in full, with nothing anywhere saying so. That is the
        failure mode this whole migration keeps meeting, so it is an error. */
     const attempt = opts.attempt;

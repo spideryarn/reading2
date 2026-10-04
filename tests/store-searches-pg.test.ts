@@ -426,14 +426,21 @@ describe("the Postgres searches store", () => {
     expect(good?.model).toBe("live-model");
   });
 
+  /* The store as a caller the compiler did not see. `SearchStore.finish`'s type
+     refuses all three calls below since 2026-10-04
+     (tests/store-contracts-require-attempts.test.ts); these two cases are the
+     run-time refusals behind it, which a cast or an `any` still reaches. */
+  const untyped = pgSearchStore as unknown as {
+    finish: (...args: unknown[]) => Promise<unknown>;
+  };
+
   it("refuses a finish with no attempt at all", async () => {
-    /* The token is optional in the interface, because the filesystem store has
-       none. Accepting `undefined` HERE would put the whole cross-process race
-       back for any caller that forgot to carry it — silently, which is the
+    /* Accepting `undefined` HERE would put the whole cross-process race
+       back for any caller that dropped the token — silently, which is the
        failure mode this migration keeps meeting. */
     const { run } = await pgSearchStore.begin(SLUG, "about time", "meaning");
     await expect(
-      pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }),
+      untyped.finish(SLUG, run.id, { status: "done", hits: [] }),
     ).rejects.toThrow(/needs the attempt/);
     expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
   });
@@ -444,10 +451,10 @@ describe("the Postgres searches store", () => {
        answer — and anybody's late write could then land on it. */
     const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "meaning");
     await expect(
-      pgSearchStore.finish(SLUG, run.id, { hits: [] }, attempt),
+      untyped.finish(SLUG, run.id, { hits: [] }, attempt),
     ).rejects.toThrow(/must end a run/);
     await expect(
-      pgSearchStore.finish(SLUG, run.id, { status: "pending" }, attempt),
+      untyped.finish(SLUG, run.id, { status: "pending" }, attempt),
     ).rejects.toThrow(/must end a run/);
   });
 

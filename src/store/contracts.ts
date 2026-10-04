@@ -52,7 +52,7 @@ import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
-import type { AnswerPatch, MarkPatch, NewComment } from "../comments.js";
+import type { AnswerFinish, MarkPatch, NewComment } from "../comments.js";
 import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
@@ -498,14 +498,12 @@ export interface CommentStore {
    *
    * ## The attempt token
    *
-   * `undefined` from the filesystem store, which has one process and needs no
-   * fence — see `beginAnswer` in src/comments.ts for why that is a property of
-   * that store rather than a weaker version of this one. From Postgres it is
-   * the row's `attempt_id`, and it has to be carried to `patch`: without it a
+   * The row's `attempt_id`, and it has to be carried to `patch`: without it a
    * model call this sweep already buried can land on top of the retry the
-   * reader is watching arrive.
+   * reader is watching arrive. It was `string | undefined` while there was a
+   * filesystem store, which had no fence; that store went on 2026-09-05.
    */
-  beginAnswer(slug: string, id: string): Promise<{ comment: Comment; attempt: string | undefined }>;
+  beginAnswer(slug: string, id: string): Promise<{ comment: Comment; attempt: string }>;
 
   /**
    * The reader edited their words. Writes `body` and `updatedAt`, nothing else.
@@ -591,15 +589,16 @@ export interface CommentStore {
   /**
    * Fill in the answer, or the error — **if this attempt is still the live one**.
    *
-   * `attempt` is the token `beginAnswer` handed back. It is optional in the
-   * type because the filesystem store has none; **the Postgres store refuses a
-   * call without it** rather than falling back to identity, because a caller
-   * that merely forgot to carry it would put back the whole race in silence.
-   * Exactly `SearchStore.finish`, and for the same reason.
+   * `attempt` is the token `beginAnswer` handed back, and it is required: a
+   * caller that merely forgot to carry it would put back the whole race in
+   * silence. Exactly `SearchStore.finish`, and for the same reason. The store
+   * still refuses a call without one at run time (`MissingAttempt`), for a
+   * caller that got round the type.
    *
-   * `patch.status` must be `done` or `error`. The attempt ends here either way,
-   * so a patch that left the comment `pending` would strip the fence off a row
-   * still waiting for an answer, after which anybody's late write can land.
+   * `patch.status` must be `done` or `error` — `AnswerFinish` says so. The
+   * attempt ends here either way, so a patch that left the comment `pending`
+   * would strip the fence off a row still waiting for an answer, after which
+   * anybody's late write can land.
    *
    * **`undefined` back means "you were superseded"** — the fenced write matched
    * no row, because a sweep buried this attempt and the reader has already
@@ -614,8 +613,8 @@ export interface CommentStore {
   patch(
     slug: string,
     id: string,
-    patch: AnswerPatch,
-    attempt?: string,
+    patch: AnswerFinish,
+    attempt: string,
     opts?: { quiet?: boolean },
   ): Promise<Comment[] | undefined>;
 
@@ -1067,18 +1066,28 @@ export interface SweepOptions {
  * fixed sequence and compare the wire form at every step.
  */
 /**
- * A turn, and the attempt now answering it.
+ * A question and its reply, as stored, in the thread they now belong to.
  *
- * `attempt` is `undefined` from the filesystem store, which has no such thing
- * and never will: the whole point of an attempt is to be compared across
- * processes, and two servers sharing one `data/` directory is a thing nobody
- * does. Under shared Postgres, multi-process is the ordinary case.
+ * What `appendSpoken` returns, and the part of a `Turn` that is not the fence:
+ * a spoken exchange is written finished, so there is no attempt to carry.
  */
-export interface Turn {
+interface StoredExchange {
   readonly thread: ChatThread;
   readonly user: ChatMessage;
   readonly reply: ChatMessage;
-  readonly attempt: string | undefined;
+}
+
+/**
+ * A turn, and the attempt now answering it.
+ *
+ * `attempt` is the pending reply's token, and `finish` must present it. It
+ * was `string | undefined` for two reasons that have both gone: the filesystem
+ * store, which had no attempts and was deleted on 2026-09-05, and
+ * `appendSpoken`, which has none legitimately and now returns a
+ * `StoredExchange` instead of a `Turn` with a hole in it.
+ */
+export interface Turn extends StoredExchange {
+  readonly attempt: string;
 }
 
 export interface ChatStore {
@@ -1128,21 +1137,16 @@ export interface ChatStore {
    * **Pass the `attempt` this answer belongs to.** A retry keeps the message
    * id, so identity cannot say which call is reporting: without the attempt, a
    * model call that a sweep already buried overwrites the retry the reader is
-   * watching. The Postgres store refuses a `finish` with no attempt for exactly
-   * that reason; the filesystem store has no attempts and ignores it.
+   * watching. So the options are required and so is the attempt in them; the
+   * store also refuses a call without one at run time (`MissingAttempt`), for
+   * a caller that got round the type.
    */
   finish(
     slug: string,
     threadId: string,
     messageId: string,
     patch: Partial<ChatMessage>,
-    /* `| undefined` explicitly, not just `?`. `exactOptionalPropertyTypes` is
-       on, and the value a caller has is `Turn.attempt`, which IS `string |
-       undefined` because the filesystem store has no attempts. Writing
-       `attempt?: string` would force every call site to branch on a difference
-       that does not exist for them. The Postgres store is where `undefined`
-       becomes an error, which is the layer that can do something about it. */
-    opts?: { attempt?: string | undefined; now?: (() => string) | undefined },
+    opts: { attempt: string; now?: (() => string) | undefined },
   ): Promise<void>;
 
   /**
@@ -1182,7 +1186,7 @@ export interface ChatStore {
    * the tail already moved and gets `ChatConflict` rather than appending the
    * turn twice. See `SpokenTurn` in src/chat.ts.
    */
-  appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<Turn>;
+  appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<StoredExchange>;
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
@@ -1197,21 +1201,31 @@ export interface ChatStore {
  * ## The attempt, and why `begin` hands one back
  *
  * A run is the reader's question and outlives any number of tries at answering
- * it; an **attempt** is one model call. Only the Postgres store has attempts as
- * rows, and it needs them for the reason `SweepOptions` gives: `finish` must be
+ * it; an **attempt** is one model call. The store keeps attempts on the row,
+ * for the reason `SweepOptions` gives: `finish` must be
  * able to say *which* call is reporting, so that a late answer from a call
  * another process already declared dead cannot land on top of the retry the
  * reader is watching. So `begin` returns an opaque attempt token, the caller
- * carries it, and `finish` presents it.
- *
- * The filesystem store returns `undefined` and ignores it, which is today's
- * behaviour exactly: fenced by identity alone.
+ * carries it, and `finish` presents it. Both halves are required in the type.
  *
  * **`finish` returns the run or `undefined`** rather than the whole list. The
  * caller only ever did `.find(…)` on it and 404s when missing, and
  * `UPDATE … RETURNING *` answers that directly — zero rows *is* "deleted while
  * running", or "this attempt is no longer the live one".
  */
+/**
+ * What a search can end as: the hits, or the sentence saying why not.
+ *
+ * **Never `pending`**, and nothing but the answer: `finish` releases the
+ * attempt whatever the patch says, so a patch leaving the run `pending` would
+ * strip the fence off a row still waiting; and `id`, `criterion`, `kind` and
+ * `sourceHash` are `begin`'s to set. It was `Partial<SearchRun>` until
+ * 2026-10-04, with both rules held only at run time.
+ */
+export type SearchFinish =
+  | { status: "done"; hits: SearchRun["hits"]; model?: string }
+  | { status: "error"; error: string };
+
 export interface SearchStore {
   load(slug: string): Promise<SearchRun[]>;
 
@@ -1257,26 +1271,24 @@ export interface SearchStore {
     wantedId?: string,
     now?: () => string,
     options?: { revises?: boolean },
-  ): Promise<{ run: SearchRun; attempt: string | undefined }>;
+  ): Promise<{ run: SearchRun; attempt: string }>;
 
   /**
    * Write the answer, if this attempt is still the live one.
    *
-   * `attempt` is optional in the type because the filesystem store has none.
-   * **The Postgres store refuses a call without it** rather than silently
-   * falling back to identity, which would put back exactly the race the column
-   * exists to close — a caller that forgets to carry the token would recreate
-   * it in full, and nothing would say so.
+   * `attempt` is required. Falling back to identity without it would put back
+   * exactly the race the column exists to close — a caller that forgot to
+   * carry the token would recreate it in full, and nothing would say so. The
+   * store still refuses a missing one at run time (`MissingAttempt`), for a
+   * caller that got round the type.
    *
-   * `patch.status` must be `done` or `error`. The attempt ends here either way,
-   * so a patch that leaves the run `pending` would strip the fence off a row
-   * that is still waiting for an answer.
+   * The patch ends the run — see `SearchFinish`.
    */
   finish(
     slug: string,
     runId: string,
-    patch: Partial<SearchRun>,
-    attempt?: string,
+    patch: SearchFinish,
+    attempt: string,
   ): Promise<SearchRun | undefined>;
 
   remove(slug: string, runId: string): Promise<SearchRun[]>;
@@ -1309,10 +1321,9 @@ export interface SearchStore {
  * sub-mode, docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1.
  *
  * `SearchStore` method for method, including the attempt fence and what it is
- * for, because it is the same problem with the same two stores behind it: a run
- * is the referee's question, an attempt is one model call, and only Postgres
- * has attempts as rows. Read that interface first; only the differences are
- * written out here.
+ * for, because it is the same problem: a run is the referee's question and an
+ * attempt is one model call. Read that interface first; only the differences
+ * are written out here.
  *
  * - **`begin` takes a config as well as a criterion.** A criterion has a kind,
  *   and `diverging` carries the two poles and the ramp. The whole union goes in
@@ -1324,6 +1335,11 @@ export interface SearchStore {
  *   criterion a mark in the prose came from, and nothing about which way a
  *   passage cuts. Sol's finding 7: those two channels must not become one.
  */
+/** What a criterion can end as — `SearchFinish`, with results for hits. */
+export type CriterionFinish =
+  | { status: "done"; results: SavedCriterion["results"]; model?: string }
+  | { status: "error"; error: string };
+
 export interface RefereeCriteriaStore {
   load(slug: string): Promise<SavedCriterion[]>;
 
@@ -1347,21 +1363,19 @@ export interface RefereeCriteriaStore {
     config: RefereeCriterionConfig,
     wantedId?: string,
     now?: () => string,
-  ): Promise<{ row: SavedCriterion; attempt: string | undefined }>;
+  ): Promise<{ row: SavedCriterion; attempt: string }>;
 
   /**
    * Write the answer, if this attempt is still the live one.
    *
-   * `attempt` is optional in the type because the filesystem store has none;
-   * the Postgres store **refuses a call without it** rather than falling back
-   * to identity, which would put back the cross-process race the column exists
-   * to close. `patch.status` must be `done` or `error`.
+   * `attempt` is required, and the patch ends the criterion — both for
+   * `SearchStore.finish`'s reasons.
    */
   finish(
     slug: string,
     id: string,
-    patch: Partial<SavedCriterion>,
-    attempt?: string,
+    patch: CriterionFinish,
+    attempt: string,
   ): Promise<SavedCriterion | undefined>;
 
   remove(slug: string, id: string): Promise<SavedCriterion[]>;
@@ -1410,10 +1424,16 @@ export interface RefereeCriteriaStore {
  * What a claims run can end as. **Never `pending`**: `finish` releases the
  * attempt token whatever the patch says, so a patch leaving the row `pending`
  * would strip the fence off a row still waiting for an answer.
- * `RefereeCriteriaStore.finish` refuses the same thing at run time; here the
- * compiler does.
+ * `SearchFinish` and `CriterionFinish` say the same of their stores.
+ *
+ * **And only the fields a finish writes.** `createdAt` and `sourceHash` are
+ * `begin`'s: the adapter ignored them in a patch, silently, so the type now
+ * refuses them. An `error` finish may carry `claims: []`, which is why this is
+ * a `Pick` rather than the two-armed union its siblings are.
  */
-export type ClaimsFinish = Partial<ClaimsRun> & { status: "done" | "error" };
+export type ClaimsFinish = Partial<Pick<ClaimsRun, "claims" | "model" | "claimsOmitted" | "error">> & {
+  status: "done" | "error";
+};
 
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */
@@ -2326,14 +2346,20 @@ export type FeedbackSubmission =
  * **A fenced write that arrived without its fence** — a caller's bug, in four stores.
  *
  * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
- * `RefereeCriteriaStore.finish` all take `attempt` as optional, because the
- * filesystem store has no such token. The Postgres side refuses a call without
- * one rather than falling back to identity: a caller that merely forgot to carry
+ * `RefereeCriteriaStore.finish` refuse a call without an attempt rather than
+ * falling back to identity: a caller that merely forgot to carry
  * it through would put the whole cross-process race back — a model call the
  * sweep already buried landing on top of the retry the reader is watching
- * arrive — with nothing anywhere reporting it. Stage H of
- * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * is where `attempt` stops being optional and this class stops being reachable.
+ * arrive — with nothing anywhere reporting it.
+ *
+ * **The types refuse it first, since 2026-10-04**
+ * (docs/plans/261004d-fifth-sweep-cluster-6b-store-contracts-require-the-attempt-and-markers-outlive-finish.md,
+ * which is Stage H of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md):
+ * `attempt` was optional in all four signatures for the filesystem store, and
+ * is now required. This class stayed, for the caller the compiler does not
+ * see — a cast, an `any`, a spread of arguments built elsewhere — because the
+ * thing it guards is a silent overwrite and the guard is one comparison.
  *
  * ## Why it is a class, and why its message names no slug
  *
