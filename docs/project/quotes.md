@@ -812,6 +812,15 @@ counts the runs; `discarded` and `elapsedMs` accumulate across them. The list is
 `MAX_QUOTES_TOTAL` (120) in [types.ts](../../src/types.ts); a pass never asks for more than the room
 left, at the ceiling no call is made, and the foot says so instead of offering the button.
 
+**The command bar presses Find more too, since 2026-10-04** — *Quotes › Find more*
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). Its row is
+drawn under the guard the foot's button is — settled, a list, not stale, not outdated, under the
+ceiling (`quotesAppendOnOffer` in [find-more.ts](../../src/web/find-more.ts), which `Foot` reads) —
+and the band makes the press through the button's own function, in the list's own profile setting,
+only when nothing is out: no job, no *Starting…*, no failure. That includes a refused POST, where
+the foot itself still shows the button under the server's sentence; the command leaves that press to
+the reader.
+
 **What the reader gave up** is a whole rewrite of a current list, including one for a new profile —
 *Choose them again* was the only way to throw a current list away. It survives on the **stale**
 banner; the **outdated** banner, the other state where extending cannot give the reader what the

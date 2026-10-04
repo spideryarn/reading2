@@ -214,6 +214,17 @@ which: `panelRun` on `GET /api/glossary/:slug`, from `panelRunKind` in
 [src/glossary.ts](../../src/glossary.ts), computed in the route beside `profileChanged` because the
 profile half needs the reader's current profile.
 
+**The command bar presses this button too, since 2026-10-04** — *Glossary › Find more*
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The row is
+drawn only when the read says `panelRun: "append"`, and the band makes the press, through the same
+`more(profiled)`, only if a fresh Find more is what the row is offering then: no job, no
+*Starting…*, no failure, no forced run waiting for its list
+(`glossaryFindMoreOffered` in [find-more.ts](../../src/web/find-more.ts); the run row's own first
+branch reads its `freshRunOffered`). It never presses *Write a new list*. **An absent `panelRun` is
+where the two part**: for an older cached response the button's label falls back to
+`stale || outdated`, which cannot see a changed profile, and may say *Find more*; the command treats
+no verdict as no.
+
 **An appendable list an older prompt wrote is added to, since 2026-10-04**
 ([261004f](../plans/261004f-glossary-find-more-always-adds-across-prompt-versions.md)). Until then
 the version had to be the current one, the prompt was bumped five times in eight days, and so on

@@ -311,6 +311,37 @@ flashed, [url-state.md](url-state.md)), where that step's row shows it — **nev
 whose generate-on-open would start a second, unforced paid run beside it. The words and labels live
 once, in [`src/web/rerun-commands.ts`](../../src/web/rerun-commands.ts), which Metadata reads too.
 
+**The two bands with a *Find more* button have a row for it since 2026-10-04** — *Glossary › Find
+more* and *Quotes › Find more*
+([261004k](../plans/261004k-command-bar-find-more-rows-and-more-mode-aliases.md)):
+
+> There are lots of cases where we have a sort of find more button, for example in the glossary
+> mode. Let's make that be part of the command bar as well.
+>
+> — Greg, 2026-10-04 (spya-rbxrgc)
+
+Typed-only, marked `generates`, and answering to whole phrases as *Run again* does — `find more
+terms`, `more quotes`, `add more jargon`, `excerpts find more`, and a bare `find more` for both.
+**A row is drawn only while its list can be added to**, which the reading view reads off the
+glossary and quotes reads it already holds: a settled read, a list, and for Glossary the server's
+word that the run appends (`panelRun`, an absent verdict counting as no); for Quotes not stale, not
+outdated and under the ceiling. So there is no row on an article with no list, on one whose run would
+write a new list, for a visitor, or on the Metadata page — no row, never a row that opens a band and
+does nothing. **Enter posts nothing**: it leaves a one-shot press in memory
+([`find-more-handoff.ts`](../../src/web/find-more-handoff.ts), the glossary ask's guards: slug,
+nonce, session, ten seconds) and opens the band with the plain mode setter, and the band presses the
+function its own button calls, in the list's own profile setting. That is why it is not a word on
+*Run again*, which posts with the reader's current profile and lands on Metadata. The band takes the
+press once its read has settled and **makes it only if a fresh Find more is what it is offering at
+that moment** — no job, no *Starting…*, no failure with its Retry, no forced run waiting for its
+list; otherwise the press is used up and dropped, so it cannot fire when a job finishes seconds
+later ([`useFindMoreHandOff.ts`](../../src/web/useFindMoreHandOff.ts)). The words and the two
+predicates are [`find-more.ts`](../../src/web/find-more.ts), which the band's own control reads too.
+`find more …` is also what the `find` verb below takes: the row comes first and *Find “more …” in
+this article* after it, the one declared exception in the collision matrix
+(`tests/command-match-arguments.test.ts`). No other band has a button that adds to a list; the rest
+have a rewrite, which is *Run again*.
+
 **Five more of Metadata's controls have rows, typed-only like *Run again*** (the empty list keeps
 the Metadata row as their stand-in), and none of them spends. Three go to a section —
 *High-powered AI* (`opus`, `stronger model`; to *AI processing*, where its switch is first, never

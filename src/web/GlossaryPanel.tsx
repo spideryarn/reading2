@@ -114,6 +114,8 @@ import { putKeyboardAway } from "./useVisualViewport.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
 import { pendingGlossaryAsk, subscribeGlossaryAsk, takeGlossaryAsk } from "./glossary-ask-handoff.js";
+import { freshRunOffered, glossaryFindMoreOffered } from "./find-more.js";
+import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
@@ -279,6 +281,27 @@ export function GlossaryPanel({
      `error` is about the list, and this is about one press, so it is the
      panel's own — drawn in the same place, the band's error line. */
   const [hideFailed, setHideFailed] = useState<string | null>(null);
+  /* **Find more, once, for its two callers**: the run row's button below, and
+     the command bar's *Glossary › Find more* (plan 261004k), which opens this
+     band and leaves a press for it to take. **In the list's own recorded
+     setting**, not the current profile: `existingFor` refuses to append
+     across a profile difference, so asking a plain list's Find more for the
+     profile would *rewrite* it — dropping every term the model did not return
+     again — under a button that says "more". The *Use your profile* checkbox
+     used to carry this, seeded from the list; since it went on 2026-09-13 the
+     list's `profiled` is passed directly. useGlossary.ts § `more`;
+     tests/glossary-find-more-keeps-the-lists-profile.test.tsx.
+
+     The bar's press is made only if a fresh Find more is what this band is
+     offering now, and is used up either way (useFindMoreHandOff.ts). */
+  const findMore = () => owner?.more(owner.profiled) ?? Promise.resolve();
+  useFindMoreHandOff({
+    slug: owner?.slug ?? null,
+    mode: "glossary",
+    settled: owner !== null && owner.status !== "loading",
+    offered: owner !== null && glossaryFindMoreOffered(owner),
+    press: () => void findMore(),
+  });
   const setHidden = owner
     ? (id: string, hide: boolean) => {
         setHideFailed(null);
@@ -394,15 +417,8 @@ export function GlossaryPanel({
              plan 261004f code review F7. */
           rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
           foundNothing={owner.glossary.passes > 1 && owner.glossary.lastAdded === 0}
-          /* **In the list's own recorded setting**, not the current profile.
-             `existingFor` refuses to append across a profile difference, so
-             asking a plain list's Find more for the profile would *rewrite*
-             it — dropping every term the model did not return again — under
-             a button that says "more". The *Use your profile* checkbox used
-             to carry this, seeded from the list; since it went on 2026-09-13
-             the list's `profiled` is passed directly. useGlossary.ts § `more`;
-             tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
-          onMore={() => owner.more(owner.profiled)}
+          /* In the list's own recorded setting — `findMore` above. */
+          onMore={findMore}
           waiting={owner.rewriting ? (owner.error ? "held" : "read") : null}
           onRead={owner.refresh}
           onCancel={owner.cancel}
@@ -2291,8 +2307,12 @@ function MoreRow({
     : "Another model call, told what it has already found, looking for the quieter terms";
   /* The stale banner used to own the transport warning and the failed job's
      Retry. Consolidating the controls must carry both, not just the spinner
-     and Stop — code review of plan 261003c. */
-  if (job || starting || failed) {
+     and Stop — code review of plan 261003c.
+
+     `freshRunOffered` is the question the command bar's Find more asks before
+     it presses `onMore` (find-more.ts): while this branch is drawn, it does
+     not. */
+  if (!freshRunOffered({ job, starting, failed })) {
     return (
       <div className="gloss-more">
         <Progress

@@ -352,7 +352,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   keyboard: {
     title: "Keyboard shortcuts",
     keywords:
-      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define tag untag microphone dictate speak sentence ask did you mean natural language",
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language",
     body: (
       <>
         <ul>
@@ -371,7 +371,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>look up entropy</em> opens a matching term already visible in the glossary, or, once
             the article has a glossary, offers to look it up and add it.{" "}
             <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
-            <em>experimental</em> turns experimental features on or off. Press the microphone in the
+            <em>experimental</em> turns experimental features on or off. <em>find more terms</em> and{" "}
+            <em>more quotes</em> open Glossary or Quotes and press its <strong>Find more</strong> for
+            you; they are offered only while that list can be added to. Press the microphone in the
             box to say it instead of typing.
           </li>
           <li>

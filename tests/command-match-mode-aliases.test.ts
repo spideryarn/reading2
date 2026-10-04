@@ -31,6 +31,9 @@
  *  5. **Every *Run again* phrase still names its own step.** Eight modes lend
  *     their nicknames to that row (rerun-commands.ts § `rerunNames`), seven
  *     phrases a nickname, and every one of those rows spends.
+ *  6. **Every *Find more* phrase names its own band's row** (Stage 2 of the
+ *     same plan; find-more.ts), and takes neither a mode's name nor a *Run
+ *     again* phrase from the row that had it.
  */
 import { describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
@@ -46,6 +49,7 @@ import {
   rankCommands,
 } from "../src/web/command-match.js";
 import { visibleModes } from "../src/web/Dock.js";
+import { FIND_MORE_MODES, findMoreWords } from "../src/web/find-more.js";
 import { METADATA_RERUN_STEPS, rerunWords } from "../src/web/rerun-commands.js";
 
 /**
@@ -74,6 +78,13 @@ function rows(archived: boolean): readonly Command[] {
             set: async () => ({ kind: "done" }) as const,
           },
           tags: { edit: async () => [] },
+        },
+        /* Both lists able to be added to, so both *Find more* rows are ranked
+           against (plan 261004k, Stage 2). */
+        executor: {
+          runners: {},
+          sources: {},
+          findMore: { glossary: () => ({ kind: "close" }), quotes: () => ({ kind: "close" }) },
         },
       },
       openComments: () => {},
@@ -106,6 +117,8 @@ describe("the list these are ranked against", () => {
     expect(ids).toContain("action:feedback");
     expect(ids).toContain("action:comments");
     expect(ids).toContain("action:rerun-glossary");
+    expect(ids).toContain("action:find-more-glossary");
+    expect(ids).toContain("action:find-more-quotes");
     expect(ids).toContain("action:archive");
     expect(ids.some((id) => id.startsWith("page:/help"))).toBe(true);
     expect(ids.length).toBeGreaterThan(60);
@@ -246,5 +259,38 @@ describe("every Run again phrase, typed in full", () => {
   it("includes the new nicknames, so the check above is about them", () => {
     expect(rerunWords("glossary").aliases).toContain("rerun jargon");
     expect(rerunWords("citations").aliases).toContain("further reading again");
+  });
+});
+
+/* Stage 2: two bands lend their nicknames to a *Find more* row, four phrases a
+   nickname, and each of those rows opens a band that spends. */
+describe("every Find more phrase, typed in full", () => {
+  it("puts its own band's row first — and a bare `find more` puts Glossary's, then Quotes'", () => {
+    const wrong = FIND_MORE_MODES.flatMap((mode) =>
+      findMoreWords(mode)
+        .aliases.filter((phrase) => phrase !== "find more")
+        .map((phrase) => ({ phrase, want: `action:find-more-${mode}`, got: first(phrase) }))
+        .filter(({ want, got }) => got.length !== 1 || got[0] !== want)
+        .map(({ phrase, want, got }) => `${phrase}: wanted ${want}, got ${got.join(" / ")}`),
+    );
+    expect(wrong).toEqual([]);
+    for (const list of LISTS) {
+      expect(rankCommands("find more", list).map(commandId)).toEqual([
+        "action:find-more-glossary",
+        "action:find-more-quotes",
+      ]);
+    }
+  });
+
+  it("leaves each mode's own name to the mode, and `rerun …` to Run again", () => {
+    expect(first("glossary")).toEqual(["mode:glossary"]);
+    expect(first("quotes")).toEqual(["mode:quotes"]);
+    expect(first("rerun glossary")).toEqual(["action:rerun-glossary"]);
+    expect(first("rerun quotes")).toEqual(["action:rerun-quotes"]);
+  });
+
+  it("includes the nicknames, so the check above is about them", () => {
+    expect(findMoreWords("glossary").aliases).toContain("more jargon");
+    expect(findMoreWords("quotes").aliases).toContain("excerpts find more");
   });
 });
