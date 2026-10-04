@@ -73,6 +73,7 @@ import {
   SendHorizontal,
   Square,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { withoutCommandLines } from "../citable.js";
@@ -1864,7 +1865,7 @@ function CopyAnswer({ text }: { text: string }) {
       {state === "copied" ? (
         <ClipboardCheck size={12} />
       ) : state === "failed" ? (
-        <X size={12} />
+        <TriangleAlert size={12} />
       ) : (
         <Copy size={12} />
       )}
