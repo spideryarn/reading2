@@ -56,6 +56,41 @@ Two read-only subagents traced the code; one ran the real `buildHeadingTree`, `c
    of that array. So a part of a document can be put through the prompt every article already
    uses, the one that has been evaluated.
 
+## The plan review, and what changed
+
+GPT Sol, read-only, 2026-10-05, on commit `d25298853`:
+[the review](261005a-long-documents-plan-review-sol.md), verdict **do not build unchanged**. It
+confirmed that nothing treats `provisional` as unfinished, that no invariant caps depth or needs
+questions, and that the structure call parses and builds on a slice. Finding by finding:
+
+- **F1 (P1), windows break section navigation. Taken, by a different fix.** The client picks "the
+  section level" as one above the deepest leaf, for the whole article (`sectionDepth`,
+  `src/web/position.ts`). Every model tree has its paragraphs at depth 3 (checked on the five
+  fixture trees), so the client has never met a tree whose branches end at different depths. The
+  review proposed teaching the client to cope. Instead **D's tree has the same shape as a model's:
+  root, parts, sections, paragraphs, every paragraph at depth 3.** No client change, and a test
+  that says so. § Stage D below is rewritten to this.
+- **F2 (P1), a model's tree can also hand labels a section too big to ask about. Taken.** Before a
+  model-built tree is accepted, the step asks the labels step's own arithmetic whether every
+  sibling set can be asked for in one call; if one cannot, it returns D's tree and logs why. The
+  threshold is the labels refusal, not 60: a paid tree is not thrown away for a 70-paragraph
+  section.
+- **F3 (P1, reasoned), one enormous paragraph.** *Half taken:* structure takes the D path when its
+  **input** will not fit as well as when its answer will not, if the estimate is already to hand.
+  *Half not built:* a labels request bounded by characters, with excerpts for an oversized block.
+  It is true of every article today, long or short, and is reported to the Overseer as a finding.
+- **F4 (P1, reasoned), 120,000 short paragraphs need more label batches than three job claims
+  allow. Not built.** New reach, since such a page was refused at structure until now. What the
+  reader gets is a readable article whose paragraph labels failed, which is a worse article and
+  not a lost one. Reported, with a recommendation.
+- **F5 (P2), a single chapter too big for one call. Taken into E's plan.**
+- **F6 (P2), the batch bound is 84, not 60, and supplements are exempt. Taken:** the tests check
+  sibling sets (at most 60) and planned batches (the planner's own maximum) separately, and
+  windowing happens before the supplement is appended.
+- **F7 (P2), the comparison was unfair to the cascade. Taken:** the E spike compares both routes
+  under the same deadline and fallback before choosing. § Stage E's recommendation is now a
+  hypothesis for that spike.
+
 ## The design
 
 ### Stage D: a bounded tree with no model
@@ -65,17 +100,26 @@ In `generateStructure` (`src/structure.ts`), where `wholeDocumentRequest(body)` 
 Everything after it (the pending labels manifest, the hash seam, `assertTreeSound`) runs as it does
 for a model's tree.
 
-The tree is `buildHeadingTree`'s, with one addition that makes it safe for the steps after it:
+The tree has the shape every model tree has, so nothing after it meets a new case:
 
-- **No run of sibling leaves is longer than a fixed bound.** A run over the bound is cut into
-  consecutive, near-equal sections ("windows"), and the leaves hang under those. The bound is the
-  labels step's own batch size (`MAX_BATCH`, 60), so labels are asked for in the sizes its checks
-  were tuned at. A document with no usable headings becomes root, then about fifty windows, then
-  leaves, rather than root and 3,100 leaves.
+```
+ root ─ parts (depth 1) ─ sections (depth 2) ─ one leaf per block (depth 3, all of them)
+```
+
+- **Parts** are the document's sections at its section heading level, chosen and stub-merged by
+  the rule `buildHeadingTree` already has. A document with no usable headings gets parts made of
+  consecutive runs of sections instead.
+- **Sections** are the sub-headings inside a part, and **no section holds more than a fixed number
+  of blocks**: a longer run is cut into consecutive, near-equal "windows". The bound is the labels
+  step's own batch size (`MAX_BATCH`, 60), so labels are asked for in the sizes its checks were
+  tuned at. Windowing is done on the body, before the endnotes are appended.
+- **Every part has sections, and every paragraph is at depth 3.** The tree-invariant checker
+  (`checkTree`) is the oracle for how a part too small to divide is handled (merged into its
+  neighbour, or whatever shape passes clean).
 - **A window is titled by the opening words of its first paragraph**, cut at a word boundary with
-  an ellipsis. It is honest (the words are the author's), free, and never empty when the block has
-  words; a window whose first block has none (a figure) takes the first block that does, else a
-  stock title.
+  an ellipsis, and carries no `sourceHeading`. It is honest (the words are the author's), free,
+  and never empty when the block has words; a window whose first block has none (a figure) takes
+  the first block that does, else a stock title.
 - **No title is ever empty.** An empty or whitespace article title falls through to the first
   heading, then to the slug; a heading with empty text does not title a section.
 - The tree keeps `provisional: "headings"`, `version: "headings/1"` and
@@ -85,8 +129,13 @@ The tree is `buildHeadingTree`'s, with one addition that makes it safe for the s
   silently became the common case must show in the logs
   ([silent-success.md](../reusable/silent-success.md)).
 
-The windowing is an option on the builder, off by default, so the structure eval's arm zero
-(`buildHeadingTree` as it stands) measures exactly what it measured before.
+`buildHeadingTree` as it stands is the structure eval's arm zero and must go on measuring exactly
+what it measured, so the bounded tree is a separate builder (or an option that is off by default)
+sharing its section-level and stub rules rather than a change to its output.
+
+Two more conditions send a document down this path (review F2, F3): its **input** will not fit one
+call, where that estimate is already to hand; and a model-built tree that holds a sibling set the
+labels step could not ask about in one call.
 
 What the reader gets from D alone: the article opens and reads; Structure, the rail and the spine
 show the author's headings and the windows, with no gists; paragraph labels arrive from the labels
@@ -103,10 +152,16 @@ Tests, each red first:
 - `tests/stated-limits.test.ts`: the KNOWN GAP test is replaced. A dense paper at the stated 250
   pages, and a headingless document past the one-answer ceiling, go through `generateStructure`
   with no model call (the test's model seam throws if touched) and come back with a sound tree in
-  which no sibling leaf run passes the bound. `wholeDocumentRequest` still refusing at 2,890 stays
-  pinned, since that is now the line where the path changes.
-- The labels planner over those trees: every structural block in a batch, no batch over the bound
-  plus headings. With a supplement appended, and without. This is finding 1 as a test.
+  which no body sibling set passes the bound and every body leaf is at depth 3.
+  `wholeDocumentRequest` still refusing at 2,890 stays pinned, since that is now the line where the
+  path changes.
+- The labels planner over those trees: every structural block in a batch, and no batch over the
+  planner's own maximum. With a supplement appended, and without. This is finding 1 as a test.
+- The client's own section list (`buildSections`) over those trees: no section with an empty
+  title, none that is a paragraph. Review F1 as a test, on a document where one chapter is long
+  and its neighbour is short.
+- A model's answer, well-formed, with one 2,200-block section: the step returns the bounded tree
+  and says why (review F2).
 - Empty article title; empty heading text; a window starting on a wordless block.
 - `buildHeadingTree` with the option off is byte-identical to before (the eval's arm).
 - One Postgres round trip: write, publish guard, load.
@@ -122,7 +177,11 @@ stated-limits test. The dialog's sentence does not change: it becomes true.
 
 ### Stage E: fill the tree in, part by part
 
-**Recommended: the ordinary structure call, once per part, stitched.** Not the cascade.
+**The hypothesis the E spike tests: the ordinary structure call, once per part, stitched**, rather
+than the cascade. Review F7: the two routes are compared under the same deadline and the same
+fallback before one is chosen. Review F5: a single part too big for one call is cut at its own
+sections' boundaries, the authored part is kept as the parent, and its gist is composed from its
+children's, so gist composition is needed for such parts as well as for the root.
 
 ```
  too-long body (3,112 blocks)
