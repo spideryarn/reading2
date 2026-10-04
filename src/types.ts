@@ -713,7 +713,19 @@ export interface AskedTermAnswer extends AskedTermFound {
  * `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS` (src/pipeline.ts).
  */
 export interface Glossary {
+  /** The prompt that wrote the **latest pass** — `PROMPT_VERSION` in src/glossary.ts. */
   version: string;
+  /**
+   * **The oldest prompt any entry here came from**, when that is not `version`.
+   *
+   * A *Find more* on an appendable list an older prompt wrote adds to it
+   * (src/glossary.ts § `appendableVersion`, plan 261004f), and the list is then
+   * stamped with the current version. This is what keeps that stamp from
+   * vouching for the older entries. Absent on a list one prompt wrote, which is
+   * every list from before 2026-10-04; a rewrite drops it. Nothing shows it: it
+   * is provenance, in the export.
+   */
+  oldestVersion?: string;
   generator: string;
   slug: string;
   /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
@@ -758,6 +770,13 @@ export interface Glossary {
    * See docs/project/original-version/glossary.md § Bug one.
    */
   passes: number;
+  /**
+   * How many entries the most recent pass added. As `Quotes.lastAdded`: the one
+   * number that tells a *Find more* that found nothing from a button that did
+   * nothing (docs/reusable/silent-success.md). Absent on a list written before
+   * 2026-10-04.
+   */
+  lastAdded?: number;
   generatedAt: string;
   /** Total across every pass. Timed from outside the SDK, whose own timings came back empty. */
   elapsedMs: number;
@@ -802,13 +821,14 @@ export interface GlossaryResponse {
   profileChanged: boolean;
   /**
    * **What the panel's own run button will do with this list** — `panelRunKind`
-   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
-   * again* when it rewrites. The route adds it, beside `profileChanged`,
+   * in src/glossary.ts, for the label: *Find more* when it appends, *Write a
+   * new list* when it rewrites. The route adds it, beside `profileChanged`,
    * because the profile half needs the reader's current profile. Plan 261003c.
    *
-   * Optional only so a hand-built response in a test need not carry it; the
-   * route always sends it. The panel reads absent as `rewrite` when the list is
-   * stale or outdated and `append` otherwise (useGlossary.ts).
+   * Optional for responses cached before the field existed, and so a hand-built
+   * response in a test need not carry it; the current route always sends it.
+   * The panel reads absent conservatively as `rewrite` when the list is stale
+   * or outdated and `append` otherwise (GlossaryPanel.tsx).
    */
   panelRun?: "append" | "rewrite";
 }
@@ -5301,18 +5321,25 @@ export function paragraphShape(paragraph: SimpleParagraph): SimpleParagraphShape
 }
 
 /**
- * **The three plain-words levels**, in the order the slider runs: `brief`,
- * short and very simple; `simple`, fairly simple and just under the first
- * version's length; `fuller`, moderately complex and just over it. Greg,
- * 2026-09-30 (SPIDERYARN-READING2-7J): *"a UI-slider with 3 level (short &
- * very-simple, just-under-current-length and fairly-simple,
- * just-over-current-length and moderately-complex)"*.
- * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
+ * **The two plain-words levels** the `simple` step writes, shortest first:
+ * `brief`, short and very simple; `fuller`, moderately complex and the longer.
  *
- * Also the `?summary=` values for these views (src/web/params.ts), so
- * `simple` keeps the value readers' links already carry.
+ * **There were three until 2026-10-04.** A middle level, itself called
+ * `simple`, sat between them (Greg, 2026-09-30, SPIDERYARN-READING2-7J). It
+ * stopped being shown on 2026-10-03 and stopped being written the day after.
+ * Greg, 2026-10-04: *"we've removed that middle level of Summary, and we're
+ * not going to add it back"*.
+ * docs/plans/261004f-stop-writing-the-simple-summary-level.md.
+ *
+ * **A row stored before then still has `levels.simple`, and `check.levels.simple`.**
+ * The reader ignores both: every guard below asks about the levels in this
+ * list and no others, so such a row is usable exactly when its Brief and
+ * Fuller are. The historical check report still reads the middle check and
+ * validates it separately. The stored JSON is not rewritten.
+ *
+ * The step and the artefact are still named `simple`; only the level went.
  */
-export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
+export const SIMPLE_LEVELS = ["brief", "fuller"] as const;
 export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
 
 /** The stored shape's version, beside the guard that decides whether it is usable. */
@@ -5328,10 +5355,10 @@ export interface SimpleLevelLimits {
 
 /*
  * The word ceilings sit above the longest the measurement saw at each level
- * (210, 338 and 431, plan 261001b § Ledger) — a ceiling is the line between an
- * orientation and a digest, not a length target, and with three calls a tight
- * one loses all three for one level's ten words. The prompt's asks are what
- * set the length.
+ * (210 for Brief and 431 for Fuller, plan 261001b § Ledger) — a ceiling is the
+ * line between an orientation and a digest, not a length target, and with a
+ * call per level a tight one loses every level for one level's ten words. The
+ * prompt's asks are what set the length.
  *
  * Fuller's were 5 paragraphs and 480 words until 2026-10-04. The limits rose
  * for the first, twice-as-long arm and deliberately stayed there when the
@@ -5341,7 +5368,6 @@ export interface SimpleLevelLimits {
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
-  simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
   fuller: { minParagraphs: 3, maxParagraphs: 8, maxWords: 850 },
 };
 
@@ -5392,9 +5418,11 @@ export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is
 }
 
 /**
- * **Are all three stored levels present and within their limits?** The content
+ * **Are both stored levels present and within their limits?** The content
  * half of `isUsableSimpleSummary` below, which is the whole-artefact guard every
- * read boundary uses (Sol's plan review, P1-2).
+ * read boundary uses (Sol's plan review, P1-2). A key that is not in
+ * `SIMPLE_LEVELS` is not looked at: that is how a row from before 2026-10-04,
+ * which also has the removed middle level, still reads.
  */
 export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -5467,7 +5495,8 @@ export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, Simple
   );
 }
 
-function isLevelCheck(value: unknown, paragraphs: number): boolean {
+/** Shared with the historical report, which also reads the removed middle level. */
+export function isLevelCheck(value: unknown, paragraphs: number): value is SimpleLevelCheck {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   const storedLatest =

@@ -354,9 +354,9 @@ const ROWS: Row[] = [
       profileChanged: profiled,
     }),
     mount: (show) => createElement(GlossaryOuter, { show }),
-    forced: ["Find more", "Find terms again"],
+    forced: ["Find more", "Write a new list"],
     direct: [
-      { label: "Find terms again", stale: true },
+      { label: "Write a new list", stale: true },
       { label: "Find more", stale: false },
     ],
     waiting: "The new terms haven't loaded yet.",
@@ -444,7 +444,7 @@ async function regenerate(): Promise<"enabled" | "disabled" | "absent"> {
 }
 async function pressRegenerate() {
   const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
-  expect(badge, "the written-for-you badge").not.toBeNull();
+  expect(badge, "the profile icon").not.toBeNull();
   await act(async () => badge!.click());
   await flush();
   expect(buttons("Regenerate")[0]?.disabled, "Regenerate is offered before the press").toBe(false);

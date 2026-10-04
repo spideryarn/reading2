@@ -1051,6 +1051,42 @@ describe("the previous artefact, over the Postgres store", () => {
     });
   }, 60_000);
 
+  /* Plan 261004f (Greg, spya-try2v7): the whole run, with the list read back
+     out of the column, on a list an older prompt wrote. It is added to, and
+     comes back stamped with the current prompt — which is the stamp the store
+     checks a write against — with the older one recorded beside it. */
+  it("appends to a carried glossary an older prompt wrote, and stamps the pass current", async () => {
+    const a = await anArticle("spya-gloss-pg-older-");
+    roots.push(a.root);
+    const { generateGlossary, previousGlossaryFrom, PROMPT_VERSION } = await import(
+      "../src/glossary.js"
+    );
+
+    answers.push(glossaryAnswer("Corrigibility"));
+    const first = await generateGlossary({ power: "standard", article: await articleIn(a.dir), previous: null });
+    await publishColumn("glossary", { ...first.glossary, version: "glossary/4" });
+
+    await withStore(SLUG, async (store) => {
+      const previous = await previousGlossaryFrom(store, SLUG);
+      expect(previous?.version).toBe("glossary/4");
+      answers.push(glossaryAnswer("Noema"));
+      const second = await generateGlossary({
+        power: "standard",
+        article: await articleIn(a.dir),
+        previous,
+      });
+      expect(second.added).toBe(1);
+      expect(second.glossary.passes).toBe(2);
+      expect(second.glossary.lastAdded).toBe(1);
+      expect(second.glossary.version).toBe(PROMPT_VERSION);
+      expect(second.glossary.oldestVersion).toBe("glossary/4");
+      expect(second.glossary.entries.map((e) => `${e.name}=${e.id}`)).toContain(
+        `Corrigibility=${first.glossary.entries[0]!.id}`,
+      );
+      expect(second.glossary.entries.map((e) => e.name).sort()).toEqual(["Corrigibility", "Noema"]);
+    });
+  }, 60_000);
+
   it("refuses when the carried glossary column holds something it cannot read", async () => {
     const { GlossaryBaselineUnusable, previousGlossaryFrom } = await import("../src/glossary.js");
     /* Valid JSONB and the wrong shape — the only corruption this store can

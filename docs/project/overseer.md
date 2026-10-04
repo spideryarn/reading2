@@ -498,7 +498,9 @@ anything is in it, holds included — Greg approved the restart 2026-09-08, and 
 that command unattended on 2026-09-09. `check` is the same thing without the restart. A hand-typed
 `sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
 refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
-*Prove the relaunch before you stop a process*.
+*Prove the relaunch before you stop a process*. It runs in tmux, not under `overseer.service`, and
+why, and what a `systemctl restart overseer` does while it runs, are in
+[hetzner-remote-server-box.md § The box's own services](hetzner-remote-server-box.md#the-boxs-own-services).
 
 ### Deploying
 

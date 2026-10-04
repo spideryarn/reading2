@@ -97,14 +97,14 @@ export const HELP_FAQ: Record<FaqId, HelpSection> = {
   },
 
   "faq-older-profile": {
-    title: "Everything says “older profile” since I edited my profile. Did something break?",
+    title: "Why did the person icon gain a pencil after I edited my profile?",
     keywords: "out of date stale label written for you regenerate profile changed",
     body: (
       <p>
-        No. Each piece of text remembers which version of your profile it was written for, and any edit
-        counts as a new version, even fixing a typo. Nothing is rewritten unless you ask, so the label
-        just means the text was written for an earlier version. Rewrite the ones you care about from
-        inside the mode. See <HelpRef to="reader-profile">Your reader profile</HelpRef>.
+        Nothing broke. Each personalised result records which version of your profile it was written
+        for, and changing even one letter can make that an older version. Nothing is rewritten unless
+        you ask. Press the icon to see the profile and, where that mode can replace its result, the
+        Regenerate button. See <HelpRef to="reader-profile">Your reader profile</HelpRef>.
       </p>
     ),
   },

@@ -115,7 +115,12 @@ const EXTRACTED = "<article><p>before the ids were stamped on</p></article>";
 const STAMPED = `<article><p data-spya-id="${BLOCKS[0]}">before the ids were stamped on</p></article>`;
 const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came from" }];
 
-/** A generated artefact that both export formats must carry whole. */
+/**
+ * A generated artefact that both export formats must carry whole. **A row from
+ * before 2026-10-04**, so it has the middle level the step no longer writes
+ * (plan 261004f): the bundle's file still carries it, and the page does not
+ * count it.
+ */
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
   promptVersion: "simple-prompt/export-fixture",
@@ -139,7 +144,7 @@ const SIMPLE: SimpleSummary = {
       { text: "It then gives the answer.", ids: [BLOCKS[1]] },
       { text: "And it says where that answer stops.", ids: [BLOCKS[2]] },
     ],
-  },
+  } as SimpleSummary["levels"],
 };
 
 /** A second whole artefact, to hold the new export registration on both paths. */
@@ -525,11 +530,14 @@ describe("the bundle is the faithful projection", () => {
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
      `simple/2` row does not have, and a zero row is dropped — so every level
      would have vanished from the page while the JSON beside it carried them. */
-  it("counts every plain-words level on the page", () => {
+  it("counts every plain-words level on the page, and not the removed middle one", () => {
     const page = bundled.get("index.html");
     if (!page) throw new Error("no index.html");
     expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(brief\)<\/span>/)?.[1]).toBe("2");
-    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(simple\)<\/span>/)?.[1]).toBe("2");
+    /* The stored row has a middle level of two paragraphs, and the JSON beside
+       the page carries it; no read shows it, so the page does not count it. */
+    expect(page).not.toContain("plain-words paragraphs (simple)");
+    expect((parsed("augmentations/simple-summary.json") as { levels: Record<string, unknown[]> }).levels.simple).toHaveLength(2);
     expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(fuller\)<\/span>/)?.[1]).toBe("3");
   });
 
