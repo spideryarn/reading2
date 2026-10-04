@@ -5,8 +5,8 @@
  * **This is a tripwire, not the evidence.** The defect is a position: at 390px
  * the list face's card opened at x 367..693, off the screen, and widened the
  * page to 706px so rows moved under the reader's finger. jsdom lays nothing
- * out, so no test here can see that; the red and the green were measured in
- * Chrome at 390px, and the numbers are in the plan.
+ * out, so no test here can see that. The separate browser check owns the red
+ * and green measurements; the plan records the reported failing position.
  *
  * What this can do is stop the cause coming back. `keepSide` on a `right`
  * tooltip forbids the drop below the row, which is the only place a card fits

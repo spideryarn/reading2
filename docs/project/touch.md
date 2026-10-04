@@ -720,8 +720,8 @@ shows, the *back to ⟨section⟩* chip does not: "back" means the band.
 
 **So does anything outside the band that names it as a destination**: *Open glossary* and *Dig
 deeper* on a term's card in the prose, *Dig deeper* on a citation's, the command bar's glossary
-commands, a question opened from the Comments drawer while Chat is the mode. Each of those sets a
-mode that is already set, which on its own reveals nothing, so they all go through one callback,
+commands, a question opened from the Comments drawer while Chat is the mode. Each can name a band
+whose mode is already set, which on its own reveals nothing, so they all go through one callback,
 `showBand` in `Reader.tsx`, that brings the band back and writes the mode only when it changes.
 A new control that opens a band from the prose calls `showBand`, not `setMode`. The citation card
 (2026-10-04, plan 261004b) and the term card (plan 261004g) each shipped with the band left hidden

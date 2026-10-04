@@ -24,9 +24,9 @@ A short comment pointing at `CardRow`'s, not a second copy of it.
 
 **Red first.** jsdom lays nothing out, so no unit test can see a card's position. The red is a
 Playwright measurement at 390px on the unfixed tree (card rect and `scrollWidth`), and the green is
-the same measurement after. A jsdom test is added only as a tripwire: it mocks `Tooltip`, and fails
-if either face's row tooltip is given `keepSide` again. It says in its header that it is a tripwire
-and where the real evidence is.
+the same measurement after. A source-reading test is added only as a tripwire: it reads each row's
+`Tooltip` opening tag, and fails if either face is given `keepSide` again. Its header distinguishes
+that check from the separate browser measurement.
 
 **Passed over.** Changing `Tooltip` so `keepSide` falls back to the other axis when both sides fail.
 It would fix every `keepSide` caller at once, but `keepSide` exists because a card on the other axis
@@ -131,7 +131,9 @@ two, and update `tests/tweets-copy-icons.test.tsx` if it names the glyph. Its ow
 changes. All three findings checked against the code and accepted.
 
 - **F1 (P1), accepted.** `openAskedFromDrawer` was a wrong "No" in the table: fixed with the same
-  callback. It has no regression test of its own yet; the code review is asked to add one.
+  callback. Code review added whole-page drawer regressions at 390px and 600px in the band-link
+  test: real stored Chat conversations, no Chat mocks, red with the old Remember-only guard and
+  green with `showBand`.
 - **F2 (P1), accepted.** `showBand` writes the mode only when it changes. The citation case in the
   band-link test now also asserts no `pushState`.
 - **F3 (P3), accepted.** The table's `handToChat` row was wrong about who calls it; corrected. The

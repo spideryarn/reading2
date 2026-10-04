@@ -45,7 +45,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
-import type { Article, BlockId, SimpleSummary } from "../src/types.js";
+import type { Article, BlockId, ChatThread, SimpleSummary } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
 const who = vi.hoisted(() => {
@@ -686,5 +686,65 @@ describe("the term card brings its band back", () => {
     expect(param("mode")).toBe("glossary");
     expect(param("term")).toBe(TERM_ID);
     expect(reader().classList.contains("band-away"), "Open glossary left the band hidden").toBe(false);
+  });
+});
+
+/* Plan 261004g F1: opening a question from the drawer while Chat is already
+   stepped aside must reveal its band. These are stored transcripts, through
+   the real Chat UI; no chat hook or component is mocked. */
+describe("a drawer question brings the Chat band back", () => {
+  it.each([PHONE, 600])("reveals the selected conversation at %ipx", async (width) => {
+    const time = "2026-10-04T00:00:00.000Z";
+    const threads: ChatThread[] = [
+      {
+        id: "spya-chat03", title: "The opening claim", kind: "chat",
+        createdAt: time, updatedAt: time, anchor: { blockId: FIRST },
+        messages: [{
+          id: "spya-answer", role: "assistant", status: "done", createdAt: time,
+          text: `The piece starts with this claim [${FIRST}].`,
+        }],
+      },
+      {
+        id: "spya-chat02", title: "The follow-through", kind: "chat",
+        createdAt: time, updatedAt: time, anchor: { blockId: SECOND },
+        messages: [{
+          id: "spya-repqy2", role: "assistant", status: "done", createdAt: time,
+          text: "The second claim builds on the first.",
+        }],
+      },
+    ];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/chat/${SLUG}?summary=1`) return Promise.resolve(json({
+        threads: threads.map(({ messages, ...thread }) => ({
+          ...thread, turns: 1, lastLine: messages[0]?.text,
+        })),
+      }));
+      if (url === `/api/chat/${SLUG}`) return Promise.resolve(json({ threads }));
+      if (url === `/api/glossary/${SLUG}` || url === `/api/quiz/${SLUG}`) return Promise.resolve(new Response(null, { status: 404 }));
+      return Promise.resolve(reply(url, init?.method ?? "GET"));
+    });
+    await open(width, `?mode=chat&thread=${threads[0]?.id}`);
+    expect(reader().classList.contains("band-covers")).toBe(true);
+    const linkTo = `.mode-band a.block-ref[data-block-link="${FIRST}"]`;
+    await until(() => host.querySelector(linkTo) !== null, "Chat drew no passage link");
+    await act(async () => host.querySelector<HTMLAnchorElement>(linkTo)?.click());
+    await until(() => reader().classList.contains("band-away"), "the Chat jump did not step aside");
+
+    const comments = host.querySelector<HTMLButtonElement>('button[aria-label="Comments"]');
+    expect(comments, "the Dock must offer Comments").not.toBeNull();
+    await act(async () => comments?.click());
+    await until(() => host.querySelectorAll(".dock-question.asked").length === 2, "the drawer did not list the stored questions");
+    const question = [...host.querySelectorAll<HTMLButtonElement>(".dock-question.asked")]
+      .find((row) => row.textContent?.includes("The second point"));
+    expect(question, "the drawer must offer the second conversation").toBeDefined();
+    await act(async () => question?.click());
+    await until(() => param("thread") === threads[1]?.id, "the question did not select its conversation");
+
+    expect(param("panel"), "the drawer must close on the way through").toBeNull();
+    expect(param("mode")).toBe("chat");
+    expect(host.querySelector(".mode-band.chat")?.textContent).toContain("The second claim builds on the first.");
+    expect(reader().classList.contains("band-away"), "the drawer left the conversation in a hidden band").toBe(false);
+    expect(pill()).toBeNull();
   });
 });
