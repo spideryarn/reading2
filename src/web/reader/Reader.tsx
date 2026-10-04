@@ -2103,11 +2103,22 @@ export function Reader({
          otherwise say *Question* directly above itself (plan 261004k § 6). */
       asked: marginViewer === "owner" ? askedBesideCard(askedList, chatCardThread) : null,
     });
+    const cardHost = (
+      <div
+        ref={setChatCardHost}
+        className="chat-card-host"
+        {...{ [CHAT_CARD_HOST_ATTR]: "" }}
+        data-marg-note=""
+      />
+    );
     const out = new Map<BlockId, ReactElement>();
     for (const [blockId, notes] of byBlock)
       out.set(
         blockId,
-        <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
+        <>
+          {blockId === chatCardBlock ? cardHost : null}
+          <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
+        </>,
       );
     /* **The card's host: first in its block's cell, above the block's own
        notes**, so the card is the thing level with the paragraph and an opened
@@ -2122,20 +2133,10 @@ export function Reader({
        `ChatDialog` attaches its panel inside it, in flow, so the host's height
        is the card's. Nothing here depends on the panel's callbacks, which
        change on every render: the memo holds, and `memo(TableView)` with it. */
-    if (chatCardBlock !== null) {
-      const notes = out.get(chatCardBlock);
-      out.set(
-        chatCardBlock,
-        <>
-          <div
-            ref={setChatCardHost}
-            className="chat-card-host"
-            {...{ [CHAT_CARD_HOST_ATTR]: "" }}
-            data-marg-note=""
-          />
-          {notes}
-        </>,
-      );
+    /* Keep the notes at the same React child position with or without a
+       host, so showing the card does not close an opened note on the block. */
+    if (chatCardBlock !== null && !out.has(chatCardBlock)) {
+      out.set(chatCardBlock, cardHost);
     }
     return out;
   }, [

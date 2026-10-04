@@ -593,11 +593,9 @@ export function ChatDialog({
    * document — and the focus and every scroll offset with it — before any
    * effect of this component runs.
    */
-  const bound = cardHost ?? home.current;
-  const kept =
-    container !== null && bound !== null && container.parentNode !== null && container.parentNode !== bound
-      ? keep(container)
-      : null;
+  /* Save even when the host prop still names the current parent: Reader can
+     replace that host in this commit, before its ref reports the new node. */
+  const kept = container !== null ? keep(container) : null;
   /* **No dependency list, on purpose**: the host can leave the document
      without any prop of this component changing, so where the container is has
      to be checked after every commit. It is two comparisons when nothing has
@@ -615,8 +613,10 @@ export function ChatDialog({
       if (to.style.getPropertyValue("--chat-card-w") !== width)
         to.style.setProperty("--chat-card-w", width);
     }
-    if (container.parentNode !== to) to.appendChild(container);
-    if (kept) putBack(kept);
+    if (container.parentNode !== to) {
+      to.appendChild(container);
+      if (kept) putBack(kept);
+    }
   });
 
   /**
@@ -800,6 +800,12 @@ export function ChatDialog({
    * short, and collapsing it would hide the box it was opened to type in.
    */
   const [shut, setShut] = useState<{ threadId: string; reopen: number } | null>(null);
+  const selectedThread = target.kind === "thread" ? target.threadId : null;
+  /* A mounted URL change leaves the former conversation behind. Its collapse
+     must not return if the reader comes back to that thread later. */
+  useLayoutEffect(() => {
+    if (shut && shut.threadId !== selectedThread) setShut(null);
+  }, [shut, selectedThread]);
   const collapsible = place.kind === "card" && thread !== undefined;
   const collapsed = collapsible && shut?.threadId === thread.id && shut.reopen === reopen;
   const shutRef = useRef<HTMLButtonElement>(null);
@@ -831,16 +837,18 @@ export function ChatDialog({
    * in view moves nothing. **Not proved on the box**: desktop Chrome at an
    * iPad's size has no Safari keyboard (GPT Sol on the plan, F6).
    */
-  const foot = useRef<HTMLElement>(null);
   const inCard = place.kind === "card";
   const showComposer = useCallback(() => {
-    const el = foot.current;
+    const composer = box.current?.querySelector<HTMLElement>(".chat-composer");
+    if (!composer?.contains(document.activeElement)) return;
+    /* Drafts compose in the footer; loaded threads compose in the body. */
+    const el = composer.closest<HTMLElement>("footer") ?? composer;
     /* jsdom has no `scrollIntoView`. */
     if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is the re-run trigger — the keyboard arriving or leaving is a new visible viewport, and the effect reads the DOM.
   useEffect(() => {
-    if (!inCard || !foot.current?.contains(document.activeElement)) return;
+    if (!inCard) return;
     showComposer();
   }, [inCard, visible, showComposer]);
 
@@ -1018,6 +1026,7 @@ export function ChatDialog({
       }
       role="dialog"
       aria-label="Chat about this passage"
+      onFocus={inCard ? showComposer : undefined}
     >
       {/* **Collapsed, the whole card is this one button** — and the rest of the
           panel is hidden rather than unmounted, because `Conversation` owns an
@@ -1168,6 +1177,7 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
+            visible={!collapsed}
             /* Always a chat. This dialog is what a selection in the prose opens,
                and a Remember turn cannot be anchored to one. */
           kind="chat"
@@ -1196,8 +1206,7 @@ export function ChatDialog({
         )}
       </div>
 
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: not an interaction — the footer only hears the focus that bubbles from the composer inside it, to bring that composer into view (§ showComposer). */}
-      <footer ref={foot} hidden={collapsed} onFocus={inCard ? showComposer : undefined}>
+      <footer hidden={collapsed}>
         {/* Nothing under a help draft either, for the reason the body gives:
             the question is already sent, so a composer offering to send it is
             the same contradiction one row down. */}

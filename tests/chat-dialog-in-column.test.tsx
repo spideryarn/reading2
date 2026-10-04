@@ -157,6 +157,45 @@ function type(box: HTMLTextAreaElement, text: string) {
   });
 }
 
+/** Browsers give a display:none transcript no scroll geometry; jsdom needs
+ * that boundary modelled explicitly to exercise a stream arriving while shut. */
+function transcriptGeometry() {
+  let height = 1000;
+  let top = 0;
+  const visible = (el: HTMLElement) => el.closest("[hidden]") === null;
+  const originals = new Map<string, PropertyDescriptor | undefined>();
+  for (const name of ["scrollHeight", "clientHeight", "scrollTop"]) {
+    originals.set(name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name));
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (!this.classList.contains("chat-scroll")) return 0;
+        if (!visible(this)) {
+          top = 0;
+          return 0;
+        }
+        return name === "scrollHeight" ? height : name === "clientHeight" ? 200 : top;
+      },
+      ...(name === "scrollTop" ? {
+        set(this: HTMLElement, value: number) {
+          if (this.classList.contains("chat-scroll")) {
+            top = visible(this) ? Math.max(0, Math.min(value, height - 200)) : 0;
+          }
+        },
+      } : {}),
+    });
+  }
+  return {
+    grow() { height = 1600; },
+    restore() {
+      for (const [name, descriptor] of originals) {
+        if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
+        else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name];
+      }
+    },
+  };
+}
+
 beforeEach(() => {
   threads = [ANSWERED, OTHER];
   send.mockClear();
@@ -350,6 +389,93 @@ describe("collapsed and expanded", () => {
     draw({ kind: "thread", threadId: OTHER.id }, inCard());
     expect(panel().classList.contains("collapsed")).toBe(false);
     expect(shown(".chat-dialog-title").map((t) => t.textContent)).toEqual([OTHER.title]);
+  });
+
+  it("opens expanded on returning to a previous thread through a mounted URL change", () => {
+    draw(THREAD, inCard());
+    act(() => button("Collapse")?.click());
+    draw({ kind: "thread", threadId: OTHER.id }, inCard());
+    draw(THREAD, inCard());
+    expect(panel().classList.contains("collapsed")).toBe(false);
+    expect(shown(".chat-scroll")).toHaveLength(1);
+  });
+
+  it("follows an answer to its new bottom when it finishes while collapsed", () => {
+    const geometry = transcriptGeometry();
+    try {
+      threads = [ANSWERING];
+      draw(THREAD, inCard());
+      const transcript = panel().querySelector<HTMLElement>(".chat-scroll");
+      if (!transcript) throw new Error("no transcript");
+      expect(transcript.scrollTop).toBe(800);
+      act(() => button("Collapse")?.click());
+      expect(transcript.scrollHeight).toBe(0);
+      geometry.grow();
+      threads = [{ ...ANSWERING, messages: [
+        ...ANSWERING.messages.slice(0, -1),
+        { ...ANSWERING.messages[3]!, text: "A much longer answer has arrived.", status: "done" },
+      ] }];
+      draw(THREAD, inCard());
+      act(() => shown(".chat-card-shut")[0]?.click());
+      expect(transcript.scrollTop).toBe(1400);
+      expect(shown(".chat-to-bottom")).toHaveLength(0);
+    } finally {
+      geometry.restore();
+    }
+  });
+
+  it("retains the reader's earlier passage and Latest control across hidden stream updates", () => {
+    const geometry = transcriptGeometry();
+    try {
+      threads = [ANSWERING];
+      draw(THREAD, inCard());
+      const transcript = panel().querySelector<HTMLElement>(".chat-scroll");
+      if (!transcript) throw new Error("no transcript");
+      act(() => {
+        transcript.scrollTop = 120;
+        transcript.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      expect(shown(".chat-to-bottom")).toHaveLength(1);
+      act(() => button("Collapse")?.click());
+      geometry.grow();
+      threads = [{ ...ANSWERING, messages: [
+        ...ANSWERING.messages.slice(0, -1),
+        { ...ANSWERING.messages[3]!, text: "A longer answer arriving out of view.", status: "pending" },
+      ] }];
+      draw(THREAD, inCard());
+      act(() => shown(".chat-card-shut")[0]?.click());
+      expect(transcript.scrollTop).toBe(120);
+      expect(shown(".chat-to-bottom")).toHaveLength(1);
+      threads = [{ ...threads[0]!, messages: [
+        ...threads[0]!.messages.slice(0, -1),
+        { ...threads[0]!.messages[3]!, text: "A longer answer arriving out of view. More text." },
+      ] }];
+      draw(THREAD, inCard());
+      expect(transcript.scrollTop).toBe(120);
+    } finally {
+      geometry.restore();
+    }
+  });
+
+  it("ignores the scroll event caused by hiding a transcript the reader had scrolled up", () => {
+    const geometry = transcriptGeometry();
+    try {
+      draw(THREAD, inCard());
+      const transcript = panel().querySelector<HTMLElement>(".chat-scroll");
+      if (!transcript) throw new Error("no transcript");
+      act(() => {
+        transcript.scrollTop = 120;
+        transcript.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      act(() => button("Collapse")?.click());
+      expect(transcript.scrollHeight).toBe(0);
+      act(() => transcript.dispatchEvent(new Event("scroll", { bubbles: true })));
+      act(() => shown(".chat-card-shut")[0]?.click());
+      expect(transcript.scrollTop).toBe(120);
+      expect(shown(".chat-to-bottom")).toHaveLength(1);
+    } finally {
+      geometry.restore();
+    }
   });
 });
 
@@ -550,7 +676,10 @@ describe("focus, in the card", () => {
   /* The keyboard arriving is a new visible viewport, and Safari can pan it
      (`offsetTop`) without resizing anything. Either is a reason to ask again,
      while the reader is in the composer and not otherwise. */
-  it("asks again when the visible viewport changes under a focused composer", () => {
+  it.each([
+    ["draft", DRAFT],
+    ["thread", THREAD],
+  ] as const)("asks again when the visible viewport changes under a focused %s composer", (_kind, target) => {
     const into = vi.fn();
     (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = into;
     const listeners = new Map<string, () => void>();
@@ -562,7 +691,7 @@ describe("focus, in the card", () => {
     };
     vi.stubGlobal("visualViewport", viewport);
     try {
-      draw(DRAFT, inCard());
+      draw(target, inCard());
       const box = panel().querySelector<HTMLTextAreaElement>("textarea");
       act(() => box?.focus());
       into.mockClear();
@@ -582,6 +711,26 @@ describe("focus, in the card", () => {
       expect(into).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it("brings the thread's composer in the conversation body into view on focus", () => {
+    const into = vi.fn();
+    (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = into;
+    try {
+      draw(THREAD, inCard());
+      const input = panel().querySelector<HTMLTextAreaElement>("textarea.chat-input");
+      if (!input) throw new Error("no thread composer");
+      expect(input.closest(".chat-dialog-body")).not.toBeNull();
+      into.mockClear();
+      act(() => input.focus());
+      expect(into).toHaveBeenCalledWith({ block: "nearest" });
+      expect(into.mock.contexts[0]).toBe(input.closest(".chat-composer"));
+      into.mockClear();
+      act(() => button("Close")?.focus());
+      expect(into).not.toHaveBeenCalled();
+    } finally {
       delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
     }
   });

@@ -64,7 +64,7 @@ type TableProps = {
   margin?: ReadonlyMap<BlockId, ReactElement> | null;
 };
 const table = () => readerReadingProbe.table.mock.lastCall?.[0] as TableProps;
-type DialogProps = { dockRoom: number | null; target: { kind: string } };
+type DialogProps = { dockRoom: number | null; target: { kind: string }; onClose: () => void };
 function dialogProps(): DialogProps {
   const props = dialog.props.mock.lastCall?.[0] as DialogProps | undefined;
   if (!props) throw new Error("the chat panel was never rendered");
@@ -292,6 +292,27 @@ describe("Reader draws the block chat as a card in the column", () => {
     expect(hostIn(during)).not.toBeNull();
     expect(during.textContent).not.toContain("2 questions");
     expect(during.querySelector(".marg-stamp")?.textContent).toBe("Question");
+  });
+
+  it("keeps the block's opened note open when a chat card arrives and leaves", async () => {
+    await withThreads();
+    const before = await cell();
+    const note = before.querySelector<HTMLButtonElement>(".marg-shut-button");
+    expect(note).not.toBeNull();
+    act(() => note?.click());
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => table().onChatAbout?.(BLOCK));
+    const during = await cell();
+    expect(hostIn(during)).not.toBeNull();
+    expect(during.querySelector(".marg-shut-button")).toBe(note);
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => dialogProps().onClose());
+    const after = await cell();
+    expect(hostIn(after)).toBeNull();
+    expect(after.querySelector(".marg-shut-button")).toBe(note);
+    expect(note?.getAttribute("aria-expanded")).toBe("true");
   });
 
   /* Sol F1. The chip, the "?" and a mark all only write `?thread=`, so a press
