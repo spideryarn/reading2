@@ -51,14 +51,12 @@ import path from "node:path";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 import { occurrencesOf, orderByFirstUse, type TextBlock } from "./glossary-occurrences.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -1700,28 +1698,8 @@ export async function generateGlossary(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is deliberately neither thrown nor logged — it is the
-       provider's own words about a request that carried the whole article,
-       and this error is copied onto the job and shown on the progress card.
-       See MODEL_REFUSED in src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("glossary", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "glossary", maxTokens, answerTokens);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const scores = noGlossaryScoreDrops();
   const glossary = buildGlossary(parseJson(raw), {

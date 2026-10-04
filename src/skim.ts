@@ -52,9 +52,7 @@
 import { createHash } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -65,7 +63,7 @@ import {
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import { isBody } from "./block-policy.js";
 import { blockIndex, sectionNodesOf, sectionPathOf } from "./section-path.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import {
   type Block,
@@ -1282,24 +1280,8 @@ export async function generateSkim(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("skim", maxTokens, ANSWER_TOKENS, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "skim", maxTokens, ANSWER_TOKENS);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyDrops();
   dropped.collapsed = input.collapsed;

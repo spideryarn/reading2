@@ -560,9 +560,58 @@ ${imported}`)).toBe(0);
       sites += (code.match(/stageFailure\(\s*MODEL_REFUSED\b/g) ?? []).length;
       if (stray(code) !== 0) offenders.push(rel);
     }
-    /* Non-vacuity: eighteen sites on the day this was written. */
-    expect(sites).toBeGreaterThan(10);
+    /* Non-vacuity. Eighteen sites on the day this was written; four since
+       2026-10-04, when fifteen stages moved onto `finishedText`
+       (src/messages-stream.ts), which is one of the four. The one that matters
+       is named, so that the scan cannot pass by having stopped seeing it. */
+    expect(sites).toBeGreaterThan(0);
+    const reader = stripComments(await readFile(path.join(ROOT, "src", "messages-stream.ts"), "utf8"));
+    expect(stray(reader)).toBe(0);
+    expect(reader).toMatch(/stageFailure\(\s*MODEL_REFUSED\s*,\s*\{\s*authored\b/);
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * **A stage reads its answer through `finishedText`, not by hand.**
+   *
+   * The rule above checks that a refusal is declared wherever one is thrown. It
+   * cannot see a stage that throws nothing: one that joins `message.content`
+   * itself and parses whatever came back, refusal sentence included. Until
+   * 2026-10-04 every stage wrote the refusal, the truncation and the join out
+   * by hand, 32 copies of the text-block filter in 18 files, and the next stage
+   * was written by copying a neighbour.
+   * docs/plans/261004d-fifth-sweep-cluster-19-one-helper-for-reading-a-messages-result.md.
+   *
+   * So: the text-block filter is spelled in one file, and the two checks that
+   * go with it are spelled only there and in the three stages whose ending is
+   * their own. A new name in that list is a decision, made here.
+   */
+  it("reads a Messages result by hand only where the ending is the stage's own", async () => {
+    const HELPER = path.join("src", "messages-stream.ts");
+    /* simple-summary returns its failures with the call's usage; labels retries
+       a truncated batch; structure-deepen shrinks one. */
+    const OWN_ENDING = new Set(
+      [HELPER, "src/simple-summary.ts", "src/labels.ts", "src/structure-deepen.ts"].map((f) =>
+        path.normalize(f),
+      ),
+    );
+    const filters: string[] = [];
+    const checks: string[] = [];
+    for (const file of await sourceFiles()) {
+      const rel = path.relative(ROOT, file);
+      const code = stripComments(await readFile(file, "utf8"));
+      if (/\bAnthropic\.TextBlock\b/.test(code) && rel !== HELPER) filters.push(rel);
+      if (/stop_reason\s*===?\s*["']max_tokens["']|\bwasRefused\s*\(/.test(code) && !OWN_ENDING.has(rel)) {
+        checks.push(rel);
+      }
+    }
+    expect(filters).toEqual([]);
+    expect(checks).toEqual([]);
+    /* Non-vacuity: the patterns still find the one place each is allowed. */
+    const helper = stripComments(await readFile(path.join(ROOT, HELPER), "utf8"));
+    expect(helper).toMatch(/\bAnthropic\.TextBlock\b/);
+    expect(helper).toMatch(/stop_reason\s*===?\s*["']max_tokens["']/);
+    expect(helper).toMatch(/\bwasRefused\s*\(/);
   });
 
   it("reads no stop_details anywhere in src/", async () => {

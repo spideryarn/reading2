@@ -41,9 +41,7 @@ import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { isBodyEvidence } from "./block-policy.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import {
   CAPABLE_MODEL,
   effortFor,
@@ -62,7 +60,7 @@ import {
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { paperwork } from "./paperwork.js";
 import {
   RELATIONS,
@@ -466,24 +464,8 @@ export async function generateRelations(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("relations", maxTokens, answer, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "relations", maxTokens, answer);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
   const parsed = parseJsonAnswer<{ relations?: unknown }>(raw, "the model's answer");
   const { relations, dropped } = toRelations(parsed.relations, eligibleIds);
 

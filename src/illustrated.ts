@@ -114,9 +114,7 @@ import {
   platedScenes,
   readModelBrief,
 } from "./illustrated-plate.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -126,7 +124,7 @@ import {
 } from "./messages-structured-output.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Meta } from "./types.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
@@ -1209,28 +1207,11 @@ export async function generateIllustrated(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  /* Declared, so the reader gets the refusal sentence rather than the generic
-     one — a plain `new Error(MODEL_REFUSED.message)` here lost it until
-     2026-10-04. See MODEL_REFUSED in src/messages.ts. */
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("illustrated", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  /* A refusal here was thrown undeclared until 2026-10-04 and the reader got
+     the generic sentence. `finishedText` is where it is declared now. */
+  const raw = finishedText(message, "illustrated", maxTokens, answerTokens);
   const briefMs = Date.now() - briefStarted;
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   /* **Every block's own text, keyed by its own id** — one structure rather than
      an id list plus a lookup beside it, for the reason
