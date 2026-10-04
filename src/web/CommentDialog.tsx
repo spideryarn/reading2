@@ -72,6 +72,8 @@ export type CommentAccess =
       onDiscuss(question: string): void;
       /** Save the reader's own words, or `null` to clear them back to a bookmark. */
       onEdit(body: string | null): void;
+      /** The reader began changing this comment, before a blur can store it. */
+      onTouched?(): void;
       /** Offered only when the conversation is really there — App.tsx says why. */
       onOpenThread?: (() => void) | undefined;
       /** **Referee mode is open**, so a placement can be seen and changed. */
@@ -266,6 +268,7 @@ export function CommentDialog({
     freshRef.current = fresh;
   }, [fresh]);
   const touch = () => {
+    own?.onTouched?.();
     if (!isFresh) return;
     setTouched(true);
     fresh.onTouched();
@@ -304,8 +307,8 @@ export function CommentDialog({
    * **A native copy of the still-selected words is the same wish as the Copy
    * button**: the reader selected in order to copy, and the highlight is
    * taken off. Only while pristine, and only when the selection is this
-   * passage, so copying the quote out of the box, or other words, removes
-   * nothing.
+   * passage, so copying the quote out of the box, other words, or text from one
+   * of the box's own editors removes nothing.
    *
    * **After the event, never during it.** The removal repaints the paragraph,
    * which collapses the selection, and the browser reads the selection for
@@ -316,7 +319,9 @@ export function CommentDialog({
   useEffect(() => {
     if (!pristine || quote === undefined || start === undefined) return;
     let after: ReturnType<typeof setTimeout> | null = null;
-    const onCopy = () => {
+    const onCopy = (event: ClipboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, [contenteditable]")) return;
       const read = readSelection(window.getSelection());
       if (read.kind !== "anchor" || !sameAnchor(read.anchor, { blockId, quote, start })) return;
       if (after !== null) clearTimeout(after);
@@ -864,12 +869,13 @@ export function CommentDialog({
                 className="linky cmt-copy"
                 onClick={() => {
                   if (comment.quote === undefined) return;
-                  copy(comment.quote, (outcome) => {
-                    /* Asked again when the clipboard answers: the reader may
-                       have picked a colour while it was thinking. */
-                    if (outcome.result === "copied" && pristineRef.current) {
-                      freshRef.current?.onCopiedOnly();
-                    }
+                  /* Capture the fresh action because this instance can unmount
+                     before the clipboard answers. Reader owns the lasting
+                     pristine/touched check and the one-shot delete, so a box
+                     reopened and edited meanwhile is protected. */
+                  const currentFresh = pristineRef.current ? freshRef.current : undefined;
+                  copy(comment.quote, undefined, (outcome) => {
+                    if (outcome.result === "copied") currentFresh?.onCopiedOnly();
                   });
                 }}
               >

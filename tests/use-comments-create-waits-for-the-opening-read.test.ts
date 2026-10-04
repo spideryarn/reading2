@@ -27,6 +27,7 @@ import type { BlockId, Comment } from "../src/types.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 const left: { url: string; init: RequestInit }[] = [];
+let answerLeaving: () => Promise<void> = () => Promise.resolve();
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
@@ -45,6 +46,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     },
     leavingFetch: (url: string, init: RequestInit = {}) => {
       left.push({ url, init });
+      return answerLeaving();
     },
   };
 });
@@ -142,6 +144,7 @@ beforeEach(() => {
   root = createRoot(host);
   latest = undefined;
   left.length = 0;
+  answerLeaving = () => Promise.resolve();
 });
 
 afterEach(async () => {
@@ -716,6 +719,106 @@ describe("pagehide: an unsettled create is sent with the keepalive writer", () =
 
     leave();
     expect(left, "a settled create has nothing left to replay").toHaveLength(1);
+  });
+
+  it("orders a later delete after the pagehide replay, so the replay cannot restore the row", async () => {
+    const post = held();
+    let finishReplay!: () => void;
+    answerLeaving = () =>
+      new Promise<void>((resolve) => {
+        finishReplay = resolve;
+      });
+    const writes: string[] = [];
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return Promise.resolve(json({ comments: [] }));
+      writes.push(method);
+      if (method === "POST") return post.promise;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+    await show("a-piece");
+    await settle();
+    act(() => {
+      void latest!.create(YELLOW);
+    });
+    await settle();
+    leave();
+    expect(left).toHaveLength(1);
+
+    post.release(
+      json({
+        comment: { ...YELLOW, createdAt: "2026-10-04T10:00:00.000Z", status: "none" },
+      }),
+    );
+    await settle();
+    act(() => latest!.remove(YELLOW.id));
+    await settle();
+    expect(writes, "DELETE overtook the replayed POST").toEqual(["POST"]);
+
+    await act(async () => finishReplay());
+    await settle();
+    expect(writes).toEqual(["POST", "DELETE"]);
+  });
+
+  it("keeps an older replay in the delete barrier when a failed create reuses its id", async () => {
+    let finishFirstReplay!: () => void;
+    let finishSecondReplay!: () => void;
+    const replayAnswers = [
+      new Promise<void>((resolve) => {
+        finishFirstReplay = resolve;
+      }),
+      new Promise<void>((resolve) => {
+        finishSecondReplay = resolve;
+      }),
+    ];
+    answerLeaving = () => replayAnswers[left.length - 1]!;
+    const writes: string[] = [];
+    let posts = 0;
+    answer = (_url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") return Promise.resolve(json({ comments: [] }));
+      writes.push(method);
+      if (method === "DELETE") return Promise.resolve(new Response(null, { status: 204 }));
+      posts += 1;
+      return Promise.resolve(
+        posts === 1
+          ? json({ error: "try again" }, 500)
+          : json({
+              comment: {
+                ...YELLOW,
+                createdAt: "2026-10-04T10:00:00.000Z",
+                status: "none",
+              },
+            }),
+      );
+    };
+    await show("a-piece");
+    await settle();
+
+    act(() => {
+      void latest!.create(YELLOW);
+    });
+    leave();
+    await settle();
+    expect(left).toHaveLength(1);
+
+    act(() => {
+      void latest!.create(YELLOW);
+    });
+    leave();
+    await settle();
+    expect(left, "the retried attempt was not replayed").toHaveLength(2);
+    act(() => latest!.remove(YELLOW.id));
+    await settle();
+    expect(writes).toEqual(["POST", "POST"]);
+
+    await act(async () => finishSecondReplay());
+    await settle();
+    expect(writes, "DELETE forgot the older replay").toEqual(["POST", "POST"]);
+
+    await act(async () => finishFirstReplay());
+    await settle();
+    expect(writes).toEqual(["POST", "POST", "DELETE"]);
   });
 
   it("replays nothing for a create that has settled, or one the reader removed while it was held", async () => {

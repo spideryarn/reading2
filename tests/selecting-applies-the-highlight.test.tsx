@@ -165,7 +165,7 @@ const BLOCKS: PublicArticle["blocks"] = [
     /* "somewhere else" is a link, for the drag that ends inside one. */
     html: `<p>${SECOND.replace(
       "somewhere else",
-      '<a href="https://example.com/elsewhere">somewhere else</a>',
+      `<a href="#${PARA}">somewhere else</a>`,
     )}</p>`,
     gistable: true,
   },
@@ -612,6 +612,29 @@ describe("the click that ends a drag", () => {
     });
     expect(click.defaultPrevented, "the browser must not follow it").toBe(true);
   });
+
+  it("does not mistake a later keyboard click for the missing click after a repainted drag", async () => {
+    await open();
+    const link = prose(OTHER).querySelector("a")!;
+    const at = SECOND.indexOf("somewhere else");
+    await act(async () => {
+      down(link);
+      window.getSelection()?.removeAllRanges();
+      setSelection(at, at + 9, OTHER);
+      link.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    });
+    window.getSelection()?.removeAllRanges();
+    const keyboardClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      detail: 0,
+    });
+    await act(async () => {
+      prose(OTHER).querySelector("a")!.dispatchEvent(keyboardClick);
+    });
+    await until(() => param("at") === PARA);
+    expect(param("at"), "the stale drag latch swallowed keyboard activation").toBe(PARA);
+  });
 });
 
 describe("the fresh box: click away to keep it", () => {
@@ -721,6 +744,62 @@ describe("the fresh box: click away to keep it", () => {
     expect(dialog(), "still open").not.toBeNull();
   });
 
+  it("a keyboard activation after click-off can reopen the highlight as an ordinary box", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await press(prose(OTHER));
+    await until(() => dialog() === null);
+
+    const gutterMark = host.querySelector<HTMLButtonElement>(
+      `tr[data-block="${PARA}"] .blk-cmt`,
+    );
+    expect(gutterMark).not.toBeNull();
+    await act(async () => {
+      gutterMark!.focus();
+      gutterMark!.click();
+    });
+    await until(() => param("note") === id);
+    expect(dialog(), "the stale click-off latch ignored the keyboard activation").not.toBeNull();
+    expect(dialog()?.textContent).not.toContain("Click away to keep it");
+  });
+
+  it("a keyboard activation after touch click-off can reopen the highlight", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    await act(async () => {
+      prose(OTHER).dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+        }),
+      );
+    });
+    await act(async () => {
+      prose(OTHER).dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          cancelable: true,
+          pointerType: "touch",
+        }),
+      );
+    });
+    expect(dialog(), "touch click-off closes the fresh box").toBeNull();
+
+    const gutterMark = host.querySelector<HTMLButtonElement>(
+      `tr[data-block="${PARA}"] .blk-cmt`,
+    );
+    await act(async () => {
+      gutterMark!.focus();
+      gutterMark!.click();
+    });
+    await until(() => param("note") === id);
+    expect(dialog(), "the touch gesture left no latch for keyboard activation").not.toBeNull();
+    expect(dialog()?.textContent).not.toContain("Click away to keep it");
+  });
+
   it("words typed and not yet committed are stored by the press that closes it", async () => {
     await open();
     await drag(4, 19);
@@ -783,6 +862,90 @@ describe("the fresh box: remove, and copy", () => {
     expect(dialog()).toBeNull();
   });
 
+  it("still removes the highlight when the box closes before the clipboard answers", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    let allow!: () => void;
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow = go;
+        }),
+    );
+    await act(async () => button(/^Copy, don.t highlight$/)?.click());
+    await press(prose(OTHER));
+    expect(dialog(), "click-off closes the box while the clipboard is pending").toBeNull();
+    expect(deletes()).toEqual([]);
+
+    await act(async () => allow());
+    await until(() => deletes().length > 0);
+    expect(deletes()).toEqual([`${LIST}/${id}`]);
+    expect(painted()).not.toContain(id);
+  });
+
+  it("keeps a highlight changed after reopening while an old copy is pending", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    let allow!: () => void;
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow = go;
+        }),
+    );
+    await act(async () => button(/^Copy, don.t highlight$/)?.click());
+    await press(prose(OTHER));
+
+    const gutterMark = host.querySelector<HTMLButtonElement>(
+      `tr[data-block="${PARA}"] .blk-cmt`,
+    );
+    await act(async () => gutterMark!.click());
+    await until(() => param("note") === id);
+    await act(async () => swatch("Green")?.click());
+    await until(() => stored.find((comment) => comment.id === id)?.colour === "green");
+
+    await act(async () => allow());
+    await settle(12);
+    expect(deletes(), "the old copy cannot remove the changed row").toEqual([]);
+    expect(stored.find((comment) => comment.id === id)?.colour).toBe("green");
+  });
+
+  it("keeps words being typed after reopening while an old copy is pending", async () => {
+    await open();
+    await drag(4, 19);
+    const id = sentId();
+    let allow!: () => void;
+    clipboard(
+      () =>
+        new Promise<void>((go) => {
+          allow = go;
+        }),
+    );
+    await act(async () => button(/^Copy, don.t highlight$/)?.click());
+    await press(prose(OTHER));
+
+    const gutterMark = host.querySelector<HTMLButtonElement>(
+      `tr[data-block="${PARA}"] .blk-cmt`,
+    );
+    await act(async () => gutterMark!.click());
+    await until(() => param("note") === id);
+    const note = dialog()!.querySelector<HTMLTextAreaElement>("textarea.cmt-note")!;
+    await act(async () => {
+      note.focus();
+      const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+      set.call(note, "still typing");
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => allow());
+    await settle(12);
+    expect(deletes(), "the old copy cannot discard unblurred words").toEqual([]);
+    expect(note.value).toBe("still typing");
+    expect(stored.some((comment) => comment.id === id)).toBe(true);
+  });
+
   it("a refused copy says so and keeps the highlight", async () => {
     await open();
     await drag(4, 19);
@@ -832,6 +995,22 @@ describe("the fresh box: remove, and copy", () => {
     await act(async () => {
       setSelection(0, 10, OTHER);
       prose(OTHER).dispatchEvent(new Event("copy", { bubbles: true, cancelable: true }));
+    });
+    await settle(12);
+    expect(deletes()).toEqual([]);
+    expect(dialog()).not.toBeNull();
+  });
+
+  it("a native copy from the note field never removes the highlight", async () => {
+    await open();
+    await drag(4, 19);
+    const note = dialog()!.querySelector<HTMLTextAreaElement>("textarea.cmt-note")!;
+    await act(async () => {
+      note.focus();
+      /* Some browsers retain the document range while the textarea owns the
+         caret. The copy target, not that stale range, says what is copied. */
+      setSelection(4, 19);
+      note.dispatchEvent(new Event("copy", { bubbles: true, cancelable: true }));
     });
     await settle(12);
     expect(deletes()).toEqual([]);

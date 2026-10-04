@@ -2383,10 +2383,14 @@ export function Reader({
    * must not remove a highlight the reader had just changed.
    *
    * **`closedFresh` is the fresh row, remembered for one gesture.** Set by the
-   * `pointerdown` that closes its box by clicking away, cleared by the next
-   * `pointerdown` (the capture listener below runs before the dialog's own).
-   * A drag is one gesture, so a selection whose `mouseup` finds this set is
-   * the reader correcting the words they just highlighted — see `selectProse`.
+   * `pointerdown` that closes its box by clicking away, held until that mouse
+   * gesture's `mouseup`, and also cleared by the next `pointerdown` as a stale
+   * guard (the capture listener below runs before the dialog's own). A mouse
+   * drag is one gesture, so a selection whose `mouseup` finds this set is the
+   * reader correcting the words they just highlighted — see `selectProse`.
+   * Touch and pen have no compatibility `mouseup` guarantee, so their
+   * `pointerup` clears it; this stops a later keyboard activation inheriting
+   * either kind of completed gesture.
    */
   const [fresh, setFresh] = useState<{
     id: string;
@@ -2395,6 +2399,11 @@ export function Reader({
   } | null>(null);
   const freshTouched = useRef(false);
   const closedFresh = useRef<{ id: string; anchor: SelectionAnchor; touched: boolean } | null>(null);
+  /* A clipboard answer can arrive after its fresh box has closed. Every
+     reader change protects the row here, above any one dialog instance, and a
+     successful answer claims the id before deleting so two pending copies
+     cannot both remove it. */
+  const copyOnlyProtected = useRef(new Set<string>());
   /** `bookmarkPress`'s twin: only the newest selection may open its box late. */
   const selectPress = useRef(0);
   /* What `selectProse` reads without depending on it — the function is
@@ -2424,8 +2433,22 @@ export function Reader({
     const nextGesture = () => {
       closedFresh.current = null;
     };
+    const gestureEnded = () => {
+      closedFresh.current = null;
+    };
+    const nonMouseGestureEnded = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") closedFresh.current = null;
+    };
     window.addEventListener("pointerdown", nextGesture, true);
-    return () => window.removeEventListener("pointerdown", nextGesture, true);
+    window.addEventListener("pointerup", nonMouseGestureEnded);
+    window.addEventListener("mouseup", gestureEnded);
+    window.addEventListener("pointercancel", gestureEnded);
+    return () => {
+      window.removeEventListener("pointerdown", nextGesture, true);
+      window.removeEventListener("pointerup", nonMouseGestureEnded);
+      window.removeEventListener("mouseup", gestureEnded);
+      window.removeEventListener("pointercancel", gestureEnded);
+    };
   }, []);
   /**
    * **A mouse keeps its words selected.** The paint replaces the paragraph's
@@ -3652,10 +3675,17 @@ export function Reader({
                   },
                   onTouched: () => {
                     freshTouched.current = true;
+                    copyOnlyProtected.current.add(openComment.id);
                   },
                   onCopiedOnly: () => {
-                    owner.comments.remove(openComment.id);
-                    void setNote(null);
+                    const id = openComment.id;
+                    const api = commentsNow.current;
+                    const row = api?.comments.find((comment) => comment.id === id);
+                    if (!api || !row || !isPristineHighlight(row)) return;
+                    if (copyOnlyProtected.current.has(id)) return;
+                    copyOnlyProtected.current.add(id);
+                    api.remove(id);
+                    void setNote((current) => (current === id ? null : current));
                   },
                 }
               : undefined
@@ -3663,12 +3693,30 @@ export function Reader({
           access={{
             kind: "owner",
             pending: othersPending,
-            onRetry: () => owner.comments.retry(openComment.id),
-            onDeepen: () => owner.comments.deepen(openComment.id),
-            onEdit: (body) => void owner.comments.edit(openComment.id, body),
+            onRetry: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.retry(openComment.id);
+            },
+            onDeepen: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.deepen(openComment.id);
+            },
+            onEdit: (body) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.edit(openComment.id, body);
+            },
+            onTouched: () => {
+              copyOnlyProtected.current.add(openComment.id);
+            },
             placing: mode === "referee",
-            onPlace: (mark) => void owner.comments.place(openComment.id, mark),
-            onRecolour: (colour) => void owner.comments.recolour(openComment.id, colour),
+            onPlace: (mark) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.place(openComment.id, mark);
+            },
+            onRecolour: (colour) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.recolour(openComment.id, colour);
+            },
             error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
@@ -3687,6 +3735,7 @@ export function Reader({
                   }
                 : undefined,
             onDiscuss: (question) => {
+            copyOnlyProtected.current.add(openComment.id);
             /* **Into the floating panel, not into chat mode.** The follow-up
                box has always handed the reader to a conversation rather than
                growing a transcript in this dialog — Greg's call, chat-handoff.ts

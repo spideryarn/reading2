@@ -1322,8 +1322,9 @@ function TableViewInner({
           // arriving `#spya-…` into `?at=` before React mounts. Taking it over
           // would break the one case where the browser's own answer is right.
           /* Read and spent before anything can return: it describes the mouseup
-             this click follows, and no later click. */
-          const endedSelection = selectionEndedHere.current;
+             this pointer click follows, and no later click. A keyboard click
+             has `detail === 0`; it consumes a stale latch without obeying it. */
+          const endedSelection = selectionEndedHere.current && e.detail !== 0;
           selectionEndedHere.current = false;
           if (e.defaultPrevented || e.button !== 0) return;
           /* **A cross-reference is not a link, and a modified click on one does

@@ -394,15 +394,22 @@ export function useComments(slug: string): CommentsApi {
    * to tell the two apart, and the store treats a repeated id with the same
    * anchor as the same comment, so the worst case is one redundant POST.
    *
-   * `replayed` is what makes it once. A `pagehide` can be a back/forward-cache
-   * suspend: the page comes back, the held create carries on down its ordinary
-   * path and draws its one row, and a second `pagehide` must not send it again.
-   * Nothing is done on `pageshow` for that reason: the ordinary create was
-   * never cancelled, so there is nothing to reconcile and nothing to apply
-   * twice.
+   * The unsettled attempt's `replayed` flag is what makes it once. A `pagehide`
+   * can be a back/forward-cache suspend: the page comes back, the held create
+   * carries on down its ordinary path and draws its one row, and a second
+   * `pagehide` must not send it again. The promise map beside it is the delete
+   * barrier: a keepalive POST must finish before a later DELETE, including when
+   * an uncertain attempt reuses the id. Nothing is done on `pageshow` for that
+   * reason: the ordinary create was never cancelled, so there is nothing to
+   * reconcile and nothing to apply twice.
    */
-  const unsettled = useRef(new Map<string, NewCommentInput>());
-  const replayed = useRef(new Set<string>());
+  const unsettled = useRef(
+    new Map<string, { input: NewCommentInput; replayed: boolean }>(),
+  );
+  /* The promise for every keepalive POST ever started under an id, combined
+     into one barrier. An id may be reused after an uncertain failure while an
+     older replay is still in flight; deletion must wait for both attempts. */
+  const replayed = useRef(new Map<string, Promise<void>>());
 
   // Switching article throws the tombstones away with the comments they name.
   useEffect(() => {
@@ -413,19 +420,26 @@ export function useComments(slug: string): CommentsApi {
     const sent = replayed.current;
     const url = `/api/comments/${encodeURIComponent(slug)}`;
     const leaving = () => {
-      for (const [id, input] of inputs) {
+      for (const [id, pending] of inputs) {
         /* Deleted while held: the reader's later act was to remove it. */
-        if (gone.has(id) || sent.has(id)) continue;
-        sent.add(id);
+        if (gone.has(id) || pending.replayed) continue;
+        pending.replayed = true;
         // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
-        void leavingFetch(url, createRequest(input));
+        const replay = leavingFetch(url, createRequest(pending.input));
+        const earlier = sent.get(id);
+        sent.set(
+          id,
+          earlier ? Promise.all([earlier, replay]).then(() => undefined) : replay,
+        );
       }
     };
     window.addEventListener("pagehide", leaving);
     return () => {
       window.removeEventListener("pagehide", leaving);
-      if (unsettled.current === inputs) unsettled.current = new Map<string, NewCommentInput>();
-      if (replayed.current === sent) replayed.current = new Set<string>();
+      if (unsettled.current === inputs) {
+        unsettled.current = new Map<string, { input: NewCommentInput; replayed: boolean }>();
+      }
+      if (replayed.current === sent) replayed.current = new Map<string, Promise<void>>();
       /* Replace rather than clear. A create held for the article we are leaving
          still needs its old tombstones and chain after this cleanup releases
          its opening gate. The new article must not inherit either collection. */
@@ -782,9 +796,10 @@ export function useComments(slug: string): CommentsApi {
       const inputs = unsettled.current;
       const sent = replayed.current;
       /* A new attempt under a reused id (the gutter's retry) may be replayed
-         again: what `replayed` remembers is the attempt, not the id. */
-      sent.delete(id);
-      inputs.set(id, input);
+         again. Its own flag says whether it has been; `sent` retains the older
+         attempt's promise because a later delete must wait for both. */
+      const pending = { input, replayed: false };
+      inputs.set(id, pending);
       const task = (async (): Promise<Comment | null> => {
         /* **Behind the opening read, if it is still out** — see `opening`. The
            `settled` check keeps the ordinary case synchronous: no `await`, so
@@ -792,13 +807,22 @@ export function useComments(slug: string): CommentsApi {
         const gate = opening.current;
         const list = gate.settled ?? (await gate.done);
         /* Deleted while held: no row existed yet, so the right DELETE is no
-           request at all. `remove` left the tombstone for this check. */
-        if (tombstones.has(id)) return null;
+           request at all — unless pagehide already replayed this create. That
+           independent POST may now be making a row, and must be followed by an
+           ownership-proving create and a final DELETE. */
+        const replay = sent.get(id);
+        if (tombstones.has(id) && !replay) return null;
         if (list === "gone") {
           /* The hook left this article while the create was held (or, in the gap
              between a new article's render and its effect, before there was a
              read to wait behind). Send the words; touch no state — the list on
              screen, if there is one, is another article's. */
+          if (tombstones.has(id)) {
+            await replay;
+            const confirmed = await createAfterLeaving(url, input);
+            if (confirmed) await forget(confirmed.id, false);
+            return null;
+          }
           return createAfterLeaving(url, input);
         }
         const optimistic = optimisticComment(input);
@@ -822,7 +846,10 @@ export function useComments(slug: string): CommentsApi {
           const { comment } = await readJson<{ comment: Comment }>(r);
           if (tombstones.has(id)) {
             /* DELETE was deliberately held behind this POST. Now the row is
-               known to exist, make the reader's later action win. */
+               known to exist, make the reader's later action win. A pagehide
+               replay is another POST for this id, so it must finish first or
+               it could restore the row after this DELETE. */
+            await sent.get(id);
             await forget(comment.id, isCurrent());
             return null;
           }
@@ -844,6 +871,7 @@ export function useComments(slug: string): CommentsApi {
             const status = statusOf(e);
             if (status === null || status >= 500) {
               try {
+                await sent.get(id);
                 const retry = await fetchOk(url, createRequest(input));
                 const { comment } = await readJson<{ comment: Comment }>(retry);
                 await forget(comment.id, isCurrent());
@@ -879,7 +907,7 @@ export function useComments(slug: string): CommentsApi {
       const settled = () => {
         if (births.get(id) !== task) return;
         births.delete(id);
-        inputs.delete(id);
+        if (inputs.get(id) === pending) inputs.delete(id);
       };
       void task.then(settled, settled);
       return task;
@@ -1105,7 +1133,12 @@ export function useComments(slug: string): CommentsApi {
       // An answer POST is not in `creating`: its `done` handler re-sends this
       // DELETE once the write it is racing has definitely landed. Doing it only
       // here would let that POST write the row back after we deleted it.
-      void forget(id);
+      /* A pagehide replay is another POST outside the ordinary create chain.
+         Let it finish before the final DELETE, or a slow keepalive request can
+         restore the row after the reader removed it. */
+      const replay = replayed.current.get(id);
+      if (replay) void replay.then(() => forget(id));
+      else void forget(id);
     },
     [forget],
   );
