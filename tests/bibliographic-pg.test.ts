@@ -214,6 +214,8 @@ describe("the cache", () => {
         authors: [{ family: "Maingret", given: "Nicolas" }, { family: "A Consortium" }],
         year: 2016,
         venue: "Nature Neuroscience",
+        /* Read back from `published_day`: the second answer came from the cache. */
+        published: "2016-05-16",
         doi: "10.1038/nn.4304",
       },
     });
@@ -264,6 +266,13 @@ describe("the cache", () => {
         insert into spideryarn.bibliographic_records (id, state, source, authors_family, authors_given, doi, fetched_at)
         values ('doi:10.1000/x', 'found', 'crossref', '{}', '{}', '10.1000/x', now())`),
     ).toBe("bibliographic_records_shape");
+    /* A claim has SQL NULL state. `state = 'found'` makes this CHECK
+       evaluate NULL, which Postgres accepts; it must instead reject the day. */
+    expect(
+      await refusedBy(sql`
+        insert into spideryarn.bibliographic_records (id, claimed_until, published_day)
+        values ('doi:10.1000/claim-with-day', now(), '2024-05-31')`),
+    ).toBe("bibliographic_records_published_day");
     /* And the good shapes go in, so the refusals above are about the shapes. */
     expect(
       await refusedBy(sql`insert into spideryarn.bibliographic_records (id, claimed_until) values ('arxiv:hep-th/9901001', now())`),

@@ -281,9 +281,12 @@ type ConversationKind = Exclude<ThreadKind, "candidates">;
  * **A question another mode has handed to chat, to be put in a fresh
  * conversation's composer and not sent.**
  *
- * Today there is one sender: the glossary's *Ask in chat*, for a term the
- * article does not contain. Greg, 2026-09-11, asked whether the question should
- * go into the conversation already open or a new one: *"fresh"*. So it never
+ * Two senders, both through `Reader`: the glossary's *Ask in chat*, for a term
+ * the article does not contain, and (since 2026-10-04) the button on a Summary
+ * paragraph, which hands over the paragraph, quoted
+ * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). Greg,
+ * 2026-09-11, asked whether the glossary's question should go into the
+ * conversation already open or a new one: *"fresh"*. So a handoff never
  * touches another conversation's draft, and it spends nothing until Send.
  *
  * **A prop, owned by `Reader`, and deliberately not the module-level cell that

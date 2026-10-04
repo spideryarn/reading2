@@ -78,11 +78,21 @@ export function SummaryBand({
   slug,
   article,
   onJump,
+  onAskChat,
 }: {
   slug: string;
   /** For the thread's copy text and its counts (Tweets.tsx). */
   article: Article;
   onJump(id: BlockId): void;
+  /**
+   * **Ask about a Brief or Fuller paragraph in chat.** `Reader` owns both the
+   * mode and the handoff into a fresh conversation, so the press goes up to it
+   * with the paragraph's text. The owner's band alone has this prop:
+   * `VisitorSummaryBand` has none to pass, because a visitor has no chat. The
+   * Thread is not given it — its posts have Copy.
+   * docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md.
+   */
+  onAskChat?: ((paragraphText: string) => void) | undefined;
 }) {
   useRenderCount("SummaryBand");
   const [view, setView] = useQueryState("summary", summaryParam);
@@ -95,6 +105,7 @@ export function SummaryBand({
       slug={slug}
       level={view}
       onJump={onJump}
+      onAskChat={onAskChat}
       render={(body, badge, about) => (
         <SummarySurface controls={controls} about={about} profile={badge}>
           {body}
@@ -114,11 +125,14 @@ function OwnerSimple({
   slug,
   level,
   onJump,
+  onAskChat,
   render,
 }: {
   slug: string;
   level: SummaryLength;
   onJump(id: BlockId): void;
+  /** See `SummaryBand`. */
+  onAskChat: ((paragraphText: string) => void) | undefined;
   render(body: ReactNode, badge: ReactNode, about: ReactNode): ReactNode;
 }) {
   useRenderCount("OwnerSimple");
@@ -152,7 +166,15 @@ function OwnerSimple({
       elapsedMs={made.elapsedMs}
     />
   ) : null;
-  return <>{render(<SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} />, badge, about)}</>;
+  return (
+    <>
+      {render(
+        <SimplePanel access={{ kind: "owner", owner }} level={level} onJump={onJump} onAskChat={onAskChat} />,
+        badge,
+        about,
+      )}
+    </>
+  );
 }
 
 /**

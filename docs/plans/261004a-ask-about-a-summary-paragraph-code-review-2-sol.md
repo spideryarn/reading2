@@ -1,0 +1,8 @@
+- **R2-1 — Correct:** [chat-handoff.ts:175](/home/greg/code/spideryarn2/.claude/worktrees/fbr9nbkt-ask-about-a-summary-paragraph/src/web/chat-handoff.ts:175). Escaping precedes truncation, so inserted characters count toward the cap. Dropping a trailing high surrogate prevents splitting a pair; complete pairs survive. CR-1 and CR-2’s P1 defects are closed.
+- **R2-2 — Correct:** [chat-handoff.ts:92](/home/greg/code/spideryarn2/.claude/worktrees/fbr9nbkt-ask-about-a-summary-paragraph/src/web/chat-handoff.ts:92). The same boundary repair correctly handles the 60-unit block quote. CR-3’s P1 defect is closed.
+- **R2-3 — Correct:** [ChatPanel.tsx:2182](/home/greg/code/spideryarn2/.claude/worktrees/fbr9nbkt-ask-about-a-summary-paragraph/src/web/ChatPanel.tsx:2182). The height `useLayoutEffect` runs before this passive effect, regardless of declaration order. Scrolling follows placement of the caret at the end. Empty boxes clamp to zero; Remember, Tutorial and Explore retain that same caret behavior. The existing nonce guard prevents scrolling during ordinary typing or reopening a conversation.
+- **R2-4 — Correct:** [summary.css:171](/home/greg/code/spideryarn2/.claude/worktrees/fbr9nbkt-ask-about-a-summary-paragraph/src/web/styles/summary.css:171). Rest opacity increases to 0.7; hover/focus remains 1 and touch remains 0.8.
+
+Requested tests: **2 files, 17 tests passed**. No files changed; no new P0–P3 findings.
+
+**Verdict: land.**

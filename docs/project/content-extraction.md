@@ -653,6 +653,43 @@ Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page wit
 keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
 [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
 
+## The journal and the publication day, from a registry
+
+> It would be great if the metadata page also somehow figured out and listed the publication date.
+> And perhaps journal etc
+>
+> — Greg, 2026-10-03 (report `spya-pcz6a3`)
+
+Since 2026-10-04 the `extract` step, and the `metadata` step for a minimal paper, ask Crossref or
+DataCite about **the article's own identifier**, after the extractor and outside any model call
+([`src/article-registry.ts`](../../src/article-registry.ts)). It is the lookup Citations uses
+(`lookupWork`), with its cache and its politeness.
+
+- **The candidates are found without a model.** A PDF: every DOI and `arXiv:` stamp printed on its
+  first two pages, in any record, the hidden DOI strip included. A web page: `citation_doi`, then
+  its own address. A minimal paper: the DOI its `metadata` step read. Three at most.
+- **A record is the article's only when two things agree**: the complete title (the same words
+  and maths operators in order), and an author. A free-text byline must contain a registry
+  author's family name with the same given name or initial beside it; a surname alone is
+  sufficient only in a structured author name. A shared title prefix or an ordinary byline
+  word can belong to a cited work. With no author evidence, nothing is kept.
+- **What is kept**: `Meta.doi`; `Meta.journal`, from Crossref's `container-title` (and `arXiv` for
+  an arXiv id; a DataCite repository's name is not a journal); and `Meta.publishedAt`, only when
+  the page stated none and the registry states a whole day. A year alone is not stored: every
+  reader of that field wants a calendar day, and a made-up `-01-01` would be a date nobody stated.
+- **It never fails an import.** No candidate, a miss, a disagreement and an unreachable registry
+  all leave `meta` as the extractor made it. The step logs the outcome and counts.
+- **Read this keeps a minimal paper's confirmed facts** when the registry is unavailable: it
+  re-reads the same bytes. An ordinary re-extraction keeps the DOI, as it always did, and asks
+  afresh for the rest, so a date a publisher removed is not carried forward.
+- **A PDF now has a publication date**, so Timeline has a year to read a year-less date against,
+  and the Shelf's Published sort has something to sort.
+- **Nothing is backfilled.** An article imported before this has the facts only once its owner
+  reads it again.
+
+The Metadata page prints both under the title. The plan, with what was deferred, is
+[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md).
+
 ## A title from outside is plain text
 
 A page's `<title>`, a PDF's `Info.Title`, an `og:title` and a web-search result's title can all

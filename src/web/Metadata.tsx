@@ -274,7 +274,7 @@ import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { howLong, timeAgo } from "./relative-time.js";
+import { calendarDay, howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -725,7 +725,21 @@ export function Metadata({
   const archive = sharedArchive ?? metadataArchive;
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
-  const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+  /* **Where and when it was published** (Greg, 2026-10-03, spya-pcz6a3). The
+     journal is the registry's name for where the piece appeared, left out when
+     the site already says it; the day is the publisher's own calendar day,
+     printed by the same `calendarDay` the shelf sorts on, so the two cannot
+     disagree about what counts as a date. */
+  const journal = meta.journal?.trim().toLowerCase() === meta.siteName?.trim().toLowerCase() ? undefined : meta.journal;
+  const published = calendarDay(meta.publishedAt)?.label;
+  const facts = [
+    ["byline", meta.authors ? undefined : meta.byline],
+    ["journal", journal],
+    ["site", meta.siteName],
+    ["published", published ? `Published ${published}` : undefined],
+    ["language", meta.lang],
+  ].filter(([, fact]) => Boolean(fact)) as [string, string][];
+  const fetchedShown = fetchedIsShown(meta.fetchedAt);
 
   /**
    * The one line that has to survive the section being shut.
@@ -879,17 +893,24 @@ export function Metadata({
             from the filtered list — same reasoning as the library card. A chain
             of `&&`s, or a separate test of the same fields, is how a line ends
             up starting with a stranded `·`. */}
-        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground">
-          {facts.map((fact, i) => (
-            <span key={fact}>
-              {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
+        <p
+          data-metadata-facts
+          className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground"
+        >
+          {/* **The separator ends an item; it never starts one.** The line wraps
+              on a phone, and a row beginning "· fetched 3 weeks ago" reads as a
+              stray mark (261004a's browser check). At the end of the row above
+              it reads as "and there is more". */}
+          {facts.map(([key, fact], i) => (
+            <span key={key}>
               {fact}
+              {(i < facts.length - 1 || fetchedShown) && <span className="tw:ml-2 tw:opacity-50">·</span>}
             </span>
           ))}
           {/* Relative, with the exact stamp on hover — theirs did this and it is
               the right way round. "3 days ago" is what you want to know; the
               timestamp is what you want when the answer is surprising. */}
-          <Fetched iso={meta.fetchedAt} lead={facts.length > 0} />
+          <Fetched iso={meta.fetchedAt} />
         </p>
         {/* Where it came from, and the way back to it — `Origin` below. `owner`
             is `hasShelfRow` rather than a fresh test, because the link it gates
@@ -3693,10 +3714,14 @@ function weight(bytes: number): string {
  * Renders nothing at all if stage 2 never recorded one, rather than a stranded
  * separator; `lead` is whether anything precedes it on the line.
  */
-function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
-  if (!iso) return null;
+/** Whether `Fetched` draws anything — the caller's separator before it depends on the same answer. */
+function fetchedIsShown(iso: string | undefined): iso is string {
+  return Boolean(iso) && !Number.isNaN(Date.parse(iso ?? ""));
+}
+
+function Fetched({ iso }: { iso: string | undefined }) {
+  if (!fetchedIsShown(iso)) return null;
   const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
   const when = new Date(t);
   return (
     <Tooltip
@@ -3712,7 +3737,6 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
       }
     >
       <span className="tw:cursor-help">
-        {lead && <span className="tw:mr-2 tw:opacity-50">·</span>}
         <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
           fetched {ago(when)}
         </span>
