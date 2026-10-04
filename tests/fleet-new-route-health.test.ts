@@ -20,7 +20,8 @@ vi.mock("../tools/fleet/health.js", async (original) => ({
   collectHealth,
 }));
 
-import { computeVerdict, type HealthReport } from "../tools/fleet/health.js";
+import type { ProbeOwner } from "../tools/fleet/child.js";
+import { collectHealthAsync, computeVerdict, type HealthReport } from "../tools/fleet/health.js";
 import { createNewSessionRoutes, newSessionHealthLevel, realIo } from "../tools/fleet/routes-new.js";
 
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
@@ -49,12 +50,30 @@ describe("the level new-session admission reads from the server's last health re
     expect(newSessionHealthLevel(report(), NOW, MAX_AGE_MS)).toBe("ok");
   });
 
+  it("still admits known load and memory when the box has no configured swap", () => {
+    expect(newSessionHealthLevel(report({ swap: { kind: "none" } }), NOW, MAX_AGE_MS)).toBe("ok");
+  });
+
   it("is critical for a fresh critical report", () => {
     const starved = report({
       memory: { kind: "value", totalBytes: 32e9, availableBytes: 32e7, availableFraction: 0.01 },
     });
     expect(starved.verdict.level).toBe("critical");
     expect(newSessionHealthLevel(starved, NOW, MAX_AGE_MS)).toBe("critical");
+  });
+
+  it("refuses a fresh survey whose load and memory probes were refused, even when swap answered", async () => {
+    const owner: ProbeOwner = {
+      live: () => [],
+      run: async (spec) => spec.cmd === "swapon"
+        ? { kind: "ok", stdout: "NAME TYPE SIZE USED PRIO\n/swapfile file 8000000000 1000000000 -2\n", stderr: "", tookMs: 1 }
+        : { kind: "refused", why: "an earlier health child is unaccounted for", pid: 41, liveForMs: 60000 },
+    };
+    const partial = await collectHealthAsync({ owner, includeSwapActivity: false, nowMs: () => NOW });
+    expect(partial.load.kind).toBe("unknown");
+    expect(partial.memory.kind).toBe("unknown");
+    expect(partial.swap.kind).toBe("value");
+    expect(newSessionHealthLevel(partial, NOW, MAX_AGE_MS)).toBe("unknown");
   });
 
   it("is unknown for a report older than the allowed age, however healthy it was", () => {
@@ -126,7 +145,7 @@ describe("the default, unconfigured health read", () => {
     await routes.handle(req as never, res as never);
 
     expect(status).toBe(503);
-    expect(JSON.parse(body).error).toMatch(/no current health reading/i);
+    expect(JSON.parse(body).error).toMatch(/no complete current health reading/i);
     expect(runs).toHaveLength(0);
     expect(collectHealth).not.toHaveBeenCalled();
   });

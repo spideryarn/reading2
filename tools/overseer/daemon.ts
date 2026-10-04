@@ -1689,7 +1689,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
       ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
       ...(options.streamRetryAfterMs === undefined ? {} : { streamRetryAfterMs: options.streamRetryAfterMs }),
     })) {
-      if (halted() !== null) break;
+      if (halted() !== null || options.signal.aborted) break;
       const at = now().toISOString();
 
       switch (message.kind) {
@@ -1723,7 +1723,9 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           throw new Error(`no handler for source message ${JSON.stringify(never)}`);
         }
       }
-      if (halted() !== null) break;
+      // A probe can yield long enough for shutdown to arrive. Stop before
+      // requesting another payload: the source may still have buffered frames.
+      if (halted() !== null || options.signal.aborted) break;
     }
   } catch (cause) {
     // A THROW IS A DEATH THE DAEMON CAN STILL WRITE DOWN. Without this it dies

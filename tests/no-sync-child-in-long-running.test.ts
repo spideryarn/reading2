@@ -123,6 +123,11 @@ export function syncChildImports(src: string, file: string): string[] {
       const arg = literal(node.source);
       if (arg !== null && MODULES.includes(arg)) found.add("*");
     }
+    if (node.type === "TSImportEqualsDeclaration" && node.importKind !== "type") {
+      const ref = node.moduleReference as AnyNode;
+      const arg = ref.type === "TSExternalModuleReference" ? literal(ref.expression) : null;
+      if (arg !== null && MODULES.includes(arg)) found.add("*");
+    }
   });
   return [...found].sort();
 }
@@ -149,6 +154,10 @@ describe("no synchronous child process in a long-running process", () => {
     expect(syncChildImports(`import cp${from("node:child_process")}`, "x.ts")).toEqual(["*"]);
     expect(syncChildImports(`export { execSync }${from("node:child_process")}`, "x.ts")).toEqual(["execSync"]);
     expect(syncChildImports(`const cp = require("child_process");`, "x.ts")).toEqual(["*"]);
+    for (const mod of MODULES) {
+      expect(syncChildImports(`import cp = require("${mod}");`, "x.cts")).toEqual(["*"]);
+      expect(syncChildImports(`import type cp = require("${mod}");`, "x.cts")).toEqual([]);
+    }
     expect(syncChildImports(`const cp = await import("node:child_process");`, "x.ts")).toEqual(["*"]);
     // The async API, a type, and a comment that names one are all free.
     expect(syncChildImports(`import { spawn, execFile }${from("node:child_process")}`, "x.ts")).toEqual([]);

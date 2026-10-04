@@ -287,6 +287,41 @@ describe("published work evidence", () => {
  * every published field, not the new one in some and the old one in others.
  */
 describe("an asynchronous probe", () => {
+  test("an abort during the probe closes the source without asking for another buffered payload", async () => {
+    const root = tempRoot();
+    const clock = fakeClock("2026-09-08T02:48:40.000Z");
+    const controller = new AbortController();
+    let askedForNext = false;
+    let sourceClosed = false;
+    let probes = 0;
+    const outcome = await runOverseer({
+      root,
+      baseUrl: "http://127.0.0.1:0",
+      signal: controller.signal,
+      now: clock.now,
+      tickMs: 5,
+      log: () => undefined,
+      source: async function* () {
+        try {
+          yield payload(rawFixture("session-new-before"));
+          askedForNext = true;
+          yield payload(rawFixture("session-new-after"));
+        } finally {
+          sourceClosed = true;
+        }
+      },
+      probe: async () => {
+        probes += 1;
+        controller.abort();
+        return capturedReading(clock.ms());
+      },
+    });
+    expect(outcome.kind).toBe("stopped");
+    expect(sourceClosed).toBe(true);
+    expect(askedForNext).toBe(false);
+    expect(probes).toBe(1);
+  });
+
   function collectedAt(json: JsonValue): string {
     const parsed = parseObservation(json);
     if (!parsed.ok || !parsed.value.clock.collected) throw new Error("fixture has no collection clock");

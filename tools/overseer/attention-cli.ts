@@ -466,7 +466,10 @@ export function attentionRunner(
     // as "waiting since" a moment nobody observed. A verdict is about a piece of
     // text and survives any gap; a wait is about continuous observation and
     // cannot.
-    const memory = memoryForEpoch(read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY, epoch);
+    const prior = read.kind === "memory" ? read.memory : EMPTY_ATTENTION_MEMORY;
+    // "Unknown" cannot prove continuity with another "unknown". Keep cached
+    // text verdicts, but drop waits on EVERY pass whose generation is unproven.
+    const memory = memoryForEpoch(generation === null ? { ...prior, waits: new Map() } : prior, epoch);
     // ONE VERSION, HANDED TO BOTH HALVES, exactly as the hand run does. Read
     // per pass rather than per runner so both compositions follow one rule;
     // a daemon's environment is fixed at start, so in practice it never moves.

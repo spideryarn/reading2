@@ -261,4 +261,30 @@ describe("the daemon's runner brackets the listing with the tmux generation", ()
     await run();
     expect(epochOf(root)).toBe("test-instance:tmux-unknown");
   });
+
+  it.each([[null, null, null, null], [7, 8, 8, 9]])(
+    "consecutive unproven generations (%j) never carry waits, but keep text verdicts",
+    async (...generations) => {
+      const root = tempRoot();
+      const { seams: s } = bracketed(generations);
+      const run = attentionRunner(root, "test-instance", s);
+      if (run === null) throw new Error("expected a runner");
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2026-10-04T12:00:00.000Z"));
+        await run();
+        const before = readAttentionMemory(root);
+        if (before.kind !== "memory") throw new Error("expected memory");
+        expect(before.memory.waits.size).toBeGreaterThan(0);
+        vi.setSystemTime(new Date("2026-10-04T12:01:00.000Z"));
+        await run();
+        const after = readAttentionMemory(root);
+        if (after.kind !== "memory") throw new Error("expected memory");
+        expect([...after.memory.verdicts]).toEqual([...before.memory.verdicts]);
+        expect([...after.memory.waits.values()]).not.toEqual([...before.memory.waits.values()]);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });

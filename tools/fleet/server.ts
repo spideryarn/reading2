@@ -460,8 +460,9 @@ function tellOverseer(input: {
 configureNewSessionNotifier(tellOverseer);
 /* New-session admission reads the report `refreshHealth` last stored instead of
    running its own survey inside the request. A report that is missing or too
-   old is `unknown`, which that gate refuses. The trade-off: the gate sees a
-   reading up to a minute old rather than a fresh one.
+   old is `unknown`, which that gate refuses. The trade-off: the gate sees the
+   last reading rather than a fresh one — a minute old in the ordinary case,
+   and up to the limit below while collections are failing.
 
    "Too old" is the longest gap the loop itself can leave, plus two intervals
    for the collection and the survey to run: after a FAILED collection the loop

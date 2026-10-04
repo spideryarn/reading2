@@ -1021,7 +1021,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
     // Claude is how the OOM killer gets to choose which agent dies.
     //
     // AND `unknown` IS REFUSED TOO, which it was not (Sol's F12). `unknown` is
-    // what health.ts reports when load, memory and swap could ALL not be read —
+    // what the admission read reports when any core measurement is unknown —
     // a box that cannot fork, or whose commands time out, which is a symptom of
     // the exact condition this gate exists for. Admitting it was failing open
     // at the one moment the gate mattered. The two get different sentences
@@ -1039,7 +1039,7 @@ export function createNewSessionRoutes(options: NewSessionOptions = {}): NewSess
           why:
             level === "critical"
               ? "the box is critical (load, memory or swap) — starting another Claude now is how the OOM killer gets to choose which agent dies. Try again when the dashboard's health line is calmer."
-              : "I have no current health reading for this box: either its load, memory and swap could all not be read, which is what a machine too busy to fork looks like, or the dashboard's last reading is missing or too old to trust — so I am not starting anything. Try again, or look at the health line.",
+              : "I have no complete current health reading for this box: a load, memory or swap measurement could not be read, or the dashboard's last reading is missing or too old to trust — so I am not starting anything. Try again, or look at the health line.",
         });
       }
     }
@@ -1170,6 +1170,9 @@ export function configureNewSessionHealth(read: NewSessionIo["healthLevel"]): vo
  * - No report, a report older than `maxAgeMs`, or one whose `collectedAt` will
  *   not parse is `unknown`: a reading nobody has taken lately is not a reason
  *   to start another agent.
+ * - An unknown load, memory or swap reading is `unknown` for admission. The
+ *   dashboard's verdict can use partial evidence, but healthy swap cannot
+ *   authorize a launch when the load or memory probe was refused.
  * - **The vmstat swap-activity sample is left out**, as it was when the gate
  *   collected for itself with `includeSwapActivity: false` ("is the box on
  *   fire?" is answered by load, memory and swap fullness). The report's own
@@ -1181,6 +1184,9 @@ export function newSessionHealthLevel(report: HealthReport | null, nowMs: number
   const ageMs = nowMs - Date.parse(report.collectedAt);
   // Written so that NaN (an unparseable clock) falls on the refusing side.
   if (!(ageMs <= maxAgeMs)) return "unknown";
+  if (report.load.kind === "unknown" || report.memory.kind === "unknown" || report.swap.kind === "unknown") {
+    return "unknown";
+  }
   return computeVerdict({ ...report, swapActivity: { kind: "skipped" } }).level;
 }
 
