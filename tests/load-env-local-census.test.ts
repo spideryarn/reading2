@@ -86,9 +86,8 @@ const nameOf = (n: unknown): string | null => {
  * Every executable call of `loadEnvLocal` in one source text, with the nearest
  * enclosing function's name, or `<module>` for a call at the top level.
  *
- * A rename on import (`import { loadEnvLocal as x }`) is reported as a call
- * site named `<renamed import>`, so it cannot be used to walk past this: the
- * scan only knows the one name.
+ * A rename on import or export is reported as a forbidden site, so a caller
+ * cannot walk past this using the new name: the scan only knows the one name.
  */
 function callsIn(file: string, source: string): Call[] {
   const found: Call[] = [];
@@ -112,6 +111,9 @@ function callsIn(file: string, source: string): Call[] {
     }
     if (n.type === "ImportSpecifier" && nameOf(n.imported) === "loadEnvLocal" && nameOf(n.local) !== "loadEnvLocal") {
       found.push({ file, where: "<renamed import>", line });
+    }
+    if (n.type === "ExportSpecifier" && nameOf(n.local) === "loadEnvLocal" && nameOf(n.exported) !== "loadEnvLocal") {
+      found.push({ file, where: "<renamed export>", line });
     }
 
     let inside = enclosing;
@@ -174,6 +176,11 @@ describe("the scanner itself", () => {
   it("reports an import under another name rather than losing it", () => {
     const source = `import { loadEnvLocal as load } from "./env.js"; export function f() { load(); }`;
     expect(callsIn("x.ts", source).map((c) => c.where)).toEqual(["<renamed import>"]);
+  });
+
+  it("reports a renamed re-export before a caller can import it under that name", () => {
+    const source = `export { loadEnvLocal as bootEnv } from "./env.js";`;
+    expect(callsIn("x.ts", source).map((c) => c.where)).toEqual(["<renamed export>"]);
   });
 });
 

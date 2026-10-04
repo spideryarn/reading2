@@ -152,6 +152,7 @@ describe("a runner with no key (characterisation: green before and after the pre
     /* No attempt, no record: a row for a call that never left the process is a
        phantom in the bill (src/ai-call.ts § `prepare`). */
     expect(report.calls).toHaveLength(0);
+    expect(report.pending).toHaveLength(0);
     /* The key is still gone. A library that reloaded `.env.local` here would
        have put one back. */
     expect(process.env.OPENROUTER_API_KEY).toBeUndefined();

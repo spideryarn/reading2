@@ -115,6 +115,25 @@ describe("parseRetryAfter", () => {
       }
     });
 
+    it("preserves an explicit named zone instead of appending a second one", () => {
+      for (const tz of ["UTC", "Europe/London", "America/New_York"]) {
+        process.env.TZ = tz;
+        for (const header of [
+          "Sun, 04 Oct 2026 04:00:30 PST",
+          "Sun, 04 Oct 2026 PST 04:00:30",
+          "Sun Oct 4 PST 04:00:30 2026",
+          "Sun, 04 Oct 2026 05:00:30 PDT",
+          "Sun, 04 Oct 2026 07:00:30 EST",
+          "Sun, 04 Oct 2026 08:00:30 EDT",
+          "Sun, 04 Oct 2026 12:00:30 UT",
+          "Sun, 04 Oct 2026 12:00:30 UTC",
+          "Sun, 04 Oct 2026 12:00:30Z",
+        ]) {
+          expect(parseRetryAfter(header, NOW), `${tz}: ${header}`).toBe(30_000);
+        }
+      }
+    });
+
     it("a past asctime date is no instruction in any zone", () => {
       for (const tz of ["UTC", "Europe/London", "America/New_York"]) {
         process.env.TZ = tz;

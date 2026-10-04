@@ -24,11 +24,13 @@
 const SECONDS = /^\d+$/;
 
 /**
- * A date that names its own zone: `GMT` (the two forms HTTP sends today), its
- * synonyms, or a numeric offset. Anything else is the asctime form or a
- * server's own variation on it, and gets `GMT` put on the end.
+ * Complete zone-less date shapes: asctime, and the two RFC forms with their
+ * `GMT` omitted. Only those get a zone appended. A clock suffix alone is not
+ * enough: `Date.parse` also understands explicit zones before the clock.
+ * Other letter-starting dates are passed through without changing their zone.
  */
-const SAYS_ITS_ZONE = /(?:\b(?:GMT|UTC?|Z)|[+-]\d{2}:?\d{2})$/i;
+const ZONELESS_ASCTIME = /^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}$/;
+const ZONELESS_RFC = /^[A-Za-z]+,\s+\d{1,2}(?:\s+[A-Za-z]{3}\s+\d{4}|-[A-Za-z]{3}-\d{2})\s+\d{2}:\d{2}:\d{2}$/;
 
 /**
  * What the server asked for, or `null` for "no usable instruction".
@@ -82,7 +84,8 @@ export function parseRetryAfter(header: string | null, nowMs: number): number | 
   if (SECONDS.test(trimmed)) {
     ms = Number(trimmed) * 1000;
   } else if (/^[A-Za-z]/.test(trimmed)) {
-    ms = Date.parse(SAYS_ITS_ZONE.test(trimmed) ? trimmed : `${trimmed} GMT`) - nowMs;
+    const zoneless = ZONELESS_ASCTIME.test(trimmed) || ZONELESS_RFC.test(trimmed);
+    ms = Date.parse(zoneless ? `${trimmed} GMT` : trimmed) - nowMs;
   } else {
     return null;
   }
