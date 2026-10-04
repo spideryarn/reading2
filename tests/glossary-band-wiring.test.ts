@@ -221,16 +221,22 @@ describe("the threshold wiring", () => {
     expect(branch).toMatch(/<ConfSlider/);
   });
 
-  it("prints the foot line unconditionally, wherever the slider is", () => {
+  it("prints the foot line unconditionally in Glossary and Quotes, and in Search whenever something is hidden", () => {
     /* Present wherever the threshold control is, absent wherever it is not. A
        line that is sometimes missing for a *different* reason teaches the
-       reader nothing, so none of the three may be behind a `note &&`. */
+       reader nothing, so neither of the first two may be behind a `note &&`. */
     expect(glossaryPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
     expect(quotesPanel).toMatch(/<p className="quotes-bar-note">\{note\}<\/p>/);
-    expect(searchPanel).toMatch(/<p className="srch-gate-note">\{note\}<\/p>/);
     for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
       expect(panel).not.toMatch(/\{note && </);
     }
+    /* Search is the exception since 2026-10-03, and by one rule only: no line
+       when the count is zero, because the `N of M` above it already says so
+       (Greg, spya-eqcbay; tests/search-results-get-the-room.test.tsx is the
+       behaviour). The condition is the count, never the string. */
+    expect(searchPanel).toMatch(
+      /\{hiddenCount > 0 && <p className="srch-gate-note">\{note\}<\/p>\}/,
+    );
   });
 
   it("gives each foot line its own noun and the counts from one pass", () => {

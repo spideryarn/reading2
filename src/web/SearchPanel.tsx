@@ -1529,11 +1529,15 @@ function ConfSlider({
         aria-valuetext={`${gate} out of 100, showing ${count} passages`}
         onChange={(e) => onGate(Number.parseInt(e.target.value, 10))}
       />
-      {/* Always, never conditionally: a line that is sometimes absent for a
-          *different* reason teaches the reader nothing, and "Nothing matched"
-          under a slider is otherwise ambiguous between the search finding
-          nothing and the reader having hidden it all. */}
-      <p className="srch-gate-note">{note}</p>
+      {/* Only when the bar is hiding something. It used to be printed always,
+          "Nothing is hidden by this threshold." included; Greg, 2026-10-03
+          (spya-eqcbay): *"We can get rid of that, I think, because the, you
+          know, n of m above kind of answers that."* On a landscape iPad the
+          line was room the results did not have. When something IS hidden the
+          sentence stays, because it is what tells "Nothing matched" from "you
+          hid it all" and names the way back. The other thresholds still print
+          theirs in every state (threshold.ts § hiddenNote). */}
+      {hiddenCount > 0 && <p className="srch-gate-note">{note}</p>}
     </div>
   );
 }
@@ -1743,7 +1747,6 @@ function Results({
       {asksTheServer(matcher) && order === "prioritised" && (
         <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
       )}
-      <Legend matcher={matcher} coloured={switchedOn.length > 1} />
       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
         <ul className="srch-hits">
           {found.map((f) => (
@@ -1797,9 +1800,8 @@ function Place({ at, decorative }: { at: number; decorative?: boolean }) {
   return (
     <span
       className="srch-place"
-      /* The legend's specimen is a picture of the control, not a reading of
-         anything: announcing "30% of the way through the article" there would
-         be a screen reader stating a fact about an article that is not true. */
+      /* Decorative in a row's gutter, where the button round it already says
+         the same number in its own name (`Hit` § about). */
       {...(decorative
         ? { "aria-hidden": true }
         : { role: "img", "aria-label": `${pct}% of the way through the article` })}
@@ -1807,55 +1809,6 @@ function Place({ at, decorative }: { at: number; decorative?: boolean }) {
     >
       <span className="srch-place-fill" />
     </span>
-  );
-}
-
-/**
- * One line under the sort bar saying what the two marks in the gutter are.
- *
- * A legend rather than leaving both to hover, because a hover-only explanation
- * is an explanation nobody on a touchscreen ever sees, and because the reader
- * who most needs to know what a confidence number is is exactly the reader who
- * has not thought to hover it. It is drawn from the same components as the rows
- * themselves, so it cannot drift from what it is describing.
- */
-function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) {
-  return (
-    <p className="srch-legend">
-      {/* Only when there is more than one colour on screen. With a single
-          search on, "which search found it" is a question with one answer, and
-          a legend for it would be explaining a distinction that is not being
-          drawn. */}
-      {coloured && (
-        <span className="srch-legend-item">
-          <span className="srch-swatches" aria-hidden>
-            <i style={{ "--cat-rgb": "var(--cat-0-rgb)" } as React.CSSProperties} />
-            <i style={{ "--cat-rgb": "var(--cat-1-rgb)" } as React.CSSProperties} />
-            <i style={{ "--cat-rgb": "var(--cat-2-rgb)" } as React.CSSProperties} />
-          </span>
-          which search found it
-        </span>
-      )}
-      {asksTheServer(matcher) && (
-        <span className="srch-legend-item">
-          <span className="srch-conf" aria-hidden>
-            62
-          </span>
-          {/* "its own guess" is doing the real work here, and it is in the
-              legend rather than only in the hover card because a reader on a
-              touchscreen rarely opens a hover card — tapping a row navigates,
-              and the card behind the score (`Hit`) is a tap nobody knows to
-              make until they are told there is something there. A caveat only a
-              curious pointer reaches is a caveat most readers do not have.
-              Raised by a GPT Sol review, 2026-08-26. */}
-          how sure the model is — its own guess, not a measurement
-        </span>
-      )}
-      <span className="srch-legend-item">
-        <Place at={0.3} decorative />
-        where in the article
-      </span>
-    </p>
   );
 }
 

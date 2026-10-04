@@ -404,7 +404,7 @@ const SEARCH: BandShape = {
   className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-box", "div.srch-sort", "ul.srch-hits"],
 };
 
 /** Chat with a conversation open, baseline § "Chat mode". */
