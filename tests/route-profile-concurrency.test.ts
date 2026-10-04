@@ -44,6 +44,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { hashProfile, renderProfile } from "../src/profile.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -100,7 +101,13 @@ let profileGate = held<string | null>();
 const payloadFor = (stamp: string) => ({
   /* A real question for the quiz route's old-client bridge. An empty array
      cannot prove the bridge still applies when profileChanged is added. */
-  [stamp]: { ...STAMP, questions: [{ id: "spya-k3m9qt", question: "Why?", referenceAnswer: "Because.", evidence: [] }] },
+  [stamp]: {
+    ...STAMP,
+    /* `panelRunKind` reads the list's own prompt version since plan 261004f
+       (`appendableVersion`), where it used to take `outdated` on trust. */
+    ...(stamp === "glossary" ? { version: GLOSSARY_PROMPT_VERSION } : {}),
+    questions: [{ id: "spya-k3m9qt", question: "Why?", referenceAnswer: "Because.", evidence: [] }],
+  },
   stale: false,
   outdated: false,
   profiled: true,

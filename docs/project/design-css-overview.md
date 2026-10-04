@@ -231,7 +231,7 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
   measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
 
 Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
-*written for you* badge sits beside it, the same size, through `ModeSurface`'s `profile`, and
+profile icon sits beside it, the same size, through `ModeSurface`'s `profile`, and
 `--band-about-room` grows only when one rendered — plan
 [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
 
