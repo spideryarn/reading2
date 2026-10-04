@@ -414,8 +414,8 @@ describe("the reading layer in the spine", () => {
     const css = readFileSync("src/web/styles/spine.css", "utf8");
     const area = /\.spine-read-area\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
     const edge = /\.spine-read-edge\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(area).toMatch(/fill-opacity:\s*0\.22\s*;/);
-    expect(edge).toMatch(/stroke-opacity:\s*0\.8\s*;/);
+    expect(area).toMatch(/fill-opacity:\s*0\.18\s*;/);
+    expect(edge).toMatch(/stroke-opacity:\s*0\.65\s*;/);
   });
 
   it("paints after the parts and under the section fill, the hairlines and the search marks", async () => {

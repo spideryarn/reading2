@@ -12,6 +12,18 @@ Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migrat
 >
 > — Greg, 2026-10-04
 
+Later the same day, after stage 1 was built, he narrowed the first half:
+
+> Ah crap, I'm confusing things and myself. I had forgotten we had that default-ticked box for
+> running some of the main modes (e.g. Summary, Glossary, etc). Let's stick with that, and not run
+> them if it's unticked. The key point I had made that stands is that if we are running them, they
+> should ideally run after & as soon as the article opens, rather than blocking the article load.
+>
+> — Greg, 2026-10-04
+
+Stage 1 already does both: the tick box decides, and the modes are queued as separate jobs at the
+import's publication, so the article opens without waiting for them.
+
 ## What production says (read-only, 2026-10-04)
 
 Every query ran inside `BEGIN READ ONLY` through `.env.prod`. Two owners have articles.

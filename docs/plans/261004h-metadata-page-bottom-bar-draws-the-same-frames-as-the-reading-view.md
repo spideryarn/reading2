@@ -87,9 +87,13 @@ they touch, so the Metadata bar should get slightly narrower, not wider (GPT Sol
 measures, so it cannot overflow silently either way; the browser check looks at 1440, 1024
 (touch) and 390.
 
-## Open question for Greg: quick search on the Metadata page
+## Decided: no quick search on the Metadata page
 
-Not built here; queued as its own entry.
+**A, leave it out.** Greg, 2026-10-04:
+
+> A. I don't have a strong view, this is low priority
+
+The question as it was put:
 
 On the reading view the bar has a search box (a ⚡ on touch screens and narrow windows). You type,
 and after a pause Search's column opens beside the article with the results, your cursor still in

@@ -142,6 +142,9 @@
    out" (Greg, spya-bguwsn). It is the background the other marks sit on, so it
    is fainter than any of them, and the edge is what carries it.
    docs/plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md.
+   That left 0.22 and 0.8; a day later Greg asked for "slightly fainter", and
+   0.18 and 0.65 sit between that and the 0.15 and 0.5 he had passed over.
+   docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
 
    **Half a pixel short of the rail's right side, and `overflow: visible`.** At
    full reach the edge sits on the viewBox's far side, and a 1px stroke centred
@@ -168,13 +171,13 @@
 }
 .spine-read-area {
   fill: var(--read-time);
-  fill-opacity: 0.22;
+  fill-opacity: 0.18;
   stroke: none;
 }
 .spine-read-edge {
   fill: none;
   stroke: var(--read-time);
-  stroke-opacity: 0.8;
+  stroke-opacity: 0.65;
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
 }
