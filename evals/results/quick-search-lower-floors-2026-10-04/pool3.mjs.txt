@@ -11,8 +11,8 @@
    261003f's second judge saw them. Writes pool3-<n>.md (article text: scratch
    only) and pool3-key.json (ids only). */
 import { readFileSync, writeFileSync } from "node:fs";
-import { entries, FIXTURES, sorted, verdict } from "./replay-floors.mjs";
-const OUT = "data/qeval";
+import { entries, FIXTURES, sorted } from "./replay-floors.mjs";
+const OUT = process.env.QOUT ?? "data/qeval";
 let seed = 20261004;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -25,9 +25,11 @@ for (const e of entries) {
   const K = keys.get(e.k) ?? { slug: e.slug, shown: e.k.split("|")[1], es: [], cand: new Set(), judged: new Set(), best: {} };
   keys.set(e.k, K); K.es.push(e);
   for (const r of e.reps) {
-    const s = sorted(r.scores);
+    const s = sorted(r.scores, e.slug);
     const could = [...s.filter(([, p]) => p >= 0.5).slice(0, 20), ...(s[0][1] < 0.7 ? s.filter(([, p]) => p >= 0.35).slice(0, 8) : [])];
-    for (const [id] of could) (verdict(e, id) === "u" ? K.cand : K.judged).add(id);
+    /* Pool membership uses only earlier labels; saved judge 3 answers must
+       not make the pool disappear when regenerated. */
+    for (const [id] of could) (e.v.has(id) ? K.judged : K.cand).add(id);
     for (const [id, p] of s) K.best[id] = Math.max(K.best[id] ?? 0, p);
   }
 }

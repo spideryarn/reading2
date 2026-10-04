@@ -17,7 +17,7 @@
   "bareFixtureFallbackLists": {
    "lists": 38,
    "shown": 137,
-   "right": 84,
+   "right": 85,
    "topRight": 24,
    "nothingRight": 13
   },
@@ -27,7 +27,12 @@
    "request": "0 of 24",
    "absent": "0 of 93"
   },
-  "queriesFlippingMode": "3 of 89"
+  "queriesFlippingMode": "3 of 89",
+  "listSizeSpread": {
+   "queries": 89,
+   "mean": 0.8539325842696629,
+   "max": 7
+  }
  },
  "chosen": {
   "main": 0.65,
@@ -47,7 +52,7 @@
   "bareFixtureFallbackLists": {
    "lists": 38,
    "shown": 204,
-   "right": 111,
+   "right": 112,
    "topRight": 22,
    "nothingRight": 10
   },
@@ -57,7 +62,12 @@
    "request": "22 of 24",
    "absent": "3 of 93"
   },
-  "queriesFlippingMode": "3 of 89"
+  "queriesFlippingMode": "3 of 89",
+  "listSizeSpread": {
+   "queries": 89,
+   "mean": 0.898876404494382,
+   "max": 7
+  }
  },
  "perQuery": [
   {

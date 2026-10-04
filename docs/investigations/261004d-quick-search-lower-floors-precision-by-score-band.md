@@ -21,27 +21,30 @@ and when none reached 0.7, the best 8 at 0.5 or more (the *fallback floor*).
 
 ## The short answer
 
-- **Floor 0.7 → 0.65. Fallback floor 0.5 → 0.4.** Cap unchanged at 8.
+- **Floor 0.7 → 0.65. Fallback floor 0.5 → 0.4.** Caps unchanged: 20 ordinary, 8 fallback.
 - **Why 0.65.** Counted by the score a passage got, on searches that already work: 86% of passages
   at 0.7 or more are right, 62% of those from 0.65 to 0.7, 38% from 0.6 to 0.65, 13% from 0.5 to
-  0.55. 0.65 is the last band where a passage is more likely right than wrong, and that holds on
-  all three kinds of query measured.
+  0.55. The 0.65–0.7 band is majority right in all three query groups. The next band is majority
+  wrong on working and request searches, though bare queries remain 61% right there. This supports
+  0.65 as a common floor under an incremental majority-right criterion, not as a unique optimum.
 - **Why 0.4.** On bare-word searches that find nothing at the floor, passages from 0.4 to 0.5 are
-  right as often (52%) as those from 0.5 to 0.55 (54%), which the fallback already showed. Below
-  0.4 it is 47%, and at 0.3 three more searches for a topic the article does not cover start
+  right about as often (52%) as those from 0.5 to 0.55 (55%), which the fallback already showed.
+  In the 0.35–0.4 band it is 47%, and at 0.3 three more searches for a topic the article does not cover start
   showing a wrong passage.
 - **What a reader sees more of.** A search that already worked: about 11% more passages (6.2 to
   6.9 a search). A question or a request: 38% more (7.5 to 10.4). A bare word: 33% more (5.3 to
   7.1), and 107 of 111 such searches show something, against 99.
 - **How much more noise.** On searches that already work, 84% right against 86%. A fallback list
-  is 54% right against 61%, and its top result is right on 22 of 38 lists against 24. The one
+  is 55% right against 62%, and its top result is right on 22 of 38 lists against 24. The one
   absent topic that already showed wrong passages ("human memory", 1 to 4 of them) now shows 8.
   No absent or near-miss topic that showed nothing starts showing something.
 - **One thing gets worse: 6 of 111 bare-word searches show fewer passages than before.** A search
   whose best paragraph scores 0.65 to 0.7 used to get the fallback's eight; now one or two clear
   the floor and that is the whole list. "Results" (capital R) on Greg's paper goes from 8, 6, 8 to
-  1, 8, 2 over three runs. The same cliff was at 0.7 before; it moved, it did not grow (three of
-  89 queries cross it between runs, before and after). Removing it needs a different rule, below.
+  1, 8, 2 over three runs. Three of 89 queries cross the ordinary floor between runs, before
+  and after, but they are different queries. That does not establish that the cliff did not grow:
+  the mean spread in list size rises from 0.85 to 0.90, with a maximum of 7 in both. Removing the
+  cliff needs a different rule, below.
 - **Precision is measured on three articles, not six.** The text of the other three (Greg's paper
   among them) is in production and not on this machine, so their new passages are unjudged. Sizes
   and counts are all six.
@@ -52,8 +55,11 @@ and when none reached 0.7, the best 8 at 0.5 or more (the *fallback floor*).
 
 Run on 2026-10-04 on the Hetzner box. Scripts are saved as `.txt` beside the results in
 [evals/results/quick-search-lower-floors-2026-10-04/](../../evals/results/quick-search-lower-floors-2026-10-04/);
-to re-run, copy them into a gitignored `data/qeval/` as `.mjs` and run from the repo root
-(`replay-floors`, then `pool3`, the judges, `analyse3`, `replay-floors` again, `chosen`, `shapes`).
+to re-run, copy them into a gitignored `data/qeval/` as `.mjs` and run from the repo root.
+Copy `judged3-*.json` and `pool3-key.json` there too, then run `analyse3`, `replay-floors`,
+`FIXTURES_ONLY=1 node data/qeval/replay-floors.mjs`, `chosen`, and `shapes`. No judge call is needed
+for a replay; `pool3` independently regenerates the blind pool from earlier labels. Set `QOUT` to
+use another scratch directory.
 No article text is in the results: ids, scores, verdicts.
 
 **The scores**, all from the shipped wording, three runs a query:
@@ -65,14 +71,17 @@ No article text is in the results: ids, scores, verdicts.
 | request | 8 | 24 | 261003f | the same intents typed as a question |
 | absent | 31 | 93 | both | topics the article does not cover: 6 from 261003c, 5 and 20 near-misses from 261003f |
 
-**The rule replayed**: keep what scores M or more, best 20; if nothing does, keep what scores F or
-more, best 8. M over 0.7, 0.65, 0.6, 0.55, 0.5; F over 0.5, 0.45, 0.4, 0.35, 0.3.
+**The rule replayed**: inclusive floors, best first, keep what scores M or more, best 20; if nothing
+does, keep what scores F or more, best 8. M over 0.7, 0.65, 0.6, 0.55, 0.5; F over 0.5, 0.45,
+0.4, 0.35, 0.3. Review corrected ties to article order on fixtures and matched `hitsFrom` on all
+246 fixture runs (`audit-replay.mjs`, run with `node --import tsx`). The other three articles'
+order is not saved: their tied identities and top results remain unverified. Review regenerated the text-free summaries after this correction.
 
-**Judging.** The earlier labels (a thorough search's hits, and two blind judges) cover what the old
-floors showed. For everything a lower floor could newly show on the three fixture articles, a third
-blind judge: 254 unjudged (query, paragraph) pairs, 86 already-judged ones to measure agreement, and
-97 decoys that never scored above 0.3. Five Opus subagents, one file each, shown the query, each
-paragraph with its section heading, no score, article order, cut at 1,500 characters, asked *would a
+**Judging.** The earlier labels (a thorough search's hits, and two blind judges) cover part of the
+old lists. A third blind judge fills both old-list gaps and newly exposed passages on the three
+fixtures, for main floors ≥0.5 and fallback floors ≥0.35: 254 unjudged (query, paragraph) pairs,
+86 already-judged ones to measure agreement, and 97 decoys that never scored above 0.3. Five Opus
+subagents, one file each, shown the query, each paragraph with its section heading, no score, article order, cut at 1,500 characters, asked *would a
 reader who typed this be glad to be shown this paragraph?* and told to choose no when torn. This is
 261003f's second judge's set-up.
 
@@ -83,13 +92,15 @@ reader who typed this be glad to be shown this paragraph?* and told to choose no
 | earlier yes, now no / earlier no, now yes | 8 / 8 |
 | decoys marked right | 0 of 97 |
 
-The disagreements are even, so the new judge is neither stricter nor looser than the old labels.
+The disagreements are even on these 86 overlaps: no net change in yes labels on that sample.
+This does not establish equal strictness on the newly judged pairs.
 
 ## Results
 
 ### Right, by score band (`summary3.json`; three fixtures, every pair judged)
 
-Each (search, passage) counted once. "Any run" is what a floor of that band would add to a search.
+Each (search, passage) counted once per run; the same query/passage can count in all three repeats.
+"Any run" uses the best 20 at ≥0.5; the fallback bands use the best 8 at ≥0.35 on runs empty at 0.7.
 
 | score | working | request | bare |
 |---|---|---|---|
@@ -100,7 +111,7 @@ Each (search, passage) counted once. "Any run" is what a floor of that band woul
 | 0.5 to 0.55 | 9 of 69, 13% | 7 of 22, 32% | 75 of 161, 47% |
 
 On working and request searches the drop is between 0.65 and 0.6. Bare words fall off more slowly,
-which is why they get the fallback and the others do not.
+so a common floor cannot follow the bare-query bands alone.
 
 The fallback's own bands: bare searches with nothing at 0.7, their best 8.
 
@@ -109,7 +120,7 @@ The fallback's own bands: bare searches with nothing at 0.7, their best 8.
 | 0.65 to 0.7 | 7 of 8, 88% |
 | 0.6 to 0.65 | 18 of 23, 78% |
 | 0.55 to 0.6 | 19 of 32, 59% |
-| 0.5 to 0.55 | 40 of 74, 54% |
+| 0.5 to 0.55 | 41 of 74, 55% |
 | 0.45 to 0.5 | 26 of 61, 43% |
 | 0.4 to 0.45 | 29 of 45, 64% |
 | 0.35 to 0.4 | 26 of 55, 47% |
@@ -130,24 +141,27 @@ Passages a search, and searches showing something.
 | 0.6 | 0.4 | 7.45 | 13.04 | 7.51 | 107 | 4 (18) |
 | 0.5 | 0.4 | 8.48 | 15.63 | 8.96 | 107 | 4 (9) |
 
-The same rows on the three fixtures, where everything shown is judged (`replay-floors-fixtures.json`):
+The same selected rows on the three fixtures (`replay-floors-fixtures.json`). Coverage is complete
+at fallback ≥0.35. At fallback 0.3, three occurrences on OpenAI's "war" query remain unjudged.
 
 | floor | fallback | working right | request right | bare right | bare lists with nothing right |
 |---|---|---|---|---|---|
-| 0.7 | 0.5 (before) | 473 of 547, 86% | 65 of 110, 59% | 161 of 267, 60% | 14 |
-| **0.65** | **0.4** | **517 of 618, 84%** | **93 of 160, 58%** | **212 of 378, 56%** | **11** |
+| 0.7 | 0.5 (before) | 473 of 547, 86% | 65 of 110, 59% | 162 of 267, 61% | 14 |
+| **0.65** | **0.4** | **517 of 618, 84%** | **93 of 160, 58%** | **213 of 378, 56%** | **11** |
 | 0.6 | 0.4 | 542 of 684, 79% | 102 of 204, 50% | 210 of 391, 54% | 10 |
 | 0.5 | 0.4 | 569 of 819, 69% | 112 of 255, 44% | 255 of 494, 52% | 16 |
 
 A floor of 0.6 adds 66 passages to working searches of which 41 are wrong, and takes requests to
-half wrong. That is the line not crossed.
+half wrong. That is the incremental line not crossed. Its cumulative additions against 0.7
+are still 69 right of 137 (50.4%) on working searches; "adds more right than wrong" alone would
+therefore not uniquely select 0.65.
 
 ### The absent topics (`chosen.json`)
 
 Four of 93 searches show something, before and after: "human memory" on Greg's paper on all three
 runs, "government regulation" on one. "human memory" showed 4, 1 and 3 wrong passages and now shows
-8, 8 and 8. Nothing else changes until the fallback floor reaches 0.3, where three more searches
-show a wrong passage.
+8, 8 and 8. At main 0.65, nothing else changes until the fallback floor reaches 0.3, where three more
+absent-topic searches show a wrong passage.
 
 ### The cliff (`shapes.json`)
 
@@ -193,5 +207,7 @@ its score (a quick hit is drawn *bare* since 261003i). Nothing here changes how 
 - One new judge, one pass, Opus, the same family as the earlier judges. 81% agreement with the
   earlier labels on 86 pairs.
 - "More likely right than wrong" was chosen as the line after the bands were read, not before.
+  Repeated runs and aliased queries reuse labels; band totals are not independent judgements.
+  The 52% versus 47% fallback bands do not establish a statistically reliable boundary at 0.4.
 - Request verdicts are their base query's: "where does it give examples?" is judged as "examples".
 - The scores are yesterday's. Nothing was re-run against Jev today.

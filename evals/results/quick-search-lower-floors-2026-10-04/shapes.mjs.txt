@@ -27,7 +27,7 @@ const rows = [];
 for (const [name, rule] of Object.entries(RULES)) for (const group of ["working", "bare", "request", "absent"]) {
   const t = { n: 0, show: 0, shown: 0, shrunk: 0, lost: 0, grew: 0, fy: 0, fn: 0, fu: 0, fshown: 0 };
   for (const e of entries.filter((x) => x.group === group)) for (const r of e.reps) {
-    const s = sorted(r.scores); const a = today(s).map(([id]) => id); const b = rule(s).map(([id]) => id);
+    const s = sorted(r.scores, e.slug); const a = today(s).map(([id]) => id); const b = rule(s).map(([id]) => id);
     t.n++; if (b.length) t.show++; t.shown += b.length;
     if (b.length < a.length) t.shrunk++; if (b.length > a.length) t.grew++;
     t.lost += a.filter((id) => !b.includes(id)).length;

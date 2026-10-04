@@ -198,12 +198,13 @@ from that shape:
   >
   > — Greg, 2026-10-04
 
-  Every passage a lower floor would show on the three fixture articles was judged blind, and
+  Every passage the chosen lower floors would show on the three fixture articles was judged blind, and
   counted by score band. On phrase, question and topic searches 86% of what scores 0.7 or more is
-  right, 62% of 0.65 to 0.7, 38% of 0.6 to 0.65 and 13% of 0.5 to 0.55: **0.65 is the last band
-  where a passage is more likely right than wrong**, on all three kinds of query measured. A
-  search that already worked shows about 11% more. For the fallback, 0.4 to 0.5 is right as often
-  (52%) as the 0.5 to 0.55 it already showed (54%), and 107 of 111 bare-word searches now show
+  right, 62% of 0.65 to 0.7, 38% of 0.6 to 0.65 and 13% of 0.5 to 0.55:
+  **the 0.65–0.7 band is majority right in all three query groups**. The next lower band is
+  majority wrong on working and request searches; bare queries remain 61% right there. A
+  search that already worked shows about 11% more. For the fallback, 0.4 to 0.5 is right about as
+  often (52%) as the 0.5 to 0.55 it already showed (55%), and 107 of 111 bare-word searches now show
   something, against 99. What it costs: a fallback list is about half right (it was about 6 in
   10); the one absent topic that already showed wrong paragraphs ("human memory") now shows eight
   of them; and **6 of 111 bare-word searches show fewer than before**, because a search whose

@@ -22,10 +22,10 @@
   "lists shorter than today": 0,
   "longer": 0,
   "passages today shows that this drops": 0,
-  "fixtures: right": 161,
-  "wrong": 106,
+  "fixtures: right": 162,
+  "wrong": 105,
   "unjudged": 0,
-  "% right": 60
+  "% right": 61
  },
  {
   "rule": "today: 0.7, empty -> 0.5 best 8",
@@ -78,8 +78,8 @@
   "lists shorter than today": 6,
   "longer": 81,
   "passages today shows that this drops": 38,
-  "fixtures: right": 212,
-  "wrong": 166,
+  "fixtures: right": 213,
+  "wrong": 165,
   "unjudged": 0,
   "% right": 56
  },
@@ -134,8 +134,8 @@
   "lists shorter than today": 0,
   "longer": 46,
   "passages today shows that this drops": 0,
-  "fixtures: right": 216,
-  "wrong": 157,
+  "fixtures: right": 217,
+  "wrong": 156,
   "unjudged": 0,
   "% right": 58
  },
@@ -190,8 +190,8 @@
   "lists shorter than today": 0,
   "longer": 39,
   "passages today shows that this drops": 0,
-  "fixtures: right": 207,
-  "wrong": 143,
+  "fixtures: right": 208,
+  "wrong": 142,
   "unjudged": 0,
   "% right": 59
  },
@@ -246,10 +246,10 @@
   "lists shorter than today": 0,
   "longer": 88,
   "passages today shows that this drops": 0,
-  "fixtures: right": 262,
-  "wrong": 194,
+  "fixtures: right": 263,
+  "wrong": 193,
   "unjudged": 9,
-  "% right": 57
+  "% right": 58
  },
  {
   "rule": "D: 0.65, fewer than 8 -> best 8 at 0.4",
@@ -302,10 +302,10 @@
   "lists shorter than today": 1,
   "longer": 88,
   "passages today shows that this drops": 5,
-  "fixtures: right": 240,
-  "wrong": 179,
+  "fixtures: right": 241,
+  "wrong": 178,
   "unjudged": 3,
-  "% right": 57
+  "% right": 58
  },
  {
   "rule": "E: 0.65, fewer than 3 -> best 8 at 0.4",
@@ -358,8 +358,8 @@
   "lists shorter than today": 1,
   "longer": 39,
   "passages today shows that this drops": 5,
-  "fixtures: right": 185,
-  "wrong": 128,
+  "fixtures: right": 186,
+  "wrong": 127,
   "unjudged": 0,
   "% right": 59
  },
@@ -470,8 +470,8 @@
   "lists shorter than today": 27,
   "longer": 47,
   "passages today shows that this drops": 89,
-  "fixtures: right": 146,
-  "wrong": 111,
+  "fixtures: right": 147,
+  "wrong": 110,
   "unjudged": 0,
   "% right": 57
  },

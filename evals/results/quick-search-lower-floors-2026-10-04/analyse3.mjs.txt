@@ -13,7 +13,7 @@ let missing = 0, extra = 0, bad = 0;
 for (const [k, v] of Object.entries(key)) for (const id of [...v.candidates, ...v.overlap, ...v.decoys]) { const a = got[k]?.[id]; if (a === undefined) missing++; else if (a !== "y" && a !== "n") bad++; }
 for (const [k, v] of Object.entries(got)) { const want = new Set(key[k] ? [...key[k].candidates, ...key[k].overlap, ...key[k].decoys] : []); for (const id of Object.keys(v)) if (!want.has(id)) extra++; }
 console.log(`verdicts: missing ${missing}, not y/n ${bad}, not asked for ${extra}`);
-if (missing || bad) throw new Error("the judge's files do not cover the pool");
+if (missing || bad || extra) throw new Error("the judge's files do not cover the pool");
 
 /* judged3.json: the candidates only. Overlap and decoys are checks, not labels. */
 const j3 = {};
@@ -37,7 +37,7 @@ for (const group of ["working", "bare", "request"]) for (const mode of ["any run
   if (mode === "any run" && lo < 0.5) continue;
   let y = 0, n = 0, u = 0;
   for (const e of entries.filter((x) => x.group === group && FIXTURES.includes(x.slug))) for (const r of e.reps) {
-    const s = sorted(r.scores); const fb = s[0][1] < 0.7;
+    const s = sorted(r.scores, e.slug); const fb = s[0][1] < 0.7;
     if (mode !== "any run" && !fb) continue;
     const list = mode === "any run" ? s.filter(([, p]) => p >= 0.5).slice(0, 20) : s.filter(([, p]) => p >= 0.35).slice(0, 8);
     for (const [id, p] of list) if (p >= lo && p < hi) { const v = verdict(e, id); if (v === "y") y++; else if (v === "n") n++; else u++; }

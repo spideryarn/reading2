@@ -33,8 +33,25 @@ for (const e of raw2) {
 }
 /* judged3 is keyed like the earlier files: by `e.k` (a variant shares its base's verdicts). */
 export const verdict = (e, id) => e.v.get(id) ?? j3[e.k]?.[id] ?? (e.group === "absent" ? "n" : "u");
-export const sorted = (scores) => Object.entries(scores).sort((a, b) => b[1] - a[1]);
-export const rule = (M, F, C) => (s) => { const k = s.filter(([, p]) => p >= M).slice(0, 20); return k.length ? { ids: k, fb: false } : { ids: s.filter(([, p]) => p >= F).slice(0, C), fb: true }; };
+/* hitsFrom breaks score ties in article order, not provider JSON key order.
+   The three production-only articles have no saved order here; their replay
+   retains JSON order, so their tied identities/top result are not verified. */
+const articleOrders = new Map(FIXTURES.map((slug) => {
+  const b = J(`tests/fixtures/data-root/data/${slug}/blocks.json`);
+  return [slug, new Map((Array.isArray(b) ? b : b.blocks).map((bl, i) => [bl.id, i]))];
+}));
+export const sorted = (scores, slug) => {
+  const order = articleOrders.get(slug);
+  const pairs = Object.entries(scores);
+  if (order && pairs.some(([id]) => !order.has(id))) throw new Error(`${slug}: score id missing from fixture`);
+  return pairs.sort((a, b) => b[1] - a[1] || (order ? order.get(a[0]) - order.get(b[0]) : 0));
+};
+export const rule = (M, F, C) => (s) => {
+  const k = s.filter(([, p]) => p >= M).slice(0, 20);
+  if (k.length) return { ids: k, fb: false };
+  const ids = s.filter(([, p]) => p >= F).slice(0, C);
+  return { ids, fb: ids.length > 0 };
+};
 
 if (process.argv[1].endsWith("replay-floors.mjs")) {
   const GRID = [];
@@ -44,7 +61,7 @@ if (process.argv[1].endsWith("replay-floors.mjs")) {
   for (const [M, F, C] of GRID) for (const group of ["working", "bare", "request", "absent"]) {
     const t = { searches: 0, show: 0, shown: 0, y: 0, n: 0, u: 0, noneRight: 0, top1y: 0, top1n: 0, top1u: 0, fb: 0, lowBand: 0 };
     for (const e of entries.filter((x) => x.group === group && only(x))) for (const r of e.reps) {
-      const { ids, fb } = rule(M, F, C)(sorted(r.scores));
+      const { ids, fb } = rule(M, F, C)(sorted(r.scores, e.slug));
       t.searches++; if (!ids.length) continue;
       t.show++; if (fb) t.fb++; t.shown += ids.length;
       const vs = ids.map(([id]) => verdict(e, id));

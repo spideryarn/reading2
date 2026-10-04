@@ -173,7 +173,7 @@ describe("turning probabilities into hits", () => {
     expect(fallback).toBe(true);
   });
 
-  it("keeps the lower floor under the floor, so the fallback can only add", () => {
+  it("keeps the fallback floor below the ordinary floor", () => {
     expect(QUICK_FALLBACK_FLOOR).toBeLessThan(QUICK_FLOOR);
   });
 

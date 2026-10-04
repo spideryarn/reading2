@@ -28,17 +28,19 @@ Nothing else: the same rule, the same cap, no change to how a hit is drawn.
 Chosen by counting how often a passage is right at each score, judged blind on three articles.
 
 - **0.65**: from 0.65 to 0.7 a passage is right 62% of the time on a search that already works;
-  from 0.6 to 0.65, 38%. So 0.65 is the lowest floor that adds more right than wrong.
-- **0.4**: on a bare word that finds nothing at the floor, 0.4 to 0.5 is right as often (52%) as
-  the 0.5 to 0.55 the fallback already showed (54%). Under 0.4 it is 47%, and at 0.3 topics the
-  article does not cover start showing wrong passages.
+  from 0.6 to 0.65, 38%. The next step adds more wrong than right on working and request searches;
+  bare queries remain 61% right in that lower band. This is an incremental criterion, not proof
+  that 0.65 is the only defensible floor.
+- **0.4**: on a bare word that finds nothing at the floor, 0.4 to 0.5 is right about as often
+  (52%) as the 0.5 to 0.55 the fallback already showed (55%). In the 0.35–0.4 band it is 47%, and at 0.3
+  topics the article does not cover start showing wrong passages.
 
 ## What a reader sees
 
 - More: about 11% more passages on a search that already worked, 38% more on a question, 33% more
   on a bare word. 107 of 111 bare-word searches show something, against 99.
-- More noise: 84% right against 86% on searches that already work. A fallback list is 54% right
-  against 61%. "human memory" on a paper about a network forgetting shows 8 wrong passages
+- More noise: 84% right against 86% on searches that already work. A fallback list is 55% right
+  against 62%. "human memory" on a paper about a network forgetting shows 8 wrong passages
   against 1 to 4.
 - **Fewer, on 6 of 111 bare-word searches** (see Q1).
 - A weaker result still reads as weaker by its printed score and its place, and the *Prioritised*
@@ -55,7 +57,7 @@ One stage.
 
 1. Red first in `tests/quick-search.test.ts`: the floor is 0.65 inclusive (0.65 kept, 0.6499
    dropped when another clears it); the fallback floor is 0.4 inclusive (0.4 kept, 0.3999 not);
-   nothing at 0.4 gives nothing; the fallback floor is under the floor.
+   nothing reaching 0.4 gives nothing; the fallback floor is under the floor.
 2. The two constants, with the measurement in their comments.
 3. `docs/project/search.md` § Quick search.
 4. Gates: this test file, `npm test`, `npm run typecheck`, lint on touched files.
@@ -100,3 +102,12 @@ fallback list is now about half right.
 
 - 2026-10-04: measured by replaying the saved scores (no Jev call, $0) and a third blind judge on
   the three fixture articles. Constants changed red first.
+- 2026-10-04: GPT Sol's code review
+  ([prompt](261004k-quick-search-lower-floors-code-review-prompt.md),
+  [answer](261004k-quick-search-lower-floors-code-review-sol.md)): **land**, no P0 or P1, and it
+  would choose the same two numbers. It recomputed the headline numbers and they matched. Three
+  P2, fixed by the reviewer: the replay broke ties in JSON order, not the article's (one capped
+  list differed; fallback lists are 62% and 55% right, not 61% and 54%); re-running the pool
+  script after judging emptied the pool; and "the last band more likely right than wrong" was
+  stronger than the evidence, since bare words are still 61% right from 0.6 to 0.65. Three P3 in
+  the wording, also fixed, including "the cliff did not grow", which the data does not show.

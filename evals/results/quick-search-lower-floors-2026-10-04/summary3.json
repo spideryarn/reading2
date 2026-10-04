@@ -209,10 +209,10 @@
    "group": "bare",
    "mode": "runs with nothing at 0.7 (best 8)",
    "band": "0.5 to 0.55",
-   "right": 40,
-   "wrong": 34,
+   "right": 41,
+   "wrong": 33,
    "unjudged": 0,
-   "% right": 54
+   "% right": 55
   },
   {
    "group": "bare",
