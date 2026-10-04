@@ -345,7 +345,10 @@ got a suppression, three listed a value that cannot change and lost it, and none
 promise that cannot reject and that nothing may wait on, such as `leavingFetch` on the way out of a
 page.
 
-**The red control for these two cannot use the repo's config.** A file outside the repo, linted with
+**The red controls use scratch copies of the repo's settings.** A file outside the repo, linted with
 `--config-path` pointing at `biome.jsonc`, is ignored: *"Checked 0 files"*, exit 1. And
-`noFloatingPromises` does not fire on stdin at all. So the test writes its violating file and a
-one-rule config into a scratch directory. The test's header says what that does and does not prove.
+`noFloatingPromises` does not fire on stdin at all. So the test copies `biome.jsonc`, `.gitignore`
+and `package.json` into a scratch directory, then writes its violating file under `tests/`.
+Both ordinary lint and the gate command must flag it by name and exit 1. That holds the configured
+severity as well as rule discovery: with `noFloatingPromises` switched off, `--only=` still reports
+it at info and exits 0.

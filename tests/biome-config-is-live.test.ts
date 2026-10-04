@@ -53,7 +53,7 @@
  * a claim about behaviour rather than about a file existing.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -199,11 +199,12 @@ describe("the check can tell a live config from a missing one", () => {
  * takes 26 minutes and `npm test` is what an agent actually runs, so the same
  * two questions are asked here (docs/plans/261004d, § A3).
  *
- * Each rule gets two tests, because zero findings is also what a rule that did
+ * Each rule gets controls, because zero findings is also what a rule that did
  * not run reports:
  *
  *  - the whole tree is clean, **and** Biome says it checked thousands of files;
- *  - a file that breaks the rule is flagged, by the rule's name.
+ *  - a file that breaks the rule is flagged, by name, and fails both the gate
+ *    command and ordinary lint under the repo's settings.
  *
  * ## Where the red control lives, and what it cannot show
  *
@@ -217,11 +218,12 @@ describe("the check can tell a live config from a missing one", () => {
  *    as the root and ignores every path outside it: *"Checked 0 files"*, exit 1
  *    for a reason that has nothing to do with the rule. Measured 2026-10-04.
  *
- * So the scratch directory carries a config of its own that sets the one rule
- * to `error`. That proves the pinned binary still has a rule of this name and
- * that the rule still sees this shape of mistake. It does **not** prove the
- * repo's config has the rule switched on; the whole-tree test does not need it
- * to, because `--only=` runs the named rule whatever the config says.
+ * Instead the scratch directory carries verbatim copies of `biome.jsonc`,
+ * `.gitignore` (needed by its VCS settings) and `package.json` (needed for
+ * React-domain rule discovery). The probe lives under `tests/`, in the config's
+ * allowlist. Ordinary lint proves the repo enables the rule; the gate command
+ * proves its severity still makes the command fail. `--only=` alone does not
+ * prove that: a configured-off nursery rule fires at info and exits 0.
  */
 const TREE_RULES = [
   {
@@ -267,9 +269,18 @@ afterAll(() => {
   for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
 });
 
-describe.each(TREE_RULES)("$rule is a gate", ({ script, rule, file, breaks }) => {
-  const [group = "", name = ""] = rule.split("/");
+function gateProbe(file: string, source: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "biome-gate-"));
+  scratchDirs.push(dir);
+  for (const config of ["biome.jsonc", ".gitignore", "package.json"]) {
+    copyFileSync(path.join(ROOT, config), path.join(dir, config));
+  }
+  mkdirSync(path.join(dir, "tests"));
+  writeFileSync(path.join(dir, "tests", file), source);
+  return dir;
+}
 
+describe.each(TREE_RULES)("$rule is a gate", ({ script, rule, file, breaks }) => {
   it("is the command package.json runs", () => {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
@@ -293,16 +304,11 @@ describe.each(TREE_RULES)("$rule is a gate", ({ script, rule, file, breaks }) =>
     );
   });
 
-  it("flags a file that breaks it, by name", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "biome-gate-"));
-    scratchDirs.push(dir);
-    writeFileSync(path.join(dir, file), breaks);
-    writeFileSync(
-      path.join(dir, "biome.jsonc"),
-      JSON.stringify({ linter: { enabled: true, rules: { [group]: { [name]: "error" } } } }),
-    );
-
-    const { out, code } = biome(["lint", `--only=${rule}`, "--max-diagnostics=none", "."], dir);
+  it.each(["gate", "ordinary lint"])("flags a file that breaks it, by name, with %s", (mode) => {
+    const dir = gateProbe(file, breaks);
+    const args = ["lint", "--max-diagnostics=none", `tests/${file}`];
+    if (mode === "gate") args.push(`--only=${rule}`);
+    const { out, code } = biome(args, dir);
 
     /* The name first: exit 1 is also what a bad config and "no files were
        processed" produce, so the exit code alone would pass for those. */

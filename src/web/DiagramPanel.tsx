@@ -388,8 +388,8 @@ const NEEDS_GRAPH = new Set<DiagramKind>(["force"]);
  * The collapse set, which is empty and stays empty — see `collapsed` in the
  * panel for why, and why it is a constant rather than a deletion.
  *
- * Module-level so it is one object for the life of the page: it is a dependency
- * of the `graph` and `layout` memos, and a fresh `new Set()` per render would
+ * Module-level so it is one object for the life of the page: it is used inside
+ * the `graph` and `layout` memos, and a fresh `new Set()` dependency per render would
  * make both of them miss on every render — which on Force is a 300-tick physics
  * simulation.
  */
@@ -912,8 +912,8 @@ export function DiagramPanel({
     // until a new answer lands — so this rebuilds exactly twice per article:
     // once immediately without the embeddings, once when they arrive.
     //
-    // `collapsed` is not listed: it is a module constant (see its declaration),
-    // so it cannot change. A picture that makes it state again must add it here.
+    // `collapsed` is not listed: it aliases the module constant NOTHING_COLLAPSED,
+    // so its identity cannot change. A picture that makes it state again must add it here.
     [root, wantsGraph, blocks, similar.pairs],
   );
 

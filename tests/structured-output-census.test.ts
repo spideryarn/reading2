@@ -1,6 +1,6 @@
 /**
- * Every file under `src/` that parses a model's JSON answer must also put a
- * schema on a request, or be on a short list with a reason beside it.
+ * Every file under `src/` with a directly named `parseJsonAnswer` call must
+ * also put a schema on a request, or be on a short list with a reason beside it.
  *
  * ## The rule
  *
@@ -12,7 +12,7 @@
  *
  * ## What it checks
  *
- * It is a **file-level** census. A file that *calls* `parseJsonAnswer` must
+ * It is a **file-level** census. A file that directly *calls* `parseJsonAnswer` must
  * also *call* one of the two functions that attach a schema to a request,
  * `withMessagesJsonSchema` or `withChatJsonSchema`, or be named in `EXCEPTIONS`.
  *
@@ -34,6 +34,9 @@
  *   looked for.
  * - **A parser reused from another file.** A file that hands its answer to
  *   another module's parsing function calls nothing this scan knows.
+ * - **Local aliases or dynamic method names.** It follows directly named
+ *   calls (including TypeScript wrappers and static string properties), not
+ *   dataflow through `const read = parseJsonAnswer; read(text)` or `json[key]`.
  * - **A decorator whose result is not the body sent.** The scan sees the call,
  *   not where its return value goes.
  *
@@ -64,7 +67,7 @@ const EXCEPTIONS: Record<string, string> = {
   "src/citation-find.ts":
     "Web search runs on the same call. Nobody has measured that with a schema, and the search annotations are a security witness.",
   "src/labels.ts":
-    "Its answer is tuples, which a schema cannot express. It needs a change of answer shape and a quality check first; it already re-asks on a malformed pair.",
+    "Its answer is tuples, which the provider's supported schema subset cannot express. It needs a change of answer shape and a quality check first; it already re-asks on a malformed pair.",
   "src/structure-expand.ts":
     "The deepening wave is off by default, so this request is not made in an ordinary run.",
 };
@@ -90,12 +93,23 @@ const nameOf = (n: unknown): string | null => {
 
 const WATCHED = new Set<string>([PARSER, ...DECORATORS]);
 
-/** The name a call node calls, for `f()` and `x.f()` alike; `null` otherwise. */
+/** TypeScript wrappers change a value's type, not which function is called. */
+function unwrapped(n: AstNode | undefined): AstNode | undefined {
+  while (n && ["TSAsExpression", "TSTypeAssertion", "TSNonNullExpression", "TSSatisfiesExpression"].includes(String(n.type))) {
+    n = n.expression as AstNode | undefined;
+  }
+  return n;
+}
+
+/** The directly named function or static member a call invokes; `null` otherwise. */
 function calledName(n: AstNode): string | null {
   if (n.type !== "CallExpression" && n.type !== "OptionalCallExpression") return null;
-  const callee = n.callee as AstNode | undefined;
+  const callee = unwrapped(n.callee as AstNode | undefined);
   const member = callee?.type === "MemberExpression" || callee?.type === "OptionalMemberExpression";
-  return member ? nameOf(callee?.property) : nameOf(callee);
+  if (!member) return nameOf(callee);
+  if (!callee?.computed) return nameOf(callee?.property);
+  const property = unwrapped(callee.property as AstNode | undefined);
+  return property?.type === "StringLiteral" && typeof property.value === "string" ? property.value : null;
 }
 
 /**
@@ -116,7 +130,7 @@ function renamedName(n: AstNode): string | null {
 function scanSource(text: string): Use {
   const use: Use = { parses: false, decorators: [], renamed: [] };
   /* Parsing every file under src/ costs seconds; a file that never spells one
-     of the three names cannot call it. */
+     of the three names has no directly named call for this scan to find. */
   if (![...WATCHED].some((name) => text.includes(name))) return use;
 
   walkAst(parseSource(text).program, (n: AstNode) => {
@@ -207,6 +221,31 @@ describe("the scan itself", () => {
     expect(problems).toEqual([
       "src/bare.ts calls parseJsonAnswer and attaches no schema to a request (withMessagesJsonSchema or withChatJsonSchema)",
     ]);
+  });
+
+  it.each([
+    '(parseJsonAnswer as typeof parseJsonAnswer)(text)',
+    'parseJsonAnswer!(text)',
+    '(parseJsonAnswer satisfies typeof parseJsonAnswer)(text)',
+    'json["parseJsonAnswer"](text)',
+    'json?.["parseJsonAnswer"]?.(text)',
+  ])("fails a bare parser call through %s", (call) => {
+    const { callers, problems } = census([
+      { path: "src/wrapped.ts", text: `export const read = (text: string) => ${call};` },
+    ], {});
+    expect(callers).toEqual({ "src/wrapped.ts": [] });
+    expect(problems).toEqual([
+      "src/wrapped.ts calls parseJsonAnswer and attaches no schema to a request (withMessagesJsonSchema or withChatJsonSchema)",
+    ]);
+  });
+
+  it("does not treat a computed variable's name as the method it selects", () => {
+    const text = `
+      const parseJsonAnswer = "otherMethod";
+      const json = { otherMethod: (text: string) => text };
+      export const read = (text: string) => json[parseJsonAnswer](text);
+    `;
+    expect(census([{ path: "src/computed.ts", text }], {})).toEqual({ callers: {}, problems: [] });
   });
 
   it("fails a file that only validates a schema, which attaches nothing", () => {

@@ -59,8 +59,8 @@ That single fact is why the list below is so short, and why two obvious names ar
 | **Biome `noExcessiveCognitiveComplexity`** (`npm run complexity`) | functions worth a second look | advisory |
 | **[jscpd](https://github.com/kucherenko/jscpd) 5.0.16** (`npm run dupes`) | copy-paste | advisory |
 
-Only Knip and jscpd are new dependencies. The Biome rules were already inside the Biome we had
-installed, the first two of them switched off — which is worth remembering next time a tool is proposed: **mine the tool
+Only Knip and jscpd are new dependencies. Cycles and cognitive complexity were already inside the
+Biome we had installed, switched off when adopted — which is worth remembering next time a tool is proposed: **mine the tool
 you already have before adding one.**
 
 ### Knip is the project-wide layer, and only that
@@ -87,8 +87,10 @@ dead.
 they are research CLIs run by hand, so nothing imports them and Knip reported all fifteen as unused
 files. The entry is those two folders and not `scripts/**/*.ts`, because an entry is never reported
 as unused, and that glob would hide a helper module under `scripts/` that had really gone dead.
-Knip's unused-files list is now three root config files (`vite.api.config.ts`,
-`vite.fleet.config.ts`, `vitest.witness.config.ts`), which are in use and not yet explained to it.
+`vitest.witness.config.ts` is also an entry: it is passed to a spawned Vitest command that Knip
+cannot follow. A full Knip run now reports no unused files. `knip --include files` still reports
+`vite.api.config.ts` and `vite.fleet.config.ts`; [knip.jsonc](../../knip.jsonc) records the mode
+difference. The other categories still have findings, so Knip remains advisory.
 
 ### Knip does not need a build
 
