@@ -1,0 +1,72 @@
+The plan still needs rework. F3, F6, F7, and F8 are resolved; F1 is resolved in product shape; F2, F4, and F5 remain incomplete. A dedicated POST route is the simplest architecture, but it needs an attempt fence and a complete client lifecycle.
+
+## Round-one findings
+
+**F1 — P1 — resolved in design — established.**  
+The plan now records the first press in `hint_opened_at`, persists it across reloads, exposes it in types/store/export, and includes an event-time test ([plan:64](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:64>), [plan:150](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:150>)). F9–F11 below identify implementation gaps, but the original “record it now” decision is taken.
+
+**F2 — P1 — not fully resolved — reasoned from established retry semantics.**  
+Keying React state by `id + createdAt` and explicitly nulling the database column on retry fixes the ordinary stale-state case ([plan:68](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:68>)). It does not fix a delayed-write race:
+
+1. The reader opens the old hint and the POST starts.
+2. Retry reuses the same message ID and clears `hint_opened_at`.
+3. The delayed POST then executes `coalesce(null, now())`.
+4. The replacement answer is recorded as opened and reloads open.
+
+This is the same class the existing chat attempt fence exists to prevent: a retry intentionally reuses the message ID, so identity alone cannot distinguish attempts ([schema.ts:3851](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/db/schema.ts:3851>), [pg-chat.ts:522](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:522>)). The route must atomically compare an expected generation, probably the answer’s authoritative `created_at`. The current begin frame sends IDs and the transient attempt token, but not server `createdAt` ([routes.ts:3300](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/routes.ts:3300>)); the transient token is nulled at finish ([pg-chat.ts:480](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:480>)). The plan therefore needs to specify how the client receives and submits a durable attempt generation.
+
+**F3 — P1 — resolved — established.**  
+Splitting in `Turn` makes drawing and copying share the same interpretation, and the plan explicitly copies the hint only while open ([plan:59](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:59>), [plan:71](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:71>)).
+
+**F4 — P1 — partly resolved — established.**  
+`answerAsSeen` is the correct projection, and keeping raw text for Recall history and export is deliberate ([plan:78](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:78>)). The build instructions do not yet carry `kind` through every Live path:
+
+- Realtime calls `liveSeedItems(thread.messages)` while the route already has `thread.kind` ([routes.ts:3887](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/routes.ts:3887>), [routes.ts:3953](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/routes.ts:3953>)).
+- GPT-Live independently calls `liveSeedItems(history)` through `gptLiveSeedInput`, whose API has no thread kind ([live-gpt.ts:444](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/live-gpt.ts:444>), [live-gpt.ts:518](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/live-gpt.ts:518>), [routes.ts:4015](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/routes.ts:4015>)).
+- `reader_notes` does have the whole thread and can pass `thread.kind` when formatting each exchange ([reader-notes.ts:453](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/reader-notes.ts:453>)).
+
+Stage 5 should name both Live engines, their routes, and tests for opened and unopened Recall answers. Otherwise GPT-Live is easy to leave raw.
+
+**F5 — P1 — partly resolved — reasoned.**  
+The reason for not requiring a valid adjacent block ID before hiding the hint **does hold**. Revealing the hint because the model omitted or invented the question’s link would punish the reader for a model-format failure. Valid adjacency belongs in the eval, where the plan now checks it against known article IDs ([plan:161](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:161>)).
+
+However, “the body contains any `?`” is still too permissive ([plan:51](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:51>)). A correction that quotes an earlier question, a rhetorical question followed by a direct answer, or even a URL query can satisfy it while having no terminal nudge; the final `Hint:` paragraph would then be hidden incorrectly. Require the body to end in the nudge’s interrogative shape, allowing an optional adjacent block ID, but do not require that ID to be present or valid. The eval remains responsible for enforcing presence and validity.
+
+**F6 — P1 — resolved — established.**  
+The plan now expressly revises the body ceiling and “question last” rule, permits the hint’s controlled extra information, requires article claims to carry an ID, and tests that the conflicting old wording disappeared ([plan:96](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:96>), [plan:154](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:154>)).
+
+**F7 — P2 — resolved — established.**  
+The eval splits first, evaluates the body and hint separately, validates adjacency against known IDs, covers misleading ID placements, and adds hinted histories ([plan:161](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:161>)).
+
+**F8 — P2 — resolved — reasoned.**  
+Prefix buffering is dropped. The disclosure begins only when the complete marker arrives, with browser evidence required before adding complexity ([plan:72](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:72>)).
+
+## New findings
+
+**F9 — P1 — the client-side persistence lifecycle is underspecified — established.**  
+The plan names the route and button but not a checked client command, its failure behavior, or how the returned timestamp enters client state ([plan:150](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:150>), [plan:156](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:156>)). This codebase explicitly requires “a write whose only job is to stick” to check non-2xx responses; `fetch` otherwise reports HTTP failures as fulfilled promises ([effects.ts:412](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/web/chat/effects.ts:412>)).
+
+After success, the authoritative timestamp should be patched into the controller’s message. Local `Turn` state alone closes again if the reader changes conversation and returns without reloading. The UI should also derive open state from later `message.hintOpenedAt` changes, not only use it as a `useState` initializer: stream recovery patches the stored message after the component may already be mounted ([reduce.ts:1380](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/web/chat/reduce.ts:1380>)). Add route-failure, thread-away-and-back, and recovery-arrival tests.
+
+**F10 — P1 — the migration is not included in “done” — established.**  
+The plan’s completion gate contains tests and typecheck but neither applies nor checks the new schema ([plan:172](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md:172>)). The database operating manual requires generated migrations to be applied with `npm run db:migrate` ([database.md:189](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/project/database.md:189>)), while `npm run db:check` is specifically excluded from the ordinary gate and is what establishes that the target database has the column ([code-quality-overview.md:35](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/project/code-quality-overview.md:35>), [code-quality-overview.md:44](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/project/code-quality-overview.md:44>)). Add generation, local migration with its `Target:` checked, and `db:check` to the stage and completion evidence.
+
+**F11 — P2 — the column’s database and round-trip invariants are incomplete — established.**  
+The route refuses non-assistant/non-Remember rows, but the schema should also enforce that only assistant rows can carry `hint_opened_at`, following the existing role-specific stance/help checks ([schema.ts:3903](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/db/schema.ts:3903>)). The store must add the field on both sides of its named mapping ([pg-chat.ts:113](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:113>), [pg-chat.ts:250](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:250>)); export is named field-by-field ([export.ts:630](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/export.ts:630>)), and the fixture restore path is independently named field-by-field and would otherwise drop it ([seed-reader-state.ts:292](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/tests/helpers/seed-reader-state.ts:292>)). Add a round-trip case.
+
+Use `clock_timestamp()` rather than the plan’s literal `now()` when stamping the event: this store records the actual write moment because `now()` is the transaction start and can precede a lock wait ([pg-chat.ts:105](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:105>)). Add the column to `tests/event-times.test.ts`’s required-column list and test set ([event-times.test.ts:64](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/tests/event-times.test.ts:64>)).
+
+## Route and retry/edit assessment
+
+A dedicated, owner-checked POST is the simplest correct mechanism. The press is a separate idempotent event, not an edit to answer text, and a narrow action route is safer than introducing a generic message PATCH. Authentication already enters through the single API gate, but article lookup must still use the owner-scoped store path ([routes.ts:7619](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/routes.ts:7619>), [security-map.md:90](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/project/security-map.md:90>), [database.md:397](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/docs/project/database.md:397>)). Within the same locked transaction it should verify owner/article, thread, Remember kind, assistant role, recognizable split hint, and expected attempt generation before applying set-once.
+
+The other field-handling requirements are:
+
+- Pure `withRetry` needs no special clearing code: it reconstructs the assistant row field-by-field ([chat.ts:649](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/chat.ts:649>)).
+- Pure `withEdit` creates a fresh assistant ID, so it naturally has no opened timestamp ([chat.ts:731](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/chat.ts:731>)).
+- PostgreSQL retry must explicitly set `hintOpenedAt: null` alongside the other attempt fields ([pg-chat.ts:530](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:530>)).
+- PostgreSQL edit deletes the old answer and inserts a fresh one, so “clear on edit” requires an assertion, not a separate update ([pg-chat.ts:614](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/store/pg-chat.ts:614>)).
+- The optimistic retry and edit rows in `useChat.ts` are fresh field-by-field objects and therefore already clear the field ([useChat.ts:781](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/web/useChat.ts:781>), [useChat.ts:846](</home/greg/code/spideryarn2/.claude/worktrees/fbfryxrf-recall-block-link-and-hint/src/web/useChat.ts:846>)). The new hint-open success action, however, must patch the field into client state.
+- Recovery’s generic spread will carry the field once the store mapper supplies it; the disclosure component must react when that prop changes.
+
+VERDICT: rework

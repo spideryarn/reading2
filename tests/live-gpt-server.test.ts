@@ -151,7 +151,7 @@ function conversation(turns: number, answer: (i: number) => string): ChatMessage
 /* ------------------------------------------------------ the session -- */
 
 describe("the session GPT-Live is asked to create", () => {
-  const session = gptLiveSession({ meta, blocks, tree: tree(3, 2, 8), history: [] });
+  const session = gptLiveSession({ meta, blocks, tree: tree(3, 2, 8), history: [], kind: undefined });
   const delegation = session.delegation as {
     type: string;
     responses: {
@@ -459,7 +459,7 @@ describe("the seeded history", () => {
     expect(bytes + seed.length * 32).toBeLessThanOrEqual(GPT_LIVE_SEED_TOKEN_CAP);
   });
   it("is in GPT-Live's message shape, oldest first", () => {
-    const seed = gptLiveSeedInput(conversation(2, (i) => `Answer ${i}.`));
+    const seed = gptLiveSeedInput(conversation(2, (i) => `Answer ${i}.`), "chat");
     expect(seed).toEqual([
       { role: "user", content: [{ type: "input_text", text: "Question 0?" }] },
       { role: "assistant", content: [{ type: "output_text", text: "Answer 0." }] },
@@ -471,6 +471,7 @@ describe("the seeded history", () => {
   it("never carries a block id in the assistant's words", () => {
     const seed = gptLiveSeedInput(
       conversation(3, (i) => `He says so [spya-k3m9qt] and again spya-p7w2dn, answer ${i}.`),
+      "chat",
     );
     const said = seed.filter((m) => m.role === "assistant").map((m) => m.content[0].text);
     expect(said).toHaveLength(3);
@@ -479,7 +480,7 @@ describe("the seeded history", () => {
 
   it("drops the oldest first to stay inside the token budget, and keeps the newest", () => {
     /* Twenty turns of long answers: far more than fits. */
-    const seed = gptLiveSeedInput(conversation(20, (i) => `Answer ${i}. ${"word ".repeat(700)}`));
+    const seed = gptLiveSeedInput(conversation(20, (i) => `Answer ${i}. ${"word ".repeat(700)}`), "chat");
     const total = seed.reduce((n, m) => n + pessimisticTokens(m.content[0].text), 0);
     expect(total).toBeLessThanOrEqual(SEED_TOKEN_BUDGET);
     expect(SEED_TOKEN_BUDGET).toBeLessThan(GPT_LIVE_SEED_TOKEN_CAP);
@@ -491,11 +492,46 @@ describe("the seeded history", () => {
     expect(kept.some((t) => t.startsWith("Answer 0."))).toBe(false);
   });
 
+  /* The second voice engine reads the same seed, so it needs the same rule:
+     a Recall hint nobody opened is not something the reader was told
+     (src/recall-hint.ts § answerAsSeen; plan 261004h, round 2, F4). */
+  describe("a Recall answer's hint", () => {
+    const recall = (over: Partial<ChatMessage> = {}) => [
+      msg({ id: "spya-q00001", text: "It is about search." }),
+      msg({
+        id: "spya-a00001",
+        role: "assistant",
+        text: "Do you remember what researchers kept doing [spya-k3m9qt]?\n\nHint: He names two games.",
+        ...over,
+      }),
+    ];
+    const said = (seed: ReturnType<typeof gptLiveSeedInput>) => seed[1]?.content[0].text;
+
+    it("is left out of the seed when the reader never opened it", () => {
+      expect(said(gptLiveSeedInput(recall(), "remember"))).toBe("Do you remember what researchers kept doing?");
+    });
+
+    it("is in the seed when they did", () => {
+      expect(said(gptLiveSeedInput(recall({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "remember"))).toContain(
+        "Hint: He names two games.",
+      );
+    });
+
+    it("reaches the session through the thread's kind, opened or not", () => {
+      const input = (history: ChatMessage[]) =>
+        (gptLiveSession({ meta, blocks, tree: tree(3, 2, 8), history, kind: "remember" }).input as ReturnType<
+          typeof gptLiveSeedInput
+        >)[1]?.content[0].text;
+      expect(input(recall())).not.toContain("Hint:");
+      expect(input(recall({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }))).toContain("Hint: He names two games.");
+    });
+  });
+
   it("shortens one over-long message rather than dropping the whole conversation", () => {
     const seed = gptLiveSeedInput([
       msg({ id: "spya-q00001", text: "Short question?" }),
       msg({ id: "spya-a00001", role: "assistant", text: "word ".repeat(20_000) }),
-    ]);
+    ], "chat");
     expect(seed).toHaveLength(2);
     expect(seed[1]?.content[0].text.endsWith("…")).toBe(true);
     expect(pessimisticTokens(seed[1]?.content[0].text ?? "")).toBeLessThanOrEqual(1200);

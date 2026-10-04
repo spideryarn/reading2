@@ -20,7 +20,7 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articleRevisions, articles, chatThreads } from "../src/db/schema.js";
+import { articleRevisions, articles, chatMessages, chatThreads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { exportArticle } from "../src/store/export.js";
@@ -35,6 +35,12 @@ const ARTICLE_ID = "00000000-0000-4000-8000-00000071a7a1";
 const REVISION_ID = "00000000-0000-4000-8000-00000071a7a2";
 const DATA_ROOT = path.join(process.cwd(), "data");
 const EXPORTED_ARTICLE = path.join(DATA_ROOT, SLUG);
+/* The one message here: a Recall answer whose hint the reader opened. Export
+   and the fixture restore each name a message's fields one by one, so
+   `hintOpenedAt` is lost by whichever of them does not name it (plan 261004h). */
+const REMEMBER_THREAD = "spya-kndb23";
+const HINTED_ANSWER = "spya-kndm23";
+const HINT_OPENED_AT = "2026-10-04T09:30:00.000Z";
 
 await pgReady({
   suite: "tests/store-export-thread-kind.test.ts",
@@ -66,6 +72,17 @@ describe("db:export and a conversation's kind", () => {
         updatedAt: at,
       })),
     );
+    await db.insert(chatMessages).values({
+      articleId: ARTICLE_ID,
+      threadId: REMEMBER_THREAD,
+      id: HINTED_ANSWER,
+      ordinal: 0,
+      role: "assistant",
+      text: "Do you remember what comes next?\n\nHint: It is about two games.",
+      status: "done",
+      createdAt: at,
+      hintOpenedAt: new Date(HINT_OPENED_AT),
+    });
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-thread-kind-"));
     /* `seedChatFromFiles` deliberately reads the repository's `data/` root and
        cannot be pointed at a temp directory. This fixture slug is unique, and
@@ -102,7 +119,7 @@ describe("db:export and a conversation's kind", () => {
   it("restores every exported kind as itself", async () => {
     const db = getDb();
     await db.delete(chatThreads).where(eq(chatThreads.articleId, ARTICLE_ID));
-    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 5, messages: 0 });
+    expect(await seedChatFromFiles(SLUG)).toEqual({ threads: 5, messages: 1 });
     const restored = await db
       .select({ title: chatThreads.title, kind: chatThreads.kind })
       .from(chatThreads)
@@ -115,6 +132,22 @@ describe("db:export and a conversation's kind", () => {
       { title: "remember", kind: "remember" },
       { title: "tutorial", kind: "tutorial" },
     ]);
+  });
+
+  it("exports when a Recall hint was opened, and restores it", async () => {
+    const file = JSON.parse(await readFile(path.join(EXPORTED_ARTICLE, "chat.json"), "utf8")) as {
+      threads: ChatThread[];
+    };
+    const exported = file.threads.find((t) => t.id === REMEMBER_THREAD)?.messages[0];
+    expect(exported).toMatchObject({ id: HINTED_ANSWER, hintOpenedAt: HINT_OPENED_AT });
+
+    /* The test above this one has already deleted the rows and restored them
+       from that file, so what is in the table now came through the helper. */
+    const [restored] = await getDb()
+      .select({ hintOpenedAt: chatMessages.hintOpenedAt })
+      .from(chatMessages)
+      .where(eq(chatMessages.articleId, ARTICLE_ID));
+    expect(restored?.hintOpenedAt?.toISOString()).toBe(HINT_OPENED_AT);
   });
 
   /* Explore's index, from the migration that widened the CHECK for it

@@ -161,9 +161,64 @@ describe("the Remember prompt itself", () => {
     expect(system).toContain("NEVER MAKE THEM FAIL TWICE");
     expect(system).toContain("FILL THE GAP");
     expect(system).toContain("EVERY REPLY POINTS INTO THE ARTICLE");
-    expect(system).toContain("120 is a ceiling");
+    expect(system).toMatch(/120 is the ceiling for the reply\s+before the hint/);
     expect(system).toContain("exactly one interrogative sentence and one");
     expect(system).toContain('directions joined by "or"');
+  });
+
+  /* Greg's report spya-fryxrf, 2026-10-04: a question with nowhere to look
+     ("Do you remember what comes next?") and no way to get a clue.
+     docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md */
+  describe("the question links its passage and carries a hint", () => {
+    it("puts the passage's id on the question itself, not just somewhere in the reply", () => {
+      expect(system).toContain("THE NUDGE'S QUESTION CARRIES ITS OWN PASSAGE");
+      expect(system).toMatch(/inside the question,? or straight after its question mark/);
+      expect(system).toMatch(/An id somewhere\s+else\s+in\s+the\s+reply\s+does\s+not\s+count/);
+    });
+
+    it("asks for a hint in the exact shape splitHint reads, and only after a nudge", async () => {
+      const { HINT_MARKER, splitHint } = await import("../src/recall-hint.js");
+      expect(system).toContain("A HINT, HIDDEN UNTIL THEY ASK FOR IT");
+      expect(system).toMatch(/When, and only when, the reply ends with\s+a nudge/);
+      expect(system).toMatch(/25 words at most/);
+      expect(system).toMatch(/never a question/);
+      expect(system).toMatch(/does not state the answer/);
+      expect(system).toMatch(/Never assume the reader (has )?opened it/);
+
+      /* The prompt's own example of a hinted reply has to be one the splitter
+         accepts, or the model is shown a shape the button never appears for. */
+      const example = system.match(/^ {4}(Do you remember[^\n]*\?)\n\n {4}(Hint: [^\n]*)$/m);
+      expect(example, "the prompt shows no example of a question followed by a hint").not.toBeNull();
+      const split = splitHint(`${example?.[1]}\n\n${example?.[2]}`);
+      expect(split.hint).not.toBeNull();
+      expect(example?.[2]?.startsWith(HINT_MARKER)).toBe(true);
+      expect(split.body).toMatch(/\[spya-[a-z0-9]{6}\]\?$/);
+    });
+
+    it("shows no example of a nudge with nowhere to look", () => {
+      /* An example outweighs the rule beside it. Every example question that
+         asks the reader to remember something carries an id in its sentence. */
+      const examples = system.match(/"[^"\n]*(?:\n[^"\n]*)*?[Dd]o you remember[^"]*\?"/g) ?? [];
+      const bare = examples.filter(
+        (q) => !/spya-[a-z0-9]{6}/.test(q) && !q.includes("what comes next"),
+      );
+      expect(examples.length).toBeGreaterThanOrEqual(3);
+      expect(bare).toEqual([]);
+    });
+
+    it("revised the old length and question-last wording rather than adding beside it", () => {
+      expect(system).not.toContain("120 is a ceiling unless");
+      expect(system).not.toContain("ONE nudge per reply, at the end:");
+      expect(system).toMatch(/last sentence before\s+the hint/);
+    });
+
+    it("leaves Tutorial, Explore and Chat without a hint rule", () => {
+      for (const kind of ["tutorial", "explore", "chat"] as const) {
+        const other = String(buildConverseMessages({ ...base, kind })[0]?.content);
+        expect(other, kind).not.toContain("Hint:");
+        expect(other, kind).not.toContain("A HINT, HIDDEN");
+      }
+    });
   });
 
   it("makes the clarification exception explicit before and inside the detailed rules", () => {

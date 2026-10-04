@@ -30,6 +30,7 @@ import type {
   OpId,
   Registering,
   SpokenOperation,
+  HintOutcome,
   ThreadsOutcome,
   WriteOutcome,
 } from "./model.js";
@@ -153,6 +154,8 @@ export interface ChatEffects {
     messageId: string,
     attempt: string | null,
   ): Promise<WriteOutcome>;
+  /** Record that the reader opened a Recall answer's hint. Answers with the time. */
+  markHintOpened(slug: string, threadId: string, messageId: string, hint: string): Promise<HintOutcome>;
 }
 
 /**
@@ -523,6 +526,16 @@ export class ChatController {
               ? { type: "intent.succeeded", opId: command.opId }
               : { type: "intent.failed", opId: command.opId, error: outcome.error },
           (error) => ({ type: "intent.failed", opId: command.opId, error }),
+        );
+        return;
+      case "hint":
+        this.#settle(
+          this.#effects.markHintOpened(command.slug, command.threadId, command.messageId, command.hint),
+          (outcome) =>
+            outcome.ok
+              ? { type: "hint.succeeded", opId: command.opId, hintOpenedAt: outcome.hintOpenedAt }
+              : { type: "hint.failed", opId: command.opId, error: outcome.error },
+          (error) => ({ type: "hint.failed", opId: command.opId, error }),
         );
         return;
       case "named":

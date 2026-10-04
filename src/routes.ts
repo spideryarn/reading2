@@ -3523,6 +3523,51 @@ async function stopChat(
 }
 
 /**
+ * **The reader pressed Hint under a Recall answer.**
+ * `POST /api/chat/:slug/:threadId/hint-opened`, body `{ messageId, hint }`.
+ *
+ * Records the first press and answers with its time; a second press gets the
+ * same time back. Its own narrow route, not a general message PATCH: the press
+ * is one fact about one answer, and nothing else about a stored answer is the
+ * browser's to change.
+ *
+ * **`hint` is the hint's text as the browser drew it, and it is the fence.** A
+ * retry reuses the answer's row, so a press still on its way could otherwise
+ * mark the replacement answer as opened. `markHintOpened` stamps only when the
+ * stored answer still carries that hint, and makes the check and the write in
+ * one transaction under the article lock. The owner check is the store's, like
+ * every other chat write: the slug resolves only to the signed-in reader's own
+ * article.
+ *
+ * Never logged: the hint's text. It is the model's words about the article.
+ * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+ */
+async function hintOpened(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ hintOpenedAt: string }> {
+  const { messageId, hint } = objectBody(body);
+  if (typeof messageId !== "string" || typeof hint !== "string" || hint === "") {
+    throw httpError(400, "Expected { messageId, hint }");
+  }
+  const out = await chatStore.markHintOpened(slug, threadId, messageId, hint);
+  if (out.ok) return { hintOpenedAt: out.hintOpenedAt };
+  switch (out.reason) {
+    case "no-such-message":
+      throw httpError(404, "That answer is not in this conversation");
+    case "not-a-recall-answer":
+      throw httpError(400, "Only a Recall answer has a hint");
+    case "hint-changed":
+      throw httpError(409, "That answer has changed since the hint was pressed");
+    default: {
+      const unhandled: never = out.reason;
+      throw new Error(`unhandled hint refusal: ${String(unhandled)}`);
+    }
+  }
+}
+
+/**
  * **Stop the first answer of a conversation, and throw the conversation away.**
  *
  * Greg's call, 2026-08-26: a reader who selects a sentence, sees the answer
@@ -3953,7 +3998,7 @@ async function liveChatToken(
   return {
     ...minted,
     sessionId,
-    seed: liveSeedItems(thread?.messages ?? []),
+    seed: liveSeedItems(thread?.messages ?? [], thread?.kind),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
 }
@@ -4022,6 +4067,7 @@ async function liveChatSession(
     tree: article.tree,
     profile: useProfile === false ? null : await resolveProfile(slug),
     history: thread?.messages ?? [],
+    kind: thread?.kind,
   });
 
   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
@@ -9999,6 +10045,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       // The slug becomes a directory; the ids are only ever matched in a Map.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await stopChat(slug, id, await readBody(req)));
+    },
+  },
+
+  /* The reader pressed Hint under a Recall answer. No model call, so
+     `first-capture` attributes nothing; it is here for the reason `spoken`
+     gives, that the request knows which article it belongs to. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/hint-opened$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await hintOpened(slug, id, await readBody(req)));
     },
   },
 

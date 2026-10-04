@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -78,6 +78,7 @@ import {
 } from "lucide-react";
 import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
+import { splitHint } from "../recall-hint.js";
 import type {
   BlockId,
   ChatMessage,
@@ -88,6 +89,7 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -196,6 +198,13 @@ interface Props {
   onEdit(messageId: string, question: string): void;
   /** Stop an answer that is still arriving. What has appeared is kept. */
   onStop(messageId: string): void;
+  /**
+   * **The reader opened a Recall answer's hint for the first time.** The band
+   * records it (`openHint` in useChat.ts) so the hint is still open after a
+   * reload. Optional: the hint opens on screen whether or not this is given,
+   * and only Recall has hints.
+   */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   /** Jump to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
@@ -351,6 +360,7 @@ export function ChatPanel({
   onRetry,
   onEdit,
   onStop,
+  onHintOpened,
   onJump,
   recovering,
   blocks,
@@ -585,6 +595,7 @@ export function ChatPanel({
           onRetry={onRetry}
           onEdit={onEdit}
           onStop={onStop}
+          onHintOpened={onHintOpened}
           focusNonce={focusNonce}
           focused={focused}
           draft={draftFor(open.id)}
@@ -1050,6 +1061,7 @@ export function Conversation({
   onRetry,
   onEdit,
   onStop,
+  onHintOpened,
   focusNonce,
   focused,
   draft,
@@ -1061,6 +1073,8 @@ export function Conversation({
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
   thread: ChatThread;
+  /** See `onHintOpened` in Props. Absent where nothing records the press. */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   onJump(id: BlockId): void;
   /** See `recovering` in Props. */
   recovering: Set<string>;
@@ -1225,6 +1239,8 @@ export function Conversation({
           <Turn
             key={m.id}
             message={m}
+            kind={kind}
+            onHintOpened={onHintOpened}
             onJump={onJump}
             recovering={recovering.has(m.id)}
             blocks={blocks}
@@ -1454,17 +1470,29 @@ function Suggestions({ onAsk }: { onAsk(question: string): void }) {
     turn in each of its waiting states; nothing else imports it. */
 export function Turn({
   message,
+  kind,
   onJump,
   recovering,
   blocks,
   onRetry,
   onEdit,
+  onHintOpened,
   canEdit,
   editing,
   onEditing,
   discards,
 }: {
   message: ChatMessage;
+  /**
+   * The conversation's kind. Only Recall (`remember`) keeps an answer's last
+   * `Hint:` paragraph behind a button; every other kind draws it as written.
+   */
+  kind: ThreadKind;
+  /**
+   * The reader opened this answer's hint for the first time. The hint opens
+   * from local state whatever this does; it is how the press gets recorded.
+   */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   onJump(id: BlockId): void;
   /** This answer's stream is lost and the client is asking the server about it. */
   recovering: boolean;
@@ -1503,6 +1531,36 @@ export function Turn({
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
   }, [editing]);
+
+  /* **Recall's hint.** The model writes it as the answer's last paragraph and
+     `splitHint` says which part it is; anything that is not exactly that shape
+     comes back whole and is drawn as written. Split here, not inside `Answer`,
+     so that what is drawn and what is copied are one `{ body, hint }`.
+
+     Open is the reader's last press here, or else the stored first press — read
+     on every render, because the stored time can arrive after this turn is
+     drawn (stream recovery, or the write's own answer). The press is keyed to
+     the attempt: a retry puts a new answer in the same row, and its hint starts
+     closed. src/recall-hint.ts; docs/project/remember-mode.md. */
+  const { body, hint } =
+    kind === "remember" && message.role === "assistant"
+      ? splitHint(message.text)
+      : { body: message.text, hint: null };
+  const attempt = `${message.createdAt}\n${hint ?? ""}`;
+  const [pressed, setPressed] = useState<{ attempt: string; open: boolean } | null>(null);
+  const hintOpen =
+    hint !== null && (pressed?.attempt === attempt ? pressed.open : message.hintOpenedAt !== undefined);
+  /** The attempt whose first press has already been reported from here. */
+  const reported = useRef<string | null>(null);
+  const hintId = useId();
+  const toggleHint = () => {
+    if (hint === null) return;
+    setPressed({ attempt, open: !hintOpen });
+    if (!hintOpen && message.hintOpenedAt === undefined && reported.current !== attempt) {
+      reported.current = attempt;
+      onHintOpened?.(message.id, hint);
+    }
+  };
 
   if (message.role === "user") {
     if (editing) {
@@ -1575,7 +1633,7 @@ export function Turn({
   const tools = message.tools ?? [];
   /* A streamed chunk can be only a leading newline. It is not the first word
      yet, so the waiting line and cursor must agree about visible text. */
-  const hasText = message.text.trim() !== "";
+  const hasText = body.trim() !== "";
   const waiting =
     message.status === "pending" &&
     !hasText &&
@@ -1597,12 +1655,36 @@ export function Turn({
           empty paragraph, which is a stray gap above the line that explains
           it. */ null : (
         <Answer
-          text={message.text}
+          text={body}
           onJump={onJump}
           blocks={blocks}
           /* Tooltips only once the answer has landed — see Cited.tsx. */
           live={message.status === "pending"}
         />
+      )}
+      {hint !== null && message.status !== "pending" && (
+        /* Offered once the answer has landed, so the hint a press records is
+           the one the server stored. While it arrives the hint is simply not
+           drawn. The label is ours; the hint under it is the model's words,
+           drawn by the same `Answer` so its block ids are chips. */
+        <div className="chat-hint">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="chat-hint-btn"
+            aria-expanded={hintOpen}
+            {...(hintOpen ? { "aria-controls": hintId } : {})}
+            onClick={toggleHint}
+          >
+            Hint
+          </Button>
+          {hintOpen && (
+            <div id={hintId} className="chat-hint-text">
+              <Answer text={hint} onJump={onJump} blocks={blocks} live={false} />
+            </div>
+          )}
+        </div>
       )}
       {/* Where the blinking cursor would be, and instead of it — because a cursor
           says "more is coming here in a moment", which is the one thing that is
@@ -1657,8 +1739,9 @@ export function Turn({
         <div className="chat-actions">
           {message.text !== "" && (
             <CopyAnswer
+              /* What is on screen: the hint goes with it only while it is open. */
               text={withoutCommandLines(
-                message.text,
+                hintOpen ? message.text : body,
                 (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
               )}
             />

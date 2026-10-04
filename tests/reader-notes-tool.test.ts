@@ -587,6 +587,32 @@ describe("threadTranscript — one conversation, bounded", () => {
     expect(ours(out.content)).toContain("Recall");
   });
 
+  /* A Recall answer's hint sits behind a button. Explore reading this
+     transcript must not be told the reader was given a clue they never looked
+     at (src/recall-hint.ts § answerAsSeen; plan 261004h). */
+  it("leaves out a Recall hint the reader never opened, and keeps one they did", () => {
+    const answer = "Do you remember what he sets it against?\n\nHint: A-REAL-STORM-CLUE.";
+    const transcript = (over: Partial<ChatMessage>, kind: "remember" | "chat" = "remember") =>
+      fenced(
+        threadTranscript(
+          [
+            thread("spya-t00001", {
+              kind,
+              messages: [msg("user", "It is about a rainstorm."), msg("assistant", answer, over)],
+            }),
+          ],
+          "spya-t00001",
+          undefined,
+        ).content,
+      )[0];
+
+    expect(transcript({})).toContain("Do you remember what he sets it against?");
+    expect(transcript({})).not.toContain("A-REAL-STORM-CLUE");
+    expect(transcript({ hintOpenedAt: "2026-10-04T10:00:00.000Z" })).toContain("Hint: A-REAL-STORM-CLUE.");
+    /* Only Recall has hints. The same words in a chat are the answer. */
+    expect(transcript({}, "chat")).toContain("A-REAL-STORM-CLUE");
+  });
+
   it("never shows a failed, pending or interrupted turn as finished, and says how many it left out (PR-4)", () => {
     const out = threadTranscript(
       [

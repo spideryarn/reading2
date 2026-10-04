@@ -128,6 +128,18 @@
 }
 
 .chat-turn.you.editing { background: var(--surface-raised); }
+
+/* Recall's Hint, under an answer's question. The button is the shared
+   `Button`; it sits inside a model turn, so it is told to keep the app's face.
+   The hint under it is the model's words and keeps the turn's own
+   (docs/project/fonts.md). */
+.chat-hint { margin-top: 0.5rem; }
+.chat-hint-btn { font-family: var(--font-ui); }
+.chat-hint-text {
+  margin-top: 0.4rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+}
 .chat-edit-box {
   display: block;
   width: 100%;

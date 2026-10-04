@@ -65,6 +65,7 @@ it("sends the begun thread's kind on the first append, and again after the serve
     settledAnswer: async () => null,
     stopAnswer: async () => ({ ok: true }),
     cancelThread: async () => ({ ok: true }),
+    markHintOpened: async () => ({ ok: false, error: "not in this test" }),
   };
   const c = new ChatController(SLUG, effects);
 

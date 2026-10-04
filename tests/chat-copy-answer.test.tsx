@@ -58,6 +58,7 @@ function paint(): void {
     root.render(
       createElement(Turn, {
         message,
+        kind: "chat",
         onJump: () => {},
         recovering: false,
         blocks: new Map<string, string>(),

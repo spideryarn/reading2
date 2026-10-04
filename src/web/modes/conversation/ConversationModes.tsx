@@ -445,6 +445,7 @@ export function ConversationBand({
     begin,
     discard,
     rename,
+    openHint,
     remove,
     deleting,
     settled,
@@ -872,6 +873,7 @@ export function ConversationBand({
         current && edit(current, messageId, question, at, onScreen?.())
       }
       onStop={(messageId) => current && stop(current, messageId)}
+      onHintOpened={(messageId, hint) => current && openHint(current, messageId, hint)}
       onJump={onJump}
       recovering={recovering}
       blocks={blocks}

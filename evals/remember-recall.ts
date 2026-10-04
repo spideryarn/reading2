@@ -65,6 +65,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
+import { BODY_WORD_LIMIT, checkReply, HINT_WORD_LIMIT } from "./remember-recall-checks.js";
 
 loadEnvLocal();
 
@@ -162,11 +163,14 @@ const CASES: readonly Case[] = [
        turn: this must produce a plain answer, not another question. */
     watchFor:
       "They asked to be told, after a nudge. Rule 2 outranks the nudge — is this a plain ANSWER, or another question?",
+    /* The stored answer carries a hint, as every nudge has since 2026-10-04.
+       The reader may never have opened it: an answer that leans on "as the hint
+       said" has assumed they did. */
     history: [
       turn("user", "So his point is that simulating a brain would give you a conscious brain."),
       turn(
         "assistant",
-        "Have a look at the section called \u201cSimulation Is Not Instantiation\u201d \u2014 he uses a simulated rainstorm there. What do you think he takes that example to show? Or say \u201cjust tell me\u201d and I will.",
+        "Have a look at the section called \u201cSimulation Is Not Instantiation\u201d \u2014 he uses a simulated rainstorm there. What do you think he takes that example to show? Or say \u201cjust tell me\u201d and I will.\n\nHint: He asks whether anything in the simulated storm gets wet [spya-placeholder].",
       ),
     ],
     said: "just tell me",
@@ -191,7 +195,7 @@ const CASES: readonly Case[] = [
       turn("user", "His main thing was that simulating something isn't the same as it being real."),
       turn(
         "assistant",
-        "Yes, that's his move [spya-placeholder]. Do you remember the example he uses to make it vivid, or what he thinks it means for brain simulations?",
+        "Yes, that's his move [spya-placeholder]. Do you remember the example he uses to make it vivid, or what he thinks it means for brain simulations [spya-placeholder]?\n\nHint: The example is about weather, and whether anything gets wet [spya-placeholder].",
       ),
     ],
     said: "no, sorry, no idea",
@@ -296,15 +300,10 @@ function flags(text: string): string[] {
   return BANNED.filter((phrase) => lower.includes(phrase));
 }
 
-/** Whether the reply ends on a question — a nudge, or a question asked of somebody who said they were lost. */
-function endsInQuestion(text: string): boolean {
-  return /\?["”)\]]*\s*$/.test(text.trim());
-}
-
-/** Block ids cited, so a run that stopped pointing at the article is visible. */
-function citations(text: string): number {
-  return (text.match(/\bspya-[a-z0-9]{6}\b/g) ?? []).length;
-}
+/* Whether a reply ends on a question, how long it is, whether its question
+   carries a block id and what its hint looks like are all `checkReply`'s, in
+   ./remember-recall-checks.ts — a module of its own so that it can be tested
+   without importing this file, which runs the eval. */
 
 async function main(): Promise<void> {
   const dir = process.argv[2] ?? "data/noema-mythology-of-conscious-ai";
@@ -325,10 +324,16 @@ async function main(): Promise<void> {
   );
   say();
 
+  const knownIds = new Set(blocks.map((b) => b.id));
   let flagged = 0;
   let uncited = 0;
   let overTarget = 0;
   let questions = 0;
+  /* The four the hint added, 2026-10-04 (plan 261004h). */
+  let unlinkedQuestions = 0;
+  let nudgesWithoutHint = 0;
+  let hintProblems = 0;
+  let strayHints = 0;
   let truncated = 0;
   let model = "";
 
@@ -343,7 +348,7 @@ async function main(): Promise<void> {
        transcript the model sees cites a block the article has. */
     const history = (c.history ?? []).map((m) => ({
       ...m,
-      text: m.text.replace("spya-placeholder", blocks[0]?.id ?? "spya-aaaaaa"),
+      text: m.text.replaceAll("spya-placeholder", blocks[0]?.id ?? "spya-aaaaaa"),
     }));
     const started = performance.now();
     let out: Awaited<ReturnType<typeof rememberOnce>>;
@@ -360,25 +365,50 @@ async function main(): Promise<void> {
     }
     model = out.model || model;
     const hit = flags(out.text);
-    const cites = citations(out.text);
-    const words = out.text.split(/\s+/).length;
+    /* Split first: the hint is its own paragraph with its own limit, so the
+       body is what "ends on a question" and the word ceiling are about. */
+    const checked = checkReply(out.text, knownIds);
+    const cites = checked.citations;
+    const words = checked.bodyWords;
     if (hit.length) flagged += 1;
     /* Every substantive reply is told to cite. An answer citing nothing is not
        automatically wrong — `unclear` should be a clarification with no id —
        but it is always worth a look, so it is counted rather than judged. */
     if (cites === 0) uncited += 1;
-    if (words > 120) overTarget += 1;
-    if (endsInQuestion(out.text)) questions += 1;
+    if (words > BODY_WORD_LIMIT) overTarget += 1;
+    if (checked.endsInQuestion) questions += 1;
+    if (checked.questionLink === "no-id" || checked.questionLink === "unknown-id") unlinkedQuestions += 1;
+    if (checked.nudgeWithoutHint) nudgesWithoutHint += 1;
+    if (checked.hintProblems.length > 0) hintProblems += 1;
+    if (checked.strayHint) strayHints += 1;
     if (out.truncated) truncated += 1;
     const secs = ((performance.now() - started) / 1000).toFixed(1);
+    const link =
+      checked.questionLink === "linked"
+        ? "ends on a question that carries its block id"
+        : checked.questionLink === "unknown-id"
+          ? `⚠︎ ends on a question whose id the article does not have (${checked.questionIds.join(" ")})`
+          : checked.questionLink === "no-id"
+            ? "⚠︎ ends on a question with NO block id of its own"
+            : "ends without a question";
+    const hintLine =
+      checked.hint !== null
+        ? `hint of ${checked.hintWords} words${checked.hintProblems.length ? ` ⚠︎ ${checked.hintProblems.join(", ")}` : ""}`
+        : checked.strayHint
+          ? "⚠︎ a hint the panel will show in the open"
+          : checked.nudgeWithoutHint
+            ? "⚠︎ no hint"
+            : "no hint";
     say(
-      `### reply — ${words} words, ${cites} citation${cites === 1 ? "" : "s"}, ${
-        endsInQuestion(out.text) ? "ends on a question" : "ends without a question"
-      }, ${secs}s${hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""}${
-        out.truncated ? ", ⚠︎ CUT OFF — hit max_tokens, do not score the ending" : ""
-      }${out.stopped ? ", ⚠︎ stopped" : ""}`,
+      `### reply — ${words} words before the hint, ${cites} citation${cites === 1 ? "" : "s"}, ${link}, ${hintLine}, ${secs}s${
+        hit.length ? `, ⚠︎ banned: ${hit.join(", ")}` : ""
+      }${out.truncated ? ", ⚠︎ CUT OFF — hit max_tokens, do not score the ending" : ""}${
+        out.stopped ? ", ⚠︎ stopped" : ""
+      }`,
     );
     say();
+    /* The raw reply, hint and all: it is what is stored, and a reader of this
+       file needs to see the `Hint:` paragraph exactly as the model spelt it. */
     say(out.text.trim());
     say();
   }
@@ -390,14 +420,22 @@ async function main(): Promise<void> {
   say(`- answers: ${total}`);
   say(`- containing a banned phrase: **${flagged}** (should be 0)`);
   say(`- citing no block at all: ${uncited} (worth a look; \`unclear\` may rightly be one)`);
-  say(`- over the 120-word target: ${overTarget} (a prompt to inspect brevity, not an automatic failure)`);
-  say(`- ending on a question: ${questions} (most should — the nudge — but not \`lost\`, \`justTellMe\` or \`nudgeFailed\` without an answer first)`);
+  say(`- over the ${BODY_WORD_LIMIT}-word target before the hint: ${overTarget} (a prompt to inspect brevity, not an automatic failure)`);
+  say(`- ending on a question, before the hint: ${questions} (most should — the nudge — but not \`lost\`, \`justTellMe\` or \`nudgeFailed\` without an answer first)`);
+  say(
+    `- **ending on a question that has no block id of its own, or one the article lacks: ${unlinkedQuestions}** (should be 0 for a nudge; \`unclear\`'s clarification may rightly be one. An id elsewhere in the reply does not count)`,
+  );
+  say(`- ending on a question with no hint: ${nudgesWithoutHint} (should be 0 for a nudge; a clarification has none)`);
+  say(`- a hint over ${HINT_WORD_LIMIT} words, or that asks a question: ${hintProblems} (should be 0)`);
+  say(
+    `- **a hint the panel will show in the open: ${strayHints}** (should be 0 — a wrong spelling of \`Hint:\`, one that is not the last paragraph, or one after a reply that asks nothing)`,
+  );
   say(
     `- **cut off mid-answer: ${truncated}** (should be 0 — a truncated reply must not be scored for how it ends)`,
   );
   say();
   say(
-    "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, whether `lost`, `dontRemember` and `nudgeFailed` were told rather than questioned, and whether each nudge makes the next recollection likely without giving it away — and only reading them says that.",
+    "A zero in the first count means nothing on its own. The question these runs exist to answer is whether the `correct`, `defensible` and `disagreement` readers were left alone, whether `lost`, `dontRemember` and `nudgeFailed` were told rather than questioned, and whether each nudge makes the next recollection likely without giving it away — and only reading them says that. For the hints, read each one against its question: does it make the answer much easier to reach without stating it, and does `justTellMe` or `nudgeFailed` talk as if the reader had opened the hint in its history?",
   );
 
   const out = path.resolve(import.meta.dirname, "results", "remember-recall.md");

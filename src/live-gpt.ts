@@ -37,7 +37,7 @@ import {
 } from "./live.js";
 import { plainWords } from "./plain-words.js";
 import { untrusted } from "./untrusted-fence.js";
-import type { Block, ChatMessage, Meta, Tree, TreeNode } from "./types.js";
+import type { Block, ChatMessage, Meta, ThreadKind, Tree, TreeNode } from "./types.js";
 
 /* ------------------------------------------------------------- budgets -- */
 
@@ -441,8 +441,8 @@ export type GptLiveSeedMessage =
  * GPT-Live takes the history at creation, so there is no seeding over the data
  * channel and no acknowledgement to wait for, unlike Realtime.
  */
-export function gptLiveSeedInput(history: ChatMessage[]): GptLiveSeedMessage[] {
-  return trimSeed(liveSeedItems(history));
+export function gptLiveSeedInput(history: ChatMessage[], kind: ThreadKind | undefined): GptLiveSeedMessage[] {
+  return trimSeed(liveSeedItems(history, kind));
 }
 
 /**
@@ -521,12 +521,18 @@ export function gptLiveSession(opts: {
   tree: Tree;
   profile?: string | null;
   history: ChatMessage[];
+  /**
+   * The kind of the conversation `history` is from, or `undefined` when there
+   * is no conversation yet. Required, so a caller has to say: a Recall answer's
+   * unopened hint is left out of the seed (`liveSeedItems` in src/live.ts).
+   */
+  kind: ThreadKind | undefined;
 }): Record<string, unknown> {
   return {
     model: GPT_LIVE_MODEL,
     instructions: gptLiveVoiceInstructions(opts),
     audio: { output: { voice: LIVE_VOICE } },
-    input: gptLiveSeedInput(opts.history),
+    input: gptLiveSeedInput(opts.history, opts.kind),
     client: { data_channel: GPT_LIVE_DATA_CHANNEL },
     delegation: {
       type: "responses",

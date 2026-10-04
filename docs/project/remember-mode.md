@@ -433,6 +433,75 @@ Known limits: a quotation with emphasis inside it is split across Markdown nodes
 the paragraph wash; a quotation that cannot be matched gets that fallback too. Tests:
 [`quote-flash.test.tsx`](../../tests/quote-flash.test.tsx).
 
+## A Recall question links its passage, and has a Hint button
+
+Greg, `spya-fryxrf`, 2026-10-04, on questions like "Do you remember what comes next?":
+
+> I feel a kind of momentary anxiety. I wonder if it could include a block link. … And I guess the
+> other thing that might help would be a little hint. So after a question, it could have a little
+> hint button, which if clicked would expand to reveal something that will make it much easier for
+> me to kind of perhaps fill in the gaps.
+
+**What a reader sees.** The question that ends a Recall reply carries the block link of the passage
+that answers it, so they can go and look instead of remembering. Under the answer is a **Hint**
+button, closed. Pressed, it opens one line that makes the answer much easier to reach without being
+the answer. Recall only: Tutorial, Explore and Chat have no hint.
+
+**The model writes the hint in the same reply**, so the button opens at once and costs no second
+call. The contract is one shape, and `REMEMBER_SYSTEM` asks for exactly it:
+
+```
+…Do you remember what he used the rainstorm to show [spya-k3m9qt]?
+
+Hint: He sets it beside a real storm, which gets things wet [spya-k3m9qt].
+```
+
+The stored text is what the model wrote, hint and all. `splitHint` in
+[`src/recall-hint.ts`](../../src/recall-hint.ts) is the one place that says which part is the hint,
+shared by the server, the browser and the eval. It splits only when the **last** paragraph begins
+exactly `Hint:` after a blank line, the hint is not empty, and the body before it **ends with a
+question**.
+
+**Every other shape fails open.** `**Hint:**`, `Hint -`, a hint in the middle, or a `Hint:` after a
+reply that asks nothing are all drawn as written. A hint shown too early is a small loss; a
+paragraph the reader can never see is not, so nothing the model wrote is ever hidden for good. The
+split does not check that the question has a block id: hiding the hint only when the link is there
+would punish the reader for the model's slip. The eval counts both.
+
+**The press is recorded**, in `chat_messages.hint_opened_at`, once
+(`POST /api/chat/:slug/:threadId/hint-opened`, `hintOpened` in `src/routes.ts`). It does two things
+today: a hint the reader opened is still open after a reload, and `answerAsSeen` reads it (below).
+The model is not told; whether Recall should ask differently after an opened hint is an open
+question in the plan.
+
+- **A retry reuses the answer's row**, so three things keep an old press off a new answer. The
+  store nulls the column on retry. The request carries the hint's own text and the store stamps
+  only if the stored answer still has that hint, checked in the same transaction, so a press still
+  on its way when the retry lands is refused. And the panel keys its open state to the attempt.
+- **In the browser** the hint opens from the panel's own state whatever the write does. The write
+  is a checked operation in the chat controller (`HintOperation` in
+  [`src/web/chat/model.ts`](../../src/web/chat/model.ts)): on success the server's time is patched
+  into the message, so leaving the conversation and coming back keeps it open; on failure nothing
+  is written and nothing claims it was.
+- **Copy** copies what is on screen: the body, and the hint only while it is open.
+- **While an answer is arriving** the hint is not drawn, and the button appears when the answer has
+  finished. A flash of the letters `Hin` before the marker completes is accepted.
+
+**Who reads an answer's text.** Storage, export and Recall's own later turns get the raw text: the
+model sees what it wrote, and its prompt says never to assume the hint was opened. Two readers were
+not there and must not be told the reader was given a clue they never looked at, so they call
+`answerAsSeen(message, kind)`, the body plus the hint only if it was opened: Live's seed
+(`liveSeedItems` in `src/live.ts`, for both voice engines) and the `reader_notes` transcript
+(`src/reader-notes.ts`).
+
+Tests: [`recall-hint.test.ts`](../../tests/recall-hint.test.ts) (the split),
+[`recall-hint-panel.test.tsx`](../../tests/recall-hint-panel.test.tsx),
+[`recall-hint-reduce.test.ts`](../../tests/recall-hint-reduce.test.ts),
+[`chat-hint-opened-route.test.ts`](../../tests/chat-hint-opened-route.test.ts) and the
+`hint_opened_at` cases in [`event-times.test.ts`](../../tests/event-times.test.ts). The plan, with
+the options passed over and what is deferred (Tutorial hints; telling the model about the press):
+[261004h](../plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md).
+
 ## A Remember conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of

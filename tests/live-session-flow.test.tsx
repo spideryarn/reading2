@@ -1899,6 +1899,7 @@ describe("spoken repair through the actual chat controller", () => {
       settledAnswer: async () => null,
       stopAnswer: async () => ({ ok: true }),
       cancelThread: async () => ({ ok: true }),
+      markHintOpened: async () => ({ ok: false, error: "not in this test" }),
     };
     const controller = new ChatController("a-slug", effects);
     controller.dispatch({ type: "thread.begun", thread });
