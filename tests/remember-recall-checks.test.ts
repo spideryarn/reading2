@@ -80,7 +80,7 @@ describe("the hint is measured apart from the body", () => {
   const body = "Do you remember what researchers kept doing [spya-bbbbbb]?";
 
   it("judges question-last and the word ceiling on the body alone", () => {
-    const longHint = `Hint: ${"word ".repeat(30).trim()}.`;
+    const longHint = `Hint: ${"word ".repeat(29)}[spya-cccccc].`;
     const out = check(`${body}\n\n${longHint}`);
     expect(out.endsInQuestion).toBe(true);
     expect(out.bodyWords).toBe(8);
@@ -89,7 +89,7 @@ describe("the hint is measured apart from the body", () => {
   });
 
   it("flags a hint that asks a question", () => {
-    expect(check(`${body}\n\nHint: Was it chess?`).hintProblems).toEqual(["asks a question"]);
+    expect(check(`${body}\n\nHint: Was it chess [spya-cccccc]?`).hintProblems).toEqual(["asks a question"]);
   });
 
   it("finds nothing wrong with a short statement", () => {
@@ -97,6 +97,13 @@ describe("the hint is measured apart from the body", () => {
     expect(out.hintProblems).toEqual([]);
     expect(out.nudgeWithoutHint).toBe(false);
     expect(out.strayHint).toBe(false);
+  });
+
+  it("requires the hint's own block id, and checks that the article has it", () => {
+    expect(check(`${body}\n\nHint: He names two games.`).hintProblems).toEqual(["has no block id"]);
+    expect(check(`${body}\n\nHint: He names two games [spya-zzzzzz].`).hintProblems).toEqual([
+      "has an unknown block id",
+    ]);
   });
 
   it("counts a nudge that came with no hint", () => {

@@ -294,10 +294,10 @@ function commit(state: ChatState, op: TurnOperation): ChatState {
 /**
  * The reader opened a Recall answer's hint: register the write that records it.
  *
- * **One write per press, and none for a press already stored.** The panel
- * reports a first press once per mount, so a second one arrives here only from
- * a remount while the first is out, or for a message whose time is already in
- * `base`. Both get the same state object back: there is nothing to ask.
+ * **One write at a time, and none for a press already stored.** The panel asks
+ * again when the reader reopens a hint whose first write failed, but a second
+ * press while the first request is still out — or after its time reached
+ * `base` — gets the same state object back: there is nothing to ask.
  */
 function startHint(state: ChatState, op: Registering<HintOperation>): Outcome {
   const { threadId, messageId, hint } = op;

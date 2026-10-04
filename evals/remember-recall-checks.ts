@@ -13,7 +13,7 @@
  * Tested by tests/remember-recall-checks.test.ts.
  * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md
  */
-import { splitHint } from "../src/recall-hint.js";
+import { endsWithRecallQuestion, splitHint } from "../src/recall-hint.js";
 
 /** The hint's own ceiling, from `REMEMBER_SYSTEM` in src/converse.ts. */
 export const HINT_WORD_LIMIT = 25;
@@ -56,34 +56,34 @@ const ID = /\bspya-[a-z0-9]{6}\b/g;
 
 const words = (text: string): number => (text.trim() === "" ? 0 : text.trim().split(/\s+/).length);
 
-/** Whether a text ends on a question, allowing closers and bracketed ids after the mark. */
-function endsOnQuestion(text: string): boolean {
-  return /\?(?:\s*(?:["'”’»)\]]|\[[^\]\n]*\]))*\s*$/.test(text);
-}
-
 /**
  * The closing question and whatever follows its mark: from the end of the
  * sentence before it to the end of the body.
  */
 function closingQuestion(body: string): string {
-  const mark = body.lastIndexOf("?");
+  const mark = Math.max(body.lastIndexOf("?"), body.lastIndexOf("？"));
   const before = body.slice(0, mark);
   /* The last place a sentence ended: `.`, `!` or `?`, any closers or a
      bracketed id after it, then space. Or a line break. */
   let start = 0;
-  for (const m of before.matchAll(/[.!?](?:["'”’»)]|\s*\[[^\]\n]*\])*\s+|\n+/g)) start = m.index + m[0].length;
+  for (const m of before.matchAll(/[.!?。！？](?:["'”’»)]|\s*\[[^\]\n]*\])*\s+|\n+/g)) {
+    start = m.index + m[0].length;
+  }
   return body.slice(start);
 }
 
 export function checkReply(text: string, knownIds: ReadonlySet<string>): ReplyChecks {
   const { body, hint } = splitHint(text.trim());
-  const endsInQuestion = endsOnQuestion(body);
+  const endsInQuestion = endsWithRecallQuestion(body);
   const questionIds = endsInQuestion ? (closingQuestion(body).match(ID) ?? []) : [];
 
   const hintProblems: string[] = [];
   if (hint !== null) {
     if (words(hint) > HINT_WORD_LIMIT) hintProblems.push(`over ${HINT_WORD_LIMIT} words`);
-    if (hint.includes("?")) hintProblems.push("asks a question");
+    if (hint.includes("?") || hint.includes("？")) hintProblems.push("asks a question");
+    const hintIds = hint.match(ID) ?? [];
+    if (hintIds.length === 0) hintProblems.push("has no block id");
+    else if (hintIds.some((id) => !knownIds.has(id))) hintProblems.push("has an unknown block id");
   }
 
   return {

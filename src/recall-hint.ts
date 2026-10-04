@@ -36,7 +36,13 @@ const BLANK_LINE = /\r?\n(?:[ \t]*\r?\n)+/g;
  * ids may follow. An id there is allowed and not required: whether the question
  * carries one is the eval's business, not the split's (the plan, F5).
  */
-const ENDS_WITH_QUESTION = /\?(?:\s*(?:["'”’»)\]]|\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]))*$/;
+const ENDS_WITH_QUESTION =
+  /[?？](?:\s*(?:\]\([^)\n]*\)|["'”’»)\]]|[*_~`]+|\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]))*$/;
+
+/** Shared with the eval so a hint the panel hides is measured as a nudge there too. */
+export function endsWithRecallQuestion(text: string): boolean {
+  return ENDS_WITH_QUESTION.test(text);
+}
 
 /**
  * Split a Recall answer into its body and its hint.
@@ -59,7 +65,7 @@ export function splitHint(text: string): SplitHint {
   if (hint === "") return whole;
 
   const body = trimmed.slice(0, last.index).trimEnd();
-  if (!ENDS_WITH_QUESTION.test(body)) return whole;
+  if (!endsWithRecallQuestion(body)) return whole;
   return { body, hint };
 }
 

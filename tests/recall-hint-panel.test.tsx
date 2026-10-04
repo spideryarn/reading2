@@ -10,7 +10,8 @@
  *
  * The write that records the press is the controller's
  * (tests/recall-hint-reduce.test.ts); this file only checks that the panel asks
- * for it, once, and opens whether or not anyone is listening.
+ * for it until the stored timestamp comes back, and opens whether or not anyone
+ * is listening.
  * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md
  */
 import { act, createElement } from "react";
@@ -154,15 +155,24 @@ describe("a Recall answer with a hint", () => {
     expect(region?.textContent).toContain(HINT_WORDS);
   });
 
-  it("asks for the press to be recorded, once, with the hint it opened", () => {
+  it("asks again after a reopen until the stored press comes back", () => {
     paint(thread());
     press(hintButton());
     expect(opened).toEqual([{ messageId: ANSWER_ID, hint: HINT }]);
-    /* Closing it and opening it again is not a second first press. */
+    /* No stored timestamp came back: the first write may have failed. */
     press(hintButton());
     expect(answer()?.textContent).not.toContain(HINT_WORDS);
     press(hintButton());
-    expect(opened).toHaveLength(1);
+    expect(opened).toEqual([
+      { messageId: ANSWER_ID, hint: HINT },
+      { messageId: ANSWER_ID, hint: HINT },
+    ]);
+
+    /* Once the server's time arrives, later toggles need no write. */
+    paint(thread({ hintOpenedAt: LATER }));
+    press(hintButton());
+    press(hintButton());
+    expect(opened).toHaveLength(2);
   });
 
   it("opens even when nothing is there to record the press", () => {
@@ -265,13 +275,24 @@ describe("what is not a hint is shown as written", () => {
 });
 
 describe("while the answer is still arriving", () => {
-  it("hides the hint as it arrives and offers the button only once the answer is done", () => {
-    paint(thread({ status: "pending" }));
+  it("offers the button once the marker arrives, and records a pending press after the answer lands", () => {
+    paint(thread({ text: `${BODY}\n\nHint: He names`, status: "pending" }));
     expect(answer()?.textContent).toContain("Do you remember what he says");
     expect(answer()?.textContent).not.toContain(HINT_WORDS);
-    expect(hintButton()).toBeNull();
+    expect(hintButton()?.getAttribute("aria-expanded")).toBe("false");
+
+    press(hintButton());
+    expect(answer()?.textContent).toContain("He names");
+    expect(opened).toEqual([]);
+
+    /* More deltas belong to the same attempt and must not close it. */
+    paint(thread({ status: "pending" }));
+    expect(answer()?.textContent).toContain(HINT_WORDS);
+    expect(hintButton()?.getAttribute("aria-expanded")).toBe("true");
+    expect(opened).toEqual([]);
 
     paint(thread());
-    expect(hintButton()?.getAttribute("aria-expanded")).toBe("false");
+    expect(hintButton()?.getAttribute("aria-expanded")).toBe("true");
+    expect(opened).toEqual([{ messageId: ANSWER_ID, hint: HINT }]);
   });
 });

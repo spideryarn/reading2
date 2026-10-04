@@ -90,9 +90,10 @@ So the four stances went, and the per-point triage Balanced did became the whole
    "just tell me" is answered first.
 4. **Every substantive reply links a passage** (`spya-kqynj5`); a pure clarification may not need
    one, and an id attaches only to what the article says.
-5. **Brief** — usually under 120 words, one nudge at the end. A long explanation becomes a pointer to
-   the passage and a suggestion that Chat is the place to talk it through. (Greg also asked for a
-   tool that starts that chat itself; there is none yet — [remembering-vision.md](remembering-vision.md).)
+5. **Brief** — usually under 120 words before the hint, with one nudge at the end; the hint has its
+   own 25-word ceiling. A long explanation becomes a pointer to the passage and a suggestion that
+   Chat is the place to talk it through. (Greg also asked for a tool that starts that chat itself;
+   there is none yet — [remembering-vision.md](remembering-vision.md).)
 
 The ranking that governed the stances survives, with the nudge in their place: **the entitlement
 rules, then the reader's own words, then the nudge.** The research behind the nudges and the hint
@@ -442,10 +443,11 @@ Greg, `spya-fryxrf`, 2026-10-04, on questions like "Do you remember what comes n
 > hint button, which if clicked would expand to reveal something that will make it much easier for
 > me to kind of perhaps fill in the gaps.
 
-**What a reader sees.** The question that ends a Recall reply carries the block link of the passage
-that answers it, so they can go and look instead of remembering. Under the answer is a **Hint**
-button, closed. Pressed, it opens one line that makes the answer much easier to reach without being
-the answer. Recall only: Tutorial, Explore and Chat have no hint.
+**What a reader sees.** The nudge question that ends most Recall replies carries the block link of
+the passage that answers it, so they can go and look instead of remembering. Under a new answer is a
+closed **Hint** button. Pressed, it opens one line that makes the answer much easier to reach without
+being the answer. A pure clarification has neither link nor hint. Recall only: Tutorial, Explore and
+Chat have no hint.
 
 **The model writes the hint in the same reply**, so the button opens at once and costs no second
 call. The contract is one shape, and `REMEMBER_SYSTEM` asks for exactly it:
@@ -484,8 +486,9 @@ question in the plan.
   into the message, so leaving the conversation and coming back keeps it open; on failure nothing
   is written and nothing claims it was.
 - **Copy** copies what is on screen: the body, and the hint only while it is open.
-- **While an answer is arriving** the hint is not drawn, and the button appears when the answer has
-  finished. A flash of the letters `Hin` before the marker completes is accepted.
+- **While an answer is arriving** the button appears as soon as the complete `Hint:` marker and some
+  hint text have arrived. A press opens it at once; its timestamp write waits until the final hint is
+  stored. A flash of the letters `Hin` before the marker completes is accepted.
 
 **Who reads an answer's text.** Storage, export and Recall's own later turns get the raw text: the
 model sees what it wrote, and its prompt says never to assume the hint was opened. Two readers were

@@ -43,6 +43,16 @@ describe("splitHint", () => {
     }
   });
 
+  it("recognises a question through Markdown closing syntax and a full-width question mark", () => {
+    for (const body of [
+      "**Do you remember what comes next?** [spya-aaaaaa]",
+      "[Do you remember what comes next?](https://example.com/passage) [spya-aaaaaa]",
+      "次に何が起こったか覚えていますか？ [spya-aaaaaa]",
+    ]) {
+      expect(splitHint(`${body}\n\nHint: ${HINT}`), body).toEqual({ body, hint: HINT });
+    }
+  });
+
   it("splits across CRLF line endings and extra blank lines", () => {
     expect(splitHint(`${BODY}\r\n\r\nHint: ${HINT}`)).toEqual({ body: BODY, hint: HINT });
     expect(splitHint(`${BODY}\n\n\nHint: ${HINT}\n`)).toEqual({ body: BODY, hint: HINT });

@@ -426,7 +426,9 @@ async function main(): Promise<void> {
     `- **ending on a question that has no block id of its own, or one the article lacks: ${unlinkedQuestions}** (should be 0 for a nudge; \`unclear\`'s clarification may rightly be one. An id elsewhere in the reply does not count)`,
   );
   say(`- ending on a question with no hint: ${nudgesWithoutHint} (should be 0 for a nudge; a clarification has none)`);
-  say(`- a hint over ${HINT_WORD_LIMIT} words, or that asks a question: ${hintProblems} (should be 0)`);
+  say(
+    `- a hint that breaks its ${HINT_WORD_LIMIT}-word, statement, or own-citation rule: ${hintProblems} (should be 0)`,
+  );
   say(
     `- **a hint the panel will show in the open: ${strayHints}** (should be 0 — a wrong spelling of \`Hint:\`, one that is not the last paragraph, or one after a reply that asks nothing)`,
   );
