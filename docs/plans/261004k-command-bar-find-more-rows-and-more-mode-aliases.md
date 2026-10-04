@@ -16,16 +16,18 @@ each production row.
 
 ## What exists
 
-- **Aliases** are `MODE_CATALOG[mode].aliases` in `src/mode-catalog.ts`, two to four a mode, under a
+- **Aliases** are `MODE_CATALOG[mode].aliases` in `src/mode-catalog.ts`, two to seven a mode, under a
   docblock that says *deliberately sparse*. Structure already answers to `hierarchy`, `toc` and
   `contents`; it does not answer to `table of contents` or `headings`, because the matcher
   (`src/web/command-match.ts` § `TIERS`) asks whether an **alias contains the query**, never the
   reverse, so `contents` does not catch `table of contents`. `tests/mode-catalog.test.ts` holds
-  three rules: unique across modes, never another mode's label, stored canonical.
+  four rules: unique across modes, never another mode's label, stored canonical, and not repeated
+  inside one mode.
 - **Find more exists in exactly two bands**: Glossary (`GlossaryPanel.tsx` § `MoreRow`,
   `owner.more(owner.profiled)`) and Quotes (`QuotesPanel.tsx` § `findMore`,
   `owner.regenerate(owner.profiled)`). Both are a forced run that the server **appends** to an
-  up-to-date list (`existingFor` in `src/glossary.ts` and `src/quotes.ts`). A survey of every other
+  current or explicitly compatible older list (`existingFor` in `src/glossary.ts` and
+  `src/quotes.ts`). A survey of every other
   band (2026-10-04) found no other button that adds to a list: Ideas, Timeline, FAQ, Citations,
   Debate, Skim, Summary, Thread, Quiz, Illustrated and Referee › Claims each have only a forced
   **rewrite**, and those are already in the bar as the *‹name› › Run again* rows
@@ -47,7 +49,7 @@ Widen every mode's `aliases` from two-to-four to roughly six-to-ten natural word
 Structure gains `table of contents`, `headings`, `headers`, `sections`, `chapters`; Summary `tldr`,
 `gist`, `overview`, `synopsis`, `abstract`, `key points`; Glossary `vocabulary`, `jargon`,
 `dictionary`, `key terms`; FAQ `q&a`, `questions and answers`; Remember `memorise`, `memorize`,
-`study`, `test me`; and so on for all seventeen. The three rules in the test stay, and so does the
+`study`, `test me`; and so on for all seventeen. The four rules in the test stay, and so does the
 rule that an alias names a destination. The docblock's "deliberately sparse: two to four" is
 replaced with Greg's sentence and what still limits a word: it must be unique, must not be another
 row's label (mode, sub-mode, page or action), must not start with a verb the argument parser owns

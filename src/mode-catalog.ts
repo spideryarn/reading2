@@ -158,7 +158,7 @@ export interface ModeCatalogEntry {
    * **Other words a reader might type meaning this mode.**
    *
    * Destination synonyms, and **as many as a reader would naturally type**:
-   * six to ten a mode. Until 2026-10-04 this said *deliberately sparse, two to
+   * six to twelve a mode. Until 2026-10-04 this said *deliberately sparse, two to
    * four each*, and that stance is superseded:
    *
    * > In the command bar, add more aliases. So, for example, structure mode

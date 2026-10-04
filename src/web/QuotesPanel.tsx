@@ -835,7 +835,9 @@ export function QuotesPanel({
   useFindMoreHandOff({
     slug: owner?.slug ?? null,
     mode: "quotes",
-    settled: owner !== null && owner.status !== "loading",
+    /* The list and the job list must both have answered. Until the first job
+       poll, `job === null` means “not known”, not “none” (code review F10). */
+    settled: owner !== null && owner.status !== "loading" && owner.loaded,
     offered: owner !== null && quotesFindMoreOffered(owner),
     press: () => void pressFindMore(),
   });
@@ -957,6 +959,7 @@ export function QuotesPanel({
           {quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
           <Foot
             list={owner.quotes}
+            loaded={owner.loaded}
             running={owner.job !== null || owner.starting}
             /* The one answer to *can this list be added to* — the gate on the
                command bar's row too (find-more.ts). Under this guard it is
@@ -1586,11 +1589,14 @@ function QuoteStepper({
  */
 function Foot({
   list,
+  loaded,
   running,
   addable,
   findMore,
 }: {
   list: Quotes;
+  /** False until the first job poll; neither a button nor the cap claim is true yet. */
+  loaded: boolean;
   /** A run is in flight, so the last one's answer is about to be superseded. */
   running: boolean;
   /**
@@ -1609,7 +1615,9 @@ function Foot({
   return (
     <div className="quotes-foot">
       {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
-      {addable ? findMore : <p className="quotes-quiet">That is as many as we keep for one article.</p>}
+      {addable ? (loaded ? findMore : null) : (
+        <p className="quotes-quiet">That is as many as we keep for one article.</p>
+      )}
     </div>
   );
 }

@@ -406,7 +406,7 @@ Three pieces of it are worth knowing about:
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
   Structure, `define and `terms` for Glossary — which live in
   [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
-  Six to ten a mode since 2026-10-04, when Greg asked for more (*"structure mode could have aliases
+  Six to twelve a mode since 2026-10-04, when Greg asked for more (*"structure mode could have aliases
   for hierarchy, table of contents, TOC, headings, etc."*, spya-uzkmn3); they were two to four. What
   still limits a word is that the cost of a loose one is not a missed match, it is the *wrong* row
   ranked first for somebody who typed the right thing — the rules are on `aliases` in that file, and

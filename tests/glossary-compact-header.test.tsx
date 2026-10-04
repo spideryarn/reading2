@@ -91,6 +91,7 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     error: null,
     retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,

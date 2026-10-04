@@ -328,6 +328,7 @@ function glossaryOwner(over: Partial<GlossaryOwner> = {}): GlossaryOwner {
     slug: SLUG,
     error: null,
     retryRead: async () => {},
+    loaded: true,
     job: null,
     failed: null,
     stalled: false,
@@ -380,6 +381,7 @@ function quotesOwner(over: Partial<QuotesOwner> = {}): QuotesOwner {
     slug: SLUG,
     error: null,
     retryRead: async () => {},
+    loaded: true,
     job: null,
     failed: null,
     stalled: false,
@@ -426,6 +428,18 @@ describe("the glossary panel takes the press", () => {
     expect(pendingFindMore(SLUG, "glossary")).not.toBeNull();
     await draw(glossaryPanel(glossaryOwner({ more })));
     expect(more.mock.calls).toEqual([[false]]);
+  });
+
+  it("waits for the first job poll, then drops the press when it finds a run", async () => {
+    const more = vi.fn(async () => {});
+    pressFindMore("glossary");
+    await draw(glossaryPanel(glossaryOwner({ more, loaded: false })));
+    expect(more).not.toHaveBeenCalled();
+    expect(pendingFindMore(SLUG, "glossary")).not.toBeNull();
+
+    await draw(glossaryPanel(glossaryOwner({ more, loaded: true, job: JOB })));
+    expect(more).not.toHaveBeenCalled();
+    expect(pendingFindMore(SLUG, "glossary"), "taken after the queue has an answer").toBeNull();
   });
 
   it.each([
@@ -479,6 +493,26 @@ describe("the quotes panel takes the press", () => {
     expect(regenerate).not.toHaveBeenCalled();
     await draw(quotesPanel(quotesOwner({ regenerate })));
     expect(regenerate.mock.calls).toEqual([[false]]);
+  });
+
+  it("waits for the first job poll, then drops the press when it finds a run", async () => {
+    const regenerate = vi.fn(async () => {});
+    pressFindMore("quotes");
+    await draw(quotesPanel(quotesOwner({ regenerate, loaded: false })));
+    expect(regenerate).not.toHaveBeenCalled();
+    expect(pendingFindMore(SLUG, "quotes")).not.toBeNull();
+
+    await draw(
+      quotesPanel(
+        quotesOwner({
+          regenerate,
+          loaded: true,
+          job: { ...JOB, steps: [{ name: "quotes", status: "running" }] } as unknown as Job,
+        }),
+      ),
+    );
+    expect(regenerate).not.toHaveBeenCalled();
+    expect(pendingFindMore(SLUG, "quotes"), "taken after the queue has an answer").toBeNull();
   });
 
   it.each([

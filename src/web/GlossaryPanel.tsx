@@ -298,7 +298,9 @@ export function GlossaryPanel({
   useFindMoreHandOff({
     slug: owner?.slug ?? null,
     mode: "glossary",
-    settled: owner !== null && owner.status !== "loading",
+    /* The list and the job list must both have answered. Until the first job
+       poll, `job === null` means “not known”, not “none” (code review F10). */
+    settled: owner !== null && owner.status !== "loading" && owner.loaded,
     offered: owner !== null && glossaryFindMoreOffered(owner),
     press: () => void findMore(),
   });
@@ -405,6 +407,7 @@ export function GlossaryPanel({
       {glossary && owner?.status === "ready" && owner.glossary ? (
         <MoreRow
           job={owner.job}
+          loaded={owner.loaded}
           starting={owner.starting}
           failed={owner.failed}
           stalled={owner.stalled}
@@ -2238,6 +2241,7 @@ export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
  */
 function MoreRow({
   job,
+  loaded,
   starting,
   failed,
   stalled,
@@ -2249,6 +2253,8 @@ function MoreRow({
   onCancel,
 }: {
   job: Job | null;
+  /** False until the first job poll; while false, whether a run exists is unknown. */
+  loaded: boolean;
   /**
    * **The POST has gone and the poll has not seen the job yet** — `useStepJob.ts`
    * § `starting`, which exists for exactly the gap this foot used to fall into.
@@ -2312,7 +2318,9 @@ function MoreRow({
      `freshRunOffered` is the question the command bar's Find more asks before
      it presses `onMore` (find-more.ts): while this branch is drawn, it does
      not. */
-  if (!freshRunOffered({ job, starting, failed })) {
+  if (!loaded) return null;
+
+  if (!freshRunOffered({ job, loaded, starting, failed })) {
     return (
       <div className="gloss-more">
         <Progress

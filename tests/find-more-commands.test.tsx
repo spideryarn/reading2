@@ -143,6 +143,7 @@ describe("whether a fresh Find more is what the glossary band offers now (F1)", 
     glossary: LIST,
     panelRun: "append",
     job: null,
+    loaded: true,
     starting: false,
     failed: null,
     rewriting: false,
@@ -167,10 +168,11 @@ describe("whether a fresh Find more is what the glossary band offers now (F1)", 
   });
 
   it("shares the run-is-idle half with the band's own row", () => {
-    expect(freshRunOffered({ job: null, starting: false, failed: null })).toBe(true);
-    expect(freshRunOffered({ job: JOB, starting: false, failed: null })).toBe(false);
-    expect(freshRunOffered({ job: null, starting: true, failed: null })).toBe(false);
-    expect(freshRunOffered({ job: null, starting: false, failed: { message: "x", retryable: true, retry: null } })).toBe(
+    expect(freshRunOffered({ job: null, loaded: true, starting: false, failed: null })).toBe(true);
+    expect(freshRunOffered({ job: null, loaded: false, starting: false, failed: null })).toBe(false);
+    expect(freshRunOffered({ job: JOB, loaded: true, starting: false, failed: null })).toBe(false);
+    expect(freshRunOffered({ job: null, loaded: true, starting: true, failed: null })).toBe(false);
+    expect(freshRunOffered({ job: null, loaded: true, starting: false, failed: { message: "x", retryable: true, retry: null } })).toBe(
       false,
     );
   });
@@ -178,7 +180,7 @@ describe("whether a fresh Find more is what the glossary band offers now (F1)", 
 
 describe("whether the quotes' list can be added to, and whether Find more is offered now", () => {
   const read = { status: "ready", quotes: quotesOf(3), stale: false, outdated: false } as const;
-  const idle = { ...read, job: null, starting: false, failed: null } as const;
+  const idle = { ...read, job: null, loaded: true, starting: false, failed: null } as const;
 
   it("is so for a current list under the ceiling", () => {
     expect(quotesAppendOnOffer(read)).toBe(true);

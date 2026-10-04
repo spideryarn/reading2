@@ -78,6 +78,7 @@ function glossaryOwner(): GlossaryOwner {
     error: null,
     retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,

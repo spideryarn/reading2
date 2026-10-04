@@ -125,8 +125,8 @@ export function findMoreCommand(mode: FindMoreMode, run: () => ActionOutcome | P
 /* ------------------------------------------------------- is it on offer -- */
 
 /**
- * **Nothing is out, so a fresh press is what the run control draws** — no job,
- * no POST on its way, no failure on screen.
+ * **Nothing is out, so a fresh press is what the run control draws** — the job
+ * list has answered, with no job, no POST on its way and no failure on screen.
  *
  * `JobProgress` draws the job's progress for the first, *Starting…* for the
  * second, and for the third a Retry (which skips the stages that worked), the
@@ -135,8 +135,8 @@ export function findMoreCommand(mode: FindMoreMode, run: () => ActionOutcome | P
  * second paid run beside the first, or past a cheaper Retry (GPT Sol's F1 on
  * plan 261004k). Glossary's run row branches on this same function.
  */
-export function freshRunOffered(run: Pick<StepJob, "job" | "starting" | "failed">): boolean {
-  return run.job === null && !run.starting && run.failed === null;
+export function freshRunOffered(run: Pick<StepJob, "job" | "loaded" | "starting" | "failed">): boolean {
+  return run.loaded && run.job === null && !run.starting && run.failed === null;
 }
 
 /**
@@ -168,7 +168,7 @@ export function glossaryAppendOnOffer(read: Pick<GlossaryRead, "status" | "gloss
  * row itself is drawn from.
  */
 export function glossaryFindMoreOffered(
-  owner: Pick<UseGlossary, "status" | "glossary" | "panelRun" | "job" | "starting" | "failed" | "rewriting">,
+  owner: Pick<UseGlossary, "status" | "glossary" | "panelRun" | "job" | "loaded" | "starting" | "failed" | "rewriting">,
 ): boolean {
   return glossaryAppendOnOffer(owner) && freshRunOffered(owner) && !owner.rewriting;
 }
@@ -192,7 +192,7 @@ export function quotesAppendOnOffer(read: Pick<QuotesRead, "status" | "quotes" |
 
 /** **A fresh Find more is what the quotes band offers right now** — `glossaryFindMoreOffered`'s twin. */
 export function quotesFindMoreOffered(
-  owner: Pick<UseQuotes, "status" | "quotes" | "stale" | "outdated" | "job" | "starting" | "failed">,
+  owner: Pick<UseQuotes, "status" | "quotes" | "stale" | "outdated" | "job" | "loaded" | "starting" | "failed">,
 ): boolean {
   return quotesAppendOnOffer(owner) && freshRunOffered(owner);
 }
