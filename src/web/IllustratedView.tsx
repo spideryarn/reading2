@@ -891,10 +891,10 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
   const { sketch } = view;
 
-  if (view.status === "error") {
+  if (view.error) {
     return (
       <ReadError
-        error={view.error ?? "Could not ask for this painting."}
+        error={view.error}
         onRetry={view.retryRead}
         className="tw:m-0"
       />

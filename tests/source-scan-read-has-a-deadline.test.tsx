@@ -151,6 +151,29 @@ describe("useSourceScan — the read has an end", () => {
     expect(seen).toEqual({ state: "ready", scan });
   });
 
+  it("bounds the body too, and a body that finishes after the deadline cannot replace the failure", async () => {
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    answer = async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) { body = controller; },
+    }), { status: 200 });
+    await mount();
+    expect(sent).toHaveLength(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SOURCE_SCAN_DEADLINE_MS);
+    });
+    expect(seen).toEqual({ state: "failed", error: SCAN_TIMED_OUT.message });
+    expect(sent[0]?.signal?.aborted).toBe(true);
+
+    /* This body deliberately ignores the abort: the promise race, rather than
+       cooperative transport cancellation, must own the deadline. */
+    await act(async () => {
+      body.enqueue(new TextEncoder().encode(JSON.stringify({ scan: { examined: false, reason: "pdf" } })));
+      body.close();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(seen).toEqual({ state: "failed", error: SCAN_TIMED_OUT.message });
+  });
+
   it("keeps the `no-source` and `body.error` arms", async () => {
     answer = async () => json({ scan: null });
     await mount();

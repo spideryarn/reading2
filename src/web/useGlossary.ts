@@ -366,6 +366,8 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         }
         const loaded = await readJson<GlossaryResponse>(res);
         if (!current()) return;
+        /* Derive before publishing: a malformed revalidation keeps the old list. */
+        const profiled = loaded.glossary.profileHash != null;
         setGlossary(loaded.glossary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
@@ -373,7 +375,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            undefined` and only `null` and absent mean "written without one". A
            `!!` here would be right today and wrong the moment somebody stores an
            empty string. */
-        setProfiled(loaded.glossary.profileHash != null);
+        setProfiled(profiled);
         setProfileChanged(loaded.profileChanged);
         setPanelRun(loaded.panelRun);
         setError(null);

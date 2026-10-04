@@ -220,9 +220,9 @@ function OwnerSketch({
       <div className="sk-empty">
         {/* A failed read is not "nobody has drawn one": say which, and offer
             the read again before the paid button below it. ReadError.tsx. */}
-        {view.status === "error" ? (
+        {view.error ? (
           <ReadError
-            error={view.error ?? "Could not ask for this picture."}
+            error={view.error}
             onRetry={view.retryRead}
             className="tw:m-0 tw:mb-2"
           />

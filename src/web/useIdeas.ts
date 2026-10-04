@@ -175,12 +175,15 @@ export function useIdeasRead(slug: string): IdeasRead {
       }
       const loaded = await readJson<IdeasResponse>(res);
       if (!current()) return;
+      /* Read the fields that can throw before publishing any of this reply.
+         A malformed revalidation must leave the loaded artefact intact. */
+      const profiled = loaded.ideas.profileHash != null;
       setIdeas(loaded.ideas);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
          undefined` and only `null` and absent mean "written without one". */
-      setProfiled(loaded.ideas.profileHash != null);
+      setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");

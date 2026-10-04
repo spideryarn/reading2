@@ -228,12 +228,14 @@ export function useQuotesRead(slug: string): QuotesRead {
       }
       const loaded = await readJson<QuotesResponse>(res);
       if (!current()) return;
+      /* Derive before publishing: a malformed revalidation keeps the old list. */
+      const profiled = loaded.quotes.profileHash != null;
       setQuotes(loaded.quotes);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
          undefined` and only `null` and absent mean "chosen without one". */
-      setProfiled(loaded.quotes.profileHash != null);
+      setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");

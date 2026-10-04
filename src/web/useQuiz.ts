@@ -343,12 +343,14 @@ export function useQuizRead(slug: string): QuizRead {
       }
       const loaded = await readJson<QuizResponse>(res);
       if (!current()) return;
+      /* Derive before publishing: a malformed revalidation keeps the old batch. */
+      const profiled = loaded.quiz.profileHash != null;
       setQuiz(loaded.quiz);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null`, as useIdeas.ts: absent (written before 261002f) and `null`
          (written for nobody) both mean no badge. */
-      setProfiled(loaded.quiz.profileHash != null);
+      setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
       /* The replacement has arrived: nothing left to wait for. */
       setHeld((h) => (h !== null && h !== loaded.quiz.batchId ? null : h));

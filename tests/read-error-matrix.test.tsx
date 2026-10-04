@@ -439,6 +439,8 @@ type Answer =
   | "missing"
   /** `fetch` rejects the way a dropped connection does, in Safari's words. */
   | "transport"
+  /** A 200 whose artefact is null, contradicting the declared response type. */
+  | "null-artefact"
   /** `fetch` rejects with an exception nobody wrote for a reader. */
   | "fault";
 
@@ -455,6 +457,13 @@ let posts: { slug?: string; steps?: string[]; force?: string[] }[] = [];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function artefactResponse(kind: string, answer: Answer): Response {
+  if (answer === "transport") throw new TypeError(BROWSER_WORDS);
+  if (answer === "fault") throw new Error(FAULT_WORDS);
+  if (answer === "null-artefact") return json({ [kind]: null, stale: true, outdated: true, profileChanged: true });
+  return answer === "ok" ? json(BODIES[kind]) : new Response(null, { status: 404 });
 }
 
 async function reply(url: string, method: string, body: string | null): Promise<Response> {
@@ -482,9 +491,7 @@ async function reply(url: string, method: string, body: string | null): Promise<
        moment it reads a 404, on every owned article, and that job would be in
        every row's `posts`. */
     const answer = answers[kind] ?? (kind === "arc" ? "ok" : "missing");
-    if (answer === "transport") throw new TypeError(BROWSER_WORDS);
-    if (answer === "fault") throw new Error(FAULT_WORDS);
-    return answer === "ok" ? json(BODIES[kind]) : new Response(null, { status: 404 });
+    return artefactResponse(kind, answer);
   }
   if (kind) return new Response(null, { status: 404 });
   return json({});
@@ -497,6 +504,10 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { SketchView } = await import("../src/web/SketchView.js");
 const { IllustratedView } = await import("../src/web/IllustratedView.js");
+const { useIdeasRead } = await import("../src/web/useIdeas.js");
+const { useQuotesRead } = await import("../src/web/useQuotes.js");
+const { useGlossaryRead } = await import("../src/web/useGlossary.js");
+const { useQuizRead } = await import("../src/web/useQuiz.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -742,6 +753,29 @@ describe.each([
     view: (blocks: Block[]) => createElement(IllustratedView, { slug: SLUG, blocks, onJump: () => {} }),
   },
 ])("$name: a failed revalidation beside a picture that is there", ({ kind, view }) => {
+  it("also offers the failed read again after an earlier 404", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { [kind]: "missing" };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(view(BLOCKS)));
+    await settle();
+    expect(gets[kind]).toBe(1);
+
+    answers = { [kind]: "transport" };
+    await act(async () => root.render(view(MORE_BLOCKS)));
+    await settle();
+    expect(gets[kind]).toBe(2);
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(COULD_NOT_REACH.message);
+    expect(tryAgain(host)).toBeDefined();
+
+    answers = { [kind]: "ok" };
+    await press(tryAgain(host));
+    expect(gets[kind]).toBe(3);
+    expect(posts).toEqual([]);
+    expect(readable(host)).toContain(SAYS[kind]);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("keeps the picture, says so with Try again, and recovers on one GET with no job", async () => {
     vi.stubEnv("PROD", true);
     answers = { [kind]: "ok" };
@@ -768,6 +802,46 @@ describe.each([
     expect(posts).toEqual([]);
     expect(readable(host)).toContain(SAYS[kind]);
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe.each([
+  { kind: "ideas", use: () => { const read = useIdeasRead(SLUG); return { read, artefact: read.ideas }; } },
+  { kind: "quotes", use: () => { const read = useQuotesRead(SLUG); return { read, artefact: read.quotes }; } },
+  { kind: "glossary", use: () => { const read = useGlossaryRead(SLUG); return { read, artefact: read.glossary }; } },
+  { kind: "quiz", use: () => { const read = useQuizRead(SLUG); return { read, artefact: read.quiz }; } },
+])("$kind: a malformed revalidation", ({ kind, use }) => {
+  it("reports PAGE_FAULT without committing the broken artefact, and retry keeps the loaded one", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: "ok" };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    const kept = seen.artefact;
+    expect(kept).toBeTruthy();
+    expect(seen.read.status).toBe("ready");
+
+    answers = { [kind]: "null-artefact" };
+    await act(async () => seen.read.refresh());
+    expect(seen.read.error).toBe(PAGE_FAULT.message);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.artefact, "a rejected response replaced the loaded artefact").toBe(kept);
+    expect([seen.read.stale, seen.read.outdated, seen.read.profileChanged, seen.read.profiled]).toEqual([
+      false, false, false, false,
+    ]);
+
+    const before = gets[kind] ?? 0;
+    answers = { [kind]: "ok" };
+    await act(async () => seen.read.retryRead());
+    expect((gets[kind] ?? 0) - before).toBe(1);
+    expect(seen.read.error).toBeNull();
+    expect(seen.read.status).toBe("ready");
+    expect(seen.artefact).toEqual(kept);
+    expect(posts).toEqual([]);
   });
 });
 
