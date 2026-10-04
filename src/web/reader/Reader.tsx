@@ -82,7 +82,7 @@ import { questionsByAnchor } from "../quiz-anchors.js";
 import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
-import type { SelectionAnchor } from "../selection.js";
+import { sameAnchor, selectAnchor, type SelectionAnchor } from "../selection.js";
 import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
@@ -91,6 +91,9 @@ import { Spine } from "../Spine.js";
 import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
+import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-highlight.js";
+import type { CommentsApi } from "../useComments.js";
+import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
@@ -2372,31 +2375,258 @@ export function Reader({
     return { band: forJump(bandJump), dialog: forJump(jumpTo) };
   }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
 
+  /**
+   * ## Selecting applies the highlight, and the box customises or removes it
+   *
+   * > how about if selecting text automatically applies the highlight and also
+   * > pops up the fuller box to allow the user to customise (or remove) it, and
+   * > they can just click off if they're happy with the highlighting
+   * >
+   * > — Greg, 2026-10-04
+   *
+   * Outside Referee mode a selection **writes its row at once** — a comment in
+   * `DEFAULT_HIGHLIGHT` — and the box that opens is the comment's own,
+   * `CommentDialog`. That is `bookmarkBlock`'s pattern above (create, then
+   * open the box on the row) with the same three guards, applied to words
+   * instead of a paragraph. There is no provisional mark and no draft: the
+   * paint is the ordinary mark of an ordinary row, and a create that fails
+   * takes the row, the paint and the box away together (`useComments.create`).
+   * docs/plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md
+   * § GPT Sol's plan review, which is where the design changed to this.
+   *
+   * **`fresh` is the box a selection opened on the comment it made**, and only
+   * that box gets the fresh rules (CommentDialog.tsx § `FreshBox`): a press
+   * elsewhere closes it, Delete reads *Remove highlight*, Copy can take the
+   * highlight off again. It ends when that box closes or shows another
+   * comment — the effect below — so the same comment opened later from its
+   * mark is an ordinary box.
+   *
+   * **`freshTouched`** is whether the reader has done anything to the fresh
+   * row. Said by the dialog at the press, because a colour or an edit is not
+   * in the stored row until the server answers, and the overlap rule below
+   * must not remove a highlight the reader had just changed.
+   *
+   * **`closedFresh` is the fresh row, remembered for one gesture.** Set by the
+   * `pointerdown` outside its box — which closes nothing yet: the box goes
+   * when that press ends, and only if it still shows this row (CommentDialog.tsx
+   * § The press outside is only recorded) — held until that mouse
+   * gesture's `mouseup`, and also cleared by the next `pointerdown` as a stale
+   * guard (the capture listener below runs before the dialog's own). A mouse
+   * drag is one gesture, so a selection whose `mouseup` finds this set is the
+   * reader correcting the words they just highlighted — see `selectProse`.
+   * Touch and pen have no compatibility `mouseup` guarantee, so their
+   * `pointerup` clears it; this stops a later keyboard activation inheriting
+   * either kind of completed gesture.
+   */
+  const [fresh, setFresh] = useState<{
+    id: string;
+    anchor: SelectionAnchor;
+    input: "mouse" | "touch";
+  } | null>(null);
+  const freshTouched = useRef(false);
+  const closedFresh = useRef<{ id: string; anchor: SelectionAnchor; touched: boolean } | null>(null);
+  /**
+   * **Has this gesture already opened a comment's box?** The fresh box closes
+   * when the press outside it ends, and by then the same press may have made a
+   * new highlight or landed on another mark, whose box is the one now wanted.
+   * The dialog checks the id it is showing and the close itself is conditional
+   * on `?note=`, but neither is enough alone: both read state that a commit not
+   * yet flushed has not reached. This is set in the handler, so it is always
+   * current. Forgotten at the next `pointerdown`.
+   */
+  const openedThisGesture = useRef(false);
+  /* A clipboard answer can arrive after its fresh box has closed. Every
+     reader change protects the row here, above any one dialog instance, and a
+     successful answer claims the id before deleting so two pending copies
+     cannot both remove it. */
+  const copyOnlyProtected = useRef(new Set<string>());
+  /** `bookmarkPress`'s twin: only the newest selection may open its box late. */
+  const selectPress = useRef(0);
+  /* What `selectProse` reads without depending on it — the function is
+     `memo(TableView)`'s `onSelect` and must keep its identity (see its
+     dependency list). Published from a committed render, as `surface` is. */
+  const commentsNow = useRef<CommentsApi | null>(null);
+  const refereeNow = useRef(false);
+  useLayoutEffect(() => {
+    commentsNow.current = owner?.comments ?? null;
+    refereeNow.current = mode === "referee";
+  });
+  /* Fresh ends when its box does. `freshShown` is there because the row can
+     be made fresh a beat before `?note=` names it. */
+  const freshShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fresh) {
+      freshShown.current = null;
+      return;
+    }
+    if (note === fresh.id) {
+      freshShown.current = fresh.id;
+      return;
+    }
+    if (freshShown.current === fresh.id) setFresh(null);
+  }, [note, fresh]);
+  useEffect(() => {
+    const nextGesture = () => {
+      closedFresh.current = null;
+      openedThisGesture.current = false;
+    };
+    const gestureEnded = () => {
+      closedFresh.current = null;
+    };
+    const nonMouseGestureEnded = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") closedFresh.current = null;
+    };
+    window.addEventListener("pointerdown", nextGesture, true);
+    window.addEventListener("pointerup", nonMouseGestureEnded);
+    window.addEventListener("mouseup", gestureEnded);
+    window.addEventListener("pointercancel", gestureEnded);
+    return () => {
+      window.removeEventListener("pointerdown", nextGesture, true);
+      window.removeEventListener("pointerup", nonMouseGestureEnded);
+      window.removeEventListener("mouseup", gestureEnded);
+      window.removeEventListener("pointercancel", gestureEnded);
+    };
+  }, []);
+  /**
+   * **A mouse keeps its words selected.** The paint replaces the paragraph's
+   * nodes, which collapses the selection the reader has just made — and a
+   * reader who selected in order to copy would press ⌘C on nothing. So once
+   * the fresh row is painted the selection is put back over it, and a native
+   * copy then both works and takes the highlight off (CommentDialog.tsx § a
+   * native copy).
+   *
+   * **Twice, and then never again**: the paragraph is painted once for the
+   * row and once more when `?note=` names it and the mark gains its open ring,
+   * so the effect runs for each. Only while the box is the fresh one — keyed
+   * on `note` being this row — so the paint that takes the ring *off* when the
+   * box closes does not put a selection back over a reader who has moved on.
+   *
+   * Not by touch: there the button press clears the selection on purpose, to
+   * put the OS handles and callout away (`selectProse`). And not over a
+   * selection that is still live, which is the reader's and may be a new one.
+   */
+  const freshOpen = fresh !== null && note === fresh.id;
+  /* A passive effect, and of this component: it runs after the table's new
+     markup is committed and after `CommentDialog`'s own mount effect has moved
+     focus to its close button. Chrome leaves a selection alone when a button
+     is focused; jsdom collapses it, and nothing promises the rest do not. */
+  useEffect(() => {
+    if (!fresh || fresh.input !== "mouse") return;
+    /* The first paint comes before `?note=` has caught up; the second with it. */
+    if (!freshOpen && freshShown.current === fresh.id) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    selectAnchor(fresh.anchor);
+  }, [fresh, freshOpen]);
+
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
        a drag it refused from no drag at all, and TableView stops on the first
        without calling in here. src/web/selection.ts § SelectionRead. */
-    (anchor: SelectionAnchor) => {
+    (anchor: SelectionAnchor, input: "mouse" | "touch" = "mouse") => {
       /* **The one control a visitor meets by accident**, since selecting prose
          is something people do while reading rather than a button they chose to
          press. So it is silent: they keep their selection and the page does not
          grow a box about an account. The ask lives where they went looking for
          something — the marked modes and the notice under the title. */
       if (!isOwner) return;
+      const api = commentsNow.current;
+      if (!api) return;
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
-         call the reader had not asked for; then it opened an ask box; since
-         2026-08-28 it opens a *comment* box, where saving is free and the model
-         is opt-in (a tick-box then, the Ask AI button since 2026-10-03). Greg's
-         call — see docs/plans/260828a-comments-and-bookmarks.md. */
-      void setNote(null);
-      void setThread(null);
-      setChatDraft(null);
-      setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
-      /* **The browser's selection is deliberately left alone**, which is a
-         reversal. It used to be cleared because it sat on top of the mark we had
-         just drawn and hid it. There is no stored mark yet — the reader still
-         has to close or save the box — so clearing it would leave them looking
-         at a quote in a box with no idea which words on the page it came from. */
+         call the reader had not asked for; then it opened an ask box; from
+         2026-08-28 a comment *draft* box; since 2026-10-04 it stores a free
+         highlight. The model is only ever asked from a button. */
+      if (refereeNow.current) {
+        /* **Referee mode keeps the draft box, exactly as it was.** A selection
+           there is evidence for a criterion: it opens on No colour, the
+           placement is part of the one save, and nothing is stored until the
+           referee says. AnnotateDialog.tsx § Referee only.
+
+           The browser's selection is left alone here: there is no stored mark
+           yet, so clearing it would leave a quote in a box with no sign of
+           which words on the page it came from. */
+        void setNote(null);
+        void setThread(null);
+        setChatDraft(null);
+        setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
+        return;
+      }
+      /* **Overlap means correction** (GPT Sol, E3). The fresh box was closed
+         by the press that began this very drag, in the same paragraph, over
+         some of the same characters: the reader is fixing which words, not
+         asking for two highlights. The first goes, if it is still exactly what
+         the selection wrote — read from the stored row *now*, and from
+         `touched` for anything the store has not answered yet. A mouse only:
+         by touch the second selection is a new long-press, a new gesture. */
+      const closed = closedFresh.current;
+      /* **The very words of the fresh highlight are not a new selection.** A
+         mouse keeps them selected while the box is open (§ A mouse keeps its
+         words selected), and a click on selected text does not collapse the
+         selection until after its `mouseup` — so a click on the highlight
+         arrives here as its own anchor again. It is a click away: leave the
+         row alone, leave `closedFresh` for `openCommentDialog`, and let the
+         box close as the press ends. Before the close moved to the end of the
+         gesture, the repaint at `pointerdown` had collapsed the selection and
+         this could not arise. */
+      if (input === "mouse" && closed && sameAnchor(closed.anchor, anchor)) return;
+      closedFresh.current = null;
+      if (input === "mouse" && closed && !closed.touched && spansOverlap(closed.anchor, anchor)) {
+        const row = api.comments.find((c) => c.id === closed.id);
+        if (row && isPristineHighlight(row)) api.remove(row.id);
+      }
+
+      const id = mintId();
+      const mine = ++selectPress.current;
+      const before = surface.current;
+      /* Read before `create`, which is what decides which of the two paths
+         below this is: with the list in, the row is drawn in this same turn. */
+      const listIn = api.loaded;
+      const stored = api.create({
+        id,
+        blockId: anchor.blockId,
+        quote: anchor.quote,
+        start: anchor.start,
+        colour: DEFAULT_HIGHLIGHT,
+      });
+      const openFreshBox = (rowId: string) => {
+        openedThisGesture.current = true;
+        freshTouched.current = false;
+        setFresh({ id: rowId, anchor, input });
+        /* One panel in the slot, and the box is drawn only when no chat is. */
+        void setThread(null);
+        setChatDraft(null);
+        setAnnotating(null);
+        void setNote(rowId);
+      };
+      /* **As soon as its row exists.** With the list loaded that is now. */
+      if (listIn) openFreshBox(id);
+      void stored.then((comment) => {
+        if (comment === null) {
+          /* Refused, or removed by the reader meanwhile. The row is gone and
+             the box with it; do not leave `?note=` naming nothing. */
+          if (listIn) void setNote((current) => (current === id ? null : current));
+          return;
+        }
+        if (listIn) {
+          /* The server may mint a different id; follow the row. */
+          if (comment.id !== id) {
+            setFresh((current) => (current?.id === id ? { ...current, id: comment.id } : current));
+            void setNote((current) => (current === id ? comment.id : current));
+          }
+          return;
+        }
+        /* **Held behind the opening read**, the first seconds of a page: there
+           was no row to open a box on until now. `bookmarkBlock`'s two guards:
+           not over anything the reader opened while waiting, and not for a
+           selection that is no longer the newest. The highlight is stored and
+           painted either way. */
+        const unchanged = surface.current.every((v, i) => Object.is(v, before[i]));
+        if (mine === selectPress.current && unchanged) openFreshBox(comment.id);
+      });
+      /* **A finger's selection is put away; a mouse's is left alone** (GPT
+         Sol, E4). On touch this takes the OS handles and callout off the words
+         the paint now marks. A mouse's stays for the reader to copy. */
+      if (input === "touch") window.getSelection()?.removeAllRanges();
     },
     /* **`isOwner`, not `owner`.** The capability is a new object on every
        render of `OwnedReader` (ArticlePage.tsx), and a reading-time step is one
@@ -2404,8 +2634,14 @@ export function Reader({
        time, and it is `memo(TableView)`'s `onSelect`. GPT Sol's F2 on
        docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md;
        tests/spine-reading.test.ts verifies a reach update leaves TableView's
-       render count unchanged, including with marginalia open. */
+       render count unchanged, including with marginalia open. The comments
+       api and the mode come through refs for the same reason. */
     [isOwner, setNote, setThread],
+  );
+  /** The chip's press: the same call, said to be a finger's. */
+  const selectProseByTouch = useCallback(
+    (anchor: SelectionAnchor) => selectProse(anchor, "touch"),
+    [selectProse],
   );
 
   /**
@@ -2423,7 +2659,21 @@ export function Reader({
    * `string`, so the annotation was a lie a reader would have believed. GPT Sol
    * F24, 2026-09-06.
    */
-  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
+  const openCommentDialog = useCallback(
+    (id: string) => {
+      /* **A click on the words just highlighted is a click away**, not a
+         request to open them. Its `pointerdown` marked the fresh box to close
+         when the press ends (`closedFresh`); this `mouseup`, landing on that
+         highlight's own mark, comes just before that close, and without this
+         it would name the same comment again and the box would open straight
+         back up as an ordinary one.
+         The next press on the mark is a new gesture and opens it as usual. */
+      if (closedFresh.current?.id === id) return;
+      openedThisGesture.current = true;
+      void setNote(id);
+    },
+    [setNote],
+  );
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.
@@ -3270,7 +3520,8 @@ export function Reader({
       />
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
-          it calls the same `selectProse`. Two gates, both decided here because
+          it calls the same `selectProse`, saying it was a finger — which is
+          what applies the highlight and then clears the selection. Two gates, both decided here because
           here is where they are known. `owner &&`: a visitor's selection is
           silent (`selectProse`'s early return), and a chip that appears and
           then does nothing is not silent. `suppressed`: the three conditions
@@ -3285,12 +3536,15 @@ export function Reader({
         <TouchSelectionChip
           key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
-          onSelect={selectProse}
+          onSelect={selectProseByTouch}
         />
       )}
       {owner && annotating && (
         <AnnotateDialog
-          /* **One box per passage, by key.** A new selection unmounts the box
+          /* **Referee mode's box, since 2026-10-04** — `selectProse` sets
+             `annotating` nowhere else.
+
+             **One box per passage, by key.** A new selection unmounts the box
              that was open, whose cleanup stores its draft against its own
              passage, and mounts an empty one — AnnotateDialog.tsx §
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
@@ -3454,15 +3708,75 @@ export function Reader({
           onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
           onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
+          /* **Only the box the selection opened on its own new highlight** —
+             § Selecting applies the highlight, above `selectProse`. The drawer,
+             a mark, the margin and a pasted `?note=` all arrive with no
+             `fresh`, or with one that names another comment. Read by
+             tests/selecting-applies-the-highlight.test.tsx. */
+          fresh={
+            fresh?.id === openComment.id
+              ? {
+                  /* Two halves since the browser check of 2026-10-04: the
+                     press is remembered while the button is down, and the box
+                     closes when it comes up — and only if `?note=` still names
+                     this row, because the same gesture may have opened the
+                     next highlight's box. */
+                  onPressOutside: () => {
+                    closedFresh.current = {
+                      id: fresh.id,
+                      anchor: fresh.anchor,
+                      touched: freshTouched.current,
+                    };
+                  },
+                  onClickOff: () => {
+                    if (openedThisGesture.current) return;
+                    const id = fresh.id;
+                    void setNote((current) => (current === id ? null : current));
+                  },
+                  onTouched: () => {
+                    freshTouched.current = true;
+                    copyOnlyProtected.current.add(openComment.id);
+                  },
+                  onCopiedOnly: () => {
+                    const id = openComment.id;
+                    const api = commentsNow.current;
+                    const row = api?.comments.find((comment) => comment.id === id);
+                    if (!api || !row || !isPristineHighlight(row)) return;
+                    if (copyOnlyProtected.current.has(id)) return;
+                    copyOnlyProtected.current.add(id);
+                    api.remove(id);
+                    void setNote((current) => (current === id ? null : current));
+                  },
+                }
+              : undefined
+          }
           access={{
             kind: "owner",
             pending: othersPending,
-            onRetry: () => owner.comments.retry(openComment.id),
-            onDeepen: () => owner.comments.deepen(openComment.id),
-            onEdit: (body) => void owner.comments.edit(openComment.id, body),
+            onRetry: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.retry(openComment.id);
+            },
+            onDeepen: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.deepen(openComment.id);
+            },
+            onEdit: (body) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.edit(openComment.id, body);
+            },
+            onTouched: () => {
+              copyOnlyProtected.current.add(openComment.id);
+            },
             placing: mode === "referee",
-            onPlace: (mark) => void owner.comments.place(openComment.id, mark),
-            onRecolour: (colour) => void owner.comments.recolour(openComment.id, colour),
+            onPlace: (mark) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.place(openComment.id, mark);
+            },
+            onRecolour: (colour) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.recolour(openComment.id, colour);
+            },
             error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
@@ -3481,6 +3795,7 @@ export function Reader({
                   }
                 : undefined,
             onDiscuss: (question) => {
+            copyOnlyProtected.current.add(openComment.id);
             /* **Into the floating panel, not into chat mode.** The follow-up
                box has always handed the reader to a conversation rather than
                growing a transcript in this dialog — Greg's call, chat-handoff.ts
@@ -3518,7 +3833,14 @@ export function Reader({
             onDelete: () => {
               // Step to the neighbour rather than closing outright: deleting one
               // of five is a tidy-up, not a reason to lose the panel.
-              const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
+              /* **Except from the fresh box**, where the press is *Remove
+                 highlight*: the reader is undoing the selection they just
+                 made, and a neighbour's box opening in its place would read as
+                 the removal having gone somewhere else. */
+              const next =
+                fresh?.id === openComment.id
+                  ? null
+                  : (stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1));
               owner.comments.remove(openComment.id);
               void setNote(next);
             },

@@ -125,3 +125,61 @@ export function readSelectionWithRange(selection: Selection | null): SelectionRe
     range: clamped,
   };
 }
+
+/** The same passage: block, offset and words. */
+export function sameAnchor(a: SelectionAnchor, b: SelectionAnchor): boolean {
+  return a.blockId === b.blockId && a.start === b.start && a.quote === b.quote;
+}
+
+/**
+ * **Put the browser's selection back on a passage**, by its anchor.
+ *
+ * Painting a highlight replaces the paragraph's nodes (`annotateHtml`, set
+ * through `innerHTML`), and a range whose nodes are removed collapses. Since
+ * 2026-10-04 that paint happens the moment a mouse lets go, so without this the
+ * reader's selection would vanish under their pointer, and a ⌘C straight after
+ * selecting would copy nothing (Reader.tsx § a mouse keeps its words selected).
+ *
+ * The inverse of `readSelectionWithRange`, in the same offset space: the
+ * concatenation of the block's text nodes. It answers whether the selection
+ * now reads back as that anchor, and leaves nothing selected when it does not
+ * (the block is gone, or its text is no longer what the anchor was read from).
+ */
+export function selectAnchor(anchor: SelectionAnchor): boolean {
+  const selection = window.getSelection();
+  if (!selection) return false;
+  let prose: HTMLElement | null = null;
+  for (const row of document.querySelectorAll<HTMLElement>("tr[data-block]")) {
+    if (row.dataset.block !== anchor.blockId) continue;
+    prose = row.querySelector<HTMLElement>("td.text .prose");
+    break;
+  }
+  if (!prose) return false;
+  const end = anchor.start + anchor.quote.length;
+  const walker = document.createTreeWalker(prose, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let seen = 0;
+  let started = false;
+  let ended = false;
+  for (let node = walker.nextNode(); node && !ended; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0;
+    /* Strictly inside for the start, so a passage that begins at a node
+       boundary starts in the node that holds its first character. */
+    if (!started && anchor.start < seen + length) {
+      range.setStart(node, anchor.start - seen);
+      started = true;
+    }
+    if (started && end <= seen + length) {
+      range.setEnd(node, end - seen);
+      ended = true;
+    }
+    seen += length;
+  }
+  if (!started || !ended) return false;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const read = readSelection(selection);
+  if (read.kind === "anchor" && sameAnchor(read.anchor, anchor)) return true;
+  selection.removeAllRanges();
+  return false;
+}

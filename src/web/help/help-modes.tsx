@@ -129,8 +129,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             <strong>The ? in a paragraph’s margin</strong> asks “Help me understand” straight away.
           </li>
           <li>
-            <strong>Select some words</strong> to get a comment box with an{" "}
-            <strong>Ask AI</strong> button.
+            <strong>Select some words</strong>: they are highlighted, and the box that opens has
+            an <strong>Ask the AI about this…</strong> field.
           </li>
         </ul>
         <p>Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.</p>
