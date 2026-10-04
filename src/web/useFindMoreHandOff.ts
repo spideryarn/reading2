@@ -4,10 +4,20 @@
  * (GlossaryPanel.tsx, QuotesPanel.tsx). Plan 261004k, Stage 2.
  *
  * The bar's row left a press and opened this band. Once the band's read has
- * settled, the press is **taken — and then made only if a fresh Find more is
- * what the band is offering at that moment** (`offered`: find-more.ts §
+ * settled **and a job list asked for after the press has been applied**, the
+ * press is **taken — and then made only if a fresh Find more is what the band
+ * is offering at that moment** (`offered`: find-more.ts §
  * `glossaryFindMoreOffered`, `quotesFindMoreOffered`). `press` is the function
  * the band's own button calls, so there is one request and it is the button's.
+ *
+ * ## Not taken on a job list older than the press
+ *
+ * `offered` says no run is out, and says it from the tab's job list. That
+ * list being *loaded* is not enough — it may predate a run another tab has
+ * since started — so the press is not `ready` until the list the press itself
+ * asked for has landed (find-more-handoff.ts § a job list newer than the
+ * press). By then the band has re-rendered on that list, and `offered` is
+ * about now. No such list in ten seconds, and the press is nobody's.
  *
  * ## Taken first, whatever the answer
  *
@@ -38,7 +48,7 @@
  */
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { FindMoreMode } from "./find-more.js";
-import { pendingFindMore, subscribeFindMore, takeFindMore } from "./find-more-handoff.js";
+import { readyFindMore, subscribeFindMore, takeFindMore } from "./find-more-handoff.js";
 
 export function useFindMoreHandOff({
   slug,
@@ -57,7 +67,7 @@ export function useFindMoreHandOff({
   /** What the band's own Find more button calls. */
   press(): void;
 }): void {
-  const read = useCallback(() => (slug === null ? null : pendingFindMore(slug, mode)), [slug, mode]);
+  const read = useCallback(() => (slug === null ? null : readyFindMore(slug, mode)), [slug, mode]);
   const nonce = useSyncExternalStore(subscribeFindMore, read, read);
   const now = useRef({ offered, press });
   now.current = { offered, press };

@@ -335,7 +335,14 @@ function its own button calls, in the list's own profile setting. That is why it
 press once its read has settled and **makes it only if a fresh Find more is what it is offering at
 that moment** — no job, no *Starting…*, no failure with its Retry, no forced run waiting for its
 list; otherwise the press is used up and dropped, so it cannot fire when a job finishes seconds
-later ([`useFindMoreHandOff.ts`](../../src/web/useFindMoreHandOff.ts)). The words and the two
+later ([`useFindMoreHandOff.ts`](../../src/web/useFindMoreHandOff.ts)). **"No job" is read off a job
+list asked for after the press**, not the one the tab already had: leaving the press asks for the
+list at once, and the band does not take it until that list — never one already on the wire — has
+been applied (`afterFreshList` in [`jobEngine.ts`](../../src/web/jobEngine.ts)). A run started in
+another tab, or by Metadata's *Run again* in a different profile, which the server does not collapse
+into the band's, is otherwise in no snapshot yet and the press would be a second paid run beside it.
+If no such list arrives inside the ten seconds, nothing is pressed
+(`tests/find-more-waits-for-a-fresh-job-list.test.tsx`). The words and the two
 predicates are [`find-more.ts`](../../src/web/find-more.ts), which the band's own control reads too.
 `find more …` is also what the `find` verb below takes: the row comes first and *Find “more …” in
 this article* after it, the one declared exception in the collision matrix

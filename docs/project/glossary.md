@@ -217,7 +217,8 @@ profile half needs the reader's current profile.
 **The command bar presses this button too, since 2026-10-04** — *Glossary › Find more*
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The row is
 drawn only when the read says `panelRun: "append"`, and the band makes the press, through the same
-`more(profiled)`, only if a fresh Find more is what the row is offering then: no job, no
+`more(profiled)`, only if a fresh Find more is what the row is offering then: no job — on a job
+list asked for after the press, not the one the tab already had — no
 *Starting…*, no failure, no forced run waiting for its list
 (`glossaryFindMoreOffered` in [find-more.ts](../../src/web/find-more.ts); the run row's own first
 branch reads its `freshRunOffered`). It never presses *Write a new list*. **An absent `panelRun` is

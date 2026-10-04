@@ -14,6 +14,23 @@
  * the last reader's press is not the next one's, and a ceiling so a press no
  * band took does not fire when the reader opens the band minutes later.
  *
+ * ## And a fifth, which the ask does not need: a job list newer than the press
+ *
+ * The band makes the press only if no run of its step is out, and it reads
+ * that off the tab's job list — which may have been fetched eight seconds ago,
+ * or longer on a tab that was hidden. A run started since, in another tab or
+ * by Metadata's *Run again* in a different profile (which the server does not
+ * collapse into this one: the profile is part of the work key), is in no
+ * snapshot yet, and a press made beside it is a second paid run (GPT Sol's F11
+ * on the code).
+ *
+ * So leaving a press **asks the engine for a list now** (`poke`), and the
+ * press is `ready` only once a list *asked for after it was left* has been
+ * applied (jobEngine.ts § `afterFreshList`) — not one already on the wire,
+ * whose silence is about an earlier moment. Nothing waits on a clock: with no
+ * such list inside the ten seconds — the server down, the engine paused on a
+ * 401 — the press is nobody's, and the reader is on the band with its button.
+ *
  * **A sibling rather than that file made general**: the ask carries a term and
  * is named for it in three callers and two test files; this carries only which
  * band. One slot here for both bands — a second press replaces the first, and
@@ -28,12 +45,16 @@ interface HandOff {
   readonly nonce: number;
   readonly epoch: number;
   readonly at: number;
+  /** A job list asked for after `at` has been applied — see the header. */
+  readonly fresh: boolean;
 }
 
 /** How long a press waits for its band — glossary-ask-handoff.ts § `STALE_AFTER_MS`. */
 const STALE_AFTER_MS = 10_000;
 
 let held: HandOff | null = null;
+/** Stop waiting for the held press's list. */
+let unwait: (() => void) | null = null;
 let nonces = 0;
 const listeners = new Set<() => void>();
 
@@ -51,10 +72,25 @@ function live(handOff: HandOff | null, slug: string, mode: FindMoreMode): handOf
   );
 }
 
-/** Leave a Find more for `mode`'s band on `slug`. Replaces any earlier one. */
+/**
+ * Leave a Find more for `mode`'s band on `slug`, and ask for the job list it
+ * will be judged on. Replaces any earlier one.
+ */
 export function handOffFindMore(slug: string, mode: FindMoreMode): void {
   nonces += 1;
-  held = { slug, mode, nonce: nonces, epoch: jobEngine.epoch(), at: Date.now() };
+  const nonce = nonces;
+  unwait?.();
+  held = { slug, mode, nonce, epoch: jobEngine.epoch(), at: Date.now(), fresh: false };
+  /* Registered before the poke, so the list the poke starts is the first that
+     counts; one already in flight is followed by another (jobEngine.ts §
+     `poll`, `again`). */
+  unwait = jobEngine.afterFreshList(() => {
+    unwait = null;
+    if (held?.nonce !== nonce) return;
+    held = { ...held, fresh: true };
+    announce();
+  });
+  jobEngine.poke();
   announce();
 }
 
@@ -64,13 +100,22 @@ export function pendingFindMore(slug: string, mode: FindMoreMode): number | null
 }
 
 /**
+ * The nonce of the press this band may take **now**, or `null`: waiting for it,
+ * and a job list asked for after it was left has been applied.
+ */
+export function readyFindMore(slug: string, mode: FindMoreMode): number | null {
+  return live(held, slug, mode) && held.fresh ? held.nonce : null;
+}
+
+/**
  * **Take it, once** — `true` if this nonce is still the press waiting for this
- * band, and removed in the same step, so a second take finds nothing. Whoever
- * takes it decides whether to press; a press not made is gone all the same.
+ * band and is `ready`, and removed in the same step, so a second take finds
+ * nothing. Whoever takes it decides whether to press; a press not made is gone
+ * all the same.
  */
 export function takeFindMore(slug: string, mode: FindMoreMode, nonce: number): boolean {
   const handOff = held;
-  if (!live(handOff, slug, mode) || handOff.nonce !== nonce) return false;
+  if (!live(handOff, slug, mode) || !handOff.fresh || handOff.nonce !== nonce) return false;
   held = null;
   announce();
   return true;
@@ -85,6 +130,8 @@ export function subscribeFindMore(onChange: () => void): () => void {
 
 /** Forget it, for a test. */
 export function resetFindMoreForTests(): void {
+  unwait?.();
+  unwait = null;
   held = null;
   announce();
 }

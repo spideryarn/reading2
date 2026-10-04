@@ -64,7 +64,7 @@ const {
   quotesAppendOnOffer,
   quotesFindMoreOffered,
 } = await import("../src/web/find-more.js");
-const { handOffFindMore, pendingFindMore, resetFindMoreForTests, takeFindMore } = await import(
+const { handOffFindMore, pendingFindMore, readyFindMore, resetFindMoreForTests, takeFindMore } = await import(
   "../src/web/find-more-handoff.js"
 );
 
@@ -223,6 +223,13 @@ describe("the hand-off", () => {
     expect(takeFindMore("another-piece", "glossary", nonce ?? -1)).toBe(false);
     expect(takeFindMore(SLUG, "quotes", nonce ?? -1)).toBe(false);
     expect(takeFindMore(SLUG, "glossary", (nonce ?? -1) + 1)).toBe(false);
+    /* Not on the job list the tab already had (code review F11) … */
+    expect(readyFindMore(SLUG, "glossary")).toBeNull();
+    expect(takeFindMore(SLUG, "glossary", nonce ?? -1)).toBe(false);
+    /* … only on one asked for after the press was left. */
+    jobEngine.receive([]);
+    expect(readyFindMore(SLUG, "glossary")).toBe(nonce);
+    expect(readyFindMore(SLUG, "quotes")).toBeNull();
     expect(takeFindMore(SLUG, "glossary", nonce ?? -1)).toBe(true);
     expect(takeFindMore(SLUG, "glossary", nonce ?? -1)).toBe(false);
     expect(pendingFindMore(SLUG, "glossary")).toBeNull();
@@ -232,6 +239,9 @@ describe("the hand-off", () => {
     handOffFindMore(SLUG, "quotes");
     const nonce = pendingFindMore(SLUG, "quotes") ?? -1;
     jobEngine.reset();
+    /* The next reader's list does not make the last reader's press ready. */
+    jobEngine.receive([]);
+    expect(readyFindMore(SLUG, "quotes")).toBeNull();
     expect(pendingFindMore(SLUG, "quotes")).toBeNull();
     expect(takeFindMore(SLUG, "quotes", nonce)).toBe(false);
   });
@@ -245,6 +255,9 @@ describe("the hand-off", () => {
     expect(pendingFindMore(SLUG, "glossary")).toBe(nonce);
     vi.setSystemTime(new Date("2026-10-04T10:00:10.000Z"));
     expect(pendingFindMore(SLUG, "glossary")).toBeNull();
+    /* A list that lands after the ten seconds is too late to make it ready. */
+    jobEngine.receive([]);
+    expect(readyFindMore(SLUG, "glossary")).toBeNull();
     expect(takeFindMore(SLUG, "glossary", nonce)).toBe(false);
   });
 });

@@ -154,6 +154,7 @@ const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
 const { readingExecutor } = await import("../src/web/command-runners.js");
 const { pendingFindMore, resetFindMoreForTests } = await import("../src/web/find-more-handoff.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
 const { pendingActivation, resetActivations } = await import("../src/web/activation.js");
 
 enableHistorySync();
@@ -200,10 +201,20 @@ async function draw(element: ReactElement): Promise<void> {
   await settle();
 }
 
-/** The bar's press, as the reading view builds it — the mover is a plain move. */
+/**
+ * The bar's press, as the reading view builds it — the mover is a plain move.
+ *
+ * **And the job list it asks for, answered.** A press is taken only on a list
+ * asked for after it (code review F11), and the queue here is posed, with no
+ * engine polling behind it — so the list is handed to the engine directly.
+ * What the band then makes of the press is this file's subject; the wait
+ * itself, over the real engine, is
+ * tests/find-more-waits-for-a-fresh-job-list.test.tsx.
+ */
 function pressFindMore(mode: "glossary" | "quotes", slug = SLUG): void {
   const executor = readingExecutor({ slug, blocks: [], jump: noop, findMore: { [mode]: noop } });
   executor.findMore?.[mode]?.();
+  jobEngine.receive([]);
 }
 
 /* ------------------------------------------- the real bands, real hooks -- */
