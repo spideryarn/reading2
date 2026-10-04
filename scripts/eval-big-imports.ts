@@ -5,7 +5,7 @@
  * a free, offline measurement of every part of an import that needs no model.
  * "The limits" are `MAX_UPLOAD_BYTES` and `MAX_PAGES` in src/uploads.ts.
  *
- *   npx tsx scripts/eval-big-imports.ts [--only m1,m2,m3,m4,m5,fetch] [--scratch <dir>]
+ *   npx tsx scripts/eval-big-imports.ts [--only m1,m2,m3,m4,m5,fetch] [--scratch <dir>] [--out <file.json>]
  *
  * - M1  at what size does each model step refuse before calling (budgets)
  * - M2  does the Postgres store take a long document (local database only)
@@ -25,7 +25,11 @@
  * deletes every article it made, on failure too.
  *
  * Results: evals/results/big-imports-2026-10-04/results.json. `--only` replaces
- * just the sections it ran and keeps the rest of the file.
+ * just the sections it ran and keeps the rest of the file — so a re-run after a
+ * fix overwrites the measurement that showed the fault. `--out <name>.json`
+ * writes this run's sections to that file in the same directory instead and
+ * leaves results.json alone (results-after-batching.json is M2 and M5 again,
+ * once `writeBlocks` batched its inserts).
  */
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -49,12 +53,14 @@ import { mintId } from "../src/ids.js";
 import { readerFailureOf } from "../src/job-failure.js";
 import { collectPdfFigures } from "../src/collect-pdf-figures.js";
 import { type CompletedLabelsFile, oversizedSets, planBatches } from "../src/labels.js";
+import { PDF_READER_MODEL } from "../src/models.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import { type PdfRecord, countPdfPages, pass0, refuseTooManyPages } from "../src/pdf.js";
 import {
   CHUNK_CONCURRENCY,
-  type PdfReader,
+  maxEncodedBytesFor,
   openPdfCuts,
+  openRouterReader,
   planChunks,
   runPdfExtract,
 } from "../src/pdf-read.js";
@@ -74,11 +80,18 @@ import { MODEL_MAX_TOKENS, THINKING_HEADROOM, budgetFor } from "../src/token-bud
 import type { Block, JobStep } from "../src/types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES, uploadLimits, uploadProblem } from "../src/uploads.js";
 import { memoryCheckpoints } from "../tests/helpers/memory-checkpoints.js";
+import {
+  DENSITIES,
+  plainBlocks,
+  rng,
+  sentence,
+  words,
+} from "../tests/helpers/synthetic-blocks.js";
 
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SELF), "..");
 const OUT_DIR = path.join(ROOT, "evals", "results", "big-imports-2026-10-04");
-const OUT_FILE = path.join(OUT_DIR, "results.json");
+const DEFAULT_OUT_FILE = path.join(OUT_DIR, "results.json");
 
 /** Vercel's limit on a function's response body. Theirs, not a constant of ours: nothing in src/ names it. */
 const VERCEL_RESPONSE_LIMIT_BYTES = 4.5 * 1024 * 1024;
@@ -104,101 +117,15 @@ function argValue(name: string): string | undefined {
   const at = process.argv.indexOf(name);
   return at >= 0 ? process.argv[at + 1] : undefined;
 }
+/** A bare file name, so a run cannot be pointed out of the results directory. */
+const OUT_FILE = path.join(OUT_DIR, path.basename(argValue("--out") ?? DEFAULT_OUT_FILE));
 const SCRATCH = path.resolve(argValue("--scratch") ?? path.join(tmpdir(), "spya-eval-big-imports"));
 const invokedAs = `npx tsx scripts/eval-big-imports.ts ${process.argv.slice(2).join(" ")}`.trim();
 
 // ───────────────────────────────────────────────────────── synthetic documents
 
-const WORDS = (
-  "time order memory structure paradigm science normal crisis anomaly theory measure observe " +
-  "history reader argument evidence chapter section method result claim account model world " +
-  "question answer puzzle community practice change revolution light energy entropy present past " +
-  "future event thing process relation field quantum gravity clock rhythm language meaning"
-).split(" ");
-
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 0x1_0000_0000;
-  };
-}
-
-function words(rand: () => number, n: number): string {
-  const out: string[] = [];
-  for (let i = 0; i < n; i++) out.push(WORDS[Math.floor(rand() * WORDS.length)] ?? "word");
-  return out.join(" ");
-}
-
-const sentence = (rand: () => number, n: number): string => {
-  const s = words(rand, n);
-  return `${s.charAt(0).toUpperCase()}${s.slice(1)}.`;
-};
-
-interface Density {
-  name: string;
-  blocksPerPage: number;
-  headingsPerPage: number;
-  source: string;
-}
-
-const DENSITIES: Density[] = [
-  {
-    name: "dense paper",
-    blocksPerPage: 14.4,
-    headingsPerPage: 1.8,
-    source: "Kuhn, measured: 142 pages, 2,025–2,046 blocks, 254 headings (plan 260904b)",
-  },
-  {
-    name: "book",
-    blocksPerPage: 5,
-    headingsPerPage: 0.1,
-    source:
-      "assumed. The Order of Time is 1,041 blocks (docs/user-feedback/261001_1829); its page count " +
-      "is not in that report, so 5 blocks a page is a guess that puts it at about 208 pages",
-  },
-  {
-    name: "headingless prose",
-    blocksPerPage: 14.4,
-    headingsPerPage: 0,
-    source: "the dense paper's block rate with every heading removed",
-  },
-];
-
-/**
- * Is block `i` of a stream at this density a heading? A property of the index
- * alone, so a prefix of a long stream is the same document as a short one —
- * which is what lets the bisection slice one array rather than rebuild it.
- */
-function isHeadingAt(i: number, density: Density): boolean {
-  const rate = density.headingsPerPage / density.blocksPerPage;
-  if (rate <= 0) return false;
-  return i === 0 || Math.floor(i * rate) !== Math.floor((i - 1) * rate);
-}
-
-/** HTML of exactly `n` elements, headings and ~90-word paragraphs only. */
-function plainHtml(n: number, density: Density, seed = 7): string {
-  const rand = rng(seed);
-  const parts: string[] = ["<article>"];
-  for (let i = 0; i < n; i++) {
-    parts.push(
-      isHeadingAt(i, density)
-        ? `<h2>${sentence(rand, 4).slice(0, -1)} ${i}</h2>`
-        : `<p>${sentence(rand, 30)} ${sentence(rand, 30)} ${sentence(rand, 30)}</p>`,
-    );
-  }
-  parts.push("</article>");
-  return parts.join("\n");
-}
-
-/** Real `Block[]`, minted by the real blocks step, from `plainHtml`. */
-function plainBlocks(n: number, density: Density): { blocks: Block[]; html: string } {
-  const run = runBlocks({ slug: "eval-big-imports-synthetic", extractedHtml: plainHtml(n, density), previous: undefined });
-  if (run.blocks.length !== n) {
-    throw new Error(`synthetic document: asked for ${n} blocks and the blocks step made ${run.blocks.length}`);
-  }
-  return { blocks: run.blocks, html: run.html };
-}
+/* The seeded generator and the plain documents are tests/helpers/synthetic-blocks.ts,
+   shared with tests/stated-limits.test.ts. */
 
 /** The mixed article M3 uses: headings at two levels, paragraphs, quotes, figures, note-ish lists. */
 function richHtml(n: number, seed = 11): string {
@@ -761,14 +688,18 @@ async function m2m5() {
       boundary,
       otherWrites:
         "Read, not run: the only multi-row inserts on the import path are the two in writeBlocks " +
-        "(block_identities, 2 parameters a row; revision_blocks). The tree, labels, assets and arc are " +
+        "(block_identities, 2 parameters a row; revision_blocks), batched since 2026-10-04 " +
+        "(src/db/insert-batches.ts). The tree, labels, assets and arc are " +
         "one jsonb column each (src/store/artifact-storage.ts), and a checkpoint is one row per write. " +
         "The structure step's write was exercised here (it calls writeBlocks again, plus the tree and a " +
-        "pending labels manifest). block_identities alone would pass 65,535 at 32,768 blocks; not run, " +
-        "because revision_blocks fails long before.",
+        "pending labels manifest). Unbatched, block_identities alone would have passed 65,535 at 32,768 " +
+        "blocks; never run, because revision_blocks failed long before.",
       leftBehind,
       instrumentCheck:
-        "The instrument is seen both passing and failing in this same run (see runs and boundary); a load " +
+        (boundary
+          ? "The instrument is seen both passing and failing in this same run (see runs and boundary); a load "
+          : "No size failed in this run, so it shows the instrument passing only; it is seen failing at 3,856 " +
+            "blocks in results.json, the run made before writeBlocks batched its inserts. A load ") +
 "is counted only when every block id comes back in the order written. successorQueued is false on " +
         "every published run: publishing queued no job a worker could have paid for.",
       cannotDetect:
@@ -1106,20 +1037,26 @@ async function measurePdf(which: PdfCase): Promise<Record<string, unknown>> {
       out.rssAfterPlanMb = mb(sample());
     }
 
-    /* The whole stage, with a reader that answers from the text layer. It
-       records the bytes of each chunk it is handed and nothing about whether a
-       request could carry them: that check is inside the real reader. */
-    const handed: { pages: number[]; rawBytes: number }[] = [];
+    /* The whole stage, through the REAL reader with only its wire replaced
+       (`ask`, since stage 2), so the request-size refusal, the request body and
+       the width gate all run. The wire answers from the text layer and records
+       what each request carried, encoded, as the provider would receive it. */
+    const handed: { pages: number[]; carriesContextPage: boolean; encodedBytes: number }[] = [];
     let inFlight = 0;
     let mostInFlight = 0;
     const layer = pass?.pages ?? [];
-    const reader: PdfReader = {
-      id: "eval-big-imports/text-layer",
-      async read(pdf, instruction) {
+    const reader = openRouterReader(PDF_READER_MODEL, undefined, {
+      async ask(_job, body) {
         inFlight += 1;
         mostInFlight = Math.max(mostInFlight, inFlight);
+        const user = (body.messages as { content: unknown }[])[1]?.content as [{ text: string }, { file: { file_data: string } }];
+        const instruction = user[0].text;
         const asked = pagesAsked(instruction);
-        handed.push({ pages: asked, rawBytes: pdf.length });
+        handed.push({
+          pages: asked,
+          carriesContextPage: instruction.includes("The FIRST page of the attached file is page"),
+          encodedBytes: user[1].file.file_data.length - "data:application/pdf;base64,".length,
+        });
         sample();
         await new Promise((resolve) => setTimeout(resolve, 5));
         const wanted = new Set(asked);
@@ -1131,9 +1068,13 @@ async function measurePdf(which: PdfCase): Promise<Record<string, unknown>> {
           }
         }
         inFlight -= 1;
-        return { records, stripped: 0, finish: "stop" as const, usage: { input: 0, output: 0 }, ms: 1 };
+        return {
+          json: { choices: [{ message: { content: JSON.stringify({ records }) }, finish_reason: "stop" }], usage: {} },
+          answeredBy: null,
+          generationId: null,
+        };
       },
-    };
+    });
     t = performance.now();
     try {
       const result = await runPdfExtract({
@@ -1155,6 +1096,7 @@ async function measurePdf(which: PdfCase): Promise<Record<string, unknown>> {
         recall: result.recall,
         retries: result.retries.length,
         notes: result.notes.slice(0, 5),
+        sentWithoutContextPage: result.notes.filter((note) => note.includes("as context")),
         htmlBytes: Buffer.byteLength(result.extractedHtml),
         blocksFromThisHtml: blocks.blocks.length,
       };
@@ -1162,20 +1104,18 @@ async function measurePdf(which: PdfCase): Promise<Record<string, unknown>> {
       out.extract = { ms: ms(t), refused: failureOf(err, "extract") };
     }
     out.rssAfterExtractMb = mb(sample());
-    handed.sort((a, b) => b.rawBytes - a.rawBytes);
+    handed.sort((a, b) => b.encodedBytes - a.encodedBytes);
     out.reader = {
       asks: handed.length,
       mostInFlight,
-      largestChunks: handed.slice(0, 3).map((h) => ({ ...h, rawMb: mb(h.rawBytes) })),
-      totalChunkMb: mb(handed.reduce((sum, h) => sum + h.rawBytes, 0)),
+      largestChunks: handed.slice(0, 3).map((h) => ({ ...h, encodedMb: mb(h.encodedBytes) })),
+      totalEncodedMb: mb(handed.reduce((sum, h) => sum + h.encodedBytes, 0)),
       requestSizeGuard:
-        "NOT EXERCISED BY THIS SEAM. The encoded-size check (MAX_ENCODED_BYTES, [pdf-chunk-big]) and the " +
-        "concurrency gate (WidthGate at CHUNK_CONCURRENCY) both live inside openRouterReader (src/pdf-read.ts), " +
-        "which an injected PdfExtractOptions.reader replaces whole. So a chunk too heavy for one request is " +
-        "transcribed here where production would refuse it, and this run says nothing about that refusal. " +
-        "To reach it for free, one of: (1) export the size policy as a pure function the real reader calls, " +
-        "e.g. refuseAnOversizedChunk(pdf) or encodedChunkProblem(bytes); (2) give openRouterReader a transport " +
-        "parameter beneath it (the openRouterJson call it makes), so a test can run the real reader with a fake wire.",
+        `EXERCISED. The reader is the real openRouterReader(${PDF_READER_MODEL}) with its wire (\`ask\`) replaced, so ` +
+        `every request here passed the production allowance of ${mb(reader.maxEncodedBytes ?? 0)} MB encoded ` +
+        `(maxEncodedBytesFor, src/pdf-read.ts), or the import was refused with [pdf-chunk-big] above. A chunk over ` +
+        "it only because of its context page is sent without that page: extract.sentWithoutContextPage.",
+      allowanceEncodedMb: mb(maxEncodedBytesFor(PDF_READER_MODEL)),
     };
   } finally {
     clearInterval(timer);
@@ -1403,8 +1343,8 @@ function m4() {
 }
 
 function printM4(r: ReturnType<typeof m4>): void {
-  console.log("\nM4 — the PDF front half (each case in its own process; reader = the PDF's own text layer)");
-  const rows: (string | number)[][] = [["case", "MB", "pages", "page-cap", "pass0 ms", "chunks", "extract ms", "blocks", "peak RSS MB", "largest chunk MB", "result"]];
+  console.log("\nM4 — the PDF front half (each case in its own process; the real reader, its wire answering from the PDF's own text layer)");
+  const rows: (string | number)[][] = [["case", "MB", "pages", "page-cap", "pass0 ms", "chunks", "extract ms", "blocks", "peak RSS MB", "largest request MB, encoded", "result"]];
   for (const c of r.cases) {
     const g = c.generated;
     const m = c.measured;
@@ -1415,7 +1355,7 @@ function printM4(r: ReturnType<typeof m4>): void {
     const pass = m.pass0 as Record<string, unknown>;
     const plan = m.plan as Record<string, unknown> | undefined;
     const extract = m.extract as Record<string, unknown>;
-    const reader = m.reader as { largestChunks: { rawMb: number }[] };
+    const reader = m.reader as { largestChunks: { encodedMb: number }[] };
     const refused = (extract.refused ?? pass.refused) as Failure | undefined;
     rows.push([
       String(m.case),
@@ -1427,12 +1367,12 @@ function printM4(r: ReturnType<typeof m4>): void {
       Number(extract.ms),
       extract.blocksFromThisHtml === undefined ? "-" : Number(extract.blocksFromThisHtml),
       Number(m.peakRssMb),
-      reader.largestChunks[0]?.rawMb ?? "-",
+      reader.largestChunks[0]?.encodedMb ?? "-",
       refused ? `✗ ${refused.readerMessage.slice(0, 90)}` : "ok",
     ]);
   }
   console.log(table(rows));
-  console.log("the request-size guard ([pdf-chunk-big]) is NOT exercised by the reader seam: see reader.requestSizeGuard in the results");
+  console.log(`the request-size guard ([pdf-chunk-big]) IS exercised: the real reader, allowance ${mb(maxEncodedBytesFor(PDF_READER_MODEL))} MB encoded; see reader.requestSizeGuard in the results`);
   for (const c of r.cases) {
     if (c.figures) console.log(`figure recovery on case ${String(c.generated.case)}: ${JSON.stringify(c.figures)}`);
   }

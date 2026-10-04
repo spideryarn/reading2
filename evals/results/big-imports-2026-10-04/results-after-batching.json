@@ -1,0 +1,191 @@
+{
+  "m2": {
+    "ranAt": "2026-10-04T11:45:21.525Z",
+    "question": "Does the store take a long document?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m2,m5 --out results-after-batching.json --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-b",
+    "target": {
+      "host": "127.0.0.1",
+      "urlPort": "54362",
+      "database": "postgres",
+      "addr": "172.18.0.2/32",
+      "port": 5432
+    },
+    "parametersPerBlockRow": 17,
+    "parametersPerIdentityRow": 2,
+    "postgresParameterLimit": 65535,
+    "runs": [
+      {
+        "blocks": 1000,
+        "slug": "eval-big-imports-1000-spyagymx",
+        "wrote": true,
+        "writeBlocksMs": 2639,
+        "writeStructureMs": 2147,
+        "publishMs": 100,
+        "successorQueued": false,
+        "loadMs": 1630,
+        "loadedBlocks": 1000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 2000,
+        "slug": "eval-big-imports-2000-spyaw0gg",
+        "wrote": true,
+        "writeBlocksMs": 5986,
+        "writeStructureMs": 4768,
+        "publishMs": 149,
+        "successorQueued": false,
+        "loadMs": 2935,
+        "loadedBlocks": 2000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3000,
+        "slug": "eval-big-imports-3000-spyawcv5",
+        "wrote": true,
+        "writeBlocksMs": 6299,
+        "writeStructureMs": 7213,
+        "publishMs": 243,
+        "successorQueued": false,
+        "loadMs": 5452,
+        "loadedBlocks": 3000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3800,
+        "slug": "eval-big-imports-3800-spyay5gf",
+        "wrote": true,
+        "writeBlocksMs": 10372,
+        "writeStructureMs": 10066,
+        "publishMs": 354,
+        "successorQueued": false,
+        "loadMs": 7380,
+        "loadedBlocks": 3800,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 3900,
+        "slug": "eval-big-imports-3900-spyab05h",
+        "wrote": true,
+        "writeBlocksMs": 10024,
+        "writeStructureMs": 10799,
+        "publishMs": 237,
+        "successorQueued": false,
+        "loadMs": 7305,
+        "loadedBlocks": 3900,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 4000,
+        "slug": "eval-big-imports-4000-spyaje6x",
+        "wrote": true,
+        "writeBlocksMs": 9700,
+        "writeStructureMs": 8450,
+        "publishMs": 883,
+        "successorQueued": false,
+        "loadMs": 6483,
+        "loadedBlocks": 4000,
+        "orderPreserved": true,
+        "error": null
+      },
+      {
+        "blocks": 6000,
+        "slug": "eval-big-imports-6000-spyanrwt",
+        "wrote": true,
+        "writeBlocksMs": 11776,
+        "writeStructureMs": 11732,
+        "publishMs": 274,
+        "successorQueued": false,
+        "loadMs": 7329,
+        "loadedBlocks": 6000,
+        "orderPreserved": true,
+        "error": null
+      }
+    ],
+    "boundary": null,
+    "otherWrites": "Read, not run: the only multi-row inserts on the import path are the two in writeBlocks (block_identities, 2 parameters a row; revision_blocks), batched since 2026-10-04 (src/db/insert-batches.ts). The tree, labels, assets and arc are one jsonb column each (src/store/artifact-storage.ts), and a checkpoint is one row per write. The structure step's write was exercised here (it calls writeBlocks again, plus the tree and a pending labels manifest). Unbatched, block_identities alone would have passed 65,535 at 32,768 blocks; never run, because revision_blocks failed long before.",
+    "leftBehind": {
+      "articles": 0,
+      "jobs": 0
+    },
+    "instrumentCheck": "No size failed in this run, so it shows the instrument passing only; it is seen failing at 3,856 blocks in results.json, the run made before writeBlocks batched its inserts. A load is counted only when every block id comes back in the order written. successorQueued is false on every published run: publishing queued no job a worker could have paid for.",
+    "cannotDetect": "Anything about production's Postgres that differs from the local one (statement timeouts, the pooler in front of it, row-size limits under real load), and any write a model step makes that this did not call. Blocks here are ~90-word paragraphs; a block with a very large html is not tried."
+  },
+  "m5": {
+    "ranAt": "2026-10-04T11:45:21.525Z",
+    "question": "Does the reader get the article back?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m2,m5 --out results-after-batching.json --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-b",
+    "limitBytes": 4718592,
+    "lifecycle": "jobs row → openOrBeginJobDraft → pgArtifactsIn(ref, tx).beginStep/write/finishStep for `blocks` then `structure` → publishRevision → loadArticle (src/store/index.ts, what the route calls) → JSON.stringify, which is all send() in src/routes.ts does.",
+    "rows": [
+      {
+        "blocks": 1000,
+        "responseBytes": 1470201,
+        "responseMb": 1.4,
+        "gzipBytes": 173499,
+        "overLimit": false
+      },
+      {
+        "blocks": 2000,
+        "responseBytes": 2939011,
+        "responseMb": 2.8,
+        "gzipBytes": 345315,
+        "overLimit": false
+      },
+      {
+        "blocks": 3000,
+        "responseBytes": 4407678,
+        "responseMb": 4.2,
+        "gzipBytes": 517186,
+        "overLimit": false
+      },
+      {
+        "blocks": 3800,
+        "responseBytes": 5583537,
+        "responseMb": 5.32,
+        "gzipBytes": 654765,
+        "overLimit": true
+      },
+      {
+        "blocks": 3900,
+        "responseBytes": 5730003,
+        "responseMb": 5.46,
+        "gzipBytes": 671183,
+        "overLimit": true
+      },
+      {
+        "blocks": 4000,
+        "responseBytes": 5877354,
+        "responseMb": 5.61,
+        "gzipBytes": 689106,
+        "overLimit": true
+      },
+      {
+        "blocks": 6000,
+        "responseBytes": 8815018,
+        "responseMb": 8.41,
+        "gzipBytes": 1032706,
+        "overLimit": true
+      }
+    ],
+    "noRowFor": [],
+    "missing": "These articles have a heading tree with no gists, questions or nav labels, no arc, no assets and almost no meta, so a real article of the same block count is larger. Blocks are plain ~90-word paragraphs: no links, maths, tables or figures in their html. send() in src/routes.ts does not compress; whether Vercel counts the body before or after its own compression was not checked.",
+    "instrumentCheck": {
+      "note": "the same comparison against a 100 KB limit, to show it can say 'over'",
+      "blocks": 1000,
+      "overA100KbLimit": true
+    },
+    "cannotDetect": "What Vercel actually does with a body over its limit, and the size of a real article: this measures bytes of a synthetic one on this machine."
+  },
+  "about": {
+    "plan": "docs/plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md",
+    "harness": "scripts/eval-big-imports.ts",
+    "statedLimits": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+    "paidCalls": 0,
+    "networkCallsRefusedInTheParent": []
+  }
+}

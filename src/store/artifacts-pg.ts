@@ -59,6 +59,7 @@ import type { SQL } from "drizzle-orm";
 
 import { decodeAuthors } from "../authors.js";
 import type { Db } from "../db/client.js";
+import { inBatches } from "../db/insert-batches.js";
 import {
   articleRevisions,
   articles,
@@ -1122,7 +1123,7 @@ async function writeRawSource(
 /**
  * Replace this revision's blocks, wholesale.
  *
- * Three statements, and the order and the conditions are all load-bearing:
+ * Three steps, and the order and the conditions are all load-bearing:
  *
  * 1. **Identities upsert, first and never deleted.** `revision_blocks` has a
  *    foreign key onto `block_identities`, so a block whose identity was never
@@ -1140,41 +1141,50 @@ async function writeRawSource(
  * 3. **Insert only when there is something to insert**, because an empty
  *    `INSERT … VALUES` is a syntax error rather than a no-op.
  *
- * `ordinal` is written from the array index. Block ids are random and carry no
- * position, so if this is wrong there is nothing left to recover the order from.
+ * **Steps 1 and 3 are each as many statements as the article needs**, because
+ * one statement can bind 65,535 parameters and a block row binds 17: until
+ * 2026-10-04 each was a single insert, which took 3,855 blocks and answered the
+ * 3,856th with a protocol error the reader was told to retry
+ * (src/db/insert-batches.ts). They are still one write — every statement runs
+ * in the caller's transaction, so a failure in a later batch takes the earlier
+ * ones with it. tests/store-artefacts-pg.test.ts § "writes an article of 4,000
+ * blocks" is the check.
+ *
+ * `ordinal` is written from the array index — **the index in the whole array,
+ * taken before the rows are cut into batches**. Block ids are random and carry
+ * no position, so if this is wrong there is nothing left to recover the order
+ * from.
  */
 async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): Promise<void> {
-  if (blocks.length) {
-    await tx
-      .insert(blockIdentities)
-      .values(blocks.map((b) => ({ articleId: ref.articleId, blockId: b.id })))
-      .onConflictDoNothing();
+  const identities = blocks.map((b) => ({ articleId: ref.articleId, blockId: b.id }));
+  for (const batch of inBatches(blockIdentities, identities)) {
+    await tx.insert(blockIdentities).values(batch).onConflictDoNothing();
   }
 
   await tx.delete(revisionBlocks).where(eq(revisionBlocks.revisionId, ref.revisionId));
 
-  if (blocks.length) {
-    await tx.insert(revisionBlocks).values(
-      blocks.map((b, index) => ({
-        articleId: ref.articleId,
-        revisionId: ref.revisionId,
-        blockId: b.id,
-        ordinal: index,
-        tag: b.tag,
-        kind: b.kind,
-        level: b.level ?? null,
-        text: b.text,
-        words: b.words,
-        html: b.html,
-        gistable: b.gistable,
-        note: b.note ?? null,
-        role: b.role ?? null,
-        treatment: b.treatment ?? null,
-        noteId: b.noteId ?? null,
-        contextId: b.context?.id ?? null,
-        contextType: b.context?.type ?? null,
-      })),
-    );
+  const rows = blocks.map((b, index) => ({
+    articleId: ref.articleId,
+    revisionId: ref.revisionId,
+    blockId: b.id,
+    ordinal: index,
+    tag: b.tag,
+    kind: b.kind,
+    level: b.level ?? null,
+    text: b.text,
+    words: b.words,
+    html: b.html,
+    gistable: b.gistable,
+    note: b.note ?? null,
+    role: b.role ?? null,
+    treatment: b.treatment ?? null,
+    noteId: b.noteId ?? null,
+    contextId: b.context?.id ?? null,
+    contextType: b.context?.type ?? null,
+  }));
+  /* No rows, no batches: an empty array is never handed to `values`. */
+  for (const batch of inBatches(revisionBlocks, rows)) {
+    await tx.insert(revisionBlocks).values(batch);
   }
 }
 
