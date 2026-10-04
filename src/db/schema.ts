@@ -79,6 +79,8 @@ import type { LabelsFile } from "../labels.js";
 import type { Candidate } from "../shelf-terms/extract.js";
 import type {
   Author,
+  Block,
+  BlockKind,
   Citations,
   Arc,
   Citation,
@@ -1309,7 +1311,14 @@ export const revisionBlocks = spideryarn.table(
     blockId: text("block_id").notNull(),
     ordinal: integer("ordinal").notNull(),
     tag: text("tag").notNull(),
-    kind: text("kind").notNull(),
+    /**
+     * `$type` here and on `role` and `treatment` below **validates nothing**:
+     * it tells the compiler what the three CHECKs at the foot of this table
+     * (`revision_blocks_kind`, `_role`, `_treatment`) already guarantee, so
+     * readers need no cast. Widen a union and its CHECK together —
+     * tests/revision-block-columns-are-typed.test.ts compares the two lists.
+     */
+    kind: text("kind").$type<BlockKind>().notNull(),
     /** Heading depth 1–6, on headings only. */
     level: smallint("level"),
     text: text("text").notNull(),
@@ -1329,8 +1338,8 @@ export const revisionBlocks = spideryarn.table(
      * and narrowing the set now would make widening it a migration
      * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 2).
      */
-    role: text("role"),
-    treatment: text("treatment"),
+    role: text("role").$type<NonNullable<Block["role"]>>(),
+    treatment: text("treatment").$type<NonNullable<Block["treatment"]>>(),
     /**
      * Which note this block belongs to. **A note is a range of blocks**, so
      * this is many-rows-to-one-value and deliberately not a key of anything: it

@@ -133,21 +133,22 @@ export function fixtureFetch(
     async run(ctx) {
       const detail = `${Math.round(bytes.byteLength / 1024)} KB (fixture ${fixture.name})`;
       ctx.report(detail);
-      const doc: FetchedDocument = {
+      const base = {
         requestedUrl: url,
         url,
         chain: [url],
         status: 200,
-        kind: fixture.kind,
         contentType: fixture.contentType,
         bytes,
-        /* HTML is stored as the decoded string and a PDF as its bytes —
-           `storedDocumentBytes` in src/fetch.ts is the one place that decides,
-           and this only has to hand it the right shape. */
-        text: fixture.kind === "pdf" ? null : new TextDecoder("utf-8").decode(bytes),
-        encoding: fixture.kind === "pdf" ? null : "utf-8",
         fetchedAt: new Date().toISOString(),
       };
+      /* HTML is stored as the decoded string and a PDF as its bytes —
+         `storedDocumentBytes` in src/fetch.ts is the one place that decides,
+         and this only has to hand it the right arm of the union. */
+      const doc: FetchedDocument =
+        fixture.kind === "pdf"
+          ? { ...base, kind: "pdf", text: null, encoding: null }
+          : { ...base, kind: "html", text: new TextDecoder("utf-8").decode(bytes), encoding: "utf-8" };
       return { parts: { raw: await writeRaw(doc) }, detail };
     },
   };

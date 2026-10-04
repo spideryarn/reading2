@@ -54,7 +54,8 @@ import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js
 /** The two things we can do anything with. Everything else is refused by name. */
 export type DocumentKind = "html" | "pdf";
 
-export interface FetchedDocument {
+/** What every fetched document has, whichever of the two it turned out to be. */
+interface FetchedBase {
   /** What the caller asked for, verbatim. */
   requestedUrl: string;
   /**
@@ -68,16 +69,36 @@ export interface FetchedDocument {
   /** Every URL in the chain, requested first, final last. One entry if no redirect. */
   chain: string[];
   status: number;
-  kind: DocumentKind;
   /** The `Content-Type` header verbatim, or `null` — some servers send none at all. */
   contentType: string | null;
   bytes: Uint8Array;
-  /** HTML only, decoded with `encoding` below. `null` for a PDF. */
-  text: string | null;
-  /** The WHATWG encoding name actually used. `null` for a PDF. */
-  encoding: string | null;
   fetchedAt: string;
 }
+
+/** A web page: the bytes, and the string they decode to. */
+export interface FetchedHtml extends FetchedBase {
+  kind: "html";
+  /** `bytes` decoded with `encoding` below. */
+  text: string;
+  /** The WHATWG encoding name actually used. */
+  encoding: string;
+}
+
+/** A PDF: the bytes are the document, and there is nothing to decode. */
+export interface FetchedPdf extends FetchedBase {
+  kind: "pdf";
+  text: null;
+  encoding: null;
+}
+
+/**
+ * **A union on `kind`, so a PDF with text and a web page without any are not
+ * values.** It was one interface with `text: string | null` until 2026-10-04,
+ * which let `storedDocumentBytes` below paper over the second with `?? ""` —
+ * an empty document, stored under a real hash, with nothing raised.
+ * tests/fetched-document-is-a-union.test.ts.
+ */
+export type FetchedDocument = FetchedHtml | FetchedPdf;
 
 /**
  * **What stage 1 acquired, and where the bytes of it are.**
@@ -278,10 +299,14 @@ export function storedDocumentBytes(
      it decodes with no encoding branch, on the strength of this line — and it
      has no `FetchedDocument`, because an upload has no URL, no redirect chain
      and no status. Narrowing the parameter is what lets it call this instead of
-     writing the rule out a third time. */
-  doc: Pick<FetchedDocument, "kind" | "bytes" | "text">,
+     writing the rule out a third time.
+
+     **Two arms rather than a `Pick` over the union**, since 2026-10-04: a
+     `Pick` of a union keeps the keys and loses which `text` goes with which
+     `kind`, and that correlation is the whole of what this reads. */
+  doc: Pick<FetchedPdf, "kind" | "bytes"> | Pick<FetchedHtml, "kind" | "text">,
 ): Uint8Array {
-  return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
+  return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text);
 }
 
 export async function writeRaw(
@@ -2431,20 +2456,19 @@ async function readDocument(
     );
   }
 
-  const decoded = kind === "html" ? decodeHtml(bytes, contentType) : null;
-
-  return {
+  const base = {
     requestedUrl,
     url: finalUrl,
     chain,
     status: res.status,
-    kind,
     contentType,
     bytes,
-    text: decoded?.text ?? null,
-    encoding: decoded?.encoding ?? null,
-    fetchedAt: opts.now().toISOString(),
   };
+  if (kind === "pdf") {
+    return { ...base, kind, text: null, encoding: null, fetchedAt: opts.now().toISOString() };
+  }
+  const decoded = decodeHtml(bytes, contentType);
+  return { ...base, kind, text: decoded.text, encoding: decoded.encoding, fetchedAt: opts.now().toISOString() };
 }
 
 /* ------------------------------------------------------------------ *
@@ -2676,7 +2700,7 @@ export async function fetchBibliographicJson(
  */
 export async function fetchHtml(url: string, options: FetchOptions = {}): Promise<string> {
   const doc = await fetchDocument(url, options);
-  if (doc.kind !== "html" || doc.text === null) {
+  if (doc.kind !== "html") {
     throw new FetchFailure(
       "unsupported-type",
       doc.url,
