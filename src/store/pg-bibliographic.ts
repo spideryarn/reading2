@@ -39,6 +39,7 @@ import type {
   CachedAnswer,
   Freshness,
   IdentifierClaim,
+  LimiterService,
   Registry,
   SlotLease,
   StartTaken,
@@ -58,7 +59,7 @@ function secs(ms: number): number {
 }
 
 /** The rows the migration must seed. Checked on a failed take so absence is a fault, not permanent `busy`. */
-const EXPECTED_SLOTS: Record<Registry, number> = { crossref: 2, datacite: 1 };
+const EXPECTED_SLOTS: Record<LimiterService, number> = { crossref: 2, datacite: 1, openalex: 1 };
 
 /** The fresh-answer test, against the table's own columns — one copy, used by the read and by the claim. */
 function freshSql(fresh: Freshness): SQL {

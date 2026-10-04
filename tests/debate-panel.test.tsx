@@ -56,6 +56,8 @@ import type {
   DebateLean,
   DebateLosses,
   DebateSynthesis,
+  Citer,
+  CitersResult,
   DirectDebateRow,
 } from "../src/types.js";
 import type { DebateOrder } from "../src/web/debate-order.js";
@@ -63,6 +65,16 @@ import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate } from "../src/public-types.js";
 import {
+  CITERS_ABOUT,
+  CITERS_HEADING,
+  CITERS_LOADING,
+  CITERS_NONE,
+  CITERS_NOT_INDEXED,
+  CITERS_NO_DOI,
+  CITERS_TOO_LARGE,
+  CITERS_UNAVAILABLE,
+  CITERS_UNCONFIRMED,
+  CITERS_UNREAD,
   DEBATE_CLAIMS_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
   DEBATE_EXTRACTS_ONLY,
@@ -194,6 +206,9 @@ const ordered: DebateOrder[] = [];
 /** Every stop the relevance bar was dragged to — `null` is its reset. */
 const relevanced: (DebateBears | null)[] = [];
 const threaded: (string | null)[] = [];
+/** Every press of *Cited by*'s Try again. */
+const retried: string[] = [];
+const NO_DOI: CitersResult = { kind: "no-doi" };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
@@ -212,12 +227,15 @@ function paint(
     articleYear?: number | null;
     thread?: string | null;
     articleTitle?: string | null;
+    /** What `useCiters` answered. An article with no DOI unless a test says otherwise. */
+    citers?: CitersResult | null;
   } = {},
 ) {
+  const result = "citers" in extra ? (extra.citers ?? null) : NO_DOI;
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o },
+        access: { kind: "owner", owner: o, citers: { result, retry: () => retried.push("retry") } },
         onJump: (id: BlockId) => jumped.push(id),
         view,
         onView: (next: DebateView) => viewed.push(next),
@@ -308,6 +326,7 @@ beforeEach(() => {
   ordered.length = 0;
   relevanced.length = 0;
   threaded.length = 0;
+  retried.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -765,7 +784,8 @@ describe("the Scholar link under Reception", () => {
 
   it("searches Google Scholar for the article's title, with no referrer and no opener", () => {
     paint(owner());
-    expect(link()?.textContent).toContain("Who cites it: search Google Scholar");
+    /* The owner's is the foot of *Cited by* since 2026-10-04 (plan 261004h). */
+    expect(link()?.textContent).toContain("Also: search Google Scholar");
     const url = new URL(link()?.href ?? "");
     expect(url.origin + url.pathname).toBe("https://scholar.google.com/scholar");
     expect(url.searchParams.get("q")).toBe(`"${ARTICLE_TITLE}"`);
@@ -778,20 +798,229 @@ describe("the Scholar link under Reception", () => {
     expect(link()).not.toBeNull();
   });
 
-  it("is not drawn without a title to search for, or in Claims, or before a search has run", () => {
+  it("is not drawn without a title to search for, or in Claims", () => {
     paint(owner(), "reception", "prioritised", new Map(), { articleTitle: null });
     expect(link()).toBeNull();
     paint(owner(), "reception", "prioritised", new Map(), { articleTitle: "  " });
     expect(link()).toBeNull();
     paint(owner(), "claims");
     expect(link()).toBeNull();
-    paint(owner({ status: "none", debate: null }));
-    expect(link()).toBeNull();
   });
 
-  it("is a visitor's too", () => {
+  it("is a visitor's too, in the words it had, and only once a search is stored", () => {
     paintShared(shared());
     expect(link()?.href).toContain("scholar.google.com");
+    expect(link()?.textContent).toContain("Who cites it: search Google Scholar");
+  });
+});
+
+/**
+ * **Cited by** — plan 261004h. The papers that cite the piece, from OpenAlex,
+ * for the owner, whenever Reception is on screen: before the paid search has
+ * run too, and without starting it. Every outcome has its own sentence, and
+ * the Scholar link stays under all of them.
+ */
+describe("Cited by, under Reception", () => {
+  const section = () => host.querySelector("section.dbt-citers");
+  const said = () => section()?.textContent ?? "";
+  const titles = () => [...host.querySelectorAll(".dbt-citer-title")].map((a) => a.textContent ?? "");
+  const scholar = () => host.querySelector<HTMLAnchorElement>("section.dbt-citers a.dbt-scholar");
+  const tryAgain = () =>
+    [...(section()?.querySelectorAll("button") ?? [])].find((b) => b.textContent === "Try again") ?? null;
+  const showAll = () =>
+    [...(section()?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.startsWith("Show all")) ?? null;
+  const withCiters = (citers: CitersResult | null, o: UseDebate = owner(), view: DebateView = "reception") =>
+    paint(o, view, "prioritised", new Map(), { citers });
+
+  function citer(n: number, over: Partial<Citer> = {}): Citer {
+    return {
+      openalexId: `W${7000 + n}`,
+      doi: `10.1000/citer.${n}`,
+      title: `Citing paper ${n}`,
+      authors: ["Ada Lovelace"],
+      authorCount: 1,
+      year: 2025,
+      venue: "A Journal",
+      kind: "article",
+      citedByCount: 50 - n,
+      ...over,
+    };
+  }
+  const list = (n: number) => Array.from({ length: n }, (_, i) => citer(i));
+  function found(n: number, over: Partial<Extract<CitersResult, { kind: "found" }>> = {}): CitersResult {
+    return {
+      kind: "found",
+      count: n,
+      returned: n,
+      dropped: 0,
+      capped: false,
+      citers: list(n),
+      fetchedAt: "2026-10-04T09:30:00.000Z",
+      ...over,
+    };
+  }
+
+  it("has its own plain sentence for every outcome that is not a list", () => {
+    const sentences: [CitersResult, string][] = [
+      [{ kind: "no-doi" }, CITERS_NO_DOI],
+      [{ kind: "not-indexed" }, CITERS_NOT_INDEXED],
+      [{ kind: "unconfirmed" }, CITERS_UNCONFIRMED],
+      [{ kind: "unavailable" }, CITERS_UNAVAILABLE],
+      [{ kind: "too-large" }, CITERS_TOO_LARGE],
+      [found(0), CITERS_NONE],
+    ];
+    expect(new Set(sentences.map(([, s]) => s)).size).toBe(sentences.length);
+    for (const [result, sentence] of sentences) {
+      withCiters(result);
+      expect(said(), result.kind).toContain(sentence);
+      expect(titles(), result.kind).toEqual([]);
+      /* The Scholar link stays, under every one of them. */
+      expect(scholar()?.href, result.kind).toContain("scholar.google.com");
+      for (const [, other] of sentences) if (other !== sentence) expect(said(), result.kind).not.toContain(other);
+    }
+    /* The sentence for a DOI we could not confirm does not accuse it of being another work's. */
+    expect(CITERS_UNCONFIRMED).not.toMatch(/belongs|different|another/);
+  });
+
+  it("offers Try again only when trying again could help", () => {
+    withCiters({ kind: "unavailable" });
+    press(tryAgain());
+    expect(retried).toEqual(["retry"]);
+    for (const kind of ["no-doi", "not-indexed", "unconfirmed", "too-large"] as const) {
+      withCiters({ kind });
+      expect(tryAgain(), kind).toBeNull();
+    }
+  });
+
+  it("says it is looking while the list is on its way, and lists nothing yet", () => {
+    withCiters(null);
+    expect(said()).toContain(CITERS_LOADING);
+    expect(section()?.querySelector("[role='status']")).not.toBeNull();
+    expect(titles()).toEqual([]);
+  });
+
+  it("lists the papers with OpenAlex's count and its date, and says we have not read them", () => {
+    withCiters(found(3, { citers: [citer(0, { kind: "review", citedByCount: 34, authors: ["Michael G. Levin"], venue: "BioEssays", year: 2024 }), citer(1, { citedByCount: 1 }), citer(2)] }));
+    expect(said()).toContain("3 papers cite this piece, by OpenAlex's count on");
+    expect(said()).toContain("2026");
+    expect(said()).toContain("Most cited first.");
+    expect(said()).toContain(CITERS_UNREAD);
+    expect(titles()).toEqual(["Citing paper 0", "Citing paper 1", "Citing paper 2"]);
+    const lines = [...host.querySelectorAll(".dbt-citer .dbt-meta")].map((p) => p.textContent);
+    expect(lines[0]).toBe("Michael G. Levin · BioEssays · 2024 · review · cited 34 times");
+    /* `article` is what nearly every row is, so it is not said; once is not "1 times". */
+    expect(lines[1]).toBe("Ada Lovelace · A Journal · 2025 · cited once");
+  });
+
+  it("builds each link itself: the DOI, else the OpenAlex id, with no referrer and no opener", () => {
+    const { doi: _doi, ...noDoi } = citer(1);
+    withCiters(found(3, { citers: [citer(0), noDoi, { ...noDoi, openalexId: "W1\"><script>", title: "No address at all" }] }));
+    const links = [...host.querySelectorAll<HTMLAnchorElement>("a.dbt-citer-title")];
+    expect(links.map((a) => a.href)).toEqual(["https://doi.org/10.1000/citer.0", "https://openalex.org/W7001"]);
+    for (const a of links) {
+      expect(a.target).toBe("_blank");
+      expect(a.rel.split(" ").sort()).toEqual(["noopener", "noreferrer"]);
+    }
+    /* The third has no address we can build, so it is text and not a link. */
+    expect(titles()).toEqual(["Citing paper 0", "Citing paper 1", "No address at all"]);
+    expect(host.querySelector("script")).toBeNull();
+  });
+
+  it("shows the first ten, then all of them on one press", () => {
+    withCiters(found(39));
+    expect(titles()).toHaveLength(10);
+    expect(showAll()?.textContent).toBe("Show all 39");
+    press(showAll());
+    expect(titles()).toHaveLength(39);
+    expect(showAll()).toBeNull();
+    /* Ten or fewer need no button. */
+    withCiters(found(10));
+    expect(titles()).toHaveLength(10);
+    expect(showAll()).toBeNull();
+  });
+
+  it("says when the page limit left some out, and separately when a record could not be shown (F5)", () => {
+    withCiters(found(100, { count: 389, capped: true }));
+    expect(said()).toContain("389 papers cite this piece");
+    expect(said()).toContain("The 100 most cited are listed.");
+    expect(showAll()?.textContent).toBe("Show all 100");
+
+    /* 39 returned, one unshowable: 38 listed, and the limit hid none. */
+    withCiters(found(38, { count: 39, returned: 39, dropped: 1 }));
+    expect(said()).toContain("39 papers cite this piece");
+    expect(said()).toContain("38 are listed, most cited first.");
+    expect(said()).toContain("1 record could not be shown");
+    expect(said()).not.toContain("most cited are listed");
+
+    /* 100 of 389 returned, five unshowable: 95 listed, and it does not claim 100. */
+    withCiters(found(95, { count: 389, returned: 100, dropped: 5, capped: true }));
+    expect(said()).toContain("We asked for the 100 most cited, and 95 are listed.");
+    expect(said()).toContain("5 records could not be shown");
+    expect(said()).not.toContain("The 100 most cited are listed.");
+
+    /* A count, and nothing we can show: not the "no paper citing it" sentence. */
+    withCiters(found(0, { count: 2, returned: 2, dropped: 2 }));
+    expect(said()).toContain("2 papers cite this piece");
+    expect(said()).toContain("None of them could be shown here.");
+    expect(said()).not.toContain(CITERS_NONE);
+  });
+
+  it("is on screen before the search has run, beside its button, and starts nothing (F8)", () => {
+    let ensured = 0;
+    let regenerated = 0;
+    const before = owner({
+      status: "none",
+      debate: null,
+      ensure: async () => {
+        ensured += 1;
+      },
+      regenerate: async () => {
+        regenerated += 1;
+      },
+    });
+    withCiters(found(12), before);
+    expect(text()).toContain("Nobody has asked the web about this one yet.");
+    expect(said()).toContain("12 papers cite this piece");
+    expect(titles()).toHaveLength(10);
+    press(showAll());
+    expect(titles()).toHaveLength(12);
+    expect(scholar()).not.toBeNull();
+    expect([ensured, regenerated]).toEqual([0, 0]);
+    /* …and while the opening read is still out, or failed. */
+    withCiters(found(2), owner({ status: "loading", debate: null }));
+    expect(titles()).toHaveLength(2);
+    withCiters(found(2), owner({ status: "error", debate: null, error: "We could not load this." }));
+    expect(titles()).toHaveLength(2);
+  });
+
+  it("is Reception's, not Claims'", () => {
+    withCiters(found(3), owner(), "claims");
+    expect(section()).toBeNull();
+    withCiters(found(3), owner(), "reception");
+    expect(section()).not.toBeNull();
+  });
+
+  it("does not change Reception's count, which is the web search's rows", () => {
+    withCiters(found(39), owner({ debate: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
+    expect(segments()[0]).toBe("Reception0");
+    expect(host.querySelectorAll(".dbt-item")).toHaveLength(0);
+    expect(titles()).toHaveLength(10);
+  });
+
+  it("is not drawn for a visitor, who keeps the Scholar link alone", () => {
+    paintShared(shared());
+    expect(section()).toBeNull();
+    expect(text()).not.toContain(CITERS_HEADING);
+    expect(host.querySelector("a.dbt-scholar")).not.toBeNull();
+  });
+
+  it("says in the (i) where the list comes from and what is sent", () => {
+    withCiters(found(3));
+    expect(card()).toContain(CITERS_ABOUT);
+    withCiters(found(3), owner({ status: "none", debate: null }));
+    expect(card()).toContain(CITERS_ABOUT);
+    paintShared(shared());
+    expect(card()).not.toContain(CITERS_ABOUT);
   });
 });
 

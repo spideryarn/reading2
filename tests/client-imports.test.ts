@@ -55,6 +55,11 @@ const SHARED = new Set([
      server's citations.ts for Reception. Imports nothing; the purity check
      below now covers it too. Plan 261003o, F4. */
   "scholar-search.js",
+  /* The address of a paper that cites the article, built from its DOI or its
+     OpenAlex id — the server shape-checks the id with the same pattern before
+     it stores it, and the panel checks it again before it is an `href`.
+     Imports nothing. Plan 261004h. */
+  "citer-link.js",
   /* Which influence a Citations row shows — the web one from a kept *Dig
      deeper* answer, else the list's own — read by the band and by chat's
      `article_citations` tool, so the two cannot disagree. Imports `types.js`

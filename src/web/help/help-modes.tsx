@@ -649,7 +649,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   debate: {
-    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations scholar",
+    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar",
     whenToUse: (
       <p>
         For a well-known paper, a contested essay, or anything you are about to rely on; not for a
@@ -671,8 +671,15 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           In Reception, pages that link to the piece or quote it come first. Pages that only mention
           its title follow under <strong>Names this piece by its title only</strong>: often a paper
           citing it, sometimes a page about something else with the same title, so check before you
-          rely on one. <strong>Who cites it: search Google Scholar</strong>, at the end, opens a
-          search for the piece’s title; we do not list every paper that cites it.
+          rely on one.
+        </li>
+        <li>
+          <strong>Cited by</strong>, at the end of Reception, lists the papers that cite the piece,
+          most cited first. It is free and is there before you search: it comes from OpenAlex, a
+          public index of published work, which we ask using the piece’s DOI, and no AI is involved.
+          It is a list only: we have not read what any of those papers says about the piece. It needs
+          the piece to have a DOI on record, and only whoever added the article sees it.{" "}
+          <strong>Search Google Scholar</strong>, under it, opens a search for the piece’s title.
         </li>
         <li>
           In Claims, each claim is quoted in the piece’s own words, with a link to that passage and

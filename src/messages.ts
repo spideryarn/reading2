@@ -4751,6 +4751,85 @@ export const DEBATE_BEFORE_SEARCH =
   "Claims: what has been written about the claims it makes. It takes about a minute and " +
   "costs real money. Many pieces have no reception at all. Searched once and kept.";
 
+/* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
+
+   One plain sentence per outcome of `CitersResult` (src/types.ts), so the
+   reader is never left with a blank where a list might have been. Plan
+   261004h, and its review's F3, F5 and F6. */
+
+export const CITERS_HEADING = "Cited by";
+export const CITERS_LOADING = "Looking up which papers cite this piece…";
+export const CITERS_NO_DOI = "This piece has no DOI on record, so we cannot look up who cites it.";
+export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
+/**
+ * **Not "the DOI belongs to another work"**: what failed is our check that the
+ * record is this piece — its title and an author must both agree — and a piece
+ * with no byline fails it with a perfectly good DOI.
+ */
+export const CITERS_UNCONFIRMED =
+  "We could not confirm that the DOI on record is this piece's own, so we have not listed who cites it.";
+/** The one outcome with a Try again beside it. */
+export const CITERS_UNAVAILABLE = "We could not reach OpenAlex just now.";
+/** No Try again: the same request would be too large again. */
+export const CITERS_TOO_LARGE = "OpenAlex's list for this piece is too large for us to read yet.";
+export const CITERS_NONE = "OpenAlex knows this piece and lists no paper citing it yet.";
+/** Under every list: the list is a list, and nothing here says what a citing paper thinks. */
+export const CITERS_UNREAD = "We have not read what any of them says about it.";
+/** What the band's (i) says of the section, for the owner. */
+export const CITERS_ABOUT =
+  "Cited by is OpenAlex's list of the papers that cite this piece. To get it we send OpenAlex " +
+  "the piece's DOI and nothing else. No AI is involved, and we have not read the papers.";
+
+const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
+
+/**
+ * **What a found list says about itself**, one sentence per fact.
+ *
+ * Three numbers can differ and each difference has its own reason, so each gets
+ * its own sentence rather than one "the 100 most cited of 389" that is false
+ * the moment a record is dropped (GPT Sol's F5): OpenAlex's `count`; how many
+ * we `listed`; whether the page limit left some out (`capped`, of `returned`
+ * asked for); and how many records could not be shown (`dropped`).
+ *
+ * @param day the day OpenAlex answered, already formatted, or undefined.
+ */
+export function citersLines(
+  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number },
+  day: string | undefined,
+): string[] {
+  if (found.count === 0 && found.returned === 0) return [CITERS_NONE];
+  const lines = [
+    `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, by OpenAlex's count${day ? ` on ${day}` : ""}.`,
+  ];
+  if (found.listed === 0) {
+    lines.push("None of them could be shown here.");
+    return lines;
+  }
+  if (found.capped) {
+    lines.push(
+      found.dropped === 0
+        ? `The ${found.listed} most cited are listed.`
+        : `We asked for the ${found.returned} most cited, and ${found.listed} are listed.`,
+    );
+  } else {
+    lines.push(found.listed === found.count ? "Most cited first." : `${found.listed} are listed, most cited first.`);
+  }
+  if (found.dropped > 0) {
+    lines.push(
+      found.dropped === 1
+        ? "1 record could not be shown: it has no title, or it repeats another."
+        : `${found.dropped} records could not be shown: they have no title, or repeat another.`,
+    );
+  }
+  lines.push(CITERS_UNREAD);
+  return lines;
+}
+
+/** *"cited 34 times"*, on a citing paper's own line. */
+export function citedTimes(n: number): string {
+  return n === 1 ? "cited once" : `cited ${n} times`;
+}
+
 /** A claim row without `bears` survives every bar without clearing its judgment. */
 export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
 

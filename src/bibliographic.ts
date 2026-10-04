@@ -50,6 +50,15 @@ export type WorkId = string & { readonly __workId: true };
 
 export type Registry = "crossref" | "datacite";
 
+/**
+ * **Every outside service the shared limiter paces** — the two registries, and
+ * OpenAlex, the citation index src/citation-index.ts asks. A separate union
+ * from `Registry` on purpose: `Registry` is also a record's provenance
+ * (`WorkRecord.source`, and the `source` CHECK on `bibliographic_records`), and
+ * OpenAlex is never that (GPT Sol's F7 on plan 261004h).
+ */
+export type LimiterService = Registry | "openalex";
+
 export interface WorkAuthor {
   family: string;
   given?: string;
@@ -126,10 +135,11 @@ const POLL_MS = 100;
 
 /**
  * Starts spaced globally: **Crossref 250 ms (4/s, under its 10), DataCite
- * 500 ms (2/s, under its 1,000 per 5 minutes)**. Slots: 2 and 1, seeded by the
- * migration — they are rows, not numbers here.
+ * 500 ms (2/s, under its 1,000 per 5 minutes), OpenAlex 500 ms (2/s, under its
+ * 10)**. Slots: 2, 1 and 1, seeded by the migrations — they are rows, not
+ * numbers here.
  */
-export const SPACING_MS: Record<Registry, number> = { crossref: 250, datacite: 500 };
+export const SPACING_MS: Record<LimiterService, number> = { crossref: 250, datacite: 500, openalex: 500 };
 
 /** A 429 or 503 without `Retry-After` cools the service this long; one with it, at most an hour. */
 export const DEFAULT_COOLDOWN_MS = 60_000;
@@ -144,7 +154,7 @@ export interface IdentifierClaim {
 }
 
 export interface SlotLease {
-  service: Registry;
+  service: LimiterService;
   slot: number;
   until: Date;
 }
@@ -165,14 +175,20 @@ export interface BibliographicStore {
   /** Remember an answer and clear the claim, only while this exact claim still owns the row. */
   write(claim: IdentifierClaim, answer: CachedAnswer): Promise<boolean>;
   /** Whether the service is cooling down right now. */
-  coolingDown(service: Registry): Promise<boolean>;
-  takeSlot(service: Registry, leaseMs: number): Promise<SlotLease | null>;
+  coolingDown(service: LimiterService): Promise<boolean>;
+  takeSlot(service: LimiterService, leaseMs: number): Promise<SlotLease | null>;
   freeSlot(lease: SlotLease): Promise<void>;
   /** Take the next start, unless the service is cooling down or the start is more than `maxWaitMs` away. */
-  takeStart(service: Registry, spacingMs: number, maxWaitMs: number): Promise<StartTaken>;
+  takeStart(service: LimiterService, spacingMs: number, maxWaitMs: number): Promise<StartTaken>;
   /** Nobody asks `service` again for `forMs`. Never shortens a cooldown already set. */
-  coolDown(service: Registry, forMs: number): Promise<void>;
+  coolDown(service: LimiterService, forMs: number): Promise<void>;
 }
+
+/** The limiter's half of the store: what one polite request needs, and nothing about the record cache. */
+export type ServiceLimiter = Pick<
+  BibliographicStore,
+  "coolingDown" | "takeSlot" | "freeSlot" | "takeStart" | "coolDown"
+>;
 
 export interface LookupDeps {
   store?: BibliographicStore;
@@ -249,7 +265,7 @@ export function doiFor(id: WorkId): string {
 }
 
 /** Each path segment encoded, the slashes kept: both APIs take `/works/10.1038/nn.4304` as written. */
-function doiPath(doi: string): string {
+export function doiPath(doi: string): string {
   return doi.split("/").map(encodeURIComponent).join("/");
 }
 
@@ -287,17 +303,17 @@ export function plainRegistryText(value: unknown, maxLength = 1000): string | nu
   return text.length > maxLength ? text.slice(0, maxLength).trimEnd() : text;
 }
 
-function record(value: unknown): Record<string, unknown> | null {
+export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 }
 
-function list(value: unknown): unknown[] {
+export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function plausibleYear(value: unknown): number | undefined {
+export function plausibleYear(value: unknown): number | undefined {
   const n = typeof value === "string" && /^\d{4}$/.test(value.trim()) ? Number(value) : value;
   return typeof n === "number" && Number.isInteger(n) && n >= 1500 && n <= 2100 ? n : undefined;
 }
@@ -450,8 +466,14 @@ async function resolveDeps(deps: LookupDeps): Promise<Resolved> {
   };
 }
 
+/** What a turn needs: the limiter, and a way to wait. */
+export interface TurnDeps {
+  store: ServiceLimiter;
+  sleep: (ms: number) => Promise<void>;
+}
+
 /** A service slot, polled for up to `MAX_WAIT_MS`. */
-async function slotFor(service: Registry, d: Resolved): Promise<SlotLease | null> {
+async function slotFor(service: LimiterService, d: TurnDeps): Promise<SlotLease | null> {
   for (let waited = 0; ; waited += POLL_MS) {
     const lease = await d.store.takeSlot(service, SLOT_LEASE_MS);
     if (lease !== null || waited >= MAX_WAIT_MS) return lease;
@@ -459,34 +481,75 @@ async function slotFor(service: Registry, d: Resolved): Promise<SlotLease | null
   }
 }
 
-/** One request to one registry, inside its slot, its start and its cooldown. */
-async function askService(id: WorkId, service: Registry, doi: string, d: Resolved): Promise<Asked> {
-  if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+/**
+ * A turn that was refused before any request went out, and where: the service
+ * was already `cooling`, there was `no-slot`, there was `no-start` (too far
+ * off, or cooling by then), or it `cooled-while-waiting` for its start.
+ */
+export interface TurnRefused {
+  kind: "refused";
+  why: "cooling-down" | "busy";
+  at: "cooling" | "no-slot" | "no-start" | "cooled-while-waiting";
+}
+
+/**
+ * **One request's turn at a service**: its cooldown respected, a leased slot,
+ * a globally spaced start, and the slot freed whatever `request` does. The one
+ * copy of the politeness, shared by the registry lookup below and by
+ * src/citation-index.ts. `request` is handed how long the start made it wait,
+ * for its log line.
+ */
+export async function inServiceTurn<T>(
+  service: LimiterService,
+  d: TurnDeps,
+  request: (waitMs: number) => Promise<T>,
+): Promise<{ kind: "ran"; value: T } | TurnRefused> {
+  if (await d.store.coolingDown(service)) return { kind: "refused", why: "cooling-down", at: "cooling" };
   const lease = await slotFor(service, d);
-  if (lease === null) {
-    d.log.info({ id, service, outcome: "busy", reason: "no-slot" }, "bibliographic lookup");
-    return { kind: "unavailable", why: "busy" };
-  }
+  if (lease === null) return { kind: "refused", why: "busy", at: "no-slot" };
   try {
     const start = await d.store.takeStart(service, SPACING_MS[service], MAX_WAIT_MS);
-    if (start.kind !== "start") {
-      d.log.info({ id, service, outcome: start.kind }, "bibliographic lookup");
-      return { kind: "unavailable", why: start.kind };
-    }
+    if (start.kind !== "start") return { kind: "refused", why: start.kind, at: "no-start" };
     if (start.waitMs > 0) {
       await d.sleep(start.waitMs);
       /* A request already in flight may have set a provider-wide cooldown while
          this start was waiting. Do not turn a valid reservation into one more
          request after the provider has told the fleet to stop. */
-      if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+      if (await d.store.coolingDown(service)) {
+        return { kind: "refused", why: "cooling-down", at: "cooled-while-waiting" };
+      }
     }
+    return { kind: "ran", value: await request(start.waitMs) };
+  } finally {
+    await d.store.freeSlot(lease);
+  }
+}
+
+/**
+ * **A 429 or a 503 cools the service for everybody**: its `Retry-After`, else a
+ * minute, at most an hour. Returns how long, or null when `err` is neither.
+ */
+export async function coolAfter(
+  err: FetchFailure,
+  service: LimiterService,
+  store: ServiceLimiter,
+): Promise<number | null> {
+  if (err.status !== 429 && err.status !== 503) return null;
+  const forMs = Math.min(err.retryAfterMs ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
+  await store.coolDown(service, Math.max(forMs, 1_000));
+  return forMs;
+}
+
+/** One request to one registry, inside its slot, its start and its cooldown. */
+async function askService(id: WorkId, service: Registry, doi: string, d: Resolved): Promise<Asked> {
+  const turn = await inServiceTurn(service, d, async (waitMs): Promise<Asked> => {
     const started = Date.now();
     const url = service === "crossref" ? crossrefUrl(doi) : dataciteUrl(doi);
     try {
       const json = await d.fetchJson(url);
       const parsed = service === "crossref" ? parseCrossref(id, doi, json) : parseDatacite(id, doi, json);
       d.log.info(
-        { id, service, status: 200, outcome: parsed ? "found" : "no-title", ms: Date.now() - started, waitMs: start.waitMs },
+        { id, service, status: 200, outcome: parsed ? "found" : "no-title", ms: Date.now() - started, waitMs },
         "bibliographic lookup",
       );
       /* A record with no title is, to every caller, no record: each of them
@@ -498,27 +561,25 @@ async function askService(id: WorkId, service: Registry, doi: string, d: Resolve
       if (!(err instanceof FetchFailure)) throw err;
       const status = err.status;
       if (status === 404 || status === 410) {
-        d.log.info({ id, service, status, outcome: "not-found", ms, waitMs: start.waitMs }, "bibliographic lookup");
+        d.log.info({ id, service, status, outcome: "not-found", ms, waitMs }, "bibliographic lookup");
         return { kind: "not-found" };
       }
-      if (status === 429 || status === 503) {
-        const forMs = Math.min(err.retryAfterMs ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
-        await d.store.coolDown(service, Math.max(forMs, 1_000));
-        d.log.warn(
-          { id, service, status, outcome: "cooling-down", cooldownMs: forMs, ms, waitMs: start.waitMs },
-          "bibliographic lookup",
-        );
+      const cooldownMs = await coolAfter(err, service, d.store);
+      if (cooldownMs !== null) {
+        d.log.warn({ id, service, status, outcome: "cooling-down", cooldownMs, ms, waitMs }, "bibliographic lookup");
         return { kind: "unavailable", why: "cooling-down" };
       }
-      d.log.warn(
-        { id, service, status, code: err.code, outcome: "error", ms, waitMs: start.waitMs },
-        "bibliographic lookup",
-      );
+      d.log.warn({ id, service, status, code: err.code, outcome: "error", ms, waitMs }, "bibliographic lookup");
       return { kind: "unavailable", why: "error" };
     }
-  } finally {
-    await d.store.freeSlot(lease);
+  });
+  if (turn.kind === "ran") return turn.value;
+  if (turn.at === "no-slot") {
+    d.log.info({ id, service, outcome: "busy", reason: "no-slot" }, "bibliographic lookup");
+  } else if (turn.at === "no-start") {
+    d.log.info({ id, service, outcome: turn.why }, "bibliographic lookup");
   }
+  return { kind: "unavailable", why: turn.why };
 }
 
 /** arXiv: DataCite. A DOI: Crossref, and only on its 404 DataCite. */

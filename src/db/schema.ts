@@ -6623,21 +6623,27 @@ export const bibliographicRecords = spideryarn.table(
  *
  * Seeded by its migration, one row each. A missing row is a bug, and
  * src/store/pg-bibliographic.ts throws rather than calling it "busy".
+ *
+ * **Three services since 2026-10-04, and the third is not a registry.**
+ * `openalex` is the citation index src/citation-index.ts asks; it shares this
+ * limiter and nothing else. `bibliographic_records.source` still allows only
+ * the two registries: OpenAlex is never a record's provenance
+ * (`LimiterService` against `Registry` in src/bibliographic.ts).
  */
 export const bibliographicServices = spideryarn.table(
   "bibliographic_services",
   {
-    service: text("service").$type<"crossref" | "datacite">().primaryKey(),
+    service: text("service").$type<"crossref" | "datacite" | "openalex">().primaryKey(),
     nextStartAt: timestamp("next_start_at", { withTimezone: true }).notNull().defaultNow(),
     cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
   },
-  (t) => [check("bibliographic_services_service", sql`${t.service} in ('crossref', 'datacite')`)],
+  (t) => [check("bibliographic_services_service", sql`${t.service} in ('crossref', 'datacite', 'openalex')`)],
 );
 
 /**
  * **Leased slots, bounding how many requests are in flight to each registry
  * across every instance** — 2 for Crossref (under its 3 concurrent), 1 for
- * DataCite. Seeded by the migration. Taken with `for update skip locked`,
+ * DataCite, 1 for OpenAlex. Seeded by the migrations. Taken with `for update skip locked`,
  * leased for 20 s so a dead process cannot hold one for ever, freed in a
  * `finally`.
  */
@@ -6645,7 +6651,7 @@ export const bibliographicServiceSlots = spideryarn.table(
   "bibliographic_service_slots",
   {
     service: text("service")
-      .$type<"crossref" | "datacite">()
+      .$type<"crossref" | "datacite" | "openalex">()
       .notNull()
       .references(() => bibliographicServices.service, { onDelete: "cascade" }),
     slot: smallint("slot").notNull(),
@@ -6655,5 +6661,131 @@ export const bibliographicServiceSlots = spideryarn.table(
   (t) => [
     primaryKey({ columns: [t.service, t.slot] }),
     check("bibliographic_service_slots_slot", sql`${t.slot} >= 1`),
+  ],
+);
+
+/* ----------------------------------------------------- citation index -- */
+
+/**
+ * **What OpenAlex said about who cites one DOI — one row per DOI, shared by
+ * every reader of that paper.** The cache behind `citersOf` in
+ * src/citation-index.ts;
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+ *
+ * **Global, not owner-scoped**, for `bibliographic_records`' reason: a row is
+ * public bibliographic fact about a public identifier. No owner, no article id,
+ * nothing a reader wrote, so it cannot say who was reading what.
+ *
+ * **A row is one of two answers**, and `citation_index_lookups_shape` keeps the
+ * columns in step with which. `state` is `not null`, so neither branch can be
+ * walked past by a NULL
+ * (docs/postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md):
+ *
+ * - `found` — OpenAlex has the work. Its list is in `citation_index_citers`.
+ * - `not-indexed` — OpenAlex has no record of the DOI.
+ *
+ * Fresh for 7 days from `fetched_at`, either way. A failed request stores
+ * nothing, and a count is never stored without its list: the row and its
+ * citers are replaced in one transaction.
+ *
+ * **`target_title` and `target_authors` are OpenAlex's own words for the work
+ * the DOI resolves to**, kept so that every later reader of the row is checked
+ * against them. Without them a second article carrying this DOI by mistake
+ * would be handed the first one's citers off the cache (GPT Sol's F1).
+ *
+ * **Three numbers, because they are three facts**: `cited_by_count` is
+ * OpenAlex's count for the query, `returned` how many records its answer
+ * carried, and `dropped` how many of those we could not show (no title, a
+ * malformed id, a duplicate). `capped` says the page limit left some out. The
+ * number listed is `returned - dropped`.
+ */
+export const citationIndexLookups = spideryarn.table(
+  "citation_index_lookups",
+  {
+    /** `doi:<lower-cased doi>` — a `WorkId` from src/bibliographic.ts, DOI form only. */
+    workId: text("work_id").primaryKey(),
+    state: text("state").$type<"found" | "not-indexed">().notNull(),
+    /** OpenAlex's id for the work, `W…`. Only on a found row. */
+    openalexId: text("openalex_id"),
+    citedByCount: integer("cited_by_count"),
+    returned: integer("returned"),
+    dropped: integer("dropped"),
+    capped: boolean("capped"),
+    targetTitle: text("target_title"),
+    /** Display names, as OpenAlex gave them, at most 20. */
+    targetAuthors: text("target_authors").array(),
+    /** When OpenAlex answered. The row's event time: there is no `created_at`. */
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check(
+      "citation_index_lookups_work_id",
+      sql`length(${t.workId}) <= 300 and ${t.workId} = lower(${t.workId})
+          and ${t.workId} ~ '^doi:10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$'`,
+    ),
+    check("citation_index_lookups_state", sql`${t.state} in ('found', 'not-indexed')`),
+    check(
+      "citation_index_lookups_shape",
+      sql`case
+            when ${t.state} = 'found' then
+              ${t.openalexId} is not null and ${t.openalexId} ~ '^W[0-9]{1,15}$'
+              and ${t.citedByCount} is not null and ${t.citedByCount} >= 0
+              and ${t.returned} is not null and ${t.returned} >= 0
+              and ${t.dropped} is not null and ${t.dropped} between 0 and ${t.returned}
+              and ${t.capped} is not null
+              and ${t.targetTitle} is not null and length(${t.targetTitle}) between 1 and 1000
+              and ${t.targetAuthors} is not null and cardinality(${t.targetAuthors}) <= 20
+              and array_position(${t.targetAuthors}, null) is null
+            else num_nonnulls(${t.openalexId}, ${t.citedByCount}, ${t.returned}, ${t.dropped},
+                              ${t.capped}, ${t.targetTitle}, ${t.targetAuthors}) = 0
+          end`,
+    ),
+  ],
+);
+
+/**
+ * **One citing paper, in the order OpenAlex returned it** (most cited first).
+ * Columns rather than JSON (docs/project/sql.md). Every string was made plain
+ * text and bounded before it was written; none is a link, and the panel builds
+ * its links from `doi` or `openalex_id` (src/citer-link.ts).
+ *
+ * No timestamp of its own: a row is part of a lookup, and
+ * `citation_index_lookups.fetched_at` times the lookup.
+ */
+export const citationIndexCiters = spideryarn.table(
+  "citation_index_citers",
+  {
+    workId: text("work_id")
+      .notNull()
+      .references(() => citationIndexLookups.workId, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    openalexId: text("openalex_id").notNull(),
+    doi: text("doi"),
+    title: text("title").notNull(),
+    /** Display names, at most 20; `author_count` is how many the work has. */
+    authors: text("authors").array().notNull(),
+    authorCount: integer("author_count").notNull(),
+    year: integer("year"),
+    venue: text("venue"),
+    /** OpenAlex's `type`: `article`, `preprint`, `review`, … */
+    kind: text("kind"),
+    citedByCount: integer("cited_by_count").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workId, t.position] }),
+    check("citation_index_citers_position", sql`${t.position} >= 0`),
+    check("citation_index_citers_openalex_id", sql`${t.openalexId} ~ '^W[0-9]{1,15}$'`),
+    check(
+      "citation_index_citers_doi",
+      sql`${t.doi} is null or (${t.doi} = lower(${t.doi}) and ${t.doi} ~ '^10[.][0-9]{4,9}/[^[:space:]"''<>?#]+$')`,
+    ),
+    check("citation_index_citers_title", sql`length(${t.title}) between 1 and 1000`),
+    check(
+      "citation_index_citers_authors",
+      sql`cardinality(${t.authors}) <= 20 and array_position(${t.authors}, null) is null
+          and ${t.authorCount} >= cardinality(${t.authors})`,
+    ),
+    check("citation_index_citers_year", sql`${t.year} is null or ${t.year} between 1500 and 2100`),
+    check("citation_index_citers_cited_by_count", sql`${t.citedByCount} >= 0`),
   ],
 );

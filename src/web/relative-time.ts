@@ -104,6 +104,13 @@ export function relativeAgo(
   return undefined;
 }
 
+/** `25 Aug 2026` for an instant — the day alone, where the hour is noise (*"by OpenAlex's count on …"*). */
+export function dayOf(iso: string | undefined): string | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : absolute(t);
+}
+
 /** `25 Aug 2026, 14:02` — where precision is the point, and the tooltip has room. */
 export function exactly(iso: string | undefined): string | undefined {
   if (!iso) return undefined;

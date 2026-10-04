@@ -52,10 +52,23 @@
  *    that only name it under a heading saying so ([`debate-levels.ts`](debate-levels.ts)
  *    — a slider hid those until 2026-10-03, and with them the citing papers the
  *    search was changed to find). `?debateby=` orders within each group. It
- *    ends with one link out, a Scholar search for who cites the piece.
+ *    ends with *Cited by* for the owner (below), and for a visitor with one
+ *    link out, a Scholar search for who cites the piece.
  *  - **Claims** is always grouped by claim, in article order, most directly
  *    bearing first within a claim ([`debate-order.ts`](debate-order.ts)). The
  *    relevance bar (`?bears=`) is its one control.
+ *
+ * ## Cited by, at the end of Reception, for the owner
+ *
+ * Since 2026-10-04 Reception ends with the papers that cite the piece, from
+ * OpenAlex (`CitedBy` below, src/citation-index.ts). It is **not part of the
+ * stored debate**: no model made it, it costs nothing, and it has its own read
+ * (src/web/useCiters.ts). So it is drawn whenever Reception is on screen —
+ * before the paid search has run as well — and nothing in it can start that
+ * search. It does not move Reception's count, which stays the web search's
+ * rows: a list we have not read is a different kind of thing. A visitor gets
+ * the Scholar link alone.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
  * **A heading is a claim we stand behind**, which is why the only headings are
  * the article's own words for a claim — located in its block before the row was
@@ -123,6 +136,7 @@ import {
   Equal,
   ExternalLink,
   Globe,
+  LoaderCircle,
   type LucideIcon,
   RotateCcw,
   Star,
@@ -130,7 +144,18 @@ import {
   ThumbsUp,
   TriangleAlert,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
+  CITERS_ABOUT,
+  CITERS_HEADING,
+  CITERS_LOADING,
+  CITERS_NOT_INDEXED,
+  CITERS_NO_DOI,
+  CITERS_TOO_LARGE,
+  CITERS_UNAVAILABLE,
+  CITERS_UNCONFIRMED,
+  citedTimes,
+  citersLines,
   DEBATE_BEFORE_SEARCH,
   DEBATE_CLAIMS_NONE,
   DEBATE_EXTRACTS_ONLY,
@@ -150,6 +175,8 @@ import {
 } from "../messages.js";
 import {
   type BlockId,
+  type Citer,
+  type CitersResult,
   type Debate,
   type DebateBears,
   type DebateCounts,
@@ -184,6 +211,7 @@ import {
 } from "./debate-order.js";
 import { registryAuthorName } from "../registry-work.js";
 import { scholarUrl } from "../scholar-search.js";
+import { citerUrl } from "../citer-link.js";
 import {
   inThread,
   KEY_ROLE_LABEL,
@@ -206,6 +234,8 @@ import { ReadError } from "./ReadError.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
+import type { UseCiters } from "./useCiters.js";
+import { dayOf } from "./relative-time.js";
 import type {
   PublicClaimDebateRow,
   PublicDebate,
@@ -772,7 +802,11 @@ export type DebateOwner = UseDebate;
  * at the call site. GlossaryPanel.tsx § GlossaryAccess is the full argument.
  */
 export type DebateAccess =
-  | { kind: "owner"; owner: DebateOwner }
+  /* `citers` is the owner's second read, Reception's *Cited by*
+     (src/web/useCiters.ts). Beside `owner` rather than on it, because it is
+     not the stored debate's and has no job: it can be on screen with no debate
+     at all. A visitor has none (plan 261004h). */
+  | { kind: "owner"; owner: DebateOwner; citers: UseCiters }
   /* **The visitor's arm, since 2026-09-29** (plan 260929c stage 4): the stored
      debate off the public payload and nothing else — no read status (it came
      with the page), no job, no verb, so nothing on a visitor's panel can start
@@ -1002,6 +1036,9 @@ export function DebatePanel({
      returned**, each naming its own search. A visitor's debate keeps
      `searchedAt` and nothing else of provenance (src/public-types.ts). */
   const made = owner?.debate ?? null;
+  /* The owner's *Cited by* is on screen with or without a stored search, so
+     where it comes from and what is sent is said in both. */
+  const aboutCiters = owner !== null ? <p>{CITERS_ABOUT}</p> : null;
   const about =
     debate && ready ? (
       <>
@@ -1015,6 +1052,7 @@ export function DebatePanel({
           <p key={line}>{line}</p>
         ))}
         <p>{DEBATE_EXTRACTS_ONLY}</p>
+        {aboutCiters}
         <AboutMade
           verb="Searched"
           generator={made?.generator}
@@ -1023,7 +1061,9 @@ export function DebatePanel({
           elapsedMs={made?.elapsedMs}
         />
       </>
-    ) : null;
+    ) : (
+      aboutCiters
+    );
 
   /* The sub-mode on screen's threads, the one selected there, and the rows its
      counts are out of: Claims' are the rows its bar left, Reception's every
@@ -1032,6 +1072,18 @@ export function DebatePanel({
   const viewThread = view === "reception" ? receptionThread : claimThread;
   const beforeThread: readonly DebateRow[] = view === "reception" ? directRows : barredClaims.visible;
   const scholar = articleTitle?.trim() ? scholarUrl(articleTitle.trim()) : null;
+
+  /**
+   * **The owner's *Cited by***, or null. On screen with Reception — and, before
+   * any search is stored, whatever `?debate=` says: there is no sub-mode
+   * control to be in Claims with until there is a debate. Built once and placed
+   * in one of two spots below, at the end of Reception's list or under the
+   * not-searched-yet states, which cannot both be drawn.
+   */
+  const citedBy =
+    access.kind === "owner" && (view === "reception" || owner?.status === "none") ? (
+      <CitedBy citers={access.citers} scholar={scholar} />
+    ) : null;
 
   return (
     <ModeSurface
@@ -1092,6 +1144,12 @@ export function DebatePanel({
           {run("Search the web")}
         </div>
       )}
+
+      {/* **Before a search is stored: Cited by, on its own.** Outside the
+          `debate && ready` block on purpose (GPT Sol's F8): the list is free and
+          is the fastest answer to "has anyone cited this", so it must not wait
+          for a paid search, and it is not a control that starts one. */}
+      {!(debate && ready) && citedBy}
 
       {debate && ready && (
         <>
@@ -1194,17 +1252,20 @@ export function DebatePanel({
                 <ReceptionList confirmed={confirmed} titleOnly={titleOnly} keyRows={keyRows} />
                 {/* **Who cites it.** A paper that cites the piece and says
                     something about it is reception, and the search looks for
-                    those; a *complete* list of citers needs a citation index
-                    we do not have. So one link out — a search by title, never
-                    a guessed address (plan 261003f's rule for author links) —
-                    and it is there when Reception kept nothing, which is when
-                    it is most use. `noreferrer` like every other link out. */}
-                {scholar !== null && (
-                  <a className="dbt-scholar" href={scholar} target="_blank" rel="noreferrer noopener">
-                    Who cites it: search Google Scholar
-                    <ExternalLink size={11} aria-hidden="true" />
-                  </a>
-                )}
+                    those. The owner then gets the list itself, from OpenAlex
+                    (`citedBy`, which ends with the Scholar link). A visitor
+                    gets no list in v1, so for them it is still one link out —
+                    a search by title, never a guessed address (plan 261003f's
+                    rule for author links) — and it is there when Reception
+                    kept nothing, which is when it is most use. `noreferrer`
+                    like every other link out. */}
+                {citedBy ??
+                  (scholar !== null && (
+                    <a className="dbt-scholar" href={scholar} target="_blank" rel="noreferrer noopener">
+                      Who cites it: search Google Scholar
+                      <ExternalLink size={11} aria-hidden="true" />
+                    </a>
+                  ))}
               </>
             ) : (
               <ClaimsList groups={claimGroups} onJump={onJump} keyRows={keyRows} />
@@ -1219,6 +1280,140 @@ export function DebatePanel({
       )}
 
     </ModeSurface>
+  );
+}
+
+/** How many citing papers are on screen before *Show all*. */
+const CITERS_SHOWN = 10;
+
+/**
+ * **Cited by** — the papers that cite the piece, as OpenAlex lists them, most
+ * cited first. The owner's, at the end of Reception.
+ *
+ * ```
+ *  CITED BY
+ *  39 papers cite this piece, by OpenAlex's count on 4 Oct 2026. Most cited first.
+ *  We have not read what any of them says about it.
+ *   The Multiscale Wisdom of the Body: … ↗
+ *   Michael G. Levin · BioEssays · 2024 · review · cited 34 times
+ *   …ten of them, then [ Show all 39 ]
+ *  Also: search Google Scholar ↗
+ * ```
+ *
+ * **A list, and no reading of it.** Nothing here says what a citing paper
+ * thinks of the piece, and the sentence under the count says so: OpenAlex has
+ * no citing sentence, and no model was asked. No sort and no filter.
+ *
+ * **A title is the citing authors' words and a stranger's string**: drawn as
+ * text in the app's face, as the rows above draw a page's title
+ * (docs/project/fonts.md leaves third-party text there), and its link is built
+ * by `citerUrl` from the DOI or the OpenAlex id, never taken from the answer.
+ *
+ * **Every outcome has a sentence**, so a missing list is never a blank, and
+ * the Scholar link stays under all of them: it is the way on when we have
+ * nothing, and a second opinion when we have something.
+ */
+function CitedBy({ citers, scholar }: { citers: UseCiters; scholar: string | null }) {
+  const headId = useId();
+  return (
+    <section className="dbt-group dbt-citers" aria-labelledby={headId}>
+      <h3 id={headId} className="dbt-group-head">
+        {CITERS_HEADING}
+      </h3>
+      {citers.result === null ? (
+        <p className="dbt-citers-note" role="status">
+          <LoaderCircle size={13} className="cmt-spinner" aria-hidden="true" /> {CITERS_LOADING}
+        </p>
+      ) : (
+        <CitersAnswer result={citers.result} onRetry={citers.retry} />
+      )}
+      {scholar !== null && (
+        <a className="dbt-scholar" href={scholar} target="_blank" rel="noreferrer noopener">
+          Also: search Google Scholar
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      )}
+    </section>
+  );
+}
+
+/** One outcome of the lookup, as its sentence or its list. The `never` makes a new outcome a type error here. */
+function CitersAnswer({ result, onRetry }: { result: CitersResult; onRetry(): void }) {
+  switch (result.kind) {
+    case "no-doi":
+      return <p className="dbt-citers-note">{CITERS_NO_DOI}</p>;
+    case "not-indexed":
+      return <p className="dbt-citers-note">{CITERS_NOT_INDEXED}</p>;
+    case "unconfirmed":
+      return <p className="dbt-citers-note">{CITERS_UNCONFIRMED}</p>;
+    case "too-large":
+      return <p className="dbt-citers-note">{CITERS_TOO_LARGE}</p>;
+    case "unavailable":
+      return (
+        <div className="dbt-citers-retry">
+          <p className="dbt-citers-note">{CITERS_UNAVAILABLE}</p>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
+      );
+    case "found":
+      return <CitersList found={result} />;
+    default: {
+      const unreachable: never = result;
+      return unreachable;
+    }
+  }
+}
+
+function CitersList({ found }: { found: Extract<CitersResult, { kind: "found" }> }) {
+  const [all, setAll] = useState(false);
+  const listed = found.citers.length;
+  const shown = all ? found.citers : found.citers.slice(0, CITERS_SHOWN);
+  return (
+    <>
+      <p className="dbt-citers-note">
+        {citersLines({ ...found, listed }, dayOf(found.fetchedAt)).join(" ")}
+      </p>
+      {listed > 0 && (
+        <ul className="dbt-citers-list">
+          {shown.map((citer) => (
+            <CiterRow key={citer.openalexId} citer={citer} />
+          ))}
+        </ul>
+      )}
+      {!all && listed > CITERS_SHOWN && (
+        <button type="button" className="dbt-more dbt-citers-all" onClick={() => setAll(true)}>
+          Show all {listed}
+        </button>
+      )}
+    </>
+  );
+}
+
+function CiterRow({ citer }: { citer: Citer }) {
+  const url = citerUrl(citer);
+  /* `article` is what nearly every row is, so only the other kinds are said. */
+  const kind = citer.kind !== undefined && citer.kind !== "article" ? citer.kind : null;
+  const facts = [
+    citer.authors.length > 0 ? bylineAuthors(citer.authors) : null,
+    citer.venue ?? null,
+    citer.year ?? null,
+    kind,
+    citedTimes(citer.citedByCount),
+  ].filter((fact) => fact !== null);
+  return (
+    <li className="dbt-citer">
+      {url !== null ? (
+        <a className="dbt-citer-title" href={url} target="_blank" rel="noreferrer noopener">
+          {citer.title}
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      ) : (
+        <span className="dbt-citer-title">{citer.title}</span>
+      )}
+      <p className="dbt-meta">{facts.join(" · ")}</p>
+    </li>
   );
 }
 

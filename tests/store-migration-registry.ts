@@ -1923,6 +1923,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
       "ledger, as for `tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/citation-index-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Reception's Cited by (2026-10-04, plan 261004h). It " +
+      "seeds four articles with `scratchArticleInPg`, reads and writes the two `citation_index_*` " +
+      "tables and the limiter's rows directly, and drives `GET /api/citers/:slug` through " +
+      "`handleApi` with `fetchBibliographicJson` replaced — entirely Postgres, and no model is " +
+      "called. Its reach into the condemned modules is the seeder's copy step and the spend ledger " +
+      "(reached through the routes import; no call is made), as for " +
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/dig-deeper-comment.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2829,6 +2842,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Seeds one article, writes a citations artefact, and drives *Investigate*
      through the route; the provider is a stubbed, streamed `fetch`. */
   "tests/citation-investigate-route.test.ts": "private-postgres",
+  /* Reception's *Cited by* (261004h): seeds four articles for two owners, clears
+     the ownerless `citation_index_lookups` and resets the limiter's rows between
+     cases — which no shared database may have done to it mid-run — and drives
+     `GET /api/citers/:slug` with the fetcher replaced. No model, no network. */
+  "tests/citation-index-pg.test.ts": "private-postgres",
   /* Seeds six articles for two owners — private, public, archived, unreadable —
      and reads Citations' in-Spideryarn candidates back as each. No model is called. */
   "tests/cited-in-spideryarn-pg.test.ts": "private-postgres",
@@ -3398,6 +3416,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   /* Two readers, each owning private and public articles, so one's citations
      can be shown never to match the other's private one. 260930b. */
+  /* A second reader who owns an article with the same DOI, so the route's
+     refusal is the owner filter and not a missing slug. 261004h. */
+  "tests/citation-index-pg.test.ts": {
+    "00000000-0000-4000-8000-00000c17e4c1": { kind: "seeded" },
+  },
   "tests/cited-in-spideryarn-pg.test.ts": {
     "00000000-0000-4000-8000-00000c17e0a1": { kind: "seeded" },
     "00000000-0000-4000-8000-00000c17e0b2": { kind: "seeded" },
