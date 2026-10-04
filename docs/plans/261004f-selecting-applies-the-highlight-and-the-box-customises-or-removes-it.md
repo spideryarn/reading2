@@ -271,3 +271,39 @@ because the box and the paint go; the earlier section's *"Copied. Not highlighte
 keep it."* belonged to the provisional design, where the box stayed. And the hint reads *Click away*
 by touch too.
 
+
+## Landed, 2026-10-04
+
+On dev as eff2e764c (the build), then the review fixes and 542b9eca8.
+
+- **Code review**, GPT Sol: [round 1](261004f-apply-on-select-code-review-sol.md) fixed F1 to F5;
+  [round 2](261004f-apply-on-select-code-review-2-sol.md), scoped to its own two P1 fixes, found F2
+  correct and F1 wrong, and fixed it again.
+- **E1's `pagehide` resend was built, and then taken out.** "As built" above describes it; it is
+  not in the code. It was a second `POST` outside `useComments`' write queue. Round 1 found it could
+  restore a highlight deleted after it (F1); round 2 found that fix could leave a promise pending
+  for ever and block every later write for the id, and answered with a 15-second deadline and a
+  drain-and-confirm step. By then it was over 200 lines threaded through `create` and `remove`, to
+  guard a highlight made in the first seconds of a page by a reader who leaves at once. **Decided
+  by me, not by a reviewer: the mechanism cost more than the window it closed.** `useComments.ts`
+  is back to the code 261003i's reviews settled, and the limit is named in `comments.md`. Sol's E1
+  stands overruled on those grounds; if the window ever shows up in practice, the right fix is to
+  make the resend part of the hook's own queue, not a second writer beside it.
+- **The browser check found one real bug**, fixed red-first: closing the fresh box by a press
+  elsewhere handed focus back to the paragraph's gutter mark, and `focus()` scrolled it into view
+  mid-press, so a drag begun in the prose made no selection and a gutter icon's click landed on
+  another button. A click-away now leaves focus to the press.
+- From the same check: the box's text buttons are the house touch height on a coarse pointer.
+- **Known and left:** "Copy, don't highlight" gives no confirmation beyond the paint and the box
+  going; the fresh box shows the previous/next arrows and a count like any comment's; in the first
+  seconds of a page a selection paints only once the comment list has loaded.
+- **A second bug from the browser recheck, same family** (376818ba2): closing on `pointerdown`
+  repainted the highlight's own paragraph before `mousedown`, so a drag begun in that paragraph
+  started on detached nodes and made no selection. That broke "select again to correct" for a real
+  mouse, which jsdom could not show. The press is now only recorded at `pointerdown`, and the box
+  closes when the press ends. **This fix came after the two review rounds and was not reviewed by
+  GPT Sol**; it is covered by seven tests (six red first) and by a real-mouse pass in Chrome:
+  same-paragraph second highlight, overlap replacing, a recoloured one kept, a click on the
+  highlighted words keeping its id, and the earlier regressions, plus an iPad profile.
+- **Never checked in a browser:** a selection made while the comment list is still loading (the
+  check could not hold that window reliably), and anything on a physical iPad.
