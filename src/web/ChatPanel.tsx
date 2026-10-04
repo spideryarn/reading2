@@ -99,6 +99,7 @@ import { liveSize } from "./live/tail.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { isSendEnter } from "./key-chord.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -1833,25 +1834,13 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
  * (docs/reusable/silent-success.md). So the state has three values, not two,
  * and a refusal says so.
  *
- * **The guard is a statement rather than `navigator.clipboard?.writeText(…)`,
- * and that is not style.** Optional chaining short-circuits the *whole* chain,
- * `.catch` included: where there is no clipboard object the expression is
- * `undefined`, nothing throws, nothing rejects, and `state` stays `"idle"` —
- * a copy button that quietly does nothing, inside the very component whose
- * comment claims that cannot happen. And "no clipboard object" is not exotic:
- * `navigator.clipboard` is undefined in every insecure context, which includes
- * reaching this app at `http://192.168.1.x:5273` from a phone. Written the
- * careless way first, caught in review, 2026-08-26.
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts.
  */
 function CopyAnswer({ text }: { text: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  // Cleared on a timer, and the timer is cleaned up: a reader who leaves the
-  // thread mid-tick would otherwise get a setState on an unmounted component.
-  useEffect(() => {
-    if (state === "idle") return;
-    const timer = setTimeout(() => setState("idle"), 1600);
-    return () => clearTimeout(timer);
-  }, [state]);
+  /* 1.6 seconds for a tick and for a refusal alike. */
+  const { state, copy } = useCopy({ copiedMs: 1600, failedMs: 1600 });
   /* The outcome is announced as well as drawn.
 
      A tick replacing a clipboard is the whole feedback this button gives, and a
@@ -1870,16 +1859,7 @@ function CopyAnswer({ text }: { text: string }) {
           ? "Your browser would not allow the copy — an insecure connection is the usual reason"
           : "Copy this answer"
       }
-      onClick={() => {
-        if (!navigator.clipboard) {
-          setState("failed");
-          return;
-        }
-        navigator.clipboard
-          .writeText(text)
-          .then(() => setState("copied"))
-          .catch(() => setState("failed"));
-      }}
+      onClick={() => copy(text)}
     >
       {state === "copied" ? (
         <ClipboardCheck size={12} />

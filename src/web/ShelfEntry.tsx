@@ -46,6 +46,7 @@ import { readHref } from "./router.js";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useCopy } from "./useCopy.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
 import { articleTitleVoice, gistVoice, withVoice } from "./voice.js";
@@ -581,6 +582,18 @@ const TIPS = {
 } as const;
 
 /**
+ * Why the browser refused a clipboard write, for the end of a sentence.
+ * A rejection is usually a `DOMException`, which is an `Error`; but a promise
+ * may reject with anything, and "Couldn't copy the link: undefined" is not a
+ * reason.
+ */
+function refusal(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return "the browser refused.";
+}
+
+/**
  * **What the five actions do, written once for both presentations.**
  *
  * Since 2026-09-15 there are two: the hover-revealed row of icons below, and,
@@ -592,39 +605,34 @@ const TIPS = {
  * the five are drawn. docs/plans/260915b-shelf-actions-reachable-on-touch.md.
  */
 function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) {
-  const [copied, setCopied] = useState(false);
+  /* The write is `useCopy`'s: the guard for a browser with no clipboard, the
+     newest-press-wins token and the timer are explained once, in useCopy.ts.
+     The tick shows for 1.5 seconds. **A failure is never drawn on the button**
+     (`failedMs: null` costs nothing, because `failed` is not read here): it is
+     a sentence in the shelf's notice, which stays until the reader dismisses
+     it. */
+  const { state: copyState, copy: write } = useCopy({ copiedMs: 1500, failedMs: null });
+  const copied = copyState === "copied";
   const [rerunning, setRerunning] = useState(false);
 
   const copy = useCallback(() => {
     const url = new URL(readHref(entry.slug), window.location.origin).toString();
-    /* **There may be no clipboard object at all**, and this was the one copy
-       button in the app that did not say so. `navigator.clipboard` is undefined
-       outside a secure context, so on anything but https or localhost this threw
-       a `TypeError` out of a React event handler — past the `.catch` below,
-       which only ever sees a *rejected promise* — and the reader got a button
-       that did nothing and no message.
+    /* Reported from inside `useCopy`'s callback, which runs only for the newest
+       press on a row still on the shelf: a refusal a later press has overtaken
+       would say "Couldn't copy" over a clipboard that holds the link.
 
-       A statement rather than `navigator.clipboard?.writeText(…)`, because the
-       optional chain evaluates to `undefined` and then `.then` throws on it:
-       the same trap, moved one line down. BlockGutter.tsx and
-       AccessSharing.tsx already guard it this way and say so; this one was the
-       odd one out, found on 2026-09-05 when a new touch test pressed Copy and
-       vitest reported the uncaught `TypeError`. */
-    if (!navigator.clipboard) {
-      shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.");
-      return;
-    }
-    /* Caught, because `writeText` rejects for real reasons — a page without
-       focus, a browser that refuses the permission — and an unhandled rejection
-       here left the reader looking at a button that had simply done nothing. */
-    void navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      })
-      .catch((e: Error) => shelf.report(`Couldn't copy the link: ${e.message}`));
-  }, [entry.slug, shelf]);
+       Both failures are said, and they are different sentences. No clipboard
+       object at all is every insecure context, anything but https or localhost;
+       `writeText` also rejects for real reasons, a page without focus or a
+       browser that refuses the permission. */
+    write(url, (outcome) => {
+      if (outcome.result === "unavailable") {
+        shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.");
+      } else if (outcome.result === "refused") {
+        shelf.report(`Couldn't copy the link: ${refusal(outcome.error)}`);
+      }
+    });
+  }, [entry.slug, shelf, write]);
 
   /* Re-running is `POST /api/jobs { slug, steps, force }` — the route that
      already exists, and the same one the add box uses. `force: ["fetch"]` is

@@ -123,6 +123,7 @@ import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
+import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
@@ -375,8 +376,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>({ kind: "editing" });
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
+  /* How the newest press of "Copy the report" went. Neither outcome times out:
+     both stay until a later press settles or the report is done with
+     (`discard`). The write, and why only the newest press may speak, are
+     `useCopy`'s (useCopy.ts). */
+  const { state: copyState, copy: writeToClipboard, reset: resetCopy } = useCopy({
+    copiedMs: null,
+    failedMs: null,
+  });
   /** A pasted image is still being decoded and re-encoded. See `takeFile`. */
   const [preparing, setPreparing] = useState(false);
 
@@ -547,12 +554,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
       setShotProblem(null);
     }
     setStage({ kind: "editing" });
-    setCopied(false);
-    setCopyFailed(false);
+    /* Also overtakes a copy still out, which would otherwise settle later and
+       say "Copied" on the next report's failure panel. */
+    resetCopy();
     setPreparing(false);
     sending.current = false;
     setReportId(mintId());
-  }, []);
+  }, [resetCopy]);
 
   /**
    * **The thank-you, as a toast rather than a dialog stage** — `toast` below.
@@ -952,16 +960,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   ]);
 
   const copy = useCallback(() => {
-    const clipboard = navigator.clipboard;
-    if (!clipboard) return setCopyFailed(true);
-    void clipboard
-      .writeText(asPlainText(body, kind, where))
-      .then(() => {
-        setCopied(true);
-        setCopyFailed(false);
-      })
-      .catch(() => setCopyFailed(true));
-  }, [body, kind, where]);
+    writeToClipboard(asPlainText(body, kind, where));
+  }, [body, kind, where, writeToClipboard]);
 
   return (
     <>
@@ -1255,7 +1255,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
               <div className="fb-failed-outs">
                 <button type="button" className="fb-copy" onClick={copy}>
                   <Copy size={14} />
-                  {copied ? "Copied" : "Copy the report"}
+                  {copyState === "copied" ? "Copied" : "Copy the report"}
                 </button>
                 <a
                   className="fb-copy"
@@ -1272,7 +1272,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                   not see. Saying so matters more here than anywhere else, because
                   a reader who believes they have copied their words and has not is
                   one Escape away from losing them. */}
-              {copyFailed ? (
+              {copyState === "failed" ? (
                 <p className="fb-shot-problem">
                   Your browser would not let us reach the clipboard. Select the text
                   in the box above and copy it by hand.

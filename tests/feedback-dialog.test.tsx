@@ -751,6 +751,112 @@ describe("the feedback dialog", () => {
     expect(host.querySelector<HTMLAnchorElement>('a[href^="mailto:"]')).not.toBeNull();
   });
 
+  /**
+   * **"Copy the report" reports the newest press, and only for the report on
+   * screen.** `writeText` is a promise, so an older press can settle last, and
+   * it can settle after the report it belonged to was filed and the form
+   * emptied. Each case was red against the two booleans this button had until
+   * 2026-10-04; it is `useCopy` now (src/web/useCopy.ts).
+   * docs/plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md.
+   */
+  describe("copying the report, more than once", () => {
+    type Write = { resolve(): void; reject(reason: unknown): void };
+    const REFUSED = "would not let us reach the clipboard";
+
+    /** A clipboard whose every write this test settles by hand, in any order. */
+    function clipboard(): Write[] {
+      const writes: Write[] = [];
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: () =>
+            new Promise<void>((resolve, reject) => {
+              writes.push({ resolve, reject });
+            }),
+        },
+      });
+      return writes;
+    }
+    afterEach(() => {
+      Reflect.deleteProperty(navigator as object, "clipboard");
+    });
+
+    /** Type a report and have its send fail: the one screen with a Copy button. */
+    async function failToSend(text: string): Promise<void> {
+      type(text);
+      answer = async () => {
+        throw new Error("offline");
+      };
+      send();
+      await act(async () => {});
+      expect(host.querySelector(".fb-failed")).not.toBeNull();
+    }
+    const copyButton = () => {
+      const button = host.querySelector<HTMLButtonElement>("button.fb-copy");
+      if (!button) throw new Error("no Copy button");
+      return button;
+    };
+    const pressCopy = () =>
+      act(() => {
+        copyButton().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    async function settle(how: () => void): Promise<void> {
+      await act(async () => {
+        how();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    it("does not say the copy failed when a newer press has succeeded", async () => {
+      mount();
+      await failToSend("It broke.");
+      const writes = clipboard();
+      pressCopy();
+      pressCopy();
+      await settle(() => writes[1]?.resolve());
+      await settle(() => writes[0]?.reject(new Error("denied")));
+      /* The clipboard holds the report. Telling the reader to copy it by hand
+         is false, and it is the older press talking. */
+      expect(copyButton().textContent).toBe("Copied");
+      expect(host.textContent).not.toContain(REFUSED);
+    });
+
+    it("does not tick the next report for a copy of the last one", async () => {
+      mount();
+      await failToSend("The first report.");
+      const writes = clipboard();
+      pressCopy();
+      /* The retry goes through while the write is still out: the report is
+         filed and the form starts again, empty. */
+      answer = ok(201);
+      send();
+      await act(async () => {});
+      expect(firstBox().value).toBe("");
+      await settle(() => writes[0]?.resolve());
+
+      /* A second report, whose send also fails. Nobody has copied this one. */
+      await failToSend("A different report.");
+      expect(copyButton().textContent).toBe("Copy the report");
+    });
+
+    it("stops saying Copied when a later copy is refused", async () => {
+      mount();
+      await failToSend("It broke.");
+      const writes = clipboard();
+      pressCopy();
+      await settle(() => writes[0]?.resolve());
+      expect(copyButton().textContent).toBe("Copied");
+
+      pressCopy();
+      await settle(() => writes[1]?.reject(new Error("denied")));
+      /* One state, not two: "Copied" beside "could not reach the clipboard"
+         told the reader both things at once. */
+      expect(host.textContent).toContain(REFUSED);
+      expect(copyButton().textContent).toBe("Copy the report");
+    });
+  });
+
   /* ---- one address on the site, and it is not a person's ---------------- */
 
   /**

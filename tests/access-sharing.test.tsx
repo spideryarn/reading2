@@ -1010,4 +1010,88 @@ describe("copying the link", () => {
     expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
     expect(announced()).toBe("Link copied.");
   });
+
+  /* The next two were red against the hand-written handler this button had
+     until 2026-10-04: no per-press token, and a timer hung off an effect keyed
+     on the state. Both are `useCopy`'s now (plan 261004e, stage 3). */
+
+  it("lets the newest press win when an older one is refused afterwards", async () => {
+    const settlers: Array<{ ok(): void; no(): void }> = [];
+    setClipboard({
+      writeText: () =>
+        new Promise<void>((ok, no) => {
+          settlers.push({ ok, no: () => no(new Error("denied")) });
+        }),
+    });
+    await mount(SHARED);
+    press("Copy");
+    press("Copy");
+    expect(settlers).toHaveLength(2);
+
+    await act(async () => {
+      settlers[1]?.ok();
+      await Promise.resolve();
+    });
+    expect(buttonSays("Copied")).toBe(true);
+    // The first press is refused after the second worked. The clipboard holds
+    // the link, and this failure sentence does not time out: it would tell an
+    // owner to select the link by hand, for as long as they stayed.
+    await act(async () => {
+      settlers[0]?.no();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
+    expect(announced()).toBe("Link copied.");
+    expect(buttonSays("Copied")).toBe(true);
+    expect(host.querySelector("[data-copy-status]")?.className).toContain("sr-only");
+  });
+
+  it("gives a second copy its own full time on screen", async () => {
+    setClipboard({ writeText: () => Promise.resolve() });
+    await mount(SHARED);
+    /* Fake timers only from here: `mount` and `settle` wait on real ones. */
+    vi.useFakeTimers();
+    try {
+      const flush = () =>
+        act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      press("Copy");
+      await flush();
+      expect(buttonSays("Copied")).toBe(true);
+
+      // 1000 ms into a 1500 ms tick, copy again.
+      act(() => vi.advanceTimersByTime(1000));
+      press("Copied");
+      await flush();
+      // 1000 ms later the first tick's timer has run out. The second copy is
+      // 1000 ms old and still has 500 ms to show.
+      act(() => vi.advanceTimersByTime(1000));
+      expect(buttonSays("Copied")).toBe(true);
+      expect(announced()).toBe("Link copied.");
+      // And it does go: 1600 ms after the second copy.
+      act(() => vi.advanceTimersByTime(600));
+      expect(buttonSays("Copy")).toBe(true);
+      expect(announced()).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the failure sentence up: it is an instruction, and does not time out", async () => {
+    setClipboard(undefined);
+    await mount(SHARED);
+    vi.useFakeTimers();
+    try {
+      press("Copy");
+      expect(announced()).toBe(SHARING_COPY_FAILED);
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(announced()).toBe(SHARING_COPY_FAILED);
+      expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

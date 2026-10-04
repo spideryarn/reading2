@@ -78,6 +78,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from "re
 
 import { currentProbe } from "./params.js";
 import { controlsBar } from "./scroll.js";
+import { useCopy } from "./useCopy.js";
 
 /** How many samples are kept before recording stops. */
 const CAP = 600;
@@ -388,7 +389,15 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-  const [said, setSaid] = useState("");
+  /* The line above the box is how the newest press of *copy* went, and it
+     stays until the next press settles, or Show or Clear wipes it. The write
+     itself is `useCopy`'s (useCopy.ts). */
+  const { state: copyState, copy: write, reset: resetCopy } = useCopy({
+    copiedMs: null,
+    failedMs: null,
+  });
+  const said =
+    copyState === "copied" ? "copied" : copyState === "failed" ? "copy refused — select the box" : "";
 
   const record = useCallback((ev: Sample["ev"]) => {
     if (full(samples.current.length)) return;
@@ -469,29 +478,23 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
 
   const show = () => {
     setText(trace());
-    setSaid("");
+    resetCopy();
   };
 
   const copy = () => {
     const t = trace();
+    /* The box is filled before the clipboard is asked anything, so a refusal
+       still leaves the trace on screen to select by hand. */
     setText(t);
     /* A button press is the user gesture iOS requires, so this is allowed to
        work — but a download is not (an installed web app has nowhere to put a
        file you can find again), which is why the textarea below is not a
-       fallback so much as the other half of the same answer. */
-    const refused = () => setSaid("copy refused — select the box");
-    /* A statement, not `navigator.clipboard?.writeText(…)`: the optional chain
-       short-circuits the whole chain, `.catch` included, so with no clipboard
-       object — every insecure context, which is how a phone reaches a dev
-       server — the press said nothing. ChatPanel.tsx has the long version. */
-    if (!navigator.clipboard) {
-      refused();
-      return;
-    }
-    navigator.clipboard
-      .writeText(t)
-      .then(() => setSaid("copied"))
-      .catch(refused);
+       fallback so much as the other half of the same answer.
+
+       No clipboard object at all — every insecure context, which is how a
+       phone reaches a dev server — is a refusal said inside this click:
+       useCopy.ts has the reasoning. */
+    write(t);
   };
 
   return (
@@ -546,7 +549,9 @@ function ProbePanel({ laidOutWidth }: { laidOutWidth: number | null }) {
                 since.current = 0;
                 setCount(0);
                 setText("");
-                setSaid("");
+                /* Also overtakes a copy still out, which would otherwise say
+                   "copied" over the box this has just emptied. */
+                resetCopy();
               }}
               label="clear"
             />

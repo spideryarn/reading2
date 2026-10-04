@@ -78,6 +78,7 @@ import type {
 } from "../types.js";
 import { Button } from "./components/ui/button.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { useCopy } from "./useCopy.js";
 import {
   sharedInventory,
   type InventoryItem,
@@ -861,18 +862,14 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
  * technology can observe its text changing. The success glyph alone does not
  * communicate a failure.
  *
- * The guard is a statement rather than `navigator.clipboard?.writeText(…)` —
- * where there is no clipboard object at all the optional chain evaluates to
- * `undefined` and the `.catch` never runs. `ChatPanel.tsx` § `CopyAnswer` has
- * the long version, and is the control this one now matches.
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts.
  */
 function CopyLink({ link }: { link: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  useEffect(() => {
-    if (state !== "copied") return;
-    const timer = setTimeout(() => setState("idle"), 1500);
-    return () => clearTimeout(timer);
-  }, [state]);
+  /* A tick goes after 1.5 seconds. `failedMs: null` is the failure staying
+     until a later press settles, for the reason above. */
+  const { state, copy } = useCopy({ copiedMs: 1500, failedMs: null });
   return (
     <div className="tw:mb-3">
       <div className="tw:flex tw:items-center tw:gap-2">
@@ -888,16 +885,7 @@ function CopyLink({ link }: { link: string }) {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              if (!navigator.clipboard) {
-                setState("failed");
-                return;
-              }
-              navigator.clipboard
-                .writeText(link)
-                .then(() => setState("copied"))
-                .catch(() => setState("failed"));
-            }}
+            onClick={() => copy(link)}
           >
             {state === "copied" ? <Check size={13} /> : <Copy size={13} />}
             {state === "copied" ? "Copied" : "Copy"}

@@ -266,5 +266,25 @@ test files pass without an edit (127 tests). Mutations: announcing outside `said
 two `annotate-dialog-keeps-a-draft` tests. Swapping the order of `onCopyPressed()` and `copy()`
 inside the one click handler reds nothing, and cannot: both run in the same step.
 
-One thing changed that no reader can see: `AnnotateDialog` had no mounted flag, so a write settling
+**Stage 3.** The other six are on the hook, and `tests/use-copy.test.tsx`'s scan now allows the
+clipboard in `useCopy.ts` alone. Eighteen tests were red against the old components first:
+
+| Caller | Red first | Test file |
+|---|---|---|
+| Tweets | stale press; full tick | `tweets-copy-icons` |
+| ChatPanel | stale press; full tick (plus three characterisations: it had no rendering test) | `chat-copy-answer`, new; renders `Turn`, because six test files mock `ChatPanel.js` with a bare factory and a new export would break them |
+| AccessSharing | stale press; full tick (plus one characterisation: the failure sentence does not time out) | `access-sharing` |
+| ShelfEntry | full tick; overtaken refusal reaching the notice; a failure leaving the old tick up; a timer left after unmount; **a rejection that is not an `Error` threw inside the old `.catch`** (found while writing the tests) | `shelf-action-touch` |
+| FeedbackDialog | stale press; a copy of the last report ticking the next one; "Copied" beside the failure sentence | `feedback-dialog` |
+| ViewportProbe | a write settling after Clear, after Show, a refusal after Clear; stale press (plus two characterisations of Clear and Show) | `viewport-probe` |
+
+Each move was then mutated and a test went red, with one exception: `failedMs` in ShelfEntry can
+be any value, because the button never draws `failed`.
+
+`tests/eager-client-graph.test.ts` went red, correctly: `useCopy.ts` is now reachable from both the
+reader's startup and the lazy `/admin` route (through `ShelfEntry`). It is on `SHARED_WITH_READER`
+with its reason. Docs: web-client.md § Shared code (client) names the hook; comments.md's note that
+the seven call sites had drifted and the hook was "Greg's call" is replaced by what was done.
+
+One thing from stage 2 changed that no reader can see: `AnnotateDialog` had no mounted flag, so a write settling
 after the box closed set state on a component that was gone, which React ignores. The hook drops it.

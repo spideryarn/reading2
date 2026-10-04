@@ -60,7 +60,7 @@
  *
  * Tailwind utilities, prefixed `tw:` — unprefixed names silently do nothing.
  */
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo } from "react";
 import { Check, Copy, PenLine, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, BlockId, Job, TweetThread } from "../types.js";
@@ -72,13 +72,14 @@ import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
+import { useCopy } from "./useCopy.js";
 import type { UseTweets } from "./useTweets.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
-/** How long a copy button says it worked before going back to normal. */
+/** How long a copy button says how it went, a tick or a refusal, before going back to normal. */
 const COPIED_MS = 1600;
 
 /**
@@ -477,6 +478,10 @@ function RunFoot({ job, owner }: { job: Job | null; owner: UseTweets }) {
  * there is no reveal-then-commit (docs/project/touch.md).
  *
  * `text` is a function so the whole-thread markdown is built on the click.
+ *
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts.
  */
 function CopyButton({
   text,
@@ -494,16 +499,10 @@ function CopyButton({
   tip: string;
   className?: string;
 }) {
-  const [state, setState] = useState<"idle" | "done" | "failed">("idle");
-
-  useEffect(() => {
-    if (state === "idle") return;
-    const t = setTimeout(() => setState("idle"), COPIED_MS);
-    return () => clearTimeout(t);
-  }, [state]);
+  const { state, copy } = useCopy({ copiedMs: COPIED_MS, failedMs: COPIED_MS });
 
   const status =
-    state === "done" ? `${what === "post" ? "Post" : "Thread"} copied` : state === "failed" ? `Couldn't copy the ${what}` : "";
+    state === "copied" ? `${what === "post" ? "Post" : "Thread"} copied` : state === "failed" ? `Couldn't copy the ${what}` : "";
 
   return (
     <span className={`tw:inline-flex tw:items-center tw:gap-1.5 ${className ?? ""}`}>
@@ -526,19 +525,9 @@ function CopyButton({
           size="icon-xs"
           className="tw:pointer-coarse:size-10"
           aria-label={label}
-          onClick={() => {
-            // No `?.`: on an origin with no clipboard it would silently do nothing.
-            if (!navigator.clipboard) {
-              setState("failed");
-              return;
-            }
-            navigator.clipboard
-              .writeText(text())
-              .then(() => setState("done"))
-              .catch(() => setState("failed"));
-          }}
+          onClick={() => copy(text())}
         >
-          {state === "done" ? (
+          {state === "copied" ? (
             <Check size={12} aria-hidden="true" className="tw:text-highlight-text" />
           ) : state === "failed" ? (
             <X size={12} aria-hidden="true" className="tw:text-destructive" />

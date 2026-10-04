@@ -402,20 +402,20 @@ one `AnnotateDialog` mounted and swapped its `anchor`, so a tick from passage A 
 B's words with A still on the clipboard; a write still in flight when the reader moved on reported
 success over the new passage; and of two presses the *older* outcome landed last and reported failure
 over a clipboard holding exactly what was asked for. The fixes are a `key` on the anchor (the button's own
-until 2026-10-03, the whole box's since — [§ The box a selection opens](#the-selection-box)) and a press
-token, both in [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) with the reasoning beside
-them, and each has a test that was red first. GPT Sol found all three reviewing the built code,
-2026-09-05. [`tests/annotate-dialog-copy.test.tsx`](../../tests/annotate-dialog-copy.test.tsx).
+until 2026-10-03, the whole box's since — [§ The box a selection opens](#the-selection-box)) in
+[`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx), and a press token, which since 2026-10-04
+is [`useCopy`](../../src/web/useCopy.ts)'s. Each has a test that was red first. GPT Sol found all
+three reviewing the built code, 2026-09-05.
+[`tests/annotate-dialog-copy.test.tsx`](../../tests/annotate-dialog-copy.test.tsx).
 
-> [!NOTE]
-> **There are now seven clipboard call sites in the client and they have drifted apart.**
-> `BlockGutter` carries an operation token, this one now does too, and
-> [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) dereferences `navigator.clipboard` with no guard
-> at all while [`AccessSharing.tsx`](../../src/web/AccessSharing.tsx) returns silently where there is
-> none, under a comment promising it reports failures. GPT Sol's recommendation, 2026-09-05, is a
-> headless `useClipboardCopy` owning the guard, the tri-state outcome, the token and the timer, with
-> each caller keeping its own icons and announcement. Not done — it is a change to seven call sites,
-> two of which have live bugs, and wants its own review. **Greg's call.**
+**Every copy button in the client goes through one hook since 2026-10-04**:
+[`src/web/useCopy.ts`](../../src/web/useCopy.ts) owns the guard for a browser with no clipboard, the
+three-state outcome, the press token and the timer, and each caller keeps its own glyphs, words and
+announcement. Until then there were eight hand-written copies and they had drifted: the token had
+reached two of them. GPT Sol recommended the hook on 2026-09-05; the plan is
+[261004e](../plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md),
+and [`tests/use-copy.test.tsx`](../../tests/use-copy.test.tsx) fails if a ninth file reaches for the
+clipboard itself.
 
 ### The two questions a selection raises <a id="the-two-questions"></a>
 

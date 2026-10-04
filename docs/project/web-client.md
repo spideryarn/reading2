@@ -150,8 +150,11 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   that appears only once a wait is long enough to mention, in the house shape
   ([§ The waiting state](#the-waiting-state)). `.srch-spin`, `.spin` and `.chat-dialog-spinner` are
   copies of the same keyframes.
-- **No shared copy button.** `src/web/Tweets.tsx` § `CopyButton` is private to that file, and the
-  other clipboard writers each have their own.
+- **`src/web/useCopy.ts` § `useCopy`** — anything that puts text on the clipboard: the guard for a
+  browser with no clipboard, only the newest press reporting, and the timer that takes the tick
+  away. The button, its glyphs and its words stay the caller's; there is no shared copy *button*
+  (`src/web/Tweets.tsx` § `CopyButton` is private to that file). `tests/use-copy.test.tsx` fails if
+  another file under `src/web` reads `navigator.clipboard` itself.
 
 ## The middle is a slot
 

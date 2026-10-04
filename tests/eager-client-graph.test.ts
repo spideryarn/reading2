@@ -611,6 +611,11 @@ const SHARED_WITH_READER = [
   "src/web/relative-time.ts",
   "src/web/router.ts",
   "src/web/useNow.ts",
+  /* Arrived 2026-10-04 (plan 261004e) by the second predicted route:
+     `ShelfEntry`, here already, copies a link through it instead of writing to
+     the clipboard itself. The reader downloaded the same code inline in eight
+     components before; it is a leaf whose only import is React. */
+  "src/web/useCopy.ts",
   "src/web/useExperimental.ts",
   "src/web/useSession.ts",
   /* Arrived 2026-10-02 (plan 261002f) by the second predicted route:

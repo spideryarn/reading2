@@ -687,7 +687,7 @@ describe("the source itself", () => {
     ).toEqual([]);
   });
 
-  it("finds the hook and the callers still to move", async () => {
+  it("finds the hook, and no other file that reaches for the clipboard", async () => {
     const entries = await readdir(WEB, { recursive: true, withFileTypes: true });
     const files = entries
       .filter((e) => e.isFile() && /\.tsx?$/.test(e.name))
@@ -701,16 +701,8 @@ describe("the source itself", () => {
         found.push(path.relative(WEB, file).split(path.sep).join("/"));
       }
     }
-    /* Stages 2 and 3 of plan 261004e shrink this to `useCopy.ts` alone. A new
-       name here is a ninth hand-written writer: use the hook instead. */
-    expect(found.sort()).toEqual([
-      "AccessSharing.tsx",
-      "ChatPanel.tsx",
-      "FeedbackDialog.tsx",
-      "ShelfEntry.tsx",
-      "Tweets.tsx",
-      "ViewportProbe.tsx",
-      "useCopy.ts",
-    ]);
+    /* Eight more names stood here until plan 261004e moved each onto the hook.
+       A new name is a ninth hand-written writer: use the hook instead. */
+    expect(found.sort()).toEqual(["useCopy.ts"]);
   });
 });
