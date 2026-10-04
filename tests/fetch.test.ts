@@ -25,7 +25,6 @@ import {
   mimeType,
   parseTarget,
   readCapped,
-  retryAfterMs,
   retryDelayMs,
   sniffKind,
   uploadedDocumentKind,
@@ -1641,24 +1640,12 @@ describe("classifyStatus", () => {
   });
 });
 
-describe("retryAfterMs", () => {
-  it("reads the seconds form", () => {
-    expect(retryAfterMs("120", NOW)).toBe(120_000);
-  });
-
-  it("reads the date form, relative to now", () => {
-    expect(retryAfterMs("Tue, 25 Aug 2026 12:00:30 GMT", NOW)).toBe(30_000);
-  });
-
-  it("never returns a negative wait for a date already past", () => {
-    expect(retryAfterMs("Tue, 25 Aug 2026 11:59:00 GMT", NOW)).toBe(0);
-  });
-
-  it("is null for nonsense or nothing", () => {
-    expect(retryAfterMs("soon", NOW)).toBeNull();
-    expect(retryAfterMs(null, NOW)).toBeNull();
-  });
-});
+/* `Retry-After` itself is parsed in src/retry-after.ts and its table is in
+   tests/retry-after.test.ts. Until 2026-10-04 this file pinned the fetcher's
+   own parser, including "a date already past is a wait of 0". That was changed
+   on purpose: a wait that is not positive is now `null`, "no usable
+   instruction", so the retry waits its ordinary backoff rather than going
+   again at once. The tests under "retrying" below pin that at the fetch. */
 
 describe("classifyNetworkError", () => {
   /* Every one of these arrives as `TypeError: fetch failed`. The whole point of
@@ -1788,6 +1775,38 @@ describe("retrying", () => {
       opts({ fetchImpl: impl, attempts: 2, sleep: async (ms) => void waits.push(ms) }),
     );
     expect(waits).toEqual([2_000]);
+  });
+
+  it("treats `Retry-After: 0` and a date already past as no instruction, and backs off", async () => {
+    /* The decision named in src/retry-after.ts: a `0` passed through would be
+       a retry with no wait at all, at a server that has just said 429. With
+       `random` pinned at 1 the backoff for a first retry is its 500 ms ceiling,
+       and a wait of 0 here would mean the header had been obeyed. */
+    for (const header of ["0", "Tue, 25 Aug 2026 11:59:00 GMT"]) {
+      const waits: number[] = [];
+      const { impl } = scripted([
+        new Response("slow down", { status: 429, headers: { "retry-after": header } }),
+        html("<html><p>ok"),
+      ]);
+      await fetchDocument(
+        "https://example.com/",
+        opts({ fetchImpl: impl, attempts: 2, random: () => 1, sleep: async (ms) => void waits.push(ms) }),
+      );
+      expect(waits, header).toEqual([500]);
+    }
+  });
+
+  it("reads a `Retry-After` date against its own clock", async () => {
+    const waits: number[] = [];
+    const { impl } = scripted([
+      new Response("slow down", { status: 429, headers: { "retry-after": "Tue, 25 Aug 2026 12:00:03 GMT" } }),
+      html("<html><p>ok"),
+    ]);
+    await fetchDocument(
+      "https://example.com/",
+      opts({ fetchImpl: impl, attempts: 2, sleep: async (ms) => void waits.push(ms) }),
+    );
+    expect(waits).toEqual([3_000]);
   });
 
   it("gives up after the last attempt and reports the real reason", async () => {

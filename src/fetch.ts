@@ -41,6 +41,7 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
+import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import { canonicalKey } from "./source.js";
 import { uploadContentType } from "./uploads.js";
@@ -685,7 +686,12 @@ export class FetchFailure extends Error {
   readonly status: number | null;
   /** Whether trying the identical request again could plausibly work. */
   readonly retryable: boolean;
-  /** What the server asked us to wait, from `Retry-After`, in ms. */
+  /**
+   * What the server asked us to wait, from `Retry-After`, in ms
+   * (src/retry-after.ts). `null` where it sent none, sent nonsense, or sent a
+   * wait that is not positive: `0` and a date already past are not an
+   * instruction, so the caller's own backoff or cooldown applies.
+   */
   readonly retryAfterMs: number | null;
 
   constructor(
@@ -1957,16 +1963,6 @@ export function decodeHtml(bytes: Uint8Array, contentType: string | null): { tex
  * Classifying what went wrong
  * ------------------------------------------------------------------ */
 
-/** `Retry-After`, as milliseconds. Accepts both the seconds form and the HTTP-date form. */
-export function retryAfterMs(header: string | null, now: Date): number | null {
-  if (!header) return null;
-  const trimmed = header.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
-  const when = Date.parse(trimmed);
-  if (Number.isNaN(when)) return null;
-  return Math.max(0, when - now.getTime());
-}
-
 /**
  * An HTTP status we didn't want, as a failure worth reading.
  *
@@ -2110,7 +2106,9 @@ function safeHost(url: string): string {
  * How long to wait before trying again.
  *
  * `Retry-After` wins where the server sent one — it is the only party that
- * knows. Otherwise exponential backoff with **full** jitter: a delay drawn
+ * knows. A `Retry-After: 0` never arrives here as `0`: the parser reads a wait
+ * that is not positive as `null` (src/retry-after.ts), so it gets the backoff
+ * below rather than a retry at once. Otherwise exponential backoff with **full** jitter: a delay drawn
  * uniformly from zero to the ceiling, rather than the ceiling nudged a little.
  * Nobody is being thundered here, but it is one multiplication.
  */
@@ -2379,7 +2377,7 @@ async function attemptFetch<T>(
  */
 async function readBody(res: Response, finalUrl: string, opts: Resolved): Promise<Uint8Array> {
   if (!res.ok) {
-    const asked = retryAfterMs(res.headers.get("retry-after"), opts.now());
+    const asked = parseRetryAfter(res.headers.get("retry-after"), opts.now().getTime());
     await discard(res);
     throw classifyStatus(res.status, finalUrl, asked);
   }

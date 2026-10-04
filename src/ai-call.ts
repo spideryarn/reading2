@@ -89,6 +89,7 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
    something the next file to import embeddings might. `import type` is erased,
    so it creates no edge at all. */
 import type { AiJob, Wire } from "./models.js";
+import { parseRetryAfter } from "./retry-after.js";
 import { isHighPowerModel } from "./high-power-model.js";
 import {
   type StreamChunk,
@@ -1242,7 +1243,12 @@ export class ProviderRefused extends Error {
    * 400 too, and halving that would only spend twice.
    */
   readonly kind: "no-endpoints" | "context-exceeded" | null;
-  /** `Retry-After`, parsed to milliseconds, or `null` if it was absent or nonsense. */
+  /**
+   * `Retry-After`, parsed to milliseconds (src/retry-after.ts), or `null` if it
+   * was absent, nonsense or not a wait at all: `0` and a date already past are
+   * `null` too, so a caller's own backoff applies. Never clamped; how long a
+   * wait is affordable is the caller's to decide.
+   */
   readonly retryAfterMs: number | null;
   constructor(status: number, body: string, headers: Headers) {
     super(providerHttpFailure(status).message);
@@ -1254,42 +1260,8 @@ export class ProviderRefused extends Error {
         : status === 400 && body.includes("max_tokens_exceeded")
           ? "context-exceeded"
           : null;
-    this.retryAfterMs = headers ? retryAfterMs(headers) : null;
+    this.retryAfterMs = headers ? parseRetryAfter(headers.get("retry-after"), Date.now()) : null;
   }
-}
-
-/**
- * `Retry-After` as a number of milliseconds. Seconds or an HTTP date; both are
- * legal.
- *
- * **What the provider actually said, not what a caller can afford.** This
- * clamped to 30 s until 2026-09-04, which meant a header saying *ten minutes*
- * and one saying *thirty seconds* arrived here indistinguishable — so the only
- * caller that wanted to *decide* about a long wait could not tell there had been
- * one, and asked again well inside a window the provider had just told it was
- * closed. Truncating an instruction and then obeying the truncation is the
- * dishonest shape ⟨GPT Sol, 2026-09-04⟩; how long a wait is affordable is a
- * property of the caller's deadline, and the callers have one each
- * (src/pdf-read.ts § `MAX_RETRY_AFTER_MS`, src/embeddings.ts § `backoffMs`).
- *
- * Still a parsed number and never a string: nothing a provider wrote leaves
- * this function — see `ProviderRefused`.
- *
- * **Exported since 2026-09-05** for the deepening wave
- * (src/structure-deepen.ts), which meets its 429s on the Anthropic SDK's road
- * rather than this one and so has an `APIError` with a `Headers` on it instead
- * of a `ProviderRefused`. The header is the same header; a second parser for it
- * would be a second opinion about what "a minute" means, and the two would
- * disagree the day one of them learned about the HTTP-date form.
- */
-export function retryAfterMs(headers: Headers): number | null {
-  const header = headers.get("retry-after");
-  if (!header) return null;
-  const seconds = Number(header);
-  const ms = Number.isFinite(seconds)
-    ? seconds * 1000
-    : Date.parse(header) - Date.now();
-  return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 /* ---------------------------------------------------------------- the meter -- */

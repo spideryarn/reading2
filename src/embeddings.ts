@@ -109,7 +109,7 @@ function backoffMs(retryAfterMs: number | null, attempt: number): number {
      us.
 
      **Clamped here since 2026-09-04**, and it is the same clamp: it used to live
-     in `retryAfterMs` (src/ai-call.ts), where it also hid a long wait from the
+     in the gateway's own parser (now src/retry-after.ts), where it also hid a long wait from the
      one caller that wanted to decide about one. This behaviour is unchanged —
      what moved is who owns the number, which is whoever has the deadline. */
   if (retryAfterMs !== null) return Math.min(retryAfterMs, 30_000);
