@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
+import { checkTree } from "../src/tree-invariants.js";
 import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
 import {
   type MarginClaim,
@@ -289,6 +290,42 @@ describe("the block the head speaks for", () => {
     } as unknown as Tree;
     expect(headBlock(stale, at, "spya-zzzzz1")).toBe("spya-zzzzz1");
     expect(headBlock(stale, at, null)).toBe(null);
+  });
+
+  it("does not borrow the argument for a block covered by an earlier supplement", () => {
+    const noteId = order[0]!;
+    const bodyId = order[1]!;
+    const articleBlocks: Block[] = [
+      { ...blocks[1]!, id: noteId, treatment: "supplement", role: "footnote", gistable: false },
+      { ...blocks[1]!, id: bodyId },
+    ];
+    const articleIndex = blockIndex(articleBlocks);
+    const withOpeningNotes = {
+      ...gapped,
+      nodes: {
+        root: node({ id: "root", depth: 0, children: ["notes", "part"], range: [noteId, bodyId], title: "Article", gist: "The argument." }),
+        notes: node({ id: "notes", depth: 1, parent: "root", children: ["note"], range: [noteId, noteId], title: "Notes", treatment: "supplement" }),
+        note: node({ id: "note", depth: 2, parent: "notes", range: [noteId, noteId], title: "" }),
+        part: node({ id: "part", depth: 1, parent: "root", children: ["paragraph"], range: [bodyId, bodyId], title: "Part A", gist: "The argument." }),
+        paragraph: node({ id: "paragraph", depth: 2, parent: "part", range: [bodyId, bodyId], title: "", navLabel: "The argument" }),
+      },
+    } satisfies Tree;
+    // This ordering is permitted by the tree contract, even though today's producer appends Notes.
+    expect(checkTree(articleBlocks, withOpeningNotes).problems).toEqual([]);
+    expect(headBlock(withOpeningNotes, articleIndex, noteId)).toBe(noteId);
+    expect(headPath(withOpeningNotes, articleIndex, headBlock(withOpeningNotes, articleIndex, noteId))).toEqual([
+      { title: "Notes", voice: "ui" },
+    ]);
+    expect(headBlock(withOpeningNotes, articleIndex, null)).toBe(bodyId);
+  });
+
+  it("a root missing its child list answers with what it was given", () => {
+    const missingChildren = {
+      ...gapped,
+      nodes: { root: { ...nodes.root, children: undefined } },
+    } as unknown as Tree;
+    expect(headBlock(missingChildren, at, order[0]!)).toBe(order[0]);
+    expect(headBlock(missingChildren, at, null)).toBeNull();
   });
 });
 

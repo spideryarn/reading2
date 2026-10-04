@@ -154,7 +154,9 @@ are read with these amendments.
 - **F4 (P2, B).** Focus is kept only when the outgoing composer's **textarea itself** held it, not
   anything inside the dialog. Negative tests: an article control, Close and the footer controls,
   and the question editor. Both the floating panel and the card; in the card, restoring focus must
-  not scroll the article (`preventScroll`).
+  not scroll the article (`preventScroll`). **Implementation disposition:** the built rule covers
+  the composer's form, including Send, rather than only its textarea. The other exclusions stand;
+  `tests/chat-dialog-keeps-the-caret-across-a-switch.test.tsx` also pins Send's focus transfer.
 - **F5 (P2).** Red-first applies to the bug assertions. A test that pins an existing decision (C's
   retention) may pass from the start. D's defect is reproduced in the rendered Reader test before
   the helper exists.
@@ -163,3 +165,34 @@ are read with these amendments.
   retries. `empty`: retry because we do not know, not because it is "more often" a hiccup.
 - **D, from the closing notes.** An unknown block id, a missing tree and a later gap do not fall
   back to the first part.
+
+## What landed, and GPT Sol's code review
+
+Built in three commits: `804de1a92` (B), `0a5e2748d` (A), `805e394c4` (C and D together, because
+both touch Reader.tsx). The review of those three is
+[261004l-four-small-queued-fixes-code-review-sol.md](261004l-four-small-queued-fixes-code-review-sol.md);
+it fixed what it found inside the four items, each red first, and its fixes are the commit after.
+
+- **F7 (P1, B), fixed.** While the replacement conversation was loading, a reader who focused
+  another control and left it again still had the caret taken when the composer arrived. Any
+  `focusin` now cancels the owed focus.
+- **F8 (P1, D), fixed.** A block before the first ordinary part can already be covered, by a Notes
+  section the tree puts first. `headBlock` now keeps a block the tree already places, and only an
+  uncovered one borrows the first part.
+- **F9 (P2, D), fixed.** `headBlock` threw on a root with no `children`.
+- **F10 (P2, C), fixed.** The hand copy of `onMode` in `tests/command-bar-sub-modes.test.tsx` now
+  uses `returnToSubMode`, as the Reader does.
+- **F11 (P3), fixed.** The plan now says the built rule covers the composer's form, Send included.
+- **F12 (P1, wider, not changed).** A stored tree whose root has no `children` crashes the reading
+  view in `buildChains`, before any of this code runs. It predates this work and no producer writes
+  such a tree; reported to the Overseer rather than fixed here.
+
+Three short postmortems, written by the reviewer for the classes behind F7, F8 and F10, are under
+`docs/postmortems/` (`261005a`, `261005b`, `261005c`).
+
+Known and left, from the builds:
+
+- A no longer logs the Node error code behind a `connection` failure, because the diagnostic copies
+  nothing from the fetcher's message. Adding it back needs an allowlist of codes, not the text.
+- B: in Chrome, a mouse click on New conversation in a panel that opened as a draft still leaves
+  focus on `<body>`. Read from the code, not tested.

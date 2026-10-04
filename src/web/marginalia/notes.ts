@@ -396,8 +396,8 @@ export function layoutNotes(
 
 /**
  * **The block the head speaks for.** The reader's own block, with one
- * exception: a block *above the first part* (a title, a byline, an abstract the
- * tree does not cover), or no block at all, answers with the first part's first
+ * exception: an uncovered block *above the first part* (a title, a byline, an
+ * abstract), or no block at all, answers with the first part's first
  * block. So the head names the first part from the very top of the article,
  * where the headings breadcrumb is hidden while the column is drawn and nothing
  * else would say where the reader is (qi-2ymfq3ek).
@@ -423,7 +423,7 @@ export function headBlock(
   /* The first part: the root's first child that is not the apparatus —
      src/tree-parts.ts § `partsOf`, which throws on a rootless tree where this
      has nothing to say. */
-  const first = tree.nodes[tree.rootId]?.children
+  const first = (tree.nodes[tree.rootId]?.children ?? [])
     .map((id) => tree.nodes[id])
     .find((node) => node !== undefined && !isSupplementNode(node));
   if (!first) return blockId;
@@ -432,7 +432,10 @@ export function headBlock(
   if (blockId === null) return first.range[0];
   const at = index.get(blockId);
   if (at === undefined) return blockId;
-  return at < start ? first.range[0] : blockId;
+  if (at >= start) return blockId;
+  /* A supplement before the argument already has its own place in the tree.
+     Earlier in the index does not mean uncovered preamble. */
+  return sectionNodesOf(blockId, index, tree).length > 0 ? blockId : first.range[0];
 }
 
 /**

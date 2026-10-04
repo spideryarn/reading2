@@ -708,6 +708,16 @@ export function ChatDialog({
    * forgiven if the reader has put focus anywhere in the meantime.
    */
   const caretOwed = useRef(false);
+  /* A focus visit followed by blur between commits still cancels the debt.
+     Sampling only activeElement below would mistake that for uninterrupted
+     waiting on the replacement. */
+  useLayoutEffect(() => {
+    const forgive = () => {
+      caretOwed.current = false;
+    };
+    document.addEventListener("focusin", forgive);
+    return () => document.removeEventListener("focusin", forgive);
+  }, []);
   /* **A layout effect, after the move above**: the card changes cell in the
      same commit as a switch to another paragraph's conversation, and focus
      cannot be given to a box that is not in the document yet. No dependency

@@ -205,6 +205,13 @@ describe("switching conversation while typing", () => {
     expect(document.activeElement).toBe(composer());
   });
 
+  it("carries focus from the outgoing composer's Send control too", () => {
+    typingInA();
+    titled("Send").focus();
+    draw(TO_B);
+    expect(document.activeElement).toBe(composer());
+  });
+
   /* The card's own case: B is about another paragraph, so the same commit that
      changes the conversation moves the card to another cell. */
   it("keeps it in the card, which moves to the other paragraph, without scrolling the article", () => {
@@ -246,6 +253,20 @@ describe("switching conversation while typing", () => {
     draw(TO_B);
 
     expect(document.activeElement).toBe(chip);
+  });
+
+  it.each(["float", "card"] as const)("%s: forgives pending focus after a visit elsewhere between commits", (place) => {
+    threads = [A];
+    typingInA(place === "float" ? "float" : hostA);
+    draw(TO_B, place === "float" ? "float" : hostB);
+
+    chip.focus();
+    chip.blur();
+    expect(document.activeElement).toBe(document.body);
+    threads = [A, B];
+    draw(TO_B, place === "float" ? "float" : hostB);
+
+    expect(document.activeElement).toBe(document.body);
   });
 
   /* "New conversation" in a dialog that opened as a draft: the draft arm's own
