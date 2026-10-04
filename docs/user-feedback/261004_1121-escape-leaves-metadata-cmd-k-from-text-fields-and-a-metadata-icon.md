@@ -35,8 +35,10 @@ What we did:
   front, Escape belongs to that instead and you stay on the page.
 - **⌘-K (Ctrl-K) opens the command bar while you are typing in a box**: Search, the quick search in
   the bar, chat, a comment. What you typed is still there when you close the bar, and the press
-  does nothing else to the box. It still does nothing inside the Feedback dialog or a full-screen
-  picture, because two dialogs cannot be open at once.
+  does nothing else to the box. Title editing keeps the chord, because opening the bar would
+  save the title on blur; on a Mac, a text box also keeps Ctrl-K as its own editing key.
+  The command bar stands down while another native dialog is open, including Feedback or a
+  full-screen picture, to avoid stacking dialogs.
 - **The Metadata button is a document with a cog**, not the (i). The (i) now means only "about
   this". The button has not moved.
 

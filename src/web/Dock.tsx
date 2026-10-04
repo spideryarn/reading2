@@ -274,7 +274,7 @@ import {
    copy of `isTyping` until 2026-09-29, because the only shared one lived in
    keynav.ts and importing that drags the article's geometry into the bar's
    import graph. key-chord.ts imports nothing, so that argument is answered. */
-import { isModChord, isTyping } from "./key-chord.js";
+import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -1590,7 +1590,7 @@ function useMetadataEscape(enabled: boolean, href: string): void {
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented || e.repeat || e.isComposing) return;
+      if (e.key !== "Escape" || e.defaultPrevented || e.repeat || isImeComposing(e)) return;
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       if (isTyping(document.activeElement)) return;
       if (document.querySelector("dialog[open]") !== null) return;

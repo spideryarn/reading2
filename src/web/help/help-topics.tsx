@@ -357,8 +357,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             name of a mode, a page or an action — <em>quotes</em>, <em>library</em>,{" "}
             <em>feedback</em> — and press <kbd>Enter</kbd>. Rows marked <strong>generates</strong>{" "}
             start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the same
-            thing. It works while you are typing in a box too, and what you typed is still there
-            when you close it.
+            thing. It works while you are typing in most boxes too, and simply closing it keeps
+            what you typed. It leaves title editing and boxes inside another open dialog alone.
+            On a Mac, use <kbd>⌘K</kbd>: <kbd>Ctrl K</kbd> stays the box’s own editing key.
           </li>
           <li>
             The command bar also takes a few whole requests. <em>where does it first mention entropy</em>{" "}
@@ -399,14 +400,14 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <kbd>Esc</kbd> closes whatever is in front: a dialog, a card, an open panel. On the
-            Metadata page, with nothing in front, it takes you back to the article.
+            Metadata page, with nothing in front and focus outside a text box, it takes you back
+            to the article.
           </li>
         </ul>
         <p>
           The article-navigation shortcuts leave keys alone while you are typing in a box.{" "}
           <kbd>⌘ Enter</kbd> / <kbd>Ctrl Enter</kbd> is instead left to the box to save or send,
-          <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> still opens the command bar, and <kbd>Esc</kbd> can still
-          close what is in front.
+          and <kbd>Esc</kbd> can still close what is in front.
         </p>
       </>
     ),

@@ -389,6 +389,13 @@ describe("Escape on the Metadata page", () => {
       expect(here()).toBe(ON_METADATA);
     },
   );
+
+  it.each([{ isComposing: true }, { keyCode: 229 }])("leaves an IME's Escape alone with %o", (over) => {
+    onMetadata();
+    focusOn(document.createElement("button"));
+    pressEscape(over);
+    expect(here()).toBe(ON_METADATA);
+  });
 });
 
 /* Greg, 2026-10-04, spya-jt4gmg: *"that information icon is the same one we use

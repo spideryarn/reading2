@@ -22,7 +22,7 @@
  * `showModal`/`close` are stubbed below, for the reason
  * tests/feedback-dialog.test.tsx gives: jsdom implements neither.
  */
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
@@ -32,6 +32,7 @@ import { modeGenerates, pendingActivation, resetActivations } from "../src/web/a
 import { ASK_HINT, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
+import { TitleEditor } from "../src/web/TitleEditor.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -900,8 +901,8 @@ describe("⌘/Ctrl-K", () => {
    * end of the line. ⌘-K opens the bar there, and Ctrl-K does off a Mac (the
    * container test above). GPT Sol's finding 3 on plan 261004h.
    */
-  it("leaves Ctrl-K in a text field to the field on a Mac, and takes ⌘-K", () => {
-    const platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+  it.each(["MacIntel", "MacPPC", "iPhone", "iPad"])("leaves a text field's Ctrl-K alone on %s, and takes ⌘-K", (name) => {
+    const platform = vi.spyOn(navigator, "platform", "get").mockReturnValue(name);
     reading();
     const box = document.createElement("textarea");
     const seen = vi.fn();
@@ -915,12 +916,60 @@ describe("⌘/Ctrl-K", () => {
     expect(ctrl.defaultPrevented).toBe(false);
     expect(dialog().open).toBe(false);
     expect(seen).toHaveBeenCalledTimes(1);
+    const meta = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(meta);
+    });
+    expect(meta.defaultPrevented).toBe(true);
+    expect(dialog().open).toBe(true);
+    expect(seen).toHaveBeenCalledTimes(1);
+    act(() => dialog().close());
     /* Ctrl-K with nothing being typed is still the bar's, on a Mac too. */
+    /* The close() stand-in does not return focus to the opener as a browser does. */
+    box.focus();
     box.blur();
     expect(chord({ metaKey: false, ctrlKey: true })).toBe(true);
     expect(dialog().open).toBe(true);
     platform.mockRestore();
     box.remove();
+  });
+
+  it.each(["article", "metadata"] as const)("leaves the real title editor's ⌘-K alone on the %s page", (view) => {
+    const onDone = vi.fn();
+    act(() => {
+      root.render(
+        createElement(
+          Fragment,
+          null,
+          createElement(Dock, { slug: "a-piece", view, experimental: EXPERIMENTAL_OFF }),
+          createElement(TitleEditor, { title: "Original title", onDone }),
+        ),
+      );
+    });
+    const box = host.querySelector<HTMLInputElement>('input[aria-label="Title"]') as HTMLInputElement;
+    box.focus();
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => box.dispatchEvent(e));
+    expect(e.defaultPrevented).toBe(false);
+    expect(dialog().open).toBe(false);
+    expect(document.activeElement).toBe(box);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it("leaves a second ⌘-K in the open command bar alone, preserving its query", () => {
+    reading();
+    expect(chord()).toBe(true);
+    type("glossary");
+    const box = input();
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => box.dispatchEvent(e));
+    expect(e.defaultPrevented).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(dialog().open).toBe(true);
+    expect(box.value).toBe("glossary");
+    expect(document.activeElement).toBe(box);
   });
 
   /**
