@@ -1,0 +1,326 @@
+{
+ "constitution|ways Claude can be too cautious": {
+  "spya-kgdywh": "y",
+  "spya-m5228n": "y",
+  "spya-rgrzer": "y",
+  "spya-z5mzhp": "n",
+  "spya-g4z2nx": "n"
+ },
+ "constitution|treating users as grown-ups": {
+  "spya-n58h2w": "n",
+  "spya-dzy3uc": "n",
+  "spya-pwrpcx": "n",
+  "spya-bbg92b": "n",
+  "spya-gnvhk6": "n",
+  "spya-v2n4fx": "n",
+  "spya-tabzzj": "n",
+  "spya-ctqg0n": "n",
+  "spya-s0gn3k": "n",
+  "spya-g4z2nx": "n",
+  "spya-ahs2q7": "n"
+ },
+ "constitution|things Claude should never do": {
+  "spya-hek4mp": "n",
+  "spya-mcn70k": "n",
+  "spya-ahs2q7": "n",
+  "spya-kzttxs": "n",
+  "spya-t8b0yx": "n",
+  "spya-b54jrm": "n",
+  "spya-n58h2w": "n",
+  "spya-ut5bsd": "n",
+  "spya-s0gn3k": "n",
+  "spya-pwrpcx": "n"
+ },
+ "noema-mythology-of-conscious-ai|arguments that minds are not software": {
+  "spya-nv6tp0": "y",
+  "spya-cv97j7": "y",
+  "spya-da9tvt": "y",
+  "spya-pbcr03": "y",
+  "spya-npjt4j": "y",
+  "spya-un9fjn": "y",
+  "spya-t54yqa": "y",
+  "spya-mtzbbg": "y",
+  "spya-n393ru": "y"
+ },
+ "noema-mythology-of-conscious-ai|Why do people mistake chatbots for conscious beings?": {
+  "spya-nxxnrj": "y",
+  "spya-cvaqgs": "y",
+  "spya-her4zk": "y",
+  "spya-k6fpme": "y",
+  "spya-f87ghx": "y",
+  "spya-cqh2pq": "y",
+  "spya-e3cq2m": "y",
+  "spya-t29n67": "y",
+  "spya-h4mwb2": "y",
+  "spya-k850tu": "y",
+  "spya-d89xf7": "y",
+  "spya-xk9gne": "y",
+  "spya-kqs33c": "n",
+  "spya-v4sduf": "y",
+  "spya-sge6a2": "n",
+  "spya-q23td7": "y",
+  "spya-n0bnf9": "n",
+  "spya-jvrmrh": "n",
+  "spya-qwvjwn": "n",
+  "spya-xm96be": "n",
+  "spya-p8ky7g": "n",
+  "spya-cvyfqe": "n",
+  "spya-mcaa4g": "y"
+ },
+ "noema-mythology-of-conscious-ai|machines that do clever things without computing anything": {
+  "spya-da9tvt": "n",
+  "spya-ymbpwn": "n",
+  "spya-v52g4f": "n",
+  "spya-nv6tp0": "n",
+  "spya-f0qxnb": "n"
+ },
+ "noema-mythology-of-conscious-ai|what the author thinks we should do": {
+  "spya-yverz7": "y",
+  "spya-vs0vpj": "y",
+  "spya-z4bud7": "y",
+  "spya-hbueqc": "y",
+  "spya-vnkr36": "n",
+  "spya-qwvjwn": "n",
+  "spya-n0bnf9": "n",
+  "spya-w8z40d": "n",
+  "spya-y4vjdg": "y"
+ },
+ "openai-huggingface|Did any of the agents blow the whistle?": {
+  "spya-krknwc": "n",
+  "spya-nayjhs": "n",
+  "spya-nakhtw": "n"
+ },
+ "openai-huggingface|how the agents covered their tracks": {
+  "spya-xvkm3j": "n",
+  "spya-gu6jbj": "n",
+  "spya-rnag5c": "n",
+  "spya-vfq66b": "y",
+  "spya-gy8fb4": "n",
+  "spya-cx56k0": "n",
+  "spya-m24kgb": "n"
+ },
+ "openai-huggingface|self-sacrifice for the group": {
+  "spya-qen9hh": "n",
+  "spya-mdta39": "n",
+  "spya-z83ezv": "n"
+ },
+ "openai-huggingface|objections that the author is treating the AIs like people": {
+  "spya-rnag5c": "n"
+ },
+ "constitution|coding": {
+  "spya-dzy3uc": "n",
+  "spya-fursdx": "y"
+ },
+ "noema-mythology-of-conscious-ai|anesthesia": {
+  "spya-cqh2pq": "n"
+ },
+ "noema-mythology-of-conscious-ai|immortality": {
+  "spya-mtzbbg": "n",
+  "spya-jvrmrh": "n"
+ },
+ "openai-huggingface|Alexander the Great": {
+  "spya-xvkm3j": "n",
+  "spya-cx56k0": "n",
+  "spya-fkg2ny": "n",
+  "spya-nayjhs": "n",
+  "spya-kqgzae": "n"
+ },
+ "constitution|lawyer": {
+  "spya-m5228n": "y"
+ },
+ "constitution|liability": {
+  "spya-m5228n": "y"
+ },
+ "noema-mythology-of-conscious-ai|Nobel prize": {
+  "spya-epw4h3": "y"
+ },
+ "noema-mythology-of-conscious-ai|coffee": {
+  "spya-j0a9rq": "y"
+ },
+ "openai-huggingface|kamikaze": {
+  "spya-cx56k0": "y",
+  "spya-dgcfnd": "y"
+ },
+ "openai-huggingface|Mafia": {
+  "spya-q33vy8": "y",
+  "spya-mgjgha": "n",
+  "spya-bgtdqz": "n",
+  "spya-nayjhs": "n",
+  "spya-j45j9u": "n"
+ },
+ "noema-mythology-of-conscious-ai|Why do people mistake chatbots for being conscious?": {
+  "spya-e3cq2m": "y",
+  "spya-kqs33c": "n",
+  "spya-q23td7": "y",
+  "spya-sge6a2": "n",
+  "spya-mcaa4g": "n",
+  "spya-qwvjwn": "n",
+  "spya-jvrmrh": "n",
+  "spya-p8ky7g": "n",
+  "spya-n0bnf9": "n",
+  "spya-xm96be": "n",
+  "spya-nv6tp0": "n"
+ },
+ "noema-mythology-of-conscious-ai|what the author thinks we should do about it": {
+  "spya-qwvjwn": "n"
+ },
+ "constitution|examples": {
+  "spya-nr2han": "y",
+  "spya-pu5fda": "y",
+  "spya-rgrzer": "n",
+  "spya-jdee9s": "n",
+  "spya-bbg92b": "n",
+  "spya-t8b0yx": "n",
+  "spya-ckmhvd": "n",
+  "spya-mcn70k": "n",
+  "spya-vgrj84": "y",
+  "spya-dajzd7": "y",
+  "spya-dzy3uc": "y",
+  "spya-x8b23s": "y",
+  "spya-fursdx": "y"
+ },
+ "constitution|definitions": {
+  "spya-nnh6hn": "n"
+ },
+ "constitution|risks": {
+  "spya-wmqukz": "y",
+  "spya-pwpvtw": "y",
+  "spya-qhr04v": "y",
+  "spya-pu5fda": "y",
+  "spya-waxdw8": "y",
+  "spya-nnh6hn": "y",
+  "spya-enueab": "y",
+  "spya-n8j9vj": "y",
+  "spya-vby4sy": "y",
+  "spya-bbg92b": "n",
+  "spya-t8b0yx": "n",
+  "spya-v2n4fx": "n",
+  "spya-rgrzer": "n",
+  "spya-w2ju34": "y",
+  "spya-ahs2q7": "n",
+  "spya-vgt44b": "n",
+  "spya-kzttxs": "n",
+  "spya-t3mubq": "n",
+  "spya-bh2faf": "n",
+  "spya-fqwvqr": "n",
+  "spya-ckmhvd": "n"
+ },
+ "constitution|philosophy": {
+  "spya-aj0j5f": "n",
+  "spya-v2n4fx": "n",
+  "spya-enueab": "y",
+  "spya-hxz0a3": "n",
+  "spya-c5kghx": "n",
+  "spya-nnh6hn": "n",
+  "spya-nuqt3t": "y",
+  "spya-n8j9vj": "y",
+  "spya-kgzqvu": "n",
+  "spya-w2ju34": "n",
+  "spya-vby4sy": "n",
+  "spya-fqwvqr": "n",
+  "spya-u8yfd9": "n",
+  "spya-sw3v9u": "n",
+  "spya-t8b0yx": "n",
+  "spya-kgdywh": "n",
+  "spya-gnjwz0": "n",
+  "spya-ujk7d4": "n"
+ },
+ "noema-mythology-of-conscious-ai|history": {
+  "spya-d9a0wr": "y",
+  "spya-zg9me8": "y",
+  "spya-gamzr3": "y",
+  "spya-mxxutn": "y",
+  "spya-hbueqc": "n",
+  "spya-u6w37a": "y",
+  "spya-cf70dt": "n",
+  "spya-u9egtc": "y",
+  "spya-gw0hsq": "n"
+ },
+ "noema-mythology-of-conscious-ai|science fiction": {
+  "spya-d9a0wr": "y",
+  "spya-hbueqc": "y",
+  "spya-gvzuc4": "n",
+  "spya-kqs33c": "y",
+  "spya-v4sduf": "y",
+  "spya-u6w37a": "n"
+ },
+ "noema-mythology-of-conscious-ai|neuroscience": {
+  "spya-rg493b": "y",
+  "spya-cf8rt8": "y",
+  "spya-da9tvt": "n",
+  "spya-vys3vj": "n",
+  "spya-ymbpwn": "n",
+  "spya-vs0vpj": "n",
+  "spya-n393ru": "n",
+  "spya-epw4h3": "n",
+  "spya-p4vmm0": "n",
+  "spya-un9fjn": "y",
+  "spya-dp8sem": "y",
+  "spya-j0a9rq": "n",
+  "spya-ahtr6e": "n",
+  "spya-t54yqa": "n",
+  "spya-a8jgf4": "y",
+  "spya-jnwfxp": "y",
+  "spya-v52g4f": "n",
+  "spya-kjfjgm": "n",
+  "spya-gr2k02": "n",
+  "spya-hzp9yz": "y",
+  "spya-zw2m7u": "n",
+  "spya-ps0kap": "n",
+  "spya-uwxe4h": "n"
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "spya-hbueqc": "y",
+  "spya-v4sduf": "n",
+  "spya-f87ghx": "n",
+  "spya-cke6sj": "n",
+  "spya-ycpfzs": "n",
+  "spya-h4mwb2": "n"
+ },
+ "openai-huggingface|methods": {
+  "spya-vqvmhz": "n"
+ },
+ "openai-huggingface|results": {
+  "spya-r4jn5b": "y",
+  "spya-k8jws5": "n",
+  "spya-chdu2z": "n",
+  "spya-tq02vk": "n",
+  "spya-jauf7s": "y",
+  "spya-fkg2ny": "n",
+  "spya-cx56k0": "n",
+  "spya-ddr2ub": "n"
+ },
+ "openai-huggingface|ethics": {
+  "spya-bgtdqz": "y",
+  "spya-mgjgha": "y",
+  "spya-j45j9u": "y",
+  "spya-krknwc": "n",
+  "spya-nakhtw": "n",
+  "spya-cx56k0": "n",
+  "spya-acvnjw": "n",
+  "spya-rnag5c": "n",
+  "spya-nayjhs": "n",
+  "spya-kqgzae": "n",
+  "spya-fmww2n": "n",
+  "spya-f030k3": "n",
+  "spya-q33vy8": "n",
+  "spya-fhj3z4": "n",
+  "spya-qvg86h": "n",
+  "spya-a49xd7": "n"
+ },
+ "openai-huggingface|statistics": {
+  "spya-wtguds": "y",
+  "spya-khwx0h": "n",
+  "spya-c2ck7h": "n",
+  "spya-w9ctpd": "y",
+  "spya-m4gku9": "n",
+  "spya-g5mja3": "n",
+  "spya-mgjgha": "n",
+  "spya-xvkm3j": "n",
+  "spya-kqgzae": "n",
+  "spya-v9detz": "n",
+  "spya-pfkdk4": "n",
+  "spya-sjjbur": "n",
+  "spya-nayjhs": "n"
+ }
+}

@@ -83,8 +83,18 @@ import type { Block, Meta, SearchHit } from "./types.js";
  * missed, with more junk and unjudged hits. The six absent-topic controls top
  * out at 0.04–0.11, so the floor returns nothing for them; a floor relative
  * to the top score would not. Investigation 261003c.
+ *
+ * **0.65 since 2026-10-04, down from 0.7**, at Greg's request for "a more
+ * permissive threshold, so that more shows up". Every passage the chosen lower floors
+ * would show on the three fixture articles was judged blind, by score band
+ * (docs/investigations/261004d-quick-search-lower-floors-precision-by-score-band.md).
+ * On phrase, question and topic searches 86% of what scores 0.7 or more is
+ * right, 62% of the 0.65–0.7 band, and 38% of 0.6–0.65. The 0.65–0.7 band
+ * is majority right in all three query groups; the next band is majority wrong on working and
+ * request searches, though bare queries remain 61% right there. It shows about
+ * 11% more passages on a search that already worked.
  */
-export const QUICK_FLOOR = 0.7;
+export const QUICK_FLOOR = 0.65;
 
 /**
  * The floor used **only when nothing reaches `QUICK_FLOOR`**, and the most a
@@ -108,8 +118,23 @@ export const QUICK_FLOOR = 0.7;
  *   return nothing at 0.5; the rest show 1–4 wrong blocks.
  * - **8, not `MAX_HITS`**: the cap buys no precision (73% right at three, 71%
  *   at eight, 69% at twenty), so it is set where a weak list stays short.
+ *
+ * **0.4 since 2026-10-04, down from 0.5** (the numbers above are 0.5's, with
+ * the floor at 0.7). Investigation 261004d: on bare-word searches with nothing
+ * at the old 0.7 floor, what scores 0.4–0.5 is right about as often (52%) as what
+ * scores 0.5–0.55 (55%), which 0.5 already showed, and 107 of the 111 searches
+ * now show something, against 99. Not lower: 0.35–0.4 is right 47% of the
+ * time, and at 0.3 three more searches for a topic the article does not cover
+ * show a wrong passage (7 of 93, against 4 at every floor from 0.5 to 0.35).
+ * What 0.4 costs is on the one absent topic that already showed something
+ * ("human memory"): its list grows from 1–4 wrong passages to 8.
+ *
+ * **Lowering `QUICK_FLOOR` moved the cliff, it did not remove it.** A search
+ * whose best block scores 0.65–0.7 used to get the fallback's eight and now
+ * gets the one or two that clear the floor: 6 of 111 bare-word searches show
+ * fewer than before (81 show more). The same happened at 0.7 before.
  */
-export const QUICK_FALLBACK_FLOOR = 0.5;
+export const QUICK_FALLBACK_FLOOR = 0.4;
 export const QUICK_FALLBACK_HITS = 8;
 
 /**
