@@ -46,6 +46,7 @@ import { LoaderCircle, MessageSquare, Square, X } from "lucide-react";
 
 import type { BlockId, ChatAnchor, ThreadSummary } from "../types.js";
 import { Composer, Conversation } from "./ChatPanel.js";
+import { chatDraftsFor } from "./chat-draft.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
 /* **The client's own creation window, imported rather than restated.** This
@@ -201,14 +202,36 @@ export function ChatDialog({
      gets its own initial value in the render that mounts its Composer. An effect
      is too late: Composer seeds local state from `draft` once, so it would keep
      the previous thread's half-typed question even after the parent cleared its
-     copy. */
+     copy.
+
+     **That is the passage arm's draft, and only its.** A conversation's unsent
+     words are the article's (src/web/chat-draft.ts), the same entry Chat
+     mode's composer reads and writes, because the two are one conversation
+     seen from two places and never at once: entering Chat unmounts this
+     dialog, and leaving Chat can mount it on the conversation that was open.
+     Two private copies would be two different half-questions, and a delete
+     pressed here would leave Chat's copy behind for a conversation that is
+     gone. GPT Sol's review of
+     docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md,
+     F5. A passage draft is about a paragraph and belongs to no conversation
+     yet, so it stays here. */
+  const drafts = chatDraftsFor(slug);
   const draftTarget = target.kind === "draft" ? `draft:${target.anchor.blockId}` : `thread:${target.threadId}`;
   const initialDraft = target.kind === "draft" ? (target.question ?? "") : "";
   const [draftState, setDraftState] = useState(() => ({ target: draftTarget, text: initialDraft }));
-  const draft = draftState.target === draftTarget ? draftState.text : initialDraft;
+  const threadTarget = target.kind === "thread" ? target.threadId : null;
+  const draft =
+    threadTarget !== null
+      ? (drafts.thread(threadTarget) ?? "")
+      : draftState.target === draftTarget
+        ? draftState.text
+        : initialDraft;
   const setDraft = useCallback(
-    (text: string) => setDraftState({ target: draftTarget, text }),
-    [draftTarget],
+    (text: string) => {
+      if (threadTarget !== null) drafts.setThread(threadTarget, text);
+      else setDraftState({ target: draftTarget, text });
+    },
+    [draftTarget, threadTarget, drafts],
   );
   const focused = useRef(0);
 
@@ -882,6 +905,9 @@ export function ChatDialog({
                 className="linky chat-dialog-delete"
                 onClick={() => {
                   remove(thread.id);
+                  /* Its unsent words go with it, so Chat mode does not find
+                     them waiting for a conversation that is gone. */
+                  drafts.dropThread(thread.id);
                   onDropped(thread.id);
                   onClose();
                 }}
@@ -921,6 +947,7 @@ export function ChatDialog({
                 className="linky chat-dialog-delete"
                 onClick={() => {
                   cancelAndDiscard(thread.id, tail.id);
+                  drafts.dropThread(thread.id);
                   onDropped(thread.id);
                   onClose();
                 }}
