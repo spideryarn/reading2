@@ -846,17 +846,115 @@ describe("⌘/Ctrl-K", () => {
   });
 
   /**
-   * **Not while somebody is writing.** The chat box, the comment box, the
-   * search field and the referee's criteria are all places a reader is typing,
-   * and ⌘-K is a text-editing chord in several editors.
+   * **From inside a text field too**, since 2026-10-04 — Greg, spya-szdjek:
+   * *"I want to be able to hit Command-K at more or less any time from within
+   * the reading view."* Until then this asserted the opposite, on the grounds
+   * that ⌘-K is a text-editing chord in several editors; none of ours binds it.
+   * The press starts on the field, as a real one does, and the field's own
+   * handler must not see it: the chord means the bar and nothing else.
    */
-  it("does not fire while a text field has focus", () => {
+  it.each(["textarea", "input", "contenteditable"])("opens from inside a focused %s, and the field never sees the press", (kind) => {
     reading();
-    const box = document.createElement("textarea");
+    const box = document.createElement(kind === "contenteditable" ? "div" : kind);
+    if (kind === "contenteditable") {
+      box.setAttribute("contenteditable", "true");
+      box.tabIndex = 0;
+    }
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
     document.body.append(box);
     box.focus();
-    expect(chord()).toBe(false);
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(true);
+    expect(dialog().open).toBe(true);
+    expect(seen).not.toHaveBeenCalled();
+    box.remove();
+  });
+
+  /**
+   * **From inside a container that keeps its keys to itself.** The live
+   * conversation's status and button stop every keydown from bubbling
+   * (LiveStatus.tsx, LiveButton.tsx), so a bubble listener on `window` never
+   * hears a press made in there. The chord listens in the capture phase.
+   */
+  it("opens from inside a container that stops keydown from bubbling", () => {
+    reading();
+    const section = document.createElement("section");
+    section.addEventListener("keydown", (e) => e.stopPropagation());
+    const box = document.createElement("textarea");
+    section.append(box);
+    document.body.append(section);
+    box.focus();
+    act(() => {
+      box.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(dialog().open).toBe(true);
+    section.remove();
+  });
+
+  /**
+   * **Ctrl-K alone, in a text field, on a Mac, is the field's**: delete to the
+   * end of the line. ⌘-K opens the bar there, and Ctrl-K does off a Mac (the
+   * container test above). GPT Sol's finding 3 on plan 261004h.
+   */
+  it("leaves Ctrl-K in a text field to the field on a Mac, and takes ⌘-K", () => {
+    const platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    reading();
+    const box = document.createElement("textarea");
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    document.body.append(box);
+    box.focus();
+    const ctrl = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(ctrl);
+    });
+    expect(ctrl.defaultPrevented).toBe(false);
     expect(dialog().open).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
+    /* Ctrl-K with nothing being typed is still the bar's, on a Mac too. */
+    box.blur();
+    expect(chord({ metaKey: false, ctrlKey: true })).toBe(true);
+    expect(dialog().open).toBe(true);
+    platform.mockRestore();
+    box.remove();
+  });
+
+  /**
+   * **A field that saves on blur asks to be left alone.** The title editor:
+   * the bar opening would blur it and save a half-typed title. Finding 5.
+   */
+  it("stands down in a field marked data-command-bar=off", () => {
+    reading();
+    const box = document.createElement("input");
+    box.setAttribute("data-command-bar", "off");
+    document.body.append(box);
+    box.focus();
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(false);
+    expect(dialog().open).toBe(false);
+    box.remove();
+  });
+
+  /** A press it does not claim is nobody's business: the field still gets it. */
+  it("leaves a plain k in a text field to the field", () => {
+    reading();
+    const box = document.createElement("textarea");
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    document.body.append(box);
+    box.focus();
+    act(() => {
+      box.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true, cancelable: true }));
+    });
+    expect(dialog().open).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
     box.remove();
   });
 
