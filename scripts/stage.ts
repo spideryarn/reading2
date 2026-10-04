@@ -93,41 +93,77 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { loadEnvLocal } from "../src/env.js";
+import { isMain } from "../src/is-main.js";
 
-/* **Before the dynamic imports below, and that is the point.** `src/store/blobs.ts`
-   picks between Supabase Storage and `data/_blobs/` from two credentials, and
+/* **The module graph, loaded by `loadRuntime` and not by importing this file.**
+
+   Two rules meet here. The first is older: `src/store/blobs.ts` picks between
+   Supabase Storage and `data/_blobs/` from two credentials, and
    `src/store/index.ts` checks Supabase credentials in its own module body — so a
    module graph loaded before `.env.local` has been applied makes a *different*
    storage selection from the server, writes bytes nothing else can find, and
    reports success (docs/postmortems/260831e-a-write-path-with-no-reader.md). Static
    imports are hoisted above every statement in a module, so the only way to put
-   a call before them is to make them dynamic. */
-loadEnvLocal();
+   `loadEnvLocal()` before them is to make them dynamic.
 
-const { sql } = await import("drizzle-orm");
-const { getDb } = await import("../src/db/client.js");
-const { slugFromFilename, slugFromUrl } = await import("../src/ingest.js");
-const { advanceJob, enqueue, getJob } = await import("../src/jobs.js");
-const { environmentOwnerId } = await import("../src/owner.js");
-const { isStepName, STEP_ORDER } = await import("../src/pipeline.js");
-const { stagingKey } = await import("../src/source.js");
-const { uploadedDocumentKind } = await import("../src/fetch.js");
-const { CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js");
-const { claimUpload, mintUpload, noteSlug, readUpload } = await import(
-  "../src/upload-records.js"
-);
-const { MAX_UPLOAD_BYTES } = await import("../src/uploads.js");
+   The second arrived with `parseStageArgv` below (2026-10-04): a test has to be
+   able to import this file for that one pure function **without** the
+   environment being applied, most of `src/` being loaded, or the command line
+   being read. So the dynamic imports moved from module scope into a function
+   that only the guarded CLI at the bottom calls, and these are the names it
+   fills in. Each is typed from the module it comes from, so every use below is
+   checked exactly as it was when they were `const`. */
+let sql: typeof import("drizzle-orm").sql;
+let getDb: typeof import("../src/db/client.js").getDb;
+let slugFromFilename: typeof import("../src/ingest.js").slugFromFilename;
+let slugFromUrl: typeof import("../src/ingest.js").slugFromUrl;
+let advanceJob: typeof import("../src/jobs.js").advanceJob;
+let enqueue: typeof import("../src/jobs.js").enqueue;
+let getJob: typeof import("../src/jobs.js").getJob;
+let environmentOwnerId: typeof import("../src/owner.js").environmentOwnerId;
+let isStepName: typeof import("../src/pipeline.js").isStepName;
+let STEP_ORDER: typeof import("../src/pipeline.js").STEP_ORDER;
+let stagingKey: typeof import("../src/source.js").stagingKey;
+let uploadedDocumentKind: typeof import("../src/fetch.js").uploadedDocumentKind;
+let CONTENT_TYPE: typeof import("../src/store/blobs.js").CONTENT_TYPE;
+let postgresBlobStore: typeof import("../src/store/blobs.js").postgresBlobStore;
+let claimUpload: typeof import("../src/upload-records.js").claimUpload;
+let mintUpload: typeof import("../src/upload-records.js").mintUpload;
+let noteSlug: typeof import("../src/upload-records.js").noteSlug;
+let readUpload: typeof import("../src/upload-records.js").readUpload;
+let MAX_UPLOAD_BYTES: typeof import("../src/uploads.js").MAX_UPLOAD_BYTES;
+
+/** `.env.local` first, then the graph — in that order, for the reason above. */
+async function loadRuntime(): Promise<void> {
+  loadEnvLocal();
+  ({ sql } = await import("drizzle-orm"));
+  ({ getDb } = await import("../src/db/client.js"));
+  ({ slugFromFilename, slugFromUrl } = await import("../src/ingest.js"));
+  ({ advanceJob, enqueue, getJob } = await import("../src/jobs.js"));
+  ({ environmentOwnerId } = await import("../src/owner.js"));
+  ({ isStepName, STEP_ORDER } = await import("../src/pipeline.js"));
+  ({ stagingKey } = await import("../src/source.js"));
+  ({ uploadedDocumentKind } = await import("../src/fetch.js"));
+  ({ CONTENT_TYPE, postgresBlobStore } = await import("../src/store/blobs.js"));
+  ({ claimUpload, mintUpload, noteSlug, readUpload } = await import("../src/upload-records.js"));
+  ({ MAX_UPLOAD_BYTES } = await import("../src/uploads.js"));
+}
 
 type Job = Awaited<ReturnType<typeof enqueue>>;
 
-const USAGE =
-  "Usage:\n" +
-  "  npm run ingest    -- <url> [--force]      make an article from an address\n" +
-  "  npm run ingest    -- <file>               make an article from a PDF or HTML file here\n" +
-  "  npm run extract   -- <slug> [--force]     re-run one stage on an article you have\n" +
-  "  npm run blocks    -- <slug> [--force]\n" +
-  "  npm run structure -- <slug> [--force]\n" +
-  `\n  any step: ${STEP_ORDER.join(", ")}\n`;
+/** A function rather than a constant because `STEP_ORDER` is one of the names
+ *  `loadRuntime` fills in. */
+function usage(): string {
+  return (
+    "Usage:\n" +
+    "  npm run ingest    -- <url> [--force]      make an article from an address\n" +
+    "  npm run ingest    -- <file>               make an article from a PDF or HTML file here\n" +
+    "  npm run extract   -- <slug> [--force]     re-run one stage on an article you have\n" +
+    "  npm run blocks    -- <slug> [--force]\n" +
+    "  npm run structure -- <slug> [--force]\n" +
+    `\n  any step: ${STEP_ORDER.join(", ")}\n`
+  );
+}
 
 function die(message: string): never {
   console.error(`\n${message}\n`);
@@ -234,14 +270,15 @@ async function drive(job: Job): Promise<Job> {
  * whatever they already were. Saying otherwise on every run is how a hint stops
  * being read.
  *
- * **Not exported and not tested, deliberately.** This file runs its CLI at
- * module top level, so importing it to reach this function would run the
- * command — and adding an `import.meta` guard to a script several agents share,
- * to cover two lines of `console.log`, is a worse trade than leaving it
- * uncovered. What could actually go stale is the invariant underneath, and that
- * *is* pinned: tests/labels-receipt-invalidation.test.ts holds `structure` to
- * writing a pending manifest and taking the receipt with it. If that test ever
- * changes shape, this sentence is the other thing to correct.
+ * **Not exported and not tested.** When this was written the file ran its CLI
+ * at module top level, so importing it to reach this function would have run
+ * the command, and a guard was not worth adding for two lines of `console.log`.
+ * The guard has since arrived for `parseStageArgv`'s sake (2026-10-04), so that
+ * reason is gone and nobody has yet taken the opening. What could actually go
+ * stale is the invariant underneath, and that *is* pinned:
+ * tests/labels-receipt-invalidation.test.ts holds `structure` to writing a
+ * pending manifest and taking the receipt with it. If that test ever changes
+ * shape, this sentence is the other thing to correct.
  */
 function labelsHint(job: Job): string[] {
   const ran = job.steps.find((s) => s.name === "structure" && s.status === "done");
@@ -275,7 +312,7 @@ function reportAndExit(job: Job, extra: string[] = []): never {
 /* ------------------------------------------------------------ one stage -- */
 
 async function oneStage(step: string, slug: string, force: boolean): Promise<never> {
-  if (!isStepName(step)) die(`"${step}" is not a pipeline step.\n\n${USAGE}`);
+  if (!isStepName(step)) die(`"${step}" is not a pipeline step.\n\n${usage()}`);
   /* **`fetch` is refused here, and refusing it is the whole point of the
      rename** ⟨GPT Sol, 2026-09-05⟩. Deleting `npm run fetch` from `package.json`
      removed the *name*; this interface takes any `StepName`, so
@@ -372,7 +409,7 @@ async function oneStage(step: string, slug: string, force: boolean): Promise<nev
  */
 async function ingestUrl(url: string, force: boolean): Promise<never> {
   const slug = slugFromUrl(url);
-  if (!slug) die(`"${url}" is not an address I can make a slug from.\n\n${USAGE}`);
+  if (!slug) die(`"${url}" is not an address I can make a slug from.\n\n${usage()}`);
   const owner = environmentOwnerId();
   await assertOwnerReady(owner);
   console.log(`Source:    ${url}`);
@@ -507,20 +544,59 @@ async function ingestFile(file: string): Promise<never> {
 
 /* ----------------------------------------------------------------- main -- */
 
-const args = process.argv.slice(2);
-const force = args.includes("--force");
-const [first, second] = args.filter((a) => !a.startsWith("--"));
+/** What a command line asked for, once it has been read. */
+export type StageCommand =
+  | { kind: "ingest-url"; url: string; force: boolean }
+  /** No `force`: it is refused for a file, so there is no value it could hold. */
+  | { kind: "ingest-file"; file: string }
+  | { kind: "stage"; step: string; slug: string; force: boolean };
 
-if (!first) die(USAGE.trim());
+/**
+ * `message: null` is the bare usage text, for a command line with nothing on
+ * it. `usage` says whether the usage text follows the message — the caller adds
+ * it, because the list of steps in it comes from `src/pipeline.ts` and this
+ * function loads nothing.
+ */
+export type ParsedStageArgv =
+  | { ok: true; command: StageCommand }
+  | { ok: false; message: string | null; usage: boolean };
 
-if (first === "ingest") {
-  if (!second) die(`\`ingest\` wants a URL or a path to a PDF.\n\n${USAGE}`);
-  /* http/https is a URL; anything else is a path on this machine. Nothing else
-     is ambiguous — `slugFromUrl` refuses a bare filename, and a URL is not a
-     file that opens. */
-  if (/^https?:\/\//i.test(second)) {
-    await ingestUrl(second, force);
-  } else {
+/**
+ * **The arguments after the script name, read and nothing else.**
+ *
+ * Pure: no environment, no database, no `process`. Whether `step` names a real
+ * pipeline step is `oneStage`'s to say, since that needs the pipeline loaded.
+ *
+ * **An argument it does not understand is refused, not dropped.** The reading
+ * this replaced was `args.includes("--force")` and then the first two of
+ * whatever did not start with `--`, so `--froce` was an *unforced* run — a row
+ * of `skipped`, exit 0, on a command typed to redo the work — and a third
+ * positional was ignored. `--force` is the only flag there is, it may sit
+ * anywhere, and nothing takes more than two positionals.
+ */
+export function parseStageArgv(args: readonly string[]): ParsedStageArgv {
+  const unknown = args.find((a) => a.startsWith("--") && a !== "--force");
+  if (unknown !== undefined) {
+    return { ok: false, message: `\`${unknown}\` is not a flag this takes. The only one is \`--force\`.`, usage: true };
+  }
+  const force = args.includes("--force");
+  const [first, second, ...extra] = args.filter((a) => !a.startsWith("--"));
+
+  if (!first) return { ok: false, message: null, usage: true };
+  if (extra[0] !== undefined) {
+    return {
+      ok: false,
+      message: `\`${extra[0]}\` is one argument too many: \`${first}\` takes one, and it has \`${second}\`.`,
+      usage: true,
+    };
+  }
+
+  if (first === "ingest") {
+    if (!second) return { ok: false, message: "`ingest` wants a URL or a path to a PDF.", usage: true };
+    /* http/https is a URL; anything else is a path on this machine. Nothing else
+       is ambiguous — `slugFromUrl` refuses a bare filename, and a URL is not a
+       file that opens. */
+    if (/^https?:\/\//i.test(second)) return { ok: true, command: { kind: "ingest-url", url: second, force } };
     /* **`--force` is refused for a file and accepted for a URL**, which is not
        an inconsistency: `enqueue` gives every upload a freshly minted slug
        unconditionally, so two runs of one file are two articles and there is
@@ -530,14 +606,55 @@ if (first === "ingest") {
        two articles", which is true of half of what it was refusing ⟨GPT Sol,
        2026-09-05⟩. */
     if (force) {
-      die(
-        "`--force` means nothing when the source is a file: every upload mints a fresh\n" +
+      return {
+        ok: false,
+        message:
+          "`--force` means nothing when the source is a file: every upload mints a fresh\n" +
           "  slug, so running one twice is two articles rather than one re-done.",
-      );
+        usage: false,
+      };
     }
-    await ingestFile(second);
+    return { ok: true, command: { kind: "ingest-file", file: second } };
   }
-} else {
-  if (!second) die(`\`${first}\` wants the slug of an article you already have.\n\n${USAGE}`);
-  await oneStage(first, second, force);
+
+  if (!second) {
+    return { ok: false, message: `\`${first}\` wants the slug of an article you already have.`, usage: true };
+  }
+  return { ok: true, command: { kind: "stage", step: first, slug: second, force } };
+}
+
+/**
+ * **Only when this file is the one the process was started with** — `npm run
+ * structure -- <slug>` is `tsx scripts/stage.ts structure <slug>`, so it is.
+ * Imported, nothing below runs: not the environment, not the module graph, not
+ * a read of the importer's own `process.argv`.
+ *
+ * The arguments are read **before** anything is loaded, so a mistyped command
+ * line is refused without `.env.local` being applied or a database client
+ * being made. The graph is then loaded even for a refusal, because the usage
+ * text names the pipeline's steps.
+ */
+if (isMain(import.meta.url)) {
+  const parsed = parseStageArgv(process.argv.slice(2));
+  await loadRuntime();
+  if (!parsed.ok) {
+    if (parsed.message === null) die(usage().trim());
+    die(parsed.usage ? `${parsed.message}\n\n${usage()}` : parsed.message);
+  }
+  const { command } = parsed;
+  switch (command.kind) {
+    case "ingest-url":
+      await ingestUrl(command.url, command.force);
+      break;
+    case "ingest-file":
+      await ingestFile(command.file);
+      break;
+    case "stage":
+      await oneStage(command.step, command.slug, command.force);
+      break;
+    default: {
+      const unreachable: never = command;
+      throw new Error(`unhandled command: ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
