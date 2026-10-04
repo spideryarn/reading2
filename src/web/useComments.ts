@@ -844,7 +844,8 @@ export function useComments(slug: string): CommentsApi {
    */
   const createOnLeave = useCallback(
     (input: NewCommentInput): void => {
-      leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input));
+      // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
+      void leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input));
     },
     [slug],
   );

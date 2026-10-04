@@ -47,6 +47,7 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
 export function useWindowWidth(): number {
   const measure = () => pageWidth() - horizontalInset(safeAreaInsets());
   const [w, setW] = useState(measure);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `measure` is a new function each render but closes over nothing from the component — it reads the window — so the listeners are added once, on mount.
   useEffect(() => {
     const on = () => setW(measure());
     window.addEventListener("resize", on);
@@ -157,6 +158,7 @@ export function useRootFontPx(): number {
     return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
   };
   const [px, setPx] = useState(measure);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `measure` is a new function each render but closes over nothing from the component — it reads the root's computed font size — so the listener is added once, on mount.
   useEffect(() => {
     const on = () => setPx(measure());
     window.addEventListener("resize", on);

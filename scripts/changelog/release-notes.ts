@@ -300,5 +300,14 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 if (isMain(import.meta.url)) {
-  main(process.argv.slice(2)).then((code) => process.exit(code));
+  /* `main` turns a `Stop` into exit 1 and rethrows anything else. Without the
+     second handler that rethrow was an unhandled rejection: Node happened to
+     exit 1 on it, but nothing here said so. */
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (err: unknown) => {
+      console.error(err);
+      process.exit(1);
+    },
+  );
 }

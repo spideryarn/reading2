@@ -22,6 +22,8 @@ Two rules an agent will otherwise break:
 | `npm run build` | that vite can resolve, bundle and parse it — typechecking does not prove this. **Both passes**: the client, then the API function | **gate** |
 | `npm run typecheck:committed` | that `HEAD` compiles, as opposed to your copy of it — they differ by your uncommitted files | **gate** |
 | `npm run cycles` | import cycles (zero today, so a failure is news) | **gate** |
+| `npm run lint:hook-deps` | React hooks whose dependency list does not match what they read — one Biome rule, [linting.md](linting.md#two-rules-that-are-gates-on-their-own) | **gate** |
+| `npm run lint:promises` | promises nobody awaits, handles or marks `void` — one Biome rule, same section | **gate** |
 | `npm run db:chain` | that `drizzle/meta/` is one unforked chain | **gate** |
 | `npm run check:staged-revert` | whether the shared index is quietly undoing somebody's commit — run it before you commit, [version-control.md](version-control.md#commit-your-own-files-by-name-in-one-command) | before a commit |
 | `npm run lint` / `lint:fix` | Biome over everything `biome.jsonc` allows | advice |

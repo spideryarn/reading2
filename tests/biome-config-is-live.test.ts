@@ -53,7 +53,7 @@
  * a claim about behaviour rather than about a file existing.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -188,5 +188,126 @@ describe("the check can tell a live config from a missing one", () => {
     );
     expect(withConfig.code, "a config setting a rule to error should fail the command").toBe(1);
     expect(without.code, "no config, so the rule falls back to a default warning").toBe(0);
+  });
+});
+
+/**
+ * ## Two rules that are gates: hook dependencies and floating promises
+ *
+ * `npm run lint:hook-deps` and `npm run lint:promises` are each one Biome rule
+ * over the whole tree, and both are gates in scripts/check.ts. That command
+ * takes 26 minutes and `npm test` is what an agent actually runs, so the same
+ * two questions are asked here (docs/plans/261004d, § A3).
+ *
+ * Each rule gets two tests, because zero findings is also what a rule that did
+ * not run reports:
+ *
+ *  - the whole tree is clean, **and** Biome says it checked thousands of files;
+ *  - a file that breaks the rule is flagged, by the rule's name.
+ *
+ * ## Where the red control lives, and what it cannot show
+ *
+ * The violating file is written to a scratch directory outside the repo, so
+ * nothing that breaks either rule is tracked and the raw commands can mean
+ * zero. Two shorter routes were measured and do not work:
+ *
+ *  - **stdin.** `noFloatingPromises` does not fire on `--stdin-file-path` input
+ *    at all (GPT Sol's plan review, S1).
+ *  - **the repo's own config, by `--config-path`.** Biome then treats the repo
+ *    as the root and ignores every path outside it: *"Checked 0 files"*, exit 1
+ *    for a reason that has nothing to do with the rule. Measured 2026-10-04.
+ *
+ * So the scratch directory carries a config of its own that sets the one rule
+ * to `error`. That proves the pinned binary still has a rule of this name and
+ * that the rule still sees this shape of mistake. It does **not** prove the
+ * repo's config has the rule switched on; the whole-tree test does not need it
+ * to, because `--only=` runs the named rule whatever the config says.
+ */
+const TREE_RULES = [
+  {
+    script: "lint:hook-deps",
+    rule: "correctness/useExhaustiveDependencies",
+    file: "hook.tsx",
+    /* `a` is read inside the effect and missing from the list. */
+    breaks: [
+      'import { useEffect, useState } from "react";',
+      "export function useThing(a: number): number {",
+      "  const [n, setN] = useState(0);",
+      "  useEffect(() => {",
+      "    setN(a);",
+      "  }, []);",
+      "  return n;",
+      "}",
+      "",
+    ].join("\n"),
+  },
+  {
+    script: "lint:promises",
+    rule: "nursery/noFloatingPromises",
+    file: "floating.ts",
+    /* `work()` is called and its promise dropped. */
+    breaks: [
+      "async function work(): Promise<number> {",
+      "  return 1;",
+      "}",
+      "export function run(): void {",
+      "  work();",
+      "}",
+      "",
+    ].join("\n"),
+  },
+] as const;
+
+/* The tree is about 3,570 files on 2026-10-04. A run that reached a few
+   hundred has lost most of the tree, whatever it found there. */
+const FILES_FLOOR = 3000;
+
+const scratchDirs: string[] = [];
+afterAll(() => {
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
+});
+
+describe.each(TREE_RULES)("$rule is a gate", ({ script, rule, file, breaks }) => {
+  const [group = "", name = ""] = rule.split("/");
+
+  it("is the command package.json runs", () => {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    /* The test below runs the binary directly, so the npm script has to be
+       shown to ask the same thing, or the two could drift apart. */
+    expect(pkg.scripts[script]).toBe(`biome lint --only=${rule} --max-diagnostics=none .`);
+  });
+
+  it("finds nothing in the whole tree, having checked the whole tree", { timeout: 180_000 }, () => {
+    const { out, code } = biome(["lint", `--only=${rule}`, "--max-diagnostics=none", "."]);
+    /* If this is red because you wrote the code it names: fix the code. For a
+       hook dependency that is deliberate, a `// biome-ignore` on the line above
+       the hook, with the reason this hook has. For a promise nobody waits for,
+       `await` it, handle its rejection, or mark it `void` and be sure that
+       nothing it can throw matters. */
+    expect(code, out.slice(-4000)).toBe(0);
+    const checked = Number(/Checked (\d+) files/.exec(out)?.[1] ?? 0);
+    expect(checked, "biome checked too few files for its silence to mean anything").toBeGreaterThan(
+      FILES_FLOOR,
+    );
+  });
+
+  it("flags a file that breaks it, by name", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "biome-gate-"));
+    scratchDirs.push(dir);
+    writeFileSync(path.join(dir, file), breaks);
+    writeFileSync(
+      path.join(dir, "biome.jsonc"),
+      JSON.stringify({ linter: { enabled: true, rules: { [group]: { [name]: "error" } } } }),
+    );
+
+    const { out, code } = biome(["lint", `--only=${rule}`, "--max-diagnostics=none", "."], dir);
+
+    /* The name first: exit 1 is also what a bad config and "no files were
+       processed" produce, so the exit code alone would pass for those. */
+    expect(out, "the rule did not report the file that breaks it").toContain(`${file}:`);
+    expect(out).toContain(`lint/${rule}`);
+    expect(code).toBe(1);
   });
 });

@@ -45,7 +45,18 @@
     // build is `npm run build:api` in package.json, which knip reads for itself,
     // and it says so as a "Remove redundant entry pattern" hint. Adding a build
     // pass to package.json is therefore all it takes — the same rule as the
-    // pipeline stages above.
+    // pipeline stages above. `vite.fleet.config.ts` is the same case.
+    //
+    // **That is true of a full `knip` run and false of `knip --include files`**,
+    // measured 2026-10-04 on 6.32.2: the files-only mode skips the step that
+    // reads `--config` out of package.json, and reports both as unused. So a
+    // files-only count is two too high, and a gate built on it would have to
+    // know that. docs/plans/261004d § A5.
+
+    // A string handed to a spawned `vitest run --config` in
+    // scripts/store-migration-witness.ts, which knip cannot follow. It is in
+    // use, and both modes reported it as an unused file.
+    "vitest.witness.config.ts",
 
     // Operational scripts and evals, each behind its own npm script.
     //
@@ -59,7 +70,19 @@
     // findings reach zero, so a false positive here is not cosmetic: it is four
     // of the things standing between it and being one.
     "scripts/*.ts",
-    "evals/**/*.ts"
+    "evals/**/*.ts",
+
+    // Research CLIs, each run by hand with `npx tsx` and named in the plan or
+    // investigation that used it. Nothing imports them and no npm script runs
+    // them, so without these two lines knip reported all fifteen as unused
+    // files (2026-10-04, docs/plans/261004d § A5).
+    //
+    // Deliberately these two folders and NOT `scripts/**/*.ts`. That would
+    // also make an entry of every helper module under `scripts/`, such as
+    // `scripts/changelog/release-paths.ts`, and an entry is never reported as
+    // unused. A helper that really had gone dead would then stay hidden.
+    "scripts/eval/*.ts",
+    "scripts/probes/*.ts"
 
     // Not listed on purpose: vite.config.ts, vitest.config.ts,
     // drizzle.config.ts, index.html -> src/web/main.tsx, and tests/**. Knip's

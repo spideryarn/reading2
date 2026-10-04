@@ -728,6 +728,7 @@ export function ChangelogBody({ versions }: { versions: Release[] }) {
      release React had left shut — the page scrolled and nothing opened. GPT
      Sol's review, P2. `hashchange` is the event for exactly this and does not
      fire for the initial load, so the two effects do not overlap. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `setReleaseOpen` is a new function each render but closes over only `setOpen`, a state setter, and uses its updater form — so the first render's copy is as good as any, and listing it would re-add the listener on every render.
   useEffect(() => {
     const onHashChange = () => {
       const asked = releaseFromAnchor(window.location.hash.slice(1));

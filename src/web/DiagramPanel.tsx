@@ -911,7 +911,10 @@ export function DiagramPanel({
     // `similar.pairs` is a *stable* array — the hook hands back the same one
     // until a new answer lands — so this rebuilds exactly twice per article:
     // once immediately without the embeddings, once when they arrive.
-    [root, wantsGraph, blocks, collapsed, similar.pairs],
+    //
+    // `collapsed` is not listed: it is a module constant (see its declaration),
+    // so it cannot change. A picture that makes it state again must add it here.
+    [root, wantsGraph, blocks, similar.pairs],
   );
 
   /* **The two scatters, and only those two.** Same narrow gate as `similar`
@@ -1054,7 +1057,8 @@ export function DiagramPanel({
       graph,
       scatter,
     );
-  }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
+    // `collapsed` is not listed, for the reason given at `graph` above.
+  }, [root, kind, box, words, graph, scatter, followsReader]);
 
   /**
    * **`drawnKind` was here, and its removal is the point of this change.**
