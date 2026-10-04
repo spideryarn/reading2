@@ -39,10 +39,10 @@ import {
   CLAIMS_THINKING_ROOM,
   CLAIMS_SYSTEM,
   CLAIMS_TIMEOUT_MS,
-  CLAIMS_UNUSABLE,
   runClaims,
   runClaimsStream,
 } from "../src/referee-claims-run.js";
+import { ANSWER_UNUSABLE } from "../src/messages.js";
 import { CRITERION_TIMEOUT_MS } from "../src/referee-criteria-run.js";
 import { MODEL_MAX_TOKENS } from "../src/token-budget.js";
 import { type Claim, MAX_CLAIMS, MAX_PASSAGES } from "../src/referee-claims.js";
@@ -289,7 +289,16 @@ describe("reading the answer back", () => {
           { blockId: "spya-ywq345", quote: "nowhere", claim: "two" },
         ]),
       );
-      await expect(runClaims({ power: "standard", meta, blocks: BLOCKS })).rejects.toThrow(CLAIMS_UNUSABLE);
+      const err = await runClaims({ power: "standard", meta, blocks: BLOCKS }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(Error);
+      /* The one sentence in src/messages.ts that both Referee runners throw,
+         whole and unchanged. Claims had its own wording until 2026-10-04
+         (`CLAIMS_UNUSABLE`); two sentences sharing one code is what the
+         catalogue's "one distinct sentence, one code" rule forbids. Compared
+         with the constant rather than with a literal, so the copy stays
+         rewritable in one place. */
+      expect((err as Error).message).toBe(ANSWER_UNUSABLE.message);
+      expect((err as Error).cause).toBe("every-claim-discarded");
     });
 
     it("is not raised when one claim survived, because a partial answer still ran", async () => {

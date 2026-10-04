@@ -513,7 +513,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
 | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
 | `SPIDERYARN_DIG_DEEPER_SEARCH_MODEL` | *Dig deeper*'s forced web search, run before the answer: it keeps the search's results and writes a keyword query for the reader's library (`src/dig-deeper.ts`). A quick-tier job; the answer the reader reads is always the high-power model, which this does not change |
-| `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once |
+| `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once: `low`, `medium` or `high`. Empty counts as unset; anything else stops the run with an error naming the variable, so a typo cannot pass as a measurement (`pipelineEffortOverride` in `src/models.ts`) |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies — read it
 there when it matters, because the copy has missed rows more than once (the latest two,

@@ -337,38 +337,32 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "retry",
   "ai-empty": "retry",
-  /* **Raised outside this file**, by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts)
-     and `ANSWER_UNUSABLE` (src/referee-criteria-run.ts): the model answered and
-     none of what came back could be found in the paper. `retry` because both
-     sentences end "asking again usually works", which is true — it is a fact
-     about that answer, never about the paper.
+  /* `ANSWER_UNUSABLE`, below: a Referee run whose every row was thrown away.
+     `retry` because the sentence ends "asking again usually works", which is
+     true. It is a fact about that answer, never about the paper.
 
-     Both sites had asked in prose since 2026-09-02 to be registered here, and
-     `referee-criteria-run.ts` said exactly why it would not happen: *"Skipping
-     the second has no symptom here — `kindOfMessage` returns null,
-     `worthRetrying` says yes, and Retry is the right answer anyway."* It was
-     right, and being right by a default's coincidence is not the same as being
-     declared. tests/every-ai-code-is-registered.test.ts is what now says so.
+     **It took four days to register and a month to move here.** The code was
+     first raised from two sentences in the runners' own files, both of which
+     had asked in prose since 2026-09-02 to be registered, and one of which said
+     exactly why it would not happen: *"Skipping the second has no symptom here
+     — `kindOfMessage` returns null, `worthRetrying` says yes, and Retry is the
+     right answer anyway."* Being right by a default's coincidence is not the
+     same as being declared; tests/every-ai-code-is-registered.test.ts is what
+     now says so. The two sentences became one, in this file, on 2026-10-04
+     (plan 261004c § R6), which also settled the "one distinct sentence, one
+     code" rule they had been breaking.
 
      **Registering a code is not only bookkeeping**, which GPT Sol pointed out
-     and this entry is the first case of: `authored()` in src/monitoring-scrub.ts
-     is `kindOfMessage(message) !== null`, so a message ending in a registered
-     code has its **full text forwarded to Sentry** instead of being withheld.
-     That is correct for these two — both are fixed literals with nothing
-     interpolated into them, which is exactly what that allowlist is for. But
-     note what it means for the next sentence given this code: it must stay free
-     of article prose and of anything a reader typed (docs/project/logging.md).
-     `monitoring-scrub.ts`'s own reasoning says the vocabulary is closed because
-     "tests/messages.test.ts round-trips every sentence in that file", and these
-     two sentences are not in this file — which is the sharpest argument for
-     moving them here, still open, and belonging to docs/project/copy.md's own
-     batch rather than to this line.
-
-     **Two different sentences share this one code**, which the "one distinct
-     sentence, one code" rule says they must not — see
-     docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T2.8. Recorded
-     rather than fixed here: unifying them or splitting the code changes what a
-     reader is shown, which is copy.md's call and not a sweep's. */
+     and this entry was the first case of: `authored()` in
+     src/monitoring-scrub.ts is `kindOfMessage(message) !== null`, so a message
+     ending in a registered code has its **full text forwarded to Sentry**
+     instead of being withheld. That is correct here, because the sentence is a
+     fixed literal with nothing interpolated into it, which is exactly what
+     that allowlist is for. Any sentence given this code must stay free of
+     article prose and of anything a reader typed (docs/project/logging.md).
+     `monitoring-scrub.ts` calls the vocabulary closed because
+     "tests/messages.test.ts round-trips every sentence in that file", and
+     since the move that is true of this one too. */
   "ai-unusable": "retry",
   /* Not a model call, and not the reader's fault either. `retry` on purpose:
      an interrupted job resumes from its artefacts rather than starting again,
@@ -786,6 +780,52 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
   message:
     "The AI service sent back something this app could not read at all. That is usually a one-off, " +
     "so asking again generally works. [ai-unreadable]",
+};
+
+/**
+ * **Referee: the model answered, and not one row of the answer could be kept.**
+ *
+ * Thrown by both Referee runners: `runCriterionStream`
+ * (src/referee-criteria-run.ts) when every result row was discarded, and
+ * `runClaimsStream` (src/referee-claims-run.ts) when every claim was.
+ *
+ * There are three outcomes a run can have, not two: the model found passages,
+ * the model found nothing, and *the model returned something nothing could be
+ * made of*. The third had no sentence until 2026-09-01. Its rows were dropped
+ * and counted, correctly, and then the run was stored `done` with no results,
+ * so the panel printed "the model did not find a passage for this", which is
+ * the sentence for the second outcome and false for the third ⟨GPT Sol's
+ * finding 4, docs/plans/260831an-referee-mode-stage3b5c-review-sol.md⟩. *Found
+ * nothing* and *found things I could not use* call for different actions, so
+ * they must not print the same sentence. For Claims the wrong one would read
+ * as *the paper makes no claims*, a finding that sub-mode exists not to make.
+ *
+ * So this is a **failed run** rather than an empty one: the row goes to
+ * `status: "error"`, the panel prints this and offers Try again, and a retry
+ * resets the row. A *partial* loss is still a success: one usable row means
+ * the run ran, and the rows that were dropped stay a log line.
+ *
+ * **One sentence, deliberately true of every discard path.** A row is thrown
+ * away for a quote that is not in the paper, for a block id the paper does not
+ * have, for a missing valence on a `diverging` criterion, and for having no
+ * anchor at all. "Nothing it returned could be used" covers all four. Until
+ * 2026-10-04 there were two sentences sharing this one code, one in each
+ * runner's file: Criteria's said the model "pointed at passages", which a row
+ * with no anchor never did, and Claims' (`CLAIMS_UNUSABLE`) said nothing "could
+ * be found in the paper", which is not why a shapeless row is dropped. Plan
+ * 261004c § R6.
+ *
+ * The rule it must keep: **a null result is evidence about the model, never a
+ * claim about the paper.** tests/referee-copy-is-about-the-model.test.ts holds
+ * it to that. And it is a fixed literal with nothing interpolated, which is
+ * what lets its full text go to Sentry (see `ai-unusable` in `CODE_KINDS`).
+ */
+export const ANSWER_UNUSABLE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The model answered, but nothing it returned could be used, so there is nothing to show. " +
+    "That is about the answer rather than about the paper, and asking again usually works. " +
+    "[ai-unusable]",
 };
 
 /**

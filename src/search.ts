@@ -65,7 +65,6 @@
  * selection: it is what somebody was looking for.
  */
 import type { Block, Meta, SearchHit } from "./types.js";
-import { loadEnvLocal } from "./env.js";
 import { findQuote } from "./quote-match.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
@@ -84,7 +83,6 @@ import {
   ANSWER_OVERFLOWED,
   ANSWER_OVERFLOWED_FIXED_ASK,
   ENDED_UNFINISHED,
-  NOT_CONFIGURED,
   PROVIDER_UNREADABLE,
   saidNothing,
 } from "./messages.js";
@@ -554,16 +552,6 @@ export async function* findPassagesStream({
   stallMs = SEARCH_STALL_MS,
 }: SearchRequest): AsyncGenerator<SearchEvent> {
   const line = log("model");
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences — see NOT_CONFIGURED in src/messages.ts.
-    // This one is for whoever runs the server; the thrown message is for the
-    // reader, and does not name an environment variable or a dotfile.
-    line.error("OPENROUTER_API_KEY is not set — every search will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   const messages = buildSearchMessages(meta, blocks, criterion);
 

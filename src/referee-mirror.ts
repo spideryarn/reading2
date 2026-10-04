@@ -160,7 +160,6 @@ export type {
   MirrorRemarkKind,
   MirrorResult,
 } from "./referee-mirror-types.js";
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import {
   type StreamEnd,
@@ -170,7 +169,7 @@ import {
   stoppedByReader,
 } from "./openrouter-stream.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
-import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
+import { ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import {
   assertNoBlockIdEnums,
   validateAnthropicJsonSchema,
@@ -1528,15 +1527,6 @@ export async function* mirrorStream({
        read". */
     yield { type: "done", remarks: minted, input, coverage, placementsOmitted, model };
     return;
-  }
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences: the variable name is useful only to whoever
-    // runs the server, so it stays in the log. See NOT_CONFIGURED.
-    line.error("OPENROUTER_API_KEY is not set — every Mirror run will fail");
-    throw new Error(NOT_CONFIGURED.message);
   }
 
   const messages = buildMirrorMessages(input.comments, asked);

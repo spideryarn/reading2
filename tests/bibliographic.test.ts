@@ -409,6 +409,29 @@ describe("lookupWork", () => {
     expect(store.writes).toEqual([]);
   });
 
+  it("cools a service the default 60 seconds, not one, on a 429 that said `Retry-After: 0`", async () => {
+    /* The whole road, from the header to the cooldown: the real fetch reads the
+       header and the real lookup decides the cooldown. `0` is "no usable
+       instruction" (src/retry-after.ts), so the default applies. Until
+       2026-10-04 it arrived here as a wait of 0 and was floored to one second,
+       which is asking a registry that has just refused us again almost at
+       once. */
+    const store = new MemoryStore();
+    const fetchImpl = vi.fn<FetchLike>(
+      async () => new Response("{}", { status: 429, headers: { "retry-after": "0" } }),
+    );
+    const resolve = async () => ["104.18.0.1"];
+    const fetchJson = (url: string) => fetchBibliographicJson(url, { fetchImpl, resolve });
+    expect(await lookupWork(nn, { store, fetchJson, sleep: noSleep })).toEqual({
+      kind: "unavailable",
+      why: "cooling-down",
+    });
+    const cooledFor = (store.cooling.get("crossref") ?? 0) - Date.now();
+    expect(cooledFor).toBeGreaterThan(55_000);
+    expect(cooledFor).toBeLessThanOrEqual(60_000);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("cools a service 60 seconds on a 503 that gave no Retry-After", async () => {
     const store = new MemoryStore();
     const { fetchJson } = registry({ [crossrefUrl("10.1038/nn.4304")]: failure(503) });

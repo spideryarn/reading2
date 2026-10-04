@@ -64,7 +64,6 @@ import type {
   Meta,
   ThreadKind,
 } from "./types.js";
-import { loadEnvLocal } from "./env.js";
 import { ID_PATTERN } from "./ids.js";
 import { errorFields, log, since } from "./log.js";
 import {
@@ -90,7 +89,6 @@ import {
 import {
   ENDED_UNFINISHED,
   KEPT_ASKING_FOR_TOOLS,
-  NOT_CONFIGURED,
   TOOL_CALL_LOST,
   saidNothing,
 } from "./messages.js";
@@ -2172,15 +2170,6 @@ export async function* converse({
   // conversation, not a file, and the ids belong to whoever stored it. The
   // route's own line carries them.
   const line = log("model");
-
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // The variable name is for whoever runs the server, so it stays in the log
-    // and out of the sentence the reader sees. See src/messages.ts.
-    line.error("OPENROUTER_API_KEY is not set — every chat message will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
 
   /* The article goes in the FIRST user message and the conversation follows it,
      rather than the article going in the system prompt. Two reasons, and the
