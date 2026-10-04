@@ -792,5 +792,164 @@
  "make the text bigger and switch to a dark theme": {
   "rows": 0,
   "argument": []
+ },
+ "can you find some more terms for the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "the glossary is missing a few words, add some more to it": {
+  "rows": 0,
+  "argument": []
+ },
+ "keep the definitions I have and look for extra ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "um I think there's there's more jargon in here than you've got, find the rest": {
+  "rows": 0,
+  "argument": []
+ },
+ "extend the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "pull out a few more good lines": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'd like some more quotes on top of these ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "there must be other passages worth keeping, go and look": {
+  "rows": 0,
+  "argument": []
+ },
+ "uh can you can you get me some extra quotations please": {
+  "rows": 0,
+  "argument": []
+ },
+ "add to the quotes, don't replace them": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the table of contents": {
+  "rows": 0,
+  "argument": []
+ },
+ "what's the tldr": {
+  "rows": 0,
+  "argument": []
+ },
+ "just give me the gist of it": {
+  "rows": 0,
+  "argument": []
+ },
+ "is there a mind map of this": {
+  "rows": 0,
+  "argument": []
+ },
+ "let me see the key terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "what are the main ideas here": {
+  "rows": 0,
+  "argument": []
+ },
+ "open the q and a for this piece": {
+  "rows": 0,
+  "argument": []
+ },
+ "I need to revise this for an exam": {
+  "rows": 0,
+  "argument": []
+ },
+ "where's the further reading": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the pull quotes": {
+  "rows": 0,
+  "argument": []
+ },
+ "what criticism has this had": {
+  "rows": 0,
+  "argument": []
+ },
+ "these quotes are no good, start over with new ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "throw out the glossary and write it again from scratch": {
+  "rows": 0,
+  "argument": []
+ },
+ "redo the key terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "the excerpts need regenerating": {
+  "rows": 0,
+  "argument": []
+ },
+ "give me a different set of quotes instead of these": {
+  "rows": 0,
+  "argument": []
+ },
+ "add more detail to the summary": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more articles like this one": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more articles like this one"
+   }
+  ]
+ },
+ "add a definition of my own to the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "delete the last three quotes": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more quotes in all my articles": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more quotes in all my articles"
+   }
+  ]
+ },
+ "stop looking for more terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "tell me more about the second experiment": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'd like more articles like this one": {
+  "rows": 0,
+  "argument": []
+ },
+ "get more quotes out of all my articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more good quotes for me": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more good quotes for me"
+   }
+  ]
  }
 }

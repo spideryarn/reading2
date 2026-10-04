@@ -1,7 +1,8 @@
 /**
  * **The requests, and what we say the right command is.** Not reader data.
  *
- * Four sets, all labelled before any arm of the 2026-10-03 run saw them:
+ * Five sets. The first four were labelled before any arm of the 2026-10-03 run
+ * saw them; the fifth before any arm of the 2026-10-04 run did:
  *
  * - `round1` (`p01`–`p46`) and `round2` (`h01`–`h26`): the 72 from plan 261002c
  *   Stage D, written 2026-10-02, **relabelled here against the bar's real ids**
@@ -15,6 +16,12 @@
  *   only each row's id, name and one-line description — not the prompts, not
  *   the other phrases, no code. Its file is `blind.raw.json`, unedited; the
  *   two labels we changed are in `BLIND_RELABEL` below with the reason.
+ * - `more` (`m01`–): written 2026-10-04 for plan 261004k's F8, after every
+ *   mode got more nicknames and the bar got *Glossary › Find more* and
+ *   *Quotes › Find more*. Requests for more of each list, the new nicknames
+ *   inside a sentence, requests that still mean *Run again*, and requests
+ *   with no right answer that sit next to the new rows. Written by the agent
+ *   that ran the re-measurement, with the list in front of it.
  *
  * `accept` lists every id counted as right; the first is the one we would have
  * built. `[NONE]` means nothing should run. A phrase whose right answer takes
@@ -34,6 +41,22 @@
  * 3. *Asking what a named term means* accepts `arg:glossary` first and
  *    `mode:glossary` second (the glossary without the term), as `h01` did in
  *    the first run. `arg:find` is not accepted.
+ *
+ * **Two more, for the `more` set only** (2026-10-04):
+ *
+ * 4. *Asking for more of a list, keeping what is there* accepts that list's
+ *    *Find more* row. For the glossary it also accepts *Glossary › Run again*,
+ *    whose own description says it adds terms to an up-to-date list. For
+ *    quotes it does not: *Quotes › Run again* writes the list again from
+ *    scratch. Opening the mode is not accepted.
+ * 5. *Asking for the list to be replaced* accepts *Run again* only, for both.
+ *
+ * **Two rows the first four sets were labelled against have gone since**:
+ * `mode:tweets` (the thread is now `submode:summary:thread`) and
+ * `submode:summary:simple`. `p15` and `b04` asked for the thread and accept
+ * its new id as well, decided 2026-10-04 before the second run; nothing else
+ * was relabelled, so `p08` simply has one accepted id that is no longer
+ * offered.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -41,7 +64,7 @@ import { fileURLToPath } from "node:url";
 
 import { NONE } from "./catalogue.js";
 
-export type PhraseSet = "round1" | "round2" | "new" | "blind";
+export type PhraseSet = "round1" | "round2" | "new" | "blind" | "more";
 export type PhraseStyle =
   | "greg"
   | "paraphrase"
@@ -68,6 +91,7 @@ const META = "page:/read/a-piece/metadata";
 const BRIEF = "submode:summary:brief";
 const SIMPLE = "submode:summary:simple";
 const FULLER = "submode:summary:fuller";
+const THREAD = "submode:summary:thread";
 const QUIZ = "submode:remember:quiz";
 const HIGH = "action:section-high-powered";
 const SHARE = "action:section-access-sharing";
@@ -134,7 +158,13 @@ const OLD: readonly Hand[] = [
     accept: ["mode:structure", "submode:structure:expanded", "submode:structure:fisheye"],
     note: "The two Structure sub-modes added; the hand copy did not have them.",
   },
-  { id: "p15", style: "paraphrase", text: "turn this into a twitter thread", accept: ["mode:tweets"] },
+  {
+    id: "p15",
+    style: "paraphrase",
+    text: "turn this into a twitter thread",
+    accept: ["mode:tweets", THREAD],
+    note: "The thread's new id added 2026-10-04: `mode:tweets` is no longer a row.",
+  },
   { id: "p16", style: "paraphrase", text: "what are the best lines in it", accept: ["mode:quotes"] },
   { id: "p17", style: "paraphrase", text: "when did all of this happen", accept: ["mode:timeline"] },
   { id: "p18", style: "paraphrase", text: "what is the author taking for granted", accept: ["mode:ideas"] },
@@ -347,6 +377,103 @@ const NEW: readonly Hand[] = [
   { id: "n80", style: "no-answer", text: "stop sharing all of my articles", accept: [NONE], note: "Near neighbour: Share this article." },
 ];
 
+
+/* ------------------------------------------------- the 2026-10-04 set -- */
+
+const MORE_GLOSSARY = "action:find-more-glossary";
+const MORE_QUOTES = "action:find-more-quotes";
+const AGAIN_GLOSSARY = "action:rerun-glossary";
+const AGAIN_QUOTES = "action:rerun-quotes";
+
+const MORE: readonly Hand[] = [
+  /* More of the glossary (rule 4). */
+  { id: "m01", style: "paraphrase", text: "can you find some more terms for the glossary", accept: [MORE_GLOSSARY, AGAIN_GLOSSARY] },
+  { id: "m02", style: "paraphrase", text: "the glossary is missing a few words, add some more to it", accept: [MORE_GLOSSARY, AGAIN_GLOSSARY] },
+  { id: "m03", style: "paraphrase", text: "keep the definitions I have and look for extra ones", accept: [MORE_GLOSSARY, AGAIN_GLOSSARY] },
+  { id: "m04", style: "voice", text: "um I think there's there's more jargon in here than you've got, find the rest", accept: [MORE_GLOSSARY, AGAIN_GLOSSARY] },
+  { id: "m05", style: "paraphrase", text: "extend the glossary", accept: [MORE_GLOSSARY, AGAIN_GLOSSARY] },
+
+  /* More quotes (rule 4). */
+  { id: "m06", style: "paraphrase", text: "pull out a few more good lines", accept: [MORE_QUOTES] },
+  { id: "m07", style: "paraphrase", text: "I'd like some more quotes on top of these ones", accept: [MORE_QUOTES] },
+  { id: "m08", style: "paraphrase", text: "there must be other passages worth keeping, go and look", accept: [MORE_QUOTES] },
+  { id: "m09", style: "voice", text: "uh can you can you get me some extra quotations please", accept: [MORE_QUOTES] },
+  { id: "m10", style: "paraphrase", text: "add to the quotes, don't replace them", accept: [MORE_QUOTES] },
+
+  /* The new nicknames, inside a sentence. Accepted ids follow the older
+     phrase for the same mode (p14, p07, p09, p11). */
+  {
+    id: "m11",
+    style: "paraphrase",
+    text: "show me the table of contents",
+    accept: ["mode:structure", "submode:structure:expanded", "submode:structure:fisheye"],
+  },
+  { id: "m12", style: "paraphrase", text: "what's the tldr", accept: [BRIEF, "mode:summary"] },
+  { id: "m13", style: "paraphrase", text: "just give me the gist of it", accept: [BRIEF, "mode:summary"] },
+  {
+    id: "m14",
+    style: "paraphrase",
+    text: "is there a mind map of this",
+    accept: ["mode:diagram", "submode:diagram:sketch", "submode:diagram:illustrated"],
+  },
+  { id: "m15", style: "paraphrase", text: "let me see the key terms", accept: ["mode:glossary"] },
+  {
+    id: "m16",
+    style: "hard",
+    text: "what are the main ideas here",
+    accept: ["mode:ideas", "mode:summary", BRIEF],
+    note: "`main ideas` is now a nickname of Ideas, but a summary answers the same sentence; both count.",
+  },
+  { id: "m17", style: "paraphrase", text: "open the q and a for this piece", accept: ["mode:faq"] },
+  {
+    id: "m18",
+    style: "paraphrase",
+    text: "I need to revise this for an exam",
+    accept: ["mode:remember", QUIZ, "submode:remember:recall", "submode:remember:tutorial"],
+  },
+  { id: "m19", style: "paraphrase", text: "where's the further reading", accept: ["mode:citations"] },
+  {
+    id: "m20",
+    style: "hard",
+    text: "show me the pull quotes",
+    accept: ["mode:quotes"],
+    note: "Near neighbour: Quotes › Find more, which now carries `more pull quotes`.",
+  },
+  { id: "m21", style: "paraphrase", text: "what criticism has this had", accept: ["mode:debate", "submode:debate:reception"] },
+
+  /* Still *Run again* (rule 5): the list replaced, not added to. */
+  { id: "m22", style: "hard", text: "these quotes are no good, start over with new ones", accept: [AGAIN_QUOTES] },
+  { id: "m23", style: "hard", text: "throw out the glossary and write it again from scratch", accept: [AGAIN_GLOSSARY] },
+  { id: "m24", style: "hard", text: "redo the key terms", accept: [AGAIN_GLOSSARY], note: "A new nickname inside a Run again phrase." },
+  { id: "m25", style: "hard", text: "the excerpts need regenerating", accept: [AGAIN_QUOTES], note: "As m24." },
+  { id: "m26", style: "hard", text: "give me a different set of quotes instead of these", accept: [AGAIN_QUOTES] },
+
+  /* `more`, and not a list. */
+  { id: "m27", style: "hard", text: "add more detail to the summary", accept: [FULLER], note: "Near neighbours: both Find more rows." },
+
+  /* No right answer, next to the new rows. */
+  { id: "m28", style: "no-answer", text: "find more articles like this one", accept: [NONE], note: "Near neighbours: both Find more rows." },
+  { id: "m29", style: "no-answer", text: "add a definition of my own to the glossary", accept: [NONE], note: "Near neighbour: Glossary › Find more; the bar cannot take a reader's own entry." },
+  { id: "m30", style: "no-answer", text: "delete the last three quotes", accept: [NONE], note: "Near neighbours: Quotes › Run again and Find more." },
+  { id: "m31", style: "no-answer", text: "find more quotes in all my articles", accept: [NONE], note: "As n78: Find more is this article only." },
+  { id: "m32", style: "no-answer", text: "stop looking for more terms", accept: [NONE], note: "Near neighbour: Glossary › Find more, which starts a run." },
+  { id: "m33", style: "content-question", text: "tell me more about the second experiment", accept: ["mode:chat", NONE], note: "Rule 2." },
+
+  /* Added after the bar's own matching was checked and before any arm ran:
+     the bar reads a sentence that opens with `find` as *Find words*, so m28
+     and m31 never reach a model. These say the same without the verb, and
+     m36 is a Find more request the verb also takes. */
+  { id: "m34", style: "no-answer", text: "I'd like more articles like this one", accept: [NONE], note: "m28 without `find`." },
+  { id: "m35", style: "no-answer", text: "get more quotes out of all my articles", accept: [NONE], note: "m31 without `find`." },
+  {
+    id: "m36",
+    style: "hard",
+    text: "find more good quotes for me",
+    accept: [MORE_QUOTES],
+    note: "The bar answers this itself, as Find words `more good quotes for me`; a model is never asked.",
+  },
+];
+
 /* ------------------------------------------------------------- the blind set -- */
 
 interface BlindRaw {
@@ -367,6 +494,10 @@ const BLIND_RELABEL: Readonly<Record<string, { accept: readonly string[]; why: s
   b39: {
     accept: [NONE, "page:/profile"],
     why: "As n61: `cancel my subscription, actually no, delete my account` — writer said `none` only.",
+  },
+  b04: {
+    accept: ["mode:tweets", THREAD],
+    why: "As p15, 2026-10-04: the thread's new id added; `mode:tweets` is no longer a row.",
   },
 };
 
@@ -391,6 +522,7 @@ export const PHRASES: readonly Phrase[] = [
   ...OLD.map((p): Phrase => ({ ...p, set: p.id.startsWith("p") ? "round1" : "round2" })),
   ...NEW.map((p): Phrase => ({ ...p, set: "new" })),
   ...BLIND,
+  ...MORE.map((p): Phrase => ({ ...p, set: "more" })),
 ];
 
 /** The right answer is an argument command (the first accepted id). */
