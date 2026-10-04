@@ -909,7 +909,11 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
    opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
-   one.
+   one. **The wait has an end**: after `SOURCE_SCAN_DEADLINE_MS` (a minute) the read is given up on
+   and aborted, and the notice says the check did not finish and that reloading runs it again —
+   `[rd-scan-timeout]`, `SCAN_TIMED_OUT` in [`src/messages.ts`](../../src/messages.ts). Until
+   2026-10-04 a request that never answered said *Checking…* for ever. There is still no retry in
+   place, for the reason the hook's header gives. `tests/source-scan-read-has-a-deadline.test.tsx`.
 
    **Five rules, and each is code rather than an intention.** A PDF says *not checked* and can never
    say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no `findings` to

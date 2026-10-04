@@ -49,8 +49,9 @@ export const OPENING_READ_DEADLINE_MS = 15_000;
 
 /** The read was given up on at the deadline. Its message is the reader's. */
 export class OpeningReadTimedOut extends ReaderFacingError {
-  constructor() {
-    super(LIST_LOAD_TIMED_OUT.message);
+  /** @param message the reader's sentence — a declared one from src/messages.ts. */
+  constructor(message: string = LIST_LOAD_TIMED_OUT.message) {
+    super(message);
     this.name = "OpeningReadTimedOut";
   }
 }
@@ -62,14 +63,33 @@ export interface OpeningRead<T> {
   abandon(): void;
 }
 
-export function openingRead<T>(url: string): OpeningRead<T> {
+/**
+ * For a read that is finite in the same way but is not a saved list.
+ *
+ * Both default to the lists' own, so the three panels above pass nothing. The
+ * one caller that does is the Referee band's scan (`useSourceScan`), whose
+ * honest answer can take nine seconds — most of the lists' fifteen — and whose
+ * failure is not about "things you saved".
+ */
+export interface OpeningReadOptions {
+  /** How long to wait for the whole read. Default `OPENING_READ_DEADLINE_MS`. */
+  deadlineMs?: number;
+  /**
+   * The reader's sentence at the deadline — a declared message from
+   * src/messages.ts, bracketed code and all. Default `LIST_LOAD_TIMED_OUT`.
+   */
+  timedOut?: string;
+}
+
+export function openingRead<T>(url: string, options: OpeningReadOptions = {}): OpeningRead<T> {
+  const { deadlineMs = OPENING_READ_DEADLINE_MS, timedOut } = options;
   const request = new AbortController();
   let clock: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
     clock = setTimeout(() => {
-      reject(new OpeningReadTimedOut());
+      reject(new OpeningReadTimedOut(timedOut));
       request.abort();
-    }, OPENING_READ_DEADLINE_MS);
+    }, deadlineMs);
   });
   const read = apiFetch(url, { signal: request.signal }).then((r) => readJson<T>(r));
   return {
