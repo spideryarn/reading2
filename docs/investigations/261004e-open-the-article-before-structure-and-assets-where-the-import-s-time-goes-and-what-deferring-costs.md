@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the question:
 [261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md) § Stage 2
-· what it led to:
+· the plan it led to, which was stopped:
 [261004l](../plans/261004l-figures-arrive-after-a-paper-opens-and-an-open-article-re-reads-itself.md)
 
 Spiked 2026-10-04 on the box, against the local database. No product code was written.
@@ -101,7 +101,12 @@ That is over Greg's second limit. **Not built.**
 On a web page `assets` is 0.8 s, and until it runs every image hot-links the publisher, which is the
 thing the step exists to stop. **Not built.**
 
-## In between: defer only a PDF's figure recovery. Built as 261004l
+## In between: defer only a PDF's figure recovery. Planned as 261004l, and stopped
+
+This looked like the answer, was written up as a plan, and did not survive GPT Sol's review of it:
+nine P1s, almost all in the half that makes the open page update by itself. The plan's review
+record has them. The first four bullets below still hold; the price in the fifth was wrong by about
+half.
 
 - **It is already a separate half.** `recoverPdfFigures` (`src/pipeline.ts`) does nothing unless the
   blocks carry PDF figure markers, and only the PDF reader mints those.
@@ -111,15 +116,59 @@ thing the step exists to stop. **Not built.**
   step that reads it is Illustrated, which is not queued automatically and whose stamp is built to
   read stale when figures arrive. Checked by grepping every read of the artefact in `src`.
 - **Saves** 49 s of 300 locally and 92 s of 250 on production's paper. Nothing on a web page.
-- **Costs** about eight files: the step writes a manifest that says figures are still to come, the
-  publication queues an `assets` successor as it queues `labels`, and the open page re-reads itself.
-  A visitor to a shared paper cannot run jobs, so they see captions until the owner's browser has.
-- **It brings the re-read**, which `labels` can use on the same day (paragraph labels arriving in an
-  open Structure with no reload), and which any later attempt at A needs first.
+- **Costs**, as first priced, about eight files. After review, about a dozen, with a step that
+  defers under three or four conditions, an ordering rule across three kinds of successor, and a
+  re-read that has to be right about a job ending mid-load, a lightbox holding an old image, a
+  Rebuild that already has figures, the CLI, and an open Illustrated band. A visitor to a shared
+  paper cannot run jobs, so they would never see the update without loading again.
+
+## Making figure recovery faster instead (measured, not built)
+
+If the 49 s cannot cheaply move behind the open, can it shrink? Timed on the same paper by wrapping
+the model call the step is handed, with no change to the code: 41.9 s that run, 8 calls.
+
+| Where | Seconds |
+|---|---|
+| Before the first model call (the bitmap and drawn routes) | 8.9 |
+| The 8 model calls, 1.4 to 2.5 s each | 15.3 |
+| Between the calls: reading and drawing a three-page window each time, and compositing | 16.8 |
+| After the last | 0.9 |
+
+Three of the eight windows were the same three pages, read and drawn from nothing each time. Eight
+windows visit 24 pages, of which 12 are distinct.
+
+| Change | This paper | What it risks |
+|---|---|---|
+| Keep pages already read (a sliding cache; markers are in page order) | about 9 s saved | least: memory stays bounded |
+| Ask the model four at a time | about 14 s saved (demonstrated: 16.5 s against 29.5 for the loop) | holds four to eight windows in memory where the code holds one on purpose; results must be put back in marker order; the page cutter may not be called concurrently |
+| Both | about 21 s saved (demonstrated: 8.0 s for the loop) | both |
+
+So 3 to 7% of a 300 s import. Worth knowing, not worth building now.
+
+## The decision
+
+**Stop.** Nothing is built.
+
+| Option | Saves | Why not |
+|---|---|---|
+| A, open after `blocks` | 25 of 31 s (web), 96 of 300 s (PDF) | 10 to 14 files at best, stopped twice before |
+| B, move all of `assets` | under 1 s more than the next row | hot-links every new web article |
+| Defer a PDF's figures | 49 of 300 s; nothing on a web page | nine P1s at plan review; about a dozen files |
+| Make figure recovery faster | 9 to 21 of 300 s | too small |
+
+Every option that saves a meaningful share needs the same missing piece, an open article that
+re-reads itself without blanking, and that piece is where the difficulty is. It has value of its
+own (Rebuild says *"Reload the page"*; paragraph labels need a reload), so it is the thing to
+build first if any of this is picked up again, as its own plan.
 
 ## What was not looked at
 
-- `extract` on a PDF, the 198 s. It is the largest number on the page and nothing here touches it.
+- **`extract` on a PDF, the 198 s, and it is the largest lead here.** Its four chunks do start
+  together (`src/pdf-read.ts`, a queue as wide as the chunk count). Read off the local `ai_calls`
+  rows: each chunk then made a second call, and after that six calls ran strictly one after another
+  for 88 s. Inferred, not confirmed: content-check retries, then one chunk sent to `recover`, which
+  re-reads it page by page in sequence by design. The log keeps the retry count and not the
+  reasons. 88 s of serial work in one step is more than everything else on this page put together.
 - A third route for the web page, which is a product question rather than an engineering one: show
   the prose on the **add page** while the import finishes, read from the job's draft, and open the
   real reading view when it publishes. Nothing is published without a tree, so nothing has to learn

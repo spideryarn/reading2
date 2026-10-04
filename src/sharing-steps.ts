@@ -35,8 +35,10 @@
  *
  * `labels` is deliberately not one: it rewrites `tree` and `nav_label_status`
  * as well as `labels`, and writes the base revision on failure, so a column copy
- * is the wrong model of it. `structure`, `assets` and the ingest steps change
- * what every mode reads.
+ * is the wrong model of it. `structure` and the ingest steps change what
+ * every mode reads. `assets` does not — it writes one column and only
+ * `illustrated` reads it — so it would qualify, and is exclusive only because
+ * nobody has needed it to share (docs/investigations/261004e).
  *
  * ## Exhaustive over `StepName`
  *

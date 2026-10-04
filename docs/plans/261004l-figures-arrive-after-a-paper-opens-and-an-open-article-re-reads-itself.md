@@ -1,6 +1,9 @@
 # Figures arrive after a paper opens, and an open article re-reads itself
 
-Status: plan, not built. Parent: [plans.md](../project/plans.md). Answers [Q-open-early] of
+Status: **not built, and stopped on purpose** after GPT Sol's plan review, 2026-10-04: nine P1s, and
+what is left after simplifying is too much machinery for 49 s off a 300 s import. See § Review
+record, which says what a later attempt would have to carry. The text below is the plan as it was
+reviewed. Parent: [plans.md](../project/plans.md). Answers [Q-open-early] of
 [261004h](261004h-post-import-modes-decided-on-the-server-for-every-import-path.md) § Stage 2. The
 measurements and the two options not built are in
 [the investigation](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md).
@@ -136,4 +139,40 @@ the comment in `src/sharing-steps.ts` that says `assets` changes what every mode
 
 ## Review record
 
-(GPT Sol on the plan, then on the code.)
+**GPT Sol on the plan** (commit 473941e1d, read-only, exit 0, answer file fresh):
+[plan-review-sol](261004l-figures-arrive-after-a-paper-opens-and-an-open-article-re-reads-itself-plan-review-sol.md).
+Verdict *build with changes*, nine P1s. The server half held: passing the job's declared step list
+survives a handed-back claim, a pending manifest failing both freshness checks makes the successor
+run, and the trigger does not loop. The rest did not:
+
+| | What was wrong with the plan |
+|---|---|
+| F1 | A figure job that ends while the article is still loading is never announced, so the page stays on captions for good. The listener has to exist before the read starts, and reconcile. |
+| F2 | *On any failure keep what is on screen* does not follow: a failed image delivery resolves successfully with fewer pictures, so a re-read can remove a figure the reader is looking at. |
+| F3 | An open image lightbox holds a copy of the old blob URL, which the re-read revokes. |
+| F4 | Two re-reads close together have no order, and releasing the old load after `setAnswer` is before the swap has been drawn. |
+| F5 | A Rebuild forces `assets`, so recovered figures would be replaced by *pending* and vanish until the second job ends. |
+| F6 | Start again queues its regenerations on a separate path, which the order has to cover too, by the holder's job id. |
+| F7 | *The publishing job ran assets* cannot be read as a finished step off the job row: the row still says running at publication. |
+| F8 | A CLI import drives only its own job, so figures would wait undriven, and the `labels` command it prints would stall behind them. |
+| F9 | An open Illustrated band would go on saying it is current after the figures land. |
+
+Each was checked against the code it names. None was wrong.
+
+**Why stop rather than fix.** Dropping the `labels` re-read and deferring only when the draft
+carries no earlier manifest removes F2, F3 and F5 and most of F4. What is left is still a step with
+three or four conditions on when it defers, a new publication trigger, two freshness arms, an
+ordering rule across three kinds of successor, a re-read with its own ordering and a reconciliation
+for the loading window, a pending note, and an Illustrated revalidation: about a dozen files and
+several states that are each silent when wrong. That buys 49 s of a 300 s import locally (92 of 250
+on production's one paper), nothing on a web page, a visitor who never sees the update, and pictures
+that push the page about when they land. Greg's second limit was *"not … too much complexity"*, and
+he said stopping with the numbers is a fine outcome.
+
+**The cheaper thing that was measured instead**: making figure recovery itself faster, with no
+deferral. It saves 9 to 21 s. The numbers and what it would take are in the investigation, § *Making
+figure recovery faster*. Not built either; it is 3 to 7% of the wait.
+
+**If this is picked up again**, the order of work is: the no-blank re-read first and by itself, as
+its own plan with F1 to F4 as its requirements, because Rebuild's *"Reload the page"* and the
+reload-only `labels` want it whatever happens here. Deferral is small once that exists.

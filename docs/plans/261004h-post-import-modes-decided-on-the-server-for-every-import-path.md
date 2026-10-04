@@ -1,6 +1,6 @@
 # Post-import modes, decided on the server for every import path
 
-Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 is a question for Greg, not built. Parent: [plans.md](../project/plans.md). Follows
+Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 was answered by Greg, spiked, and stopped with nothing built (§ Stage 2). Parent: [plans.md](../project/plans.md). Follows
 [260930c](260930c-auto-generate-the-main-modes-after-import.md), whose Deferred 2 this is.
 
 > We should automatically run Glossary mode generation as part of every import process
@@ -199,6 +199,15 @@ move only `assets` behind the publication, as `labels` was moved on 2026-09-06.
 > going to introduce too much complexity. use your judgment
 >
 > — Greg, 2026-10-04
+
+**What came of it: nothing built, with the numbers.** The spike is
+[261004e](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md)
+and the plan that was written and then stopped at review is
+[261004l](261004l-figures-arrive-after-a-paper-opens-and-an-open-article-re-reads-itself.md).
+Two things above turned out wrong. `assets` does **not** rewrite what the modes read: it writes one
+artefact that only Illustrated reads, so the modes need not wait for it. And no open reading view
+re-reads its article today, so *"update automatically"* is new work under every option, and it is
+where the difficulty is.
 
 ## Cost
 
