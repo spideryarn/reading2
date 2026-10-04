@@ -1979,7 +1979,7 @@ async function runBatch(
      * The one truncation in the pipeline that is **not** tagged `bug`, and the
      * only place that still takes the bare sentence.
      *
-     * The other stages throw `truncationFailure` (through `finishedText`,
+     * The ordinary stages throw `truncationFailure` (through `finishedText`,
      * src/messages-stream.ts), which carries a
      * `failureKind` so the job card withholds Retry (src/job-failure.ts). This
      * one must not, for two reasons, and either alone would be enough:

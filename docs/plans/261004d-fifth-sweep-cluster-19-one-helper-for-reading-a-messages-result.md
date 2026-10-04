@@ -66,9 +66,9 @@ export function finishedText(
 ): string
 ```
 
-`finishedText` is `wasRefused` → `stageFailure(MODEL_REFUSED, { authored })`, then `max_tokens` →
-`truncationFailure(stage, maxTokens, answerTokens, { outputTokens, answerChars }, headroom)`, then
-`messageText`. Refusal is judged first, as every copy does today. The comment about `stop_details`
+`finishedText` is `wasRefused` → `stageFailure(MODEL_REFUSED, { authored })`, then `messageText`, then
+`max_tokens` → `truncationFailure(stage, maxTokens, answerTokens, { outputTokens, answerChars }, headroom)`,
+otherwise returning the joined text. Refusal is judged first, as every copy does today. The comment about `stop_details`
 that eight stages carry moves onto the function, once.
 
 The fifteen ordinary stages become one line each, `const raw = finishedText(message, "arc",
@@ -108,8 +108,10 @@ counted; headroom dropped). Nothing calls the helper yet. Done: tests green, mut
 **Stage 2: move the stages.** One commit: the replacement, the imports it orphans, and the two
 tests that have to move with it (Sol's plan review, PL-1 and PL-2). `tests/stop-details.test.ts`
 counts `stageFailure(MODEL_REFUSED` sites and wants more than ten; four are left, so its non-vacuity
-check is restated, and a second scan is added so that a stage which goes back to reading
-`message.content` by hand goes red. `tests/illustrated-run.test.ts` replaces the whole module with a
+check is restated, and a second scan guards literal content reads in modules importing the
+Messages gateway or SDK. It parses property access and destructuring rather than relying on a text-block
+type annotation; indirect imports and dynamic keys are outside its scope.
+`tests/illustrated-run.test.ts` replaces the whole module with a
 two-export mock and toggles a fake `wasRefused`; it keeps the real module and hands back a message
 that really is a refusal. One thing is not strictly mechanical and is accepted: Illustrated's
 `briefMs` timer now stops after the text is joined rather than before (PL-3), a difference of
@@ -130,4 +132,29 @@ with the scoped diff and the census output.
 
 ## What landed
 
-(filled in at the end of each stage)
+All three stages, 2026-10-04.
+
+- **Stage 1, `0cd280739`.** `messageText` and `finishedText` in `src/messages-stream.ts`, seven
+  tests, five mutations shown red.
+- **Stage 2, `5b63cdd8f`.** Fifteen stages call `finishedText`; `simple-summary`, `labels` and
+  `structure-deepen` take `messageText`. 32 copies of the text-block filter became one. The two
+  tests moved with it, and the doc line (stage 3) went in the same commit.
+- **Sol's code review, in the commit after.** No P0 or P1; it compared all 18 files before and
+  after and found no observable change beyond the accepted timer. It fixed one P2 itself (CR-1):
+  my source scan looked for the `Anthropic.TextBlock` annotation, which a hand-written read does not
+  need, so six ordinary spellings passed it. The scan now parses the file and looks for a read of
+  `.content` in any module that imports the gateway or the SDK. Its write-up, naming the class, is
+  [261004f](../postmortems/261004f-an-optional-type-annotation-cannot-defend-a-content-read.md).
+  Two stale passages it reported (CR-4, CR-5) are fixed in the same commit:
+  `evals/paperwork/structure-parse.ts` and `docs/project/ai-gateway.md` § The one thing still open.
+
+**Left, on purpose.** Five hand-written reads under `evals/` and `scripts/`
+(`evals/embedding-retrieval.ts`, `evals/paperwork/structure-parse.ts`,
+`evals/structure-whole-document/model-arms.ts`, `scripts/spike-book-structure.ts`,
+`scripts/spike-expand-section.ts`). They are outside this cluster's files, and Sol's reading is
+that their error handling and measurements differ enough that `finishedText` would change what
+they do. `messageText` would fit, and is a five-line follow-up for whoever is next in those files.
+
+**Gates.** `npm run typecheck` green. `npm test` on stage 2: 32,925 passed, 4 failed, all four in
+files that need `npm run build` or `npm run build:fleet`, which a fresh worktree does not have;
+after building, those five files pass.

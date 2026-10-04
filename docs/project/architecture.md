@@ -392,8 +392,9 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   wire. `finishedText` is the ending: a refusal throws, a truncation throws, otherwise it returns
   the answer's text. A stage that answers a truncation itself (`labels`, `structure-deepen`,
   `simple-summary`) keeps its own checks and takes `messageText`; `tests/stop-details.test.ts`
-  fails a stage that reads `message.content` by hand. Each stage still writes its own progress line
-  and `finalMessage()` call, copied from a neighbour; there is no helper for those.
+  guards literal content reads in modules importing the Messages gateway or SDK. Each stage still
+  writes its own progress line and `finalMessage()` call, copied from a neighbour; there is no
+  helper for those.
 - **`src/stream-run.ts` § `runStream`** — a streamed answer a reader is waiting for: the deadline,
   the stall clock, and the verdict on how the stream ended. Most streaming routes predate it and
   hand-roll the same loop; [comments.md § streaming](comments.md#streaming) says which are copies.
