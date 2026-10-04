@@ -221,6 +221,7 @@ export const REVISION_CARRY_POLICY: Record<
      none of its own. */
   abstract: "carry",
   doi: "carry",
+  journal: "carry",
 
   // Stage 1: what was fetched, and what came back.
   requestedUrl: "carry",

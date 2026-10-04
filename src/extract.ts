@@ -44,6 +44,8 @@ import {
 } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
+import { ownIdsOfDocument } from "./article-registry.js";
+import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
@@ -158,6 +160,12 @@ ${sanitizeHtml(article.content ?? "")}
 export interface ExtractResult {
   slug: string;
   meta: Meta;
+  /**
+   * The DOI or arXiv id the page declares for itself, for the step to ask a
+   * registry about (src/article-registry.ts). Beside `meta` and not in it: a
+   * candidate is not a fact until the registry's title agrees.
+   */
+  ownIds: WorkId[];
   /**
    * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
    *
@@ -395,6 +403,8 @@ export function readArticle(
    * asking what Readability said still gets what Readability said.
    */
   authors: Author[] | null;
+  /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
+  ownIds: WorkId[];
   refusal: TooLittleTextToRead | null;
   notes: NoteStats;
   callouts: CalloutStats;
@@ -412,6 +422,7 @@ export function readArticle(
   return {
     article: shipped.article,
     authors: shipped.authors,
+    ownIds: shipped.ownIds,
     refusal: capabilityFloor(shipped.article),
     notes: shipped.notes,
     callouts: shipped.callouts,
@@ -436,6 +447,7 @@ function readingArm(
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
   authors: Author[] | null;
+  ownIds: WorkId[];
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -466,10 +478,13 @@ function readingArm(
   /* Before the parse for the same reason: every author the page declares,
      which Readability collapses to one — src/meta-authors.ts. */
   const authors = metaAuthors(dom.window.document);
+  /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
+  const ownIds = ownIdsOfDocument(dom.window.document, url);
   const article = new Readability(dom.window.document).parse();
   return {
     article,
     authors,
+    ownIds,
     notes,
     callouts,
     removed,
@@ -1187,7 +1202,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  const { article, authors, ownIds, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -1247,6 +1262,7 @@ export async function runExtract(opts: {
   return {
     slug,
     meta,
+    ownIds,
     extractedHtml: debugPage({ ...article, title }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,

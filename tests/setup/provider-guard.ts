@@ -214,7 +214,10 @@ export function providerHostOf(input: unknown): string | null {
  * real inbox. src/email.ts refuses to send outside production anyway; this is
  * the net under that.
  */
-const ALSO_REFUSED: readonly string[] = ["api.stripe.com", "api.resend.com"];
+/* **Crossref and DataCite** (261004a): free, but a step that asks a registry
+   about an article would otherwise do it for real from inside the suite, slowly
+   and with an answer that changes. A test hands the step a lookup instead. */
+const ALSO_REFUSED: readonly string[] = ["api.stripe.com", "api.resend.com", "api.crossref.org", "api.datacite.org"];
 
 function methodOf(input: unknown, init: unknown): string {
   const fromInit = (init as { method?: unknown } | undefined)?.method;

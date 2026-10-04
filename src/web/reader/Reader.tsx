@@ -65,6 +65,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
@@ -763,8 +764,9 @@ export function Reader({
 
 
   /**
-   * Comments: selecting prose asks a question of the model, and the answer
-   * arrives in a floating dialog. See docs/project/comments.md.
+   * Comments and highlights: selecting prose opens the free annotation box.
+   * Ask AI is an explicit second action, and its conversation arrives in the
+   * separate floating chat dialog. See docs/project/comments.md.
    *
    * Note what is *not* here — no column, no change to `fit`, nothing threaded
    * through the layout arithmetic. That was the point of choosing a dialog.
@@ -2315,8 +2317,8 @@ export function Reader({
       setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
       /* **The browser's selection is deliberately left alone**, which is a
          reversal. It used to be cleared because it sat on top of the mark we had
-         just drawn and hid it. There is now no mark to reveal — nothing is
-         stored until the reader asks — so clearing it would leave them looking
+         just drawn and hid it. There is no stored mark yet — the reader still
+         has to close or save the box — so clearing it would leave them looking
          at a quote in a box with no idea which words on the page it came from. */
     },
     /* **`isOwner`, not `owner`.** The capability is a new object on every
@@ -3053,6 +3055,9 @@ export function Reader({
           one stray `{" "}` away from drawing the strip again with nothing to
           say so. docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
           § The simpler options passed over. */}
+      {/* Directly before the bar, and only for a bar that holds the breadcrumb:
+          BarStuckSentinel.tsx. */}
+      {showCrumbs && <BarStuckSentinel />}
       {showBar && (
         <div className="controls">
           {/* First of all: what footing you are reading on outranks every control
