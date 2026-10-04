@@ -81,18 +81,45 @@
  * the ×, Escape, another selection in the prose, and leaving the page. The rule
  * now:
  *
- * - A draft **with something in it** — words, a colour, or a Referee placement
- *   (`isDirty`) — is stored on every way out but one: the ×, the box's Escape,
- *   another selection, the box unmounting for any reason, and `pagehide`. Stored
- *   exactly as Save would store it, and never asking the AI. If `pagehide` put
- *   the tab in bfcache, `pageshow` reconciles that save and closes the old box.
+ * - A draft **the reader did something to** — words, a changed colour, or a
+ *   Referee placement (`hasIntent`) — is stored on every way out but one: the ×,
+ *   the box's Escape, another selection, the box unmounting for any reason, and
+ *   `pagehide`. Stored exactly as Save would store it, and never asking the AI.
+ *   If `pagehide` put the tab in bfcache, `pageshow` reconciles that save and
+ *   closes the old box.
  * - **Discard** (it was *Cancel*) is that one, and it says so.
- * - **An untouched box stores nothing.** This is the one place the build is
- *   narrower than "it should auto-save" read literally: storing a bookmark the
- *   moment the box opened would leave a mark behind every time a reader selects
- *   words to copy them (the fifth decision, above).
+ * - **An untouched box is stored by no exit the reader did not choose** (the
+ *   seventh decision, below, is what the × and Escape do with one). Storing a
+ *   mark the moment the box opened would leave one behind every time a reader
+ *   selects words to copy them (the fifth decision, above).
  * - The textarea's own first Escape still clears what was typed. That is the
  *   reader removing their words, not the box losing them.
+ *
+ * ## And a seventh, since 2026-10-04: Yellow is picked, and closing saves it
+ *
+ * > I like the new human highlights when I select text - can we default to the
+ * > yellow colour, and default to saving it, so that it requires fewer clicks?
+ * >
+ * > — Greg, 2026-10-03 (spya-ur8kum)
+ *
+ * The colour row opens on Yellow, and the × and Escape store what the box
+ * shows, so a highlight is one press after the selection instead of two. Three
+ * things hold that back from being "every selection is a highlight":
+ *
+ * - **The exits nobody chose still store nothing from an untouched box**:
+ *   another selection, an unmount, `pagehide`. Letting go of a drag opens this
+ *   box, so a mis-drag would otherwise leave a highlight per attempt — and
+ *   StrictMode's mount → cleanup → mount would store one in development.
+ * - **Copy, then close, stores nothing** when nothing else was done: that
+ *   reader wanted the sentence. The hint says so once Copy is pressed, and Save
+ *   still saves.
+ * - **Referee mode opens on No colour.** A selection there records evidence
+ *   against a criterion; adding a reading highlight nobody picked would mix two
+ *   meanings. Chosen at mount, and not changed if the mode is.
+ *
+ * The two gates are `hasSomething` and `hasIntent`, and `flush` says which exit
+ * asks which.
+ * docs/plans/261004a-a-selection-s-highlight-is-yellow-by-default-and-closing-the-box-saves-it.md.
  *
  * **One instance is one draft.** Every caller keys the whole box on its passage
  * (`annotateKey`), so an instance owns one anchor, one draft id and one latch
@@ -165,8 +192,8 @@ export interface AnnotateDraft {
    */
   mark: Mark;
   /**
-   * The highlight colour the reader picked, `null` for none — the default, so a
-   * comment made the old way looks as it always has.
+   * The highlight colour the box showed, `null` for none. Yellow unless the
+   * reader changed it; none by default in Referee mode.
    */
   colour: HighlightColour | null;
   /**
@@ -245,22 +272,39 @@ interface Props {
   escapeEnabled?: boolean;
 }
 
-/** The three things a reader can put in the box. */
+/** The colour the row opens on outside Referee mode. Greg, 2026-10-03 (spya-ur8kum). */
+const DEFAULT_HIGHLIGHT: HighlightColour = "yellow";
+
+/** The three things a reader can put in the box, and two things they can do. */
 interface Fields {
   body: string;
   mark: Mark;
   colour: HighlightColour | null;
+  /** The reader changed the colour row from what it opened on. */
+  colourChanged: boolean;
+  /** The reader pressed Copy — at the press, whatever the clipboard then said. */
+  copyPressed: boolean;
 }
 
 /**
- * **Is there anything here worth keeping?**
+ * **Is there anything here to store?** True of an untouched box outside
+ * Referee mode, which shows Yellow.
  *
  * The placement is read **structurally**, not by identity with `NO_MARK`: the
  * section hands back a fresh object when a placement is cleared, which is not
- * `NO_MARK` and is not a placement either. GPT Sol's plan review, D4.
+ * `NO_MARK` and is not a placement either. GPT Sol's plan review of 261003i, D4.
  */
-function isDirty(fields: Fields): boolean {
+function hasSomething(fields: Fields): boolean {
   return fields.body.trim() !== "" || fields.colour !== null || fields.mark.criterionId !== null;
+}
+
+/**
+ * **Did the reader do anything that says they want this kept?** Words, a
+ * placement, or a change to the colour row. Opening the box is not one, and nor
+ * is Copy.
+ */
+function hasIntent(fields: Fields): boolean {
+  return fields.body.trim() !== "" || fields.mark.criterionId !== null || fields.colourChanged;
 }
 
 export function AnnotateDialog({
@@ -281,9 +325,12 @@ export function AnnotateDialog({
      comment because a failed write must not look like a successful one — this
      one is local: there is nothing on a server yet for it to disagree with. */
   const [mark, setMark] = useState<Mark>(NO_MARK);
-  /* The highlight colour, a draft like the placement. None by default (plan
-     261003e). */
-  const [colour, setColour] = useState<HighlightColour | null>(null);
+  /* The highlight colour, a draft like the placement. Yellow from the start,
+     except in Referee mode; read once, so a mode change under an open box does
+     not recolour its draft (plan 261004a). */
+  const [colour, setColour] = useState<HighlightColour | null>(placing ? null : DEFAULT_HIGHLIGHT);
+  const [colourChanged, setColourChanged] = useState(false);
+  const [copyPressed, setCopyPressed] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -323,7 +370,7 @@ export function AnnotateDialog({
      once and outlive the render that made them, so they take the draft and the
      caller's `onSave` from here. An effect that *depended* on the fields would
      run its cleanup on every keystroke, and its cleanup is "store the draft". */
-  const fields: Fields = { body, mark, colour };
+  const fields: Fields = { body, mark, colour, colourChanged, copyPressed };
   const latest = useRef({ fields, onSave, onCancel });
   latest.current = { fields, onSave, onCancel };
 
@@ -382,8 +429,20 @@ export function AnnotateDialog({
   };
 
   /**
-   * **The box is going, and nobody pressed anything: store a draft that has
-   * something in it.** Never asks the AI.
+   * **The box is going, and nobody pressed Save or Ask AI: store the draft if
+   * this exit should.** Never asks the AI.
+   *
+   * Two kinds of exit, two gates (plan 261004a):
+   *
+   * - `chosen` — the × and Escape, which the reader pressed. Stores whatever
+   *   the box shows, an untouched Yellow included; except after Copy with
+   *   nothing else done, which was a reader after the sentence.
+   * - not `chosen` — an unmount or `pagehide`. Stores only what the reader did
+   *   something to.
+   *
+   * The gate is asked before `fate` moves, so an exit that stores nothing
+   * leaves the box as live as it was: StrictMode's simulated unmount, and an
+   * untouched `pagehide` that turns out to be a bfcache suspend.
    *
    * It has neither of `press`'s guards, deliberately. Not `loaded`: there is no
    * button left to wait at, and `useComments.create` orders the write after the
@@ -398,9 +457,11 @@ export function AnnotateDialog({
    * Reads only refs, so the copy an effect registered at mount is as good as
    * this render's.
    */
-  const flush = (leaving: boolean) => {
+  const flush = (leaving: boolean, chosen: boolean) => {
     if (fate.current !== "open") return;
-    if (!isDirty(latest.current.fields)) return;
+    const now = latest.current.fields;
+    if (!hasSomething(now)) return;
+    if (chosen ? now.copyPressed && !hasIntent(now) : !hasIntent(now)) return;
     fate.current = leaving ? "left" : "done";
     send(false, leaving);
   };
@@ -410,11 +471,11 @@ export function AnnotateDialog({
      `[]`, so the cleanup runs once and only then.
 
      Safe under StrictMode's mount → cleanup → mount: that cleanup runs before
-     anyone could have typed, an untouched draft is not dirty, and nothing is
-     sent. The refs survive the simulated remount, so a draft sent later is
+     anyone could have typed, an untouched draft has no intent behind it, and
+     nothing is sent. The refs survive the simulated remount, so a draft sent later is
      still sent once. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `flush` reads refs only, and this must run once
-  useEffect(() => () => flush(false), []);
+  useEffect(() => () => flush(false, false), []);
 
   /* **And when the page goes rather than the box**: a reload, a closed tab, a
      link out. React runs no cleanup then. `pagehide` is the last event a page
@@ -430,7 +491,7 @@ export function AnnotateDialog({
      docs/project/comments.md § Deliberate limits. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `flush` reads refs only
   useEffect(() => {
-    const leaving = () => flush(true);
+    const leaving = () => flush(true, false);
     const returning = () => {
       if (fate.current !== "left") return;
       fate.current = "done";
@@ -447,7 +508,7 @@ export function AnnotateDialog({
 
   /** The × and Escape: keep the draft, then go. */
   const close = () => {
-    flush(false);
+    flush(false, true);
     onCancel();
   };
   /** The one thing that throws a draft away. */
@@ -490,7 +551,7 @@ export function AnnotateDialog({
               is keyed on the passage (`annotateKey`), which remounts this with
               it, state and in-flight write included. GPT Sol's review of the
               built code, 2026-09-05; tests/annotate-dialog-copy.test.tsx. */}
-          <CopyQuote text={anchor.quote} />
+          <CopyQuote text={anchor.quote} onCopyPressed={() => setCopyPressed(true)} />
           <button
             type="button"
             className="annotate-close close-x"
@@ -535,7 +596,11 @@ export function AnnotateDialog({
                 press(false);
               }
             }}
-            placeholder="Add a comment, or just save to bookmark it…"
+            placeholder={
+              colour !== null
+                ? "Add a comment, or just save the highlight…"
+                : "Add a comment, or just save to bookmark it…"
+            }
             aria-label="Your comment on this passage"
             rows={3}
           />
@@ -550,7 +615,16 @@ export function AnnotateDialog({
           {/* A highlight is this same comment with a colour; no words and a
               colour is a wordless highlight. Not gated on `loaded` — picking is
               part of the draft, and only the two buttons wait. */}
-          <HighlightSwatches value={colour} onChange={setColour} />
+          {/* The row only calls back when the colour differs, so a press on
+              the one already picked is not a change — and must stay that way,
+              because `CommentDialog` PATCHes on this callback. */}
+          <HighlightSwatches
+            value={colour}
+            onChange={(next) => {
+              setColour(next);
+              setColourChanged(true);
+            }}
+          />
 
           <div className="annotate-actions">
             {dictate.dictation.supported && (
@@ -593,7 +667,13 @@ export function AnnotateDialog({
               themselves, so it takes the hint's place until it passes. */}
           {!loaded
             ? "Loading your comments on this article — Save will be ready in a moment."
-            : "Nothing is asked unless you press Ask AI. Closing this keeps what you wrote."}
+            : copyPressed && !hasIntent(fields)
+              ? /* The one close that keeps nothing without being Discard, so
+                   it is said where the reader is looking. */
+                "Copied. Closing leaves no highlight; press Save to keep it."
+              : colour !== null
+                ? "Closing this saves the highlight; Discard throws it away. Nothing is asked unless you press Ask AI."
+                : "Nothing is asked unless you press Ask AI. Closing this keeps what you wrote."}
         </p>
       </div>
     </aside>
@@ -643,7 +723,7 @@ export function AnnotateDialog({
  */
 type Said = { kind: "idle" | "copied" | "failed" };
 
-function CopyQuote({ text }: { text: string }) {
+function CopyQuote({ text, onCopyPressed }: { text: string; onCopyPressed(): void }) {
   const [said, setSaid] = useState<Said>({ kind: "idle" });
   /**
    * Which press this is.
@@ -679,6 +759,10 @@ function CopyQuote({ text }: { text: string }) {
         aria-label="Copy the passage"
         onClick={() => {
           const mine = ++press.current;
+          /* Before the clipboard is asked anything: what the box does at its
+             next close hangs on the reader having pressed this, not on a
+             promise that may still be out, or refused. */
+          onCopyPressed();
           const settle = (kind: Said["kind"]) => {
             if (press.current === mine) setSaid({ kind });
           };
