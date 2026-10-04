@@ -258,8 +258,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           first look; <strong>thorough</strong> on a quick search runs the full meaning search on
           the same words, in about half a minute, and replaces the quick one. You do not have to
           press it: once you stop typing and the quick answer has settled for two seconds, the
-          thorough search starts by itself (at once if you pressed Enter). The quick search shows <strong>thorough…</strong>
-          while it runs. On success its results take the quick ones' place; if it fails, the quick
+          thorough search starts by itself (at once if you pressed Enter). The quick search shows a spinner in place of its{" "}
+          <strong>thorough</strong> button while it runs. On success its results take the quick ones' place; if it fails, the quick
           results stay.
         </p>
         <p>

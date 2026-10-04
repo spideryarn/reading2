@@ -460,14 +460,14 @@
 .srch-thorough:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
 .srch-thorough:disabled { opacity: 0.4; cursor: default; }
 /* In the button's place while the thorough search runs by itself (plan
-   261004l). The button's type, colour and padding, with a clear border, so
-   the row keeps its height and nothing beside it moves. */
+   261004l). The button's type, colour and padding, with a clear border, and
+   the button's own word kept unseen under the spinner, so the box is exactly
+   the button's size and nothing beside it moves. */
 .srch-upgrading {
   flex: none;
   align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
+  display: inline-grid;
+  place-items: center;
   padding: 0.05rem 0.4rem;
   border: 1px solid transparent;
   color: var(--ink-faint);
@@ -475,6 +475,8 @@
   font-size: 0.78rem;
   white-space: nowrap;
 }
+.srch-upgrading > * { grid-area: 1 / 1; }
+.srch-upgrading-word { visibility: hidden; }
 
 /* The same banner the glossary and the tweet thread page carry, in the same
    words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the

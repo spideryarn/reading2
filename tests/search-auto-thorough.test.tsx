@@ -340,7 +340,10 @@ describe("a quick search starts the thorough one", () => {
     // One row, the quick one, saying so quietly; the thorough row is not ticked.
     expect(listed()).toEqual([WORDS]);
     expect(isQuick(rowFor(WORDS))).toBe(true);
-    expect(rowFor(WORDS).querySelector(".srch-upgrading")?.textContent).toContain("thorough…");
+    // A spinner the size of the button it stands in for, named for a screen reader.
+    const sign = rowFor(WORDS).querySelector(".srch-upgrading");
+    expect(sign?.getAttribute("aria-label")).toBe("Thorough search running");
+    expect(sign?.querySelector(".srch-spin")).not.toBeNull();
     expect(rowFor(WORDS).querySelector("button.srch-thorough")).toBeNull();
     await urlRuns(s.posts("quick")[0]!.id);
   });

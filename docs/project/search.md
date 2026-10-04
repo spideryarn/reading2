@@ -336,7 +336,7 @@ saved rather than thrown away: the plan's § The decision.
 > — Greg, 2026-10-04
 
 A quick search shows its paragraphs in about a second, as before. Once the words have settled, the
-thorough search for the same words starts unseen. The quick row says *thorough…* with a spinner
+thorough search for the same words starts unseen. The quick row shows a spinner, exactly the button's size,
 where its *thorough* button was. When the thorough answer is complete it takes the quick row's
 place: same colour, same tick, same place in the list, no press. If it fails, the quick row stays,
 its button comes back, and nothing is said.

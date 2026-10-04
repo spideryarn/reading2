@@ -885,11 +885,19 @@ function Thorough({
 }) {
   if (upgrading) {
     return (
+      /* **Exactly the button's width**: the word is still there, unseen, and
+         the spinner sits over it. Spelled out beside the spinner it was 22px
+         wider, and in a phone's row that wrapped the line under the words and
+         made the row 17px taller for as long as the search ran (the browser
+         check of plan 261004l). */
       <span
         className="srch-upgrading"
+        role="status"
+        aria-label="Thorough search running"
         title="A thorough search for these words is running. It will replace this quick search when it finishes."
       >
-        <LoaderCircle size={11} className="srch-spin" aria-hidden /> thorough…
+        <span className="srch-upgrading-word" aria-hidden>thorough</span>
+        <LoaderCircle size={11} className="srch-spin" aria-hidden />
       </span>
     );
   }
