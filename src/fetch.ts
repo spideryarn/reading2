@@ -44,7 +44,8 @@ import type { DocumentOrigin } from "./document-origin.js";
 import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 import { canonicalKey } from "./source.js";
-import { uploadContentType } from "./uploads.js";
+import { readStreamCapped } from "./read-capped.js";
+import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -464,8 +465,7 @@ export class RawDocumentUnavailable extends Error {
  *
  * `storeRawSource` proves what was written; this proves what came back, and
  * they are different moments with a network and a filesystem in between. One
- * SHA-256 pass over a buffer already in memory — about 60 ms at the 32 MB
- * ceiling — against a stage that is about to run jsdom over it or spend a
+ * SHA-256 pass over a buffer already in memory, against a stage that is about to run jsdom over it or spend a
  * vision-model call on it. The same trade `pg-source.ts` makes, for the same
  * reason.
  */
@@ -505,7 +505,9 @@ export async function readRawBytes(
   try {
     bytes = await store.get(
       key,
-      manifest.storedBytes === undefined ? {} : { maxBytes: manifest.storedBytes },
+      // Legacy HTML lacks a stored count and may expand when decoded to UTF-8.
+      // At most three UTF-8 bytes replace one input byte (including U+FFFD).
+      { maxBytes: manifest.storedBytes ?? MAX_UPLOAD_BYTES * (kind === "html" ? 3 : 1) },
     );
   } catch (err) {
     /* **The bound throwing is corruption; everything else is a fault.** Both
@@ -760,14 +762,23 @@ export const USER_AGENT =
 /**
  * The defaults, exported so tests and docs can quote them rather than repeat them.
  *
- * `maxBytes` is 32 MB and the number has a source: the previous version capped
- * at 4 MB, and one of the three articles Greg named as a representative hard
- * case — the Nagel PDF at `sas.upenn.edu` — is 4,930,377 bytes. A cap chosen
- * without a real document in front of you rejects real documents.
+ * `maxBytes` is `MAX_UPLOAD_BYTES`, **the same constant an upload stops at**,
+ * so the dialog's "up to 50 MB" is true of a file chosen and of an address
+ * pasted and the two cannot drift. It was a second literal, 32 MiB, until
+ * 2026-10-04, and a document fetched by address was refused at a size the
+ * dialog had just said was fine. Greg, 2026-10-04:
+ * "make them consistent (and perhaps reuse the same protection-machinery)".
+ * docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md.
+ *
+ * Still a hard cap on bytes that arrived, and it still has a floor with a
+ * source: the version before this one capped at 4 MB, and one of the three
+ * articles Greg named as a representative hard case, the Nagel PDF at
+ * `sas.upenn.edu`, is 4,930,377 bytes. A cap chosen without a real document in
+ * front of you rejects real documents.
  */
 export const DEFAULTS = {
   timeoutMs: 30_000,
-  maxBytes: 32 * 1024 * 1024,
+  maxBytes: MAX_UPLOAD_BYTES,
   attempts: 3,
   maxRedirects: 5,
   userAgent: USER_AGENT,
@@ -1142,50 +1153,16 @@ export function pinnedAgent(pinned: Map<string, readonly string[]>): Agent & {
 /**
  * Read a body, counting as we go, and give up the moment it is too big.
  *
- * The counting is the point. By the time bytes reach here they are already
- * decompressed — undici does that for us — so this caps the size that actually
- * matters rather than the size the server advertised. `cancel()` closes the
- * socket rather than politely draining however many gigabytes are still coming.
+ * The counter itself is `readStreamCapped` in src/read-capped.ts, shared with
+ * the store's own read since 2026-10-04 so that there is one size guard rather
+ * than two. This is the fetch's half: what "too big" is called here.
  */
 export async function readCapped(body: ReadableStream<Uint8Array> | null, maxBytes: number, url: string): Promise<Uint8Array> {
-  if (!body) return new Uint8Array(0);
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        throw new FetchFailure(
-          "too-large",
-          url,
-          `That page is over the ${Math.round(maxBytes / (1024 * 1024))} MB limit.`,
-        );
-      }
-      chunks.push(value);
-    }
-  } catch (err) {
-    /* Every way out of that loop except a clean finish leaves a socket open —
-       going over the cap, and also the read itself failing mid-body, which is
-       the one easy to forget. Cancelling twice is harmless; not cancelling
-       leaves the server streaming into nothing. */
-    await reader.cancel().catch(() => {});
-    throw err;
-  } finally {
-    /* Without this the stream stays locked after we are done with it, so
-       nothing else can ever read or cancel it. */
-    reader.releaseLock();
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
+  return readStreamCapped(
+    body,
+    maxBytes,
+    () => new FetchFailure("too-large", url, `That page is over the ${Math.round(maxBytes / (1024 * 1024))} MB limit.`),
+  );
 }
 
 /** The MIME type on its own, lower-cased, without the parameters. */
@@ -1468,7 +1445,7 @@ interface LeadingToken {
  *
  * **There is no prefix cap here**, which is ⟨Sol F6⟩ answered: a licence header
  * or an unterminated comment pushes the first tag past any window we would pick,
- * and the input is already bounded by the 32 MB fetch cap and the 50 MB upload
+ * and the input is already bounded by the shared 50 MiB fetch and upload
  * cap. The walk is linear and stops at the first non-skippable unit, so the
  * common case reads a handful of them.
  *
@@ -2428,7 +2405,7 @@ async function readBody(res: Response, finalUrl: string, opts: Resolved): Promis
      already established lies about it. A server that overstates would have had
      a perfectly good article refused with a confident number in the message,
      and no way to tell from the outside. What the check bought was skipping a
-     download the cap already bounds at 32 MB — a few seconds, against a class
+     download the cap already bounds at 50 MiB — a few seconds, against a class
      of bug nobody could diagnose. */
   const bytes = await readCapped(res.body, opts.maxBytes, finalUrl);
   if (bytes.byteLength === 0) {

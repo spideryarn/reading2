@@ -40,7 +40,8 @@ Paid spend: $2.15, on two real PDFs.
 - **Making a too-long document into an article.** Greg's call, five options, a recommendation:
   `qi-kbkbw4rp`, and on [awaiting-approval.md](awaiting-approval.md).
 - **A document pasted as an address stops at 32 MB**, not 50. A listed security defence, so left
-  for Greg: `qi-bv9nbj5z`, and on awaiting-approval.md.
+  for Greg: `qi-bv9nbj5z`. Greg answered 2026-10-04 and it is built: one 50 MiB limit for both,
+  [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
 - A long article's response may be too big for Vercel: `qi-sbytr395`.
 - Transcription asks nearly every chunk twice and checkpoints under half: `qi-astc8qqs`.
 - The Sentry status write: this session has no Sentry sign-in, so the next sweep does it.

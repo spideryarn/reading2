@@ -51,6 +51,7 @@ import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "./extract.j
 import {
   cameFromAnUpload,
   decodeHtml,
+  FetchFailure,
   fetchDocument,
   type RawManifest,
   RawDocumentUnavailable,
@@ -186,6 +187,7 @@ import {
   articleHadNoText,
   documentHadTooLittleText,
   documentHasNoArticle,
+  FETCH_TOO_BIG,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
@@ -2139,6 +2141,28 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
   return facts.meta;
 }
 
+/**
+ * **A document fetched by address that is over the size limit, as the reader's
+ * own sentence**, or `null` for every other failure.
+ *
+ * `FetchFailure` declares no `readerFailure`, so `readerFailureOf` gives each
+ * of its codes the generic copy and offers Retry. For this one code that was
+ * a button that cannot import the same over-limit document. The
+ * upload half has said so since it was written (`UPLOAD_TOO_BIG`); this is the
+ * fetched half saying the same thing, with the same number
+ * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+ *
+ * Only `too-large`. The other codes still take the generic sentence, which is
+ * wider than that plan and is recorded there rather than changed here.
+ *
+ * The diagnostic is authored here and carries no address: a log of article
+ * URLs is a reading history (docs/project/logging.md).
+ */
+function overTheSizeLimit(err: unknown): Error | null {
+  if (!(err instanceof FetchFailure) || err.code !== "too-large") return null;
+  return stageFailure(FETCH_TOO_BIG, { authored: `The fetched document is over ${MAX_UPLOAD_BYTES} bytes.` });
+}
+
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 1. Its own step, and its own artefact, so that a failed or wrong
      extraction can be retried without asking the publisher again — and without
@@ -2173,7 +2197,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
-      const doc = await fetchDocument(url, { signal: ctx.signal });
+      const doc = await fetchDocument(url, { signal: ctx.signal }).catch((err: unknown) => {
+        throw overTheSizeLimit(err) ?? err;
+      });
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on
          what stage 1 decided the bytes *are*, never on the address — a `.pdf`

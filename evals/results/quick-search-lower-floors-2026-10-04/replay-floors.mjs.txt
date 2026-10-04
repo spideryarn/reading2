@@ -1,0 +1,77 @@
+/* 261004: replay lower floors over the scores two earlier evals saved. No model
+   calls. Rule(M, F, C): keep >= M, best 20; if none, keep >= F, best C.
+   Verdicts: recall set = reference hit (y) then judged.json; bare set =
+   judged2.json (slug|base); absent, near-miss and negative = n; plus, when
+   present, judged3.json (this eval's blind judge), which only fills gaps. */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+const R = "evals/results";
+const R0 = `${R}/quick-search-spike-2026-10-02`, R1 = `${R}/quick-search-recall-2026-10-03`, R2 = `${R}/quick-search-category-words-2026-10-03`;
+const OUT = process.env.QOUT ?? "data/qeval";
+const J = (p) => JSON.parse(readFileSync(p, "utf8"));
+const raw1 = J(`${R1}/jev-raw.json`), judged1 = J(`${R1}/judged.json`), refShort = J(`${R1}/reference-short.json`);
+const rawA = J(`${R2}/abstract-raw.json`), raw2 = J(`${R2}/round2-raw.json`), j2 = J(`${R2}/judged2.json`);
+const j3 = existsSync(`${OUT}/judged3.json`) ? J(`${OUT}/judged3.json`) : {};
+export const FIXTURES = ["constitution", "noema-mythology-of-conscious-ai", "openai-huggingface"];
+
+/* One entry per query: group, slug, the words, the key its verdicts live under, three runs. */
+export const entries = [];
+for (const e of Object.values(raw1)) {
+  if (e.wording !== "mention") continue;
+  const v = new Map();
+  let ref = [];
+  if (e.set === "old") { try { ref = J(`${R0}/reference-${e.slug}.json`)[e.q]?.hits ?? []; } catch { ref = []; } }
+  else ref = refShort[`${e.slug}|${e.q}`]?.hits ?? [];
+  for (const h of ref) v.set(h.blockId, "y");
+  for (const [id, yn] of Object.entries(judged1[`${e.slug}|${e.q}`] ?? {})) if (!v.has(id)) v.set(id, yn);
+  entries.push({ group: e.set === "negative" ? "absent" : "working", src: `recall-${e.set}`, slug: e.slug, q: e.q, k: `${e.slug}|${e.q}`, reps: e.reps, v });
+}
+const v2 = (k) => new Map(Object.entries(j2[k]?.verdicts ?? {}));
+for (const e of rawA) entries.push({ group: e.set === "absent" ? "absent" : "bare", src: "bare", slug: e.slug, q: e.q, k: `${e.slug}|${e.q}`, reps: e.reps, v: v2(`${e.slug}|${e.q}`) });
+for (const e of raw2) {
+  if (e.set === "hard") entries.push({ group: "absent", src: "near-miss", slug: e.slug, q: e.q, k: `${e.slug}|${e.q}`, reps: e.reps, v: new Map() });
+  else entries.push({ group: e.how === "request" ? "request" : "bare", src: `variant-${e.how}`, slug: e.slug, q: e.q, k: `${e.slug}|${e.base}`, reps: e.reps, v: v2(`${e.slug}|${e.base}`) });
+}
+/* judged3 is keyed like the earlier files: by `e.k` (a variant shares its base's verdicts). */
+export const verdict = (e, id) => e.v.get(id) ?? j3[e.k]?.[id] ?? (e.group === "absent" ? "n" : "u");
+/* hitsFrom breaks score ties in article order, not provider JSON key order.
+   The three production-only articles have no saved order here; their replay
+   retains JSON order, so their tied identities/top result are not verified. */
+const articleOrders = new Map(FIXTURES.map((slug) => {
+  const b = J(`tests/fixtures/data-root/data/${slug}/blocks.json`);
+  return [slug, new Map((Array.isArray(b) ? b : b.blocks).map((bl, i) => [bl.id, i]))];
+}));
+export const sorted = (scores, slug) => {
+  const order = articleOrders.get(slug);
+  const pairs = Object.entries(scores);
+  if (order && pairs.some(([id]) => !order.has(id))) throw new Error(`${slug}: score id missing from fixture`);
+  return pairs.sort((a, b) => b[1] - a[1] || (order ? order.get(a[0]) - order.get(b[0]) : 0));
+};
+export const rule = (M, F, C) => (s) => {
+  const k = s.filter(([, p]) => p >= M).slice(0, 20);
+  if (k.length) return { ids: k, fb: false };
+  const ids = s.filter(([, p]) => p >= F).slice(0, C);
+  return { ids, fb: ids.length > 0 };
+};
+
+if (process.argv[1].endsWith("replay-floors.mjs")) {
+  const GRID = [];
+  for (const M of [0.7, 0.65, 0.6, 0.55, 0.5]) for (const F of [0.5, 0.45, 0.4, 0.35, 0.3]) if (F <= M) GRID.push([M, F, 8]);
+  const only = process.env.FIXTURES_ONLY ? (e) => FIXTURES.includes(e.slug) : () => true;
+  const rows = [];
+  for (const [M, F, C] of GRID) for (const group of ["working", "bare", "request", "absent"]) {
+    const t = { searches: 0, show: 0, shown: 0, y: 0, n: 0, u: 0, noneRight: 0, top1y: 0, top1n: 0, top1u: 0, fb: 0, lowBand: 0 };
+    for (const e of entries.filter((x) => x.group === group && only(x))) for (const r of e.reps) {
+      const { ids, fb } = rule(M, F, C)(sorted(r.scores, e.slug));
+      t.searches++; if (!ids.length) continue;
+      t.show++; if (fb) t.fb++; t.shown += ids.length;
+      const vs = ids.map(([id]) => verdict(e, id));
+      t.y += vs.filter((x) => x === "y").length; t.n += vs.filter((x) => x === "n").length; t.u += vs.filter((x) => x === "u").length;
+      t.lowBand += ids.filter(([, p]) => p < 0.7).length;
+      if (!vs.includes("y") && !vs.includes("u")) t.noneRight++;
+      if (vs[0] === "y") t.top1y++; else if (vs[0] === "n") t.top1n++; else t.top1u++;
+    }
+    rows.push({ main: M, fallback: F, group, searches: t.searches, "show something": t.show, "as fallback": t.fb, shown: t.shown, "per search": +(t.shown / t.searches).toFixed(2), right: t.y, wrong: t.n, unjudged: t.u, "% right of judged": t.y + t.n ? Math.round(100 * t.y / (t.y + t.n)) : null, "shown under 0.7": t.lowBand, "top right/wrong/unj": `${t.top1y}/${t.top1n}/${t.top1u}`, "lists all wrong": t.noneRight });
+  }
+  for (const g of ["working", "bare", "request", "absent"]) console.table(rows.filter((r) => r.group === g));
+  writeFileSync(`${OUT}/replay-floors${process.env.FIXTURES_ONLY ? "-fixtures" : ""}.json`, JSON.stringify(rows, null, 1));
+}

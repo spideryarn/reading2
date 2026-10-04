@@ -1,0 +1,63 @@
+/* 261004: the blind pool for a third judge. Fixture articles only (the other
+   three articles' text is not on this machine). Per verdict key (a query, or a
+   base query and its bare variants):
+   - candidates: unjudged blocks some rule in the grid could show: the best 20
+     at >= 0.5 on any run, and the best 8 at >= 0.35 on a run where nothing
+     cleared 0.7;
+   - overlap: up to 4 already-judged blocks scoring >= 0.5, to measure
+     agreement with the earlier labels;
+   - decoys: a quarter as many (at least 2) that never scored above 0.3.
+   Article order, section heading shown, no score, cut at 1,500 characters: as
+   261003f's second judge saw them. Writes pool3-<n>.md (article text: scratch
+   only) and pool3-key.json (ids only). */
+import { readFileSync, writeFileSync } from "node:fs";
+import { entries, FIXTURES, sorted } from "./replay-floors.mjs";
+const OUT = process.env.QOUT ?? "data/qeval";
+let seed = 20261004;
+const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+const keys = new Map();
+for (const e of entries) {
+  if (e.group === "absent" || !FIXTURES.includes(e.slug)) continue;
+  /* A request ("where does it give examples?") shares its base's verdicts in
+     261003f; keep that, and show the judge the base words, as it did. */
+  const K = keys.get(e.k) ?? { slug: e.slug, shown: e.k.split("|")[1], es: [], cand: new Set(), judged: new Set(), best: {} };
+  keys.set(e.k, K); K.es.push(e);
+  for (const r of e.reps) {
+    const s = sorted(r.scores, e.slug);
+    const could = [...s.filter(([, p]) => p >= 0.5).slice(0, 20), ...(s[0][1] < 0.7 ? s.filter(([, p]) => p >= 0.35).slice(0, 8) : [])];
+    /* Pool membership uses only earlier labels; saved judge 3 answers must
+       not make the pool disappear when regenerated. */
+    for (const [id] of could) (e.v.has(id) ? K.judged : K.cand).add(id);
+    for (const [id, p] of s) K.best[id] = Math.max(K.best[id] ?? 0, p);
+  }
+}
+const key = {};
+const sections = [];
+for (const [k, K] of keys) {
+  if (!K.cand.size) continue;
+  const overlap = shuffle([...K.judged].sort()).slice(0, 4);
+  const low = shuffle(Object.entries(K.best).filter(([, p]) => p <= 0.3).map(([id]) => id).sort());
+  const decoys = low.slice(0, Math.max(2, Math.ceil(K.cand.size / 4)));
+  key[k] = { candidates: [...K.cand], overlap, decoys };
+  const show = new Set([...K.cand, ...overlap, ...decoys]);
+  const b = JSON.parse(readFileSync(`tests/fixtures/data-root/data/${K.slug}/blocks.json`, "utf8"));
+  const blocks = Array.isArray(b) ? b : b.blocks;
+  let md = `\n\n## ${k}\n\nThe reader typed: **${K.shown}**\n\n`, heading = "(start of the article)", n = 0;
+  for (const bl of blocks) {
+    if (bl.kind === "heading") { heading = bl.text.replace(/\s+/g, " ").slice(0, 120); continue; }
+    if (!show.has(bl.id)) continue;
+    n++;
+    md += `- \`${bl.id}\` [under the heading: “${heading}”] ${bl.text.slice(0, 1500).replace(/\s+/g, " ")}${bl.text.length > 1500 ? " […]" : ""}\n`;
+  }
+  if (n !== show.size) throw new Error(`${k}: ${show.size} ids, ${n} found in blocks.json`);
+  sections.push({ k, md, n });
+}
+/* Files of about 110 blocks, a whole query to a file. */
+const files = [[]]; let size = 0;
+for (const s of sections) { if (size + s.n > 110 && size > 0) { files.push([]); size = 0; } files.at(-1).push(s); size += s.n; }
+files.forEach((f, i) => writeFileSync(`${OUT}/pool3-${i + 1}.md`, f.map((s) => s.md).join("")));
+writeFileSync(`${OUT}/pool3-key.json`, JSON.stringify(key, null, 1));
+const tot = (f) => Object.values(key).reduce((s, v) => s + v[f].length, 0);
+console.log(`${Object.keys(key).length} queries; ${tot("candidates")} candidates, ${tot("overlap")} overlap, ${tot("decoys")} decoys; ${files.length} files: ${files.map((f) => f.reduce((s, x) => s + x.n, 0)).join(", ")}`);
