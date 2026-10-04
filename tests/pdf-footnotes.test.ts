@@ -114,6 +114,126 @@ describe("endnotes on a page of their own", () => {
   });
 });
 
+/**
+ * The MDPI Entropy paper again, on a fresh import, 2026-10-04: the model typed
+ * the middle page of its three "Notes" pages as `paragraph`, every record
+ * opening with the next label. Shapes are the real ones; the words are not.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ */
+describe("a page of endnotes the model typed as paragraphs", () => {
+  const prose = r(3, "paragraph", "They stop17 here, which is remarkable18 is the claim, and so are memories19 , and more20.");
+  const notesPage = [r(17, "heading1", "Notes"), r(17, "footnote", "16 This is because."), r(17, "footnote", "17 They can.")];
+  const paragraphs = (records: PdfRecord[]) =>
+    splitIntoBlocks(render(records))
+      .blocks.filter((b) => b.role !== "footnote")
+      .map((b) => b.text);
+
+  it("lists them as notes and links their markers, past a running header at the page turn", () => {
+    const records = [
+      prose,
+      ...notesPage,
+      r(18, "publisher", "Entropy 2024, 26, 481"),
+      r(18, "paragraph", "18 There may be."),
+      r(18, "paragraph", "19 This may."),
+      r(19, "footnote", "20 For instance."),
+    ];
+    expect(links(records)).toEqual([
+      "17 → They can.",
+      "18 → There may be.",
+      "19 → This may.",
+      "20 → For instance.",
+    ]);
+    expect(listed(records)).toEqual(["This is because.", "They can.", "There may be.", "This may.", "For instance."]);
+    /* And not twice: nothing of them is left in the body. */
+    expect(paragraphs(records).join("\n")).not.toMatch(/There may be|This may/);
+  });
+
+  it("does so when the notes end on that page, with no footnote record after it", () => {
+    const records = [prose, ...notesPage, r(18, "paragraph", "18 There may be."), r(18, "paragraph", "19 This may.")];
+    expect(listed(records)).toEqual(["This is because.", "They can.", "There may be.", "This may."]);
+  });
+
+  it("joins a `continues` paragraph onto the note before it", () => {
+    const records = [
+      prose,
+      ...notesPage,
+      r(18, "paragraph", "18 There may be"),
+      r(18, "paragraph", "more to say.", true),
+      r(18, "paragraph", "19 This may."),
+    ];
+    expect(listed(records)).toEqual(["This is because.", "They can.", "There may be more to say.", "This may."]);
+  });
+
+  it("leaves the whole page alone when one paragraph on it is ordinary prose", () => {
+    const records = [
+      prose,
+      ...notesPage,
+      r(18, "paragraph", "18 There may be."),
+      r(18, "paragraph", "19 This may."),
+      r(18, "paragraph", "Ordinary prose sits here."),
+    ];
+    expect(listed(records)).toEqual(["This is because.", "They can."]);
+    expect(paragraphs(records)).toEqual(expect.arrayContaining(["18 There may be.", "19 This may.", "Ordinary prose sits here."]));
+  });
+
+  it("leaves a numbered paragraph alone when no footnote record comes before it", () => {
+    const records = [prose, r(17, "heading1", "Notes"), r(18, "paragraph", "18 There may be."), r(18, "paragraph", "19 This may.")];
+    expect(listed(records)).toEqual([]);
+    expect(paragraphs(records)).toEqual(expect.arrayContaining(["18 There may be.", "19 This may."]));
+  });
+
+  it("leaves it alone when a heading, not furniture, lies between the footnote and it", () => {
+    const records = [prose, ...notesPage, r(18, "heading2", "Results"), r(18, "paragraph", "18 There may be.")];
+    expect(listed(records)).toEqual(["This is because.", "They can."]);
+    expect(paragraphs(records)).toContain("18 There may be.");
+  });
+
+  it("leaves it alone when the label skips — 17, then 19", () => {
+    const records = [prose, ...notesPage, r(18, "paragraph", "19 This may."), r(18, "paragraph", "20 For instance.")];
+    expect(listed(records)).toEqual(["This is because.", "They can."]);
+    expect(paragraphs(records)).toEqual(expect.arrayContaining(["19 This may.", "20 For instance."]));
+  });
+
+  it("leaves a page's one continued body paragraph alone, though a footnote ended the page before", () => {
+    const records = [
+      r(5, "paragraph", "A sentence5 that runs on"),
+      r(5, "footnote", "5 A note."),
+      r(6, "paragraph", "over the page turn.", true),
+    ];
+    expect(listed(records)).toEqual(["A note."]);
+    expect(paragraphs(records).join(" ")).toContain("over the page turn.");
+  });
+});
+
+describe("a space the model put between a marker and the punctuation after it", () => {
+  /* Kept on purpose: dropping it changes the block's text, and an article split
+     before its notes were linked keeps its ids only on unchanged text — it cost
+     10 of 77 ids on the real paper (`withMarkers`, plan 261004j). */
+  it("is kept when the marker is linked, so the block's text does not change", () => {
+    const html = render([
+      lead,
+      r(2, "paragraph", "We keep making up stories9 . This holds for memories10 , and for time steps11 ? Yes."),
+      r(2, "footnote", "9 One."),
+      r(2, "footnote", "10 Two."),
+      r(2, "footnote", "11 Three."),
+    ]);
+    expect(html).toMatch(/stories<sup><a [^>]+>9<\/a><\/sup> \. This/);
+    expect(html).toMatch(/memories<sup><a [^>]+>10<\/a><\/sup> , and/);
+    expect(html).toMatch(/steps<sup><a [^>]+>11<\/a><\/sup> \? Yes/);
+    const { blocks } = splitIntoBlocks(html);
+    expect(blocks.some((b) => b.text.includes("stories9 . This holds for memories10 , and"))).toBe(true);
+  });
+
+  it("is kept after digits nothing links, and before a word", () => {
+    const html = render([
+      lead,
+      r(2, "paragraph", "We keep making up stories9 . This report2 says so."),
+      r(2, "footnote", "2 IPCC, 2021."),
+    ]);
+    expect(html).toContain("stories9 . This");
+    expect(html).toMatch(/report<sup><a [^>]+>2<\/a><\/sup> says/);
+  });
+});
 
 describe("footnotes and endnotes in one paper", () => {
   it("links both, though the notes arrive 1, 3, 2 and the markers read 1, 2, 3 (GPT Sol, F1)", () => {

@@ -1858,11 +1858,15 @@ export function mendSeamHyphens(
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
-  records: PdfRecord[],
+  transcribed: PdfRecord[],
   title: string,
   rawSha256: string,
-  targets: readonly (number | null)[] = continuationTargets(records),
+  targets: readonly (number | null)[] = continuationTargets(transcribed),
 ): string {
+  /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
+     records from here down, so a mistyped endnote leaves the body and joins the
+     notes in the same step. Indexes do not move, so `targets` still lines up. */
+  const records = endnotesTypedAsProse(transcribed);
   /* **Whole blocks first, HTML second.** A continuation's text is added to its
      block before anything is written, so a caption continued onto the next page
      is inside its `<figcaption>` and the figure's ref is minted from the whole
@@ -2102,6 +2106,112 @@ const NOTE_LABEL = /^([1-9]\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶
 /** The prose a marker may sit in. Captions and headings are left alone. */
 const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);
 
+/** A note's leading label as a number, or null: no label, a symbol, or a label with nothing after it. */
+function numericLabel(text: string): number | null {
+  const label = NOTE_LABEL.exec(text);
+  if (!label || !text.slice(label[0].length).trim()) return null;
+  const plain = markerSpellings(label[1]!)[0]!;
+  return /^\d+$/.test(plain) ? Number(plain) : null;
+}
+
+/**
+ * **A page of endnotes the model typed as `paragraph`, given back to the notes.**
+ *
+ * Measured on a fresh import of the MDPI *Entropy* paper, 2026-10-04: its 62
+ * endnotes run over four "Notes" pages, and the model typed the second page —
+ * notes 18 to 32, fifteen records — as `paragraph`, each opening with the next
+ * label, between `footnote` records for 17 and 33. They came out as fifteen body
+ * paragraphs at the end of the article, and their markers in the prose
+ * (`remarkable28 is`) stayed bare digits with no note to link to.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ *
+ * Found in code, like the markers, and for the same reason: no prompt or schema
+ * change, so no import pays and no cached chunk goes stale. The copy returned
+ * has those records typed `footnote`; nothing else about them, and no index,
+ * changes.
+ *
+ * **Deliberately narrow**, because the wrong direction here moves the author's
+ * prose out of the article and into a note. A page is retyped only when:
+ *
+ * 1. **every** `paragraph`, `quote` and `listitem` on it opens with a numeric
+ *    label that is exactly one more than the note before it, or is a `continues`
+ *    of one that does. One ordinary paragraph and the whole page is left alone;
+ * 2. **the count starts from a real `footnote` record**, numbered one less,
+ *    with nothing but `publisher` furniture between — a running header at the
+ *    page turn. A heading, a reference or a figure in between ends it, so a
+ *    numbered list in the body is not picked up by a footnote pages earlier.
+ *
+ * The next `footnote` record carrying on the count would be a second anchor, and
+ * it is **not required**: the notes may end on the mistyped page.
+ */
+function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
+  const out = [...records];
+  const decided = new Set<number>();
+  /* The number of the note we are in, or null once anything but furniture has
+     come since; and whether that note is one retyped here, which is the only
+     kind a `continues` paragraph is taken to carry on. */
+  let last: number | null = null;
+  let retyped = false;
+  /* The ones that opened with the next label, as against carrying one on. */
+  const labelled = new Set<PdfRecord>();
+  const step = (record: PdfRecord, asNote: boolean): boolean => {
+    if (record.type === "publisher" || !record.text.trim()) return true;
+    if (record.type === "footnote") {
+      if (!(record.continues && last !== null)) {
+        last = numericLabel(record.text.trim());
+        retyped = false;
+      }
+      return true;
+    }
+    if (CITING.has(record.type) && asNote) {
+      const n = numericLabel(record.text.trim());
+      if (last !== null && n === last + 1) {
+        last = n;
+        retyped = true;
+        labelled.add(record);
+        return true;
+      }
+      if (record.continues && retyped) return true;
+      return false;
+    }
+    last = null;
+    retyped = false;
+    return true;
+  };
+
+  for (const [i, record] of out.entries()) {
+    if (CITING.has(record.type) && !decided.has(record.page)) {
+      /* The first prose on its page: read the rest of the page as if it were
+         notes, and keep that reading only if every piece of prose fits. */
+      decided.add(record.page);
+      const before: { last: number | null; retyped: boolean } = { last, retyped };
+      let fits = true;
+      for (let j = i; j < out.length && fits; j++) {
+        if (out[j]!.page === record.page) fits = step(out[j]!, true);
+      }
+      ({ last, retyped } = before);
+      if (fits) {
+        for (let j = i; j < out.length; j++) {
+          const r = out[j]!;
+          if (r.page !== record.page || !CITING.has(r.type)) continue;
+          /* A labelled one starts a note whatever its `continues` says, as its
+             label says it does; `collectNotes` would otherwise join it on. */
+          out[j] = { ...r, type: "footnote", continues: r.continues && !labelled.has(r) };
+        }
+      }
+    }
+    /* `out[i]`, not `record`: a retyped one is a footnote from here on. */
+    const now = out[i]!;
+    if (now.type === "footnote" && now !== record) {
+      /* Already checked above; walk it again to carry the count forward. */
+      step(record, true);
+    } else {
+      step(now, false);
+    }
+  }
+  return out;
+}
+
 /** The footnote records, as notes. A record marked `continues` joins the note before it. */
 function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
   const notes: Omit<PdfNote, "id">[] = [];
@@ -2270,7 +2380,19 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
   return markers;
 }
 
-/** A block's text, escaped, with its markers written in as links to their notes. */
+/**
+ * A block's text, escaped, with its markers written in as links to their notes.
+ *
+ * **The space the model leaves after a marker stays** — `stories9 . This`,
+ * `memories29 , and` — though once the digits are raised it is a full stop
+ * adrift of its sentence. Taking it out changes the block's text, and stage 3
+ * carries an id from an article split before its notes were linked only when
+ * the whole text is unchanged (`legacyKey`, src/blocks.ts). Measured on the
+ * *Entropy* paper's stored transcription, 2026-10-04: tidying it cost 10 of 77
+ * block ids, one of them under a reader's comment. The place to close the gap
+ * is where the block is drawn, not here.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ */
 function withMarkers(text: string, markers: readonly Marker[]): string {
   let out = "";
   let at = 0;

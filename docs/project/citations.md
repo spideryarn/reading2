@@ -200,7 +200,14 @@ under the bibliography heading **at the list's own numbers**. The model sees the
 article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
 
 - the list has that number, and the work's verified mentions cite it (`[8]`, `[7,8]`, `[6–9]`) —
-  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors;
+  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors.
+  **In an article with no footnotes or endnotes at all**, a number stuck to the text counts too —
+  `studies15`, `mortality.¹`, `pattern5,51`, `disease.³⁻⁵` — the superscript cite of a biomedical
+  paper, which otherwise lost every entry. It is read inside the quote and **straight after it in
+  the block** (`markerAfter`), since the model's quote usually stops before the superscript. With
+  notes, such a number may be a note's marker, so brackets only. `gluedNumbers` says what is not
+  one (`p38`, `CO2`, `3.5`, `1,000`);
+  [261004j](../plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md);
 - the model's title is in the entry — else the entry is dropped as disagreeing.
 
 Then every author name must be a word of the entry, or the authors go, and the year must be one of

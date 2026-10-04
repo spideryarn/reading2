@@ -1,7 +1,8 @@
 # Footnote digits glued to words: census, root cause, and what a re-import would cost
 
-**Status: plan, awaiting GPT Sol's plan review.** Nothing here writes to production. The re-import
-itself is stage 4 and is not run by this job.
+**Status: done to stage 4, which is a stop** (2026-10-04). Plan reviewed by GPT Sol, two fixes
+built and code-reviewed, § Results at the foot. Nothing here wrote to production; the re-import, or
+the re-render that measured better, is Greg's to decide.
 
 ## What this is for
 
@@ -142,6 +143,52 @@ The snapshot holds real articles and Greg's own annotations. It lives in the ses
 directory, is not committed, and is deleted at the end. The write-up carries slugs, counts and
 examples of a few words each; no credentials, no annotation text.
 
+## The plan review, and what was done with it
+
+GPT Sol, read-only, 2026-10-04, of commit `0742284f9` —
+[261004j-footnote-digits-plan-review-sol.md](261004j-footnote-digits-plan-review-sol.md). Verdict
+*"revise before build"*, ten findings. Each was checked against the code. **Where a finding and the
+stages above disagree, this table is the plan.**
+
+| | Finding | Done |
+|---|---|---|
+| F1 | The recall sample is drawn only from articles the detector already flagged, so an article where it misses everything is never sampled | A second recall sample over the other 32 articles. Precision and recall are stated per class (footnote, citation), over the stored text, not against the source PDF |
+| F2 | "Did Citations link it" folds three questions into one | Reported as three: does the marker reach its note; does the list hold the work's reference entry; do the cited words of any mention cover that marker |
+| F3 | "The marker did not resolve to a note" is no evidence that a digit is a citation; the linker leaves real footnotes unresolved on purpose | That alternative is removed. Citations pairing is not widened in this job (F4) |
+| F4 | A stored Citations list has already thrown away the model's rejected entry claims, so a wider verifier cannot be replayed on it | Accepted. Widening `markerNumbers` needs raw model responses and known-correct pairs. It is written up as a proposal with what it would need, not built |
+| F5 | Block ids also live in `search_runs.hits`, `referee_criteria.results`, `referee_claims.claims`, `chat_messages` and `link_summaries` | All five are in the snapshot and in the per-article count, reader's own writing kept apart from regenerable results |
+| F6 | A block can keep its id while the quoted words a comment hangs on change | For every comment and passage chat on a surviving block, the stored quote is looked for in the new block's text |
+| F7 | Two fresh imports confound a code change with the model reading differently | Code is compared on one transcription: production's cached records, rendered by today's renderer. A fresh import is a separate sample and is called one |
+| F8 | `begin read only` is not one snapshot | Re-taken in one `begin isolation level repeatable read read only` transaction. Blocks, citations and annotations were byte-identical to the first read |
+| F9 | `stories9 .`, `word9?` and `word9[` already pass `candidatesIn` | Removed from the suspects. Misses are taken from what the replay leaves unlinked, not guessed |
+| F10 | Seeding ids is not what production does; and a reset also drops the article's extras | The baseline handed to `splitIntoBlocks` is production's full block rows (tag, text, html). The write-up names the production operation, what it drops, and what it costs to regenerate |
+
 ## Results
 
-*(filled in as each stage lands)*
+The numbers, the method and the per-article table are in
+[261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).
+What changed about the plan as it ran:
+
+- **Stage 1** landed as written, with the review's changes. 735 unlinked glued numbers: 144
+  footnote markers, 168 citation numbers, 31 byline marks, 392 not markers.
+- **Stage 2** found two things a fresh import still gets wrong, and both are fixed with a red test
+  first: a page of endnotes typed as paragraphs (`endnotesTypedAsProse`, `src/pdf-read.ts`), and
+  Citations reading a reference number only in square brackets (`gluedNumbers`, `markerAfter`,
+  `hasNotes`, `src/citations.ts`). The review's F4 said the Citations change could not be judged on
+  stored lists; it was judged instead by running the step on two real papers locally, which is also
+  what showed the first version of the fix kept nothing.
+- **Built and taken out:** dropping the stray space after a linked marker. It cost 10 block ids on
+  the *Entropy* article.
+- **Stage 3** changed the recommendation. A re-import (a fresh reading) of the *Entropy* article
+  loses the block under 4 of Greg's 7 anchored comments and chats; re-rendering the transcription
+  production already holds loses none and links more notes. Production has no such operation.
+- **Stage 4**: stopped, as planned. Nothing was written to production.
+
+**Passed over, with the reason:** a marker rule for author-affiliation marks (they sit in the
+byline, which is not prose); linking Kuhn's ten remaining notes (the transcription dropped the
+markers); a `PROMPT_VERSION` bump to make the model type endnotes reliably (every import would pay,
+every cached chunk would go stale, and the code rule covers the measured case).
+
+**For Greg to decide** (asked through the Overseer, not built): whether to build the re-render
+operation — an extract that reuses a stored transcription made under an older prompt — and run it
+on the *Entropy* article, rather than re-import.

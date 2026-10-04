@@ -363,13 +363,31 @@ export interface Draft {
  * one the work's own verified mentions cite: `[8]`, `[7,8]`, `[6–9]`. That is
  * the pairing error a model makes and code can see: entry 9 offered for a work
  * the text cites as `[8]` carries the neighbour's authors, title and venue.
- * A work whose mentions carry no bracketed number gets no entry at all.
+ * A work whose mentions carry no citation number gets no entry at all.
+ *
+ * **`glued` is whether a number stuck to the text may count as one** —
+ * `studies15`, `mortality.¹` — which is how a biomedical or Nature-style paper
+ * cites, and without which every entry of such a paper was a mismatch (27 of
+ * 27 and 69 of 69:
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md).
+ * The caller says yes only for an article with no notes (`hasNotes`): a
+ * footnote marker and a reference number are the same glyphs, and pairing by a
+ * note's number would give a work its neighbour's authors (GPT Sol's review of
+ * that plan). Brackets are read either way.
+ *
+ * **And then the marker is read from the block as well as from the quote**
+ * (`markerAfter`), which is what `byId` is for. The model's quote usually
+ * stops just before the superscript — *reduced mortality*, not *reduced
+ * mortality.¹* — so the quote alone kept nothing on the paper this was built
+ * for: 1 mention in about 30 ended with its marker.
  */
 export function verifyEntry(
   raw: unknown,
   list: NumberedReferenceList,
   mentions: readonly CitationPlace[],
   drops: CitationDrops,
+  glued: boolean,
+  byId: ReadonlyMap<string, Block>,
 ): string | null {
   const n = typeof raw === "number" ? raw : typeof raw === "string" && /^\s*\d{1,4}\s*$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isInteger(n)) return null;
@@ -378,7 +396,10 @@ export function verifyEntry(
     drops.entryUnfound++;
     return null;
   }
-  if (!markerNumbers(mentions.map((m) => m.quote)).has(n)) {
+  const cited =
+    markerNumbers(mentions.map((m) => m.quote), glued).has(n) ||
+    (glued && mentions.some((m) => markerAfter(m, byId.get(m.blockId)).includes(n)));
+  if (!cited) {
     drops.entryMismatch++;
     return null;
   }
@@ -412,11 +433,18 @@ function withIdentifierEntry(draft: Draft, identifierEntry: string | undefined):
 /**
  * **Every number a bracketed cite names** — `[8]`, `[1,2]`, `[3–5]`,
  * `(e.g., [16,17])`. A range is expanded when it is short enough to be one.
+ *
+ * With `glued`, a quote that has no bracketed cite is also read for numbers
+ * stuck to the text (`gluedNumbers`). A quote with a bracketed cite is read by
+ * the bracket rule only: a paper that brackets its cites does not also glue
+ * them. `verifyEntry` says when `glued` may be asked for.
  */
-export function markerNumbers(quotes: readonly string[]): Set<number> {
+export function markerNumbers(quotes: readonly string[], glued = false): Set<number> {
   const out = new Set<number>();
   for (const quote of quotes) {
+    let bracketed = false;
     for (const m of quote.matchAll(/\[(\d[^\]]*)\]/g)) {
+      bracketed = true;
       const parts = (m[1] ?? "").split(/[,;]/);
       const found = parts.flatMap(numbersIn);
       /* A bracketed four-digit number is overwhelmingly a year, not a
@@ -428,8 +456,88 @@ export function markerNumbers(quotes: readonly string[]): Set<number> {
         out.add(n);
       }
     }
+    if (glued && !bracketed) for (const n of gluedNumbers(quote)) out.add(n);
   }
   return out;
+}
+
+const SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/**
+ * A number, and the list or range after it, **where a superscript cite sits**:
+ * straight after a lower-case word of three letters or more (`studies15`,
+ * `(from23)`), after `.` `,` `:` that do not follow a digit (`mortality.¹`,
+ * `et al.18`), or after `;` or a closing bracket or quote. That is what keeps
+ * out `p38` (one letter), `CO2` and `BRCA1` (capitals), `cm²`, `3.5`, `3:1`,
+ * and `1,000 cells` and `in 2020.` (glued to nothing).
+ */
+const GLUED =
+  /(?:(?<=(?<![\p{L}\p{N}])\p{Ll}{3,})|(?<=[^\s\d][.,:])|(?<=\S[;)\]"”’»']))\d+(?:(?:,\s?|\s?[–—‐‑-]\s?)\d+)*/gu;
+
+/** `Fig.3`, `Eq.2`: a label's number, which the bracket rule also refuses (`[Fig. 3]`). */
+const LABEL_BEFORE = /(?<![\p{L}\p{N}])(?:figs?|eqs?|eqns?|refs?|nos?|vols?|pp?|chs?|sect?|tabs?)\.$/iu;
+
+/** What follows a quantity rather than a cite: more of the number, a letter, a unit. */
+const QUANTITY_AFTER =
+  /^(?:[\p{L}\p{N}%°]|\.\d|[–—‐‑-][\p{L}\p{N}]|\s?(?:%|°|(?:[kmcnµμ]?(?:g|l|L|m|M|s|Hz|V)|h|min|d|fold)(?![\p{L}\p{N}])))/u;
+
+/** One to three digits, as the list's splitter accepts, or a range of them: never a year or `000`. */
+const ENTRY_PART = /^\s*[1-9]\d{0,2}(?:\s*[–—‐‑-]\s*[1-9]\d{0,2})?\s*$/;
+
+/**
+ * **The numbers a glued or superscript cite names** — `pattern5,51`,
+ * `disease.³⁻⁵`, `before17, 19–21` (plan 261004j). Superscript digits are read
+ * as digits, so both spellings a PDF transcription stores take one rule.
+ *
+ * A candidate that turns out to be a quantity is dropped whole — a letter, a
+ * `%`, a decimal or a unit after it, or a part that is not an entry number.
+ * The one exception is a last part that follows a comma and a space
+ * (`studies15, 20 patients`): that comma may be the sentence's, so the part
+ * goes and the cite before it stays.
+ */
+function gluedNumbers(quote: string, from?: number): number[] {
+  const text = quote.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, (c) => (c === "⁻" ? "-" : String(SUPERSCRIPTS.indexOf(c))));
+  const out: number[] = [];
+  for (const m of text.matchAll(GLUED)) {
+    /* `from`: only the marker that begins there, past at most a closing
+       quote or bracket and one punctuation mark. */
+    if (from !== undefined && (m.index < from || !/^["”’»')\]]?[.,;:]?$/.test(text.slice(from, m.index)))) continue;
+    if (LABEL_BEFORE.test(text.slice(0, m.index))) continue;
+    let candidate = m[0];
+    const after = text.slice(m.index + candidate.length);
+    const quantity = QUANTITY_AFTER.test(after);
+    const proseComma = candidate.lastIndexOf(", ");
+    const proseTail = proseComma >= 0 && candidate.lastIndexOf(",") === proseComma;
+    if (proseTail && (quantity || /^\s+\p{Ll}/u.test(after))) candidate = candidate.slice(0, proseComma);
+    else if (quantity) continue;
+    const parts = candidate.split(",");
+    if (!parts.every((part) => ENTRY_PART.test(part))) continue;
+    out.push(...parts.flatMap(numbersIn));
+  }
+  return out;
+}
+
+/**
+ * **The glued cite that sits straight after a mention's words, in its block**
+ * — `reduced mortality` then `.¹`. Read by `gluedNumbers` over the block's own
+ * text, so the same things are refused (`p38`, a unit, a decimal, `Fig.3`), and
+ * only where the marker begins at the quote's end: a number further along the
+ * sentence belongs to other words.
+ *
+ * `start` is a disambiguator, not an anchor (`CitationPlace`): trusted only if
+ * the quote is there, else the quote's one occurrence in the block is used, and
+ * with several nothing is read. A quote with a bracketed cite is left to the
+ * bracket rule, as in `markerNumbers`.
+ */
+function markerAfter(mention: CitationPlace, block: Block | undefined): number[] {
+  const { quote } = mention;
+  if (!block || !quote || /\[\d[^\]]*\]/.test(quote)) return [];
+  let at = mention.start;
+  if (block.text.slice(at, at + quote.length) !== quote) {
+    at = block.text.indexOf(quote);
+    if (at < 0 || block.text.indexOf(quote, at + 1) >= 0) return [];
+  }
+  return gluedNumbers(block.text, at + quote.length);
 }
 
 /** `8` → [8]; `3–5` → [3, 4, 5] when the range is short enough to be one; else nothing. */
@@ -578,9 +686,12 @@ export function toDrafts(
 ): Draft[] {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
   const article = articleTextOf(byId, list);
+  /* A glued number is a citation only where it cannot be a note's marker
+     (`verifyEntry`): known here from the blocks, once for every work. */
+  const glued = !hasNotes(blocks);
   const out: Draft[] = [];
   for (const item of Array.isArray(raw) ? raw : []) {
-    const draft = readDraft(item, byId, drops, scores, list, article);
+    const draft = readDraft(item, byId, drops, scores, list, article, glued);
     if (draft) out.push(draft);
   }
   /* **No cut here.** The cap counts works, and these are still rows — the
@@ -636,6 +747,7 @@ function readDraft(
   scores: CitationScoreDrops,
   list: NumberedReferenceList | null,
   article: ReturnType<typeof articleTextOf>,
+  glued: boolean,
 ): Draft | null {
   if (!item || typeof item !== "object") {
     drops.malformed++;
@@ -662,7 +774,7 @@ function readDraft(
   /* A PDF list's entry, when the model named one that checks out; a
      bibliography block's text is attached later, in `buildCitations`, once it
      is known how many works claim that block (Sol F4). */
-  const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops) : null;
+  const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops, glued, byId) : null;
   const said = saidFields(w, title);
   const located = listed === null ? null : locateInEntry(said, listed, drops);
   /* Identity follows only an entry that survived the title check. A rejected
@@ -737,6 +849,16 @@ export function isBodyBlock(block: Block): boolean {
 }
 
 const MARKER = new RegExp(`${REF_ATTR}="([^"]+)"`, "g");
+
+/**
+ * Whether the article has any footnote or endnote at all: a note block, or a
+ * marker stamped for one. Any block counts, body or not — this is the licence
+ * for reading a glued number as a citation (`verifyEntry`), so it errs towards
+ * yes.
+ */
+export function hasNotes(blocks: readonly Block[]): boolean {
+  return blocks.some((b) => Boolean(b.noteId) || b.role === "footnote" || b.html.includes(REF_ATTR));
+}
 
 /**
  * Every body block carrying a marker for each note, in document order.
