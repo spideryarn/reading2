@@ -882,15 +882,15 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
   return rows.map((row) => ({
     id: row.id,
     tag: row.tag,
-    kind: row.kind as Block["kind"],
+    kind: row.kind,
     ...(row.level === null ? {} : { level: row.level }),
     text: row.text,
     words: row.words,
     html: row.html,
     gistable: row.gistable,
     ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+    ...(row.role === null ? {} : { role: row.role }),
+    ...(row.treatment === null ? {} : { treatment: row.treatment }),
     ...(row.noteId === null ? {} : { noteId: row.noteId }),
     ...(row.contextId === null || row.contextType === null
       ? {}

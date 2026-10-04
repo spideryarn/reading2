@@ -130,7 +130,7 @@ describe("a stored page is read as the UTF-8 it was stored as", () => {
     const sent = new TextEncoder().encode(text);
     const decoded = decodeHtml(sent, "text/html; charset=utf-8");
     return {
-      bytes: storedDocumentBytes({ kind: "html", bytes: sent, text: decoded.text }),
+      bytes: storedDocumentBytes({ kind: "html", text: decoded.text }),
       kind: "html",
       filename: null,
     };
@@ -172,7 +172,7 @@ describe("a stored page is read as the UTF-8 it was stored as", () => {
        on the plan, which tried it. */
     const sent = new Uint8Array([0xff, ...new TextEncoder().encode(page(""))]);
     const decoded = decodeHtml(sent, "text/html; charset=utf-8");
-    const bytes = storedDocumentBytes({ kind: "html", bytes: sent, text: decoded.text });
+    const bytes = storedDocumentBytes({ kind: "html", text: decoded.text });
     expect(() => new TextDecoder("utf-8", { fatal: true }).decode(bytes)).not.toThrow();
     const found = await invisible({ bytes, kind: "html", filename: null });
     const said = found.map((f) => f.text).join(" | ");
