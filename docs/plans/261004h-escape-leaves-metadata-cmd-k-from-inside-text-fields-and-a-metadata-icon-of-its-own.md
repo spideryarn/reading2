@@ -92,6 +92,10 @@ The label, the card, the position and the button itself are unchanged.
 (a plain document; already the shelf's and the PDF note's icon), `SlidersHorizontal` (controls;
 already Profile's section icon), `TableProperties` (a property sheet).
 
+**Decided: `FileCog` stays.** Greg, 2026-10-04, answering `[Q-metadata-icon]`:
+
+> probably cog
+
 ## Tests, red first
 
 - `tests/metadata-escape.test.tsx` (new): Escape on the metadata page navigates to the article href;
