@@ -4116,7 +4116,7 @@ function Questions({
   if (entries.length === 0) {
     /* **Two sentences, because the second half of the owner's is an
        instruction a visitor cannot follow.** *"Select a sentence in the article
-       to bookmark it"* is the right thing to say to somebody who can, and a
+       to highlight it"* is the right thing to say to somebody who can, and a
        dead end for somebody who cannot — the shape
        docs/project/copy.md keeps warning about, where the true half of a
        sentence carries a false half along with it. A visitor is told what the
@@ -4125,7 +4125,7 @@ function Questions({
       <p className="dock-empty">
         {access.kind === "owner" ? (
           <>
-            Nothing marked yet. Select a sentence in the article to bookmark it, and add a
+            Nothing marked yet. Select a sentence in the article to highlight it, and add a
             comment if you want one.
           </>
         ) : (

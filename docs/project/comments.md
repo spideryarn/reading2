@@ -18,8 +18,9 @@ answer from the model only if you ask for one. Saving costs nothing.
 > [260828a-comments-and-bookmarks.md](../plans/260828a-comments-and-bookmarks.md) is the plan, and its GPT Sol
 > review is beside it.
 >
-> **The tick-box became a button on 2026-10-03**, and the box stopped losing drafts —
-> [§ The box a selection opens](#the-selection-box).
+> **The tick-box became a button on 2026-10-03**, and the box stopped losing drafts. **Since
+> 2026-10-04 a selection is highlighted the moment it is made**, and the box that opens is the
+> comment's own — [§ The box a selection opens](#the-selection-box).
 >
 > **Read the rest of this file with that in mind.** Everything it says about *anchoring*,
 > *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
@@ -38,34 +39,126 @@ Three independent properties, and a comment may have any combination of them:
 
 ### The box a selection opens <a id="the-selection-box"></a>
 
-The quote, a Copy button, a place to write, a colour row **with Yellow already picked**, and three
-buttons:
+> how about if selecting text automatically applies the highlight and also pops up the fuller box to
+> allow the user to customise (or remove) it, and they can just click off if they're happy with the
+> highlighting
+>
+> — Greg, 2026-10-04
+
+**Selecting words writes a yellow highlight and opens that comment's own box.** Outside Referee
+mode there is no draft any more: letting go of the drag stores a comment with `colour: "yellow"`
+(one `POST`), the words are painted as the ordinary mark of an ordinary row, and the box beside them
+is [`CommentDialog`](../../src/web/CommentDialog.tsx), the one a click on any highlight opens. It
+is the gutter bookmark's pattern ([§ The whole-block bookmark](#the-whole-block-bookmark): create,
+then open the box on the row) applied to words. `selectProse` in
+[`Reader.tsx`](../../src/web/reader/Reader.tsx).
 
 ```
-   Discard                                  [ Ask AI ]  [ Save ]
+   select ──► words go yellow, box opens
+                │
+                ├─ click away / × / Esc / select elsewhere / leave ──► kept
+                ├─ write, pick a colour, Ask the AI                 ──► kept, as changed
+                ├─ Remove highlight                                 ──► gone
+                ├─ Copy, don't highlight / ⌘C                       ──► copied, not kept
+                └─ re-select overlapping words (untouched)          ──► replaced by the new one
 ```
 
-- **Save** stores the comment — a yellow highlight if nothing was written or changed, a bare
-  bookmark if *No colour* was picked. It is the only submit button, so ⌘/Ctrl+Enter is the free Save
-  and plain Enter is a newline.
-- **Ask AI** stores it and then opens the chat composer on those words, pre-filled, for the reader
-  to send ([§ Asking the model](#asking-the-model-and-the-link-back)). Pressing it spends nothing;
-  the model is called when the reader sends.
-- **Discard** throws the draft away.
-
-**Yellow is the default, and closing the box saves it, since 2026-10-04.** Greg:
+The yellow is Greg's default from the day before:
 
 > I like the new human highlights when I select text - can we default to the yellow colour, and
 > default to saving it, so that it requires fewer clicks?
 >
 > — Greg, 2026-10-03 (spya-ur8kum)
 
-So a highlight is the selection and one press: Save, the ×, or Escape. Before, it was the yellow
-dot and then Save. Two questions decide what an exit stores (`hasSomething` and `hasIntent` in
-[`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx)):
+**The fresh box.** A box is *fresh* while it is the one the selection opened on the comment it
+made. It stops being fresh when it closes or shows another comment, so the same comment opened
+later from its mark, the drawer or a link is an ordinary box. Only a fresh box has these
+(`FreshBox` in `CommentDialog.tsx`):
+
+- **A press anywhere else closes it, and the highlight stays.** The press is never swallowed: a link
+  still follows, a Dock button still opens, and a drag that begins in the prose becomes the next
+  selection. "Inside" means the box and anything it portals (a tooltip is at the end of `<body>`),
+  decided by React's own event path through the portal and not by `contains`. Words typed and not
+  yet committed are committed first, because the press arrives before the blur it causes. A click
+  on the words just highlighted is a click away too: it does not open the box straight back up.
+- **Delete reads *Remove highlight***, still one press, and closes the box instead of stepping to a
+  neighbour.
+- **A hint**: *Highlighted. Click away to keep it.*
+- **Copy** ([§ Copying the passage](#copying-the-passage)).
+
+**Pristine** is the word for a row that is still exactly what the selection wrote: yellow, no
+words, no conversation, no answer, no placement (`isPristineHighlight` in
+[`fresh-highlight.ts`](../../src/web/fresh-highlight.ts)). Only a pristine row is ever taken away
+without being asked for by name. A colour press and an edit reach the stored row only when the
+server answers, so the box and `Reader` also keep a *touched* flag set at the press.
+
+**Overlap means correction.** A reader who drags again over some of the same words straight away
+is fixing which words, not asking for two highlights. The fresh row is remembered for the one
+gesture that closes its box (set by that `pointerdown`, cleared by the next), and a selection that
+gesture goes on to make, in the same paragraph and sharing at least one character, removes the
+first if it is still pristine. Then the new one is created as usual. A mouse only: by touch the
+second selection is a new long-press, and both are kept.
+
+**The first seconds of a page.** A create made before the comment list has loaded waits for it
+inside `useComments.create`
+([260908c](../postmortems/260908c-an-opening-read-can-erase-a-later-write.md)), so in that window
+nothing is painted and the box opens when the row exists, a moment after the selection. It then
+opens only if nothing else was opened meanwhile and no later selection was made (`bookmarkBlock`'s
+two guards); the highlight is stored and painted either way.
+
+**A create that fails removes its row**, and with it the paint and the box, and the Dock says the
+write failed. Nothing is shown as highlighted that is not stored or being stored.
+
+**The browser's own selection.** A mouse's is kept: painting replaces the paragraph's nodes, which
+collapses a selection, so it is put back over the new mark (`selectAnchor` in
+[`selection.ts`](../../src/web/selection.ts)) and ⌘C still copies the words. A finger's is cleared
+at the button press, which puts the OS handles and callout away
+([touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button)).
+Two smaller rules in `TableView.tsx` follow from the paint arriving between `mouseup` and `click`:
+the click that ends a drag does not follow the link under it, and a `mouseup` that finds the same
+words still selected (a press on a gutter icon) is not a second selection.
+
+**What a reload or a crash can lose.** `useComments` replays every create that has been called and
+not yet settled through the keepalive writer on `pagehide`, once, with the same id and body. That
+covers a create still held behind the opening read, which no box is holding for it. It is best
+effort: nobody reads the answer, and an expired token refuses it. A crash or a killed browser fires
+no event, so a highlight made in the first seconds of a page and not yet sent is lost. Once the
+`POST` has been answered, nothing here can lose it.
+[§ Deliberate limits](#deliberate-limits).
+
+The plan is [261004f](../plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md),
+whose last section is the design as built: GPT Sol's review showed that *painted now, stored later*
+cost a provisional mark, an unmount flush and a pending handoff, and that writing the row at once
+cost a create and a delete for a mis-drag. The tests are
+[`tests/selecting-applies-the-highlight.test.tsx`](../../tests/selecting-applies-the-highlight.test.tsx).
+
+#### In Referee mode: the draft box <a id="the-draft-box"></a>
+
+**Referee mode keeps the box as it was before 2026-10-04**, and it is now the only place
+[`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) opens. A selection there records evidence
+against a criterion; a reading highlight nobody picked would mix two meanings, and the placement is
+part of the one save ([§ The referee's own placement](#the-referees-own-placement)). Nothing is
+stored until the referee says. Whether Referee should follow the rest of the app is a separate
+question, not decided.
+
+The quote, a Copy button, a place to write, a colour row that opens on *No colour*, the placement,
+and three buttons:
 
 ```
-   something to store   words, a colour (Yellow counts), or a placement
+   Discard                                  [ Ask AI ]  [ Save ]
+```
+
+- **Save** stores the comment. It is the only submit button, so ⌘/Ctrl+Enter is the free Save and
+  plain Enter is a newline.
+- **Ask AI** stores it and then opens the chat composer on those words, pre-filled, for the reader
+  to send ([§ Asking the model](#asking-the-model-and-the-link-back)). Pressing it spends nothing;
+  the model is called when the reader sends.
+- **Discard** throws the draft away.
+
+Two questions decide what an exit stores (`hasSomething` and `hasIntent` in `AnnotateDialog.tsx`):
+
+```
+   something to store   words, a colour, or a placement
    the reader's intent  words, a placement, or the colour row CHANGED
 
    Save, Ask AI         always store what the box shows
@@ -75,23 +168,9 @@ dot and then Save. Two questions decide what an exit stores (`hasSomething` and 
    Discard              nothing
 ```
 
-Three things keep "closing saves" from being "every selection is a highlight":
-
-- **An exit the reader did not choose stores nothing from an untouched box.** Letting go of a drag
-  opens the box, so a mis-drag followed by a second drag would otherwise leave a highlight per
-  attempt, and React StrictMode's simulated unmount would store one in development.
-- **Copy, then close, leaves no highlight** if nothing else was done
-  ([§ Copying the passage](#copying-the-passage)). The hint under the buttons says so as soon as
-  Copy is pressed, because it is the one close besides Discard that keeps nothing.
-- **Referee mode opens on No colour**, and behaves as it did. A selection there records evidence
-  against a criterion; a reading highlight nobody picked would mix two meanings.
-
-A press on the Yellow that is already picked is not a change: `HighlightSwatches` calls back only
-when the colour differs, and has to, because `CommentDialog` PATCHes on that callback. And Ask AI
-stores the yellow the box shows, so a word a reader asks about is also a highlight and a row in
-Quotes unless they pick *No colour* first. Both are open questions for Greg in the plan,
-[261004a](../plans/261004a-a-selection-s-highlight-is-yellow-by-default-and-closing-the-box-saves-it.md),
-with saving at the moment of selection.
+In Referee mode an untouched box has nothing to store, so every exit from one keeps nothing. (The
+box still has its 2026-10-04 behaviour of opening on Yellow and saving it on × or Escape when it is
+mounted outside Referee mode, which today only tests do.)
 
 **Ask AI was a tick-box until 2026-10-03**, and the box kept everything as a draft until its one
 button was pressed. Greg:
@@ -106,9 +185,9 @@ button was pressed. Greg:
 A ticked box looks like an action taken, and it was not one. And five things threw the draft away
 without a word: Cancel, the ×, Escape, another selection in the prose, and leaving the page.
 
-**The rule now: no way out silently discards a draft.** A draft *the reader did something to* —
-words, a changed colour, or a Referee placement — is stored as a comment, exactly as Save would
-store it and never asking the AI, by each of:
+**The rule for the draft box: no way out silently discards a draft.** A draft *the reader did
+something to* — words, a changed colour, or a Referee placement — is stored as a comment, exactly
+as Save would store it and never asking the AI, by each of:
 
 | The way out | What stores it |
 |---|---|
@@ -117,14 +196,10 @@ store it and never asking the AI, by each of:
 | leaving the article inside the app | the same unmount |
 | a reload, a closed tab, a link out | a `pagehide` listener starts the best-effort keepalive write (`leavingFetch`); if the page returns from the back/forward cache, `pageshow` replays that frozen snapshot through ordinary `create` so the tab learns about it, then closes the old box |
 
-**An untouched box is stored only by the first row of that table** (the × and Escape, since
-2026-10-04, above), never by the other three. That is the one place this is narrower than "it
-should auto-save" read literally: storing a mark the moment the box opened would leave one behind
-every time a reader selects words to copy them
-([§ Copying the passage](#copying-the-passage)). The textarea's own first Escape still clears what
-was typed — that is the reader removing their words, not the box losing them.
+The textarea's own first Escape still clears what was typed — that is the reader removing their
+words, not the box losing them.
 
-Two things follow from storing on the way out:
+Three things follow from storing on the way out, and the last two hold for every create:
 
 - **A draft stored mid-dictation is stored as the box stands.** Save refuses while the microphone is
   armed because better words are about to arrive; at an exit nothing better will, so the words the
@@ -135,11 +210,13 @@ Two things follow from storing on the way out:
 - **A create is the first write in that comment's queue.** An edit waits behind it, and a delete
   made while the create is still held cancels it; once its POST is in flight, the delete waits for
   the answer and removes the row afterwards. Neither operation can reach the server before the row
-  it names exists.
+  it names exists. This is what makes *Remove highlight* and the overlap rule above safe to press
+  the instant the highlight appears.
 
-What this does **not** promise is under [§ Deliberate limits](#deliberate-limits). The plan is
-[261003i](../plans/261003i-the-comment-box-never-loses-a-draft-and-ask-ai-is-a-button.md); the
-tests are [`tests/annotate-dialog-keeps-a-draft.test.tsx`](../../tests/annotate-dialog-keeps-a-draft.test.tsx)
+What this does **not** promise is under [§ Deliberate limits](#deliberate-limits). The plans are
+[261003i](../plans/261003i-the-comment-box-never-loses-a-draft-and-ask-ai-is-a-button.md) and
+[261004a](../plans/261004a-a-selection-s-highlight-is-yellow-by-default-and-closing-the-box-saves-it.md);
+the tests are [`tests/annotate-dialog-keeps-a-draft.test.tsx`](../../tests/annotate-dialog-keeps-a-draft.test.tsx)
 and [`tests/use-comments-create-waits-for-the-opening-read.test.ts`](../../tests/use-comments-create-waits-for-the-opening-read.test.ts).
 
 ### The whole-block bookmark <a id="the-whole-block-bookmark"></a>
@@ -382,17 +459,30 @@ Greg, 2026-09-05:
 > Comment panel, so then I would have to reselect it in the Comment panel to be able to then copy it.
 
 Opening the box takes the focus and the selection with it, so the one thing a selection most often
-means outside this app had become the one thing it could no longer do. There is a Copy button in the
-box's header now, beside Close, and it puts `anchor.quote` on the clipboard: the reader's own words,
-with no id and no attribution attached. The block's citable address is a different thing and already
-has its own button in the gutter ([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)).
+means outside this app had become the one thing it could no longer do. And since 2026-10-04 a
+selection is also a highlight, so a reader who selected in order to copy is left with a mark they
+did not ask for. **Copy means copy**, in two places:
 
-It copies and does nothing else — it does not save, does not close, and buys nothing. **And since
-2026-10-04 it tells the box the reader was after the sentence**: the × or Escape after Copy, with
-nothing else done, leaves no highlight, where it otherwise saves the default yellow one
-([§ The box a selection opens](#the-selection-box)). The press is what counts, not the clipboard's
-answer, which may still be out or be a refusal when the box closes. Three states
-rather than two, because a copy that quietly failed is
+- **The fresh box has a Copy button** ([§ The box a selection opens](#the-selection-box)). While the
+  row is pristine it reads *Copy, don't highlight*: it puts the quote on the clipboard and then
+  removes the row and closes the box. **The removal follows the clipboard's real answer, never the
+  press** (GPT Sol, E7 on plan 261004f): on a refusal, or with no clipboard at all, the box says
+  *Your browser would not allow the copy. The highlight is kept.* and the row stays. Once the reader
+  has written, recoloured, placed or asked, the button reads *Copy* and only copies.
+- **A native copy does the same.** ⌘C while the box is fresh, the row pristine and the document's
+  selection still that passage removes the highlight too. The copy itself is not touched, and the
+  removal waits until the event is over, because repainting the paragraph would collapse the
+  selection the browser is about to read.
+
+**The draft box (Referee mode) has the older button**, in its header beside Close. It puts
+`anchor.quote` on the clipboard: the reader's own words, with no id and no attribution attached.
+The block's citable address is a different thing and already has its own button in the gutter
+([`BlockGutter.tsx`](../../src/web/BlockGutter.tsx)). It copies and does nothing else: it does not
+save, does not close, and buys nothing. There the *press* is what counts, not the clipboard's
+answer: the × or Escape after Copy, with nothing else done, stores nothing
+([§ In Referee mode: the draft box](#the-draft-box)).
+
+Three states rather than two in both, because a copy that quietly failed is
 [silent-success](../reusable/silent-success.md) with a clipboard on it, and `navigator.clipboard` is
 undefined in every insecure context.
 
@@ -1011,9 +1101,10 @@ bare bookmark.
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the drawer the list lives in, and its focus contract — [§ The drawer](#the-drawer) |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
-| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a Copy button, a box, Ask AI and Save — and the rule that no exit drops a draft |
-| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, the client-minted id, and a create that waits behind the opening read |
-| [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
+| [`src/web/fresh-highlight.ts`](../../src/web/fresh-highlight.ts) | the default colour, what *pristine* means, and when two selections overlap |
+| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens in Referee mode**: the quote, a Copy button, a box, Ask AI and Save — and the rule that no exit drops a draft |
+| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, the client-minted id, a create that waits behind the opening read, and the `pagehide` replay of an unsettled one |
+| [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources — and **what a selection opens everywhere else**, with the fresh box's rules |
 | [`src/web/BlockGutter.tsx`](../../src/web/BlockGutter.tsx) | the `Bookmark` beside a commented block, and what opens when it is pressed |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | reading order, stepping, and grouping onto blocks for the gutter |
 | [`src/web/comment-jump.ts`](../../src/web/comment-jump.ts) | **moving** to one: the drawer pushes, the arrows do not — [§ Opening a question is a jump](#opening-is-a-jump) |
@@ -1178,19 +1269,23 @@ rather than blanked, and if none survives the key comes off entirely.
 - **A selection spanning two blocks is clamped to the first.** A comment addresses one block —
   that is what makes it storable against the id spine — and silently doing the first paragraph beats
   appearing to ignore the drag.
-- **A draft whose write fails after the box has closed is lost.** The promise is *no exit silently
-  discards a draft*, not *a draft is never lost*. An ordinary exit hands the draft to `create`; if
-  that request is then refused or the network is down, the optimistic row is removed, the Dock says
-  the save failed, and the words are in neither the box nor Postgres — as they would have been after
-  a pressed Save, before 2026-10-03 as well. Keeping a recoverable failed draft is its own piece of
-  work, not built (GPT Sol's review of plan 261003i, D6). The `pagehide` write is weaker still: it
-  is a keepalive request nobody reads the answer to, and a token that expired seconds earlier
-  refuses it.
-- **A crash or a killed browser fires no event**, so a draft open at that moment is gone. `pagehide`
-  is the last thing a page reliably hears; nothing is written before it, because an untouched box
-  must store nothing. Keystroke-by-keystroke saving is a different design and is not built.
-- **A finger's selection opens nothing by itself.** There is no mouseup on an iPad, so a touch
-  selection gets a "Highlight or comment" button below it, and the press opens this box —
+- **A highlight whose write fails is gone, and says so.** Selecting stores the row at once; if that
+  request is refused or the network is down, the optimistic row is removed, the paint and the box go
+  with it, and the Dock says the save failed. The same holds for a Referee draft handed to `create`
+  on its way out: the words are then in neither the box nor Postgres. Keeping a recoverable failed
+  draft is its own piece of work, not built (GPT Sol's review of plan 261003i, D6). The `pagehide`
+  write is weaker still: it is a keepalive request nobody reads the answer to, and a token that
+  expired seconds earlier refuses it.
+- **A crash or a killed browser fires no event.** What that can lose is narrow since 2026-10-04: a
+  highlight made in the first seconds of a page, while its create is still held behind the opening
+  read, and in Referee mode a draft box open at that moment. `pagehide` is the last thing a page
+  reliably hears. Keystroke-by-keystroke saving is a different design and is not built.
+- **A mis-drag is a create and a delete.** Writing the row on selection means a selection made by
+  accident, or made to copy, costs two requests. That was the price of dropping the provisional
+  mark; plan 261004f, last section.
+- **A finger's selection highlights nothing by itself.** There is no mouseup on an iPad, and the
+  same long-press is how a reader copies or looks a word up, so a touch selection gets a "Highlight
+  or comment" button below it and the press applies the highlight —
   [touch.md § A finger's selection gets a button](touch.md#a-fingers-selection-gets-a-button).
 - **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
   visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
@@ -1220,9 +1315,11 @@ rather than blanked, and if none survives the key comes off entirely.
 - **Deleting while the answer is still in the air wins.** The POST returns the whole comment, so
   storing it used to put back a row the reader had already deleted, mark and all. `useComments`
   keeps a tombstone and re-sends the DELETE once the write it was racing has landed.
-- **Selecting inside an existing mark asks a new question**, rather than reopening the comment that
-  is already there. Asking about a narrower part of something you asked about before is ordinary;
-  the mark only takes the click when there is no selection to act on.
+- **Selecting inside an existing mark makes a new highlight**, rather than reopening the comment that
+  is already there. Marking a narrower part of something you marked before is ordinary; the mark
+  only takes the click when there is no selection to act on. (The one exception is the overlap rule
+  in [§ The box a selection opens](#the-selection-box), which replaces a highlight made a moment
+  ago and not yet touched.)
 - **No editing, no reply, no follow-up question.** Ask, read, delete. Anything more is a chatbot
   with the article in the context window, which is
   [an explicit anti-goal](vision.md#anti-goals).

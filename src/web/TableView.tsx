@@ -44,7 +44,7 @@ import {
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { readSelection, type SelectionAnchor } from "./selection.js";
+import { readSelection, sameAnchor, type SelectionAnchor } from "./selection.js";
 import { rendersMaths } from "./maths-provenance.js";
 import { internalTarget } from "./internal-links.js";
 import {
@@ -794,6 +794,20 @@ function TableViewInner({
    */
   const [zoomed, setZoomed] = useState<ZoomedFigure | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
+  /**
+   * **Two memories of the last mouseup, both for the tbody's handlers.**
+   *
+   * `reportedSelection` is the anchor last handed to `onSelect`, forgotten by
+   * the next press in the prose: a mouseup that finds the same words still
+   * selected is a press on something else in the table, not a new selection.
+   *
+   * `selectionEndedHere` says the click now arriving follows a mouseup that
+   * completed a selection. The click handler used to ask the live selection
+   * that; since 2026-10-04 the highlight is painted between the two events,
+   * and the paint collapses it (GPT Sol, E4 on plan 261004f).
+   */
+  const reportedSelection = useRef<SelectionAnchor | null>(null);
+  const selectionEndedHere = useRef(false);
 
   /**
    * The article's blocks by id, for `resolveAnchors` above — which is where
@@ -1285,6 +1299,14 @@ function TableViewInner({
           e.preventDefault();
           onJump(xrefTo);
         }}
+        /* **A press in the prose starts a new selection gesture**, which is what
+           lets the same words be reported again — see `reportedSelection`. A
+           press anywhere else in the table (a gutter icon) leaves the browser's
+           selection, and so the memory of it, where they were. */
+        onMouseDown={(e) => {
+          selectionEndedHere.current = false;
+          if ((e.target as Element).closest?.("td.text .prose")) reportedSelection.current = null;
+        }}
         /* Both handlers below are delegated, not per-block: the prose is
            injected HTML, so its <mark> and <a> elements are not React's and
            cannot carry React handlers. */
@@ -1299,6 +1321,10 @@ function TableViewInner({
           // that works: the href is a real fragment, and main.tsx turns an
           // arriving `#spya-…` into `?at=` before React mounts. Taking it over
           // would break the one case where the browser's own answer is right.
+          /* Read and spent before anything can return: it describes the mouseup
+             this click follows, and no later click. */
+          const endedSelection = selectionEndedHere.current;
+          selectionEndedHere.current = false;
           if (e.defaultPrevented || e.button !== 0) return;
           /* **A cross-reference is not a link, and a modified click on one does
              nothing** — this line returns for it as for everything else. There
@@ -1322,7 +1348,7 @@ function TableViewInner({
           const xrefTo = xrefTarget(e.target, xrefs);
           if (xrefTo) {
             const selection = window.getSelection();
-            if (selection && !selection.isCollapsed) return;
+            if (endedSelection || (selection && !selection.isCollapsed)) return;
             e.preventDefault();
             onJump(xrefTo);
             return;
@@ -1374,9 +1400,17 @@ function TableViewInner({
              click is not optional here: merely declining to jump would leave the
              browser to follow the fragment natively, which throws the reader
              away from the passage they just chose. */
+          /* **`endedSelection` as well as the live selection**, since
+             2026-10-04: outside Referee mode the mouseup now paints the
+             highlight before this click arrives, the paint replaces the
+             paragraph's nodes, and that collapses the selection this test used
+             to read. A click only lands on the link when the press began in it
+             too, so the latch alone says what the anchor test said. GPT Sol, E4
+             on plan 261004f. */
           const selection = window.getSelection();
-          if (selection && !selection.isCollapsed && selection.anchorNode &&
-              link.contains(selection.anchorNode)) {
+          if (endedSelection ||
+              (selection && !selection.isCollapsed && selection.anchorNode &&
+               link.contains(selection.anchorNode))) {
             e.preventDefault();
             return;
           }
@@ -1423,7 +1457,18 @@ function TableViewInner({
           // reader never clicked. The two are separate variants now, and
           // `too-short` stops here: nothing opens, and the reader drags again.
           const read = readSelection(window.getSelection());
-          if (read.kind === "anchor") return onSelect(read.anchor);
+          if (read.kind === "anchor") {
+            /* **The same words, still selected, are not a second selection.**
+               A press on a gutter icon does not clear the browser's selection,
+               so its mouseup arrives here with the words of the last drag
+               still live. That was harmless while a selection only opened a
+               draft box; now it writes a highlight, and would write it twice. */
+            const last = reportedSelection.current;
+            if (last && sameAnchor(last, read.anchor)) return;
+            reportedSelection.current = read.anchor;
+            selectionEndedHere.current = true;
+            return onSelect(read.anchor);
+          }
           if (read.kind === "too-short") return;
           /* A link inside a commented passage is a link. `annotateHtml` puts
              the <mark> *inside* the <a>, so without this a click on one would

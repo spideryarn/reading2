@@ -437,8 +437,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             so the page is not covered in icons.
           </li>
           <li>
-            <strong>Press and hold to select words.</strong> On your own article, letting go opens
-            the box for a comment or bookmark.
+            <strong>Press and hold to select words.</strong> On your own article a{" "}
+            <strong>Highlight or comment</strong> button appears under them. Tap it and the words
+            are highlighted, with a box to add a comment, change the colour or remove it. Tap
+            anywhere else to keep the highlight.
           </li>
           <li>
             <strong>On your home screen</strong> there is no Back button: use the{" "}
@@ -667,24 +669,41 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
     body: (
       <>
         <p>
-          <strong>Select a few words in the article</strong> and a box opens, with yellow already
-          picked. Press <strong>Save</strong>, the × or Escape and the words are highlighted. You
-          can write a note first, pick another colour, or pick no colour for a plain underlined
-          bookmark. All of it is free. Clicking the passage later opens it again.
+          <strong>Select a few words in the article</strong> and they are highlighted in yellow
+          straight away. A box opens beside them: click anywhere else and you are done, the
+          highlight stays. In the box you can write a note, pick another colour, or pick no colour
+          for a plain underlined bookmark. All of it is free. Clicking the passage later opens the
+          box again.
         </p>
         <ul>
           <li>
-            <strong>The AI is a button.</strong> Press <strong>Ask AI</strong> instead of Save: your
-            comment is saved first, then a conversation about the passage opens with your words
-            ready to send. If the AI call fails, your words are still kept.
+            <strong>To take it off</strong>, press <strong>Remove highlight</strong> in the box.
           </li>
           <li>
-            <strong>Closing the box saves it.</strong> The × and Escape save the highlight, with
-            whatever you wrote. <strong>Discard</strong> throws it away. If you only pressed
-            Copy, closing leaves no highlight. If you typed something or changed the colour,
-            selecting something else saves it too, and leaving or reloading the page tries to,
-            but a failed connection can still lose that last-chance save. A box you did nothing
-            in is not saved by selecting something else or leaving the page.
+            <strong>If you only wanted to copy the words</strong>, press{" "}
+            <strong>Copy, don’t highlight</strong>, or copy with the keyboard while they are still
+            selected: the words are copied and the highlight is taken off again. Once you have
+            written a note or changed the colour, Copy only copies.
+          </li>
+          <li>
+            <strong>Changing which words.</strong> Select again over some of the same words
+            straight away and the new highlight replaces the first, unless you had already
+            changed it.
+          </li>
+          <li>
+            <strong>The AI is opt-in.</strong> Type a question in{" "}
+            <strong>Ask the AI about this…</strong> and a conversation about the passage opens
+            with your words ready to send. Nothing is asked until you send it.
+          </li>
+          <li>
+            <strong>In the first seconds after a page opens</strong>, before your earlier comments
+            have loaded, the highlight and its box appear a moment after you select rather than at
+            once. Leaving or reloading the page in that moment still tries to save it, but a
+            failed connection can lose it.
+          </li>
+          <li>
+            <strong>In Referee mode</strong> selecting works the old way: a box opens first, and
+            nothing is saved until you press <strong>Save</strong> or close it.
           </li>
           <li>
             <strong>To bookmark a whole paragraph</strong>, use the bookmark icon in its margin; you

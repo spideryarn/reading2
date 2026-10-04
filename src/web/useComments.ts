@@ -1,9 +1,10 @@
 /**
  * The client half of comments — see docs/project/comments.md.
  *
- * Selecting text opens `AnnotateDialog`, whose Save, close and Ask AI paths all
- * create the same free comment here. Ask AI then opens a separate conversation;
- * it does not make this create a paid request. This hook also reads existing
+ * Selecting text creates a free comment here: at once, as a yellow highlight
+ * (Reader.tsx § `selectProse`, since 2026-10-04), or in Referee mode from
+ * `AnnotateDialog`'s Save, close and Ask AI paths. Ask AI then opens a separate
+ * conversation; it does not make this create a paid request. This hook also reads existing
  * comments, edits their reader-owned fields, and offers `retry` and `deepen` for
  * the older explanations that are still stored on comments.
  *
@@ -75,9 +76,10 @@ interface NewCommentInputFields {
    */
   mark?: Mark;
   /**
-   * A highlight's colour, if the saved selection has one. Yellow is the default
-   * in `AnnotateDialog`, so it need not have been picked explicitly. Only on a
-   * selection: the server refuses a colour on a whole-block bookmark.
+   * A highlight's colour, if the saved selection has one. Yellow is what a
+   * selection is stored in (`DEFAULT_HIGHLIGHT`, fresh-highlight.ts), so it
+   * need not have been picked explicitly. Only on a selection: the server
+   * refuses a colour on a whole-block bookmark.
    */
   colour?: HighlightColour;
 }
@@ -155,6 +157,8 @@ export interface CommentsApi {
    * src/web/lib/api.ts), because an ordinary fetch from a dying page often
    * never leaves. Best effort by nature — nothing is awaited and nothing is
    * drawn. Its one caller is the draft in `AnnotateDialog` (plan 261003i, D2).
+   * A create already *called* needs no caller for this: the hook replays it
+   * itself (`useComments` § `unsettled`).
    */
   createOnLeave(input: NewCommentInput): void;
   /** Change the reader's words, or clear them back to a bare bookmark. */
@@ -370,13 +374,58 @@ export function useComments(slug: string): CommentsApi {
    */
   const creating = useRef(new Map<string, Promise<Comment | null>>());
 
+  /**
+   * **What each unsettled create was asked to store, so `pagehide` can send
+   * it.** The same lifetime as `creating`: in when `create` is called, out
+   * when its task settles.
+   *
+   * Since 2026-10-04 a selection is stored the moment it is made and the
+   * reader is told so by the paint (or, in the first seconds of a page, will
+   * be once the opening read lands). Nothing on screen is then holding the
+   * words: the box may be closed, and a create still held behind the opening
+   * read, or inside `apiFetch`'s wait for a token, has sent nothing. A reload
+   * in that window lost the highlight with no crash involved. GPT Sol, E1 on
+   * plan 261004f.
+   *
+   * So on `pagehide` every create still here is sent once through the
+   * keepalive writer, same id, same body (`createRequest`). **Every unsettled
+   * one, not only those known to be unsent**: a request already on the wire
+   * from a dying page often never arrives, the hook cannot see past `fetchOk`
+   * to tell the two apart, and the store treats a repeated id with the same
+   * anchor as the same comment, so the worst case is one redundant POST.
+   *
+   * `replayed` is what makes it once. A `pagehide` can be a back/forward-cache
+   * suspend: the page comes back, the held create carries on down its ordinary
+   * path and draws its one row, and a second `pagehide` must not send it again.
+   * Nothing is done on `pageshow` for that reason: the ordinary create was
+   * never cancelled, so there is nothing to reconcile and nothing to apply
+   * twice.
+   */
+  const unsettled = useRef(new Map<string, NewCommentInput>());
+  const replayed = useRef(new Set<string>());
+
   // Switching article throws the tombstones away with the comments they name.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: slug scopes these registries to one article
   useEffect(() => {
     const gone = deleted.current;
     const chains = patching.current;
     const births = creating.current;
+    const inputs = unsettled.current;
+    const sent = replayed.current;
+    const url = `/api/comments/${encodeURIComponent(slug)}`;
+    const leaving = () => {
+      for (const [id, input] of inputs) {
+        /* Deleted while held: the reader's later act was to remove it. */
+        if (gone.has(id) || sent.has(id)) continue;
+        sent.add(id);
+        // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
+        void leavingFetch(url, createRequest(input));
+      }
+    };
+    window.addEventListener("pagehide", leaving);
     return () => {
+      window.removeEventListener("pagehide", leaving);
+      if (unsettled.current === inputs) unsettled.current = new Map<string, NewCommentInput>();
+      if (replayed.current === sent) replayed.current = new Set<string>();
       /* Replace rather than clear. A create held for the article we are leaving
          still needs its old tombstones and chain after this cleanup releases
          its opening gate. The new article must not inherit either collection. */
@@ -730,6 +779,12 @@ export function useComments(slug: string): CommentsApi {
       tombstones.delete(id);
       const births = creating.current;
       const chains = patching.current;
+      const inputs = unsettled.current;
+      const sent = replayed.current;
+      /* A new attempt under a reused id (the gutter's retry) may be replayed
+         again: what `replayed` remembers is the attempt, not the id. */
+      sent.delete(id);
+      inputs.set(id, input);
       const task = (async (): Promise<Comment | null> => {
         /* **Behind the opening read, if it is still out** — see `opening`. The
            `settled` check keeps the ordinary case synchronous: no `await`, so
@@ -821,14 +876,12 @@ export function useComments(slug: string): CommentsApi {
       /* The create is the first write in this id's PATCH queue. An edit made
          from an optimistic row waits until POST has made a real row. */
       chains.set(id, task.then(() => undefined, () => undefined));
-      void task.then(
-        () => {
-          if (births.get(id) === task) births.delete(id);
-        },
-        () => {
-          if (births.get(id) === task) births.delete(id);
-        },
-      );
+      const settled = () => {
+        if (births.get(id) !== task) return;
+        births.delete(id);
+        inputs.delete(id);
+      };
+      void task.then(settled, settled);
       return task;
     },
     [slug, put, forget],

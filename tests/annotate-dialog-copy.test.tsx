@@ -221,24 +221,33 @@ describe("copying the selected passage", () => {
   });
 });
 
-describe("what the help page promises about closing the box", () => {
+/* **Rewritten on 2026-10-04 (plan 261004f).** These two cases pinned the help
+   page to the draft box's rules ("with yellow already picked", "The × and
+   Escape save the highlight", "If you only pressed Copy, closing leaves no
+   highlight"). Outside Referee mode a selection now stores its highlight at
+   once and the box is the comment's own, so each of those sentences became
+   false. What they guard is unchanged: the page must not promise more than the
+   code does. tests/selecting-applies-the-highlight.test.tsx is the behaviour. */
+describe("what the help page promises about selecting", () => {
   it("says that a page-exit save is best effort, not certain", () => {
     const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
-    expect(copy).toContain("leaving or reloading the page tries to");
-    expect(copy).toContain("a failed connection can still lose that last-chance save");
+    expect(copy).toContain("Leaving or reloading the page in that moment still tries to save it");
+    expect(copy).toContain("a failed connection can lose it");
     expect(copy).not.toContain("leaving the page all save it");
   });
 
-  it("says what closing saves since 2026-10-04, and the two closes that keep nothing (spya-ur8kum)", () => {
-    /* The box opens on Yellow and the × and Escape save it; this section said
-       "a box you did not touch saves nothing", which the change made false.
-       Plan 261004a; the behaviour is tests/annotate-dialog-keeps-a-draft.test.tsx. */
+  it("says the highlight is applied on selecting, and the three ways to undo or change it", () => {
     const copy = renderToStaticMarkup(HELP_TOPICS.comments.body);
-    expect(copy).toContain("with yellow already picked");
-    expect(copy).toContain("The × and Escape save the highlight");
-    expect(copy).toContain("If you only pressed Copy, closing leaves no highlight");
-    expect(copy).toContain("is not saved by selecting something else or leaving the page");
-    expect(copy).not.toContain("did not touch saves nothing");
+    expect(copy).toContain("they are highlighted in yellow straight away");
+    expect(copy).toContain("click anywhere else and you are done");
+    expect(copy).toContain("Remove highlight");
+    expect(copy).toContain("Copy, don’t highlight");
+    expect(copy).toContain("Once you have written a note or changed the colour, Copy only copies");
+    expect(copy).toContain("the new highlight replaces the first");
+    /* The draft box's promises, which are no longer true outside Referee mode. */
+    expect(copy).not.toContain("with yellow already picked");
+    expect(copy).not.toContain("The × and Escape save the highlight");
+    expect(copy).toMatch(/In Referee mode<\/strong> selecting works the old way/);
   });
 });
 

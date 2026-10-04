@@ -235,3 +235,39 @@ click-off closes a fresh box and not an ordinary one; Remove highlight; Copy on 
 after a successful write and not after a refused one; ⌘C the same; overlap correction keeps a
 touched row and removes a pristine one; Referee still opens `AnnotateDialog`; the held-create
 `pagehide` replay in `useComments`; a failed create leaves no box.
+
+## As built, 2026-10-04: five things the section above did not say
+
+The design above is what was built. Building it against the whole app
+([`tests/selecting-applies-the-highlight.test.tsx`](../../tests/selecting-applies-the-highlight.test.tsx)
+mounts `App`) turned up five things that follow from *the row is painted between `mouseup` and
+`click`*, each now in code and in [comments.md § The box a selection opens](../project/comments.md#the-selection-box):
+
+1. **The paint collapses the mouse's selection.** `annotateHtml` goes in through `innerHTML`, the
+   paragraph's nodes are replaced, and a range over removed nodes collapses. So "the mouse's
+   selection is left alone" (E4) needed work to be true: `selectAnchor` in `selection.ts` puts it
+   back over the new mark. Without it, select-then-⌘C copied nothing, and the native-copy rule had
+   no selection to recognise.
+2. **So E4 needed the latch after all.** The click that ends a drag can no longer ask the live
+   selection whether a drag just ended. `TableView` remembers that the last `mouseup` completed a
+   selection, for the one click that follows.
+3. **The same words still selected are not a second selection.** A press on a gutter icon does not
+   clear the selection, so its `mouseup` re-read the same anchor. That only re-opened a draft box
+   before; now it would have written the highlight twice. `TableView` remembers the anchor it last
+   reported until the next press in the prose.
+4. **A click on the words just highlighted is a click away.** Its `pointerdown` closes the fresh
+   box; its `mouseup` lands on that highlight's own mark and would have opened it straight back.
+5. **The press arrives before the blur.** Words typed in the fresh box and not yet committed are
+   committed by taking focus off the field before the box closes.
+
+E1 was built as Sol worded it: **every unsettled create** is replayed on `pagehide`, not only ones
+known to be unsent. The hook cannot see past `fetchOk` to tell a held request from one waiting on a
+token, and the store answers a repeated id with the same anchor and colour as the same comment
+(`pg-comments.ts` § `create`), so the cost is one redundant `POST` for a request already on the
+wire.
+
+**Not built, and not decided:** the fresh box says nothing after *Copy, don't highlight* succeeds,
+because the box and the paint go; the earlier section's *"Copied. Not highlighted: pick a colour to
+keep it."* belonged to the provisional design, where the box stayed. And the hint reads *Click away*
+by touch too.
+
