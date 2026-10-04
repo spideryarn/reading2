@@ -212,8 +212,10 @@ improvement that changes their text.
 
 **Production cannot do this today.** A chunk of transcription is cached under a key that includes
 the prompt version, so a reset under `pdf-v4` does not find a `pdf-v3` transcription and reads the
-PDF again. And the cache is swept: 15 of the 21 PDF articles with any cached chunk no longer have
-every page. The *Entropy* article's 29 pages are all still there as of this snapshot.
+PDF again. And the cache is not a complete record: for 15 of the 21 PDF articles with any cached
+chunk, the chunks do not cover every page, and why was not established. The *Entropy* article's 29
+pages are all there as of this snapshot. Nothing deletes them on a timer; a person running
+`scripts/checkpoints-sweep.ts` would.
 
 ## Cost
 
@@ -223,43 +225,51 @@ extra the article had, which was not totalled.
 
 ## After the fixes
 
-**Endnotes typed as paragraphs.** The local *Entropy* import was re-extracted with the fix. All 19
-chunks came from the cache, so it is the same transcription rendered twice:
+## After the code review
 
-| | before | after |
-|---|---|---|
-| notes shown | 48 | 63 |
-| markers linked | 41 | 58 |
-| notes 18–32, `remarkable28` and `memories29 ,` among them | body paragraphs, markers bare | notes, linked |
-| block ids kept against production | 61 of 77 | 61 of 77 |
+GPT Sol's code review of the stage (`8f576723b`,
+[the review](../plans/261004j-footnote-digits-code-review-sol.md)) fixed four defects itself, each
+with a failing test first, and left one open:
 
-The fix changes nothing about ids: a fresh reading still loses 16 blocks.
+- **Endnote recovery was too willing.** An ordinary page footnote followed by a numbered list in
+  the body was moved into the notes. It now needs a `Notes` or `Endnotes` heading and a preceding
+  notes page with no body prose. Re-run on the same *Entropy* transcription: **61 of 63 linked**
+  (the earlier version linked 58).
+- **A quote ending inside a number.** `studies1` quoted from `studies15` gave entry 1. The number
+  is now read from the whole paragraph.
+- **Maths** between TeX delimiters gave false numbers.
+- **Left open (C5):** a note the extraction dropped or did not recognise leaves no trace in the
+  blocks, so "this article has no notes" could be wrong, and a footnote's number could pair a work
+  with the wrong entry. Closed afterwards with a check over the whole article: glued numbers count
+  only when they cite **at least half of the reference list**. On the two real papers that is 69 of
+  69 and 26 of 27; on the *Entropy* paper, whose glued numbers are endnotes, 53 of 292. Sol's probe
+  ([`source-notes-absence.ts`](../../evals/footnote-digits/source-notes-absence.ts)) now asserts
+  the wrong entry is refused against a ten-entry list, and still accepted against a one-entry list,
+  which is the residue.
 
-**Citations on a superscript-citation paper.** Citations was run again on the two local papers.
+Citations run once more on both papers with the final code, the half-the-list check included:
+`s41598-023` **62 of 69** entries kept (6 dropped by the title check, none by the number);
+`jco-2005` **20 of 27** (6 by the title check, 1 by the number). The tables in § After the fixes
+above are the earlier candidate; these two lines are the code as committed.
 
-| paper | run | entries the model named | kept | wrong number | title not in the entry |
-|---|---|---|---|---|---|
-| `s41598-023` | before | 70 | 0 | 69 (and 1 not in the list) | – |
-| `s41598-023` | after | 69 | **61** | 1 | 7 |
-| `jco-2005` | before | 27 | 0 | 27 | – |
-| `jco-2005` | first try at the fix | 27 | 0 | 26 | 1 |
-| `jco-2005` | after | 27 | **20** | 1 | 6 |
+## What to do, article by article
 
-Seven of the 61 kept pairings were read by hand (every ninth): each entry's number is inside the
-range its citing words carry (`spatial memory1–7` → entry 1; `delayed-win-shift task41,42` → entry
-42). The eight works left without an entry include three cited as `1–7` whose titles the model
-gave differently from the list.
+None of this has been run. Each line is what the measurements support.
 
-**The first try at the fix kept nothing, and passed its tests.** It read the number only inside the
-quoted citing words. On the next real run the model's quotes stopped one character short of the
-superscript (`reduced mortality`, not `reduced mortality.¹`), so 26 of 27 were still thrown away.
-The number is now also read from the paragraph, immediately after the quoted words. That was found
-only by running the step on the paper.
+**The three papers that cite with superscript numbers need no re-import.** Their words are right;
+what was missing is the pairing in Citations. Once the fix is deployed, *Citations → make it again*
+on the Metadata page re-reads the list with one model call and changes no block:
+`s41598-023-33209-9` (live), `jco-2005-01-libre` and `arxiv-2212` (archived).
 
-**The Citations step is not steady from run to run on these papers**, fix or no fix. Of five runs
-on the two papers after the first: one returned no works at all (`s41598-023`, 6,216 output tokens,
-nothing counted as dropped), and one named no entry for any of 27 works (`jco-2005`). Neither is
-caused by this change and neither was chased.
+**Footnote articles:**
+
+| article | what would link | what of Greg's is at risk | supported by the measurements |
+|---|---|---|---|
+| `entropy-26-00481` (live) | re-render: 61 of 63 notes. Re-import: 58 of 63 | re-render: nothing (one table block, 6 seconds of reading time). Re-import: the block under 4 of 7 comments and passage chats, 15 of 73 reading-time blocks | **Re-render, not re-import.** It needs a small new operation and a deploy |
+| `distributed-representations` (live), `2406-01506v1` (live) | 2 footnotes each | nothing: no comment, chat or reading time on either | re-import is safe |
+| `nagel-bat` (live) | 13 of 16; three notes missing from the fresh reading | its one passage chat loses its block; 22 of 33 blocks change | only a re-import is possible (no stored transcription). Greg's call: 13 links against one chat anchor |
+| Kuhn (live, 142 pages) | 50 of 60 on the stored transcription | one of two passage chats; a fresh reading was not bought (about $0.50, and 2,030 blocks to re-match) | leave, unless the re-render operation is built: then it applies to the 136 pages stored |
+| `nihms-536461`, `revistes-ub-30977`, `arxiv-2610` (archived) | 3, 1 and 1 | reading time only; `revistes` has 2 comments | leave |
 
 ## What this does not show
 

@@ -165,6 +165,16 @@ stages above disagree, this table is the plan.**
 
 ## Results
 
+**The code review** (GPT Sol, write-capable, of `8f576723b` —
+[261004j-footnote-digits-code-review-sol.md](261004j-footnote-digits-code-review-sol.md)) fixed
+four P1s itself, red first: C1 numbered body lists retyped as endnotes, C2 notes continued across a
+page, C3 a quote ending inside a number, C4 maths read as numbers. Its diff was read and kept. It
+left **C5** open as wider work: `hasNotes` cannot see a note the extraction dropped. C5 was then
+closed here rather than overruled, with `citesMostOfListGlued` (glued numbers count only when they
+cite at least half the reference list) and a red test; the residue is in that function's comment
+and in the [postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md)
+Sol wrote. That last fix was written after the review and has not itself been reviewed by Sol.
+
 The numbers, the method and the per-article table are in
 [261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).
 What changed about the plan as it ran:
@@ -173,7 +183,7 @@ What changed about the plan as it ran:
   footnote markers, 168 citation numbers, 31 byline marks, 392 not markers.
 - **Stage 2** found two things a fresh import still gets wrong, and both are fixed with a red test
   first: a page of endnotes typed as paragraphs (`endnotesTypedAsProse`, `src/pdf-read.ts`), and
-  Citations reading a reference number only in square brackets (`gluedNumbers`, `markerAfter`,
+  Citations reading a reference number only in square brackets (`gluedNumbers`, `markersInBlock`,
   `hasNotes`, `src/citations.ts`). The review's F4 said the Citations change could not be judged on
   stored lists; it was judged instead by running the step on two real papers locally, which is also
   what showed the first version of the fix kept nothing.

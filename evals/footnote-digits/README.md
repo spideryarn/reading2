@@ -5,6 +5,18 @@ The scripts behind
 They read production and write nothing there. The data they produce is real articles and a reader's
 annotations: **keep it outside the repo and delete it afterwards.**
 
+The exception is `source-notes-absence.ts`: an offline, synthetic probe GPT Sol wrote in its code
+review. It uses no credentials. It shows a real source note leaving `hasNotes` false, and asserts
+what follows from that today: a footnote's number does **not** pair a work with entry 2 of a
+ten-entry list (`citesMostOfListGlued`), and still does with a one-entry list. Run:
+
+```sh
+node --import tsx evals/footnote-digits/source-notes-absence.ts
+```
+
+The [postmortem](../../docs/postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md)
+names the class.
+
 ```
 export FD_DATA=/some/dir/outside/the/repo
 

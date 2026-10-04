@@ -62,6 +62,7 @@ import {
   PROMPT_VERSION,
   scholarUrl,
   systemPrompt,
+  toDrafts,
   verifyEntry,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
@@ -1506,6 +1507,12 @@ describe("glued and superscript cites", () => {
     expect(glued("see Fig.3 and Eq.2")).toEqual([]);
   });
 
+  it("does not read the numbers inside delimited maths as cites", () => {
+    expect(glued(String.raw`Use \(\log2(x)\) before the transformation.`)).toEqual([]);
+    expect(glued(String.raw`The exponent is \(f(x)2\), not an entry.`)).toEqual([]);
+    expect(glued(String.raw`The claim \(f(x)2\) follows earlier studies15.`)).toEqual([15]);
+  });
+
   it("keeps the cite and leaves a quantity that follows a prose comma", () => {
     expect(glued("in earlier studies15, 20 patients were")).toEqual([15]);
     expect(glued("in earlier studies15, 20 mg daily")).toEqual([15]);
@@ -1575,6 +1582,70 @@ describe("glued and superscript cites", () => {
       expect(drops.entryMismatch).toBe(1);
     });
 
+    it("ignores glued numbers when only a note id survives on a block", () => {
+      const identified = block("spya-n00002", "A note without its role.", { noteId: "spya-note-0123456789" });
+      const { row, drops } = paired(8, [BODY, identified]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    /* GPT Sol's C5 (review of 261004j): a note the extraction left out or did
+       not recognise leaves no block behind, so "no notes" cannot be read off
+       the blocks alone. A paper that really cites by glued numbers cites most
+       of its list that way; one stray glued number against a ten-entry list is
+       a footnote's marker far more often than a reference. */
+    it("ignores glued numbers that cover little of the reference list", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("…and reads them when the body cites at least half the list that way", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const more = block("spya-b00003", "Earlier work1–4 and a later review6,7 agree.");
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY, more],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBe(ENTRY_8);
+    });
+
     it("…and when a body block carries a note marker", () => {
       const marked = block("spya-b00002", "A remark.", { html: `<p>A remark.<sup ${REF_ATTR}="spya-n00009">1</sup></p>` });
       const { row, drops } = paired(8, [BODY, marked]);
@@ -1621,6 +1692,16 @@ describe("glued and superscript cites", () => {
       expect(verified([at("It was given to")])).toEqual([]);
       expect(verified([at("recurrence and reduced")])).toEqual([]);
       expect(verified([at("p38 signalling in most")])).toEqual([]);
+    });
+
+    it.each([
+      ["The earlier studies15 were conclusive.", "earlier studies1", [15]],
+      ["The prescribed dose5mg was used.", "prescribed dose5", []],
+      ["The effect rose12% overall.", "effect rose12", []],
+      ["The lesion covers area5 cm².", "lesion covers area5", []],
+    ])("reads a partial quoted number in its block context: %s", (text, quote, expected) => {
+      const body = block(B.id, text);
+      expect(verified([{ blockId: B.id, quote, start: text.indexOf(quote) }], [body])).toEqual(expected);
     });
 
     it("reads nothing when the offset is wrong and the quote repeats, and finds a lone quote anyway", () => {

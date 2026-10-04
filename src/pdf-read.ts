@@ -2133,81 +2133,70 @@ function numericLabel(text: string): number | null {
  * **Deliberately narrow**, because the wrong direction here moves the author's
  * prose out of the article and into a note. A page is retyped only when:
  *
- * 1. **every** `paragraph`, `quote` and `listitem` on it opens with a numeric
- *    label that is exactly one more than the note before it, or is a `continues`
- *    of one that does. One ordinary paragraph and the whole page is left alone;
- * 2. **the count starts from a real `footnote` record**, numbered one less,
- *    with nothing but `publisher` furniture between — a running header at the
- *    page turn. A heading, a reference or a figure in between ends it, so a
- *    numbered list in the body is not picked up by a footnote pages earlier.
+ * 1. **every** `paragraph`, `quote` and `listitem` on it opens with the next
+ *    numeric label, or is an unlabelled `continues` of the preceding note;
+ * 2. a `Notes` or `Endnotes` heading established the section, and the adjacent
+ *    preceding page ends in a numbered note and contains no body prose. Page
+ *    footnotes and title-page affiliations cannot anchor the repair;
+ * 3. the candidate page contains only notes, their prose and `publisher`
+ *    furniture. A heading, a reference or a figure leaves the page alone.
  *
- * The next `footnote` record carrying on the count would be a second anchor, and
- * it is **not required**: the notes may end on the mistyped page.
+ * The next `footnote` record is not required: notes may end on the mistyped
+ * page. Each accepted page can anchor the next; a failed trial changes nothing.
+ * A continuation may carry on a typed or recovered note, across a page turn.
  */
 function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
   const out = [...records];
-  const decided = new Set<number>();
-  /* The number of the note we are in, or null once anything but furniture has
-     come since; and whether that note is one retyped here, which is the only
-     kind a `continues` paragraph is taken to carry on. */
   let last: number | null = null;
-  let retyped = false;
-  /* The ones that opened with the next label, as against carrying one on. */
-  const labelled = new Set<PdfRecord>();
-  const step = (record: PdfRecord, asNote: boolean): boolean => {
-    if (record.type === "publisher" || !record.text.trim()) return true;
-    if (record.type === "footnote") {
-      if (!(record.continues && last !== null)) {
-        last = numericLabel(record.text.trim());
-        retyped = false;
-      }
-      return true;
-    }
-    if (CITING.has(record.type) && asNote) {
-      const n = numericLabel(record.text.trim());
-      if (last !== null && n === last + 1) {
-        last = n;
-        retyped = true;
-        labelled.add(record);
-        return true;
-      }
-      if (record.continues && retyped) return true;
-      return false;
-    }
-    last = null;
-    retyped = false;
-    return true;
-  };
+  let previousPage: number | null = null;
+  let previousWasNotes = false;
+  let inNotes = false;
 
-  for (const [i, record] of out.entries()) {
-    if (CITING.has(record.type) && !decided.has(record.page)) {
-      /* The first prose on its page: read the rest of the page as if it were
-         notes, and keep that reading only if every piece of prose fits. */
-      decided.add(record.page);
-      const before: { last: number | null; retyped: boolean } = { last, retyped };
-      let fits = true;
-      for (let j = i; j < out.length && fits; j++) {
-        if (out[j]!.page === record.page) fits = step(out[j]!, true);
-      }
-      ({ last, retyped } = before);
-      if (fits) {
-        for (let j = i; j < out.length; j++) {
-          const r = out[j]!;
-          if (r.page !== record.page || !CITING.has(r.type)) continue;
-          /* A labelled one starts a note whatever its `continues` says, as its
-             label says it does; `collectNotes` would otherwise join it on. */
-          out[j] = { ...r, type: "footnote", continues: r.continues && !labelled.has(r) };
+  for (let start = 0; start < out.length;) {
+    const page = out[start]!.page;
+    let end = start + 1;
+    while (end < out.length && out[end]!.page === page) end++;
+    const original = out.slice(start, end);
+    const candidate = [...original];
+    let number = last;
+    let fits: boolean = inNotes && previousWasNotes && previousPage === page - 1 && number !== null;
+    for (let j = 0; j < candidate.length && fits; j++) {
+      const r = candidate[j]!;
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues) number = numericLabel(r.text.trim());
+      } else if (CITING.has(r.type)) {
+        const n = numericLabel(r.text.trim());
+        if (number !== null && n === number + 1) {
+          number = n;
+          // A new label starts a note even when the model says `continues`.
+          candidate[j] = { ...r, type: "footnote", continues: false };
+        } else if (number !== null && n === null && r.continues) {
+          candidate[j] = { ...r, type: "footnote" };
+        } else {
+          fits = false;
         }
+      } else {
+        fits = false;
       }
     }
-    /* `out[i]`, not `record`: a retyped one is a footnote from here on. */
-    const now = out[i]!;
-    if (now.type === "footnote" && now !== record) {
-      /* Already checked above; walk it again to carry the count forward. */
-      step(record, true);
-    } else {
-      step(now, false);
+    // Commit a whole page, or none of it. A failed trial cannot affect later pages.
+    const accepted: PdfRecord[] = fits ? candidate : original;
+    out.splice(start, accepted.length, ...accepted);
+    previousWasNotes = accepted.some((r) => r.type === "footnote" && r.text.trim()) &&
+      !accepted.some((r) => CITING.has(r.type) && r.text.trim());
+    if (previousPage !== page - 1) last = null;
+    for (const r of accepted) {
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues || last === null) last = numericLabel(r.text.trim());
+      } else {
+        last = null;
+        if (r.type.startsWith("heading")) inNotes = /^(?:end)?notes$/i.test(r.text.trim());
+      }
     }
+    previousPage = page;
+    start = end;
   }
   return out;
 }

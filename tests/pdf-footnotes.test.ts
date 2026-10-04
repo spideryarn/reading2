@@ -194,6 +194,74 @@ describe("a page of endnotes the model typed as paragraphs", () => {
     expect(paragraphs(records)).toEqual(expect.arrayContaining(["19 This may.", "20 For instance."]));
   });
 
+  it.each([false, true])("keeps numbered body instructions after an ordinary page footnote (Notes heading: %s)", (heading) => {
+    const records = [
+      ...(heading ? [r(4, "heading1", "Notes")] : []),
+      r(5, "paragraph", "The claim has a qualification5."),
+      r(5, "footnote", "5 A qualification."),
+      r(6, "listitem", "6 Apply the treatment to every patient."),
+      r(6, "listitem", "7 Measure the outcome."),
+    ];
+    expect(listed(records)).toEqual(["A qualification."]);
+    expect(paragraphs(records)).toEqual(expect.arrayContaining([
+      "6 Apply the treatment to every patient.", "7 Measure the outcome.",
+    ]));
+  });
+
+  it("keeps numbered body prose after a title page containing only an affiliation note", () => {
+    const records = [
+      r(1, "heading1", "A study of memory"),
+      r(1, "footnote", "1 Department of Neuroscience."),
+      r(2, "listitem", "2 Recruit participants."),
+      r(2, "listitem", "3 Collect the measurements."),
+    ];
+    expect(paragraphs(records)).toEqual(expect.arrayContaining([
+      "2 Recruit participants.", "3 Collect the measurements.",
+    ]));
+  });
+
+  it("keeps a numbered body page across a gap in the supplied pages", () => {
+    const records = [prose, ...notesPage, r(25, "paragraph", "18 Participants were enrolled.")];
+    expect(paragraphs(records)).toContain("18 Participants were enrolled.");
+  });
+
+  it("carries a retyped note's continuation across a page turn", () => {
+    const records = [
+      prose, ...notesPage,
+      r(18, "paragraph", "18 There may be."),
+      r(18, "paragraph", "19 This may need"),
+      r(19, "publisher", "Running header"),
+      r(19, "paragraph", "more explanation.", true),
+      r(19, "paragraph", "20 For instance."),
+    ];
+    expect(listed(records)).toEqual([
+      "This is because.", "They can.", "There may be.", "This may need more explanation.", "For instance.",
+    ]);
+    expect(paragraphs(records).join(" ")).not.toContain("more explanation.");
+  });
+
+  it("recovers a page beginning with a continuation of a typed endnote", () => {
+    const records = [
+      prose, ...notesPage,
+      r(18, "paragraph", "the rest of note seventeen.", true),
+      r(18, "paragraph", "18 There may be."),
+    ];
+    expect(listed(records)).toEqual([
+      "This is because.", "They can. the rest of note seventeen.", "There may be.",
+    ]);
+  });
+
+  it("recovers the full measured 18–32 sequence without mutating the transcription", () => {
+    const records = [prose, ...notesPage,
+      ...Array.from({ length: 15 }, (_, i) => r(18, "paragraph", `${18 + i} Note body ${18 + i}.`)),
+      r(19, "footnote", "33 The next note."),
+    ];
+    const before = structuredClone(records);
+    expect(listed(records)).toHaveLength(18);
+    expect(paragraphs(records).join(" ")).not.toContain("Note body");
+    expect(records).toEqual(before);
+  });
+
   it("leaves a page's one continued body paragraph alone, though a footnote ended the page before", () => {
     const records = [
       r(5, "paragraph", "A sentence5 that runs on"),
