@@ -152,12 +152,12 @@ import { HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
 import { STEPS, type PipelineStep, type StepContext, type StepProduct } from "../src/pipeline.js";
 import type { ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
 import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
-import { mintAttempt } from "../src/store/jobs.js";
+import { mintAttempt, StaleAttemptError } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { StoreSession } from "../src/store/session.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
-import type { Job, JobStep, StepName } from "../src/types.js";
+import type { BlockId, Job, JobStep, StepName, StepPreview } from "../src/types.js";
 
 /* A `restoreStore` closure stood here until 2026-09-05, put back in `afterAll`
    rather than after the imports because two cases below reload `src/store/live.ts`
@@ -964,5 +964,185 @@ describe("one claim walks the whole job", () => {
     /* And the second job's own output is there, so this is not green because
        nothing happened. */
     expect(after.blocks).not.toBeNull();
+  });
+
+  /**
+   * **A step's preview is on the job row only while the step is running**
+   * (docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2, and
+   * GPT Sol's review of that stage's plan, S4, S5 and S7).
+   *
+   * The fake steps here are `fetch` and `extract`, as everywhere in this file:
+   * a preview's `kind` is the artefact's and the runner does not read it, so
+   * which step carries it is beside the point.
+   *
+   * **Mutations, watched red on 2026-10-04**, each against src/jobs.ts: with no
+   * `ctx.preview` at all, all six are red; with `await written` taken out of
+   * `stepPreviews`'s `settle`, the delayed-write case alone is.
+   */
+  describe("a step's preview", () => {
+    const PREVIEW: StepPreview = {
+      kind: "simple-brief",
+      paragraphs: [{ text: "What the piece is about, in one plain sentence.", ids: ["spya-k3m9qt" as BlockId] }],
+    };
+
+    const stored = async (id: string) => (await pgJobStore.get(id, OWNER))?.steps ?? [];
+
+    /** `ctx.preview` returns nothing, so a case that wants the row to carry it waits for the row. */
+    async function untilPreviewStored(id: string): Promise<JobStep | undefined> {
+      for (let i = 0; i < 100; i += 1) {
+        const [first] = await stored(id);
+        if (first?.preview) return first;
+        await new Promise((go) => setTimeout(go, 20));
+      }
+      return (await stored(id))[0];
+    }
+
+    it("is on the stored row while the step runs, and gone once it succeeds", async () => {
+      const seen: { during?: JobStep | undefined; after?: JobStep | undefined } = {};
+      const names: StepName[] = ["fetch", "extract"];
+      const { job, parts } = await fixture("test-walk-preview-success", names, {
+        fetch: async (ctx) => {
+          ctx.preview(PREVIEW);
+          seen.during = await untilPreviewStored(job.id);
+        },
+        extract: async () => {
+          seen.after = (await stored(job.id))[0];
+        },
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(seen.during?.status).toBe("running");
+      expect(seen.during?.preview).toEqual(PREVIEW);
+      expect(seen.after?.status, "the next step ran, so the first one settled").toBe("done");
+      expect(seen.after?.preview, "nothing of the artefact stays on the job row").toBeUndefined();
+      expect(advanced?.job.status).toBe("done");
+      expect(advanced?.job.steps.map((s) => s.preview)).toEqual([undefined, undefined]);
+      expect((await stored(job.id)).map((s) => s.preview)).toEqual([undefined, undefined]);
+    });
+
+    it("is gone from the row once the step fails", async () => {
+      let during: JobStep | undefined;
+      const { job, parts } = await fixture("test-walk-preview-failure", ["fetch"], {
+        fetch: async (ctx) => {
+          ctx.preview(PREVIEW);
+          during = await untilPreviewStored(job.id);
+          throw new Error("the second half fell over");
+        },
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(during?.preview, "it has to have been stored for its absence to mean anything").toEqual(PREVIEW);
+      expect(advanced?.job.status).toBe("error");
+      expect(advanced?.job.steps[0]?.status).toBe("error");
+      expect(advanced?.job.steps[0]?.preview).toBeUndefined();
+      expect((await stored(job.id))[0]?.preview).toBeUndefined();
+    });
+
+    it.each([
+      ["an ordinary error", "error", (_id: string): Error => new Error("the database went away")],
+      ["a stale-attempt refusal", "stale", (id: string): Error => new StaleAttemptError(id)],
+    ])("does not fail the step when its write is refused with %s", async (_label, tag, refusal) => {
+      const names: StepName[] = ["fetch", "extract"];
+      let refused = 0;
+      const { ran, job, parts } = await fixture(`test-walk-preview-refused-${tag}`, names, {
+        fetch: (ctx) => {
+          ctx.preview(PREVIEW);
+        },
+      });
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+        if (steps.some((s) => s.preview)) {
+          refused += 1;
+          throw refusal(id);
+        }
+        return await realNote(id, attempt, steps);
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(refused, "the preview write has to have been tried").toBe(1);
+      expect(ran.names).toEqual(names);
+      expect(advanced?.busy).toBe(false);
+      expect(advanced?.job.status).toBe("done");
+      expect(advanced?.job.steps.map((s) => s.status)).toEqual(["done", "done"]);
+      expect((await stored(job.id)).map((s) => s.preview)).toEqual([undefined, undefined]);
+    });
+
+    it("waits for a write still in flight before settling, so a late one cannot put the step back", async () => {
+      /**
+       * `noteProgress` replaces the whole `steps` array and its fence is the
+       * job's claim, not the step. So a preview write serialised while the step
+       * was `running`, and reaching Postgres after the step has settled, would
+       * put back `running` and the preview — on a claim that is still good,
+       * which the fence accepts. Sol's S4.
+       *
+       * **The snapshot is the point.** The walk hands `noteProgress` its live
+       * `job.steps`; a delayed call that passed that on would write whatever
+       * the steps had become by then and prove nothing. So the spy copies the
+       * steps as they were when the write was asked for, which is what a query
+       * already on the wire holds.
+       */
+      const names: StepName[] = ["fetch", "extract"];
+      const seen: { midWalk?: JobStep[] } = {};
+      let late: Promise<unknown> = Promise.resolve();
+      const { job, parts } = await fixture("test-walk-preview-late", names, {
+        fetch: (ctx) => {
+          /* And returns at once: the write is still in flight when `run` ends. */
+          ctx.preview(PREVIEW);
+        },
+        extract: async () => {
+          /* Longer than the delay below, so a late write has landed by now. */
+          await new Promise((go) => setTimeout(go, 500));
+          await late.catch(() => undefined);
+          seen.midWalk = await stored(job.id);
+        },
+      });
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let delayed = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps) => {
+        if (!steps.some((s) => s.preview)) return await realNote(id, attempt, steps);
+        delayed += 1;
+        const asAsked = structuredClone(steps);
+        const landing = new Promise((go) => setTimeout(go, 200)).then(() => realNote(id, attempt, asAsked));
+        late = landing;
+        return await landing;
+      });
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(delayed, "the preview write has to have been the delayed one").toBe(1);
+      expect(seen.midWalk?.[0]?.status, "the late write put the settled step back to running").toBe("done");
+      expect(seen.midWalk?.[0]?.preview, "the late write put the preview back").toBeUndefined();
+      expect(advanced?.job.status).toBe("done");
+      const final = await stored(job.id);
+      expect(final.map((s) => s.status)).toEqual(["done", "done"]);
+      expect(final.map((s) => s.preview)).toEqual([undefined, undefined]);
+    });
+
+    it("starts a requeued step without the preview its last attempt left", async () => {
+      /* A requeue resets a running step to `pending` and keeps its other fields
+         (src/store/pg-jobs.ts § `settledSteps`), so the row a second attempt
+         claims can still carry the first one's preview. Written here as the
+         requeue leaves it. Sol's S5. */
+      let atStart: JobStep | undefined;
+      const { job, parts } = await fixture("test-walk-preview-requeue", ["fetch"], {
+        fetch: async () => {
+          atStart = (await stored(job.id))[0];
+        },
+      });
+      await getDb()
+        .update(jobsTable)
+        .set({ steps: job.steps.map((s) => ({ ...s, preview: PREVIEW })) })
+        .where(eq(jobsTable.id, job.id));
+      expect((await stored(job.id))[0]?.preview, "the row has to start with one").toEqual(PREVIEW);
+
+      const advanced = await advanceAsOwner(job.id, parts);
+
+      expect(atStart?.status).toBe("running");
+      expect(atStart?.preview, "the old attempt's preview was shown under the new attempt").toBeUndefined();
+      expect(advanced?.job.status).toBe("done");
+    });
   });
 });

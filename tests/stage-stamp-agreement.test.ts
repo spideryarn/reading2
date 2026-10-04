@@ -98,10 +98,11 @@ import { partsOf } from "../src/arc.js";
 import type { Article } from "../src/article-input.js";
 import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
-import { SIMPLE_LEVELS } from "../src/types.js";
-import { STEPS } from "../src/pipeline.js";
+import { SIMPLE_LEVELS, type SimpleSummary } from "../src/types.js";
+import { SIMPLE_PROMPT_VERSION } from "../src/simple-summary.js";
+import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
+import { type MemoryArtifactStore, memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import type { ArtifactReads } from "../src/store/artifacts.js";
 
 /* ------------------------------------------------------- the stubbed model -- */
@@ -245,6 +246,7 @@ function ctxFor(): StepContext {
     power: "standard",
     slug: SLUG,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };
@@ -596,5 +598,66 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
     expect(dated.expected, "timeline's stamp ignores the publication date").not.toBe(
       undated.expected,
     );
+  }, 30_000);
+});
+
+/**
+ * **An unforced run never rewrites a stored summary for the prompt's age**
+ * (docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2, GPT
+ * Sol's S1). `simple`'s stamp expects the prompt version of the summary already
+ * stored, so only the article moving makes an unforced job write again.
+ * *Outdated* is a different question, asked against the current version by the
+ * owner's GET and Metadata (src/store/pg.ts), and nothing here touches it.
+ *
+ * `stepIsDone` is the whole of the unforced decision (src/jobs.ts skips on
+ * `true`), so it is asked directly, as tests/quiz-step-registration.test.ts
+ * does.
+ *
+ * **Mutation, watched red on 2026-10-04.** The stamp's `promptVersion` put back
+ * to `SIMPLE_PROMPT_VERSION` alone: the first case goes red and the other three
+ * stay green.
+ */
+describe("an unforced simple run, with a summary already stored", () => {
+  /** A fresh store over the fixture, holding the summary the real stage writes, edited by `change`. */
+  async function storeWith(change: (simple: SimpleSummary) => void): Promise<MemoryArtifactStore> {
+    const store = await memoryArtefactsFrom(path.join(root, "with-meta"), SLUG);
+    answers.length = 0;
+    answers.push(...scriptFor("simple", withMeta.article));
+    const result = await STEPS.simple.run(ctxFor(), store, nullCheckpointStore());
+    expect(answers).toEqual([]);
+    const simple = result.parts?.simple;
+    if (!simple) throw new Error("the simple stage returned no summary to store");
+    change(simple);
+    store.plant(SLUG, "simple", "simple", simple);
+    return store;
+  }
+
+  it("is done when the stored summary was written by an older prompt", async () => {
+    const store = await storeWith((simple) => {
+      simple.promptVersion = "simple-prompt/3";
+    });
+    expect(SIMPLE_PROMPT_VERSION, "the control: the stored version really is an older one").not.toBe("simple-prompt/3");
+    expect((await store.stampFor(SLUG, "simple"))?.promptVersion).toBe("simple-prompt/3");
+    expect(await stepIsDone(STEPS.simple, ctxFor(), store)).toBe(true);
+  }, 30_000);
+
+  it("is done when it was written by the current prompt", async () => {
+    const store = await storeWith(() => {});
+    expect((await store.stampFor(SLUG, "simple"))?.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
+    expect(await stepIsDone(STEPS.simple, ctxFor(), store)).toBe(true);
+  }, 30_000);
+
+  it("is not done when the article has moved, whatever the prompt's age", async () => {
+    const store = await storeWith((simple) => {
+      simple.promptVersion = "simple-prompt/3";
+      simple.sourceHash = "0000000000000000";
+    });
+    expect(await stepIsDone(STEPS.simple, ctxFor(), store)).toBe(false);
+  }, 30_000);
+
+  it("is not done when nothing is stored", async () => {
+    const store = await memoryArtefactsFrom(path.join(root, "with-meta"), SLUG);
+    store.forget(SLUG, "simple", "simple");
+    expect(await stepIsDone(STEPS.simple, ctxFor(), store)).toBe(false);
   }, 30_000);
 });

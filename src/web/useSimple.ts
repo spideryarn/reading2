@@ -18,7 +18,13 @@
  * and a visitor reads the paragraphs off the public payload with no hook at all.
  */
 import { useCallback, useEffect, useState } from "react";
-import type { Job, SimpleSummary, SimpleSummaryResponse } from "../types.js";
+import {
+  isSimpleParagraphs,
+  type Job,
+  type SimpleParagraph,
+  type SimpleSummary,
+  type SimpleSummaryResponse,
+} from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
@@ -52,6 +58,13 @@ export interface UseSimple {
    * replaced them nor failed — every forced control waits. rewrite-hold.ts.
    */
   rewriting: boolean;
+  /**
+   * **Brief, shown before anything is stored**: the paragraphs the running job
+   * announced on its step (`JobStep.preview`, src/types.ts), or null. Null
+   * whenever a summary is stored, so a rewrite never draws over the one on
+   * screen. See `keptPreview` for how long it is held.
+   */
+  preview: SimpleParagraph[] | null;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   /**
@@ -65,6 +78,58 @@ export interface UseSimple {
   /** The forced run — the stale notice's button. It replaces the paragraphs. */
   regenerate(): Promise<void>;
   cancel(id: string): void;
+}
+
+/** A preview this hook has seen, and the job and article it came from. */
+interface KeptPreview {
+  slug: string;
+  jobId: string;
+  paragraphs: SimpleParagraph[];
+}
+
+/** Brief's paragraphs on a job's `simple` step, if the job is showing any that can be drawn. */
+function briefPreviewOf(job: Job | null): SimpleParagraph[] | null {
+  const preview = job?.steps.find((step) => step.name === "simple")?.preview;
+  if (preview?.kind !== "simple-brief") return null;
+  /* The stored summary's own guard: off the wire, so checked before it is drawn. */
+  return isSimpleParagraphs(preview.paragraphs, "brief") ? preview.paragraphs : null;
+}
+
+/**
+ * **What the hook remembers of a preview, after this render's news.**
+ *
+ * The server keeps a preview on the job row only while the step runs, and the
+ * job leaves `useStepJob` a render before the stored summary's read lands, or
+ * for good when it fails. So the band cannot draw "the running job's preview":
+ * it would blank between the job and the read, and a failed write would lose
+ * the Brief the reader was already reading (GPT Sol's review of plan 261004f
+ * stage 2, S3). The last one seen is held instead, with the id of its job:
+ *
+ * - **dropped once the stored summary has loaded**, which is the same Brief;
+ * - **dropped when a different job becomes current** for this article, since
+ *   a retry writes both levels again and its Brief may differ;
+ * - **dropped when the hook moves to another article**;
+ * - kept otherwise, so it survives the job finishing or failing.
+ *
+ * In the page's memory only: after a reload a failed write shows its failure
+ * without Brief. Returns `kept` itself when nothing changed, so the caller can
+ * compare by identity.
+ */
+function keptPreview(
+  kept: KeptPreview | null,
+  slug: string,
+  job: Job | null,
+  stored: boolean,
+): KeptPreview | null {
+  if (stored) return null;
+  const live = briefPreviewOf(job);
+  if (job && live) {
+    const same = kept?.slug === slug && kept.jobId === job.id && kept.paragraphs === live;
+    return same ? kept : { slug, jobId: job.id, paragraphs: live };
+  }
+  if (!kept || kept.slug !== slug) return null;
+  if (job && job.id !== kept.jobId) return null;
+  return kept;
 }
 
 export function useSimple(slug: string): UseSimple {
@@ -156,6 +221,14 @@ export function useSimple(slug: string): UseSimple {
      end button — spends; arrival never does. */
   useAutoRun(slug, "simple", status, ensure, reload);
 
+  /* Adjusted while rendering, not in an effect, so there is no render in which
+     the job has gone and the preview has not yet been remembered. React runs
+     the render again at once when the state moves; `keptPreview` hands back
+     the same object when nothing has, which is what ends that. */
+  const [kept, setKept] = useState<KeptPreview | null>(null);
+  const preview = keptPreview(kept, slug, queue.job, status === "ready" && simple !== null);
+  if (preview !== kept) setKept(preview);
+
   return {
     status,
     simple,
@@ -170,6 +243,7 @@ export function useSimple(slug: string): UseSimple {
     stalled: queue.stalled,
     starting: queue.starting,
     rewriting: hold.rewriting,
+    preview: preview?.paragraphs ?? null,
     retryRead,
     refresh,
     ensure,

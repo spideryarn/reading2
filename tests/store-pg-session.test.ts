@@ -741,6 +741,7 @@ function contextFor(slug: string): StepContext {
     power: "standard",
     slug,
     report: () => {},
+    preview: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
   };

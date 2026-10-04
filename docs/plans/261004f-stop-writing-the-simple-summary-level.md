@@ -128,6 +128,194 @@ gates green; the measurement recorded.
 - Renaming the step or the artefact.
 - Deleting old rows' Simple text.
 
+## Stage 2: show Brief as soon as it is written, then a longer Fuller
+
+Added 2026-10-04, after stage 1 landed (`c9900a0e2`, `a27ebd3ad`). Not in this plan when it was
+first reviewed; reviewed on its own before it is built.
+
+> Q-summary-fuller-length D and C
+>
+> — Greg, 2026-10-04 (relayed by the Overseer). D is stage 1. C is option C of
+> [261004a](../investigations/261004a-summary-fuller-longer-and-bold-and-bullets-prompt-eval.md):
+> a Fuller of about 490 words, with Brief shown as soon as it is written.
+
+The queue item (qi-nec8qqzc), as the Overseer relayed it: *"Store and show each level as it lands
+(Brief first), then raise Fuller's ask to about 500 (two numbers in PITCH.fuller,
+src/simple-summary.ts; the limits already allow it)."*
+
+### What it is for
+
+A reader who opens Summary sees nothing until both levels are written, about 30 s today. A Fuller
+of about 500 words took 55 s when it was tried, which is why it was not shipped. Brief on its own
+is ready much sooner, and it is the level Summary opens on. So: show Brief the moment it is
+written and checked, let Fuller arrive when it does, and then Fuller can be longer.
+
+### Two facts that decide the design (each checked in the code)
+
+1. **A step cannot publish its artefact before it returns** (it can write a checkpoint; see S6
+   below). It is handed a reads-only store
+   (`src/jobs.ts`: `run(ctx, session.reads, session.checkpoints)`), and its `parts` are written to
+   a draft revision that is published only when the job ends (`src/store/session.ts` § `commit`).
+   The owner's read looks at the published revision, so a mid-run read finds nothing.
+2. **Nothing a step says reaches the reader until the step ends.** `ctx.report` sets `step.detail`
+   in memory (`src/jobs.ts`, "In memory only"); the job row is written at step start and step end
+   (`note()` → `noteProgress`), and the browser polls that row every second.
+
+### The design: Brief rides on the live job; both are stored at the end
+
+```
+ press ──► job row: simple running                       browser polls the job each second
+            │
+            ├─ Fuller call starts (article cached) ─────────────────────────────┐
+            ├─ Brief call ─► valid ─► checked ─► ctx.preview(brief)             │
+            │                              │                                    │
+            │                 job row: step.preview = Brief's paragraphs        │
+            │                              └──► the band draws Brief  (~15 s?)  │
+            │                                                                   ▼
+            └─ both levels ─► stored together, as today ──► the band re-reads, Fuller is there
+```
+
+- **One new optional field on a job step**: `JobStep.preview`, holding Brief's paragraphs. A step
+  sets it through a new `ctx.preview(...)`, which writes the job row once with the existing
+  `noteProgress`. A failed write is swallowed: the preview is a courtesy, never a reason to fail a
+  paid step.
+- **`generateSimpleSummary` gets `onLevel(level, paragraphs)`**, called once for a level when that
+  level is final: valid, checked, and past any retry. Only Brief is forwarded to the preview.
+- **The band**: with nothing stored and a running job that has a preview, Brief draws the preview's
+  paragraphs with the progress row under them; Fuller draws the progress row and one line saying
+  Brief is ready and Fuller is still being written. When the job ends the band re-reads and draws
+  the stored summary, whose Brief is the same paragraphs, so nothing moves.
+- **What is stored does not change**: both levels or none, the same shape, the same guards. So
+  the public payload, the export, Metadata, the *make public* dialog and every read boundary are
+  untouched, and a rollback reads every row.
+- **The preview is cleared when the step succeeds**, so the reader's summary lives in one place.
+  It is the owner's (jobs are owner-scoped), never logged, never sent to a visitor.
+
+### Where this departs from the queue item's words, on purpose
+
+The item says "store and show". This **shows** Brief as it lands and **stores** both at the end.
+
+**The option passed over: store a Brief-only row mid-run.** It needs a write path around the
+draft-and-publish rule (fact 1), a "partial" answer at every one of the ten places that read the
+artefact, an optional Fuller in the public payload, and a way to resume a write that has Brief and
+not Fuller. That is most of a second storage model, for one difference the reader can see:
+
+**What is given up: if Fuller then fails, Brief is not kept.** Fuller gets its one retry first. If
+it still fails, the job fails, nothing is stored, and the failed job still carries the preview, so
+Brief stays on screen beside the failure and *Try again*. Pressing that writes both again, so the
+reader may see a differently worded Brief, and pays for Brief twice (about a cent). In the 24
+writes measured across this plan and 261004b, none failed. If it turns out to happen, the
+follow-up is to bank Brief as a step checkpoint (the structure step's pattern,
+`src/store/checkpoints.ts`), which costs one additive migration.
+
+This is a product-visible trade-off, so it goes in the debrief as **[Q-brief-kept-on-failure]**
+with the recommendation to leave it.
+
+### The longer Fuller
+
+`PITCH.fuller` goes to the arm 261004b measured and Sol's fidelity pass judged (`fbaza1|a2`):
+"Five to eight paragraphs", about 500 words, never more than 600. That is three values, not the
+item's two: the shape line asked for four to seven paragraphs and would fight the word count.
+`SIMPLE_LIMITS.fuller` (8 paragraphs, 850 words) already allows it. Brief's prompt does not change.
+
+- `SIMPLE_PROMPT_VERSION` becomes `simple-prompt/8`, by the file's own rule. Every stored summary
+  becomes *outdated*, which is silent: the band draws it as before and nothing is rewritten on
+  open (the door rule fires only with nothing stored). Metadata's Rerun writes the longer one.
+- The hash pin in `tests/simple-two-levels.test.ts` keeps Brief's hash and takes Fuller's new one.
+- The copy "usually in about half a minute" in the empty state is rewritten to match.
+
+### Does write-once still hold
+
+Yes. A write still happens only on the door (nothing stored) or a forced rerun. The preview is not
+a second write: it is the same Brief that is stored a few seconds later. The one exception is the
+failure case above, which is an explicit press.
+
+### Measuring it
+
+`evals/simple/probe.ts` records `briefReadyMs` and `fullerReadyMs` through `onLevel`. Three
+articles, two cold writes each:
+
+- **before**: `onLevel` built, Fuller still asked for 350 (stage 1's prompt);
+- **after**: Fuller asked for 500.
+
+Reported: the wait to Brief and to Fuller in each, and cost. This also answers what stage 1 could
+not: whether the slow writes are Fuller's.
+
+### Build order (one stage)
+
+Red first:
+
+1. `tests/simple-summary.test.ts`: `onLevel` is called once per level, with the paragraphs that
+   are then stored; Brief's call comes before Fuller resolves; a level whose attempt was flagged is
+   announced once, with the kept text; not called at all for a level that fails.
+2. A jobs test: a step that calls `ctx.preview(x)` makes the stored job row carry it while the
+   step is running; a `noteProgress` that throws does not fail the step; the preview is gone from
+   the row after the step succeeds and still there after it fails.
+3. `tests/simple-panel.test.tsx`: nothing stored, running job with a preview: Brief draws the
+   paragraphs and the progress row; Fuller draws the progress row and the "still being written"
+   line and none of Brief's text; a failed job with a preview keeps Brief beside the failure; a
+   visitor never gets a preview.
+4. `tests/simple-two-levels.test.ts`: Brief's hash unchanged, Fuller's new, version `/8`.
+
+Then: `src/types.ts` (`JobStep.preview`), `src/pipeline.ts` (`StepContext.preview`, the `simple`
+step passes `onLevel`), `src/jobs.ts` (set, write, swallow, clear on success),
+`src/simple-summary.ts` (`onLevel`, `PITCH.fuller`, the version), `src/web/useSimple.ts` and
+`src/web/SimplePanel.tsx`, `evals/simple/probe.ts`, `docs/project/summaries.md`, the help page if
+it states the wait. Browser check on the box with Playwright, in a Sonnet subagent: press Summary
+on an article with none, see Brief arrive before Fuller.
+
+Done means: Brief is on screen before Fuller is written, with nothing stored early; a failed
+Fuller leaves Brief visible and stores nothing; Fuller comes back at about 500 words; the two
+waits are measured; gates green; Sol's code review read and its fixes committed.
+
+### Sol's review of this stage's plan (refuse), and what changed
+
+[The review](261004f-stop-writing-the-simple-summary-level-stage-2-plan-review-sol.md). It agreed
+with the design ("Brief on the owner's job row, ordinary artifact publication unchanged") and
+refused on three P1s. **Where the text above and this section disagree, this section wins.**
+
+- **S1 (P1), taken, and it is a fix of its own.** An unforced job that includes `simple` rewrites
+  a stored summary whenever the prompt version has moved, because `stepIsDone` compares stamps
+  and the stamp carries the prompt version. The Summary door never does this (it writes only with
+  nothing stored), but the add page's *Generate the main modes* box queues `simple` unforced. That
+  was already true of every earlier bump; `/8` would make every stored summary eligible, against
+  Greg's "the only time we'd rewrite it is if we click Rerun in Metadata". **Fix**: the `simple`
+  step's expected stamp takes the prompt version of the summary already stored, when there is
+  one, so an unforced run never rewrites for the prompt's age. It still rewrites when the article
+  itself moved, and a forced run always writes. The owner's read and Metadata compare against the
+  current version on their own (`src/store/pg.ts`), so *outdated* and Rerun are unchanged. Test
+  first: a stored `/7` summary is done for an unforced run under `/8`, and not done when its
+  `sourceHash` no longer matches.
+- **S2 (P1), not taken here; it goes to Greg.** Summary has two presses of its own that force a
+  rewrite: *Write it again* under a stale notice or a changed profile, and the profile badge's
+  action. Read strictly, Greg's rule leaves only Metadata's Rerun. They are explicit presses, they
+  predate this plan, this stage does not touch them, and removing a button a reader has is a
+  product change nobody asked for. **[Q-summary-write-it-again]** in the debrief.
+- **S3 (P1), taken.** The band cannot draw the preview only "while the job is running": when the
+  job finishes, the job leaves the hook a render before the stored summary arrives, and a failed
+  job is not exposed at all. **Fix**: `useSimple` remembers the last preview it saw, with the id
+  of the job it came from. It keeps drawing it until the stored summary has loaded, drops it when
+  a different job starts for this article, and so still has it when the job fails. It lives in the
+  page's memory only: after a reload a failed write shows its failure without Brief.
+- **S4 (P1, reasoned), taken.** `noteProgress` replaces the whole `steps` array, so a preview
+  write still in flight when the step settles could land afterwards and put back an old `steps`.
+  **Fix**: `ctx.preview` keeps the promise of its write, and the step runner awaits it before it
+  settles the step on either path. Tested with the write deliberately delayed.
+- **S5 (P2), taken.** A requeued attempt keeps a step's other fields, so the preview is deleted
+  when a step starts, beside `error`.
+- **S6 (P2), taken as a correction.** Fact 1 is narrower than written: a step cannot *publish its
+  artefact* before it returns. It can write a checkpoint mid-run, which is why banking Brief there
+  is the named follow-up and not an escape hatch.
+- **S7 (P2), taken, and simpler than clearing on success only.** The preview is on the job row
+  **only while the step is running**: deleted when it succeeds and when it fails. So nothing of
+  the summary is retained on a job row, and nothing is missing from an export. On a forced rewrite
+  with a summary already on screen, the old summary stays until both new levels are stored; the
+  preview is drawn only when nothing is stored.
+
+Build order, amended: `src/web/useStepJob.ts` is not changed; `src/pipeline.ts` § `simple.stamp`
+is; the jobs test covers start, success, failure and a delayed write; the client test drives the
+real hook through a deferred completion read, a failure, a retry and a successor job.
+
 ## Ledger
 
 ### Sol's plan review (approve)
@@ -193,3 +381,61 @@ change. Identical retained prompts establish prompt preservation, not unchanged 
 Six writes a side are too few to settle a latency effect. `nosimple2` is kept apart because it
 ran within the cache's five minutes; its 87.2 s Fuller retry remains evidence that a retained
 level can still stall the press.
+
+### Stage 2: what landed
+
+Built by an Opus subagent from § Stage 2 as amended by Sol's S1 to S7; I read the diff.
+
+- `JobStep.preview` (`StepPreview`, one kind: `simple-brief`), `StepContext.preview`, and
+  `stepPreviews` in `src/jobs.ts`: set and written once, awaited and deleted before the step
+  settles on either path, deleted at step start and on a skip. Every failure of the write is
+  swallowed, a stale attempt included: the step's own fenced commit says so if the claim moved.
+- `simple.stamp` expects the stored summary's own prompt version (S1).
+  `tests/freshness-deciders-agree.test.ts` asserted the queue and Metadata agree on a stale
+  prompt version; they now differ on purpose for `simple`, pinned as an exact pair.
+- `useSimple.preview`, held in the page's memory with its job id; `EarlyBrief` in `SimplePanel`.
+- `PITCH.fuller`: five to eight paragraphs, about 500 words, never more than 600;
+  `simple-prompt/8`. Brief's prompt hash is unchanged.
+- New reader-facing words: "Brief is ready. Fuller is still being written."; "Fuller was not
+  written, so nothing has been kept yet."; the empty state's "Brief appears first. Fuller follows,
+  and can take up to about a minute."
+
+Red first: six jobs cases, five panel cases and three prompt pins failed before the code. The S1
+cases were written after the stamp line and proven by mutation. Mutations: no await of the preview
+write fails the delayed-write case; a stamp that always returns the current version fails the S1
+case; dropping the preview when the job leaves fails four panel cases.
+
+### Stage 2: cost and wait, measured
+
+Three articles, two cold writes each. `timed350a|b` is stage 1's prompt with per-level timing;
+`timed500a|b` is the longer Fuller. Seconds from the start of the write to each level being final.
+
+| article | Brief s, 350 | Fuller s, 350 | Brief s, 500 | Fuller s, 500 | Fuller words, 500 |
+|---|---|---|---|---|---|
+| s41598 | 17.0, 22.8 | 23.7, 37.9 | 13.8, 14.9 | 35.5, 34.3 | 505, 513 |
+| entropy | 14.3, 12.3 | 27.2, 50.5 | 13.6, 12.3 | 28.6, 28.4 | 511, 490 |
+| scaling-hypothesis | 26.1, 13.4 | 33.3, 63.5 | 26.4, 23.6 | 35.1, 36.8 | 438, 481 |
+
+Median wait to Brief 15.7 s at 350 and 14.4 s at 500. Median wait to Fuller 35.6 s and 34.7 s;
+its range was 23.7 to 63.5 s at 350 and 28.4 to 36.8 s at 500. Mean cost $0.220 and $0.217.
+
+What this does and does not show:
+
+- Brief is final at 12 to 26 s in all twelve writes. That is the wait a reader now has.
+- The slow writes are Fuller's: in every one of the twelve, Fuller was final last, and the two
+  slowest (50.5 s and 63.5 s) had Brief at 12.3 s and 13.4 s. Stage 1's write-up could not say
+  this.
+- The longer Fuller was not slower here. 261004b measured 55 s for it. The two slowest writes in
+  this table are both at 350, so six a side says only that the difference, if any, is smaller
+  than the write-to-write spread. It does not show the longer Fuller costs no wait.
+- One real press in a browser, a fourth article, through the job: Brief on screen at 26.3 s,
+  Fuller stored at 55.9 s (517 words, eight paragraphs). The job's own start-up and one-second
+  polling are in both numbers; one sample.
+
+### Stage 2: the browser check
+
+A Sonnet subagent with Playwright on the box, one paid press on an article with no summary. Brief
+appeared with the progress row under it; Fuller's tab showed "Brief is ready. Fuller is still being
+written." and none of Brief's text; across completion, 186 samples at 300 ms saw no empty band and
+no change of wording; after a reload both levels loaded with no new job; no overflow at 390 px; no
+page errors. Not seen: the empty state's new hint, because the press started the job at once.

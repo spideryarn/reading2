@@ -32,6 +32,8 @@ import { isUsableSimpleSummary, SIMPLE_LEVELS, SIMPLE_LIMITS, type Block, type B
 const sent: { task: string; level: string }[] = [];
 /** A level whose every answer fails validation, so the case is about who is asked. */
 let broken: string | null = null;
+/** A level whose answer waits for this before it arrives. */
+let held: { level: string; until: Promise<void> } | null = null;
 
 /** Which level a request is for, read off its system prompt as the reader's age. */
 const levelOf = (body: unknown): string => {
@@ -55,7 +57,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         aborted: () => false,
         attempts: () => 1,
         finalMessage: () =>
-          Promise.resolve({
+          (held?.level === level ? held.until : Promise.resolve()).then(() => ({
             id: "msg_stub",
             type: "message",
             role: "assistant",
@@ -64,7 +66,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
             stop_reason: "end_turn",
             stop_sequence: null,
             usage: { input_tokens: 1, output_tokens: 1 },
-          }),
+          })),
       };
     },
   };
@@ -104,6 +106,7 @@ beforeEach(() => {
   sent.length = 0;
   checks.length = 0;
   broken = null;
+  held = null;
 });
 
 /* --------------------------------------------------------------- fixtures -- */
@@ -208,6 +211,53 @@ describe("the levels a write produces", () => {
   });
 });
 
+describe("each level is announced when it is final (plan 261004f, stage 2)", () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("says Brief is ready while Fuller is still being written, with the paragraphs that are then stored", async () => {
+    let release = () => {};
+    held = { level: "fuller", until: new Promise<void>((r) => (release = r)) };
+    const seen: { level: string; paragraphs: unknown }[] = [];
+    const pending = generateSimpleSummary({
+      article: ARTICLE,
+      profile: null,
+      power: "standard",
+      guard: true,
+      onLevel: (level, paragraphs) => seen.push({ level, paragraphs }),
+    });
+    for (let i = 0; i < 20 && seen.length === 0; i++) await tick();
+    /* Fuller's answer has not arrived, and Brief has been written and checked. */
+    expect(seen.map((s) => s.level)).toEqual(["brief"]);
+    expect(checks).toHaveLength(1);
+    release();
+    const out = await pending;
+    expect(seen.map((s) => s.level)).toEqual(["brief", "fuller"]);
+    expect(seen[0]?.paragraphs).toEqual(out.simpleSummary.levels.brief);
+    expect(seen[1]?.paragraphs).toEqual(out.simpleSummary.levels.fuller);
+  });
+
+  it("does not announce a level that fails, and a listener that throws does not lose the write", async () => {
+    broken = "brief";
+    const seen: string[] = [];
+    await expect(
+      generateSimpleSummary({ article: ARTICLE, profile: null, power: "standard", guard: false, onLevel: (level) => seen.push(level) }),
+    ).rejects.toThrow();
+    expect(seen).not.toContain("brief");
+
+    broken = null;
+    const out = await generateSimpleSummary({
+      article: ARTICLE,
+      profile: null,
+      power: "standard",
+      guard: false,
+      onLevel: () => {
+        throw new Error("the listener broke");
+      },
+    });
+    expect(Object.keys(out.simpleSummary.levels).sort()).toEqual(["brief", "fuller"]);
+  });
+});
+
 describe("a row stored while there were three levels", () => {
   it("still reads: its Brief and Fuller are usable and its middle level is ignored", () => {
     const row = oldRow();
@@ -233,13 +283,14 @@ describe("a row stored while there were three levels", () => {
 });
 
 describe("Brief's and Fuller's prompts", () => {
-  /* The level went and these two did not move, which is why the prompt version
-     did not either: no stored summary is `outdated` and none is rewritten. A
-     change to either prompt changes its hash here and wants a version bump. */
-  it("are the bytes `simple-prompt/7` shipped", () => {
+  /* A change to either prompt changes its hash here and wants a version bump.
+     When the middle level went (stage 1) neither moved, so the version did not.
+     `/8` is stage 2's longer Fuller: Fuller's hash moved and **Brief's is the
+     one `/7` shipped**, which is what "Brief unchanged" means. */
+  it("are the bytes `simple-prompt/8` shipped: Brief's as they were, Fuller's longer", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/7");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/8");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
-    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("9bad8d909ff9731c70306db318090074f0f8ad604879a19709f614da6713258b");
+    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
   });
 });

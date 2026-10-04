@@ -39,7 +39,7 @@ async function extract(old: Meta, full: boolean, title = TITLE) {
   ));
   const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
   const result = await STEPS.extract.run({
-    slug: "s", url: "https://example.org/paper", report: () => {},
+    slug: "s", url: "https://example.org/paper", report: () => {}, preview: () => {},
     signal: new AbortController().signal, cacheArticle: false, power: "standard",
   }, store, nullCheckpointStore());
   return { meta: result.parts?.meta, lookup };

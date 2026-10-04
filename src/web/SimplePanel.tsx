@@ -56,6 +56,12 @@ export const SIMPLE_ASK_CHAT = "Ask about this paragraph in chat";
 /** The owner's empty state, before the press has started anything. */
 export const SIMPLE_NONE_OWNER = "Nobody has asked for a plain-words version of this piece yet.";
 
+/** On Fuller, while Brief can already be read and Fuller cannot. */
+export const SIMPLE_FULLER_PENDING = "Brief is ready. Fuller is still being written.";
+
+/** On Fuller, once the write that had shown Brief has stopped without storing anything. */
+export const SIMPLE_FULLER_NOT_WRITTEN = "Fuller was not written, so nothing has been kept yet.";
+
 /**
  * **Who is reading, and the paragraphs they get — one prop.** The owner's arm
  * is the whole `useSimple` read with its job and verbs; the visitor's is the
@@ -106,6 +112,11 @@ export function SimplePanel({
   /* A rewrite has finished and its paragraphs are not here yet: the forced
      button gives way to a read, never to a second paid run. rewrite-hold.ts. */
   const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  /* **Brief, before anything is stored** (plan 261004f stage 2): the owner's
+     alone, and only with nothing stored. `useSimple` answers null whenever a
+     summary is, so a rewrite leaves the old one on screen until the new one
+     has been stored whole. */
+  const early = owner?.status === "none" ? owner.preview : null;
 
   /**
    * @param again whether this is the button beside paragraphs already there.
@@ -136,14 +147,24 @@ export function SimplePanel({
     <div className="summ-scroll simple-scroll">
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
       {owner?.status === "loading" && <p className="summ-quiet">Looking for the plain-words version…</p>}
-      {owner?.status === "none" && (
+      {owner && early && (
+        <EarlyBrief
+          owner={owner}
+          paragraphs={early}
+          level={level}
+          progress={run("Write it")}
+          onJump={onJump}
+          onAskChat={askChat}
+        />
+      )}
+      {owner?.status === "none" && !early && (
         <div className="gloss-empty">
           {/* Not while a run is under way: opening Summary starts one since
               2026-10-02 (docs/plans/261002a-summary-generates-on-open.md), and
               "nobody has asked" beside its progress reads as a contradiction. */}
           {!(owner.job || owner.starting) && <p>{SIMPLE_NONE_OWNER}</p>}
           <p className="gloss-hint">
-            Brief and Fuller are written together, usually in about half a minute. Written once and kept —
+            Brief appears first. Fuller follows, and can take up to about a minute. Written once and kept —
             you will not be asked again unless the article changes.
           </p>
           {run("Write it")}
@@ -178,6 +199,58 @@ export function SimplePanel({
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * **The band while Brief is written and Fuller is not** (plan 261004f stage 2):
+ * nothing is stored yet, and the job has shown Brief on its step.
+ *
+ * On Brief, the paragraphs, drawn exactly as the stored ones are. They are the
+ * same paragraphs, so the read that follows the job swaps one for the other
+ * without the page moving. On Fuller, a line and none of Brief's words: Brief
+ * is one press away on the row above.
+ *
+ * `progress` is the panel's own job row. It is drawn only while there is
+ * something for it to say: a job, a start, or a failure and its retry. With the
+ * job over and its read not yet back there is not, and a run button there
+ * would offer to write what has just been written.
+ */
+function EarlyBrief({
+  owner,
+  paragraphs,
+  level,
+  progress,
+  onJump,
+  onAskChat,
+}: {
+  owner: UseSimple;
+  paragraphs: SimpleParagraph[];
+  level: SimpleLevel;
+  progress: ReactNode;
+  onJump(id: BlockId): void;
+  onAskChat: ((paragraphText: string) => void) | undefined;
+}) {
+  const busy = owner.job !== null || owner.starting || owner.failed !== null;
+  if (level !== "brief") {
+    return (
+      <div className="gloss-empty">
+        {busy && <p className="gloss-hint">{owner.failed ? SIMPLE_FULLER_NOT_WRITTEN : SIMPLE_FULLER_PENDING}</p>}
+        {busy && progress}
+      </div>
+    );
+  }
+  return (
+    <>
+      <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
+        <div className="simple-paras">
+          {paragraphs.map((p) => (
+            <Paragraph key={p.text} paragraph={p} onJump={onJump} onAskChat={onAskChat} />
+          ))}
+        </div>
+      </TooltipGroup>
+      {busy && <div className="simple-job">{progress}</div>}
+    </>
   );
 }
 
