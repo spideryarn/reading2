@@ -496,14 +496,20 @@ bigger model ([glossary.md § Digging deeper into a term](glossary.md#digging-de
 Greg's words and the shared half). The code and the route keep the old name
 (`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`).
 
-**A dig outlives the band, and its row stays drawn** (2026-10-04, plan 261004b). The press's state
+**A dig outlives the band** (2026-10-04, plan 261004b). The press's state
 lives on the article's citations read, not in the band, so the prose card can start one from any
-mode; leaving Citations mid-answer no longer stops the reading, and the draft, a failure or the
-answer is on the row when the reader comes back. Leaving the article still stops the reading; the
-server finishes and stores the answer either way. And a dig can change its own row's priority (it
-detaches the last answer's web influence while it looks again), so whenever that priority changes
-the bar is lowered if it would now hide the row. A reader who raises the bar afterwards is not
-fought.
+mode; leaving Citations mid-answer no longer stops the reading. Its draft or result remains
+available when the reader comes back; a replacement list clears the old press's failure and
+no-match note once the press has finished. Leaving the article still stops the reading; the
+server finishes and stores the answer either way.
+
+A dig can change its own row's priority (it detaches the last answer's web influence while it
+looks again). While the panel is mounted, a change in the last dug work's priority lowers the bar
+if the prioritised order would hide it. Other orders leave their dormant bar alone, and moving
+the slider alone does not trigger this reveal. This does not guarantee visibility when a dig
+finishes with the band closed: the panel's last-work ref is gone, and the saved bar still applies
+on return. See `CitationsPanel`'s two reveal effects in
+[`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx).
 
 One press, in order:
 

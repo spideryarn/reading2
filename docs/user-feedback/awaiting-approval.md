@@ -13,6 +13,14 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-03 · SPIDERYARN-READING2-BV (spya-c2qmbg; the report itself shipped as *Dig deeper* on
+  the citation card, this is its larger half) · should Citations become a sub-mode of Debate
+  (Reception, Claims, Cited works, under one name), and should a cited work be listed beside the
+  claim it is cited near, or placed in a debate thread? Recommended: the merge, then the
+  claim-side list; not the threads yet · qi-vmnga65v ·
+  [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md) ·
+  [note](261003_1947-citation-card-dig-deeper-and-citations-in-debate.md)
+
 - 2026-10-03 · spya-caue42 (the report itself shipped; this is its deferred half) · should Debate's
   Claims let the reader choose which claim is checked: a box that runs one more search on a claim
   they type or pick, a list of claims first with no search until one is picked, or as built (the

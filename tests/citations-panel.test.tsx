@@ -2337,9 +2337,8 @@ describe("opening the band on one work", () => {
     expect(seen.bars).toEqual([0.2]);
     expect(seen.scrolled).toEqual([]);
     expect(seen.taken()).toBe(0);
-    /* The URL has caught up: now the row is there to scroll to. */
-    act(() => root.unmount());
-    root = createRoot(host);
+    /* The URL has caught up on the same mounted panel: now the row is there
+       to scroll to. Remounting here would miss a broken effect retry. */
     const after = await drawFocused(PASSING.id, 0.2);
     expect(after.bars).toEqual([]);
     expect(after.scrolled).toEqual([PASSING.id]);

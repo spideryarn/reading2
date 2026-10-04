@@ -1161,6 +1161,9 @@ export function Reader({
             dig: (id) => {
               void investigateCitation(id);
               setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
+              /* A passage jump can leave this very mode mounted but hidden
+                 on a narrow window. Setting the same mode cannot reveal it. */
+              setBandAway(false);
               void setMode("citations");
             },
           },

@@ -424,6 +424,18 @@ export function useCitationsRead(slug: string): CitationsRead {
   const [investigateStage, setInvestigateStage] = useState<InvestigateStage | null>(null);
   const [investigateDraft, setInvestigateDraft] = useState<InvestigateDraft | null>(null);
   const [investigateFailed, setInvestigateFailed] = useState<InvestigateFailure | null>(null);
+  /* A regeneration keeps work ids, but those ids must not carry a completed
+     press's local failure or no-match into the replacement list. Ordinary
+     revalidation keeps the generation and therefore keeps these results.
+     Let a live press finish before clearing its notes; never stop its stream. */
+  const resultGeneration = useRef(citations?.generatedAt);
+  const generation = citations?.generatedAt;
+  useEffect(() => {
+    if (investigating || resultGeneration.current === generation) return;
+    resultGeneration.current = generation;
+    setInvestigateFailed(null);
+    setFindNote(null);
+  }, [generation, investigating]);
   /* What is stored on each row at the moment of a press, read without making
      `investigate` change identity every time the list does. */
   const citationsNow = useRef(citations);

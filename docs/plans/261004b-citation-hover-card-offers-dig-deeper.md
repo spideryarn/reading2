@@ -214,6 +214,28 @@ For the name: **Debate** is wrong for a bibliography and **References** is wrong
   which this does. **Not taken:** it also said a `title` is not enough on touch to say the press is
   paid. The glossary card's button is the same, and Greg asked on 2026-10-03 for that card's foot to
   take less room, so no line was added; it is in the debrief as a choice.
+- 2026-10-04: GPT Sol's code review, [261004b-code-review-sol.md](261004b-code-review-sol.md). It
+  fixed two defects, each with a test it saw red. (1) On a narrow window the press could leave the
+  Citations band hidden: a passage jump steps the band aside, and setting the mode it is already
+  in does not bring it back; `dig` now clears `bandAway`
+  ([postmortem](../postmortems/261004b-selecting-a-mode-does-not-reveal-its-hidden-band.md)).
+  (2) A regenerated list inherited the old press's failure and no-match note, now that they outlive
+  the band; they are cleared when the list's generation changes
+  ([postmortem](../postmortems/261004b-longer-lived-results-need-a-generation-boundary.md)).
+  It also narrowed the doc's claim about the dug row staying drawn: that holds while the panel is
+  mounted, not for a dig that finishes with the band closed. **Reported, not fixed:** the glossary
+  card has defect (1) too, from before this change; queued as qi-fs4qzzfm. And it repeated that a
+  finger gets no visible word that the press is paid; left as the glossary card has it, and put to
+  Greg in the debrief.
+- 2026-10-04: browser check (Sonnet subagent, Playwright on the box, commit e5be1f9fc, so before the
+  reviewer's two fixes; the paid POST intercepted and aborted, so nothing was spent). At 1440×900,
+  834×1194 touch and 390×844 touch: the card has the button, 77×30px, on its own line at the foot's
+  right, nothing clipped; one POST per press; the card closes; Citations opens with the row in view
+  and *Digging deeper…* on it; another citation's button is disabled meanwhile; after the abort the
+  row shows the failure and the buttons come back. With the bar raised to hide every row, the press
+  lowered it from 0.80 to 0.76 and drew the row. **Not checked:** a signed-out visitor's card, for
+  want of a public article with citation marks (a visitor has no marks by construction); and real
+  WebKit. Shots: `261004b-shot-1` to `-6`.
 - 2026-10-04: `git log` on citations and Debate: nothing has built this. fb-debate-2610 landed
   261003o (Reception and Claims) on dev at 4b4e5c4fb, which this worktree contains; it did not touch
   the citation card or `useCitations`.

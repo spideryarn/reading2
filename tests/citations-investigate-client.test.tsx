@@ -76,6 +76,7 @@ let end: (() => void) | null = null;
 let breakStream: ((error: Error) => void) | null = null;
 /** Make citation re-reads fail without affecting the already-open SSE. */
 let getFailure: Error | null = null;
+let generatedAt = "2026-09-30T09:00:00.000Z";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -100,7 +101,10 @@ vi.mock("../src/web/lib/api.js", () => ({
     if (input === `/api/citations/${SLUG}`) {
       gets++;
       if (getFailure) throw getFailure;
-      return json({ citations: artefact(listed), stale: false, outdated: false });
+      return json({ citations: { ...artefact(listed), generatedAt }, stale: false, outdated: false });
+    }
+    if (input === "/api/citations/next-piece") {
+      return json({ citations: { ...artefact({ ...WORK, title: "The next article's work" }), slug: "next-piece" }, stale: false, outdated: false });
     }
     throw new Error(`the test made an unexpected request: ${input}`);
   },
@@ -150,6 +154,7 @@ beforeEach(() => {
   end = null;
   breakStream = null;
   getFailure = null;
+  generatedAt = "2026-09-30T09:00:00.000Z";
   hook = null;
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -659,11 +664,122 @@ describe("the band going does not stop a dig", () => {
     hook = useCitations(SLUG, props.read);
     return null;
   }
-  function Article({ band }: { band: boolean }): ReactElement | null {
-    read = useCitationsRead(SLUG);
+  function Article({ band, slug = SLUG }: { band: boolean; slug?: string }): ReactElement | null {
+    read = useCitationsRead(slug);
     return band ? createElement(Band, { read }) : null;
   }
-  const paint = (band: boolean) => act(async () => root.render(createElement(Article, { band })));
+  const paint = (band: boolean, slug = SLUG) => act(async () => root.render(createElement(Article, { band, slug })));
+
+  it("keeps a failure across band remounts, but clears it when a replacement list retains the row's id", async () => {
+    reply = { status: 429, error: "The previous press was refused." };
+    await paint(true);
+    mounted = true;
+    await flush();
+    await act(async () => { await hook?.investigate(ID); });
+    expect(read?.investigateFailed?.message).toBe("The previous press was refused.");
+    await paint(false);
+    await paint(true);
+    await flush();
+    expect(hook?.investigateFailed?.message).toBe("The previous press was refused.");
+
+    await paint(false);
+    generatedAt = "2026-10-04T11:00:00.000Z";
+    await act(async () => { await read?.refresh(); });
+    await paint(true);
+    await flush();
+    expect(hook?.citations?.citations[0]?.id).toBe(ID);
+    expect(hook?.investigateFailed, "a replaced list inherited a failure about the old list").toBeNull();
+  });
+
+  it("clears a completed press's no-match note when the list is replaced", async () => {
+    await paint(false);
+    mounted = true;
+    await flush();
+    let pressed: Promise<void> | undefined;
+    await act(async () => { pressed = read?.investigate(ID); });
+    await flush();
+    const kept = investigation("2026-10-04T10:00:00.000Z");
+    listed = { ...WORK, investigation: kept };
+    await act(async () => {
+      push?.("lookup", { outcome: "no-match", message: "No page matched the old reference." });
+      push?.("done", { investigation: kept });
+      end?.();
+    });
+    await act(async () => { await pressed; });
+    await flush();
+    expect(read?.findNote?.message).toBe("No page matched the old reference.");
+
+    generatedAt = "2026-10-04T11:00:00.000Z";
+    listed = WORK;
+    await act(async () => { await read?.refresh(); });
+    await flush();
+    expect(read?.findNote, "a replaced list inherited a no-match note about the old reference").toBeNull();
+  });
+
+  it("aborts when a reused read changes slug, and ignores old stream frames for a retained-shaped id", async () => {
+    await paint(false);
+    mounted = true;
+    await flush();
+    let pressed: Promise<void> | undefined;
+    await act(async () => { pressed = read?.investigate(ID); });
+    await flush();
+    await act(async () => { push?.("delta", { text: "Old article draft" }); });
+    await flush();
+    expect(read?.investigateDraft?.text).toBe("Old article draft");
+
+    await paint(false, "next-piece");
+    await flush();
+    expect(signal?.aborted).toBe(true);
+    expect(read?.citations?.slug).toBe("next-piece");
+    expect(read?.investigateDraft).toBeNull();
+    await act(async () => {
+      push?.("stage", { stage: "finding" });
+      push?.("lookup", { outcome: "no-match", message: "Old article note" });
+      push?.("delta", { text: "Late old article draft" });
+      push?.("done", { investigation: investigation("2026-10-04T10:00:00.000Z") });
+      end?.();
+    });
+    await act(async () => { await pressed; });
+    await flush();
+    expect(read?.citations?.citations[0]?.title).toBe("The next article's work");
+    expect(read?.citations?.citations[0]?.investigation).toBeUndefined();
+    expect(read?.investigating).toBeNull();
+    expect(read?.investigateStage).toBeNull();
+    expect(read?.investigateDraft).toBeNull();
+    expect(read?.investigateFailed).toBeNull();
+    expect(read?.findNote).toBeNull();
+  });
+
+  it("keeps a live stream through list replacement, then drops its old note and late failure", async () => {
+    await paint(false);
+    mounted = true;
+    await flush();
+    let pressed: Promise<void> | undefined;
+    await act(async () => { pressed = read?.investigate(ID); });
+    await flush();
+    await act(async () => {
+      push?.("lookup", { outcome: "no-match", message: "No page matched the old reference." });
+      push?.("delta", { text: "Still reading the old reference" });
+    });
+    await flush();
+    generatedAt = "2026-10-04T11:00:00.000Z";
+    await act(async () => { await read?.refresh(); });
+    await flush();
+    expect(signal?.aborted).toBe(false);
+    expect(read?.investigating).toBe(ID);
+    expect(read?.investigateDraft?.text).toBe("Still reading the old reference");
+    await act(async () => { await read?.investigate(ID); });
+    expect(posts).toBe(1);
+    await act(async () => {
+      push?.("error", { error: "The old reference's reading stopped." });
+      end?.();
+    });
+    await act(async () => { await pressed; });
+    await flush();
+    expect(read?.investigateFailed, "a late failure branded the replacement list's row").toBeNull();
+    expect(read?.findNote, "a late completed press branded the replacement list's row").toBeNull();
+    expect(read?.investigating).toBeNull();
+  });
 
   it("carries on reading with the band closed, and the band finds the answer when it is back", async () => {
     await paint(true);
@@ -688,6 +804,8 @@ describe("the band going does not stop a dig", () => {
     await flush();
     expect(hook?.investigating).toBe(ID);
     expect(hook?.investigateDraft?.text).toBe("Still reading.");
+    await act(async () => { await hook?.investigate(ID); });
+    expect(posts, "remounting the band released the active read's admission").toBe(1);
     await paint(false);
 
     const kept = investigation("2026-10-04T10:00:00.000Z");
@@ -703,6 +821,9 @@ describe("the band going does not stop a dig", () => {
     expect(read?.investigating).toBeNull();
     expect(read?.citations?.citations[0]?.investigation).toEqual(kept);
     expect(posts, "a second dig was started").toBe(1);
+    await paint(true);
+    await flush();
+    expect(hook?.citations?.citations[0]?.investigation).toEqual(kept);
   });
 
   it("starts from the read alone, with no band mounted — the card's press", async () => {
