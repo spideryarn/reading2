@@ -668,7 +668,7 @@ make the two disagree and hide a kept answer. Dig deeper bumped `CITATION_INVEST
 answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. So did
 fencing the passages call's article fields on 2026-10-04 (`/8`): that call has no version of its
 own, and its passages go on into the answer's prompt. The answer's own prompt fences the same
-fields, and the matched search result, under the same `/8`, which had not been deployed
+fields, the matched search result and the paper's source host under the same `/8`, which had not been deployed
 ([261004i](../plans/261004i-fence-the-dig-deeper-and-quick-check-prompts-article-fields.md)); the
 quick check's prompt was fenced with it and went to `citation-lookup/7`, so a kept *Look it up*
 detaches too. It never
