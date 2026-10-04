@@ -15,7 +15,7 @@
  * it — comments.md#streaming.
  */
 import { ENDED_UNFINISHED } from "../../messages.js";
-import { markUnreachable } from "./reader-facing.js";
+import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 
 export interface ServerEvent {
   name: string;
@@ -228,8 +228,9 @@ function parseFrame(frame: string): ServerEvent | null {
  * **A streamed, kept answer's terminal contract, in one function** — written
  * for the glossary's two streams (the box and *Check the web*, src/web/useGlossary.ts)
  * and moved here unchanged when Citations' *Investigate* needed the same one
- * (src/web/useCitations.ts, plan 260930a stage 2). `readMark` in
- * src/web/useQuiz.ts is the same shape.
+ * (src/web/useCitations.ts, plan 260930a stage 2). The quiz's mark
+ * (src/web/useQuiz.ts § `mark`) had a hand-written copy, `readMark`, until
+ * 2026-10-04; `readRun` in src/web/useMirror.ts still is one.
  *
  * An optional `begin`, any number of `delta`, then exactly one `done` or
  * `error`. The result is returned **only** from a `done` that `done` accepts —
@@ -251,6 +252,16 @@ export async function readAnswerStream<T>(
      * `stage` and `lookup` (plan 260930d). Ignored when absent, as before.
      */
     other?(name: string, data: unknown): void;
+  },
+  /**
+   * The caller's own words for the two stops that carry none: an `error` frame
+   * that names no reason, and the body ending. Absent, both say
+   * `ENDED_UNFINISHED`, as they always did. The quiz's mark passes its own
+   * (useQuiz.ts § `MARK_STOPS`).
+   */
+  sentences: { stopped: string; ended: string } = {
+    stopped: ENDED_UNFINISHED.message,
+    ended: ENDED_UNFINISHED.message,
   },
 ): Promise<T> {
   let text = "";
@@ -279,9 +290,12 @@ export async function readAnswerStream<T>(
     }
     if (event.name === "error") {
       const message = (event.data as { error?: unknown } | null)?.error;
-      throw new Error(typeof message === "string" && message ? message : ENDED_UNFINISHED.message);
+      /* Declared for a reader: the server's `error` frame is a reader channel
+         (docs/project/copy.md § The same seam in the browser), so a catch that
+         goes through `describeFetchFailure` shows it rather than `PAGE_FAULT`. */
+      throw new ReaderFacingError(typeof message === "string" && message ? message : sentences.stopped);
     }
     on.other?.(event.name, event.data);
   }
-  throw new Error(ENDED_UNFINISHED.message);
+  throw new Error(sentences.ended);
 }

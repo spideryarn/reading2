@@ -59,6 +59,8 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream, StreamStalled } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
@@ -160,6 +162,8 @@ export interface UseCitations extends CitationDig {
    * does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -230,6 +234,8 @@ export interface CitationsRead extends CitationDig {
   stale: boolean;
   outdated: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Fetch again **only if nothing is already fetching** — the band's mount. */
   reload(): Promise<void>;
   /** Fetch again **because the list on the server has just changed** — a job finished. */
@@ -324,7 +330,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
            nothing to fall back on. Same guard as useTimeline.ts. */
@@ -340,6 +346,15 @@ export function useCitationsRead(slug: string): CitationsRead {
   /* A run that finishes after the reader left the band still reaches the prose
      and the margin — § An always-mounted read is not an always-fresh read. */
   useStepFinished(slug, "citations", refresh);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Works already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (citations === null) setStatus("loading");
+    await reload();
+  }, [citations, reload]);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `CitationsBand`'s own mount
@@ -493,7 +508,7 @@ export function useCitationsRead(slug: string): CitationsRead {
              stream opens, so they are JSON and `readJson` throws their
              sentence. Nothing was stored. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         opened = true;
         const investigation = await readAnswerStream(res.body, {
@@ -563,6 +578,7 @@ export function useCitationsRead(slug: string): CitationsRead {
     stale,
     outdated,
     error,
+    retryRead,
     reload,
     refresh,
     applyFound,
@@ -652,6 +668,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

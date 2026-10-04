@@ -304,6 +304,97 @@ describe("and the cases that keep that from being vacuous", () => {
   });
 });
 
+/* **Quiz's own words on each stop, pinned to the letter** — before `readMark`
+   moved onto `readAnswerStream` (src/web/lib/sse.ts), which has two sentences
+   of its own for the same two stops. The first two passed before that move and
+   after it; the `null` rows were a `TypeError` in the reader's face before it.
+   Plan 261004c § 2c, GPT Sol's plan review F8. */
+describe("the sentence each stop says, and what stays on screen", () => {
+  const twoDeltasThen = (...last: Uint8Array[]) => () =>
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("delta", { text: "You have " }));
+        c.enqueue(frame("delta", { text: "the first half of it. " }));
+        for (const f of last) c.enqueue(f);
+        c.close();
+      },
+    });
+
+  it("the body ending with no terminal frame", async () => {
+    await answer("I think it claims a thing.");
+    expect(latest?.attempt?.error).toBe(
+      "The reply stopped arriving before it was finished. Nothing was lost — try again.",
+    );
+    expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+  });
+
+  it("an error frame that names no reason", async () => {
+    markBody = twoDeltasThen(frame("error", {}));
+    await answer("I think it claims a thing.");
+    expect(latest?.attempt?.status).toBe("failed");
+    expect(latest?.attempt?.error).toBe("The mark stopped before it was finished.");
+    expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+  });
+
+  it("an error frame whose data is null", async () => {
+    markBody = twoDeltasThen(frame("error", null));
+    await answer("I think it claims a thing.");
+    expect(latest?.attempt?.status).toBe("failed");
+    expect(latest?.answered.has(Q1)).toBe(false);
+    expect(latest?.attempt?.error).toBe("The mark stopped before it was finished.");
+    expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+  });
+
+  it("a delta frame whose data is null costs nothing", async () => {
+    markBody = twoDeltasThen(frame("delta", null), frame("done", { reply: "You have it.", verdict: "right" }));
+    await answer("I think it claims a thing.");
+    expect(latest?.attempt?.status).toBe("done");
+    expect(latest?.attempt?.reply).toBe("You have it.");
+    expect(latest?.attempt?.verdict).toBe("right");
+  });
+
+  it("a done frame with no reply falls back to what was watched arriving", async () => {
+    markBody = twoDeltasThen(frame("done", { verdict: "sideways" }));
+    await answer("I think it claims a thing.");
+    expect(latest?.attempt?.status).toBe("done");
+    expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+    expect(latest?.attempt?.verdict).toBeUndefined();
+  });
+
+  it.each(["stall", "body failure"] as const)("keeps the partial reply on a %s and leaves the question retryable", async (stop) => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    let cancelled = false;
+    markBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+        c.enqueue(frame("delta", { text: "You have " }));
+        c.enqueue(frame("delta", { text: "the first half of it. " }));
+      },
+      cancel() { cancelled = true; },
+    });
+    vi.useFakeTimers();
+    try {
+      let marking!: Promise<void>;
+      await act(async () => { marking = latest!.mark(Q1, "I think it claims a thing."); });
+      await settle();
+      expect(latest?.attempt?.status).toBe("marking");
+      expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+      await act(async () => {
+        if (stop === "stall") await vi.advanceTimersByTimeAsync(60_000);
+        else controller.error(new TypeError("socket broke"));
+        await marking;
+      });
+      expect(latest?.attempt?.status).toBe("failed");
+      expect(latest?.attempt?.reply).toBe("You have the first half of it. ");
+      expect(latest?.answered.has(Q1)).toBe(false);
+      expect(latest?.attempt?.error).toBe(stop === "stall" ? "the stream sent nothing for 60s" : "socket broke");
+      if (stop === "stall") expect(cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 /* ── the server half: `markAnswerStream` itself ──────────────────────────── */
 
 /**

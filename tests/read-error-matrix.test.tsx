@@ -1,0 +1,941 @@
+// @vitest-environment jsdom
+/**
+ * **A failed read, in every mode that has one: a sentence written for a reader,
+ * and a way to ask again.**
+ *
+ * FAQ got *Try again* in `418a3d57f`, and the fix reached four panels of
+ * thirteen. Fourteen hooks put `(err as Error).message` on screen, so Safari's
+ * "Load failed" reached a reader as the explanation. The pattern — *the fix
+ * landed only in the mode being built* — was found three times by the fifth
+ * sweep, so this is one table with a row per panel, and a second half that
+ * finds the mode a fix missed.
+ * docs/plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md
+ * § Stage 1d.
+ *
+ * ## The whole app, and only the network is posed
+ *
+ * `<App/>` under a `NuqsAdapter` at the owner's article, the harness
+ * tests/every-mode-draws-its-surface.test.tsx establishes: the real hook, the
+ * real band, the real panel, the real `apiFetch` and the real job engine. What
+ * is faked is `fetch`. That matters for the first column: a lost connection is
+ * recognised by the mark `apiFetch` puts on a `TypeError` that came out of
+ * `fetch`, so a test that mocked `apiFetch` could not tell a hook that goes
+ * through `describeFetchFailure` from one that happens to print the same words.
+ *
+ * ## Two columns, because Arc is in one and not the other
+ *
+ *  - **the sentence** — all fourteen hooks. A bare `TypeError("Load failed")`
+ *    out of `fetch` is said as `COULD_NOT_REACH` and, on a built page, with none
+ *    of the browser's words; an exception nobody wrote for a reader is said as
+ *    `PAGE_FAULT`, never in its own words.
+ *  - **the recovery** — the thirteen panels. A button named *Try again*; pressing
+ *    it makes exactly one more GET and **no** `POST /api/jobs`; on success the
+ *    artefact is on screen. `useArc` is not in this column: nothing draws its
+ *    `error`, so there is nothing to put a button beside.
+ *
+ * ## What *Try again* may and may not spend (plan § F1)
+ *
+ * `retryRead` itself sends only a GET. A press still in hand is honoured exactly
+ * as it would have been had the first read answered — useAutoRun.ts § A failed
+ * read is not an answer. Both halves are pinned at the foot of this file, for an
+ * ordinary mode and for Thread, which starts by arrival.
+ */
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { act, createElement, type ReactElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { COULD_NOT_REACH, PAGE_FAULT } from "../src/messages.js";
+import type { Mode } from "../src/modes.js";
+import { MODE_LABEL } from "../src/title-text.js";
+import type { Article, Block, BlockId } from "../src/types.js";
+
+const OWNER = { id: "owner-1", email: "owner@example.com" };
+
+vi.mock("../src/web/useSession.js", () => ({
+  useSession: () => ({ session: null, user: OWNER, loading: false }),
+}));
+
+const authListeners: ((event: string, session: unknown) => void)[] = [];
+
+vi.mock("../src/web/lib/supabase.js", () => ({
+  supabase: {
+    auth: {
+      getSession: async () => ({ data: { session: { access_token: "t" } } }),
+      refreshSession: async () => ({ data: { session: { access_token: "t" } } }),
+      onAuthStateChange: (fn: (event: string, session: unknown) => void) => {
+        authListeners.push(fn);
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
+      signOut: async () => ({ error: null }),
+    },
+  },
+  googleSignInAvailable: false,
+}));
+
+/* A failed GET is answered from the offline copy when there is one
+   (lib/api.ts), and a copy is a 200. There is none here, said outright rather
+   than left to jsdom having no IndexedDB. */
+vi.mock("../src/web/lib/offline-store.js", () => ({
+  readCached: async () => undefined,
+  writeCached: async () => undefined,
+  reserveTicket: async () => null,
+  invalidate: async () => undefined,
+  cachedSlugs: async () => new Set<string>(),
+  rememberUser: () => {},
+  lastKnownUser: () => null,
+  forgetUser: () => {},
+}));
+
+/* The browser APIs the reading view uses that jsdom does not have. */
+class NoResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }),
+});
+Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
+if (!(globalThis as { CSS?: unknown }).CSS) {
+  (globalThis as { CSS?: unknown }).CSS = { escape: (s: string) => s };
+}
+
+/* ------------------------------------------------------------- the article -- */
+
+const SLUG = "a-piece";
+const PARAGRAPH =
+  "The instrument was built before anybody could say what it would measure, and the theory followed it.";
+const SECOND = "A later chapter revisits the same episode from the other side again.";
+const QUOTE_LINE = "before anybody could say what it would measure";
+
+const BLOCKS: Block[] = [
+  { id: "spya-aaaaaa" as BlockId, tag: "h1", kind: "heading", level: 1, text: "A piece", words: 2, html: "<h1>A piece</h1>", gistable: false },
+  { id: "spya-bbbbbb" as BlockId, tag: "p", kind: "text", text: PARAGRAPH, words: 17, html: `<p>${PARAGRAPH}</p>`, gistable: true },
+  { id: "spya-cccccc" as BlockId, tag: "p", kind: "text", text: SECOND, words: 11, html: `<p>${SECOND}</p>`, gistable: true },
+];
+
+const OWNED: Article = {
+  highPowerSince: null,
+  titleOverridden: false,
+  blocks: BLOCKS,
+  tree: {
+    version: "test",
+    generator: "test",
+    slug: SLUG,
+    rootId: "n0",
+    nodes: {
+      n0: { id: "n0", depth: 0, parent: null, children: ["n1"], range: ["spya-aaaaaa", "spya-cccccc"], title: "A piece", gist: "The root's gist." },
+      n1: { id: "n1", depth: 1, parent: "n0", children: [], range: ["spya-bbbbbb", "spya-cccccc"], title: "The first section", gist: "The child's gist." },
+    },
+  } as Article["tree"],
+  assets: undefined,
+  navLabelStatus: "ready",
+  sourceGuess: undefined,
+  meta: { slug: SLUG, title: "A piece", url: "https://example.com/a" },
+};
+
+/* --------------------------------------------------------- what is stored --
+
+   One invented string per artefact, so a band cannot satisfy its row with
+   another band's content or with chrome. The shapes are
+   tests/every-mode-draws-its-surface.test.tsx's, cut to one row each. */
+
+const STAMP = { version: "test", generator: "test", slug: SLUG, sourceHash: "hash", generatedAt: "2026-09-01T09:00:00.000Z", elapsedMs: 1 };
+const AT = { blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 };
+const HASH = "a".repeat(64);
+
+const SAYS = {
+  faq: "Why trust a rig nobody could yet explain?",
+  simple: "A short one about the rig.",
+  skim: "Where the chapter turns",
+  tweets: "The rig came first; the theory of what it measured came later.",
+  ideas: "Instruments outrun explanation",
+  timeline: "The Vienna calibration",
+  quotes: QUOTE_LINE,
+  debate: "The Leiden replication",
+  glossary: "Kolmogorov depth",
+  citations: "Elements of Episodic Memory",
+  quiz: "What was built before it could be explained?",
+  illustrated: "The rig, painted",
+  sketch: "The calibrated rig",
+} as const;
+
+const NO_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
+const COUNTS = { returnedSources: 1, reportedRows: 1, keptRows: 1, omittedOverCap: 0, lost: NO_LOSSES, webSearches: 1 };
+
+const para = (text: string, id = "spya-bbbbbb") => ({ text, ids: [id] });
+
+/** What each artefact's GET answers when it answers. Keyed by the path segment after `/api/`. */
+const BODIES: Record<string, unknown> = {
+  faq: {
+    faq: {
+      ...STAMP,
+      questions: [{ id: "faq-q1", question: SAYS.faq, passages: [AT] }],
+      dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, unanchored: 0, overCap: 0, malformed: 0 },
+    },
+    stale: false,
+    outdated: false,
+  },
+  simple: {
+    simpleSummary: {
+      ...STAMP,
+      version: "simple/2",
+      profileHash: null,
+      levels: {
+        brief: [para(SAYS.simple), para("And why it matters.", "spya-cccccc")],
+        simple: [para("The plain one."), para("Its second.", "spya-cccccc")],
+        fuller: [para("The fuller one."), para("Its second."), para("Its third.", "spya-cccccc")],
+      },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  skim: {
+    skim: {
+      ...STAMP,
+      profileHash: null,
+      stops: [{ quoteId: "spya-qte234", depth: 1, role: SAYS.skim }],
+      visible: [1, 1, 1],
+      offered: 1,
+      dropped: { unknownQuote: 0, duplicate: 0, sameBlock: 0, malformed: 0, badRole: 0, overCap: 0, collapsed: 0 },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+    notOnRoute: 0,
+  },
+  tweets: {
+    thread: {
+      ...STAMP,
+      version: "tweets/5",
+      limit: 280,
+      tweets: [{ text: SAYS.tweets, chars: [...SAYS.tweets].length, blocks: ["spya-bbbbbb"] }],
+    },
+    stale: false,
+    profileChanged: false,
+  },
+  ideas: {
+    ideas: {
+      ...STAMP,
+      ideas: [
+        {
+          id: "spya-kdea34",
+          name: SAYS.ideas,
+          provenance: "assumed",
+          statement: "You cannot theorise about what you have no way to measure.",
+          occurrences: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", reasoning: "It rests on it." }],
+        },
+      ],
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  timeline: {
+    timeline: {
+      ...STAMP,
+      events: [
+        {
+          id: "spya-evt234",
+          label: SAYS.timeline,
+          dating: { kind: "words", phrase: "before the theory" },
+          order: 1,
+          modality: "happened",
+          occurrences: [AT],
+        },
+      ],
+      orderConflicts: 0,
+    },
+    stale: false,
+    outdated: false,
+  },
+  quotes: {
+    quotes: {
+      ...STAMP,
+      quotes: [
+        {
+          id: "spya-qte234",
+          blockId: "spya-bbbbbb",
+          text: QUOTE_LINE,
+          start: PARAGRAPH.indexOf(QUOTE_LINE),
+          reason: "It is the sentence the whole chapter turns on.",
+          importance: 90,
+          striking: 80,
+        },
+      ],
+      discarded: { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  debate: {
+    debate: {
+      version: "test",
+      generator: "test",
+      slug: SLUG,
+      sourceHash: "hash",
+      searchedAt: "2026-09-01T09:00:00.000Z",
+      direct: {
+        rows: [
+          {
+            id: "spya-dbt234",
+            url: "https://example.org/leiden",
+            title: SAYS.debate,
+            sourceQuote: "We could not reproduce the calibration.",
+            relation: "disputes",
+            lean: "leans-against",
+            applies: "A replication in Leiden reached the opposite reading.",
+            articleReferenceQuote: "The instrument was built",
+            /* `quoted`, or the identification bar hides the row — every-mode
+               test's note on this fixture has the story. */
+            identifies: [
+              {
+                kind: "quoted",
+                quote: "instrument was built before anybody could say what it would measure",
+                blockId: "spya-bbbbbb",
+                coverage: 0.5,
+                density: 0.2,
+              },
+              { kind: "named", by: "title", witness: "The instrument was built" },
+            ],
+          },
+        ],
+        counts: COUNTS,
+      },
+      claims: { rows: [], counts: { ...COUNTS, returnedSources: 0, reportedRows: 0, keptRows: 0 } },
+      elapsedMs: 1,
+    },
+    stale: false,
+    outdated: false,
+  },
+  glossary: {
+    glossary: {
+      ...STAMP,
+      entries: [
+        {
+          id: "spya-term23",
+          name: SAYS.glossary,
+          kind: "concept",
+          aliases: [],
+          senseHere: "How much work it took to build the thing.",
+          blocks: ["spya-bbbbbb"],
+        },
+      ],
+      passes: 1,
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  citations: {
+    citations: {
+      ...STAMP,
+      citations: [
+        {
+          id: "spya-c7t2wd",
+          key: "work:elements of episodic memory|tulving|1983",
+          title: SAYS.citations,
+          authors: "Tulving",
+          year: "1983",
+          why: "The idea the piece tests.",
+          relevance: 0.9,
+          influence: 0.9,
+          mentions: [AT],
+          citedAt: ["spya-bbbbbb"],
+          firstCited: "spya-bbbbbb",
+          citedInBody: true,
+          url: "https://scholar.google.com/scholar?q=Elements",
+          linkFrom: "search",
+        },
+      ],
+      capped: false,
+    },
+    stale: false,
+    outdated: false,
+  },
+  quiz: {
+    quiz: {
+      ...STAMP,
+      version: "quiz/1",
+      batchId: "spya-batch2",
+      questions: [
+        {
+          id: "spya-qm9qt2",
+          question: SAYS.quiz,
+          referenceAnswer: "The instrument.",
+          evidence: [AT],
+        },
+      ],
+      dropped: { unknownIds: 0, unquoted: 0, truncated: 0, overCap: 0, malformed: 0, duplicate: 0, unanchored: 0 },
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  illustrated: {
+    illustrated: {
+      version: "illustrated/1",
+      generator: "a-model",
+      illustrator: "openai/gpt-image-2",
+      style: "A plain register.",
+      profileHash: null,
+      plates: [
+        {
+          sceneId: "overview",
+          title: SAYS.illustrated,
+          prompt: "A workbench, in gouache.",
+          vignettes: [{ block: "spya-bbbbbb", quote: QUOTE_LINE, depicts: "A rig on a workbench" }],
+          image: { sha256: HASH, ext: "jpeg", bytes: 73_000, width: 1024, height: 1536 },
+        },
+      ],
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  sketch: {
+    sketch: {
+      title: "One instrument, one claim",
+      caption: "The measurement is doing the arguing.",
+      scenes: [
+        {
+          id: "s0",
+          title: "Overview",
+          height: 200,
+          items: [
+            { kind: "node", id: "n1", shape: "box", x: 10, y: 10, w: 140, h: 40, text: SAYS.sketch, size: "md", block: "spya-bbbbbb" },
+          ],
+        },
+      ],
+    },
+    stale: false,
+    outdated: false,
+    profileChanged: false,
+  },
+  arc: { arc: { ...STAMP, entries: [] }, stale: false },
+};
+
+/* ------------------------------------------------------------ the network -- */
+
+type Answer =
+  /** 200 with `BODIES[kind]`. */
+  | "ok"
+  /** 404 — nobody has asked for one. The default. */
+  | "missing"
+  /** `fetch` rejects the way a dropped connection does, in Safari's words. */
+  | "transport"
+  /** A 200 whose artefact is null, contradicting the declared response type. */
+  | "null-artefact"
+  /** `fetch` rejects with an exception nobody wrote for a reader. */
+  | "fault";
+
+/** What the browser says, and what a reader must never be shown. */
+const BROWSER_WORDS = "Load failed";
+/** A programming fault's own text, which must stop at the console. */
+const FAULT_WORDS = "zq-internal: cannot read properties of undefined";
+
+let answers: Record<string, Answer> = {};
+/** Every artefact GET, by kind — the exact `/api/<kind>/<slug>` and nothing under it. */
+let gets: Record<string, number> = {};
+/** Every `POST /api/jobs` body, in order. */
+let posts: { slug?: string; steps?: string[]; force?: string[] }[] = [];
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function artefactResponse(kind: string, answer: Answer): Response {
+  if (answer === "transport") throw new TypeError(BROWSER_WORDS);
+  if (answer === "fault") throw new Error(FAULT_WORDS);
+  if (answer === "null-artefact") return json({ [kind]: null, stale: true, outdated: true, profileChanged: true });
+  return answer === "ok" ? json(BODIES[kind]) : new Response(null, { status: 404 });
+}
+
+async function reply(url: string, method: string, body: string | null): Promise<Response> {
+  if (url === `/api/article/${SLUG}`) return json(OWNED);
+  if (url === "/api/reader") return json({ experimentalSince: "2026-01-01T00:00:00.000Z" });
+  if (url === "/api/jobs" && method === "POST") {
+    posts.push(JSON.parse(body ?? "{}"));
+    return new Response(null, { status: 204 });
+  }
+  if (/\/api\/illustrated\/[^/]+\/[0-9a-f]{64}\.jpeg$/.test(url)) {
+    return new Response(new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: "image/jpeg" }), {
+      status: 200,
+      headers: { "Content-Type": "image/jpeg" },
+    });
+  }
+  if (method !== "GET") return new Response(null, { status: 204 });
+  if (url === "/api/jobs") return json({ jobs: [] });
+  if (url.startsWith("/api/comments/")) return json({ comments: [] });
+  if (url.startsWith("/api/chat/")) return json({ threads: [] });
+  if (url.startsWith("/api/search/")) return json({ runs: [] });
+  const kind = new RegExp(`^/api/([a-z]+)/${SLUG}$`).exec(url)?.[1];
+  if (kind && kind in BODIES) {
+    gets[kind] = (gets[kind] ?? 0) + 1;
+    /* The arc is there unless a test says otherwise: `useArc` asks for one the
+       moment it reads a 404, on every owned article, and that job would be in
+       every row's `posts`. */
+    const answer = answers[kind] ?? (kind === "arc" ? "ok" : "missing");
+    return artefactResponse(kind, answer);
+  }
+  if (kind) return new Response(null, { status: 404 });
+  return json({});
+}
+
+const { App } = await import("../src/web/App.js");
+const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
+const { resetActivations } = await import("../src/web/activation.js");
+const { jobEngine } = await import("../src/web/jobEngine.js");
+const { useArc } = await import("../src/web/useArc.js");
+const { SketchView } = await import("../src/web/SketchView.js");
+const { IllustratedView } = await import("../src/web/IllustratedView.js");
+const { useIdeasRead } = await import("../src/web/useIdeas.js");
+const { useQuotesRead } = await import("../src/web/useQuotes.js");
+const { useGlossaryRead } = await import("../src/web/useGlossary.js");
+const { useQuizRead } = await import("../src/web/useQuiz.js");
+
+let host: HTMLDivElement;
+let root: Root;
+
+enableHistorySync();
+
+beforeEach(() => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  answers = {};
+  gets = {};
+  posts = [];
+  resetActivations();
+  jobEngine.reset();
+  resetExperimental();
+  const dialogs = window.HTMLDialogElement?.prototype;
+  if (dialogs) {
+    dialogs.showModal = function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    dialogs.close = function close(this: HTMLDialogElement) {
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    };
+  }
+  URL.createObjectURL = vi.fn(() => "blob:spideryarn/plate-1");
+  URL.revokeObjectURL = vi.fn();
+  /* `describeFetchFailure` reports a fault to the console, and Tweets logs its
+     own; neither is what a failing row should be read through. */
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+    reply(String(input), (init?.method ?? "GET").toUpperCase(), (init?.body as string | undefined) ?? null),
+  );
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+async function settle(turns = 8): Promise<void> {
+  for (let i = 0; i < turns; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 0));
+    });
+  }
+}
+
+/** The whole app at the owner's article. Not under `<StrictMode>`: requests are counted. */
+async function open(search = ""): Promise<void> {
+  history.replaceState(null, "", `/read/${SLUG}${search}`);
+  await act(async () => {
+    root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+  });
+  await act(async () => {
+    for (const fn of [...authListeners]) fn("SIGNED_IN", { user: OWNER });
+  });
+  await settle();
+}
+
+const UNREADABLE = '[aria-hidden="true"], [hidden], [class*="sr-only"]';
+
+/** What a reader can read in `el` — every-mode test § `readable`. */
+function readable(el: Element | null): string {
+  if (!el || el.closest(UNREADABLE)) return "";
+  const copy = el.cloneNode(true) as HTMLElement;
+  for (const unread of copy.querySelectorAll(UNREADABLE)) unread.remove();
+  return copy.textContent ?? "";
+}
+
+function tryAgain(within: Element | null): HTMLButtonElement | undefined {
+  return [...(within?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+    (b) => b.textContent?.trim() === "Try again",
+  );
+}
+
+async function press(button: HTMLButtonElement | undefined): Promise<void> {
+  await act(async () => button?.click());
+  await settle();
+}
+
+/* --------------------------------------------------------------- the table -- */
+
+interface Row {
+  /** The hook file under src/web whose read this is — the static half's key. */
+  hook: string;
+  /** The path segment of its GET: `/api/<kind>/<slug>`. */
+  kind: keyof typeof SAYS;
+  /** The address that opens its band — a pasted link, so nothing is armed. */
+  search: string;
+  /** The band the sentence and the button must be inside. */
+  where: string;
+  /** Other artefacts that must be there for this one's body to draw. */
+  needs?: readonly string[];
+  /** What the loaded artefact puts on screen, where that is not `SAYS[kind]`. */
+  shows?: string;
+}
+
+const ROWS: readonly Row[] = [
+  { hook: "useFaq.ts", kind: "faq", search: "?mode=faq", where: ".mode-band.faq" },
+  { hook: "useSimple.ts", kind: "simple", search: "?mode=summary", where: ".mode-band.summ" },
+  { hook: "useSkim.ts", kind: "skim", search: "?mode=skim", where: ".mode-band.skim", needs: ["quotes"] },
+  { hook: "useTweets.ts", kind: "tweets", search: "?mode=summary&summary=thread", where: ".mode-band.summ.tweets" },
+  { hook: "useIdeas.ts", kind: "ideas", search: "?mode=ideas", where: ".mode-band.ideas" },
+  { hook: "useTimeline.ts", kind: "timeline", search: "?mode=timeline", where: ".mode-band.timeline" },
+  { hook: "useQuotes.ts", kind: "quotes", search: "?mode=quotes", where: ".mode-band.quotes" },
+  { hook: "useDebate.ts", kind: "debate", search: "?mode=debate", where: ".mode-band.dbt" },
+  { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
+  { hook: "useCitations.ts", kind: "citations", search: "?mode=citations", where: ".mode-band.citations" },
+  {
+    hook: "useQuiz.ts",
+    kind: "quiz",
+    search: "?mode=remember&remember=quiz",
+    where: ".mode-band.quiz",
+    /* Nothing has been read in this harness, so *Only what I've read* holds the
+       one question back and says how many there are — a sentence the panel can
+       only draw from the loaded batch. */
+    shows: "to see all 1",
+  },
+  { hook: "useIllustrated.ts", kind: "illustrated", search: "?mode=diagram&diagram=illustrated", where: ".mode-band.diag" },
+  { hook: "useSketch.ts", kind: "sketch", search: "?mode=diagram", where: ".mode-band.diag" },
+];
+
+/**
+ * **Every other caller of `useOrderedRead`, and why it has no row.** A new
+ * caller is red until it is a row above or a line here; see the static half.
+ */
+const NOT_A_ROW: Record<string, string> = {
+  "useOrderedRead.ts": "the definition itself",
+  "useArc.ts":
+    "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
+  "useClaims.ts":
+    "Referee's claims run is a stored stream run, not a mode panel's artefact read; it already goes through `describeFetchFailure` and words its own load failure.",
+  "useRelations.ts":
+    "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
+  "useCrossrefs.ts":
+    "an enhancement over the prose with no error state at all: a failed read draws no links and says nothing.",
+  "Metadata.tsx":
+    "the metadata page's provenance read, not a mode band. It still prints the caught message as it is; that is another cluster's file (plan 261004c § Out of scope).",
+};
+
+function arrange(row: Row, answer: Answer): void {
+  answers = { [row.kind]: answer };
+  for (const kind of row.needs ?? []) answers[kind] = "ok";
+}
+
+describe.each(ROWS)("$hook: a failed opening read", (row) => {
+  const band = () => host.querySelector(row.where);
+
+  it("says a lost connection in the reader's sentence, with none of the browser's words on a built page", async () => {
+    vi.stubEnv("PROD", true);
+    arrange(row, "transport");
+    await open(row.search);
+    const said = readable(band());
+    expect(said).toContain(COULD_NOT_REACH.message);
+    expect(said).not.toContain(BROWSER_WORDS);
+  });
+
+  it("says a fault of the page's own as PAGE_FAULT, never in the fault's words", async () => {
+    arrange(row, "fault");
+    await open(row.search);
+    const said = readable(band());
+    expect(said).toContain(PAGE_FAULT.message);
+    expect(said).not.toContain(FAULT_WORDS);
+  });
+
+  it("draws Try again; pressing it is one more GET, no job, and the artefact", async () => {
+    arrange(row, "transport");
+    await open(row.search);
+    expect(band()?.querySelector('[role="alert"]'), "the sentence is not announced").not.toBeNull();
+    const button = tryAgain(band());
+    expect(button, "no button named Try again in the band").toBeDefined();
+
+    const before = gets[row.kind] ?? 0;
+    expect(before, "the opening read was never made").toBeGreaterThan(0);
+    arrange(row, "ok");
+    await press(button);
+
+    expect((gets[row.kind] ?? 0) - before, "Try again must be exactly one more GET").toBe(1);
+    expect(posts, "Try again started a job on a pasted link").toEqual([]);
+    expect(readable(band())).toContain(row.shows ?? SAYS[row.kind]);
+    expect(band()?.querySelector('[role="alert"]'), "the error outlived the recovery").toBeNull();
+    expect(tryAgain(band())).toBeUndefined();
+  });
+});
+
+/* ------------------------------------------------------ Arc, sentence only -- */
+
+describe("useArc.ts: a failed read", () => {
+  let seen: { status: string; error: string | null } | null = null;
+  function Probe(): ReactElement | null {
+    seen = useArc(SLUG, undefined);
+    return null;
+  }
+  async function mount(): Promise<void> {
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+  }
+
+  it("holds a lost connection as the reader's sentence", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { arc: "transport" };
+    await mount();
+    expect(seen).toMatchObject({ status: "error", error: COULD_NOT_REACH.message });
+  });
+
+  it("holds a fault of the page's own as PAGE_FAULT", async () => {
+    answers = { arc: "fault" };
+    await mount();
+    expect(seen).toMatchObject({ status: "error", error: PAGE_FAULT.message });
+  });
+});
+
+/* ------------------------------------------- a picture kept through a failure --
+
+   Sketch and Illustrated keep a loaded picture through a failed revalidation
+   (the `was === "loading" ? "error" : was` guard) and drew the error only in
+   their empty branch — so the failure was silent, and there was no way to ask
+   again. Plan § F4. The revalidation here is the one both hooks already make
+   on their own: a new block order re-keys the read. */
+
+const MORE_BLOCKS: Block[] = [
+  ...BLOCKS,
+  { id: "spya-dddddd" as BlockId, tag: "p", kind: "text", text: "A fourth.", words: 2, html: "<p>A fourth.</p>", gistable: true },
+];
+
+describe.each([
+  {
+    name: "Sketch",
+    kind: "sketch" as const,
+    view: (blocks: Block[]) =>
+      createElement(SketchView, { access: { kind: "owner", slug: SLUG }, blocks, atRow: null, onJump: () => {} }),
+  },
+  {
+    name: "Illustrated",
+    kind: "illustrated" as const,
+    view: (blocks: Block[]) => createElement(IllustratedView, { slug: SLUG, blocks, onJump: () => {} }),
+  },
+])("$name: a failed revalidation beside a picture that is there", ({ kind, view }) => {
+  it("also offers the failed read again after an earlier 404", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { [kind]: "missing" };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(view(BLOCKS)));
+    await settle();
+    expect(gets[kind]).toBe(1);
+
+    answers = { [kind]: "transport" };
+    await act(async () => root.render(view(MORE_BLOCKS)));
+    await settle();
+    expect(gets[kind]).toBe(2);
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(COULD_NOT_REACH.message);
+    expect(tryAgain(host)).toBeDefined();
+
+    answers = { [kind]: "ok" };
+    await press(tryAgain(host));
+    expect(gets[kind]).toBe(3);
+    expect(posts).toEqual([]);
+    expect(readable(host)).toContain(SAYS[kind]);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("keeps the picture, says so with Try again, and recovers on one GET with no job", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { [kind]: "ok" };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(view(BLOCKS)));
+    await settle();
+    expect(readable(host)).toContain(SAYS[kind]);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+
+    answers = { [kind]: "transport" };
+    await act(async () => root.render(view(MORE_BLOCKS)));
+    await settle();
+    expect(readable(host), "the failed revalidation took the picture away").toContain(SAYS[kind]);
+    expect(host.querySelector('[role="alert"]')?.textContent, "the failure was silent").toBe(
+      COULD_NOT_REACH.message,
+    );
+    const button = tryAgain(host);
+    expect(button, "no Try again beside the kept picture").toBeDefined();
+
+    const before = gets[kind] ?? 0;
+    answers = { [kind]: "ok" };
+    await press(button);
+    expect((gets[kind] ?? 0) - before).toBe(1);
+    expect(posts).toEqual([]);
+    expect(readable(host)).toContain(SAYS[kind]);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe.each([
+  { kind: "ideas", use: () => { const read = useIdeasRead(SLUG); return { read, artefact: read.ideas }; } },
+  { kind: "quotes", use: () => { const read = useQuotesRead(SLUG); return { read, artefact: read.quotes }; } },
+  { kind: "glossary", use: () => { const read = useGlossaryRead(SLUG); return { read, artefact: read.glossary }; } },
+  { kind: "quiz", use: () => { const read = useQuizRead(SLUG); return { read, artefact: read.quiz }; } },
+])("$kind: a malformed revalidation", ({ kind, use }) => {
+  it("reports PAGE_FAULT without committing the broken artefact, and retry keeps the loaded one", async () => {
+    let seen!: ReturnType<typeof use>;
+    function Probe() {
+      seen = use();
+      return null;
+    }
+    answers = { [kind]: "ok" };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    const kept = seen.artefact;
+    expect(kept).toBeTruthy();
+    expect(seen.read.status).toBe("ready");
+
+    answers = { [kind]: "null-artefact" };
+    await act(async () => seen.read.refresh());
+    expect(seen.read.error).toBe(PAGE_FAULT.message);
+    expect(seen.read.status).toBe("ready");
+    expect(seen.artefact, "a rejected response replaced the loaded artefact").toBe(kept);
+    expect([seen.read.stale, seen.read.outdated, seen.read.profileChanged, seen.read.profiled]).toEqual([
+      false, false, false, false,
+    ]);
+
+    const before = gets[kind] ?? 0;
+    answers = { [kind]: "ok" };
+    await act(async () => seen.read.retryRead());
+    expect((gets[kind] ?? 0) - before).toBe(1);
+    expect(seen.read.error).toBeNull();
+    expect(seen.read.status).toBe("ready");
+    expect(seen.artefact).toEqual(kept);
+    expect(posts).toEqual([]);
+  });
+});
+
+/* -------------------------------------------- what Try again may spend (F1) -- */
+
+function modeButton(mode: Mode): HTMLButtonElement {
+  const label = MODE_LABEL[mode];
+  const found = [
+    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
+  ].find((b) => b.getAttribute("aria-label") === label);
+  expect(found, `the bar must draw ${label}`).toBeDefined();
+  return found as HTMLButtonElement;
+}
+
+describe("Try again answered by a 404", () => {
+  const ideasBand = () => host.querySelector(".mode-band.ideas");
+  const threadBand = () => host.querySelector(".mode-band.summ.tweets");
+
+  it("honours a press still in hand: exactly one unforced run, as if the first read had answered", async () => {
+    answers = { ideas: "transport" };
+    await open("");
+    await act(async () => modeButton("ideas").click());
+    for (let i = 0; i < 40 && !ideasBand(); i++) await settle(1);
+    await settle();
+    expect(tryAgain(ideasBand()), "the armed press did not end at the error").toBeDefined();
+    expect(posts, "a failed read is not an answer, and it spent").toEqual([]);
+
+    answers = { ideas: "missing" };
+    await press(tryAgain(ideasBand()));
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["ideas"]]);
+    expect(posts[0]?.force ?? [], "the honoured press must be the unforced verb").toEqual([]);
+  });
+
+  it("spends nothing when nobody pressed: a pasted link, then Try again", async () => {
+    answers = { ideas: "transport" };
+    await open("?mode=ideas");
+    expect(tryAgain(ideasBand())).toBeDefined();
+
+    answers = { ideas: "missing" };
+    await press(tryAgain(ideasBand()));
+    await settle();
+    expect(readable(ideasBand())).not.toContain(COULD_NOT_REACH.message);
+    expect(posts).toEqual([]);
+  });
+
+  it("Thread starts by arrival, so its Try again ends in exactly one unforced run", async () => {
+    answers = { tweets: "transport" };
+    await open("?mode=summary&summary=thread");
+    expect(tryAgain(threadBand())).toBeDefined();
+    expect(posts).toEqual([]);
+
+    answers = { tweets: "missing" };
+    await press(tryAgain(threadBand()));
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    expect(posts[0]?.force ?? []).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------ the mode a fix would miss -- */
+
+describe("every caller of useOrderedRead", () => {
+  const web = path.resolve(import.meta.dirname, "..", "src", "web");
+  /** A call, not a mention: comment lines name the hook in a dozen other files. */
+  const calls = (source: string) =>
+    source
+      .split("\n")
+      .filter((line) => !/^\s*(\*|\/\*|\/\/)/.test(line))
+      .some((line) => /\buseOrderedRead\(/.test(line));
+  const callers = (readdirSync(web, { recursive: true }) as string[])
+    .filter((f) => /\.tsx?$/.test(f))
+    .filter((f) => calls(readFileSync(path.join(web, f), "utf8")))
+    .sort();
+
+  it("is a row in the table or a named exclusion, and never both", () => {
+    expect(callers.length, "the search found nothing, so it proves nothing").toBeGreaterThanOrEqual(14);
+    const rows = new Set(ROWS.map((r) => r.hook));
+    const unaccounted = callers.filter((f) => !rows.has(f) && !(f in NOT_A_ROW));
+    expect(
+      unaccounted,
+      "a read with no row here has no checked sentence and no checked Try again — add a row, or an exclusion with its reason",
+    ).toEqual([]);
+    expect(callers.filter((f) => rows.has(f) && f in NOT_A_ROW)).toEqual([]);
+  });
+
+  it("names no file that is not one", () => {
+    const named = [...ROWS.map((r) => r.hook), ...Object.keys(NOT_A_ROW)];
+    expect(named.filter((f) => !callers.includes(f))).toEqual([]);
+  });
+
+  it("gives every exclusion a reason", () => {
+    for (const [file, why] of Object.entries(NOT_A_ROW)) {
+      expect(why.length, `${file} is excused with no reason`).toBeGreaterThan(10);
+    }
+  });
+});

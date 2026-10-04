@@ -49,11 +49,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Lightbulb,
-  RotateCw,
   Route,
   TriangleAlert,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
 import type { SkimDepth } from "../types.js";
@@ -68,6 +66,7 @@ import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { StepTip } from "./StepTip.js";
+import { ReadError } from "./ReadError.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -647,17 +646,7 @@ export function SkimPanel({ access, view, away }: Props) {
         ) : null
       }
     >
-      {owner?.error && (
-        <div className="skim-read-error">
-          <p className="gloss-error" role="alert">
-            {owner.error}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
-      )}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
 

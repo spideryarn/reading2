@@ -113,7 +113,6 @@
   line-height: 1.35;
 }
 
-.quotes-error,
 .quotes-quiet {
   margin: 0;
   padding: 0.7rem;
@@ -121,7 +120,6 @@
   font-size: 0.88rem;
   line-height: 1.45;
 }
-.quotes-error { color: var(--highlight-ink); }
 
 .quotes-empty { padding: 0.7rem; }
 .quotes-empty p { margin: 0 0 0.5rem; font-size: 0.91rem; color: var(--ink-soft); }

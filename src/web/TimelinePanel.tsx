@@ -70,6 +70,7 @@ import {
 } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ReadError } from "./ReadError.js";
 import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
 
@@ -430,7 +431,7 @@ export function TimelinePanel({
       }
     >
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for the timeline…</p>}
 

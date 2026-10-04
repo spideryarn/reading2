@@ -109,6 +109,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/useOrderedRead.ts`, `useStepJob.ts`, `useAutoRun.ts`; `JobProgress.tsx`** — a mode's
   artefact read, its job, running on arrival, and the progress card. The state glue around them is
   still copied hook to hook — [mode.md](mode.md).
+- **`src/web/rewrite-hold.ts` § `useRewriteHold`; `ReadError.tsx`, `RewriteWaiting.tsx`** — a forced
+  re-run holding every forced control until its result is read, and the two rows that offer a read
+  again. `useQuiz` had its own hold until 2026-10-04 —
+  [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
   "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
   private copy with neither the switch to a date nor the clock.

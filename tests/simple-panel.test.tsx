@@ -178,6 +178,7 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},

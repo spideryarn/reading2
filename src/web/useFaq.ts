@@ -26,6 +26,7 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type FaqStatus = "loading" | "none" | "ready" | "error";
 
@@ -48,7 +49,11 @@ export interface UseFaq {
   starting: boolean;
   /** The run in flight was started automatically. `UseDebate.automatic`. */
   automatic: boolean;
-  /** Repeat only the GET after a failed read. This never starts a model job. */
+  /**
+   * Repeat the GET after a failed read. **It sends only a GET**; a press still
+   * in hand is then honoured exactly as it would have been had the first read
+   * answered — useAutoRun.ts § A failed read is not an answer.
+   */
   retryRead(): Promise<void>;
   /**
    * **Write it if nobody has** — unforced, for the automatic run and for the
@@ -122,7 +127,7 @@ export function useFaqRead(slug: string): FaqRead {
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
            nothing to fall back on. Same guard as useDebate.ts. */
@@ -136,9 +141,12 @@ export function useFaqRead(slug: string): FaqRead {
      it, and only the newest reply commits. src/web/useOrderedRead.ts. */
   const { reload, refresh } = useOrderedRead(load);
 
-  /* A recovery control for the read itself, never a generation verb. Keep an
-     already loaded list on screen while a failed post-job revalidation is tried
-     again; only the opening-error case returns to the loading sentence. */
+  /* A recovery control for the read itself: it sends only a GET. What that GET
+     answers is then treated as the first read's answer would have been, so a
+     404 with the reader's press still in hand starts the run the press asked
+     for (unforced, once) — useAutoRun.ts § A failed read is not an answer. Keep
+     an already loaded list on screen while a failed post-job revalidation is
+     tried again; only the opening-error case returns to the loading sentence. */
   const retryRead = useCallback(async () => {
     setError(null);
     if (faq === null) setStatus("loading");

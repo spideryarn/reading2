@@ -63,6 +63,7 @@ import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
+import { ReadError } from "./ReadError.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -980,7 +981,7 @@ export function QuotesPanel({
         <div className="quotes-list quotes-list-yours-only">{rowList}</div>
       )}
 
-      {owner?.error && <p className="quotes-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <p className="quotes-quiet">Looking for quotes…</p>}
 

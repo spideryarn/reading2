@@ -69,6 +69,7 @@ import {
 } from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ReadError } from "./ReadError.js";
 import { useRenderCount } from "./perf.js";
 import {
   survivesThreshold,
@@ -982,7 +983,7 @@ export function CitationsPanel({
         <BarSlider works={all} bar={bar} moved={chosenBar !== null} onBar={onBar} />
       )}
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
 

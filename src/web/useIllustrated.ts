@@ -48,6 +48,7 @@ import {
 } from "../illustrated-plate.js";
 import type { Block, BlockId, IllustratedResponse, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -170,6 +171,8 @@ export interface UseIllustrated {
    * sentence it replaces, and true.
    */
   drawThenPaint(note?: string): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -276,7 +279,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
       setStatus((was) => (was === "loading" ? "error" : was));
@@ -288,6 +291,15 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. A painting already on screen stays there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (illustrated === null) setStatus("loading");
+    await reload();
+  }, [illustrated, reload]);
 
   const queue = useStepJob(slug, "illustrated", refresh, "watches-queue");
 
@@ -385,6 +397,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     ensure,
     regenerate,
     drawThenPaint,
+    retryRead,
     cancel: queue.cancel,
   };
 }

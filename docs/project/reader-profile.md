@@ -512,6 +512,28 @@ being shown back to the reader. `useProfile: boolean` on a generate request is
 unchanged, because a client that could *supply* profile text is a way to put an
 arbitrary string into a prompt.
 
+### Regenerate waits for its own result
+
+One press must not buy two rewrites. A finished job leaves the queue before its result has been
+read, and until that read lands the old text is still on screen with its old `profileChanged` — so
+Regenerate would be offered again. From the press until the new artefact is read, **every forced
+control in that mode is held**: the panel's Regenerate, and *Write it again*, *Find them again*,
+*Find more* / *Find terms again* beside the text, on a stale or unprofiled artefact too. Quiz,
+Summary, Thread, Ideas, Glossary and Sketch.
+
+The hold is kept outside the band, so closing the mode during the run and coming back does not lose
+it. Three things release it: a read **the server answered** shows a different artefact; the job
+failed or was cancelled; or the job is listed as over and a read *started after that* shows the same
+artefact. A read answered from the offline copy is not the server's word and releases nothing. While
+the mode is held with nothing running it says the new version hasn't loaded yet and offers *Try
+again*, which only reads.
+
+**What it does not cover:** a full page reload forgets the hold, so a reader who reloads during a
+rewrite can be offered a second one. The rule, and the two races it is shaped by, are in
+[`src/web/rewrite-hold.ts`](../../src/web/rewrite-hold.ts); each sequence is a test in
+[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)
+([261004c § 2a](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
+
 ## What editing your profile costs
 
 **One typo fix marks every artefact in the library `profileChanged` at once.** Hash equality has no

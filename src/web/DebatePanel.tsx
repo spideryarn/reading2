@@ -202,6 +202,7 @@ import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ReadError } from "./ReadError.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
@@ -1073,7 +1074,7 @@ export function DebatePanel({
       }
     >
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && (
         <p className="gloss-quiet">Looking for what the web says…</p>
