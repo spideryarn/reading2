@@ -974,6 +974,13 @@
       "when": 1791122141705,
       "tag": "20261004135541_reader_auto_modes_off_at",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1791127731956,
+      "tag": "20261004152851_chat_message_hint_opened_at",
+      "breakpoints": true
     }
   ]
 }

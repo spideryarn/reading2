@@ -2,8 +2,8 @@
 
 Up: [plans.md](../project/plans.md) · the mode: [remember-mode.md](../project/remember-mode.md)
 
-**Status: planned 2026-10-04; reworked the same day after GPT Sol's plan review (§ What the plan
-review changed).** Report `spya-fryxrf` (an admin's, so trusted input), queue item `qi-e5qjsmbq`.
+**Status: built 2026-10-04** (§ As built, at the end; the plan above it is as it stood after GPT
+Sol's two plan reviews). Report `spya-fryxrf` (an admin's, so trusted input), queue item `qi-e5qjsmbq`.
 
 Greg, 2026-10-04, in Remember's Recall sub-mode on *The Bitter Lesson*:
 
@@ -227,3 +227,50 @@ code review checks the result. **Where this section and the text above disagree,
   fixture restore in `tests/helpers/seed-reader-state.ts`, with a round-trip case; stamped with
   `clock_timestamp()` as the store's other event times are; added to `tests/event-times.test.ts`.
   Postgres retry sets it null explicitly; edit inserts a fresh answer, so that is an assertion.
+
+## As built
+
+Where the code differs from the plan above, this section is what is true.
+
+- **The Hint button appears once the answer has finished arriving**, not while it streams. The
+  hint's text is hidden from the moment its marker arrives; only the button waits, for about a
+  second. See F12 and F17 below.
+- **The button is a toggle**: a hint can be closed again. Open is the reader's last press here, or
+  else the stored press.
+- **The migration** is `drizzle/20261004152851_chat_message_hint_opened_at.sql`. It was generated
+  twice: a peer's migration took the same place in the chain first, so this one was deleted and
+  regenerated on top of it after the merge ([database.md § Repairing a fork](../project/database.md#repairing-a-fork-what-the-losing-migration-is-decides-everything)).
+- **The route** is `POST /api/chat/:slug/:threadId/hint-opened`, body `{ messageId, hint }`: 404 for
+  no such answer (another reader's included), 400 for an answer that is not Recall's, 409 when the
+  stored hint is not the one sent.
+- **The eval's checks** are in `evals/remember-recall-checks.ts`, apart from the runner, so a unit
+  test can import them.
+- **Two example questions already in the prompt gained a block id**, because an example without one
+  outweighs the rule beside it.
+- **The eval** is written up in
+  [261004c](../investigations/261004c-recall-hint-and-question-link-eval.md). The format holds
+  (13 of 13 hints hidden correctly, 12 of 13 questions with their own link). One revision stopped
+  hints stating the answer. Replies before the hint got longer, 6 of 13 over 120 words against 3,
+  and the revision did not bring that back.
+
+### The code review
+
+[261004h-recall-hint-code-review-sol.md](261004h-recall-hint-code-review-sol.md), GPT Sol, on
+commit `35ca72d7f`: **rework**, six findings; it fixed four in place.
+
+- **F13 (P1) a failed save was never tried again** — Sol's fix kept: the next press that opens the
+  hint asks again.
+- **F14 (P1) a question ending in emphasis, a link or `？` showed its hint** — Sol's fix kept.
+- **F15 (P2) the eval passed a hint with no block id of its own** — Sol's fix kept.
+- **F12 (P1) "the button was withheld until streaming finished", fixed by Sol, and F17 (P1) which
+  Sol then reported against its own fix**: a press made mid-stream was held in the panel until the
+  answer landed, and leaving the conversation first lost it. **Sol's F12 fix was taken back out**,
+  on an Opus arbitration: with no button until the answer has settled, every press is on the final
+  hint and is sent at once, so there is nothing to hold and F17 cannot happen. The other way,
+  holding the press in the chat controller, is a state that has to survive leaving, stopping,
+  failing and retrying, for a second's earlier button.
+- **F16 (P2) the fence is the hint's text, so a retry that wrote the identical hint would accept a
+  late press** — overruled, with Opus agreeing: the reader would be shown words they had already
+  opened, and telling the attempts apart needs a generation carried through the stream and the
+  request. `remember-mode.md` says exactly what the fence does and does not promise.
+

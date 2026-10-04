@@ -1546,35 +1546,26 @@ export function Turn({
     kind === "remember" && message.role === "assistant"
       ? splitHint(message.text)
       : { body: message.text, hint: null };
-  /* `createdAt` moves on retry, but not as the streamed hint grows. Keying this
-     to the hint text made an open disclosure close again on its next delta. */
+  /* `createdAt` moves on retry, which is what makes it the attempt. */
   const attempt = message.createdAt;
   const [pressed, setPressed] = useState<{ attempt: string; open: boolean } | null>(null);
-  const hintOpen =
-    hint !== null && (pressed?.attempt === attempt ? pressed.open : message.hintOpenedAt !== undefined);
-  /** A press made before the final answer exists in the store. */
-  const pendingReport = useRef<string | null>(null);
+  /* **Nothing to press, and nothing drawn, until the answer has settled.** A
+     press is therefore always on the final hint, and is reported the moment it
+     happens: no press is ever held here waiting for the answer to land, where
+     leaving the conversation would lose it. The hint is the last paragraph, so
+     the button is about a second later than it could be. */
+  const hintOffered = hint !== null && message.status !== "pending";
+  const hintOpen = hintOffered && (pressed?.attempt === attempt ? pressed.open : message.hintOpenedAt !== undefined);
   const hintId = useId();
   const toggleHint = () => {
-    if (hint === null) return;
+    if (hint === null || !hintOffered) return;
     const opening = !hintOpen;
     setPressed({ attempt, open: opening });
-    if (opening && message.hintOpenedAt === undefined) {
-      /* Deltas are not stored one by one. Keep the press locally now, and send
-         the final hint once `finish` has made it matchable by the route. */
-      if (message.status === "pending") pendingReport.current = attempt;
-      else onHintOpened?.(message.id, hint);
-    }
+    /* Every opening press asks until the stored time comes back, so a write
+       that failed is tried again; the controller drops a request that is
+       already out or already answered (`startHint` in chat/reduce.ts). */
+    if (opening && message.hintOpenedAt === undefined) onHintOpened?.(message.id, hint);
   };
-  useEffect(() => {
-    if (pendingReport.current !== null && pendingReport.current !== attempt) {
-      pendingReport.current = null;
-      return;
-    }
-    if (message.status === "pending" || pendingReport.current !== attempt) return;
-    pendingReport.current = null;
-    if (hint !== null && message.hintOpenedAt === undefined) onHintOpened?.(message.id, hint);
-  }, [attempt, hint, message.hintOpenedAt, message.id, message.status, onHintOpened]);
 
   if (message.role === "user") {
     if (editing) {
@@ -1676,10 +1667,11 @@ export function Turn({
           live={message.status === "pending"}
         />
       )}
-      {hint !== null && (
-        /* Offered as soon as the complete marker and any hint text have
-           arrived. A press made before the answer lands is reported afterwards,
-           with the final hint the server stored. */
+      {hint !== null && hintOffered && (
+        /* Offered once the answer has settled; while it arrives the hint is
+           simply not drawn (`hintOffered` above). The label is ours; the hint
+           under it is the model's words, drawn by the same `Answer` so its
+           block ids are chips. */
         <div className="chat-hint">
           <Button
             type="button"
@@ -1694,7 +1686,7 @@ export function Turn({
           </Button>
           {hintOpen && (
             <div id={hintId} className="chat-hint-text">
-              <Answer text={hint} onJump={onJump} blocks={blocks} live={message.status === "pending"} />
+              <Answer text={hint} onJump={onJump} blocks={blocks} live={false} />
             </div>
           )}
         </div>

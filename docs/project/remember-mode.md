@@ -478,17 +478,31 @@ question in the plan.
 
 - **A retry reuses the answer's row**, so three things keep an old press off a new answer. The
   store nulls the column on retry. The request carries the hint's own text and the store stamps
-  only if the stored answer still has that hint, checked in the same transaction, so a press still
-  on its way when the retry lands is refused. And the panel keys its open state to the attempt.
+  only if the stored answer, split, has that same hint, checked in the same transaction. And the
+  panel keys its open state to the attempt.
+- **What that fence guarantees, exactly:** a stamp lands only on an answer whose hint is word for
+  word the one the reader pressed. It is a fence on the hint's text, not on the attempt. A press
+  still on its way when a retry lands is refused while the row is empty or its new hint says
+  anything else. If the retry writes the identical hint, the late press is accepted and the
+  replacement shows open: the reader is shown words they had already opened, so nothing unseen is
+  revealed, but the time recorded is of a press made on the earlier attempt. Telling the two apart
+  needs an attempt generation carried through the stream and the request, which was judged not
+  worth its protocol for this case (F16 in the
+  [code review](../plans/261004h-recall-hint-code-review-sol.md)).
 - **In the browser** the hint opens from the panel's own state whatever the write does. The write
   is a checked operation in the chat controller (`HintOperation` in
   [`src/web/chat/model.ts`](../../src/web/chat/model.ts)): on success the server's time is patched
   into the message, so leaving the conversation and coming back keeps it open; on failure nothing
-  is written and nothing claims it was.
+  is written and nothing claims it was, and the next press that opens the hint asks again. Until a
+  write succeeds, a hint opened here is closed again after leaving and coming back.
 - **Copy** copies what is on screen: the body, and the hint only while it is open.
-- **While an answer is arriving** the button appears as soon as the complete `Hint:` marker and some
-  hint text have arrived. A press opens it at once; its timestamp write waits until the final hint is
-  stored. A flash of the letters `Hin` before the marker completes is accepted.
+- **While an answer is arriving** the hint is hidden as soon as the complete `Hint:` marker has
+  arrived, and there is no button; the button appears, closed, when the answer has settled. The
+  hint is the last paragraph, so that is about a second after it could first have been pressed. In
+  exchange every press is on the final hint and is sent the moment it happens: the panel never
+  holds a press waiting for the answer to land, where leaving the conversation would lose it (F12
+  and F17 in the code review). A flash of the letters `Hin` before the marker completes is
+  accepted.
 
 **Who reads an answer's text.** Storage, export and Recall's own later turns get the raw text: the
 model sees what it wrote, and its prompt says never to assume the hint was opened. Two readers were

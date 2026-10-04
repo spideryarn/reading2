@@ -507,8 +507,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             <strong>Talk</strong> for the microphone, or <strong>Live conversation</strong> to talk it
             through out loud. Each reply is short: it corrects one thing if something comes apart from
             the article, links the passage, and usually nudges you to remember a little more — often
-            offering two directions to choose from. Each nudge links the passage that answers it,
-            and the <strong>Hint</strong> button under it opens a clue if you want one. Say you don’t
+            offering two directions to choose from. When it asks what you remember, the question links
+            the passage that answers it, and the <strong>Hint</strong> button under it opens a clue if
+            you want one. Say you don’t
             remember and it fills the gap instead. It does not praise or grade you, and disagreeing with the author is not counted as
             misunderstanding. There is one Recall conversation per article; the bin icon starts it
             over.

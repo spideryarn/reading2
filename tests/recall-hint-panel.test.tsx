@@ -275,24 +275,37 @@ describe("what is not a hint is shown as written", () => {
 });
 
 describe("while the answer is still arriving", () => {
-  it("offers the button once the marker arrives, and records a pending press after the answer lands", () => {
+  it("hides the hint as it arrives, and offers no button until the answer has settled", () => {
+    /* No button means no press before the answer has settled, so there is
+       never a press waiting in the panel for a write that leaving the
+       conversation would lose (F17 in the 261004h code review). */
     paint(thread({ text: `${BODY}\n\nHint: He names`, status: "pending" }));
     expect(answer()?.textContent).toContain("Do you remember what he says");
-    expect(answer()?.textContent).not.toContain(HINT_WORDS);
-    expect(hintButton()?.getAttribute("aria-expanded")).toBe("false");
+    expect(answer()?.textContent).not.toContain("He names");
+    expect(answer()?.textContent).not.toContain("Hint");
+    expect(hintButton()).toBeNull();
 
-    press(hintButton());
-    expect(answer()?.textContent).toContain("He names");
-    expect(opened).toEqual([]);
-
-    /* More deltas belong to the same attempt and must not close it. */
+    /* The whole hint is there, and the answer still has not settled. */
     paint(thread({ status: "pending" }));
-    expect(answer()?.textContent).toContain(HINT_WORDS);
-    expect(hintButton()?.getAttribute("aria-expanded")).toBe("true");
-    expect(opened).toEqual([]);
+    expect(answer()?.textContent).not.toContain(HINT_WORDS);
+    expect(hintButton()).toBeNull();
 
     paint(thread());
-    expect(hintButton()?.getAttribute("aria-expanded")).toBe("true");
+    expect(answer()?.textContent).not.toContain(HINT_WORDS);
+    expect(hintButton()?.getAttribute("aria-expanded")).toBe("false");
+    expect(opened).toEqual([]);
+
+    /* The first press is on the stored answer, and is reported at once. */
+    press(hintButton());
+    expect(answer()?.textContent).toContain(HINT_WORDS);
     expect(opened).toEqual([{ messageId: ANSWER_ID, hint: HINT }]);
+  });
+
+  it("draws neither button nor hint for a pending answer, whatever its stored time says", () => {
+    /* The rule is the status alone, so it has no second case to get wrong. */
+    paint(thread({ status: "pending", hintOpenedAt: LATER }));
+    expect(hintButton()).toBeNull();
+    expect(answer()?.textContent).not.toContain(HINT_WORDS);
+    expect(opened).toEqual([]);
   });
 });
