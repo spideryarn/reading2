@@ -163,3 +163,7 @@ Recommended if Greg wants it: option 1, after he has used v1 and knows whether h
   Screenshots: `261004a-shot-*.png`; they predate those two fixes.
 - Not re-run after the review fixes: the full suite. The fixes touch `chat-handoff.ts`, one line of
   `ChatPanel.tsx` and one CSS value; the chat and summary test files and the typecheck were re-run.
+- 2026-10-04 — GPT Sol round two, a narrow read-only check of the four fixes made after round one
+  ([answer](261004a-ask-about-a-summary-paragraph-code-review-2-sol.md)): all four correct, no new
+  findings, land. Merged `origin/dev`; typecheck green, ten related test files (280 tests) green,
+  lint clean on the touched files. Pushed to `dev`.
