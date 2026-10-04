@@ -1,0 +1,143 @@
+{
+  "what": "Plan 261004f stage 3: two real long PDFs through the real pipeline on the local stack, with real models",
+  "date": "2026-10-04",
+  "database": "postgresql://…@127.0.0.1:54362/postgres (local Supabase; checked before the first write)",
+  "owner": "f4d08b58-5573-4811-9887-e26c114fb324",
+  "code": {
+    "headAtEveryPaidStep": "e8fa927c493d65c364b076b967e02e1fe3ad2ce3",
+    "gitStatusAtEveryPaidStep": "clean",
+    "headAfterTheRuns": "27c21b8f0ca1d16ea2debdfb6246ebd814a34560 (moved after both ingests had exited; nothing ran on it)"
+  },
+  "spend": {
+    "capUsd": 9.0,
+    "totalUsd": 1.5258,
+    "calls": 252,
+    "unpricedCalls": 0,
+    "callsNotOk": 0,
+    "query": "select round(sum(coalesce(credits_used_nanos,0)+coalesce(byok_upstream_nanos,0)+coalesce(computed_cost_nanos,0))/1e9,4) from spideryarn.ai_calls where article_slug like 's3-%'"
+  },
+  "preflight": {
+    "s3-doctorow-250p.pdf": {
+      "source": "269039ca.pdf (263 pages), first 250 pages copied with pdf-lib",
+      "fileMB": 0.8, "pages": 250, "isScan": false, "textLayerWords": 113059,
+      "plannedChunks": 43, "largestPageMiB": 0.06, "largestRequestEncodedMiBEst": 0.4,
+      "estimateUsd": { "extract": 1.10, "structure": 1.60, "assets": 0.05, "total": 2.75 }
+    },
+    "s3-gdl-45mb.pdf": {
+      "source": "33da8edb.pdf, unchanged",
+      "fileMB": 45.09, "pages": 160, "isScan": false, "textLayerWords": 59485,
+      "plannedChunks": 36, "largestPageMiB": 16.74, "sumOfSinglePageCutsMiB": 79.7,
+      "largestRequestEncodedMiBEst": 22.8, "largestRequestPage": 95,
+      "chunksEstOver30MiB": 0, "chunksEstOver32MB": 0, "chunksEstOver40MiB": 0,
+      "estimateUsd": { "extract": 0.80, "structure": 1.00, "assets": 0.15, "total": 1.95 }
+    },
+    "basisForEstimates": "local ledger, Kuhn 142 pages 2026-09-04: extract $0.55–0.63, one whole-document structure call $1.26"
+  },
+  "documents": [
+    {
+      "file": "s3-doctorow-250p.pdf",
+      "slug": "s3-doctorow-250p-spya-sw2jbz",
+      "articleId": "56f7e169-c8b2-46c7-90d0-c509ec6ffe5c",
+      "jobId": "spya-fne0qh",
+      "jobStatus": "error",
+      "failureKind": "blocked",
+      "published": false,
+      "requeues": 0,
+      "started": "2026-10-04T12:09:37Z",
+      "finished": "2026-10-04T12:12:43Z",
+      "wallSeconds": 186,
+      "claims": 2,
+      "claimNote": "claim handed back after blocks (558.6 s left, structure wants 700 s); second claim started structure at once. A between-steps release, not a requeue.",
+      "steps": [
+        { "step": "fetch", "status": "done", "ms": 2296, "detail": "778 KB", "usd": 0 },
+        {
+          "step": "extract", "status": "done", "ms": 166512, "usd": 0.6545, "calls": 142,
+          "lunaCalls": 140, "lunaUsd": 0.6432, "frontMatterCalls": 2, "frontMatterUsd": 0.0114,
+          "chunks": 43, "chunksAskedAgain": 43, "qualityNotes": 36, "records": 3266, "recall": 0.999,
+          "inputTokens": 491349, "outputTokens": 466360, "reasoningTokens": 59448,
+          "longestCallSeconds": 45.5, "gateWidth": 100, "gateRefusals": 0,
+          "chunkCheckpointsLeft": 18, "droppedContextPage": 0, "pdfChunkBig": 0
+        },
+        { "step": "blocks", "status": "done", "ms": 12535, "blocks": 3112, "minted": 3112 },
+        {
+          "step": "structure", "status": "error", "ms": 82, "usd": 0, "calls": 0,
+          "errorType": "TooLongForOnePass",
+          "readerSentence": "This article is longer than this step can handle in one go, and reading a long piece in sections is not built yet. Trying again will not help — the article is the same length each time — but a shorter piece will work. [ai-too-long]",
+          "developerSentence": "The table of contents needs about 68,925 tokens for this article, and one model response holds 128,000 including the model's own reasoning.",
+          "estimatedAnswerTokens": 68925
+        },
+        { "step": "assets", "status": "pending (never run)" }
+      ],
+      "blocks": { "total": 3112, "p": 2741, "blockquote": 134, "li": 120, "h1": 88, "h2": 28, "figure": 1, "headings": 116, "words": 111209 },
+      "againstTheStructureCeiling": "3,112 blocks with 116 headings; stage 1 measured the refusal at about 2,890 headingless blocks or about 322 headings",
+      "readBack": { "error": "404 No article artefacts", "why": "nothing was published; articles.current_revision_id is null and the draft is 'failed'" }
+    },
+    {
+      "file": "s3-gdl-45mb.pdf",
+      "slug": "s3-gdl-45mb-spya-cc9kr8",
+      "articleId": "05239250-a10b-41f5-b6aa-950d97d7b973",
+      "jobId": "spya-vwwzmu",
+      "jobStatus": "done",
+      "published": true,
+      "revisionId": "047d1f76-beb8-4d0e-8746-c3ff3be5c91e",
+      "requeues": 0,
+      "started": "2026-10-04T12:13:38Z",
+      "finished": "2026-10-04T12:19:24Z",
+      "wallSeconds": 346,
+      "claims": 2,
+      "claimNote": "claim handed back after blocks (540.9 s left); a between-steps release, not a requeue.",
+      "steps": [
+        { "step": "fetch", "status": "done", "ms": 4143, "detail": "44036 KB", "usd": 0 },
+        {
+          "step": "extract", "status": "done", "ms": 189107, "usd": 0.4813, "calls": 101,
+          "lunaCalls": 99, "lunaUsd": 0.4703, "frontMatterCalls": 2, "frontMatterUsd": 0.0110,
+          "chunks": 36, "chunksAskedAgain": 31, "qualityNotes": 51, "records": 1490, "recall": 0.968,
+          "inputTokens": 544986, "outputTokens": 313291,
+          "longestCallSeconds": 97.7, "gateWidth": 100, "gateRefusals": 0,
+          "chunkCheckpointsLeft": 19, "droppedContextPage": 0, "pdfChunkBig": 0
+        },
+        { "step": "blocks", "status": "done", "ms": 5714, "blocks": 1025, "minted": 1025 },
+        {
+          "step": "structure", "status": "done", "ms": 87719, "usd": 0.3746, "calls": 1,
+          "model": "anthropic/claude-sonnet-5", "inputTokens": 137816, "outputTokens": 9892,
+          "sections": 52, "droppedQuestions": 3, "repairedRanges": 0, "supplementBlocks": 55
+        },
+        {
+          "step": "assets", "status": "done", "ms": 57182, "usd": 0.0155, "calls": 8,
+          "model": "google/gemini-3-flash-preview",
+          "figureMarkers": 58, "figuresStored": 28, "figuresNotStored": 30, "figuresLocatedByModel": 8, "figuresDrawn": 0, "images": 0
+        }
+      ],
+      "usd": 0.8714,
+      "readBack": {
+        "loadMs": 6225, "blocks": 1025, "headings": 119, "text": 842, "quote": 4, "media": 60,
+        "treeNodes": 1077, "treeMaxDepth": 3, "leaves": 1025, "leavesWithNavLabel": 0,
+        "navLabelStatus": "pending",
+        "responseBytes": 962763, "responseMB": 0.963, "gzipBytes": 181442, "gzipMB": 0.181,
+        "fractionOfVercel4_5MB": 0.214,
+        "bytesByKey": { "blocks": 806943, "tree": 143903, "assets": 10954, "meta": 812 },
+        "words": 47957
+      }
+    }
+  ],
+  "requestSize": {
+    "anyRequestOver30MiBEncoded": false,
+    "anyRequestOver32MBEncoded": false,
+    "largestEstimatedEncodedMiB": 22.8,
+    "note": "Estimated from single-page cuts (page 95 is 16.74 MiB alone). The 40 MiB allowance was therefore NOT exercised against the real provider by this document; that question is still open."
+  },
+  "automaticSuccessors": [
+    {
+      "jobId": "spya-bcfap4", "slug": "s3-gdl-45mb-spya-cc9kr8", "step": "labels",
+      "queuedAt": "2026-10-04T12:19:24.576Z", "cancelledAt": "2026-10-04T12:19:24.910Z",
+      "claimedByAnyone": false, "cost": 0,
+      "how": "a scratch watcher polling every 250 ms called cancelJob on any one-step non-ingest job for a slug like 's3-%'"
+    }
+  ],
+  "notRun": [
+    "labels for the page-limit document: it has no tree and no published revision, so there is nothing to label",
+    "labels for the byte-limit document: not in the brief's order (it named the page-limit document only); its article says labels are pending with nothing queued",
+    "assets for the page-limit document: the job ended at structure",
+    "every reading mode"
+  ]
+}

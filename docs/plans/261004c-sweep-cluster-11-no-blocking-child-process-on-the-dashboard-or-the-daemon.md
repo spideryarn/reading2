@@ -201,6 +201,10 @@ synchronous for a script or a CLI, with the long-running caller moved off it: `h
 `readiness-git.ts`, `work-probe.ts`. Startup or CLI only: `revision.ts`, `diagnose.ts`,
 `launchers.ts`, `scripts/overseer.ts`.
 
+**Nine, since later on 2026-10-04:** `report-artefacts.ts` left the list in
+[261004g](261004g-overseer-report-drain-artefact-checks-stop-blocking-the-daemon.md), which also
+added the log line the two kept sleeps of stage 5 were waiting for.
+
 ---
 
 Up: [261003f-fifth-codebase-sweep-umbrella.md](261003f-fifth-codebase-sweep-umbrella.md)

@@ -303,6 +303,7 @@ function ctxOf(slug: string = SLUG): StepContext {
     power: "standard",
     slug,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };

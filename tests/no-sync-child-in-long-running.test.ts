@@ -55,7 +55,6 @@ const MAY_STILL_BLOCK: Record<string, string> = {
   "tools/fleet/revision.ts": "runs once at startup, before the server listens",
   "tools/overseer/diagnose.ts": "a CLI",
   "tools/overseer/launchers.ts": "one tmux call per launch; its header argues the window",
-  "tools/overseer/report-artefacts.ts": "git in the daemon's report drain: STILL BLOCKING, and a job of its own — plan 261004c, stage 6 not built",
   "tools/overseer/work-probe.ts": "the sync probeProcessTable, kept for scripts/fleet-collect-bench.ts; the daemon and the dashboard use probeProcessTableAsync",
   "scripts/overseer.ts": "the report CLI's own tmux-session lookup",
 };

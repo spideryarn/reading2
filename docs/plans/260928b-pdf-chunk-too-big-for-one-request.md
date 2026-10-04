@@ -1,6 +1,9 @@
 # A PDF chunk too big for one request (`pdf-chunk-big`)
 
-**Status: investigation and proposal. Nothing is built.** Greg decides which option to build, if any.
+**Status: A and B were built on 2026-10-04, under plan
+[261004f](261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md). C and D
+are not built. See [§ Result](#result) at the end.** What follows is the investigation as it was
+written on 2026-09-28, when nothing was built and Greg was to decide which option to build, if any.
 
 **Where the report came from:** Greg, 2026-09-28, passed on by the Overseer as a low-priority brief.
 There is no note under `docs/user-feedback/` for it, and none was added. He imported
@@ -167,3 +170,38 @@ message should be very rare, so it can stay as it is.
    (B)?** The cost is that a paragraph running across that one page break comes out as two
    paragraphs. Recommended: yes, since the alternative is failing the whole article.
 3. **C and D: wait until a real example turns up?** Recommended: wait.
+
+## Result
+
+**A and B were built on 2026-10-04**, as part of stage 2 of plan
+[261004f](261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md). Greg did
+not answer the three questions above one by one. His report `spya-bac46a` asked for big PDFs to be
+made robust up to the stated limits, and that plan took it as a yes to items 1 and 2; the trade-off
+in item 2 is written again under that plan's § Decisions so that he can overturn it. Item 3, options
+C and D, still waits for a real example.
+
+What was built, all in `src/pdf-read.ts`:
+
+- **A.** The allowance is `READER_REQUEST_BYTES`, keyed on the model: **40 MiB** encoded for
+  `openai/gpt-5.6-luna`, and the old 30 MiB for any model that is not listed. The key is checked by
+  the compiler against `PDF_READER_MODEL`, so changing the reader model fails `npm run typecheck`
+  until its limit is written down. 40 MiB still rests on a documented 50 MB file limit and one live
+  run at 32 MB; no request near 40 has been sent.
+- **B, the narrow form.** In `runPdfExtract`, a chunk whose cut is over the reader's allowance and
+  which carries a context page is cut again without it. The planner is untouched. The run says which
+  pages in its `notes` and in one log line. The chunk's checkpoint key is the key of the chunk that
+  was sent (`context: null`), so it cannot be served to a later run that asks for the same pages
+  with their context page, or the other way round; no other chunk's key changes.
+- **The seam that makes both testable for free.** `openRouterReader` takes the wire (`ask`) and the
+  allowance as a third argument, and says its allowance as `PdfReader.maxEncodedBytes`.
+  `tests/pdf-chunk-size-policy.test.ts` runs the real reader over a fake wire.
+
+Checked by hand with the production numbers and no network, 2026-10-04: a 4-page PDF whose page 2
+is 25 MiB and page 3 is 8 MiB. Page 2 went with page 1 as context (33.34 MiB encoded). Page 3 with
+page 2 in front of it would have been 44 MiB, so it went alone (10.67 MiB), with the note. A 3-page
+PDF whose page 2 is 31 MiB alone was refused with the same sentence as before, now reading "41 MB,
+where 40 MB is the most".
+
+One thing differs from the text above. Where a chunk is *still* over the allowance without its
+context page, it is refused on its size without the context page, so the sentence gives the page's
+own weight.

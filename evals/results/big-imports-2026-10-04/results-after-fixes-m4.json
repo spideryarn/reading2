@@ -1,0 +1,418 @@
+{
+  "m4": {
+    "ranAt": "2026-10-04T12:02:08.337Z",
+    "question": "Does the PDF front half cope at the caps?",
+    "command": "npx tsx scripts/eval-big-imports.ts --only m4 --out results-after-fixes-m4.json --scratch /tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-d",
+    "caps": {
+      "uploadLimits": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+      "MAX_PAGES": 250,
+      "MAX_UPLOAD_BYTES": 52428800,
+      "fetchMaxBytes": 33554432,
+      "uploadAtTheCap": null,
+      "uploadOneByteOver": "That's 50 MB, and the limit is 50 MB. [pick-big]"
+    },
+    "vercelMemory": "vercel.json sets maxDuration (800) and no memory for api/**, so the function's memory ceiling is whatever the plan's default is: not readable from the repo, not measured.",
+    "cases": [
+      {
+        "generated": {
+          "case": "a",
+          "what": "250 pages of embedded text, ~450 words a page",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-d/case-a.pdf",
+          "bytes": 533274,
+          "mb": 0.51,
+          "generateMs": 1335,
+          "childWallMs": 6817
+        },
+        "measured": {
+          "case": "a",
+          "what": "250 pages of embedded text, ~450 words a page",
+          "baselineRssMb": 324.97,
+          "fileBytes": 533274,
+          "fileMb": 0.51,
+          "uploadProblem": null,
+          "pages": 250,
+          "countPagesMs": 1963,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 591.41,
+          "pass0": {
+            "ms": 2191,
+            "pages": 250,
+            "isScan": false,
+            "words": 110250,
+            "nonEmptyLines": 10050
+          },
+          "rssAfterPass0Mb": 567.86,
+          "plan": {
+            "ms": 1074,
+            "chunks": 42,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 6,
+            "withContextPage": 41,
+            "largestMeasuredPageMb": 0,
+            "smallestMeasuredPageMb": 0
+          },
+          "rssAfterPlanMb": 611.96,
+          "extract": {
+            "ms": 32650,
+            "pages": 250,
+            "chunks": 42,
+            "records": 10050,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "sentWithoutContextPage": [],
+            "htmlBytes": 901404,
+            "blocksFromThisHtml": 10050
+          },
+          "rssAfterExtractMb": 721.03,
+          "reader": {
+            "asks": 42,
+            "mostInFlight": 36,
+            "largestChunks": [
+              {
+                "pages": [
+                  241,
+                  242,
+                  243,
+                  244,
+                  245,
+                  246
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 21044,
+                "encodedMb": 0.02
+              },
+              {
+                "pages": [
+                  181,
+                  182,
+                  183,
+                  184,
+                  185,
+                  186
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 21004,
+                "encodedMb": 0.02
+              },
+              {
+                "pages": [
+                  97,
+                  98,
+                  99,
+                  100,
+                  101,
+                  102
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 20976,
+                "encodedMb": 0.02
+              }
+            ],
+            "totalEncodedMb": 0.83,
+            "requestSizeGuard": "EXERCISED. The reader is the real openRouterReader(openai/gpt-5.6-luna) with its wire (`ask`) replaced, so every request here passed the production allowance of 40 MB encoded (maxEncodedBytesFor, src/pdf-read.ts), or the import was refused with [pdf-chunk-big] above. A chunk over it only because of its context page is sent without that page: extract.sentWithoutContextPage.",
+            "allowanceEncodedMb": 40
+          },
+          "peakRssMb": 721.15,
+          "networkCallsRefused": 0,
+          "childWallMs": 44146
+        }
+      },
+      {
+        "generated": {
+          "case": "b",
+          "what": "251 pages of embedded text (must be refused)",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-d/case-b.pdf",
+          "bytes": 535740,
+          "mb": 0.51,
+          "generateMs": 1334,
+          "childWallMs": 6774
+        },
+        "measured": {
+          "case": "b",
+          "what": "251 pages of embedded text (must be refused)",
+          "baselineRssMb": 324.43,
+          "fileBytes": 535740,
+          "fileMb": 0.51,
+          "uploadProblem": null,
+          "pages": 251,
+          "countPagesMs": 1585,
+          "pageCountRefusal": {
+            "name": "TooManyPages",
+            "message": "This PDF has 251 pages and the limit is 250.",
+            "readerMessage": "fetch did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+            "readerKind": "retry",
+            "causes": []
+          },
+          "rssAfterCountMb": 589.9,
+          "pass0": {
+            "ms": 46,
+            "refused": {
+              "name": "TooManyPages",
+              "message": "This PDF has 251 pages and the limit is 250.",
+              "readerMessage": "extract did not finish. What went wrong has been recorded for whoever supports this app, and a step that stops like this often comes out differently on a second attempt — so trying again is worth a go. [jb-step-again]",
+              "readerKind": "retry",
+              "causes": []
+            }
+          },
+          "rssAfterPass0Mb": 590.9,
+          "extract": {
+            "ms": 85,
+            "refused": {
+              "name": "Error",
+              "message": "This PDF has 251 pages and the limit is 250. That is a cost cap, not a technical one — see docs/plans/260826c-pdf-ingestion.md. [pdf-pages]",
+              "readerMessage": "This PDF has 251 pages, and this app takes documents of at most 250. That is a limit on what reading a document is allowed to cost rather than a technical one, so the same file will be refused the same way — a shorter document, or the part of this one you actually want, will go through. [pdf-pages]",
+              "readerKind": "blocked",
+              "causes": []
+            }
+          },
+          "rssAfterExtractMb": 600.78,
+          "reader": {
+            "asks": 0,
+            "mostInFlight": 0,
+            "largestChunks": [],
+            "totalEncodedMb": 0,
+            "requestSizeGuard": "EXERCISED. The reader is the real openRouterReader(openai/gpt-5.6-luna) with its wire (`ask`) replaced, so every request here passed the production allowance of 40 MB encoded (maxEncodedBytesFor, src/pdf-read.ts), or the import was refused with [pdf-chunk-big] above. A chunk over it only because of its context page is sent without that page: extract.sentWithoutContextPage.",
+            "allowanceEncodedMb": 40
+          },
+          "peakRssMb": 600.78,
+          "networkCallsRefused": 0,
+          "childWallMs": 6810
+        }
+      },
+      {
+        "generated": {
+          "case": "c",
+          "what": "250 pages, each with a JPEG and ~90 words, just under 50 MiB",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-d/case-c.pdf",
+          "bytes": 50881635,
+          "mb": 48.52,
+          "generateMs": 5679,
+          "childWallMs": 11066
+        },
+        "measured": {
+          "case": "c",
+          "what": "250 pages, each with a JPEG and ~90 words, just under 50 MiB",
+          "baselineRssMb": 323.82,
+          "fileBytes": 50881635,
+          "fileMb": 48.52,
+          "uploadProblem": null,
+          "pages": 250,
+          "countPagesMs": 1895,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 733.9,
+          "pass0": {
+            "ms": 1172,
+            "pages": 250,
+            "isScan": false,
+            "words": 24500,
+            "nonEmptyLines": 2300
+          },
+          "rssAfterPass0Mb": 657.98,
+          "plan": {
+            "ms": 1237,
+            "chunks": 42,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 6,
+            "withContextPage": 41,
+            "largestMeasuredPageMb": 0.19,
+            "smallestMeasuredPageMb": 0.19
+          },
+          "rssAfterPlanMb": 731.99,
+          "extract": {
+            "ms": 8763,
+            "pages": 250,
+            "chunks": 42,
+            "records": 2300,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "sentWithoutContextPage": [],
+            "htmlBytes": 196441,
+            "blocksFromThisHtml": 2300
+          },
+          "rssAfterExtractMb": 852.87,
+          "reader": {
+            "asks": 42,
+            "mostInFlight": 23,
+            "largestChunks": [
+              {
+                "pages": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 1900584,
+                "encodedMb": 1.81
+              },
+              {
+                "pages": [
+                  121,
+                  122,
+                  123,
+                  124,
+                  125,
+                  126
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 1900584,
+                "encodedMb": 1.81
+              },
+              {
+                "pages": [
+                  181,
+                  182,
+                  183,
+                  184,
+                  185,
+                  186
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 1900584,
+                "encodedMb": 1.81
+              }
+            ],
+            "totalEncodedMb": 75.35,
+            "requestSizeGuard": "EXERCISED. The reader is the real openRouterReader(openai/gpt-5.6-luna) with its wire (`ask`) replaced, so every request here passed the production allowance of 40 MB encoded (maxEncodedBytesFor, src/pdf-read.ts), or the import was refused with [pdf-chunk-big] above. A chunk over it only because of its context page is sent without that page: extract.sentWithoutContextPage.",
+            "allowanceEncodedMb": 40
+          },
+          "peakRssMb": 893.9,
+          "networkCallsRefused": 0,
+          "childWallMs": 18993
+        },
+        "figures": {
+          "case": "c",
+          "baselineRssMb": 325.73,
+          "figures": {
+            "ms": 4140,
+            "markers": 250,
+            "entries": 250,
+            "stored": 100,
+            "drawn": 0,
+            "failed": 150,
+            "deduped": 0,
+            "storedMb": 18.44,
+            "elapsedMs": 4139,
+            "storageErrors": 0,
+            "outcomes": {
+              "stored": 100,
+              "failed: budget": 150
+            },
+            "blobsHeld": 100
+          },
+          "peakRssMb": 702.97,
+          "networkCallsRefused": 0,
+          "childWallMs": 11836
+        }
+      },
+      {
+        "generated": {
+          "case": "d",
+          "what": "3 pages, the middle one carrying a ~25 MiB JPEG",
+          "file": "/tmp/claude-1000/-home-greg-code-spideryarn2/e434e457-2d11-4dce-9356-6ad9a1d83201/scratchpad/harness-d/case-d.pdf",
+          "bytes": 26220437,
+          "mb": 25.01,
+          "generateMs": 1190,
+          "childWallMs": 6428
+        },
+        "measured": {
+          "case": "d",
+          "what": "3 pages, the middle one carrying a ~25 MiB JPEG",
+          "baselineRssMb": 323.76,
+          "fileBytes": 26220437,
+          "fileMb": 25.01,
+          "uploadProblem": null,
+          "pages": 3,
+          "countPagesMs": 1898,
+          "pageCountRefusal": null,
+          "rssAfterCountMb": 665.06,
+          "pass0": {
+            "ms": 143,
+            "pages": 3,
+            "isScan": false,
+            "words": 973,
+            "nonEmptyLines": 89
+          },
+          "rssAfterPass0Mb": 691.44,
+          "plan": {
+            "ms": 597,
+            "chunks": 3,
+            "CHUNK_CONCURRENCY": 100,
+            "moreChunksThanConcurrency": false,
+            "largestChunkPages": 1,
+            "withContextPage": 2,
+            "largestMeasuredPageMb": 25,
+            "smallestMeasuredPageMb": 0
+          },
+          "rssAfterPlanMb": 652.66,
+          "extract": {
+            "ms": 2966,
+            "pages": 3,
+            "chunks": 3,
+            "records": 89,
+            "isScan": false,
+            "recall": 1,
+            "retries": 0,
+            "notes": [],
+            "sentWithoutContextPage": [],
+            "htmlBytes": 8033,
+            "blocksFromThisHtml": 89
+          },
+          "rssAfterExtractMb": 821,
+          "reader": {
+            "asks": 3,
+            "mostInFlight": 3,
+            "largestChunks": [
+              {
+                "pages": [
+                  2
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 34957660,
+                "encodedMb": 33.34
+              },
+              {
+                "pages": [
+                  3
+                ],
+                "carriesContextPage": true,
+                "encodedBytes": 34957604,
+                "encodedMb": 33.34
+              },
+              {
+                "pages": [
+                  1
+                ],
+                "carriesContextPage": false,
+                "encodedBytes": 3848,
+                "encodedMb": 0
+              }
+            ],
+            "totalEncodedMb": 66.68,
+            "requestSizeGuard": "EXERCISED. The reader is the real openRouterReader(openai/gpt-5.6-luna) with its wire (`ask`) replaced, so every request here passed the production allowance of 40 MB encoded (maxEncodedBytesFor, src/pdf-read.ts), or the import was refused with [pdf-chunk-big] above. A chunk over it only because of its context page is sent without that page: extract.sentWithoutContextPage.",
+            "allowanceEncodedMb": 40
+          },
+          "peakRssMb": 860.5,
+          "networkCallsRefused": 0,
+          "childWallMs": 11681
+        }
+      }
+    ],
+    "cannotDetect": "Anything the model does: a slow, short or wrong transcription, a provider's own size or page limit, rate limits at this width. Peak RSS is sampled every 20 ms in a Node process on this box, so a short spike can be missed, and it is not the memory of a Vercel function. The fake reader returns in 5 ms, so nothing about a 740 s step deadline is tested."
+  },
+  "about": {
+    "plan": "docs/plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md",
+    "harness": "scripts/eval-big-imports.ts",
+    "statedLimits": "PDF or web page, up to 50 MB. PDFs up to 250 pages.",
+    "paidCalls": 0,
+    "networkCallsRefusedInTheParent": []
+  }
+}

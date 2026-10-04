@@ -1545,7 +1545,7 @@ error type rather than to this case — but nothing on the server puts a structu
 field** rather than spreading an error's own properties: a Drizzle failure's message carries bound
 parameters, and a provider's carries its own words.
 
-*`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
+*`Too many articles already have that name.` is a different sentence and stays.* It is the retry budget
 running out inside slug allocation, which is a fault rather than a queue state.
 
 ### One job in the app was asked for by nobody

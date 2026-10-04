@@ -166,10 +166,20 @@ The differences that matter to a reader:
   this attempt rather than truncating a wait the provider actually asked for.
 - **A chunk is bounded by bytes as well as by words.** Words alone let a run of image-heavy pages
   through, so `MAX_CHUNK_BYTES` (3 MB) is a *planning* bound on the encoded page images — distinct
-  from `MAX_ENCODED_BYTES` (30 MB), the hard request ceiling. Both are in
-  [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
+  from the hard request ceiling, which is the reader model's own: `READER_REQUEST_BYTES`, 40 MB
+  encoded for today's reader, and 30 MB for a model nobody has listed. It is keyed on the model, so
+  changing `PDF_READER_MODEL` fails the typecheck until the new model's limit is written down. Both
+  are in [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
   single page heavier than it still goes out over the limit, which is the honest edge rather than an
   oversight.
+- **A chunk that is over the request ceiling only because of its context page goes without it.** Every
+  chunk after the first carries the page before it, whole, so the model can finish a sentence that
+  runs across the page break; a 20 MB page is therefore sent twice. When that context page is what
+  takes a chunk over the ceiling, `runPdfExtract` cuts the chunk again without it, says so in the
+  result's `notes` and in the log, and stores the reading under the key of the chunk it actually
+  sent. The price is that a paragraph running across that one page break comes out as two. A page
+  that is over the ceiling by itself is still refused (`[pdf-chunk-big]`): the options for that are
+  C and D of [260928b](../plans/260928b-pdf-chunk-too-big-for-one-request.md), not built.
 - **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
   Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
   `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an

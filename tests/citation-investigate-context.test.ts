@@ -267,6 +267,10 @@ describe("attaching a stored investigation", () => {
     const old = new Map([[base.id, { ...STORED(recipe("citation-investigate/6", CAPABLE_MODEL_OPENROUTER)), promptVersion: "citation-investigate/6" }]]);
     expect(attachInvestigations(list(base), old, now).citations[0]?.investigation).toBeUndefined();
 
+    /* Plan 261004h: the same model, so only the version detaches it. */
+    const unfenced = new Map([[base.id, { ...STORED(recipe("citation-investigate/7", DIG_DEEPER_MODEL)), promptVersion: "citation-investigate/7" }]]);
+    expect(attachInvestigations(list(base), unfenced, now).citations[0]?.investigation).toBeUndefined();
+
     const dug = new Map([[base.id, STORED(now(base))]]);
     expect(attachInvestigations(list(base), dug, now).citations[0]?.investigation?.answer).toBe("An answer.");
   });

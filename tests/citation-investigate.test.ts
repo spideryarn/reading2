@@ -472,7 +472,7 @@ describe("the request", () => {
       expect(second, "the second part invites the claim again").not.toMatch(/Describe a result as this work/);
     }
     expect(CITATION_INVESTIGATE_VERSION, "the prompt changed, so stored answers must detach").toBe(
-      "citation-investigate/7",
+      "citation-investigate/8",
     );
   });
 
@@ -548,7 +548,7 @@ describe("what is kept", () => {
       searches: 2,
       searchesFrom: "server_tool_use_details",
       at: "2026-09-30T12:00:00.000Z",
-      promptVersion: "citation-investigate/7",
+      promptVersion: "citation-investigate/8",
     });
     expect(h.finished).toEqual(["lease-1"]);
   });
