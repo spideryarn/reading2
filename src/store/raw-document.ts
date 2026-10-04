@@ -158,7 +158,8 @@ export async function readRawDocument(
        process that then has to hash it, and a few concurrent requests exhaust
        it. `MAX_UPLOAD_BYTES` is the right ceiling because it is the largest
        object that can legitimately be under a canonical key: uploads stop
-       there, and anything we fetched stopped at src/fetch.ts's own 32 MiB.
+       there, and anything we fetched stopped at the same constant (it was
+       src/fetch.ts's own 32 MiB until 2026-10-04).
        GPT Sol asked for the bound twice, 2026-08-31. */
     let bytes: Uint8Array | null;
     try {

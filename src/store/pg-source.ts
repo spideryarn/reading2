@@ -170,7 +170,7 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
            requests exhaust it. `MAX_UPLOAD_BYTES` is the right ceiling because
            it is the largest object that can legitimately be under a canonical
            key: uploads stop there, and anything we fetched stopped at
-           src/fetch.ts's own 32 MiB. GPT Sol asked for the bound twice,
+           the same constant (src/fetch.ts's own 32 MiB until 2026-10-04). GPT Sol asked for the bound twice,
            2026-08-31; `readRawDocument` in raw-document.ts carries the same
            one. */
         const bytes = await sources().get(key, { maxBytes: MAX_UPLOAD_BYTES });

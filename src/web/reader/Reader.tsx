@@ -609,13 +609,28 @@ export function Reader({
    * taller bar, while this is true (crumbs.css § a narrow window) — which is
    * why it is in `layoutKey` below.
    *
+   * **Not while Structure or Marginalia's head is on screen** — Greg,
+   * 2026-10-04 (spya-rx43ku): *"We don't need to show that horizontal rail when
+   * either structure or annotations mode are on, because they both provide
+   * that information too."* Structure's band has its own "you are here";
+   * Annotations is Marginalia, whose head ordinarily names the part and the section. For
+   * Marginalia "on" means *drawn*: `?margin=1` on a window with no room for the
+   * column shows no head, so the breadcrumb stays there. For an owner the bar
+   * goes with it (`showBar` below), which `layoutKey` already hears. The plan
+   * records the empty-head and contained-failure exceptions.
+   * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
+   *
    * The tree itself is not built while the switch is off. `Reader` renders for
    * every scroll-independent state change, and an experimental feature should
    * not add a full block map and tree walk for readers who cannot see it.
    */
+  /** Marginalia's column is on screen: switched on, and the window has room for it. */
+  const marginRoom = marginOpen && fit.margW > 0;
   const showCrumbs =
     experimental.on &&
     !bandCovers &&
+    mode !== "structure" &&
+    !marginRoom &&
     (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
   /**
    * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
@@ -1704,7 +1719,6 @@ export function Reader({
     owner && owner.citations.status === "ready" && !owner.citations.stale
       ? (owner.citations.citations?.citations ?? null)
       : null;
-  const marginRoom = marginOpen && fit.margW > 0;
   /* Whether the block chat panel sits over the column rather than over the
      prose, and the room it has there — layout.ts § `chatDock`. From the same
      `fit` the column is drawn from, so the two cannot disagree about whether

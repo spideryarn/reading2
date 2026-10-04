@@ -152,7 +152,7 @@ export interface ReadPaperOptions {
   pdfOnly?: boolean;
 }
 
-/** A paper's PDF, not a book's. 15 MB covers a figure-heavy paper; the fetcher's own default is 32 MB. */
+/** A paper's PDF, not a book's. 15 MB covers a figure-heavy paper; the fetcher's own default is 50 MB. */
 export const PAPER_MAX_BYTES = 15 * 1024 * 1024;
 /** Over this many pages it is a thesis or a book, and reading it costs `pass0` seconds a reader is waiting through. */
 export const PAPER_MAX_PAGES = 150;
