@@ -639,9 +639,12 @@ function Row({
 }) {
   const reveal = useTapReveal(true);
   return (
+    /* `right`, and without `keepSide`, for the reason StructurePanel.tsx §
+       `CardRow` gives at length: on a phone neither side has room, `keepSide`
+       forbids the drop below the row, and the card opened off the screen and
+       widened the page under the reader's finger (qi-fkyrdns3, plan 261004g). */
     <Tooltip
       placement="right"
-      keepSide
       open={reveal.open}
       onOpenChange={reveal.onOpenChange}
       content={
