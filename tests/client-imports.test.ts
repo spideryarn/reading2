@@ -202,6 +202,11 @@ const SHARED = new Set([
   // must share the rule. Extracted from routes.ts into this import-free leaf;
   // the purity check below keeps server dependencies out of the client.
   "spoken-label.js",
+  /* Which part of a Recall answer is its hint. The panel hides it, the store
+     fences the recorded press on it, and Live's seed and `reader_notes` leave
+     an unopened one out, so a browser copy and a server copy would be two
+     rules for one paragraph. It imports types only. src/recall-hint.ts. */
+  "recall-hint.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the

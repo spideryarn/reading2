@@ -743,6 +743,7 @@ describe("the reader routes", () => {
          boundary drops — leaving a client to read "not sent" as "off" by luck
          rather than by contract. docs/project/experimental-features.md. */
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -753,13 +754,14 @@ describe("the reader routes", () => {
     /* **Both fields, whichever one the body changed.** A reply whose shape
        follows the request is one a client reads as "the other thing is unset".
        `routes.ts` § patchReader. */
-    expect(w.body).toEqual({ profile: "A physicist.", experimentalSince: null });
+    expect(w.body).toEqual({ profile: "A physicist.", experimentalSince: null, autoModes: true });
     expect((await call("GET", "/api/reader")).body).toEqual({
       profile: "A physicist.",
       purpose: null,
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -785,6 +787,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     expect((await call("GET", "/api/reader")).body).toMatchObject({
       profile: null,
@@ -796,6 +799,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     /* Whitespace is *clearing*, not storing three spaces — and the row says so
        rather than the reply. */
@@ -827,6 +831,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
     /* …and the article still has one. `purpose` comes back as the reader's
        own words rather than as a flag, because the panel prints each box
@@ -840,6 +845,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -877,6 +883,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { experimental: false })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     expect(
       (await call("GET", "/api/reader")).body as unknown as { experimentalSince: null },
@@ -904,6 +911,70 @@ describe("the reader routes", () => {
     ).toBe("A physicist.");
   });
 
+  /* ------------------------------------- generate the main modes: the box -- */
+
+  /**
+   * Plan 261004h: the add page's tick box is the reader's setting, read by the
+   * publication that queues the modes. A boolean on the wire and a time in the
+   * row — `auto_modes_off_at`, null for on — so the row is read directly here:
+   * the reply alone cannot say the time was kept.
+   */
+  const offAt = async (): Promise<Date | null | undefined> => {
+    const [row] = await getDb()
+      .select({ at: readerProfiles.autoModesOffAt })
+      .from(readerProfiles)
+      .where(eq(readerProfiles.ownerId, TEST_OWNER));
+    return row?.at;
+  };
+
+  it("has the main modes on until they are switched off, and stamps when", async () => {
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: true });
+    expect(await offAt(), "a reader who never chose has a row").toBeUndefined();
+
+    const off = await call("PATCH", "/api/reader", { autoModes: false });
+    expect(off.status).toBe(200);
+    expect(off.body).toEqual({ profile: null, experimentalSince: null, autoModes: false });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: false });
+    const stamped = await offAt();
+    expect(stamped, "switching off stored no time").toBeInstanceOf(Date);
+
+    /* Off twice keeps the first time: the column answers *since when*. */
+    await call("PATCH", "/api/reader", { autoModes: false });
+    expect((await offAt())?.getTime()).toBe(stamped?.getTime());
+
+    const on = await call("PATCH", "/api/reader", { autoModes: true });
+    expect(on.body).toEqual({ profile: null, experimentalSince: null, autoModes: true });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: true });
+    expect(await offAt(), "switching back on left the time").toBeNull();
+  });
+
+  it("refuses an autoModes that is not a boolean, and one sent with another field", async () => {
+    const wrong = await call("PATCH", "/api/reader", { autoModes: "false" });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toMatch(/autoModes must be true or false/);
+    const both = await call("PATCH", "/api/reader", { autoModes: false, experimental: true });
+    expect(both.status).toBe(400);
+    expect(both.body.error).toMatch(/one at a time/);
+    expect(await offAt(), "a refused request wrote the row").toBeUndefined();
+  });
+
+  it("keeps the main-modes choice and the other two fields out of each other's way", async () => {
+    await call("PATCH", "/api/reader", { autoModes: false });
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    await call("PATCH", "/api/reader", { experimental: true });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: "A physicist.",
+      autoModes: false,
+    });
+    await call("PATCH", "/api/reader", { autoModes: true });
+    const body = (await call("GET", "/api/reader")).body as unknown as {
+      profile: string | null;
+      experimentalSince: string | null;
+    };
+    expect(body.profile).toBe("A physicist.");
+    expect(body.experimentalSince).toBeTypeOf("string");
+  });
+
   it("refuses to change both halves in one request", async () => {
     /* Two store operations and no transaction across them: a body carrying both
        could save the profile, fail on the switch, and answer with an error
@@ -916,6 +987,7 @@ describe("the reader routes", () => {
     expect((await call("GET", "/api/reader")).body).toMatchObject({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -946,6 +1018,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -978,6 +1051,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -996,6 +1070,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 });

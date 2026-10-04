@@ -521,6 +521,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the stubbed model call records.",
   },
   /**
+   * **Written 2026-10-04 (plan 261004h), after the witness ran**, so
+   * `static-only` for the ordinary reason the header gives. Born on Postgres;
+   * it makes no model call, so the seeder's copy step is the one door.
+   */
+  "tests/chat-hint-opened-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.hint_opened_at` at the route: that a press on a Recall hint is recorded " +
+      "once, and refused for a hint the stored answer no longer carries or for somebody else's " +
+      "article. It seeds through `scratchArticleInPg`; what it still reaches is the seeder's " +
+      "copy step.",
+  },
+  /**
    * **Written 2026-09-12 (fb30 stage 1b), after the witness ran**, so
    * `static-only` for the ordinary reason the header gives. Its request harness
    * is `chat-anchor-route.test.ts`'s and it reaches what that file reaches, by
@@ -2726,6 +2741,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      than through the Auth service — nothing here talks to GoTrue — so
      `shared-services` would buy nothing while the clone keeps a growing journal
      of stub sessions out of the shared stack's own. */
+  "tests/chat-hint-opened-route.test.ts": "private-postgres",
   "tests/chat-live-ticket-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane is decided by what the cases do
      rather than by what they seed: each one leaves a model call hanging open
@@ -3055,6 +3071,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      throughout — it publishes real revisions, claims a real job and inserts a
      real `ingest_events` row to prove the successor never settles one. */
   "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
+  /* Plan 261004h: an import's first full publication queues the main-mode
+     jobs. The same harness as the labels-successor suite above — real
+     revisions, real job rows, a real `reader_profiles` row for the opt-out. */
+  "tests/publication-queues-the-main-modes.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted

@@ -71,8 +71,12 @@ import type {
  * **Bump when the lookup prompt (`LOOKUP_SYSTEM`, src/citation-find.ts), the
  * user turn, or any rule in this file changes what a lookup would say** — it is
  * inside the context fingerprint, so a bump detaches every stored lookup.
+ *
+ * `/7` is the user turn fencing the work's details, `why` and the citing
+ * passage (plan 261004i, src/citation-find.ts § `lookupPrompt`): a lookup kept
+ * from the unfenced layout is not one today's prompt would write.
  */
-export const CITATION_LOOKUP_VERSION = "citation-lookup/6";
+export const CITATION_LOOKUP_VERSION = "citation-lookup/7";
 
 /** R-7: the citing passage sent, in characters. */
 export const PASSAGE_CAP = 1_200;

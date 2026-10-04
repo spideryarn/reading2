@@ -836,7 +836,7 @@ describe("step 1, the lookup — what it hands on", () => {
     expect(error).toBeNull();
     expect(text).toContain("The loss scales as a power-law with model size");
     const second = secondPart(h.runs);
-    expect(second).toContain("A first check matched one search result to this work:");
+    expect(second).toContain("A first check matched one search result to this work");
     expect(second).toContain(`URL: ${PAPER_PAGE.url}`);
     expect(h.saved[0]?.matchedHost).toBe("arxiv.org");
   });
@@ -893,7 +893,7 @@ describe("step 1, the lookup — what it hands on", () => {
        not either: that page passed code's identity check, and one search that
        came back empty is not evidence against it. */
     const second = secondPart(h.runs);
-    expect(second).toContain("A first check matched one search result to this work:");
+    expect(second).toContain("A first check matched one search result to this work");
   });
 });
 
@@ -988,7 +988,7 @@ describe("between the steps: the list is read again (P-3)", () => {
     expect(error).toBeNull();
     expect(h.lookupCalls).toHaveLength(1);
     expect(types(events)).toEqual(["stage:searching", "stage:finding", "lookup", "stage:reading-paper", "stage:reading", "delta", "done"]);
-    expect(secondPart(h.runs)).toContain("A first check matched one search result to this work:");
+    expect(secondPart(h.runs)).toContain("A first check matched one search result to this work");
   });
 
   it("sends the why the list has after step 1, not the one it had at the press", async () => {

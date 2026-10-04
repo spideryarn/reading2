@@ -26,7 +26,7 @@ import { apiFetch, failure, readJson } from "../lib/api.js";
 import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
 import { describeFetchFailure } from "../lib/describe-failure.js";
-import type { Begun, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
+import type { Begun, HintOutcome, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
 
 /**
  * A clock on each individual look for a lost answer.
@@ -506,6 +506,42 @@ export function cancelThread(
       expectedTailId: messageId,
     }),
   }, "/cancel");
+}
+
+/**
+ * Tell the server the reader opened a Recall answer's hint.
+ *
+ * Checked like `writeThread` above, and for its reason: a 409 (the answer has
+ * been retried since) or a 500 resolves a bare `fetch`, and treating that as
+ * saved would keep a hint open after a reload that the server never recorded.
+ * It differs only in reading the answer, because the caller wants the time the
+ * server stored. A `200` with no time in it is a failure too.
+ *
+ * `hint` is the hint's own text, which the server matches against the stored
+ * answer before it stamps — `hintOpened` in src/routes.ts.
+ */
+export async function markHintOpened(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  hint: string,
+): Promise<HintOutcome> {
+  try {
+    const r = await apiFetch(
+      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/hint-opened`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, hint }),
+      },
+    );
+    if (!r.ok) throw await failure(r);
+    const { hintOpenedAt } = await readJson<{ hintOpenedAt?: unknown }>(r);
+    if (typeof hintOpenedAt !== "string") return { ok: false, error: "The server did not say when." };
+    return { ok: true, hintOpenedAt };
+  } catch (e) {
+    return { ok: false, error: describeFetchFailure(e as Error) };
+  }
 }
 
 export function renameThread(slug: string, threadId: string, title: string): Promise<WriteOutcome> {

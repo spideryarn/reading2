@@ -1105,6 +1105,15 @@ export interface Turn extends StoredExchange {
   readonly attempt: string;
 }
 
+/**
+ * What `ChatStore.markHintOpened` answers. The three refusals are different
+ * facts for the route: the message is not there, it is not an answer in a
+ * Recall thread, or the answer no longer carries the hint that was pressed.
+ */
+export type HintOpened =
+  | { ok: true; hintOpenedAt: string }
+  | { ok: false; reason: "no-such-message" | "not-a-recall-answer" | "hint-changed" };
+
 export interface ChatStore {
   load(slug: string): Promise<ChatThread[]>;
 
@@ -1205,6 +1214,17 @@ export interface ChatStore {
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /**
+   * **The reader pressed Hint under a Recall answer.** Stamps
+   * `hint_opened_at` once; a second press answers with the first time.
+   *
+   * `hint` is the hint's own text as the reader's browser split it, and it is
+   * the fence: a retry reuses the answer's row, so a press still in flight
+   * could otherwise mark the replacement answer as opened. The store stamps
+   * only when the stored answer, split by `splitHint`, carries that same hint.
+   */
+  markHintOpened(slug: string, threadId: string, messageId: string, hint: string): Promise<HintOpened>;
 
   /** Turn abandoned `pending` answers into `error`. See `SweepOptions`. */
   sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]>;
@@ -1700,6 +1720,22 @@ export interface ReaderStore {
    * date: the first spell ended.
    */
   writeExperimental(on: boolean): Promise<string | null>;
+
+  /**
+   * **Whether an import queues the main-mode jobs for this reader.** `true`
+   * for a reader who has never chosen, including one with no row at all.
+   *
+   * A boolean here and a time in the row (`auto_modes_off_at`): nothing shows
+   * when it was switched off, so the contract carries only the answer.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  readAutoModes(): Promise<boolean>;
+
+  /**
+   * Switch it on or off, and answer with what is now stored. Off twice keeps
+   * the first time; on clears it.
+   */
+  writeAutoModes(on: boolean): Promise<boolean>;
 }
 
 /**

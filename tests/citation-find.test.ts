@@ -26,6 +26,7 @@ import { ProviderRefused, type AiRequestBody, type JsonCall } from "../src/ai-ca
 import {
   FIND_SYSTEM,
   MAX_TOTAL_RESULTS,
+  findPrompt,
   findRequest,
   findWorkPage,
   LOOKUP_ANSWER_TOKENS,
@@ -450,7 +451,8 @@ describe("the request — the only bounds on spend that exist", () => {
     });
     expect(reading.verdict).toEqual({ kind: "kept", page: expect.objectContaining({ url: PAPER }) });
     const user = (sent[0]?.messages as { content: string }[] | undefined)?.[1]?.content ?? "";
-    expect(user).toBe(`Title: ${TITLE}`);
+    expect(user, "the title and nothing else of a work, fenced").toBe(findPrompt({ title: TITLE }, null));
+    expect(user).toContain(`\nTitle: ${TITLE}\n<<<END UNTRUSTED CITED WORK>>>`);
   });
 
   it("sends the article's reference entry when the work has one", async () => {

@@ -56,7 +56,8 @@
 
 import { createHash } from "node:crypto";
 
-import type { Block, ChatMessage, Meta, MicPlacement } from "./types.js";
+import { answerAsSeen } from "./recall-hint.js";
+import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
@@ -503,11 +504,22 @@ export function liveInstructions(opts: {
  * Stripping rather than reformatting, and only on the **assistant** side: the
  * reader's own words are theirs, and if they said something that looks like an
  * id we have no business editing it.
+ *
+ * ## A Recall hint nobody opened is left out
+ *
+ * A Recall answer carries a hint behind a button (src/recall-hint.ts). The
+ * voice prompt knows nothing of hints, so the seed is each answer **as the
+ * reader saw it**: the hint is there only if they opened it. That needs the
+ * thread's `kind`, which is why it is a required argument: both engines call
+ * this, and one left passing raw text would be easy to miss.
  */
-export function liveSeedItems(history: ChatMessage[]): { role: "user" | "assistant"; text: string }[] {
+export function liveSeedItems(
+  history: ChatMessage[],
+  kind: ThreadKind | undefined,
+): { role: "user" | "assistant"; text: string }[] {
   return recentHistory(history).map((m) => ({
     role: m.role,
-    text: m.role === "assistant" ? withoutBlockIds(m.text) : m.text,
+    text: m.role === "assistant" ? withoutBlockIds(answerAsSeen(m, kind)) : m.text,
   }));
 }
 

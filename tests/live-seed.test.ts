@@ -58,6 +58,37 @@ describe("withoutBlockIds", () => {
   });
 });
 
+/* A Recall answer ends with a hint the reader sees only if they press Hint
+   (src/recall-hint.ts). The voice prompt knows nothing of hints, so a hint
+   nobody opened must not reach it as something the reader was told.
+   docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md */
+describe("liveSeedItems and Recall's hint", () => {
+  const hinted = (over: Partial<ChatMessage> = {}): ChatMessage[] => [
+    msg({ id: "spya-000011", text: "It is about search and learning." }),
+    msg({
+      id: "spya-000012",
+      role: "assistant",
+      text: "Do you remember what researchers kept doing [spya-k3m9qt]?\n\nHint: He names two games [spya-p7w2dn].",
+      ...over,
+    }),
+  ];
+
+  it("leaves out a hint the reader never opened", () => {
+    expect(liveSeedItems(hinted(), "remember")[1]?.text).toBe("Do you remember what researchers kept doing?");
+  });
+
+  it("keeps a hint the reader opened, ids stripped like the rest", () => {
+    expect(liveSeedItems(hinted({ hintOpenedAt: "2026-10-04T10:00:00.000Z" }), "remember")[1]?.text).toBe(
+      "Do you remember what researchers kept doing?\n\nHint: He names two games.",
+    );
+  });
+
+  it("does not touch the same words in a chat", () => {
+    expect(liveSeedItems(hinted(), "chat")[1]?.text).toContain("Hint: He names two games.");
+    expect(liveSeedItems(hinted(), undefined)[1]?.text).toContain("Hint: He names two games.");
+  });
+});
+
 describe("liveSeedItems", () => {
   const history: ChatMessage[] = [
     msg({ id: "spya-000001", text: "What does he claim?" }),
@@ -69,7 +100,7 @@ describe("liveSeedItems", () => {
   ];
 
   it("strips ids from the assistant's words", () => {
-    const seed = liveSeedItems(history);
+    const seed = liveSeedItems(history, "chat");
     expect(seed[1]?.text).toBe("That consciousness is not substrate independent.");
     expect(seed.some((s) => s.text.includes("spya-"))).toBe(false);
   });
@@ -82,7 +113,7 @@ describe("liveSeedItems", () => {
       msg({ id: "spya-000003", text: "what is spya-k3m9qt about" }),
       msg({ id: "spya-000004", role: "assistant", text: "The rainstorm." }),
     ];
-    expect(liveSeedItems(said)[0]?.text).toBe("what is spya-k3m9qt about");
+    expect(liveSeedItems(said, "chat")[0]?.text).toBe("what is spya-k3m9qt about");
   });
 
   it("uses recentHistory's window rather than a second one", () => {
@@ -93,7 +124,7 @@ describe("liveSeedItems", () => {
       msg({ id: "spya-000005", text: "asked but never answered" }),
       msg({ id: "spya-000006", role: "assistant", text: "", status: "pending" }),
     ];
-    expect(liveSeedItems(half).map((s) => s.text)).toEqual([
+    expect(liveSeedItems(half, "chat").map((s) => s.text)).toEqual([
       "What does he claim?",
       "That consciousness is not substrate independent.",
     ]);
@@ -108,7 +139,7 @@ describe("liveSeedItems", () => {
       msg({ id: "spya-000007", text: "and then?" }),
       msg({ id: "spya-000008", role: "assistant", text: "a long unheard tail", interrupted: true }),
     ];
-    expect(liveSeedItems(withInterrupted).map((s) => s.text)).toEqual([
+    expect(liveSeedItems(withInterrupted, "chat").map((s) => s.text)).toEqual([
       "What does he claim?",
       "That consciousness is not substrate independent.",
     ]);

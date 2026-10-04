@@ -3737,6 +3737,20 @@ export interface ChatMessage {
    * follow above, and what tests/store-roundtrip.test.ts compares.
    */
   help?: true;
+  /**
+   * **When the reader first pressed Hint under this answer.** Assistant turns
+   * of Recall (`remember`) threads only.
+   *
+   * The hint is the answer's own last paragraph (`splitHint` in
+   * src/recall-hint.ts); this is the record that the reader opened it. Set once
+   * by the first press, cleared when a retry replaces the answer. It keeps an
+   * opened hint open after a reload, and `answerAsSeen` reads it so that Live
+   * and `reader_notes` are not told about a hint nobody looked at.
+   *
+   * Absent, never null — the rule every optional field here follows.
+   * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+   */
+  hintOpenedAt?: string;
 }
 
 /**

@@ -3527,6 +3527,51 @@ async function stopChat(
 }
 
 /**
+ * **The reader pressed Hint under a Recall answer.**
+ * `POST /api/chat/:slug/:threadId/hint-opened`, body `{ messageId, hint }`.
+ *
+ * Records the first press and answers with its time; a second press gets the
+ * same time back. Its own narrow route, not a general message PATCH: the press
+ * is one fact about one answer, and nothing else about a stored answer is the
+ * browser's to change.
+ *
+ * **`hint` is the hint's text as the browser drew it, and it is the fence.** A
+ * retry reuses the answer's row, so a press still on its way could otherwise
+ * mark the replacement answer as opened. `markHintOpened` stamps only when the
+ * stored answer still carries that hint, and makes the check and the write in
+ * one transaction under the article lock. The owner check is the store's, like
+ * every other chat write: the slug resolves only to the signed-in reader's own
+ * article.
+ *
+ * Never logged: the hint's text. It is the model's words about the article.
+ * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+ */
+async function hintOpened(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ hintOpenedAt: string }> {
+  const { messageId, hint } = objectBody(body);
+  if (typeof messageId !== "string" || typeof hint !== "string" || hint === "") {
+    throw httpError(400, "Expected { messageId, hint }");
+  }
+  const out = await chatStore.markHintOpened(slug, threadId, messageId, hint);
+  if (out.ok) return { hintOpenedAt: out.hintOpenedAt };
+  switch (out.reason) {
+    case "no-such-message":
+      throw httpError(404, "That answer is not in this conversation");
+    case "not-a-recall-answer":
+      throw httpError(400, "Only a Recall answer has a hint");
+    case "hint-changed":
+      throw httpError(409, "That answer has changed since the hint was pressed");
+    default: {
+      const unhandled: never = out.reason;
+      throw new Error(`unhandled hint refusal: ${String(unhandled)}`);
+    }
+  }
+}
+
+/**
  * **Stop the first answer of a conversation, and throw the conversation away.**
  *
  * Greg's call, 2026-08-26: a reader who selects a sentence, sees the answer
@@ -3957,7 +4002,7 @@ async function liveChatToken(
   return {
     ...minted,
     sessionId,
-    seed: liveSeedItems(thread?.messages ?? []),
+    seed: liveSeedItems(thread?.messages ?? [], thread?.kind),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
 }
@@ -4026,6 +4071,7 @@ async function liveChatSession(
     tree: article.tree,
     profile: useProfile === false ? null : await resolveProfile(slug),
     history: thread?.messages ?? [],
+    kind: thread?.kind,
   });
 
   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
@@ -6611,6 +6657,8 @@ interface ReaderState {
   profile: string | null;
   /** When experimental features were switched on, ISO 8601, or `null` for off. */
   experimentalSince: string | null;
+  /** Whether an import queues the main-mode jobs. On unless switched off. */
+  autoModes: boolean;
 }
 
 /**
@@ -6634,9 +6682,9 @@ interface ReaderState {
  * unset" — the same argument the `purpose` field on the GET above makes at
  * length. The cost is one store read for the field you did not change.
  *
- * **One field per request, though — both at once is a 400.** The two writes are
- * two store operations and there is no transaction across them, so a body
- * carrying both could save the profile, fail on the switch, and answer with an
+ * **One field per request, though — two at once is a 400.** The writes are
+ * separate store operations and there is no transaction across them, so a body
+ * carrying two could save the profile, fail on the switch, and answer with an
  * error after half of it had committed. No client sends both (the two hooks own
  * one field each), so refusing costs nothing today and removes a half-committed
  * state that would be found the hard way. The day one needs to, the fix is a
@@ -6647,6 +6695,12 @@ interface ReaderState {
  * `experimental` is a **boolean on the wire and a date in the store**: the
  * client says on or off, and what comes back is when it was switched on.
  * docs/project/experimental-features.md.
+ *
+ * `autoModes` is a boolean both ways: whether an import queues the main-mode
+ * jobs, which the publication reads off the same row
+ * (src/store/pg-revisions.ts § `publishRevisionIn`). The row keeps when it was
+ * switched off; nothing shows that, so the wire does not carry it.
+ * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
  *
  * The **cap is enforced in the store, not here**. That is deliberate: this is
  * stored, so the rule has to hold for every writer rather than for this one
@@ -6660,12 +6714,14 @@ async function patchReader(body: unknown): Promise<ReaderState> {
   const patch = objectBody(body);
   const wantsProfile = "profile" in patch;
   const wantsExperimental = "experimental" in patch;
-  if (!wantsProfile && !wantsExperimental) {
-    throw httpError(400, "Nothing to change: expected profile or experimental");
+  const wantsAutoModes = "autoModes" in patch;
+  const wanted = [wantsProfile, wantsExperimental, wantsAutoModes].filter(Boolean).length;
+  if (wanted === 0) {
+    throw httpError(400, "Nothing to change: expected profile, experimental or autoModes");
   }
-  // See the header: two writes, no transaction across them.
-  if (wantsProfile && wantsExperimental) {
-    throw httpError(400, "Change one at a time: profile or experimental, not both");
+  // See the header: separate writes, no transaction across them.
+  if (wanted > 1) {
+    throw httpError(400, "Change one at a time: profile, experimental or autoModes");
   }
   const profile = patch.profile;
   if (wantsProfile && profile !== null && typeof profile !== "string") {
@@ -6678,9 +6734,13 @@ async function patchReader(body: unknown): Promise<ReaderState> {
   if (wantsExperimental && typeof experimental !== "boolean") {
     throw httpError(400, "experimental must be true or false");
   }
-  /* Exactly one of these is a write and the other is a read, which is what the
-     both-at-once refusal above buys: there is no order here that can leave the
-     row half-changed. */
+  const autoModes = patch.autoModes;
+  if (wantsAutoModes && typeof autoModes !== "boolean") {
+    throw httpError(400, "autoModes must be true or false");
+  }
+  /* Exactly one of these is a write and the others are reads, which is what
+     the one-at-a-time refusal above buys: there is no order here that can
+     leave the row half-changed. */
   return {
     profile: wantsProfile
       ? await readerStore.writeProfile(profile as string | null)
@@ -6688,6 +6748,9 @@ async function patchReader(body: unknown): Promise<ReaderState> {
     experimentalSince: wantsExperimental
       ? await readerStore.writeExperimental(experimental as boolean)
       : await readerStore.readExperimental(),
+    autoModes: wantsAutoModes
+      ? await readerStore.writeAutoModes(autoModes as boolean)
+      : await readerStore.readAutoModes(),
   };
 }
 
@@ -8588,6 +8651,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          second endpoint — and a second endpoint is how two answers to "is it
          on" come to disagree. docs/project/experimental-features.md. */
       const experimentalSince = await readerStore.readExperimental();
+      /* The add page's tick box: whether an import queues the main-mode jobs
+         (plan 261004h). On this route for the reason the switch above is. */
+      const autoModes = await readerStore.readAutoModes();
       /* Asked of the *rendered* pair rather than of `parts.profile`, which is
          what makes a reader who has written only "why you're reading this one"
          count — the case this whole `?slug=` exists for. */
@@ -8608,6 +8674,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
            free to disagree — and the one that disagreed would be the one a
            feature gate read. */
         experimentalSince,
+        autoModes,
       });
     },
   },
@@ -10043,6 +10110,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* The reader pressed Hint under a Recall answer. No model call, so
+     `first-capture` attributes nothing; it is here for the reason `spoken`
+     gives, that the request knows which article it belongs to. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/hint-opened$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await hintOpened(slug, id, await readBody(req)));
+    },
+  },
+
   {
     kind: "pattern",
     method: "PATCH",
@@ -10464,10 +10545,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          article* and stamp a new one's artefacts with it — and under `postgres`
          it would simply throw, because the article does not exist yet.
 
-         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
-         at `arc`, and no step in it takes a profile. The reader asks for a
-         glossary or a set of ideas later, by slug, and that request resolves
-         correctly. GPT Sol's review of the built code, 2026-08-26.
+         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which ends
+         at `assets`, and no step in it takes a profile. The main-mode jobs its
+         publication queues are given the reader's profile there
+         (src/store/pg-revisions.ts § `publishRevisionIn`), and a request made
+         later, by slug, resolves it here. GPT Sol's review of the built code,
+         2026-08-26.
 
          `=== false`, so absent means yes: a client that has never heard of this
          field gets the profiled run, which is the default the panel offers. */

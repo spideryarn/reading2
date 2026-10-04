@@ -57,6 +57,7 @@ import {
   askForThreads,
   cancelThread,
   deleteThread,
+  markHintOpened,
   renameThread,
   runTurn,
   settledAnswer,
@@ -322,6 +323,13 @@ export interface ChatApi {
   discard(threadId: string): void;
   rename(threadId: string, title: string): void;
   /**
+   * **The reader opened a Recall answer's hint**: record it, so the hint is
+   * still open after a reload and after leaving the conversation. The hint is
+   * already on screen; this never closes it and says nothing if it fails. See
+   * `HintOperation` in ./chat/model.ts.
+   */
+  openHint(threadId: string, messageId: string, hint: string): void;
+  /**
    * Delete a conversation. `restoreOnFailure` puts it back if the server
    * refuses — Remember's Start over, which must not leave its one conversation
    * hidden while it still exists. See `DeleteOperation.restoreOnFailure`.
@@ -365,6 +373,7 @@ const chatEffects: ChatEffects = {
   settledAnswer,
   stopAnswer,
   cancelThread,
+  markHintOpened,
 };
 
 
@@ -901,6 +910,17 @@ export function useChat(slug: string): ChatApi {
     [controller],
   );
 
+  /** One dispatch; the reducer decides whether a request is needed at all. */
+  const openHint = useCallback(
+    (threadId: string, messageId: string, hint: string) => {
+      controller.dispatch({
+        type: "hint.started",
+        op: { id: asOpId(mintId()), kind: "hint", threadId, messageId, hint },
+      });
+    },
+    [controller],
+  );
+
   /**
    * Delete a conversation.
    *
@@ -956,6 +976,7 @@ export function useChat(slug: string): ChatApi {
     begin,
     discard,
     rename,
+    openHint,
     remove,
     deleting,
     settled,

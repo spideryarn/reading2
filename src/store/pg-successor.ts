@@ -95,8 +95,9 @@ export type SuccessorOutcome =
  * `jobs_reserved_slug` and `jobs_active_source` and simply queues behind
  * whatever is already on this article. No `profile` for the labels successor:
  * its step takes none, and putting one on would give identical work distinct
- * work keys. A reset's regenerations are the exception, and carry the one the
- * reset snapshotted — see the parameters below.
+ * work keys. A reset's regenerations carry the one the reset snapshotted, and
+ * an import's main-mode jobs the reader's as it stands at publication — see
+ * the parameters below.
  * No `url`: the job is about an article, not an address, and `enqueue`'s
  * `urlForSlug` normalisation is exactly the thing that makes `Job.url` useless
  * for telling free work from paid.
@@ -115,11 +116,12 @@ export async function enqueueSuccessorIn(
     slug: string;
     steps: StepName[];
     /**
-     * The reader's profile to run under — a reset's regeneration only, which
-     * carries the snapshot the reset took at the press (Sol F2). On the row and
-     * in the work key, the way `enqueue` puts it on both. The labels successor
-     * passes none: its step takes no profile, and one would give identical work
-     * distinct keys.
+     * The reader's profile to run under. A reset's regeneration carries the
+     * snapshot the reset took at the press (Sol F2); an import's main-mode job
+     * carries the reader's profile as rendered at publication (plan 261004h).
+     * On the row and in the work key, the way `enqueue` puts it on both. The
+     * labels successor passes none: its step takes no profile, and one would
+     * give identical work distinct keys.
      */
     profile?: string;
     /**
@@ -140,9 +142,31 @@ export async function enqueueSuccessorIn(
      * microseconds, so one apart is enough. Absent means the column default.
      */
     after?: number;
+    /**
+     * **A job this one must sort after**: `created_at` is counted from the
+     * later of this transaction's `now()` and that job's own `created_at`,
+     * and `after` is added to whichever it is.
+     *
+     * For the main-mode jobs, which must claim after the labels job. When the
+     * labels successor was inserted here, its stamp is this transaction's
+     * `now()` and this changes nothing. When it collapsed onto a job already
+     * queued (`alreadyQueued`), that holder was stamped by an app server's
+     * clock (`enqueue`, src/jobs.ts) and can be later than the database's
+     * `now()`; a mode stamped from `now()` would then sort ahead of it and
+     * could claim first (GPT Sol, F5 of the 261004h plan review). A job that
+     * no longer exists contributes nothing: `greatest` ignores a null.
+     * An identical queued holder with no draft is moved to this slot too:
+     * joining earlier work must not bypass the predecessor or job ordering.
+     */
+    notBefore?: string;
   },
 ): Promise<SuccessorOutcome> {
-  const { ownerId, slug, steps, profile, scope, after } = successor;
+  const { ownerId, slug, steps, profile, scope, after, notBefore } = successor;
+  const stamp = sql`${
+    notBefore === undefined
+      ? sql`now()`
+      : sql`greatest(now(), (select ${jobs.createdAt} from ${jobs} where ${jobs.id} = ${notBefore}))`
+  } + make_interval(secs => ${after ?? 0}::double precision / 1000000)`;
   /* **The canonical builder, not a second hashing of the same question.**
      `sameWork` (src/jobs.ts) is the prose specification it satisfies, and
      `tests/jobs.test.ts` holds the two together. With no profile and no scope —
@@ -197,8 +221,8 @@ export async function enqueueSuccessorIn(
         urlKey: null,
         ingestEventId: null,
         ...(profile !== undefined && { profile }),
-        ...(after !== undefined && {
-          createdAt: sql`now() + make_interval(secs => ${after}::double precision / 1000000)`,
+        ...((after !== undefined || notBefore !== undefined) && {
+          createdAt: stamp,
         }),
       })
       /* Broad on purpose, and immediately narrowed by the read below. `on
@@ -212,6 +236,21 @@ export async function enqueueSuccessorIn(
 
     const holder = await activeHolder(tx, { ownerId, slug, workKey });
     if (holder) {
+      if (notBefore !== undefined && !holder.draftRevisionId) {
+        // A reader can queue this mode while the import is running. Joining
+        // that row must also give it this successor's place behind labels;
+        // otherwise its earlier timestamp makes labels wait for the mode.
+        // Only an unclaimed row can be moved: never retime a live attempt or
+        // a requeued draft bound to an earlier base.
+        await tx
+          .update(jobs)
+          .set({ createdAt: stamp })
+          .where(and(
+            eq(jobs.id, holder.id),
+            eq(jobs.status, "queued"),
+            sql`${jobs.draftRevisionId} is null`,
+          ));
+      }
       /**
        * **A holder that already owns a draft is working from an earlier base**,
        * and it can never finish this revision: its own publication will be

@@ -91,6 +91,12 @@ looks wrong.
   There was a hand-rolled globe in `CommentDialog.tsx`; it's gone. Composing an extra path *into* a
   Lucide icon is fine when there's a reason (see the next rule); drawing a whole icon from scratch
   is not.
+- **One glyph, one meaning. `Info`, the (i), means "about this"**: about this mode (`BandAbout`),
+  about this list, about your plan. It is not a button's own icon. The bottom bar's Metadata button
+  wore it until 2026-10-04 and now wears `FileCog`. Greg, spya-jt4gmg:
+
+  > that information icon is the same one we use elsewhere for information about a mode, and I
+  > think they are different, and so it's a bit confusing to use the same icon for both.
 - **Colour comes from `currentColor`**, so state is a CSS colour change on the parent and never a
   prop. See `.cmt-search.on` / `.cmt-search.off` in
   [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css).

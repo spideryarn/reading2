@@ -5,20 +5,21 @@
  *
  * What is pinned, and why each matters:
  *
- *  - **The save lands before any mode is queued.** Each job freezes the profile
- *    when it is posted, so a PATCH that loses the race means five modes written
- *    without the sentence the reader just typed.
+ *  - **The page posts no mode job, on any path.** Until plan 261004h it queued
+ *    the main modes after the save; the server queues them at the import's
+ *    publication now (tests/publication-queues-the-main-modes.test.ts), so a
+ *    `run:` from this page is a second set. Every case asserts there is none.
+ *  - **The save lands before the article opens**, so chat and anything
+ *    generated from the reading view has the sentence the reader just typed.
  *  - **An empty box is never sent** (Sol's F1). `purpose: null` clears the
  *    stored sentence, and on a re-add this box starts empty over one the reader
  *    cannot see.
- *  - **Exactly one queue and one navigation**, under StrictMode and a double
- *    press (F2). The server would de-duplicate the second set of jobs; nothing
- *    would de-duplicate the second navigation.
- *  - **A failed save queues nothing**, so no mode is written without it.
+ *  - **Exactly one navigation**, under StrictMode and a double press (F2).
+ *  - **A failed save stays on the page**, with the draft.
  *
- * Table-driven over the three ways an add finishes (F8), because each used to
- * queue and navigate on its own and the bug that matters is one of them
- * forgetting the rule.
+ * Table-driven over the three ways an add finishes (F8), because each
+ * navigates on its own and the bug that matters is one of them forgetting the
+ * rule.
  *
  * `JobCard` is the real one here — the Retry test (F3) is about what pressing
  * its button does to the page around it.
@@ -58,7 +59,11 @@ Object.defineProperty(window, "sessionStorage", {
 });
 const mark = () => session.get("spideryarn.ask-purpose") ?? null;
 
-/** Everything that left the page, in order: `patch:<body>` and `run:<steps>`. */
+/**
+ * Everything that left the page, in order: `patch:<body>` (the purpose),
+ * `reader:<body>` (the tick box's setting), `put:` (High-powered AI) and
+ * `run:<steps>` — which nothing should ever be.
+ */
 const events: string[] = [];
 const runs = () => events.filter((e) => e.startsWith("run:"));
 const patches = () => events.filter((e) => e.startsWith("patch:"));
@@ -106,11 +111,22 @@ const puts = () => events.filter((e) => e.startsWith("put:"));
 /** How the PATCH answers. Replaced per test; the default stores what it was sent. */
 let patchAnswer: (body: { purpose: string | null }) => Promise<Response> = async (body) =>
   new Response(JSON.stringify({ purpose: body.purpose?.trim() ?? null }), { status: 200 });
+/** What `GET /api/reader` says the reader's setting is. Replaced per test. */
+let readerAutoModes = true;
 vi.mock("../src/web/lib/api.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/web/lib/api.js")>();
   return {
     ...actual,
     apiFetch: async (input: string, init: RequestInit = {}) => {
+      if (input === "/api/reader" && init.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { autoModes: boolean };
+        events.push(`reader:${JSON.stringify(body)}`);
+        readerAutoModes = body.autoModes;
+        return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
+      }
+      if (input === "/api/reader") {
+        return new Response(JSON.stringify({ autoModes: readerAutoModes }), { status: 200 });
+      }
       if (init.method === "PUT" && input.endsWith("/high-power")) {
         const body = JSON.parse(String(init.body)) as { on: boolean };
         events.push(`put:${input.split("/")[3]}:${body.on}`);
@@ -126,20 +142,15 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
   };
 });
 
-const { autoModePosts, writeAutoModes } = await import("../src/web/auto-modes.js");
 const { AddPage } = await import("../src/web/AddPage.js");
+const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
 
 const SLUG = "a-paper";
 const UPLOAD_ID = "up-1";
 const URL_SOURCE = { kind: "url", url: "https://example.com/a-paper" } as const;
 const UPLOAD_SOURCE = { kind: "upload", uploadId: UPLOAD_ID } as const;
-/* The order the page posts in — `autoModePosts`, which `queueAutoModes` reads
-   (tests/auto-modes.test.tsx pins that order independently). Not
-   `autoModeRequests()`'s order since `crossrefs` joined (260930f). */
-const EXPECTED_RUNS = () => {
-  const { together, after } = autoModePosts();
-  return [...together, ...after].map((steps) => `run:${steps.join(",")}`);
-};
+/** **The page posts no mode job** — the server queues them at publication. */
+const NO_RUNS: string[] = [];
 
 const makeJob = (id: string, status: Job["status"], slug = SLUG): Job =>
   ({ id, slug, status, steps: [] }) as unknown as Job;
@@ -247,8 +258,10 @@ const PRODUCERS: Producer[] = [
 ];
 
 beforeEach(() => {
+  resetAutoModesSettingForTests();
   window.localStorage.clear();
   session.clear();
+  readerAutoModes = true;
   events.length = 0;
   navigations.length = 0;
   jobs = [];
@@ -278,27 +291,26 @@ describe.each(PRODUCERS)("when $name", (producer) => {
     expect(box(), "the purpose box was not offered while the add ran").toBeTruthy();
     await producer.finish();
     expect(navigations).toEqual([`/read/${SLUG}`]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(patches()).toEqual([]);
   });
 
-  it("a typed box waits, then Save and open PATCHes before any mode is queued", async () => {
+  it("a typed box waits, then Save and open PATCHes before the article opens", async () => {
     await producer.start();
     focus();
     type("how they handled missing data");
     blur();
     await producer.finish();
     expect(navigations, "navigated over a typed purpose").toEqual([]);
-    expect(runs(), "queued modes before the purpose was saved").toEqual([]);
     press("Save and open");
     await settle();
     expect(patches()).toEqual([`patch:${JSON.stringify({ purpose: "how they handled missing data" })}`]);
     expect(events.indexOf(patches()[0] as string)).toBe(0);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
-  it("a failed save stays on the page with the draft, and queues nothing", async () => {
+  it("a failed save stays on the page with the draft", async () => {
     patchAnswer = async () => new Response(JSON.stringify({ error: "The shelf is unavailable." }), { status: 503 });
     await producer.start();
     type("the evidence");
@@ -313,14 +325,14 @@ describe.each(PRODUCERS)("when $name", (producer) => {
     expect(button("Save and open")?.disabled, "no second go after a failure").toBe(false);
   });
 
-  it("Open without it queues and opens without a PATCH", async () => {
+  it("Open without it opens without a PATCH", async () => {
     await producer.start();
     type("the evidence");
     await producer.finish();
     press("Open without it");
     await settle();
     expect(patches()).toEqual([]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
@@ -335,7 +347,7 @@ describe.each(PRODUCERS)("when $name", (producer) => {
     press("Save and open");
     await settle();
     expect(patches(), "an empty draft was sent, which would clear a stored purpose").toEqual([]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
@@ -350,15 +362,15 @@ describe.each(PRODUCERS)("when $name", (producer) => {
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
-  it("under StrictMode, untouched: one queue and one navigation", async () => {
+  it("under StrictMode, untouched: one navigation", async () => {
     strict = true;
     await producer.start();
     await producer.finish();
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
-  it("under StrictMode, a double press: one PATCH, one queue, one navigation", async () => {
+  it("under StrictMode, a double press: one PATCH, one navigation", async () => {
     strict = true;
     await producer.start();
     type("the evidence");
@@ -371,13 +383,13 @@ describe.each(PRODUCERS)("when $name", (producer) => {
     press("Open without it");
     await settle();
     expect(patches()).toHaveLength(1);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 });
 
 describe("a completion already there on the first render", () => {
-  it("under StrictMode's double effect: one queue and one navigation", async () => {
+  it("under StrictMode's double effect: one navigation", async () => {
     /* The only producer that can be non-null at mount — the other two arrive
        through state an effect sets — so the only one that meets StrictMode's
        second run of the deciding effect. */
@@ -385,13 +397,13 @@ describe("a completion already there on the first render", () => {
     transfer = { uploadId: UPLOAD_ID, filename: "p.pdf", bytes: 10, phase: { kind: "article", slug: SLUG } };
     render(UPLOAD_SOURCE);
     await settle();
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 });
 
 describe("while the save is in flight", () => {
-  it("queues nothing, disables both buttons, and goes on only once it answers", async () => {
+  it("disables both buttons, and goes on only once it answers", async () => {
     let answer: (r: Response) => void = () => {};
     patchAnswer = () =>
       new Promise((resolve) => {
@@ -410,10 +422,10 @@ describe("while the save is in flight", () => {
     expect(box().disabled, "the box could accept words that were not in the save").toBe(true);
     act(() => button("Open without it")?.click());
     await settle();
-    expect(runs(), "Open without it raced the save").toEqual([]);
+    expect(navigations, "Open without it raced the save").toEqual([]);
     answer(new Response(JSON.stringify({ purpose: "the evidence" }), { status: 200 }));
     await settle();
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 });
@@ -486,12 +498,35 @@ describe("the shortcut and the tick box", () => {
     expect(navigations).toEqual([`/read/${SLUG}`]);
   });
 
-  it("saves the purpose even when the modes are not to be generated", async () => {
-    writeAutoModes(false);
+  it("says what a purpose saved now still reaches", async () => {
+    /* The modes were queued when the import published, with the profile as it
+       stood. The sentence over the two buttons must not promise otherwise. */
     const producer = PRODUCERS[0] as Producer;
     await producer.start();
     type("the evidence");
     await producer.finish();
+    expect(host.textContent).toContain("purpose saved when the import finished");
+    expect(host.textContent).not.toContain("written for it from the start");
+  });
+
+  it("does not infer which modes were queued from a setting changed after completion", async () => {
+    const producer = PRODUCERS[0] as Producer;
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    act(() => host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+    await settle();
+    expect(host.textContent).not.toContain("anything generated from here on is written for it");
+    expect(host.textContent).toContain("purpose saved when the import finished");
+  });
+
+  it("saves the purpose even when the modes are not to be generated", async () => {
+    readerAutoModes = false;
+    const producer = PRODUCERS[0] as Producer;
+    await producer.start();
+    type("the evidence");
+    await producer.finish();
+    expect(host.textContent).toContain("Saving this now reaches chat and anything generated later");
     press("Save and open");
     await settle();
     expect(patches()).toHaveLength(1);
@@ -531,7 +566,7 @@ describe("Retry after a failed import (F3)", () => {
     await failThenRetry();
     await retryToDone();
     expect(navigations, "the page kept watching the failed job").toEqual([`/read/${SLUG}`]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(mark(), "an untouched retry completion lost the first-open question").toBe(SLUG);
   });
 
@@ -669,9 +704,15 @@ describe.each(PRODUCERS)("the ask-purpose mark (261001s § Stage 3) when $name",
 /**
  * **High-powered AI chosen at import** — plan 261002k. The box sends the
  * Metadata switch's own PUT; what is pinned here is the page's half: nothing is
- * sent unless ticked, and **no mode is queued before the switch has answered**
- * (GPT Sol's plan review P1-3), over all three ways an add finishes — one of
- * which never had a job, so the intent is sent against the completion's slug.
+ * sent unless ticked, and a tick is sent — over all three ways an add finishes,
+ * one of which never had a job, so the intent is sent against the completion's
+ * slug.
+ *
+ * **The page no longer holds the modes until the switch answers**, because it
+ * no longer queues them (plan 261004h § High-powered AI). What stands in for
+ * that is on the server: each mode step reads the article's power as it
+ * starts, and none starts before the labels job ahead of it has ended
+ * (tests/publication-queues-the-main-modes.test.ts).
  */
 describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => {
   const powerBox = (): HTMLInputElement => {
@@ -685,10 +726,10 @@ describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => 
     expect(powerBox().checked).toBe(false);
     await producer.finish();
     expect(puts()).toEqual([]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
   });
 
-  it("ticked, it switches the article on before any mode is queued", async () => {
+  it("ticked, it sends the switch, and opens the article without waiting for the answer", async () => {
     let answer: () => void = () => {};
     putAnswer = () =>
       new Promise((resolve) => {
@@ -701,14 +742,13 @@ describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => 
     await producer.finish();
     expect(puts()).toEqual([`put:${SLUG}:true`]);
     expect(navigations, "the navigation waited for the switch").toEqual([`/read/${SLUG}`]);
-    expect(runs(), "a mode was queued before High-powered AI answered").toEqual([]);
     answer();
     await settle();
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
     expect(events.indexOf(`put:${SLUG}:true`)).toBe(0);
   });
 
-  it("a refusal still queues the modes, on the standard model", async () => {
+  it("a refusal changes nothing about what the page posts", async () => {
     putAnswer = async () =>
       new Response(JSON.stringify({ error: "[pay-high-power] Not enough of your allowance left." }), {
         status: 402,
@@ -718,7 +758,7 @@ describe.each(PRODUCERS)("High-powered AI at import, when $name", (producer) => 
     await producer.finish();
     await settle();
     expect(puts()).toEqual([`put:${SLUG}:true`]);
-    expect(runs()).toEqual(EXPECTED_RUNS());
+    expect(runs(), "the page posted a mode job").toEqual(NO_RUNS);
   });
 });
 

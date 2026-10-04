@@ -119,6 +119,10 @@ export function TitleEditor({
         // Blur commits rather than cancels: clicking away from a field you have
         // typed into and losing the typing is the more annoying of the two.
         onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+        /* Because of the line above: ⌘-K opens a modal, a modal takes focus,
+           and that blur would save a half-typed title. Dock.tsx §
+           `keepsItsOwnModK`. */
+        data-command-bar="off"
         /* The reader's typing, so the reader's face (voice.ts) — which is why
            no caller's `className` may carry a `tw:font-*`: a utility outranks
            the voice class on the same element. */

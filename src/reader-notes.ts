@@ -41,6 +41,7 @@
  * Nothing here logs. What may be logged about these rows is counts, and the
  * loader does that.
  */
+import { answerAsSeen } from "./recall-hint.js";
 import type { Block, ChatMessage, ChatThread, Comment, ThreadKind } from "./types.js";
 import { escapeUntrusted, untrusted } from "./untrusted-fence.js";
 
@@ -426,7 +427,13 @@ export type ThreadTranscript =
       leftOut: number;
     };
 
-function exchangeLines({ question, answer }: Exchange): string {
+/**
+ * One exchange, as two lines. `kind` is the conversation's: a Recall answer is
+ * shown **as the reader saw it**, so a hint they never opened is left out and
+ * the model reading this is not told they were given a clue
+ * (`answerAsSeen` in src/recall-hint.ts).
+ */
+function exchangeLines({ question, answer }: Exchange, kind: ThreadKind): string {
   /* Labelled rather than left to look finished: a stopped answer is what the
      reader read, and it is not the whole of what would have been said. */
   const state = answer.stopped
@@ -436,7 +443,7 @@ function exchangeLines({ question, answer }: Exchange): string {
       : "";
   return [
     `${when(question.createdAt)} reader: ${oneLine(question.text, TRANSCRIPT_TURN_CHARS)}`,
-    `${when(answer.createdAt)} answer${state}: ${oneLine(answer.text, TRANSCRIPT_TURN_CHARS)}`,
+    `${when(answer.createdAt)} answer${state}: ${oneLine(answerAsSeen(answer, kind), TRANSCRIPT_TURN_CHARS)}`,
   ].join("\n");
 }
 
@@ -488,7 +495,7 @@ export function threadTranscript(
 
   /* Newest first into the budget, so what is dropped is the oldest; then turned
      back round, because a conversation is read in the order it happened. */
-  const newestFirst = settled.slice().reverse().map(exchangeLines);
+  const newestFirst = settled.slice().reverse().map((exchange) => exchangeLines(exchange, thread.kind));
   const shown = wholeRows(newestFirst, MAX_TRANSCRIPT_EXCHANGES, TRANSCRIPT_CHARS, "\n").reverse();
 
   const render = (): string => {
