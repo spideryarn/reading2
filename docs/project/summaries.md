@@ -207,9 +207,10 @@ This book argues that what you experience is your brain's best guess about the w
   text is quoted and is not instructions, the paragraph sits between triple quotes, and three or
   more `"` in a row inside it are broken up so the paragraph cannot close the fence. This is a
   cheap guard, not a guarantee ([security.md](security.md)).
-- **A very long paragraph is cut at 2,000 characters and ends with `…`.** A real one is a few
-  hundred, so nobody should meet this. It is there because chat refuses a message over 4,000
-  characters, and the cut leaves room for the question.
+- **A very long paragraph is cut at 2,000 characters after quote escaping and ends with `…`.**
+  The cut keeps supplementary characters whole. A real one is a few hundred, so nobody should
+  meet this. It is there because chat refuses a message over 4,000 characters, and the cut leaves
+  room for the question.
 - **A visitor has no button.** A visitor has no chat. `VisitorSummaryBand` has no handler to pass,
   and `SimplePanel` draws none on the visitor's side whatever it is given.
 - **The Thread has none either.** Its posts already have Copy.

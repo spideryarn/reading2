@@ -2175,6 +2175,11 @@ export function Composer({
       const el = box.current;
       el?.focus();
       el?.setSelectionRange(el.value.length, el.value.length);
+      /* And the box shows it. A handed-over summary paragraph is taller than
+         the box's roof, and Chrome left it scrolled to the top: the reader saw
+         the start of the quote and not the line they were to type on
+         (browser check, plan 261004a). */
+      if (el) el.scrollTop = el.scrollHeight;
     }
   }, [focusNonce, focused]);
 

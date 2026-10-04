@@ -160,7 +160,7 @@
      line about 16; the negative block margin gives the difference back, since
      Greg's standing ask for this band is not to spend vertical space
      (SPIDERYARN-READING2-7A).
-   - **Quiet until wanted.** Faint beside prose that is the point of the band,
+   - **Quiet until wanted.** Quieter than the prose that is the point of the band,
      full strength when the pointer is on its paragraph or the keyboard is on
      the button. Where nothing can hover there is no "until", so it is drawn
      at a strength a finger can find. Its size on a coarse pointer is at the
@@ -168,7 +168,7 @@
 .simple-ask {
   margin-left: auto;
   margin-block: -0.25rem;
-  opacity: 0.45;
+  opacity: 0.7;
   transition: opacity 0.12s;
 }
 .simple-ask:focus-visible { opacity: 1; }

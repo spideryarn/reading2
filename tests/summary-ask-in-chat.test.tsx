@@ -335,6 +335,11 @@ describe("asking about a Summary paragraph in chat", () => {
     await until(() => host.querySelectorAll(".mode-band .simple-para").length === 2);
     expect(host.textContent, "Brief's paragraphs are showing").toContain(SECOND);
 
+    /* jsdom lays nothing out, so every `scrollHeight` is 0. Say the box's text
+       is taller than the box, which is what the browser check measured (417px
+       of text in a 158px box), so the scroll to the caret has somewhere to go. */
+    const tall = vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockReturnValue(417);
+
     const buttons = askButtons();
     expect(buttons, "one ask button per paragraph").toHaveLength(2);
     await act(async () => buttons[1]?.click());
@@ -354,6 +359,8 @@ describe("asking about a Summary paragraph in chat", () => {
     expect(composer()?.readOnly, "and the box is editable").toBe(false);
     expect(document.activeElement, "and has the caret").toBe(composer());
     expect(composer()?.selectionStart, "after the quote, where the question goes").toBe(seed.length);
+    expect(composer()?.scrollTop, "and the box is scrolled to it, not left at the top of the quote").toBe(417);
+    tall.mockRestore();
     expect(host.textContent, "the old conversation is not what is open").not.toContain(
       "An earlier question",
     );

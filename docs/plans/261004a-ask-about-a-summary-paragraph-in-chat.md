@@ -60,10 +60,11 @@ This book argues that what you experience is your brain's best guess about the w
   three or more `"` inside the paragraph is broken up so it cannot close the fence. Passed over:
   `untrusted()` from `src/untrusted-fence.ts`, whose `<<<UNTRUSTED … >>>` banner is written for a
   model and would sit in the reader's own box and transcript.
-- **A very long paragraph is quoted up to 2,000 characters and ends with `…`** (F2). A level is
-  capped in words, not characters, and a question may be at most 4,000 characters, heading and
-  quote included. The cut is visible in the box before Send, and leaves room for the question. A
-  real paragraph is a few hundred characters, so this is a guard, not a behaviour anyone meets.
+- **A very long paragraph is quoted up to 2,000 characters after quote escaping and ends with
+  `…`** (F2). The cut keeps supplementary characters whole. A level is capped in words, not
+  characters, and a question may be at most 4,000 characters, heading and quote included. The cut
+  is visible in the box before Send, and leaves room for the question. A real paragraph is a few
+  hundred characters, so this is a guard, not a behaviour anyone meets.
 - **The title in Chat's list will be the heading**, the same for every such conversation
   (`titleFrom` takes the first 60 characters, F3), and only once it has been sent: an unsent draft
   is gone when the reader leaves Chat. The reader can rename it. A heading short enough to leave
@@ -141,3 +142,24 @@ Recommended if Greg wants it: option 1, after he has used v1 and knows whether h
   reader-legible fence rather than `untrusted()`), F2 a visible cut at 2,000 characters and a
   send-path test, F3 the title claim corrected, F4 the wording. It agreed that deferring the way
   back is right and added option 4.
+- 2026-10-04 — built by an Opus subagent, tests red first; committed as `99a1290e4`. Full suite
+  once: 1504 files passed, 5 failed, all five for a fresh worktree's missing `api-dist/` and fleet
+  client build.
+- 2026-10-04 — GPT Sol code review ([answer](261004a-ask-about-a-summary-paragraph-code-review-sol.md)):
+  land, with two P1s it fixed itself, red first. CR-1: the cut was made before the quote
+  break-up, so 2,000 quotation marks made a 4,077-character draft chat would refuse; the break-up
+  now comes first. CR-2: the cut could split an emoji; it now drops a trailing half. Its
+  [postmortem](../postmortems/261004a-a-bound-before-escaping-does-not-bound-the-sent-text.md)
+  names the class. CR-3, the same emoji split in the older `askAboutBlock`, was outside the stage;
+  fixed here anyway, red first.
+- 2026-10-04 — browser check (Sonnet, Playwright, commit `99a1290e4`, article `fowler-phrenology`)
+  at 1440, 820 and 390 wide: one button per paragraph on Brief and Fuller, 24px on desktop and 40px
+  on touch with no overlap, tooltip, Tab and Enter, the composer holds exactly the seed with the
+  caret at the end, no POST, Back returns to Summary, a signed-out visitor has no button. Thread
+  was not opened (arriving there writes the thread, a paid call). Two things it found, both fixed:
+  **the composer was left scrolled to the top of the quote**, so the line to type on was out of
+  sight (`ChatPanel.tsx` now scrolls the box to the caret; the Reader-level test asserts it, seen
+  red); and **the button was nearly invisible at rest on desktop** (opacity 0.45, now 0.7).
+  Screenshots: `261004a-shot-*.png`; they predate those two fixes.
+- Not re-run after the review fixes: the full suite. The fixes touch `chat-handoff.ts`, one line of
+  `ChatPanel.tsx` and one CSS value; the chat and summary test files and the typecheck were re-run.

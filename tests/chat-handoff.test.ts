@@ -43,6 +43,12 @@ describe("the message a selection pre-fills", () => {
     expect(asked.length).toBeLessThan(200);
   });
 
+  it("does not leave half a supplementary character where the opening words are cut", () => {
+    /* CR-3 of the 261004a code review: the 60th UTF-16 unit was an emoji's first half. */
+    const asked = askAboutBlock({ blockId: "spya-k3m9qt", quote: `${"a".repeat(59)}😀 and more`, question: "why?" });
+    expect(asked).toBe(`About block k3m9qt ("${"a".repeat(59)}…"):\n\nwhy?`);
+  });
+
   it("says 'explain this passage' for an empty box", () => {
     /* Greg's call: leaving the box empty and pressing Enter keeps the old
        one-press behaviour a keystroke away rather than gone. Phrased as the
@@ -108,9 +114,27 @@ describe("the message a summary paragraph pre-fills", () => {
     expect(asked).toBe(`${HEAD}\n\n"""\n${"a".repeat(1995)}…\n"""\n\n`);
   });
 
+  it("bounds the escaped quote too, leaving room to send a question even after a long quote run", () => {
+    const asked = askAboutSummaryParagraph('"'.repeat(2000));
+    /* Escaping nearly doubles this valid one-word paragraph. The composer
+       must still have space for a reader's question under the server's cap. */
+    expect(`${asked}${"q".repeat(1900)}`.length).toBeLessThanOrEqual(4000);
+    expect(asked.match(/"""/g)).toHaveLength(2);
+    expect(asked).toContain('…\n"""\n\n');
+  });
+
+  it("cuts before a supplementary character rather than leaving half of it in the quote", () => {
+    const asked = askAboutSummaryParagraph(`${"a".repeat(1999)}😀 and more`);
+    expect(asked).toBe(`${HEAD}\n\n"""\n${"a".repeat(1999)}…\n"""\n\n`);
+  });
+
+  it("keeps a supplementary character whole when both halves fit at the boundary", () => {
+    const asked = askAboutSummaryParagraph(`${"a".repeat(1998)}😀 and more`);
+    expect(asked).toBe(`${HEAD}\n\n"""\n${"a".repeat(1998)}😀…\n"""\n\n`);
+  });
+
   it("still has only its two fences when the cut lands inside a run of quotation marks", () => {
-    /* The cut is made first and the break-up second, so a run the cut shortens
-       to three is still broken up. */
+    /* Escaping before the cut keeps the shortened run broken up too. */
     const asked = askAboutSummaryParagraph(`${"a".repeat(1997)}"""""`);
     expect(asked.match(/"""/g)).toHaveLength(2);
   });
