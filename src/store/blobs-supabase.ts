@@ -17,6 +17,7 @@
  *
  * See docs/plans/260826u-pdf-upload-and-storage.md § What was measured, not read.
  */
+import { readStreamCapped } from "../read-capped.js";
 import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.js";
 
 /**
@@ -145,23 +146,30 @@ export function supabaseBlobs(baseUrl: string, serviceKey: string): RawSourceSto
         if ((await realStatus(res)) === 404) return null;
         throw await fail(res, "get");
       }
-      /* **Checked before the body is read, and again after.** `Content-Length`
+      /* **Refused on the header, and counted as it arrives.** `Content-Length`
          is what the server claims and is enough to refuse a 60 MB object
-         without transferring it; the length of what actually arrived is the
-         only number that is true, and a chunked response has no header at all.
-         Refusing on either is cheap. Truncating on neither is the point — half
-         a PDF hashes to a real-looking number that answers a different
-         question. */
+         without transferring it: this server is our own Storage, not a
+         stranger's, so its claim is worth a cheap refusal (src/fetch.ts
+         deliberately has no such check, for the opposite reason). The count of
+         what actually arrives is the only number that is true, and a chunked
+         response has no header at all, so the body goes through the same
+         streaming counter the fetch uses and is cancelled at the first byte
+         over. Until 2026-10-04 this was `arrayBuffer()` and a length check
+         afterwards, which bounded what we kept and not what we buffered.
+         Truncating on neither is the point: half a PDF hashes to a real-looking
+         number that answers a different question. */
       const max = options?.maxBytes;
       const claimed = Number(res.headers.get("content-length"));
       if (max !== undefined && Number.isFinite(claimed) && claimed > max) {
         void res.body?.cancel();
         throw new Error(`That object is ${claimed} bytes and the limit is ${max}.`);
       }
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (max !== undefined && bytes.byteLength > max) {
-        throw new Error(`That object is ${bytes.byteLength} bytes and the limit is ${max}.`);
-      }
+      if (max === undefined) return new Uint8Array(await res.arrayBuffer());
+      const bytes = await readStreamCapped(
+        res.body,
+        max,
+        (seen) => new Error(`That object is at least ${seen} bytes and the limit is ${max}.`),
+      );
       return bytes;
     },
 

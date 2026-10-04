@@ -86,10 +86,36 @@ compressing incompressible input can add overhead rather than remove it, and mor
 server that simply overstates would have had a real article refused, with a confident figure in the
 error message and no way to tell from outside that the figure was invented. It was also quietly at
 odds with this very section — the header is a claim by the same server we have just finished saying
-lies about it. What it bought was skipping a download the cap already bounds at 32 MB. **The cap is
+lies about it. What it bought was skipping a download the cap already bounds. **The cap is
 now enforced in exactly one place: bytes that actually arrived.**
 
-**The cap is 32 MB, and the number has a source.** The previous version used 4 MB
+**The cap is 50 MiB, and it is the upload's number, not a second one.** `DEFAULTS.maxBytes` in
+`src/fetch.ts` is `MAX_UPLOAD_BYTES` from `src/uploads.ts`, the constant the upload dialog reads
+when it says "up to 50 MB", so a file chosen and an address pasted stop at the same size and cannot
+drift. Until 2026-10-04 it was a second literal, 32 MiB, and a document fetched by address was
+refused at a size the dialog had just called fine.
+
+> make them consistent (and perhaps reuse the same protection-machinery)
+>
+> — Greg, 2026-10-04
+
+The machinery is shared too. The streaming counter is `readStreamCapped` in `src/read-capped.ts`,
+and both the fetch (`readCapped`) and the store's own read (`get` in `src/store/blobs-supabase.ts`)
+go through it; the store used to read the whole body and check its length afterwards. It is still a
+defence ([security-map.md](security-map.md)): a hard stop on bytes that arrived. What a body at the cap
+holds in the fetch itself is the chunks plus one joined copy, up from about 64 MiB to about
+100 MiB; past that point an upload at 50 MiB already sends the same bytes down the same pipeline.
+**That is a bounded increase, not a measured capacity**: nobody has confirmed Vercel's memory
+ceiling for a 50 MiB import, by either route (`src/pdf-read.ts` says the same of its own numbers).
+Only the pipeline's own document fetch uses the default: link
+previews, paper text, figures and the bibliographic lookups each pass a tighter cap of their own.
+
+**What the reader is told.** Over the cap, the job card shows `FETCH_TOO_BIG` (`[fetch-big]` in
+`src/messages.ts`), which names the limit and is `blocked`, so no Retry is offered: the address
+serves the same bytes next time. The plan is
+[261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+
+**The number also has a floor with a source.** The previous version used 4 MB
 ([original-version/extraction.md](original-version/extraction.md#the-fetch-and-one-hard-won-fix)),
 and Greg's own example — `sas.upenn.edu/~cavitch/pdf-library/Nagel_Bat.pdf`, Nagel's *What Is It
 Like to Be a Bat?* — is **4,930,377 bytes**. Their cap would have refused it. A limit picked without
