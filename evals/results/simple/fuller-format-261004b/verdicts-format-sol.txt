@@ -1,0 +1,12 @@
+1: Y — key result and conclusion stand out
+2: X — central claim and novelty stand out
+3: X — main results are easy to scan
+4: Y — hypothesis and evidence stand out
+5: X — core argument and evidence stand out
+6: Y — design and main result are clearer
+7: X — key concept and finding stand out
+8: Y — findings are clearly grouped and highlighted
+9: X — main finding stands out immediately
+10: X — argument, evidence and reasons are scannable
+11: Y — key concepts and findings are easy to find
+12: Y — central concept and result stand out

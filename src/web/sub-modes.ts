@@ -165,7 +165,7 @@ export const SUMMARY_SUB_MODES: Readonly<Record<SummaryView, SubModeWords>> = {
   },
   fuller: {
     label: "Fuller",
-    description: "The piece in plain words, a little longer and keeping more of its terms",
+    description: "The piece in plain words, longer and with more of the detail",
     experimental: false,
   },
   thread: {

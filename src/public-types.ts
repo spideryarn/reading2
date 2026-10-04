@@ -555,7 +555,9 @@ export interface PublicFaq {
  * carries whole, at every level. And `sentences` when `usableSentences` says
  * they are that paragraph's text exactly (plan 261002e): the same words, cut
  * at sentence ends, each with one of the paragraph's own ids or none, so
- * nothing new is disclosed.
+ * nothing new is disclosed. Since plan 261004b a sentence may carry `key`, a
+ * phrase of its own text to draw bold, and a paragraph `list: true`; neither
+ * adds a word.
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
  * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —

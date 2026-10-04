@@ -1076,8 +1076,21 @@ describe("the artefacts a shared link carries", () => {
     profileHash: "0f1e2d3c4b5a6978",
     levels: {
       brief: [
-        { text: "It asks what a measurement carries.", ids: ["spya-bbbbbb" as BlockId] },
-        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
+        /* A list with a key phrase, and a key that is not its sentence's words
+           (plan 261004b): `list` and the good key cross, the bad one does not. */
+        {
+          text: "It asks three things. What is carried? By what? And why does a copy fail?",
+          ids: ["spya-bbbbbb" as BlockId],
+          list: true,
+          sentences: [
+            { text: "It asks three things.", id: null, key: "three things" },
+            { text: "What is carried?", id: "spya-bbbbbb", key: "key-not-in-its-sentence" },
+            { text: "By what?", id: null, key: null },
+            { text: "And why does a copy fail?", id: null },
+          ],
+        },
+        /* `list` on a paragraph with no usable sentences draws nothing, and does not cross. */
+        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId], list: true },
       ],
       simple: [
         /* Sentences that are its text exactly (plan 261002e): they cross, rebuilt. */
@@ -1847,6 +1860,11 @@ describe("the artefacts a shared link carries", () => {
         "levels",
         "levels.brief",
         "levels.brief[].ids",
+        "levels.brief[].list",
+        "levels.brief[].sentences",
+        "levels.brief[].sentences[].id",
+        "levels.brief[].sentences[].key",
+        "levels.brief[].sentences[].text",
         "levels.brief[].text",
         "levels.fuller",
         "levels.fuller[].ids",
@@ -1867,7 +1885,21 @@ describe("the artefacts a shared link carries", () => {
     });
     const plain = ({ text, ids }: SimpleSummary["levels"]["brief"][number]) => ({ text, ids });
     expect(built.simpleSummary?.levels.fuller).toEqual(SIMPLE.levels.fuller.map(plain));
-    expect(built.simpleSummary?.levels.brief).toEqual(SIMPLE.levels.brief);
+    /* Bold and bullets (plan 261004b): `list: true` and a valid key, and nothing else new. */
+    expect(built.simpleSummary?.levels.brief).toEqual([
+      {
+        text: "It asks three things. What is carried? By what? And why does a copy fail?",
+        ids: ["spya-bbbbbb"],
+        list: true,
+        sentences: [
+          { text: "It asks three things.", id: null, key: "three things" },
+          { text: "What is carried?", id: "spya-bbbbbb" },
+          { text: "By what?", id: null },
+          { text: "And why does a copy fail?", id: null },
+        ],
+      },
+      { text: "A copy would not do.", ids: ["spya-cccccc"] },
+    ]);
     expect(built.simpleSummary?.levels.simple.slice(1)).toEqual(SIMPLE.levels.simple.slice(1));
     const json = JSON.stringify(built.simpleSummary);
     for (const provenance of [
@@ -1883,9 +1915,30 @@ describe("the artefacts a shared link carries", () => {
       "checker-why-sentence",
       "stray",
       "unchecked-words-here",
+      "key-not-in-its-sentence",
     ]) {
       expect(json, provenance).not.toContain(provenance);
     }
+  });
+
+  it("does not publish list formatting when a stored list has no two bullet sentences", () => {
+    const malformedList = {
+      text: "These are the findings. It read faster.",
+      ids: ["spya-bbbbbb" as BlockId],
+      list: true,
+      sentences: [
+        { text: "These are the findings.", id: null },
+        { text: "It read faster.", id: "spya-bbbbbb" as BlockId },
+      ],
+    };
+    const summary: SimpleSummary = {
+      ...SIMPLE,
+      levels: { ...SIMPLE.levels, brief: [malformedList, SIMPLE.levels.brief[1]!] },
+    };
+    const shared = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: summary });
+    const paragraph = shared.simpleSummary?.levels.brief[0];
+    expect(paragraph?.sentences).toEqual(malformedList.sentences);
+    expect(paragraph).not.toHaveProperty("list");
   });
 
   it("does not publish a stored Simple artefact outside either level's contract", () => {

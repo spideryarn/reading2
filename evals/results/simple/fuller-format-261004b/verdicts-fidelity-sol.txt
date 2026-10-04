@@ -1,0 +1,372 @@
+1.1: unsupported-minor — looking and sniffing are not stated
+1.2: supported
+1.3: supported
+1.4: unsupported-minor — rearing’s frequency is not stated
+1.5: supported
+1.6: supported
+1.7: supported
+1.8: unsupported-minor — fibres delivered light, not halorhodopsin
+1.9: supported
+1.10: supported
+1.11: supported
+1.12: supported
+1.13: supported
+1.14: unsupported-serious — six rats is not cited
+1.15: supported
+1.16: supported
+1.17: unsupported-serious — seven rats and heat are not cited
+1.18: supported
+1.19: supported
+1.20: unsupported-minor — hippocampal-part limitation is not cited
+1.21: supported
+1.22: supported
+2.1: unsupported-minor — the essay date is not cited
+2.2: supported
+2.3: unsupported-minor — parameter definition is not cited
+2.4: supported
+2.5: supported
+2.6: supported
+2.7: supported
+2.8: supported
+2.9: supported
+2.10: unsupported-minor — business-standard comparison is not cited
+2.11: supported
+2.12: unsupported-minor — word and grammar stages are not cited
+2.13: supported
+2.14: supported
+2.15: supported
+2.16: unsupported-serious — nobody predicting the abilities is not cited
+2.17: supported
+2.18: supported
+2.19: supported
+2.20: unsupported-serious — non-human data is not mentioned
+3.1: supported
+3.2: supported
+3.3: supported
+3.4: supported
+3.5: supported
+3.6: supported
+3.7: supported
+3.8: supported
+3.9: supported
+3.10: supported
+3.11: supported
+3.12: supported
+3.13: supported
+3.14: supported
+3.15: supported
+3.16: supported
+3.17: unsupported-minor — redundancy causing the fall is not cited
+3.18: supported
+3.19: supported
+3.20: supported
+3.21: supported
+3.22: supported
+3.23: supported
+4.1: supported
+4.2: unsupported-minor — “mostly” the authors’ studies is not established
+4.3: supported
+4.4: supported
+4.5: supported
+4.6: supported
+4.7: supported
+4.8: supported
+4.9: supported
+4.10: supported
+4.11: supported
+4.12: supported
+4.13: supported
+4.14: supported
+4.15: supported
+4.16: supported
+4.17: supported
+4.18: supported
+4.19: unsupported-minor — redundancy causing the fall is not cited
+4.20: supported
+4.21: supported
+4.22: supported
+4.23: supported
+4.24: supported
+4.25: supported
+4.26: supported
+4.27: supported
+4.28: supported
+5.1: unsupported-minor — release and next-word details are not cited
+5.2: supported
+5.3: unsupported-serious — the exact 117-fold figure is not cited
+5.4: supported
+5.5: unsupported-serious — the forecasting claim is not cited
+5.6: supported
+5.7: supported
+5.8: supported
+5.9: supported
+5.10: supported
+5.11: unsupported-minor — planning and goal pursuit are not defined
+5.12: unsupported-serious — this conclusion is not in the citations
+6.1: supported
+6.2: supported
+6.3: supported
+6.4: supported
+6.5: supported
+6.6: supported
+6.7: supported
+6.8: supported
+6.9: supported
+6.10: unsupported-minor — AlphaGo Zero’s description is not cited
+6.11: supported
+6.12: supported
+6.13: supported
+6.14: supported
+6.15: supported
+6.16: supported
+6.17: supported
+6.18: unsupported-minor — word and association stages are not cited
+6.19: supported
+6.20: supported
+6.21: supported
+6.22: supported
+6.23: unsupported-minor — planning and goal pursuit are not defined
+6.24: supported
+6.25: supported
+6.26: supported
+6.27: supported
+6.28: unsupported-serious — Moravec and the stated alternatives are not cited
+7.1: supported
+7.2: unsupported-minor — step-by-step treatment is not stated
+7.3: supported
+7.4: supported
+7.5: supported
+7.6: supported
+7.7: supported
+7.8: supported
+7.9: unsupported-minor — the slices’ thinness is not cited
+7.10: supported
+7.11: supported
+7.12: supported
+7.13: supported
+7.14: supported
+7.15: supported
+7.16: supported
+7.17: supported
+7.18: supported
+7.19: supported
+7.20: supported
+7.21: supported
+7.22: supported
+8.1: unsupported-minor — the essay date is not cited
+8.2: supported
+8.3: supported
+8.4: supported
+8.5: supported
+8.6: supported
+8.7: supported
+8.8: supported
+8.9: supported
+8.10: supported
+8.11: supported
+8.12: supported
+8.13: supported
+8.14: supported
+8.15: supported
+8.16: supported
+8.17: supported
+8.18: supported
+8.19: unsupported-serious — reasoning and understanding are not cited here
+8.20: supported
+8.21: supported
+8.22: unsupported-serious — neither “no one” claim is established
+8.23: supported
+8.24: supported
+8.25: supported
+8.26: supported
+8.27: supported
+8.28: supported
+8.29: supported
+9.1: supported
+9.2: unsupported-minor — spatial memory is not defined this way
+9.3: supported
+9.4: supported
+9.5: supported
+9.6: supported
+9.7: unsupported-serious — the maze procedure is not cited
+9.8: supported
+9.9: supported
+9.10: unsupported-serious — increased arm entries are not cited
+9.11: supported
+9.12: supported
+9.13: supported
+10.1: supported
+10.2: unsupported-minor — places and routes are not defined
+10.3: unsupported-minor — remembering food locations is not cited
+10.4: supported
+10.5: supported
+10.6: supported
+10.7: supported
+10.8: supported
+10.9: supported
+10.10: unsupported-serious — the arm-entry result is not cited
+10.11: unsupported-minor — equal light duration is not cited
+10.12: supported
+10.13: supported
+10.14: supported
+11.1: supported
+11.2: supported
+11.3: supported
+11.4: supported
+11.5: supported
+11.6: supported
+11.7: supported
+11.8: supported
+11.9: unsupported-minor — mouse tissue grown in a dish is not cited
+11.10: supported
+11.11: unsupported-minor — monkeys are not identified
+11.12: supported
+11.13: supported
+12.1: supported
+12.2: supported
+12.3: unsupported-minor — “mostly” their own studies is not established
+12.4: supported
+12.5: supported
+12.6: supported
+12.7: supported
+12.8: unsupported-minor — the past-to-next-step definition is not cited
+12.9: supported
+12.10: supported
+12.11: supported
+12.12: supported
+12.13: unsupported-minor — the slices’ thinness is not cited
+12.14: unsupported-serious — transfer entropy does not establish neuronal driving
+12.15: supported
+12.16: supported
+12.17: supported
+12.18: supported
+12.19: unsupported-minor — redundancy causing the fall is not cited
+12.20: supported
+12.21: supported
+12.22: supported
+12.23: supported
+12.24: supported
+12.25: supported
+12.26: supported
+12.27: supported
+12.28: supported
+12.29: supported
+12.30: unsupported-minor — analysis across several targets is not cited
+13.1: supported
+13.2: supported
+13.3: supported
+13.4: supported
+13.5: unsupported-minor — the cited decomposition has two inputs
+13.6: supported
+13.7: supported
+13.8: unsupported-minor — mouse tissue grown in a dish is not cited
+13.9: supported
+13.10: unsupported-minor — monkeys are not identified
+13.11: supported
+13.12: supported
+14.1: unsupported-minor — the citation says announced, not released
+14.2: supported
+14.3: supported
+14.4: supported
+14.5: supported
+14.6: supported
+14.7: supported
+14.8: supported
+14.9: unsupported-minor — the yes-or-no-guess explanation is not cited
+14.10: supported
+14.11: supported
+14.12: unsupported-minor — word, grammar and meaning stages are not cited
+14.13: supported
+14.14: supported
+14.15: supported
+14.16: supported
+14.17: unsupported-serious — the question does not establish either claim
+14.18: supported
+14.19: supported
+14.20: unsupported-serious — never admitting error is not cited
+14.21: supported
+14.22: supported
+14.23: supported
+15.1: supported
+15.2: unsupported-minor — release and next-word details are not cited
+15.3: supported
+15.4: supported
+15.5: supported
+15.6: supported
+15.7: unsupported-minor — more general learning is not stated
+15.8: supported
+15.9: unsupported-serious — reasoning and understanding are not cited
+15.10: unsupported-minor — their money and hardware are not cited
+15.11: unsupported-minor — lack of testable numbers is not cited
+15.12: unsupported-serious — this conclusion is not in the citations
+15.13: supported
+16.1: unsupported-minor — looking around is not stated
+16.2: supported
+16.3: supported
+16.4: supported
+16.5: supported
+16.6: supported
+16.7: supported
+16.8: supported
+16.9: supported
+16.10: unsupported-minor — viral delivery is not cited here
+16.11: supported
+16.12: supported
+16.13: supported
+16.14: supported
+16.15: supported
+16.16: supported
+16.17: supported
+16.18: supported
+16.19: supported
+16.20: supported
+16.21: supported
+16.22: supported
+16.23: supported
+16.24: supported
+16.25: supported
+17.1: supported
+17.2: supported
+17.3: supported
+17.4: supported
+17.5: supported
+17.6: supported
+17.7: supported
+17.8: unsupported-minor — the pellets are not identified as sugar
+17.9: supported
+17.10: supported
+17.11: supported
+17.12: supported
+17.13: supported
+17.14: supported
+17.15: unsupported-serious — six experimental rats is not cited
+17.16: supported
+17.17: supported
+17.18: unsupported-serious — seven rats and marker protein are not cited
+17.19: supported
+17.20: supported
+17.21: supported
+17.22: supported
+17.23: supported
+17.24: supported
+17.25: supported
+18.1: unsupported-minor — looking and sniffing are not stated
+18.2: supported
+18.3: supported
+18.4: supported
+18.5: supported
+18.6: supported
+18.7: supported
+18.8: supported
+18.9: supported
+18.10: supported
+18.11: supported
+18.12: supported
+18.13: supported
+18.14: supported
+18.15: supported
+18.16: supported
+18.17: supported
+18.18: supported
+18.19: supported
+18.20: supported
