@@ -78,6 +78,7 @@ interface RecordRow {
   authors_given: (string | null)[] | null;
   year: number | null;
   venue: string | null;
+  published_day: string | null;
   doi: string | null;
   fresh: boolean;
   claimed: boolean;
@@ -101,6 +102,7 @@ function answerOf(id: WorkId, row: RecordRow): CachedAnswer | null {
       authors,
       ...(row.year !== null ? { year: row.year } : {}),
       ...(row.venue !== null ? { venue: row.venue } : {}),
+      ...(row.published_day !== null ? { published: row.published_day } : {}),
       doi: row.doi,
     },
   };
@@ -109,7 +111,7 @@ function answerOf(id: WorkId, row: RecordRow): CachedAnswer | null {
 const rawPgBibliographicStore: BibliographicStore = {
   async read(id, fresh) {
     const result = await getDb().execute(sql`
-      select state, source, title, authors_family, authors_given, year, venue, doi,
+      select state, source, title, authors_family, authors_given, year, venue, published_day, doi,
              coalesce(${freshSql(fresh)}, false) as fresh,
              coalesce(claimed_until > now(), false) as claimed
         from spideryarn.bibliographic_records
@@ -164,6 +166,7 @@ const rawPgBibliographicStore: BibliographicStore = {
            set state = ${answer.kind}, source = ${found?.source ?? null}, title = ${found?.title ?? null},
                authors_family = ${sql.param(family)}::text[], authors_given = ${sql.param(given)}::text[],
                year = ${found?.year ?? null}::integer, venue = ${found?.venue ?? null}, doi = ${found?.doi ?? null},
+               published_day = ${found?.published ?? null},
                fetched_at = now(), claimed_until = null
          where id = ${claim.id}
            and claimed_until = ${claim.until.toISOString()}::timestamptz

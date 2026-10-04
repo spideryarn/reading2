@@ -699,6 +699,7 @@ const REVISION_READ_POLICY: Record<
      `metaFrom` puts them on every owner-facing `Meta`. No prompt reads either. */
   abstract: { article: "value", library: "value" },
   doi: { article: "value", library: "value" },
+  journal: { article: "value", library: "value" },
   /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
      is the one stage whose freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
@@ -1074,6 +1075,7 @@ const META_COLUMNS = {
   note: articleRevisions.note,
   abstract: articleRevisions.abstract,
   doi: articleRevisions.doi,
+  journal: articleRevisions.journal,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
@@ -1859,6 +1861,7 @@ function metaFrom(
     ...(revision.note === null ? {} : { note: revision.note }),
     ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
     ...(revision.doi === null ? {} : { doi: revision.doi }),
+    ...(revision.journal === null ? {} : { journal: revision.journal }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of
        `source === "pdf"` — which is the media kind and stopped being a proxy

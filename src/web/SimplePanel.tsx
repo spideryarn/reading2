@@ -24,18 +24,21 @@
  * docs/project/mode.md has the rule.
  */
 import { Fragment } from "react";
-import { RotateCw, TriangleAlert, Sprout } from "lucide-react";
+import { MessageSquare, RotateCw, TriangleAlert, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type BlockId, type SimpleLevel, type SimpleParagraph, usableSentences } from "../types.js";
 import type { PublicSimpleSummary } from "../public-types.js";
 import type { UseSimple } from "./useSimple.js";
 import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
-import { TooltipGroup } from "./Tooltip.js";
+import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 
 /** A visitor on a public article whose owner never asked for one. */
 export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this piece yet.";
+
+/** The ask button's name and its card: one sentence, the same in both. */
+export const SIMPLE_ASK_CHAT = "Ask about this paragraph in chat";
 
 /** The owner's empty state, before the press has started anything. */
 export const SIMPLE_NONE_OWNER = "Nobody has asked for a plain-words version of this piece yet.";
@@ -55,14 +58,25 @@ export function SimplePanel({
   access,
   level,
   onJump,
+  onAskChat,
 }: {
   access: SimpleAccess;
   /** Which level to draw. The band's control offers Brief and Fuller; Simple is stored and not offered (plan 261003l). */
   level: SimpleLevel;
   onJump(id: BlockId): void;
+  /**
+   * **Ask about this paragraph in chat** — handed the paragraph's own `text`.
+   * `Reader` owns both the mode and the handoff into a fresh conversation
+   * (`askAboutSummaryParagraph` in chat-handoff.ts). Absent, no button is
+   * drawn; and a visitor gets none whatever is passed, because a visitor has
+   * no chat. docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md.
+   */
+  onAskChat?: ((paragraphText: string) => void) | undefined;
 }) {
   useRenderCount("SimplePanel");
   const owner = access.kind === "owner" ? access.owner : null;
+  /* The owner's alone: the visitor's arm must have nothing to press. */
+  const askChat = access.kind === "owner" ? onAskChat : undefined;
   const paragraphs =
     access.kind === "owner" ? access.owner.simple?.levels[level] : access.simple?.levels[level];
   /* A visitor's paragraphs arrived with the page, so they are ready by construction. */
@@ -143,7 +157,7 @@ export function SimplePanel({
                   never reordered, and two identical paragraphs would be a
                   write-time bug rather than a state to draw. */}
               {paragraphs.map((p) => (
-                <Paragraph key={p.text} paragraph={p} onJump={onJump} />
+                <Paragraph key={p.text} paragraph={p} onJump={onJump} onAskChat={askChat} />
               ))}
             </div>
           </TooltipGroup>
@@ -165,8 +179,22 @@ export function SimplePanel({
  * is plain text. Only `usableSentences` decides whether there are sentences to
  * draw — the same question a visitor's payload was built with — and a paragraph
  * without them draws exactly as before.
+ *
+ * **And, for the owner, a way to ask about it** (plan 261004a, Greg's
+ * spya-r9nbkt): a small button at the end of the doors row. It hands over the
+ * paragraph's `text` — the whole of it, whether or not it was drawn as
+ * sentences. The Thread's per-post Copy is the model for its shape
+ * (Tweets.tsx § `CopyButton`); the icon is the prose gutter's chat button's.
  */
-function Paragraph({ paragraph, onJump }: { paragraph: SimpleParagraph; onJump(id: BlockId): void }) {
+function Paragraph({
+  paragraph,
+  onJump,
+  onAskChat,
+}: {
+  paragraph: SimpleParagraph;
+  onJump(id: BlockId): void;
+  onAskChat: ((paragraphText: string) => void) | undefined;
+}) {
   const sentences = usableSentences(paragraph);
   return (
     <div className="simple-para">
@@ -195,6 +223,20 @@ function Paragraph({ paragraph, onJump }: { paragraph: SimpleParagraph; onJump(i
         {paragraph.ids.map((id) => (
           <BlockRef key={id} id={id} onJump={onJump} />
         ))}
+        {onAskChat && (
+          <Tooltip placement="top" content={<TipNote>{SIMPLE_ASK_CHAT}</TipNote>}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="simple-ask tw:pointer-coarse:size-10"
+              aria-label={SIMPLE_ASK_CHAT}
+              onClick={() => onAskChat(paragraph.text)}
+            >
+              <MessageSquare size={12} aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        )}
       </div>
     </div>
   );

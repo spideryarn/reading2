@@ -1,0 +1,3 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "journal" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD COLUMN "published_day" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."bibliographic_records" ADD CONSTRAINT "bibliographic_records_published_day" CHECK ("spideryarn"."bibliographic_records"."published_day" is null or ("spideryarn"."bibliographic_records"."state" = 'found' and "spideryarn"."bibliographic_records"."published_day" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'));

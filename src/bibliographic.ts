@@ -63,6 +63,13 @@ export interface WorkRecord {
   authors: WorkAuthor[];
   year?: number;
   venue?: string;
+  /**
+   * The calendar day the registry says the work was published, `YYYY-MM-DD` —
+   * only when it states a whole day. Crossref often gives a year or a month
+   * alone, and DataCite a year; a day made up from those would be a date
+   * nobody stated. Absent on an answer cached before 2026-10-04.
+   */
+  published?: string;
   /** The DOI the registry holds the record under — for an arXiv id, `10.48550/arxiv.<id>`. */
   doi: string;
 }
@@ -300,6 +307,22 @@ function crossrefYear(date: unknown): number | undefined {
   return plausibleYear(list(list(record(date)?.["date-parts"])[0])[0]);
 }
 
+/** `s` when it is a real calendar day spelled `YYYY-MM-DD`, else undefined. `2024-02-31` has the shape and is not one. */
+export function realIsoDay(s: unknown): string | undefined {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
+  if (plausibleYear(Number(s.slice(0, 4))) === undefined) return undefined;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().startsWith(`${s}T`) ? s : undefined;
+}
+
+/** Crossref's `{ "date-parts": [[2016, 5, 16]] }`, as a day — only when all three parts are there. */
+function crossrefDay(date: unknown): string | undefined {
+  const [y, m, d] = list(list(record(date)?.["date-parts"])[0]);
+  if (![y, m, d].every((n) => typeof n === "number" && Number.isInteger(n))) return undefined;
+  const two = (n: unknown) => String(n).padStart(2, "0");
+  return realIsoDay(`${String(y).padStart(4, "0")}-${two(m)}-${two(d)}`);
+}
+
 const MAX_AUTHORS = 100;
 const MAX_NAME = 200;
 
@@ -338,6 +361,12 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     crossrefYear(msg["published-online"]) ??
     crossrefYear(msg.published);
   const venue = plainRegistryText(list(msg["container-title"])[0]);
+  /* The earliest whole day any of the four states: online usually precedes
+     print, and `issued` is Crossref's own earliest but often lacks the day. */
+  const published = [msg["published-online"], msg["published-print"], msg.published, msg.issued]
+    .map(crossrefDay)
+    .filter((day) => day !== undefined)
+    .sort()[0];
   return {
     id,
     source: "crossref",
@@ -345,6 +374,7 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     authors,
     ...(year !== undefined ? { year } : {}),
     ...(venue !== null ? { venue } : {}),
+    ...(published !== undefined ? { published } : {}),
     doi: normaliseDoi(msg.DOI, doi),
   };
 }

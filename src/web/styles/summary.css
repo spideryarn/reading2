@@ -145,5 +145,37 @@
   gap: 0.2rem 0.5rem;
   margin-top: 0.3rem;
   font-size: 0.81rem;
+  /* The ask button is taller than the doors' text; keep them on one line. */
+  align-items: center;
+}
+/* **Ask about this paragraph in chat** (SimplePanel.tsx § `Paragraph`, plan
+   261004a): the owner's button at the end of the doors row. It is the shared
+   ghost icon button — the Thread's per-post Copy is the same one — so its box,
+   radius, hover wash and focus ring are that component's, and only three
+   things are set here.
+
+   - **Pushed to the right**, so it sits in the same place under every
+     paragraph whatever the number of doors.
+   - **It does not make the row taller.** The button is 24px and the doors'
+     line about 16; the negative block margin gives the difference back, since
+     Greg's standing ask for this band is not to spend vertical space
+     (SPIDERYARN-READING2-7A).
+   - **Quiet until wanted.** Quieter than the prose that is the point of the band,
+     full strength when the pointer is on its paragraph or the keyboard is on
+     the button. Where nothing can hover there is no "until", so it is drawn
+     at a strength a finger can find. Its size on a coarse pointer is at the
+     call site (`tw:pointer-coarse:size-10`), where the utilities layer wins. */
+.simple-ask {
+  margin-left: auto;
+  margin-block: -0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.simple-ask:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  .simple-para:hover .simple-ask { opacity: 1; }
+}
+@media (hover: none) {
+  .simple-ask { opacity: 0.8; }
 }
 .simple-job { margin-top: 0.7rem; }

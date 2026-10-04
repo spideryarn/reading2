@@ -2319,7 +2319,8 @@ export interface PdfExtractResult {
    * counts the originals, and the two numbers agree: hiding retypes, never
    * deletes.
    *
-   * Nothing in the pipeline reads it: `src/pipeline.ts` wants the count and the
+   * The pipeline reads it for one thing, the identifiers printed on the first
+   * pages (src/article-registry.ts § `ownIdsOfPdf`); otherwise it wants the count and the
    * HTML. It is here for `evals/pdf/titles.mts`, which buys a transcription
    * once and then runs several title arms over it offline — an eval that
    * re-transcribed per arm would be comparing arms that read different records,

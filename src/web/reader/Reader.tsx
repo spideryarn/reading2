@@ -75,7 +75,7 @@ import {
   ConversationBand,
   RememberBand,
 } from "../modes/conversation/ConversationModes.js";
-import { askAboutTerm } from "../chat-handoff.js";
+import { askAboutSummaryParagraph, askAboutTerm } from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
@@ -814,8 +814,11 @@ export function Reader({
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
   /**
-   * **A question on its way into chat mode from another mode** — the glossary's
-   * *Ask in chat*, for a term the article does not contain.
+   * **A question on its way into chat mode from another mode.** Two senders:
+   * the glossary's *Ask in chat*, for a term the article does not contain, and
+   * (since 2026-10-04) the button on a Summary paragraph, which carries the
+   * paragraph across, quoted
+   * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md).
    *
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
@@ -826,12 +829,19 @@ export function Reader({
    * `ChatHandoff` in ConversationModes.tsx says what else it guards against.
    */
   const [chatHandoff, setChatHandoff] = useState<ChatHandoff | null>(null);
-  const askInChat = useCallback(
-    (term: string) => {
-      setChatHandoff({ slug, question: askAboutTerm(term) });
+  /* The one body both senders share: the text is ready-made, and the handoff
+     and the mode are set in one event so they arrive in one commit. */
+  const handToChat = useCallback(
+    (question: string) => {
+      setChatHandoff({ slug, question });
       void setMode("chat");
     },
     [slug, setMode],
+  );
+  const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term)), [handToChat]);
+  const askAboutSummary = useCallback(
+    (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText)),
+    [handToChat],
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /* **And a handoff chat mode never took does not wait for the next visit.** The
@@ -2571,7 +2581,9 @@ export function Reader({
               onJump={bandJump}
             />
           );
-        return <SummaryBand slug={slug} article={article} onJump={bandJump} />;
+        /* `onAskChat` on the owner's band only: a visitor has no chat, and
+           `VisitorSummaryBand` above has no such prop to be handed. */
+        return <SummaryBand slug={slug} article={article} onJump={bandJump} onAskChat={askAboutSummary} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default

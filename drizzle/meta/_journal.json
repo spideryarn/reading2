@@ -953,6 +953,20 @@
       "when": 1791059362776,
       "tag": "20261003202922_citation_investigation_influence",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1791071462375,
+      "tag": "20261003235102_article_journal_and_registry_published_day",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1791073083443,
+      "tag": "20261004001803_registry_published_day_only_on_found",
+      "breakpoints": true
     }
   ]
 }

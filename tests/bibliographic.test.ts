@@ -140,8 +140,25 @@ describe("parseCrossref", () => {
       ],
       year: 2016,
       venue: "Nature Neuroscience",
+      published: "2016-05-16",
       doi: "10.1038/nn.4304",
     });
+  });
+
+  it("keeps the earliest whole day any date field states, and none from a year or a month alone", () => {
+    const day = (message: Record<string, unknown>) =>
+      parseCrossref(id("10.1000/x"), "10.1000/x", { message: { title: ["A title"], ...message } })?.published;
+    expect(
+      day({
+        issued: { "date-parts": [[2024]] },
+        "published-print": { "date-parts": [[2024, 6, 20]] },
+        "published-online": { "date-parts": [[2024, 5, 31]] },
+      }),
+    ).toBe("2024-05-31");
+    expect(day({ issued: { "date-parts": [[2024, 5]] }, published: { "date-parts": [[2024]] } })).toBeUndefined();
+    expect(day({ issued: { "date-parts": [[2024, 2, 31]] } })).toBeUndefined();
+    expect(day({ issued: { "date-parts": [[null]] } })).toBeUndefined();
+    expect(day({ issued: { "date-parts": [["2024", "5", "31"]] } })).toBeUndefined();
   });
 
   it("takes an organisation's name as its family, strips markup, and finds the year where it is", () => {

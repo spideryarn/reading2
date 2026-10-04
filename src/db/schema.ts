@@ -677,6 +677,15 @@ export const articleRevisions = spideryarn.table(
      */
     abstract: text("abstract"),
     doi: text("doi"),
+    /**
+     * **`Meta.journal`: where the registry says the piece appeared** — Crossref's
+     * `container-title` (or DataCite's) for the article's own DOI, kept only
+     * when the registry's title is the article's (src/article-registry.ts).
+     * Since then a full PDF and a web page may have a `doi` too, and
+     * `published_at` may be the registry's day. Null on everything imported
+     * before 2026-10-04, and whenever no identifier was found or agreed.
+     */
+    journal: text("journal"),
 
     /**
      * Stage 1's real output. `requestedUrl` and `finalUrl` differ whenever a
@@ -6541,6 +6550,8 @@ export const bibliographicRecords = spideryarn.table(
     authorsGiven: text("authors_given").array().$type<(string | null)[]>(),
     year: integer("year"),
     venue: text("venue"),
+    /** `WorkRecord.published`: the whole day the registry states, `YYYY-MM-DD`. Text for `published_at`'s reason. Null when it states less. */
+    publishedDay: text("published_day"),
     /** The DOI the registry gave the record — for an arXiv id, DataCite's `10.48550/arxiv.<id>`. */
     doi: text("doi"),
     /** When the answer was fetched. Null on a claim with no answer. */
@@ -6559,6 +6570,11 @@ export const bibliographicRecords = spideryarn.table(
     check("bibliographic_records_state", sql`${t.state} is null or ${t.state} in ('found', 'not-found')`),
     check("bibliographic_records_source", sql`${t.source} is null or ${t.source} in ('crossref', 'datacite')`),
     check("bibliographic_records_year", sql`${t.year} is null or ${t.year} between 1500 and 2100`),
+    /** Only a found record has one, and only in the one spelling. */
+    check(
+      "bibliographic_records_published_day",
+      sql`${t.publishedDay} is null or (${t.state} is not distinct from 'found' and ${t.publishedDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')`,
+    ),
     /** Same length, at most 100, and a family name for every author. */
     check(
       "bibliographic_records_authors",
