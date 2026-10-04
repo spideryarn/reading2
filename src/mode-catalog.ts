@@ -157,19 +157,35 @@ export interface ModeCatalogEntry {
   /**
    * **Other words a reader might type meaning this mode.**
    *
-   * Destination synonyms, and deliberately **sparse**: two to four each, and an
-   * empty list where nothing natural exists. This is not a keyword-stuffing
-   * field. Every alias widens what the command bar's matcher will accept, and
-   * the cost of a loose one is not a missed match — it is the *wrong* mode
-   * ranked first for somebody who typed the right thing.
+   * Destination synonyms, and **as many as a reader would naturally type**:
+   * six to ten a mode. Until 2026-10-04 this said *deliberately sparse, two to
+   * four each*, and that stance is superseded:
    *
-   * Three rules, all of them checked in tests/mode-catalog.test.ts because
-   * none of them is visible at the point somebody adds a word:
+   * > In the command bar, add more aliases. So, for example, structure mode
+   * > could have aliases for hierarchy, table of contents, TOC, headings, etc.
+   * >
+   * > — Greg, 2026-10-04 (report spya-uzkmn3)
+   *
+   * The matcher asks whether a nickname *contains* what was typed and never
+   * the reverse (src/web/command-match.ts § `TIERS`), so `contents` did not
+   * catch `table of contents`: a phrase a reader would type whole has to be
+   * written out whole.
+   *
+   * What still limits a word is what the old stance was protecting. The cost
+   * of a loose one is not a missed match — it is the *wrong* row ranked first
+   * for somebody who typed the right thing. Seven rules, the first four checked
+   * in tests/mode-catalog.test.ts and the rest in
+   * tests/command-match-mode-aliases.test.ts, which types every word here into
+   * the whole list the bar holds, because none of them is visible at the point
+   * somebody adds a word:
    *
    *  1. **Unique across every mode.** Two modes claiming `terms` makes the bar
    *     ambiguous, and an ambiguous bar is worse than a bare one.
-   *  2. **Never another mode's label.** Typing `search` must open Search and
-   *     not something that borrowed the word.
+   *  2. **Never another row's label, unless both open the same place.** Typing
+   *     `search` must open Search and not something that borrowed the word. The
+   *     rows are the modes, their sub-modes, the pages and the actions.
+   *     `recall`, `sketch` and `reception` are chips of the mode that lists
+   *     them, so the chip's row comes first and lands where the mode would.
    *  3. **Stored already-canonical** — lowercase, trimmed, and internal runs of
    *     whitespace collapsed to one space. The matcher normalises what the
    *     reader types before comparing; an alias with a capital or a stray space
@@ -177,6 +193,28 @@ export interface ModeCatalogEntry {
    *     collapse is the part that is easy to forget, and forgetting it lets
    *     `"peer review"` and `"peer  review"` pass a uniqueness check on raw text
    *     and then collide the moment anybody types either (GPT Sol, 2026-09-07).
+   *  4. **Not twice in one mode.**
+   *  5. **Typed in full, it puts its own mode first.** The one that is easy to
+   *     break: a word that *starts with* a nickname of a mode later in the bar
+   *     takes that nickname from it. `questions and answers` on FAQ would put
+   *     FAQ above Chat for `question`, and `highlights` on Quotes would put
+   *     Quotes above Search for `highlight`; both were left out for that.
+   *  6. **It does not take a word that is a page's or an action's own.**
+   *     Comments answers to `notes`, Feedback to `help`. The modes come first
+   *     in the list, so a mode nickname that starts with one of those wins it.
+   *     Two older words already do, and the test names them rather than
+   *     hiding them: `annotations` (Marginalia over Comments) and `sources`
+   *     (Citations over Metadata's `source`).
+   *  7. **It does not start with a verb the argument parser owns** — `find`,
+   *     `search`, `look up`, `define`, `tag` and the rest of `VERBS` in
+   *     src/web/command-match.ts — or the bar would also offer *Find “in
+   *     page” in this article*. A bare verb is fine (`find`, `define`). The
+   *     collision matrix in tests/command-match-arguments.test.ts runs the
+   *     parser over every word here.
+   *
+   * **Eight modes lend these words to their *Run again* row** (`rerunNames`
+   * in src/web/rerun-commands.ts): `rerun jargon` forces the glossary. So a
+   * word on one of those modes must also be a fair name for the step.
    *
    * They name a **destination**, never an action. `summarise` is fine, because
    * opening Summary is what produces one. A phrase like *"jump to where it
@@ -238,19 +276,27 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        when they want the piece and nothing else. `article` first because that
        is what they are asking for; the mode's own name is a description of
        what is missing rather than of what they get. */
-    aliases: ["article", "text", "reading"],
+    aliases: ["article", "text", "reading", "just the article", "prose", "original", "no mode", "no panel"],
     experimental: false,
   },
   chat: {
     description: "Ask about this article — answers point back at the paragraphs they came from",
     how: "Nothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.",
-    aliases: ["ask", "question"],
+    /* Not `ai`: *AI processing* is a row's own name (article-commands.ts).
+       Not `discussion`, which belongs to neither this nor Debate: on Debate it
+       would take `discuss` from here, and here it is already found by it. */
+    aliases: ["ask", "question", "talk", "discuss", "conversation", "assistant"],
     experimental: false,
   },
   glossary: {
     description: "The terms this piece uses in a non-obvious way, defined from the piece itself",
     how: "The list is one model pass over the whole article, written once and then stored, so it is instant every time after the first. Terms are defined from this piece rather than from a dictionary, and once they exist they are underlined in the prose in every mode, not only this one.",
-    aliases: ["define", "terms", "definitions"],
+    /* Not `concepts`: a reader could as well mean Ideas, and `rerun concepts`
+       would then force the wrong list. */
+    aliases: [
+      "define", "terms", "definitions", "vocabulary", "jargon", "dictionary", "key terms", "terminology",
+      "lexicon",
+    ],
     experimental: false,
   },
   search: {
@@ -259,8 +305,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* `highlight` because highlighting is what search *does to the page* rather
        than a separate thing to press — the two dimmed placeholders this mode
        was built out of are one mode now, and the word should still land.
-       docs/project/search.md. */
-    aliases: ["find", "highlight"],
+       docs/project/search.md.
+
+       Nothing longer may start with `find` or `search`: those are the argument
+       parser's verbs, so `find in page` would be read as a search for *in
+       page* (rule 7 on `aliases`). `look for` is not one of its verbs. */
+    aliases: ["find", "highlight", "locate", "look for", "ctrl f", "ctrl+f", "cmd f", "keyword", "semantic search"],
     experimental: false,
   },
   referee: {
@@ -278,7 +328,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        and `reviewer` was passed over only because it would have sat beside it.
        `referee` is what journals call the person; `review` is what everyone
        else calls the job. src/modes.ts § referee has the whole argument. */
-    aliases: ["review", "reviewer", "peer review"],
+    /* Not `critique`: Debate has `critiques`, and Referee comes first in the
+       bar, so the shorter word here would take every start of the longer one.
+       Not `criteria`, which is the chip's own row. */
+    aliases: ["review", "reviewer", "peer review", "peer reviewer", "referee report", "assess", "assessment"],
     experimental: true,
   },
   summary: {
@@ -311,8 +364,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        *Summary › Thread* row (src/web/sub-modes.ts § `SUMMARY_SUB_MODES`). On
        this row they would select Summary at whatever view the address names —
        Brief, by default — and could start the plain-words run (GPT Sol, F3 of
-       the 261003l review). `gist` went with the outline on 2026-10-01. */
-    aliases: ["summarise", "summarize"],
+       the 261003l review). `gist` went with the outline on 2026-10-01 and came
+       back on 2026-10-04 as a word for the piece restated, which is what this
+       mode now is. **Not `abstract`**: a paper has one of its own, and this
+       is not it. Not `brief`, which is the chip's row. */
+    aliases: ["summarise", "summarize", "tldr", "tl;dr", "gist", "overview", "synopsis", "key points", "recap"],
     experimental: false,
   },
   diagram: {
@@ -329,8 +385,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     how: "The Sketch — the picture you get unless you ask for another — is a model reading the argument and drawing it, which is about a minute of work the first time and stored afterwards. Its empty state names what that costs before anything runs.",
     /* `sketch` is the artefact a press actually draws, and it is the word the
        empty state and the pipeline both use, so a reader who has seen the mode
-       once will type it. */
-    aliases: ["sketch", "picture", "visual"],
+       once will type it. **Not `figure`, `image` or `illustration`**: the
+       first two are the pictures the article came with, and the third is the
+       Illustrated chip's word. */
+    aliases: [
+      "sketch", "picture", "visual", "drawing", "chart", "graph", "argument map", "mind map", "visualisation",
+      "visualization",
+    ],
     experimental: true,
   },
   ideas: {
@@ -343,7 +404,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        mode's control. A textual uniqueness test cannot see that — the collision
        is with a label inside another mode, not with an alias — so it is a thing
        a person has to notice. `premises` is the unoverloaded word. */
-    aliases: ["premises", "propositions", "assumptions"],
+    aliases: ["premises", "propositions", "assumptions", "arguments", "key ideas", "main ideas", "theses", "beliefs"],
     experimental: false,
   },
   remember: {
@@ -369,20 +430,25 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        a destination and then not go there. GPT Sol found this, 2026-09-07.
        Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
        "quiz" }` — the bar's *Remember › Quiz* row (src/web/sub-modes.ts, plan
-       261001d) — and that row, not an alias here, is where `quiz` lands. */
-    aliases: ["recall"],
+       261001d) — and that row, not an alias here, is where `quiz` lands.
+       `test me` is left out for the same reason, and `flashcards` because the
+       description denies it. Both spellings of *practise*. */
+    aliases: ["recall", "memorise", "memorize", "study", "revise", "revision", "practice", "practise", "learn"],
     experimental: true,
   },
   quotes: {
     description: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
     how: "The model only locates a line; the words you read are sliced out of the article itself, so nothing here is the model's typing. What that proves is that the sentence is in the piece, not who wrote it — a quotation the article left unmarked cannot be told from its own prose.",
-    aliases: ["quotations", "excerpts"],
+    /* Not `highlights`: Search has `highlight`, and Quotes comes first in the
+       bar, so the longer word here would take the shorter one from it. `quote`
+       needs no entry — it is the start of the mode's own name. */
+    aliases: ["quotations", "excerpts", "extracts", "passages", "pull quotes", "key quotes", "best lines"],
     experimental: false,
   },
   timeline: {
     description: "When the piece says these things happened, in order — and how sure it actually is",
     how: "One model pass over the article, written once and then stored. Anything the piece never dated stays undated rather than being guessed at, and the order is the model's reading of the piece rather than a sort by date.",
-    aliases: ["chronology", "dates", "events"],
+    aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
     experimental: true,
   },
   debate: {
@@ -406,8 +472,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        in an *alias*, which they only meet by having typed it themselves.
        `responses` was refused because `Response` means four things in `src/`;
        that objection is about code and does not reach a reader's keyboard.
-       src/modes.ts § debate. */
-    aliases: ["critiques", "reception", "responses"],
+       src/modes.ts § debate. `reception` has also been a chip of this mode
+       since 2026-10-03, and the one it opens on. */
+    aliases: [
+      "critiques", "reception", "responses", "criticism", "reactions", "commentary", "rebuttals",
+      "counterarguments", "what others say", "replies",
+    ],
     experimental: true,
   },
   citations: {
@@ -456,7 +526,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
-    aliases: ["references", "bibliography", "sources", "works cited"],
+    aliases: [
+      "references", "bibliography", "sources", "works cited", "refs", "reference list", "cited works",
+      "literature", "further reading",
+    ],
     experimental: true,
   },
   structure: {
@@ -488,8 +561,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Outline's nicknames and Outline is now this. `hierarchy`, `toc` and
        `contents` came from Hierarchy on 2026-09-29 for the same reason, when
        it retired into this mode.
-       docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
-    aliases: ["columns", "outline", "tree", "map", "hierarchy", "toc", "contents"],
+       docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.
+       `table of contents` and `headings` are Greg's own examples of 2026-10-04
+       (see `aliases` above); `contents` never caught the first. */
+    aliases: [
+      "columns", "outline", "tree", "map", "hierarchy", "toc", "contents", "table of contents", "headings",
+      "headers", "sections", "chapters",
+    ],
     /* **Out of the switch since 2026-09-10.** It was behind it as an
        instrument — a third structural view for Greg to compare against the
        other two, kept off an ordinary reader's bar while the comparison ran.
@@ -521,10 +599,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Not the "checked against it" sentence, which the panel's (i) already
        says (GPT Sol D3). About the mode, not the press, and no price. */
     how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
-    /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
-       in the command bar. `faq` itself is this mode's label, which an alias may
-       not repeat (tests/mode-catalog.test.ts). */
-    aliases: ["faqs", "frequently asked questions"],
+    /* Not `questions`, and nothing that starts with it — `questions and
+       answers` — because `question` is Chat's and FAQ comes first in the bar:
+       the longer word here would take it. `faq` itself is this mode's label,
+       which an alias may not repeat (tests/mode-catalog.test.ts). */
+    aliases: ["faqs", "frequently asked questions", "q&a", "q and a", "qa", "common questions", "key questions"],
     /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
     experimental: true,
   },
@@ -549,7 +628,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* "spiral" and "route" are the two words Greg used for it in the brief —
        docs/project/skim.md. `trajectory` was the mode's own word until
        2026-10-01 (261001r), and Greg asked to keep it as a keyword. */
-    aliases: ["spiral", "route", "trajectory"],
+    aliases: ["spiral", "route", "trajectory", "skim read", "speed read", "quick read", "preview", "scan"],
     /* Behind the switch from 2026-09-28 until later that day, when Greg asked
        for it in the mainstream: "take Skim and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
@@ -569,8 +648,10 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
     how: "Turning it on marks where the argument turns, with one model pass that puts so, but or vs beside those paragraphs. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
-    /* `annotations` was the mode's own word until 2026-10-01 (261001n). */
-    aliases: ["annotations", "margin notes", "margin", "sidenotes"],
+    /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
+       Comments row has it too and this row wins it. **Nothing here may start
+       with `notes`**, which is the Comments row's. */
+    aliases: ["annotations", "margin notes", "margin", "margins", "sidenotes", "side notes", "marginal notes"],
     /* **Behind the switch**: a first experiment with a column on the right,
        which Greg asked to "play with" (SPIDERYARN-READING2-7K). Nothing in it
        is finished enough to put on every reader's bar.

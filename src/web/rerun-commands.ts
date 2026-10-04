@@ -117,9 +117,10 @@ const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
 
 /**
  * **Names a reader might use that neither the label nor a mode supplies.**
- * Sparse, for the reason the mode aliases are (reading-view-overview.md § The
- * command bar): the cost of a loose alias is not a missed match, it is the
- * wrong row ranked first — and every row this table names spends.
+ * Sparse, for the reason that still limits the mode aliases, which are no
+ * longer sparse themselves (reading-view-overview.md § The command bar): the
+ * cost of a loose alias is not a missed match, it is the wrong row ranked
+ * first — and every row this table names spends.
  */
 const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> = {
   crossrefs: ["cross references", "crossrefs"],

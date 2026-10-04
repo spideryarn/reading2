@@ -962,8 +962,8 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
     description: "Your shelf, and the box you paste a new article into.",
     /* Greg's `Homepage`, and the four other words for the same place. `add` and
        `add an article` because a bare `/add` lands here anyway — see the
-       docblock above. Sparse elsewhere, for the reason the mode aliases are
-       (docs/project/reading-view-overview.md § The command bar): the cost of a
+       docblock above. Sparse elsewhere, for the reason that still limits the
+       mode aliases (docs/project/reading-view-overview.md § The command bar): the cost of a
        loose alias is not a missed match, it is the wrong row ranked first. */
     aliases: ["home", "homepage", "shelf", "my articles", "add", "add an article"],
     generates: false,

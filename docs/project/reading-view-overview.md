@@ -375,8 +375,11 @@ Three pieces of it are worth knowing about:
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
   Structure, `define and `terms` for Glossary — which live in
   [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
-  Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
-  mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
+  Six to ten a mode since 2026-10-04, when Greg asked for more (*"structure mode could have aliases
+  for hierarchy, table of contents, TOC, headings, etc."*, spya-uzkmn3); they were two to four. What
+  still limits a word is that the cost of a loose one is not a missed match, it is the *wrong* row
+  ranked first for somebody who typed the right thing — the rules are on `aliases` in that file, and
+  `tests/command-match-mode-aliases.test.ts` types every one into the whole list. The ranking is five named tiers in
   [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
 - **The other rows are ranked by the same five tiers**, over words they carry themselves rather than
   out of the catalog — `src/web/CommandBar.tsx` § `besideTheModes` is the whole list, and another one
