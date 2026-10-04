@@ -274,7 +274,7 @@ import { TagEditor } from "./TagEditor.js";
 import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { howLong, timeAgo } from "./relative-time.js";
+import { calendarDay, howLong, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
@@ -725,7 +725,20 @@ export function Metadata({
   const archive = sharedArchive ?? metadataArchive;
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
-  const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+  /* **Where and when it was published** (Greg, 2026-10-03, spya-pcz6a3). The
+     journal is the registry's name for where the piece appeared, left out when
+     the site already says it; the day is the publisher's own calendar day,
+     printed by the same `calendarDay` the shelf sorts on, so the two cannot
+     disagree about what counts as a date. */
+  const journal = meta.journal?.toLowerCase() === meta.siteName?.toLowerCase() ? undefined : meta.journal;
+  const published = calendarDay(meta.publishedAt)?.label;
+  const facts = [
+    meta.authors ? undefined : meta.byline,
+    journal,
+    meta.siteName,
+    published ? `Published ${published}` : undefined,
+    meta.lang,
+  ].filter(Boolean) as string[];
 
   /**
    * The one line that has to survive the section being shut.
@@ -879,7 +892,10 @@ export function Metadata({
             from the filtered list — same reasoning as the library card. A chain
             of `&&`s, or a separate test of the same fields, is how a line ends
             up starting with a stranded `·`. */}
-        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground">
+        <p
+          data-metadata-facts
+          className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground"
+        >
           {facts.map((fact, i) => (
             <span key={fact}>
               {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}

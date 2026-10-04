@@ -214,6 +214,8 @@ describe("the cache", () => {
         authors: [{ family: "Maingret", given: "Nicolas" }, { family: "A Consortium" }],
         year: 2016,
         venue: "Nature Neuroscience",
+        /* Read back from `published_day`: the second answer came from the cache. */
+        published: "2016-05-16",
         doi: "10.1038/nn.4304",
       },
     });

@@ -1599,6 +1599,11 @@ export interface Meta {
    *
    * It is the publisher's claim, verbatim, not a verified fact: a page can say
    * anything, and re-dating an old post is a thing publishers do.
+   *
+   * **Since 2026-10-04 it may be a registry's day instead** (`YYYY-MM-DD`, no
+   * time): when the page states none and Crossref's record for the article's
+   * own DOI states a whole day — src/article-registry.ts. That is how a PDF
+   * gets one.
    */
   publishedAt?: string;
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
@@ -1613,6 +1618,15 @@ export interface Meta {
    */
   abstract?: string;
   doi?: string;
+  /**
+   * **The journal or venue the registry names for this piece** — Crossref's or
+   * DataCite's, for the article's own DOI, kept only when the registry's title
+   * is the article's (src/article-registry.ts). The same lookup may fill `doi`
+   * and, when the page stated no date, `publishedAt`. Owner-facing only, like
+   * `doi`. Absent on everything imported before 2026-10-04.
+   * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md.
+   */
+  journal?: string;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which

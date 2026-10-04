@@ -37,7 +37,7 @@ import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import type { VerifyResult, Verifier } from "../src/auth.js";
 import { blocksArtefact } from "../src/blocks.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, ingestEvents, jobs as jobsTable, uploads } from "../src/db/schema.js";
+import { articleRevisions, articles, ingestEvents, jobs as jobsTable, uploads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { buildTree } from "../src/structure.js";
 import {
@@ -55,7 +55,7 @@ import { duplicateOnShelfSql, isMinimalJob } from "../src/minimal-paper.js";
 import { NotProcessed } from "../src/not-processed.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import type { PaperMetadata } from "../src/paper-metadata.js";
-import { DEFAULT_INGEST_STEPS, STEPS, metadataReaders, type PipelineStep } from "../src/pipeline.js";
+import { DEFAULT_INGEST_STEPS, STEPS, articleRegistryDeps, metadataReaders, type PipelineStep } from "../src/pipeline.js";
 import { handleApi } from "../src/routes.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { stagingKey } from "../src/source.js";
@@ -224,6 +224,21 @@ beforeEach(() => {
   /* No network, ever: both readers answer from the fixture. */
   vi.spyOn(metadataReaders, "pdf").mockResolvedValue(found());
   vi.spyOn(metadataReaders, "html").mockResolvedValue(found({ title: null, abstract: null, doi: null }));
+  /* Nor the registry: the fetch guard refuses Crossref, so the steps are handed
+     an answer. It is the fixture paper's own record, by title and author. */
+  vi.spyOn(articleRegistryDeps, "lookup").mockImplementation(async (id) => ({
+    kind: "found",
+    record: {
+      id,
+      source: "crossref",
+      title: "A paper about entropy",
+      authors: [{ family: "Lovelace", given: "Ada" }],
+      year: 2022,
+      venue: "Entropy",
+      published: "2022-07-06",
+      doi: "10.3390/e24070930",
+    },
+  }));
 });
 
 const EXTRACTED_HTML = ["<h1>A Paper About Entropy</h1>", ...PARAGRAPHS.map((p) => `<p>${p}</p>`)].join("\n");
@@ -391,6 +406,13 @@ describe("a minimal paper, added", () => {
       filename: "entropy.pdf",
       kind: "pdf",
     });
+    /* The registry's record for that DOI agreed on title and author, so the
+       revision keeps where and when it was published (261004a). */
+    const [revision] = await getDb()
+      .select({ journal: articleRevisions.journal, publishedAt: articleRevisions.publishedAt })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, article.currentRevisionId ?? randomUUID()));
+    expect(revision).toEqual({ journal: "Entropy", publishedAt: "2022-07-06" });
 
     const rows = await ledgerOf(article.id);
     expect(rows.map((r) => [r.kind, r.succeededAt !== null])).toEqual([["minimal", true]]);
@@ -709,6 +731,8 @@ describe("Read this", () => {
     const twice = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, readThis: true }));
     expect(twice.status).toBe(409);
 
+    /* The registry is unreachable by the time the paper is read in full. */
+    vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
     const job = await drive(READER, String(queued.body.id));
     expect(job.status, job.error).toBe("done");
 
@@ -718,6 +742,8 @@ describe("Read this", () => {
     expect(read.blocks.length).toBeGreaterThan(0);
     /* The abstract the shelf showed survives a re-read that found none. */
     expect(read.meta.abstract).toBe("We measure something and find it is entropy.");
+    /* And so does what the registry said about its DOI, though nobody could ask again. */
+    expect(read.meta).toMatchObject({ doi: "10.3390/e24070930", journal: "Entropy", publishedAt: "2022-07-06" });
 
     const rows = await ledgerOf(article.id);
     const minimal = rows.find((r) => r.kind === "minimal");

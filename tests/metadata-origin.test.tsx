@@ -373,3 +373,30 @@ describe("the visitor's metadata page", () => {
     expect(host.textContent).toContain("words");
   });
 });
+
+describe("when and where it was published, under the title", () => {
+  const facts = () => host.querySelector("[data-metadata-facts]")?.textContent ?? "";
+
+  it("prints the publisher's calendar day and the journal", async () => {
+    await owner({ source: "pdf", journal: "Entropy", publishedAt: "2024-05-31" });
+    expect(facts()).toContain("Entropy");
+    /* The words are the reader's locale's; the day is not. */
+    expect(facts()).toMatch(/Published (31 May|May 31),? 2024/);
+  });
+
+  it("reads the day off a web page's own timestamp, in the publisher's zone", async () => {
+    await owner({ url: URL_, siteName: "Noema", publishedAt: "2024-03-11T23:30:00-05:00" });
+    expect(facts()).toMatch(/Published (11 Mar|Mar 11),? 2024/);
+  });
+
+  it("says nothing about a date the article does not have", async () => {
+    await owner({ url: URL_, siteName: "Noema" });
+    expect(facts()).toContain("Noema");
+    expect(facts()).not.toContain("Published");
+  });
+
+  it("names a journal once when the site has the same name", async () => {
+    await owner({ url: URL_, siteName: "Entropy", journal: "entropy" });
+    expect(facts().match(/entropy/gi)).toHaveLength(1);
+  });
+});
