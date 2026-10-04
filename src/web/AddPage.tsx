@@ -65,11 +65,12 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
-import { type UseJobs, useJobs } from "./useJobs.js";
+import { useJobs } from "./useJobs.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { AUTO_MODES_LABEL, autoModesDetail, queueAutoModes, readAutoModes, writeAutoModes } from "./auto-modes.js";
+import { AUTO_MODES_LABEL, autoModesDetail } from "./auto-modes.js";
+import { useAutoModesSetting } from "./auto-modes-setting.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { savePurpose } from "./purpose.js";
 import { markAskPurpose } from "./ask-purpose.js";
@@ -134,11 +135,13 @@ interface Completion {
  * **Between "the import is running" and "the article is open".**
  *
  * Since 260930e the page can stop between the two: a reader who has typed why
- * they are reading is asked whether to save it before the modes are queued,
- * because each job freezes the profile when it is posted — a purpose saved
- * afterwards reaches none of them. A union rather than booleans so that
- * *saving* and *ready* cannot both be true, and so both carry the completion
- * they are about.
+ * they are reading is asked whether to save it before the article opens. Until
+ * plan 261004h that was also before the modes were queued; the server queues
+ * them at publication now, with the profile as it stands then, so a purpose
+ * saved here reaches chat and whatever is generated afterwards, not those
+ * first jobs (the plan's § The purpose box). A union rather than booleans so
+ * that *saving* and *ready* cannot both be true, and so both carry the
+ * completion they are about.
  *
  * `running` covers everything before a completion, failed imports included.
  * docs/plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md
@@ -151,28 +154,24 @@ type Phase =
   | { kind: "opened" };
 
 /**
- * **The terminal act, and the only place the page leaves.** Queue the modes if
- * the box is ticked, then open the article.
+ * **The terminal act, and the only place the page leaves.** Open the article.
  *
- * Not awaited: the router is client-side, so the POSTs carry on after the page
- * is gone, and the app-wide job engine drives what they queue from the reading
- * view. Waiting for five round trips before opening the article would spend the
- * one thing Greg asked this to save. `replace`, so Back leaves the reading view
- * for wherever the reader came from rather than for a finished import.
+ * **It queues no modes.** The server queued them when the import published
+ * (src/store/pg-revisions.ts § `publishRevisionIn`), if the reader's setting
+ * says so, and the app-wide job engine drives them from the reading view.
+ * `replace`, so Back leaves the reading view for wherever the reader came from
+ * rather than for a finished import.
  *
  * Callers take the once-guard (`claimed`) first; this does not check it.
  */
-function openArticle(
-  completion: Completion,
-  generate: boolean,
-  run: UseJobs["run"],
-  highPower: HighPowerIntent,
-): void {
-  /* **The modes wait for High-powered AI; the navigation does not.** A mode job
-     queued before the switch lands could claim and read the standard model
-     (GPT Sol, plan 261002k P1-3). `settle` never rejects. */
-  const settled = highPower.settle(completion.slug);
-  if (generate) void settled.then(() => queueAutoModes(run, completion.slug));
+function openArticle(completion: Completion, highPower: HighPowerIntent): void {
+  /* **A High-powered tick in the last second is still sent**, and not waited
+     for. Each mode step reads the article's power as it starts, and none
+     starts until the `labels` job ahead of it has ended, so a switch that has
+     been committed by then is the one they run on. A step starting before
+     the switch commits uses the standard model; later steps read it again
+     (docs/project/high-powered-ai.md). `settle` never rejects. */
+  void highPower.settle(completion.slug);
   navigate(readHref(completion.slug), { replace: true });
 }
 
@@ -329,25 +328,12 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   failureRef.current = queue.lastFailure;
 
   /**
-   * **Generate the main modes once it is in** — Greg's tick box, on unless this
-   * browser was last told otherwise (src/web/auto-modes.ts).
-   *
-   * These live above both ways an add can finish because an upload can answer
-   * with an existing article instead of a job. That answer must honour the same
-   * choice as a job reaching `done`; otherwise the box shown during the upload
-   * promises work that the completion path silently skips.
-   *
-   * Read through refs in the completion effects so they keep depending on the
-   * completion alone. `queuedModesFor` is the once-guard, keyed on the job id or
-   * the existing-article answer: StrictMode runs effects twice in development,
-   * and the server would de-duplicate the second set but the log would still say
-   * it was asked.
+   * **Generate the main modes once it is in** — Greg's tick box, on unless the
+   * reader has switched it off. It is their setting, on their own row
+   * (src/web/auto-modes-setting.ts): each change is a `PATCH`, and the server
+   * reads the row when the import publishes. This page queues nothing.
    */
-  const [autoModes, setAutoModes] = useState(readAutoModes);
-  const autoModesRef = useRef(autoModes);
-  autoModesRef.current = autoModes;
-  const runRef = useRef(queue.run);
-  runRef.current = queue.run;
+  const autoModes = useAutoModesSetting();
 
   /**
    * **High-powered AI for this add**, one intent per address — plan 261002k.
@@ -366,7 +352,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
    * **Why the reader is reading this**, asked while the import runs — the one
    * moment answering costs nothing extra (plan 260930e § Stage 1).
    *
-   * Read through refs at completion for the reason `autoModesRef` is: one of the
+   * Read through refs at completion: one of the
    * three completions arrives in a promise made by the posting effect, which
    * would otherwise see the draft as it was when the request went out (Sol's
    * F2). Focus counts, because a reader with the caret in an empty box may be
@@ -643,7 +629,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
          purpose. */
       if (draftRef.current === "" && !purposeTouchedRef.current) markAskPurpose(completionSlug);
       setPhase({ kind: "opened" });
-      openArticle(finished, autoModesRef.current, runRef.current, highPower);
+      openArticle(finished, highPower);
       return;
     }
     /* Otherwise wait, indefinitely. A blur or a pause is not a decision. */
@@ -651,10 +637,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   }, [completionKey, completionSlug, wanted, highPower]);
 
   /**
-   * **Save and open**: the purpose first and awaited, then the modes, then the
-   * article — so every mode is written for it from the start (`patchShelf`
-   * commits before it answers, and each job resolves the profile when it is
-   * posted; plan § Stage 1 says where that fails open).
+   * **Save and open**: the purpose first and awaited, then the article — so
+   * chat, and anything generated from the reading view, is written for it
+   * (`patchShelf` commits before it answers). The first modes are not: the
+   * server queued them at publication (plan 261004h § The purpose box).
    *
    * **An empty draft is never sent** (Sol's F1, a P0). `null` clears the stored
    * purpose, and on a re-add this box starts empty over a sentence the reader
@@ -672,7 +658,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     const text = draftRef.current;
     if (text.trim() === "") {
       setPhase({ kind: "opened" });
-      openArticle(done, autoModesRef.current, runRef.current, highPower);
+      openArticle(done, highPower);
       return;
     }
     setPhase({ kind: "saving", completion: done });
@@ -685,10 +671,9 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         )
           return;
         setPhase({ kind: "opened" });
-        openArticle(done, autoModesRef.current, runRef.current, highPower);
+        openArticle(done, highPower);
       },
-      /* Back to *ready* with the draft intact, and nothing queued: a mode
-         written without the purpose is what the reader has just declined. */
+      /* Back to *ready* with the draft intact, so the words are not lost. */
       (e: Error) => {
         if (
           claimed.current !== done.key ||
@@ -711,7 +696,7 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       return;
     claimed.current = phase.completion.key;
     setPhase({ kind: "opened" });
-    openArticle(phase.completion, autoModesRef.current, runRef.current, highPower);
+    openArticle(phase.completion, highPower);
   };
 
   /* The tab, naming what is being added — the host for an address, the filename
@@ -988,27 +973,35 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       )}
 
       {/* Offered for the whole add — including a file transfer before its job
-          exists — and read at the moment it finishes, so it can be changed
-          right up to then. src/web/auto-modes.ts. */}
+          exists. Each change is sent to the reader's setting, and the server
+          reads the committed choice when the import publishes.
+          src/web/auto-modes-setting.ts. */}
       {(showAutoModes || deciding) && (
         <label className="tw:mt-3 tw:flex tw:items-start tw:gap-2 tw:text-sm">
           <input
             type="checkbox"
             className="tw:mt-0.5"
-            checked={autoModes}
-            onChange={(event) => {
-              const on = event.target.checked;
-              /* The completion can be an already-article promise rather than a
-                 render driven by a job status. Update the ref in the gesture so
-                 that promise cannot observe the previous render's choice. */
-              autoModesRef.current = on;
-              setAutoModes(on);
-              writeAutoModes(on);
-            }}
+            checked={autoModes.on}
+            onChange={(event) => autoModes.set(event.target.checked)}
           />
           <span>
             {AUTO_MODES_LABEL}
             <span className="tw:block tw:text-muted-foreground">{autoModesDetail()}</span>
+            {autoModes.saving && (
+              <span role="status" className="tw:block tw:text-muted-foreground">
+                Saving your choice. The import uses the last saved choice when it finishes.
+              </span>
+            )}
+            {autoModes.loadError && (
+              <span role="alert" className="tw:block tw:text-muted-foreground">
+                Could not read your saved choice. Reload to try again.
+              </span>
+            )}
+            {autoModes.error && (
+              <span role="alert" className="tw:block tw:text-muted-foreground">
+                The save request failed. Check the choice above and try again.
+              </span>
+            )}
           </span>
         </label>
       )}
@@ -1044,7 +1037,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
       {deciding && (
         <div className="tw:mt-3">
           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">
-            Ready. Saving it first means the modes are written for it from the start.
+            Ready. Any first modes already queued use the purpose saved when the import finished.
+            Saving this now reaches chat and anything generated later.
           </p>
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
             <Button type="button" size="sm" disabled={phase.kind === "saving"} onClick={saveAndOpen}>

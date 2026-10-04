@@ -8,15 +8,12 @@
  * Pressed from the shelf card and from the paper's own page; one function, so
  * the two cannot disagree about what pressing it does.
  *
- * **And the add page's tick box after it.** A single upload queues the main
- * modes once its import is done when *Generate the main modes* is ticked
- * (auto-modes.ts, read from the same stored choice). *Read this* is the same
- * import, so it keeps the same promise — but the shelf card may unmount long
- * before the job ends, so the wait is the engine's (`watchTerminal`), not a
- * component's. Session-fenced: a sign-out drops the watcher uncalled.
+ * **It queues no modes.** *Read this* is an import, and like every import its
+ * publication queues the main-mode jobs on the server when the reader's
+ * setting says so (src/store/pg-revisions.ts § `publishRevisionIn`; plan
+ * 261004h). Until then this file watched the job and posted them itself.
  */
 import type { Job, StepName } from "../types.js";
-import { queueAutoModes, readAutoModes } from "./auto-modes.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -31,48 +28,11 @@ const post = <T>(body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/**
- * A mode job, posted the way `useJobs`'s `run` posts one — through the action
- * seam, fenced to the session — but with no component behind it.
- */
-async function runStep(
-  request: { slug: string; steps: StepName[] },
-  /** The *Read this* session. Later auto-mode groups must not cross a sign-out. */
-  epoch: number,
-): Promise<Job | null> {
-  if (jobEngine.epoch() !== epoch) return null;
-  try {
-    const job = await post<Job>(request);
-    if (jobEngine.epoch() !== epoch) return null;
-    jobEngine.actionSucceeded(epoch);
-    return job;
-  } catch (err) {
-    jobEngine.actionFailed(
-      describeFetchFailure(err instanceof Error ? err : new Error(String(err))),
-      statusOf(err),
-      epoch,
-    );
-    return null;
-  }
-}
-
 /** Press *Read this* on `slug`. */
 export async function readThis(slug: string): Promise<ReadThisOutcome> {
   const epoch = jobEngine.epoch();
-  const generate = readAutoModes();
   try {
     const job = await post<Job>({ slug, readThis: true });
-    /* A POST may outlive the reader who made it. Do not register one reader's
-       job in the next reader's watcher map, even though the callback below is
-       fenced as a second line of defence. */
-    if (generate && jobEngine.epoch() === epoch) {
-      /* Watched before the poke, so the list the poke asks for may say the job
-         has gone (jobEngine.ts § watchTerminal). */
-      jobEngine.watchTerminal(job.id, (ended) => {
-        if (ended.kind !== "done" || jobEngine.epoch() !== epoch) return;
-        void queueAutoModes((request) => runStep(request, epoch), slug);
-      });
-    }
     jobEngine.actionSucceeded(epoch);
     return { ok: true, job };
   } catch (err) {

@@ -43,10 +43,12 @@ For things this checklist does not hold:
   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
   below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
 - **A mode can start without being opened.** Besides the first press
-  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), the add page queues every
-  main mode once an import finishes — derived from `MODE_CATALOG`'s `experimental` flag, so a new
-  non-experimental mode joins it with no edit, and is paid for on every import that keeps the box
-  ticked. [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and
+  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), an import's publication
+  queues every main mode — the modes outside `MODE_CATALOG`'s `experimental` flag. The server
+  queues from a written list ([`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts)), and
+  `tests/auto-modes.test.tsx` fails until that list matches the one derived from the catalogue
+  ([`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)): a new non-experimental mode is one
+  line there, and is paid for on every import by a reader who has not switched it off.
   [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 - **Checking it in a browser**: [browser-control.md](browser-control.md), then
   [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.
@@ -66,8 +68,8 @@ Two existing shapes borrow half this page:
   profile row:
   [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (View
   choices carried in a shared link are URL parameters — [url-state.md](url-state.md). The add
-  page's browser-only tick box instead uses `localStorage` —
-  [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) § `readAutoModes`, which says why.)
+  page's *generate the main modes* box is a second column on that row since 2026-10-04,
+  `auto_modes_off_at` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page).)
 
 ## The client
 

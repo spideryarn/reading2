@@ -187,6 +187,7 @@ import {
   Globe,
   LoaderCircle,
   Network,
+  FileCog,
   Info,
   Layers,
   LifeBuoy,
@@ -273,7 +274,7 @@ import {
    copy of `isTyping` until 2026-09-29, because the only shared one lived in
    keynav.ts and importing that drags the article's geometry into the bar's
    import graph. key-chord.ts imports nothing, so that argument is answered. */
-import { isModChord, isTyping } from "./key-chord.js";
+import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
 import { InstallHint } from "./InstallHint.js";
@@ -1414,10 +1415,11 @@ export function hasQuickSearch(
  *  - **Not on a repeat.** A held ⌘-K would otherwise reopen the bar every few
  *    milliseconds under whatever the reader had already typed. The same rule
  *    the arrows keep — docs/project/keyboard.md § auto-repeat is ignored.
- *  - **Not while a text field has focus.** The chat box, the comment box, the
- *    search field and the referee's criteria are all places a reader is
- *    writing, and ⌘-K is a text-editing chord in several editors. key-chord.ts
- *    § `isTyping` is the list.
+ *  - **A text field is not a refusal**, since 2026-10-04. It was — "⌘-K is a
+ *    text-editing chord in several editors" — and Greg, spya-szdjek: *"I want
+ *    to be able to hit Command-K at more or less any time from within the
+ *    reading view."* None of our fields binds it; the bar is a modal dialog,
+ *    so the field keeps its text and gets its focus back when the bar closes.
  *  - **Not over another native modal.** `showModal()` on a dialog while another
  *    modal dialog is showing stacks two in the top layer and traps focus in the
  *    newer one — the Feedback dialog, the Lightbox and the comment dialogs are
@@ -1434,7 +1436,36 @@ export function hasQuickSearch(
  * `preventDefault()` **only when the press is claimed**: Firefox focuses the
  * address bar on ⌘-K, and a listener that suppressed that without opening
  * anything would be a chord that quietly breaks a browser feature.
+ *
+ * **In the capture phase, and a claimed press goes no further.** Capture is
+ * what makes "from anywhere" a fact: the live conversation's status and button
+ * stop every keydown from bubbling (LiveStatus.tsx, LiveButton.tsx), and a
+ * bubble listener here never hears a press made inside them. And
+ * `stopPropagation()` keeps the press from the field it was typed in, so a
+ * claimed ⌘-K means the bar and nothing else — on a Mac, Ctrl-K in a text
+ * field is otherwise "delete to the end of the line". A press that is not
+ * claimed is not touched.
+ * docs/plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md § 2.
  */
+/**
+ * **The two text fields' presses ⌘/Ctrl-K still leaves alone**, both GPT Sol's
+ * on the plan (261004h, findings 3 and 5):
+ *
+ *  - **Ctrl-K without ⌘, in a text field, on a Mac.** There it is "delete to
+ *    the end of the line", a real editing key, and Greg asked for Command-K.
+ *    ⌘-K opens the bar there; Ctrl-K opens it everywhere off a Mac.
+ *  - **A field that asks to be left alone**, `data-command-bar="off"`. The
+ *    title editor saves on blur, and a modal dialog opening is a blur: the
+ *    chord would save a half-typed title the reader could no longer Escape
+ *    out of. TitleEditor.tsx.
+ */
+function keepsItsOwnModK(e: KeyboardEvent): boolean {
+  const focused = document.activeElement;
+  if (!isTyping(focused)) return false;
+  if (focused?.closest('[data-command-bar="off"]')) return true;
+  return !e.metaKey && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
 function useCommandBarChord(
   /** Whether this reader gets a command bar at all — a visitor does not (`DockCommands`). */
   enabled: boolean,
@@ -1470,16 +1501,17 @@ function useCommandBarChord(
          Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2; the test
          is key-chord.ts's now, so ⌘-Enter below cannot drift from it. */
       if (!isModChord(e, "k")) return;
-      if (isTyping(document.activeElement)) return;
+      if (keepsItsOwnModK(e)) return;
       /* Checked here as well as inside `show`, because this one decides whether
          the press is *claimed* — calling `preventDefault()` and then declining
          to open is the one outcome that is worse than doing nothing. */
       if (document.querySelector("dialog[open]") !== null) return;
       e.preventDefault();
+      e.stopPropagation();
       show();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [enabled, show]);
   /* Named rather than an inline arrow in the markup, which is also one fewer
      nested function inside `Dock` — a component this file has already had to
@@ -1531,6 +1563,42 @@ function useMetadataChord(href: string): void {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [href]);
+}
+
+/**
+ * **Escape on the Metadata page is a press on its button** — back to the
+ * article, by the same href, so the button, ⌘-Enter and Escape cannot disagree
+ * about where "back" is.
+ *
+ * > If I hit escape while in metadata mode, sort of hide the metadata mode, as
+ * > if I'd clicked on the metadata mode button to take me back to wherever I
+ * > was before.
+ * >
+ * > — Greg, 2026-10-04, spya-ynx97n
+ *
+ * **The page is the last surface to hear the key**, so this is a bubble-phase
+ * `window` listener — the escape inventory's T3 — and anything in front of the
+ * page gets the press first: a hover card or a popover stops it before it
+ * arrives, a native `<dialog>` owns it (the query `useEscapeToClose` makes),
+ * and a handler that `preventDefault`ed it has claimed it. **A text field
+ * keeps its Escape**: a reader who presses it in the tag editor or the page
+ * search means the box, and being thrown off a page they were editing is the
+ * worse mistake. A modified or auto-repeating Escape is not this.
+ * docs/plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md § 1.
+ */
+function useMetadataEscape(enabled: boolean, href: string): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || e.repeat || isImeComposing(e)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (isTyping(document.activeElement)) return;
+      if (document.querySelector("dialog[open]") !== null) return;
+      navigate(href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, href]);
 }
 
 /**
@@ -1925,6 +1993,7 @@ export function Dock({
      docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
   const metadataHref = readHref(slug, search, view === "metadata" ? "article" : "metadata");
   useMetadataChord(metadataHref);
+  useMetadataEscape(view === "metadata", metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
      neither can be trusted. */
@@ -2326,7 +2395,10 @@ export function Dock({
           <DockLink
             href={metadataHref}
             current={view === "metadata"}
-            icon={Info}
+            /* Not `Info`: that (i) is "about this mode" (BandAbout), and one
+               glyph for two meanings is what Greg reported, spya-jt4gmg. A
+               document with a cog, for the machinery behind the article. */
+            icon={FileCog}
             label="Metadata"
             hover={
               <ControlTip
@@ -2529,7 +2601,7 @@ const NOT_A_MODE = {
   metadata: {
     /* The chord in the Commands card's own format. The same card on both
        pages, so it says both directions (since 2026-10-03, plan 261003c). */
-    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article",
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article, and so does Esc",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 

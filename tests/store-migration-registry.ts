@@ -3037,6 +3037,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      throughout — it publishes real revisions, claims a real job and inserts a
      real `ingest_events` row to prove the successor never settles one. */
   "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
+  /* Plan 261004h: an import's first full publication queues the main-mode
+     jobs. The same harness as the labels-successor suite above — real
+     revisions, real job rows, a real `reader_profiles` row for the opt-out. */
+  "tests/publication-queues-the-main-modes.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted
