@@ -586,7 +586,7 @@ function articleFor(slug: string, marker: string): unknown {
     /* `loadArticle` puts the reader's exact uploaded filename in `Meta`; the
        diagnostics attachment must remove it rather than relying on the source
        attachment's separately reduced shape. */
-    meta: { slug, title: `${marker} title`, filename: "UPLOADED_FILENAME_MARKER.pdf" },
+    meta: { slug, title: `${marker} title`, filename: "UPLOADED_FILENAME_MARKER.pdf", publishedYear: 2011 },
     blocks: [{ id: "spya-aaaaaa", kind: "p", text: `${marker} paragraph` }],
     tree: { id: "root", children: [] },
     navLabelStatus: "ready",
@@ -683,6 +683,8 @@ describe("the article, sent with extra diagnostics", () => {
     const json = JSON.parse(new TextDecoder().decode(attachmentBytes(envelope, "article.json")));
     expect(json.version).toBe(1);
     expect(json.article.meta.title).toBe("ARTICLE_MARKER title");
+    /* The year follows the date: the same fact, for a paper with no whole day (plan 261004h). */
+    expect(json.article.meta.publishedYear).toBe(2011);
     /* **The pick, pinned.** A field added to `ArticleMetadata` does not ride
        along until somebody decides it should. */
     expect(Object.keys(json).sort()).toEqual(["article", "metadata", "source", "version"]);

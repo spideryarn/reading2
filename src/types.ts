@@ -1645,11 +1645,22 @@ export interface Meta {
    * **The journal or venue the registry names for this piece** — Crossref's or
    * DataCite's, for the article's own DOI, kept only when the registry's title
    * is the article's (src/article-registry.ts). The same lookup may fill `doi`
-   * and, when the page stated no date, `publishedAt`. Owner-facing only, like
-   * `doi`. Absent on everything imported before 2026-10-04.
+   * and, when the page stated no date, `publishedAt` or `publishedYear`. A
+   * visitor is sent it too (`PublicMeta.journal`), which `doi` is not. Absent
+   * on everything imported before 2026-10-04.
    * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md.
    */
   journal?: string;
+  /**
+   * **The year of publication, when that is all the registry states** — an
+   * older print paper, or a DataCite record. Set only while `publishedAt` is
+   * absent: an article has a day or a year, never both, and the database
+   * refuses a row with both. Read the two together with `publishedOf`
+   * (src/web/relative-time.ts). Timeline does not read it: a year is too
+   * coarse a frame for "last March".
+   * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+   */
+  publishedYear?: number;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1745,6 +1756,17 @@ export interface Meta {
    * it, nobody is checking. `recall` is the number; this is the complaint.
    */
   quality?: string[];
+}
+
+/**
+ * `value` when it is a year `Meta.publishedYear` may hold, else undefined: a
+ * whole number from 1000 to 2999, the bounds of the column's own check
+ * (`article_revisions_published_year`). One function for every place a year
+ * comes in from outside the type system: a registry record, a database row on
+ * its way to a visitor, a shelf saved in the browser.
+ */
+export function publishedYearOf(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1000 && value <= 2999 ? value : undefined;
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */
@@ -2073,6 +2095,13 @@ export interface LibraryEntry {
    * that states none or was last extracted before 2026-08-31.
    */
   publishedAt?: string;
+  /**
+   * `Meta.publishedYear`: the year alone, for a paper whose registry record
+   * states no whole day. Never beside `publishedAt`. The shelf reads the pair
+   * with `publishedOf` (src/web/relative-time.ts), which sorts a year at the
+   * start of that year and prints it as `2011`.
+   */
+  publishedYear?: number;
   /**
    * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
    * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and

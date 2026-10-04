@@ -685,8 +685,14 @@ DataCite about **the article's own identifier**, after the extractor and outside
   word can belong to a cited work. With no author evidence, nothing is kept.
 - **What is kept**: `Meta.doi`; `Meta.journal`, from Crossref's `container-title` (and `arXiv` for
   an arXiv id; a DataCite repository's name is not a journal); and `Meta.publishedAt`, only when
-  the page stated none and the registry states a whole day. A year alone is not stored: every
-  reader of that field wants a calendar day, and a made-up `-01-01` would be a date nobody stated.
+  the page stated none and the registry states a whole day.
+- **A year alone goes in its own field**, `Meta.publishedYear` (`article_revisions.published_year`),
+  since 2026-10-04. Older print papers and DataCite records often state only a year, or a year
+  and a month, which is kept as the year. It is never put in `publishedAt`: every reader of that
+  field wants a calendar day, and a made-up `-01-01` would be a date nobody stated. An article has
+  a day or a year, never both, and the table refuses a row with both. The page prints
+  `Published 2011`. Read the pair with [`publishedOf`](../../src/web/relative-time.ts). Timeline
+  does not read the year: it is too coarse a frame for "last March".
 - **It never fails an import.** No candidate, a miss, a disagreement and an unreachable registry
   all leave `meta` as the extractor made it. The step logs the outcome and counts.
 - **Read this keeps a minimal paper's confirmed facts** when the registry is unavailable: it
@@ -694,11 +700,16 @@ DataCite about **the article's own identifier**, after the extractor and outside
   afresh for the rest, so a date a publisher removed is not carried forward.
 - **A PDF now has a publication date**, so Timeline has a year to read a year-less date against,
   and the Shelf's Published sort has something to sort.
-- **Nothing is backfilled.** An article imported before this has the facts only once its owner
-  reads it again.
+- **Nothing is backfilled yet.** An article imported before this has the facts only once its owner
+  reads it again. The backfill is stage 2 of
+  [261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md).
 
-The Metadata page prints both under the title. The plan, with what was deferred, is
-[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md).
+The Metadata page prints both under the title, for the owner and, since 2026-10-04, for a visitor
+to a shared article: the journal and the publication date cross the public boundary, the DOI does
+not ([security-map.md](security-map.md#the-allowlist-has-two-failure-directions-and-only-one-of-them-is-loud)).
+The plans are
+[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md)
+and [261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md).
 
 ## A title from outside is plain text
 

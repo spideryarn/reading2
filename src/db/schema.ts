@@ -688,6 +688,17 @@ export const articleRevisions = spideryarn.table(
      * before 2026-10-04, and whenever no identifier was found or agreed.
      */
     journal: text("journal"),
+    /**
+     * **`Meta.publishedYear`: the year alone**, for a paper whose registry
+     * record states no whole day (an older print paper, a DataCite record).
+     * A second column rather than a year in `published_at`, because every
+     * reader of that one wants a whole day and a made-up 1 January would be a
+     * date nobody stated. **A row has one or the other, never both**
+     * (`article_revisions_published_day_or_year`), so the two cannot disagree.
+     * Null on everything imported before 2026-10-04.
+     * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+     */
+    publishedYear: integer("published_year"),
 
     /**
      * Stage 1's real output. `requestedUrl` and `finalUrl` differ whenever a
@@ -1220,6 +1231,15 @@ export const articleRevisions = spideryarn.table(
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
     check("article_revisions_authors_array", sql`jsonb_typeof(${t.authors}) = 'array'`),
+    /* The bounds `publishedYearOf` (src/types.ts) reads by. A null year is
+       NULL here and passes, which is wanted: most rows have none. */
+    check("article_revisions_published_year", sql`${t.publishedYear} between 1000 and 2999`),
+    /* **A day or a year, never both.** Written with `is null` on both sides so
+       it is never NULL itself: a CHECK refuses only false. */
+    check(
+      "article_revisions_published_day_or_year",
+      sql`${t.publishedAt} is null or ${t.publishedYear} is null`,
+    ),
     /**
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
      * same standing hazard `revision_step_runs_step` has, which has drifted

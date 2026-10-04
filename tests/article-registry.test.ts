@@ -300,4 +300,54 @@ describe("withRegistryFacts", () => {
     expect(out.meta.journal).toBe("Entropy");
     expect(out.meta.publishedAt).toBeUndefined();
   });
+
+  /* Plan 261004h: a day or a year, never both. */
+  describe("a record that states only a year", () => {
+    const yearOnly = { kind: "found", record: record("10.3390/e26060481", { year: 2011, published: undefined }) } as const;
+
+    it("fills the year and no day", async () => {
+      const { lookup } = lookupOf({ [ID]: yearOnly });
+      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      expect(out.meta).toEqual({ ...meta(), doi: "10.3390/e26060481", journal: "Entropy", publishedYear: 2011 });
+    });
+
+    it("fills the day and no year when the record states a whole day", async () => {
+      const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
+      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      expect(out.meta.publishedAt).toBe("2024-05-31");
+      expect(out.meta).not.toHaveProperty("publishedYear");
+    });
+
+    it("gives neither to an article with its own date", async () => {
+      const { lookup } = lookupOf({ [ID]: yearOnly });
+      const out = await withRegistryFacts(meta({ publishedAt: "2011-06-02T09:00:00+02:00" }), [ID], { lookup });
+      expect(out.meta.publishedAt).toBe("2011-06-02T09:00:00+02:00");
+      expect(out.meta).not.toHaveProperty("publishedYear");
+    });
+
+    it("takes the year when the day it states is not a real one", async () => {
+      const { lookup } = lookupOf({
+        [ID]: { kind: "found", record: record("10.3390/e26060481", { year: 2024, published: "2024-02-31" }) },
+      });
+      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      expect(out.meta).not.toHaveProperty("publishedAt");
+      expect(out.meta.publishedYear).toBe(2024);
+    });
+
+    it("drops a year the article carried when the record now states a day", async () => {
+      const { lookup } = lookupOf({ [ID]: { kind: "found", record: record("10.3390/e26060481") } });
+      const out = await withRegistryFacts(meta({ publishedYear: 2024 }), [ID], { lookup });
+      expect(out.meta.publishedAt).toBe("2024-05-31");
+      expect(out.meta).not.toHaveProperty("publishedYear");
+    });
+
+    it("writes no year from a record that states none", async () => {
+      const { lookup } = lookupOf({
+        [ID]: { kind: "found", record: record("10.3390/e26060481", { year: undefined, published: undefined }) },
+      });
+      const out = await withRegistryFacts(meta(), [ID], { lookup });
+      expect(out.meta).not.toHaveProperty("publishedYear");
+      expect(out.meta.journal).toBe("Entropy");
+    });
+  });
 });

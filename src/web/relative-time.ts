@@ -21,6 +21,8 @@
  * 2026-10-04; its `whenSaid` now puts "on" before this file's date.)
  */
 
+import { publishedYearOf } from "../types.js";
+
 /** How far past which a date reads better as a date. */
 const ABSOLUTE_AFTER_DAYS = 30;
 
@@ -152,6 +154,29 @@ export function calendarDay(iso: string | undefined): { t: number; label: string
     timeZone: "UTC",
   });
   return { t, label };
+}
+
+/**
+ * **When a piece was published, at the precision we were told**: a day
+ * (`publishedAt`) or a year alone (`publishedYear`), as a number to sort on and
+ * the words to print. `undefined` when it has neither.
+ *
+ * The one reader of the pair, for the shelf and both Metadata pages, so no
+ * caller decides for itself what a year-only paper prints or where it sorts.
+ * A day reads exactly as `calendarDay` reads it. A year prints as `2011` and
+ * sorts at the start of that year, so it sits among the pieces dated in 2011
+ * (and ties with one dated 1 January). That start-of-year number is a sort key
+ * only: it is never stored and never printed as a day. Plan 261004h.
+ */
+export function publishedOf(piece: {
+  publishedAt?: string | undefined;
+  publishedYear?: number | undefined;
+}): { t: number; label: string; precision: "day" | "year" } | undefined {
+  const day = calendarDay(piece.publishedAt);
+  if (day) return { ...day, precision: "day" };
+  const year = publishedYearOf(piece.publishedYear);
+  if (year === undefined) return undefined;
+  return { t: Date.parse(`${year}-01-01T00:00:00Z`), label: String(year), precision: "year" };
 }
 
 /**

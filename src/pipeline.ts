@@ -2100,6 +2100,12 @@ async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: M
     ...(next.doi === undefined && previous?.doi ? { doi: previous.doi } : {}),
     ...(keptDoi?.journal ? { journal: keptDoi.journal } : {}),
     ...(keptDoi?.publishedAt && next.publishedAt === undefined ? { publishedAt: keptDoi.publishedAt } : {}),
+    /* The year, where the registry stated no whole day: the same fact at a
+       coarser precision, kept on the same terms. Only while there is no day
+       from either side, because an article has one or the other. */
+    ...(keptDoi?.publishedYear !== undefined && keptDoi.publishedAt === undefined && next.publishedAt === undefined
+      ? { publishedYear: keptDoi.publishedYear }
+      : {}),
   };
 }
 
@@ -2125,6 +2131,7 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
       registryAsked: facts.asked,
       registryJournal: facts.meta.journal !== undefined,
       registryDay: facts.meta.publishedAt !== meta.publishedAt,
+      registryYear: facts.meta.publishedYear !== undefined,
       registryMs: Date.now() - started,
     },
     `${step} ${ctx.slug}: registry ${facts.outcome}`,

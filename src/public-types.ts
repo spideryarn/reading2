@@ -94,10 +94,14 @@ import type {
 /**
  * The masthead, for somebody who is not the owner.
  *
- * Six fields out of `Meta`'s twenty. Every one of them is a fact about the
- * article as the world can see it: the title the page itself carried, who wrote
- * it, where it was published, what language it is in, and the publication's own
- * one-line excerpt.
+ * Ten fields. Every one of them is a fact about the article as the world can
+ * see it: the title the page itself carried, who wrote it, where and when it
+ * was published, what language it is in, the publication's own one-line
+ * excerpt, and its published address.
+ *
+ * (This said "six" while there were seven: `url` arrived on 2026-08-30 and the
+ * count was not moved. `journal`, `published` and `publishedYear` are the
+ * three added on 2026-10-04.)
  */
 export interface PublicMeta {
   slug: string;
@@ -114,6 +118,29 @@ export interface PublicMeta {
   lang?: string;
   /** Readability's own one-or-two sentences, from the page. */
   excerpt?: string;
+  /**
+   * **The journal the piece appeared in, and when it was published.** Greg,
+   * 2026-10-04: "Q-visitor-page yes" — these two facts, and no others. Both
+   * are public facts about a published work, and for a paper they come from
+   * its public registry record (src/article-registry.ts). `Meta.doi` and
+   * `Meta.abstract` were not asked for and stay out.
+   * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+   */
+  journal?: string;
+  /**
+   * **The calendar day of publication, `YYYY-MM-DD`, and never
+   * `Meta.publishedAt` itself.** The owner's field is the publisher's own
+   * string and may carry a time of day and an offset; `publicMeta` sends its
+   * first ten characters when they are a real day and nothing otherwise. A
+   * different name from the owner's, so neither is mistaken for the other.
+   */
+  published?: string;
+  /**
+   * The year alone, for a paper whose registry record states no whole day:
+   * the publication date at the precision we hold it. Never beside
+   * `published`.
+   */
+  publishedYear?: number;
   /**
    * **Where the article came from, for whoever can read it.** Greg, 2026-08-30:
    * *"I think Public-readable articles should show their provenance-url to all

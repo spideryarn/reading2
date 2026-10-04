@@ -4306,10 +4306,15 @@ export const ALWAYS_SHARED = [
 
        **And for an upload, the page we matched it to**, since 2026-10-02: a
        found source guess crosses to a visitor's banner (plan 261002g,
-       `PublicArticle.sourceGuess`), so the owner is told it goes out. */
+       `PublicArticle.sourceGuess`), so the owner is told it goes out.
+
+       **And the journal and when it was published**, since 2026-10-04 (plan
+       261004h): the day, or the year alone for a paper dated only to a year.
+       "Where we know them", because most articles have neither. */
     detail:
-      "The article's title, byline, publication, language and one-line excerpt, plus a source link " +
-      "where we have one — for an uploaded file, that may be a page we found that matches it.",
+      "The article's title, byline, publication, language and one-line excerpt; its journal and " +
+      "when it was published, where we know them; plus a source link where we have one — for an " +
+      "uploaded file, that may be a page we found that matches it.",
   },
   {
     /**

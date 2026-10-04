@@ -759,14 +759,23 @@ characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wr
 **An article with no publication date sorts last, both ways**, like any missing value
 ([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
 a PDF, or a paper added with only its metadata, has a date only if it was imported on or after
-2026-10-04 and a registry confirmed its DOI and states a whole day
+2026-10-04 and a registry confirmed its DOI and states a whole day or a year
 ([content-extraction.md](content-extraction.md#the-journal-and-the-publication-day-from-a-registry)).
 A web page has one only if its publisher states it
 and it was extracted on or after 2026-08-31; that includes a DOI URL that resolves to a web page.
 Falling back to the Added date was passed
-over, because a 1990 paper fetched yesterday would then lead "newest first". Giving papers a year
-is a pipeline change, not a shelf one —
-[261003m](../plans/261003m-shelf-sorts-by-publication-date.md).
+over, because a 1990 paper fetched yesterday would then lead "newest first"
+([261003m](../plans/261003m-shelf-sorts-by-publication-date.md)).
+
+**A paper dated only to a year sorts among the dated ones**, since 2026-10-04. Where the registry
+states a year and no whole day, the article has `publishedYear` instead of `publishedAt`, and the
+chip, the column, the row card and the card's note all read the pair through one function,
+[`publishedOf`](../../src/web/relative-time.ts). It prints the year alone, `2011`, and sorts at the
+start of that year: beside the pieces dated in 2011, and level with one dated 1 January 2011. That
+start-of-year number is a sort key only, never stored and never printed as a day. Leaving such
+papers with the undated ones was passed over, because most older print papers would then sit
+outside the sort built for them
+([261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md)).
 
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article

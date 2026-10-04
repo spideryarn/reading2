@@ -57,7 +57,7 @@
  * invalidation can replace it later; nothing here may go on promising an
  * article that has been destroyed.
  */
-import type { LibraryEntry } from "../../types.js";
+import { publishedYearOf, type LibraryEntry } from "../../types.js";
 import { forgetUser, lastKnownUser, readCached } from "./offline-store.js";
 
 /**
@@ -224,6 +224,8 @@ function isDrawableEntry(value: unknown): boolean {
     maybe(e.lastOpenedAt, str) &&
     /* Absent on most entries, and on every body saved before plan 261003m. */
     maybe(e.publishedAt, str) &&
+    /* A whole year inside the column's own bounds, or not a shelf (plan 261004h). */
+    maybe(e.publishedYear, (v) => publishedYearOf(v) !== undefined) &&
     maybe(e.archivedAt, str) &&
     maybe(e.fixture, (v) => typeof v === "boolean") &&
     maybe(e.titleOverridden, (v) => typeof v === "boolean") &&

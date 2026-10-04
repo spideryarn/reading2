@@ -383,6 +383,10 @@ export async function exportArticle(
        the field. Placed where stage 2 writes it, so the round trip is
        byte-identical. src/db/schema.ts § `publishedAt`. */
     publishedAt: revision.publishedAt,
+    /* The year alone, for a paper with no whole day: the same fact, so it is
+       exported where the date is. `journal` and `doi` are still not, which is
+       261004a's open question and not this one's. */
+    publishedYear: revision.publishedYear,
     note: revision.note,
     source: revision.source,
     method: revision.extractMethod,

@@ -60,6 +60,22 @@ describe("registry metadata retained during extraction", () => {
     expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedAt: previous.publishedAt });
   });
 
+  /* Plan 261004h: the year is the same fact as the day at a coarser precision,
+     so it is kept and dropped on the same terms. */
+  const { publishedAt: _day, ...undated } = previous;
+  const yearOnly: Meta = { ...undated, publishedYear: 2011 };
+
+  it("keeps a year-only paper's year during Read this, and never beside a day", async () => {
+    const { meta } = await extract(yearOnly, false);
+    expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedYear: 2011 });
+    expect(meta).not.toHaveProperty("publishedAt");
+  });
+
+  it("does not carry an old year into a full re-extraction", async () => {
+    const { meta } = await extract(yearOnly, true);
+    expect(meta).not.toHaveProperty("publishedYear");
+  });
+
   it("keeps them whatever title the fuller reading gives: Read this re-reads the same bytes", async () => {
     const { meta } = await extract(previous, false, "A different article about the mechanics of fluid flow");
     expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedAt: previous.publishedAt });

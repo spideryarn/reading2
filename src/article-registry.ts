@@ -20,7 +20,7 @@
 import { parseWorkId, realIsoDay, type LookupResult, type WorkId } from "./bibliographic.js";
 import { registryTitleIsDistinctive, safeLookup, titlesDifferByObjectQualifier } from "./citation-registry.js";
 import { tokens } from "./citation-lookup.js";
-import type { Meta } from "./types.js";
+import { publishedYearOf, type Meta } from "./types.js";
 
 /** Candidates asked about for one article. Each is a bounded request; three is a first page's worth. */
 export const MAX_OWN_IDS = 3;
@@ -190,7 +190,8 @@ export interface RegistryFacts {
  * `meta` with the journal, the DOI and the publication day of the first
  * candidate whose record is this article. The article's own DOI, when it has
  * one, is asked about first. The page's own `publishedAt` is never replaced:
- * it is the publisher's claim and may carry a time.
+ * it is the publisher's claim and may carry a time. A record that states no
+ * whole day gives its year instead (`publishedYear`), and never a made-up day.
  */
 export async function withRegistryFacts(
   meta: Meta,
@@ -219,14 +220,21 @@ export async function withRegistryFacts(
        venue falls back to the depositing publisher, which is a repository's
        name and not a journal — except for arXiv, where it is the answer. */
     const journal = record.source === "crossref" || id.startsWith("arxiv:") ? record.venue : undefined;
+    /* **A day or a year, never both** (plan 261004h). The year is kept only
+       when the article ends up with no day, its own or the registry's; a year
+       and a month is kept as the year. Any year `meta` arrived with is taken
+       off first, so this record's answer is the only one left standing. */
+    const { publishedYear: _carried, ...rest } = meta;
+    const year = rest.publishedAt === undefined && day === undefined ? publishedYearOf(record.year) : undefined;
     return {
       outcome: "agreed",
       asked,
       meta: {
-        ...meta,
+        ...rest,
         ...(meta.doi === undefined && id.startsWith("doi:") ? { doi: record.doi } : {}),
         ...(journal !== undefined ? { journal } : {}),
         ...(day !== undefined ? { publishedAt: day } : {}),
+        ...(year !== undefined ? { publishedYear: year } : {}),
       },
     };
   }
