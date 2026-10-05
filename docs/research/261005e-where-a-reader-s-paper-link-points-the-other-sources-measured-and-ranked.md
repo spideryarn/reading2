@@ -5,8 +5,7 @@ Up: [research.md](../project/research.md)
 Researched and measured on 2026-10-05, for report `spya-ayettj` part 2 (queue entry `qi-5m89dnxa`).
 The decision it feeds is in the plan,
 [261005m](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md).
-arXiv itself is part 1:
-[261005l](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md).
+arXiv itself is part 1, plan `261005l` (not on `dev` when this was written, so not a link).
 
 > 2) and use web research to longlist and prioritise and optimise a lot of other common likely
 > sources (like Arxiv) for other kinds of papers that we should create import optimisations for.

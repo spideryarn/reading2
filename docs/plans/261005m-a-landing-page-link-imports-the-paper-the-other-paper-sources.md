@@ -1,13 +1,13 @@
 # A landing-page link imports the paper: the other paper sources
 
-Status as of 2026-10-05: **plan, revised after GPT Sol's first review, nothing built** — evidence:
+Status as of 2026-10-06: **plan, revised after GPT Sol's two reviews, nothing built** — evidence:
 no source but arXiv in `src/paper-sources.ts`, which is itself not on `dev` yet (see § What this
 waits on).
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 2
-of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv:
-[261005l](261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md),
-queue entry `qi-jqtexyzq`.
+of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv: plan
+`261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md`
+(not a link, because it is not on `dev` yet), queue entry `qi-jqtexyzq`.
 
 ## Goal
 
@@ -106,14 +106,22 @@ of document. Any other failure (a 403, a timeout, a 503) is the step's failure.
 pages *about* an arXiv paper, with the arXiv id as their path. They are not new sources: they are
 two more shapes of address that the arXiv source recognises, beside `abs/`, `pdf/` and arXiv's DOI.
 So they resolve to exactly what `arxiv.org/abs/<id>` resolves to, they are the same article as the
-arXiv link, they get arXiv's HTML when part 1 turns that on, and **everything else that asks "is
-this an arXiv paper?" learns them at once**: part 1 points `identityOf`
-(`src/cited-in-spideryarn.ts`) and `arxivPdfUrl` (`src/paper-text.ts`) at the same function, so a
-citation to a Hugging Face page is matched to the arXiv article we hold, and Citations reads the
-paper rather than the Hugging Face page (Sol's G7). The stage checks each of those callers by test,
-not by this sentence.
+arXiv link, and they get arXiv's HTML when part 1 turns that on.
 
-alphaXiv's `/overview/<id>` shape is recognised only if the live check finds it (Sol's G9).
+**Three other places ask "is this an arXiv paper?", each with its own parser today** (Sol's G7,
+then G11, which showed the first fix was a sentence and not a trace): `identityOf` in
+`src/cited-in-spideryarn.ts` (an article we hold), `keysOf` in `src/citations.ts` (a work an
+article cites) and `arxivPdfUrl` in `src/paper-text.ts` (which address to read a cited paper
+from). At part 1's commit none of them calls the registry's `arxivIdOf`. This stage points all
+three at it, so a citation to a Hugging Face page gets the arXiv work's key, matches the arXiv
+article we hold, and is read from arXiv's PDF. The test is end to end: `matchOf` with a work whose
+address is the Hugging Face page and a candidate whose address is the stored arXiv PDF.
+
+What that gives up, deliberately: a Hugging Face or alphaXiv link in an article's prose is treated
+as the arXiv paper everywhere, so its hover card shows the paper and not the mirror page's own
+commentary.
+
+alphaXiv's `/overview/<id>` is recognised too: probed on 2026-10-05, it redirects to `/abs/<id>`.
 
 ### Five sources, each one object in the list
 
@@ -128,13 +136,31 @@ alphaXiv's `/overview/<id>` shape is recognised only if the live check finds it 
 NeurIPS's file name ends differently by year and track (`-Paper.pdf`, `-Paper-Conference.pdf`, and
 others). The first draft guessed a list of endings. This one guesses nothing: the abstract page's
 own address carries the same ending (`-Abstract-Conference.html`), so the PDF's is read off it.
-The live check fetches one paper of each ending it can find.
+Probed on 2026-10-05: 2023 has `-Conference` (3,218 papers) and `-Datasets_and_Benchmarks` (322),
+2021 has none; the PDF of each answered 200, and the wrong ending answered 404.
 
-**What a wrong rule costs.** These grammars were learned from two papers per site. Where a paper's
-PDF is not where the rule says, the import fails with the missing-page sentence, where today it
-imports the abstract page. That is a change a reader can meet. It is the right way round: the
-report is about an abstract page passing for the paper. The step's log line carries the source's
-name and how many candidates were tried, and no address, so a rule that keeps missing shows up.
+**What a wrong rule costs.** These grammars were learned from a few papers per site. Where a
+paper's PDF is not where the rule says, the import fails, where today it imports the abstract page.
+That is a change a reader can meet. It is the right way round: the report is about an abstract
+page passing for the paper. Nothing is charged: the fetch is the first step, no model has run, and
+a failed import releases its slot.
+
+**The failure needs a sentence of its own** (Sol's G12). The sentence a missing page gets today
+tells the reader to check the address for a slip, and their address is fine: what is missing is a
+PDF address we derived and they never saw. So when a paper source's last candidate is absent, the
+card says, under a new code `[fetch-paper-missing]`, blocked rather than retryable:
+
+> We found the page for this paper, but not the paper itself where this site usually keeps it.
+> Download the PDF from the site and upload it here.
+
+**This is a new reader-facing sentence, written without Greg.** It is here so he can change it.
+
+**And a line in the log** (Sol's G13). Today's log line is written only when the fetch succeeds. A
+failed paper-source fetch logs the source's name, how many candidates were tried and the failure's
+code, and no address, so a rule that keeps missing shows up as that source's name repeating.
+
+Both are small changes around part 1's loop (what its caller does with a terminal failure), not to
+which candidate it tries or when it moves on.
 
 **What the fix costs the reader.** Every source here serves the paper as a PDF only. A PDF is read
 by a model: around ten US cents and one to three minutes, against a landing page's free few
@@ -143,8 +169,8 @@ cost as pasting the PDF's own address today.
 
 ### What is not touched
 
-`src/fetch.ts`, the SSRF and address checks, the redirect and byte caps, the fetch step's loop,
-`enqueue`, `urlKey` and `slugFromUrl` (they already ask the registry), stage 2, and everything in
+`src/fetch.ts`, the SSRF and address checks, the redirect and byte caps, which candidate the fetch
+step tries and when it moves on, `enqueue`, `urlKey` and `slugFromUrl` (they already ask the registry), stage 2, and everything in
 [security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live).
 No new dependency, no key, no outside service, no login, no changed header.
 
@@ -167,8 +193,11 @@ No new dependency, no key, no outside service, no login, no changed header.
   the shelf, and a second paste of the same DOI link imports and charges again. That is true of a
   `doi.org` link today, but today the second import is a free abstract page and afterwards it would
   be a paid PDF read. It needs the shelf lookup to know the address an article was *asked for* as
-  well as the one it came from (`article_revisions.requested_url` already holds it), which is a
-  change to identity in `enqueue` and the store, where part 1 is still fixing P0s. § Deferred.
+  well as the one it came from, which is a change to identity in `enqueue` and the store, where
+  part 1 is still fixing P0s. **`article_revisions.requested_url` is not that address** (Sol's
+  G14): for a paper source it holds the candidate we derived, because that is what `fetchDocument`
+  was asked for. The job's own address has to be kept as well, which is a new column and so
+  Greg's call. § Deferred.
 
 ## Stages
 
@@ -189,8 +218,12 @@ Waits on part 1's stage 1 being on `dev`.
       - the two mirrors resolve to a value deep-equal to arXiv's for the same id, with and without
         a version; `huggingface.co/papers` alone, `huggingface.co/papers/<not an arXiv id>`,
         `huggingface.co/<user>/<model>` and `alphaxiv.org/` do not resolve;
-      - `identityOf` gives a Hugging Face address the arXiv work's identity, and `arxivPdfUrl`
-        (or whatever part 1 left in `paper-text.ts`) gives it arXiv's PDF;
+      - `identityOf`, `keysOf` and `arxivPdfUrl` each give a Hugging Face and an alphaXiv address
+        what they give the arXiv address, and `matchOf` matches a work cited by its Hugging Face
+        page to a candidate stored under arXiv's PDF address; their existing tests stay green;
+      - a paper source whose last candidate is absent fails with `[fetch-paper-missing]`, blocked,
+        and logs the source and the count; an ordinary address that is absent fails exactly as
+        today;
       - for each of the five: every recognised shape resolves to one key, one slug and the
         candidates in the table; **every candidate's own address resolves back to the same key**;
         near-misses resolve to `null` (a look-alike host, a port, credentials, an id with a
@@ -231,12 +264,12 @@ Waits on part 1's stage 1 being on `dev`.
 
 | What | Why not now | Queue entry |
 |---|---|---|
-| **A `doi.org` link or a shortener that ends on a known source imports the paper**, and an article is found by the address it was asked for as well as the one it came from | § The options passed over, last item. Waits on part 1 being on `dev` and its `enqueue` fixes settled. Sol's G6 belongs to it: the document already fetched must be allowed to satisfy a candidate, not be fetched twice | *(to be added)* |
-| **NBER** and **OSF Preprints / PsyArXiv / SocArXiv** | NBER: a recent paper held for subscribers would turn today's abstract into a failure, and that wants a look at what the PDF address answers for one. OSF: its download ends on a signed, expiring Google Storage address, so the article's address would be useless for a refresh, a source link or finding it again (Sol's G2). OSF needs the asked-for address from the row above | the same entry as the row above |
-| **bioRxiv and medRxiv**, with the eval that decides between bioRxiv's full-text HTML and its PDF | The HTML is free and seconds; the PDF is paid. A pasted `.full` page must stay the HTML (Sol's G3). bioRxiv's robots file was only half read (G9). medRxiv refused us (403), so it is included only if a later check gets in. Needs part 1's eval harness on `dev` | *(to be added)* |
-| **Follow a stub landing page's `citation_pdf_url`**, for the long tail (university repositories, Zenodo, AAAI, small journals) | A second mechanism and a judgement about what a stub is. Wants its own plan | *(to be added)* |
-| **OpenReview** | Challenged from the box. One fetch of a forum page and its PDF from production's network decides whether a ten-line source is worth adding | *(to be added)* |
-| **HAL's bot-check page imports as an article** (*"Making sure you're not a bot!"*, 178 words, no error) | A bug found on the way, in a different place: stage 2's refusal of a page with too little text. Any Anubis-protected site will do the same | *(to be added)* |
+| **A `doi.org` link or a shortener that ends on a known source imports the paper**, and an article is found by the address it was asked for as well as the one it came from | § The options passed over, last item. Waits on part 1 being on `dev` and its `enqueue` fixes settled. Sol's G6 belongs to it: the document already fetched must be allowed to satisfy a candidate, not be fetched twice | `qi-fbrh4kck` (needs Greg: the column) |
+| **NBER** and **OSF Preprints / PsyArXiv / SocArXiv** | NBER: a recent paper held for subscribers would turn today's abstract into a failure, and that wants a look at what the PDF address answers for one. OSF: its download ends on a signed, expiring Google Storage address, so the article's address would be useless for a refresh, a source link or finding it again (Sol's G2). OSF needs the asked-for address from the row above | `qi-fbrh4kck` |
+| **bioRxiv and medRxiv**, with the eval that decides between bioRxiv's full-text HTML and its PDF | The HTML is free and seconds; the PDF is paid. A pasted `.full` page must stay the HTML (Sol's G3). bioRxiv's robots file was only half read (G9). medRxiv refused us (403), so it is included only if a later check gets in. Needs part 1's eval harness on `dev` | `qi-w49m6b3d` |
+| **Follow a stub landing page's `citation_pdf_url`**, for the long tail (university repositories, Zenodo, AAAI, small journals) | A second mechanism and a judgement about what a stub is. Wants its own plan | `qi-nyd8f2w6` |
+| **OpenReview** | Challenged from the box. One fetch of a forum page and its PDF from production's network decides whether a ten-line source is worth adding | `qi-smqhdmcm` |
+| **HAL's bot-check page imports as an article** (*"Making sure you're not a bot!"*, 178 words, no error) | A bug found on the way, in a different place: stage 2's refusal of a page with too little text. Any Anubis-protected site will do the same | `qi-ptvjnvdm` |
 
 ## For Greg: not built, and why
 
@@ -248,7 +281,7 @@ Waits on part 1's stage 1 being on `dev`.
   to be let in is a decision about a bot wall, and it is yours**. If you say yes it is a small
   change in the fetcher's headers for one host, plus a PubMed → PMC lookup that needs NCBI's
   id-converter service (free, no key, a new outside call). Today both fail with a sentence, and the
-  reader's route is to download the PDF and upload it.
+  reader's route is to download the PDF and upload it. Queue entry `qi-azad3wfd`, waiting on you.
 - **The publishers that refuse us** (Science, PNAS, ACM, Wiley, Elsevier, Springer, IEEE, SSRN,
   eLife, MDPI, and the rest of 261005e's table). No code. The upload route works.
 
@@ -284,4 +317,16 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
   | G9 (P2) | alphaXiv `/overview/`, NeurIPS's endings, OSF `_v<N>` and bioRxiv's robots file were unverified | **Fixed**: NeurIPS's ending is read off the link; each remaining shape is live-checked or removed |
   | G10 (P3) | "174 addresses" is 174 cases over 157 distinct addresses | **Fixed** here and in 261005e |
 
+- **Plan review, GPT Sol, round 2** (`261005m-other-paper-sources-plan-review-2-sol.md`, on commit
+  `5c94e073e`): *build it after fixing G11–G14*. G1–G6 and G8–G10 confirmed closed; the cut of
+  seven confirmed.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | G11 (P1) | G7's fix was not traced: `identityOf`, `arxivPdfUrl` and `keysOf` each have their own arXiv parser and none calls `arxivIdOf` | **Fixed in the plan**: all three are pointed at it, with an end-to-end `matchOf` test. This fix was not in the round-2 snapshot, so the code review checks it first |
+  | G12 (P1) | A missing derived PDF tells the reader to check an address that is fine | **Fixed in the plan**: `[fetch-paper-missing]`, with a sentence flagged for Greg |
+  | G13 (P2) | A failed paper-source fetch logs neither the source nor the count | **Fixed in the plan** |
+  | G14 (P2) | `requested_url` holds the derived candidate, not the pasted address | **Accepted**: the deferred entry says the job's address needs a column of its own |
+
+  Discovery on the plan is closed at two rounds.
 - Code review, GPT Sol: *(pending)*

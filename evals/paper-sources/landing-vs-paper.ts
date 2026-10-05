@@ -75,7 +75,10 @@ function attr(tag: string, name: string): string | undefined {
 function rawMeta(html: string): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   const add = (k: string, v: string | undefined) => {
-    if (v) (out[k] ??= []).push(v.slice(0, 300));
+    if (!v) return;
+    const list = out[k] ?? [];
+    list.push(v.slice(0, 300));
+    out[k] = list;
   };
   for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
     const name = (attr(m[0], "name") ?? attr(m[0], "property"))?.toLowerCase();
@@ -141,7 +144,7 @@ async function measure(source: string, label: string, role: Row["role"], expect:
     const { blocks } = splitIntoBlocks(out.extractedHtml);
     const text = blocks.map((b) => b.text).join("\n");
     row.title = out.meta.title;
-    row.byline = out.meta.byline;
+    if (out.meta.byline !== undefined) row.byline = out.meta.byline;
     row.words = blocks.reduce((n, b) => n + b.words, 0);
     row.blocks = blocks.length;
     row.headings = blocks.filter((b) => b.kind === "heading").length;

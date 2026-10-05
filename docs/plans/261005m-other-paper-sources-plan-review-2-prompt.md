@@ -28,3 +28,5 @@ The mechanism it builds on is still part 1's commit `0f63486a2` (not in this tre
 Same severity scale as round 1 (P0 data loss / security / wrong charging; P1 user-visible wrong behaviour or a contract violated; P2 design risk; P3 prose). New findings continue the numbering from G11, each *established* or *suspected*, with the concrete sequence and the smallest credible fix. No network.
 
 End with one line: `VERDICT: build it` / `VERDICT: build it after fixing G…` / `VERDICT: do not build`.
+
+Candidate commit: 5c94e073e
