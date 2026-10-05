@@ -194,8 +194,15 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * byte for byte (plan 261004f stage 2). Every stored summary becomes
  * *outdated*, which is silent, and none is rewritten for it: an unforced run
  * skips a stored summary whatever its prompt's age (src/pipeline.ts § `simple`).
+ *
+ * `simple-prompt/9` (2026-10-05): the length Fuller is asked for follows the
+ * length of the piece, in four bands (`SIMPLE_BANDS`; Greg, spya-gttwhn; plan
+ * 261005b). Brief is `/8` byte for byte in every band, and so is Fuller in the
+ * `standard` band, 2,500 to 14,999 words: only the Fuller of a short piece, a
+ * long one or a book is written differently. As with `/8`,
+ * every stored summary becomes *outdated* and none is rewritten for it.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/8";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/9";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -291,35 +298,102 @@ export const ANSWER_TOKENS =
  * Brief's stays 50 over its own.
  */
 
+/**
+ * **How long the piece is, as Fuller's prompt sees it**: one of four bands,
+ * picked from the words of the body the request sends. Greg, 2026-10-04
+ * (spya-gttwhn): *"The length of the summaries should somewhat reflect the
+ * length of the text. Not linearly. But a book will surely need (at least
+ * somewhat) longer summaries than a short article."*
+ *
+ * Bands and not a formula, so there are four prompts a person can read, a test
+ * can pin and a measurement can cover, where a formula would give every
+ * article its own. **`standard` is the prompt as it was before bands**, byte
+ * for byte, and most articles are in it. Plan 261005b has the measurement:
+ * asked for 500 words whatever the piece, Fuller gave an 879-word essay 402
+ * and 492 words and a 49,000-word book 489 and 515.
+ */
+export const SIMPLE_BANDS = ["short", "standard", "long", "book"] as const;
+export type SimpleBand = (typeof SIMPLE_BANDS)[number];
+
+/** The fewest body words in each band. Ascending, as `bandFor` reads it. */
+export const BAND_FROM: Record<SimpleBand, number> = {
+  short: 0,
+  standard: 2_500,
+  long: 15_000,
+  book: 40_000,
+};
+
+/** The band for a body of this many words (`Block.words`, summed over the evidence sent). */
+export function bandFor(bodyWords: number): SimpleBand {
+  let band: SimpleBand = "short";
+  for (const candidate of SIMPLE_BANDS) if (bodyWords >= BAND_FROM[candidate]) band = candidate;
+  return band;
+}
+
 /** How LENGTH ends for Brief; `simpleSystem` supplies the line it finishes. */
 const ORIENTATION_NOT_DIGEST = `Shorter is fine; this is an
 orientation, not a digest, so leave detail to the article.`;
 
-const PITCH: Record<
-  SimpleLevel,
-  { reader: string; shape: string; words: number; never: number; sentence: number; shorter: string }
-> = {
-  brief: {
-    reader: "A bright twelve-year-old",
-    shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
-    words: 80,
-    never: 130,
-    sentence: 18,
-    shorter: ORIENTATION_NOT_DIGEST,
-  },
+/* Not the line above: detail is what Fuller is for, so it is not told to leave
+   it out. It is still not a replacement for the article. */
+const FULLER_SHORTER = `Shorter is fine for a short
+piece. This is still not a replacement for the article: spend the words on what
+the piece did, found and admits, and never on saying one thing twice.`;
+
+/** What does not move with the piece's length: who it is for, and how long a sentence may be. */
+const PITCH: Record<SimpleLevel, { reader: string; sentence: number; shorter: string }> = {
+  brief: { reader: "A bright twelve-year-old", sentence: 18, shorter: ORIENTATION_NOT_DIGEST },
   fuller: {
     reader: "A bright eighteen-year-old in their first year at university",
-    shape: "Five to eight paragraphs, each two to five sentences",
-    words: 500,
-    never: 600,
     sentence: 30,
-    /* Not the line above: detail is what this level is for, so it is not told
-       to leave it out. It is still not a replacement for the article. */
-    shorter: `Shorter is fine for a short
-piece. This is still not a replacement for the article: spend the words on what
-the piece did, found and admits, and never on saying one thing twice.`,
+    shorter: FULLER_SHORTER,
   },
 };
+
+type Length = { shape: string; words: number; never: number };
+
+/**
+ * **Brief is one length, whatever the piece.** It was banded too in this
+ * change's first build (60 words for a short piece, up to 140 for a book) and
+ * a blind judge preferred the unbanded Brief in six pairs of eight: the
+ * 60-word one left out a point the essay turned on in four of four, and the
+ * book's longer one read as padded both times. Brief is the one-glance answer,
+ * and a glance is the same length for a book. Plan 261005b § Ledger.
+ */
+const BRIEF_LENGTH: Length = {
+  shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
+  words: 80,
+  never: 130,
+};
+
+/**
+ * **What moves with the piece's length is Fuller**: the paragraphs asked for,
+ * the words asked for, and the "never more than". Not linear: from `short` to
+ * `book` the piece is at least sixteen times longer and the ask is 3.6 times.
+ *
+ * Every `never` has to sit under `SIMPLE_LIMITS.fuller.maxWords`
+ * (src/types.ts), which is one cap for all bands: over it the write fails and
+ * stores nothing. tests/simple-length-bands.test.ts holds that.
+ */
+export const FULLER_LENGTH: Record<SimpleBand, Length> = {
+  short: { shape: "Three to five paragraphs, each two to five sentences", words: 250, never: 330 },
+  standard: { shape: "Five to eight paragraphs, each two to five sentences", words: 500, never: 600 },
+  long: { shape: "Six to nine paragraphs, each two to five sentences", words: 700, never: 820 },
+  book: { shape: "Eight to eleven paragraphs, each two to five sentences", words: 900, never: 1050 },
+};
+
+/** The length one level is asked for, of a piece in one band. */
+export const lengthFor = (level: SimpleLevel, band: SimpleBand): Length =>
+  level === "brief" ? BRIEF_LENGTH : FULLER_LENGTH[band];
+
+/*
+ * **The numbers are the whole of it.** A sentence for the two long bands,
+ * "This is a long piece. Cover the whole of it, the later parts as well as the
+ * opening, and give each main part its share", was measured for Fuller and
+ * left out: over four blind pairs the judge preferred the summary without it
+ * twice and with it once, which is no more than two writes of one prompt
+ * differed by. Plan 261005b § Ledger.
+ */
 
 /**
  * What a level may do beyond the plainest — said inside that level's own
@@ -417,11 +491,13 @@ would for an outsider, and keep as few as you can.`,
 };
 
 /**
- * The system prompt for one level. Constant per level — the reader goes in
- * the user message, after the breakpoint.
+ * The system prompt for one level, for a piece in one length band. Constant
+ * per level and band — the reader goes in the user message, after the
+ * breakpoint. The band changes three values in Fuller's LENGTH section and
+ * nothing else, and nothing at all of Brief's.
  */
-export function simpleSystem(level: SimpleLevel): string {
-  const p = PITCH[level];
+export function simpleSystem(level: SimpleLevel, band: SimpleBand = "standard"): string {
+  const p = { ...PITCH[level], ...lengthFor(level, band) };
   return `You are helping a reader get their bearings before they read the article above.
 
 WHAT YOU WRITE
@@ -514,10 +590,16 @@ characters, no headings. Bold and lists are said only by "key" and "list".
 Never put a real line break inside a string, and escape any straight double
 quote as \\".`;
 
-/** Each level's system prompt, built once. */
-export const SIMPLE_SYSTEMS = Object.fromEntries(
-  SIMPLE_LEVELS.map((level) => [level, simpleSystem(level)]),
-) as Record<SimpleLevel, string>;
+/** Each band's two system prompts, built once. */
+export const SIMPLE_SYSTEMS_BY_BAND = Object.fromEntries(
+  SIMPLE_BANDS.map((band) => [
+    band,
+    Object.fromEntries(SIMPLE_LEVELS.map((level) => [level, simpleSystem(level, band)])),
+  ]),
+) as Record<SimpleBand, Record<SimpleLevel, string>>;
+
+/** The `standard` band's pair: the prompts as they were before bands, byte for byte. */
+export const SIMPLE_SYSTEMS = SIMPLE_SYSTEMS_BY_BAND.standard;
 
 /** The same answer contract for every level and every retry. */
 export const SIMPLE_SUMMARY_OUTPUT_SCHEMA = {
@@ -987,6 +1069,10 @@ export async function generateSimpleSummary(opts: {
      so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
   const evidenceIds = new Set(evidence.map((b) => b.id as string));
+  /* How long a summary this piece is asked for (plan 261005b). Counted over
+     exactly the body the request shows, so it moves only when `sourceHash`
+     does and the stamp needs no field for it. */
+  const systems = SIMPLE_SYSTEMS_BY_BAND[bandFor(evidence.reduce((n, b) => n + b.words, 0))];
   /* What the checker quotes beside each paragraph: the same blocks' text. */
   const textOf = new Map(evidence.map((b) => [b.id as string, b.text]));
   const guard = opts.guard ?? SIMPLE_CHECK_ENABLED;
@@ -1065,7 +1151,7 @@ export async function generateSimpleSummary(opts: {
               text: article,
               ...(markArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
             },
-            { type: "text" as const, text: SIMPLE_SYSTEMS[level] },
+            { type: "text" as const, text: systems[level] },
           ],
           /* The reader goes here and nowhere earlier: after the breakpoint, so
              a profile never splits the article's cache entry (src/profile.ts §

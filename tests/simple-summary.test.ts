@@ -20,6 +20,7 @@ import { SIMPLE_LIMITS, type Block, type BlockId, type SimpleLevel } from "../sr
 import {
   ANSWER_TOKENS,
   SIMPLE_SYSTEMS,
+  SIMPLE_SYSTEMS_BY_BAND,
   SIMPLE_PROMPT_VERSION,
   SIMPLE_SUMMARY_OUTPUT_SCHEMA,
   SIMPLE_VERSION,
@@ -307,30 +308,33 @@ describe("buildSimpleSummary", () => {
     expect(() => build(four)).toThrow(/4 "brief" paragraphs and the limit is 3/);
     /* Three, Brief's ceiling, is kept. */
     expect(build(five.slice(0, 3)).levels.brief).toHaveLength(3);
-    /* Four and five are no failure in Fuller, nor is its ceiling of eight; nine is (plan 261004b). */
+    /* Four and five are no failure in Fuller, nor is its ceiling of thirteen; fourteen is (plan 261005b). */
     expect(build(BRIEF, emptyDropped(), four).levels.fuller).toHaveLength(4);
     expect(build(BRIEF, emptyDropped(), five).levels.fuller).toHaveLength(5);
-    const eight = [...five, para("Six.", WHY.id), para("Seven.", RESULT.id), para("Eight.", METHOD.id)];
-    expect(build(BRIEF, emptyDropped(), eight).levels.fuller).toHaveLength(8);
-    const nine = [...eight, para("Nine.", WHY.id)];
-    expect(() => build(BRIEF, emptyDropped(), nine)).toThrow(/9 "fuller" paragraphs and the limit is 8/);
+    const thirteen = [...five, ...[6, 7, 8, 9, 10, 11, 12, 13].map((n) => para(`Paragraph ${n}.`, WHY.id))];
+    expect(build(BRIEF, emptyDropped(), thirteen).levels.fuller).toHaveLength(13);
+    const fourteen = [...thirteen, para("Fourteen.", WHY.id)];
+    expect(() => build(BRIEF, emptyDropped(), fourteen)).toThrow(/14 "fuller" paragraphs and the limit is 13/);
   });
 
-  it("keeps a Fuller of eight paragraphs and 800 words, and refuses one of 851 (plan 261004b)", () => {
+  it("keeps a Fuller of eight paragraphs and 800 words, and refuses one of 1,401 (plans 261004b, 261005b)", () => {
     const eightOf = (each: number, last: number) =>
       [INTRO, WHY, RESULT, METHOD, INTRO, WHY, RESULT, METHOD].map((b, i) => para(words(i === 7 ? last : each), b.id));
     const stored = build(BRIEF, emptyDropped(), eightOf(100, 100));
     expect(stored.levels.fuller).toHaveLength(8);
     expect(isUsableSimpleSummary(stored)).toBe(true);
     /* The ceiling exactly, and one word past it. */
-    expect(SIMPLE_LIMITS.fuller).toEqual({ minParagraphs: 3, maxParagraphs: 8, maxWords: 850 });
-    expect(build(BRIEF, emptyDropped(), eightOf(100, 150)).levels.fuller).toHaveLength(8);
-    expect(() => build(BRIEF, emptyDropped(), eightOf(100, 151))).toThrow(/851 "fuller" words and the limit is 850/);
+    expect(SIMPLE_LIMITS.fuller).toEqual({ minParagraphs: 3, maxParagraphs: 13, maxWords: 1400 });
+    expect(build(BRIEF, emptyDropped(), eightOf(100, 700)).levels.fuller).toHaveLength(8);
+    expect(() => build(BRIEF, emptyDropped(), eightOf(100, 701))).toThrow(/1401 "fuller" words and the limit is 1400/);
     /* The read boundary enforces the same two numbers. */
-    const over = { ...stored, levels: { ...stored.levels, fuller: eightOf(100, 151) } };
+    const over = { ...stored, levels: { ...stored.levels, fuller: eightOf(100, 701) } };
     expect(isUsableSimpleSummary(over)).toBe(false);
-    const nine = { ...stored, levels: { ...stored.levels, fuller: [...stored.levels.fuller, para("Nine.", WHY.id)] } };
-    expect(isUsableSimpleSummary(nine)).toBe(false);
+    const six = [9, 10, 11, 12, 13, 14].map((n) => para(`Paragraph ${n}.`, WHY.id));
+    const thirteen = { ...stored, levels: { ...stored.levels, fuller: [...stored.levels.fuller, ...six.slice(0, 5)] } };
+    expect(isUsableSimpleSummary(thirteen)).toBe(true);
+    const fourteen = { ...stored, levels: { ...stored.levels, fuller: [...stored.levels.fuller, ...six] } };
+    expect(isUsableSimpleSummary(fourteen)).toBe(false);
   });
 
   it("fails over a level's word ceiling rather than cutting", () => {
@@ -831,6 +835,30 @@ describe("the request", () => {
     await expect(run()).rejects.toThrow();
   });
 
+  /* Plan 261005b: the length Fuller is asked for follows the length of the piece. The
+     band is counted over the body the request shows, so a supplement's words
+     (the bibliography, an appendix) never push a piece into a longer band. */
+  it.each([
+    ["short", 2_499],
+    ["standard", 2_500],
+    ["standard", 14_999],
+    ["long", 15_000],
+    ["long", 39_999],
+    ["book", 40_000],
+  ] as const)("asks for the %s band's lengths of a body of %i words", async (band, bodyWords) => {
+    answer = good();
+    const spoken = EVIDENCE.reduce((n, b) => n + b.words, 0);
+    const padding = block("spya-ffffff", "word", { words: bodyWords - spoken });
+    const appendix = block("spya-gggggg", "appendix", { words: 100_000, treatment: "supplement" });
+    await generateSimpleSummary({
+      power: "standard",
+      article: { ...article(), blocks: [...BLOCKS, padding, appendix] },
+      profile: null,
+    });
+    const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system[1]?.text);
+    expect(new Set(systems)).toEqual(new Set(Object.values(SIMPLE_SYSTEMS_BY_BAND[band])));
+  });
+
   it("fails on an empty successful answer", async () => {
     answer = "";
     await expect(run()).rejects.toThrow();
@@ -855,7 +883,8 @@ describe("the request", () => {
     expect(sent.map((c) => c.task)).toEqual(["simple", "simple"]);
     const systems = sent.map((c) => (c.body as { system: { text: string }[] }).system);
     expect(systems[0]?.[0]).toEqual(systems[1]?.[0]);
-    expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS)));
+    /* The fixture is a few dozen words, so it is asked for the short band's lengths (plan 261005b). */
+    expect(new Set(systems.map((s) => s[1]?.text))).toEqual(new Set(Object.values(SIMPLE_SYSTEMS_BY_BAND.short)));
     const outputConfigs = sent.map(
       (c) => (c.body as { output_config?: { effort?: string; format?: unknown } }).output_config,
     );
@@ -1485,7 +1514,7 @@ describe("the prompt version (plans 261001p and 261003c)", () => {
     expect(out.version).toBe("simple/2");
     /* A literal pin, not a value derived from the output under test: otherwise
        changing both the producer and this imported constant stays green. */
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/8");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/9");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
     /* Pipeline freshness and artefact copies read this generic stamp. If they

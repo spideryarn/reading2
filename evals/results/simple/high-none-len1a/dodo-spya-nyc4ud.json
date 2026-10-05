@@ -1,0 +1,294 @@
+{
+  "arm": "high-none-len1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "dodo-spya-nyc4ud",
+  "version": "simple-prompt/9",
+  "sourceSha256": "4489cb29836c49d266fdadbd055eead7a950f26a63beb5d18a4c744ebf8c45f0",
+  "at": "2026-10-05T02:33:03.160Z",
+  "bodyWords": 12143,
+  "band": "standard",
+  "bodyBlocks": 251,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "426908bf469027b8",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 33233,
+  "costUsd": 0.115102,
+  "tokens": {
+    "input": 12952,
+    "output": 4644,
+    "reasoning": 2179
+  },
+  "briefReadyMs": 20034,
+  "fullerReadyMs": 33228,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 489,
+  "briefWords": 109,
+  "fuller": [
+    {
+      "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar. It walks through how the bird is classified, what it looked like, how it lived, how it died out, what remains of it, and its place in culture. A recurring theme is how little is certain, because the evidence is mostly 17th-century drawings, written accounts and old bones.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It walks through how the bird is classified, what it looked like, how it lived, how it died out, what remains of it, and its place in culture.",
+          "id": null
+        },
+        {
+          "text": "A recurring theme is how little is certain, because the evidence is mostly 17th-century drawings, written accounts and old bones.",
+          "id": "spya-tre7b7"
+        }
+      ]
+    },
+    {
+      "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598. That loss drew attention to a problem nobody had seen before: humans can wipe out whole species. It was first used as an example of human-caused extinction in 1833 and has since been called an \"icon of extinction\".",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-jnkm7z"
+      ],
+      "sentences": [
+        {
+          "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "That loss drew attention to a problem nobody had seen before: humans can wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans can wipe out whole species"
+        },
+        {
+          "text": "It was first used as an example of human-caused extinction in 1833 and has since been called an \"icon of extinction\".",
+          "id": "spya-jnkm7z"
+        }
+      ]
+    },
+    {
+      "text": "Early scientists called it an ostrich, a vulture or an albatross, but in 1842 a Danish zoologist argued from a skull that it was a pigeon. DNA work in 2002 confirmed this, placing the extinct Rodrigues solitaire as its closest relative and the Nicobar pigeon as its closest living one. The article warns that this DNA came from one degraded specimen in Oxford, so the results still need checking independently.",
+      "ids": [
+        "spya-mqwjb3",
+        "spya-dbqyy9",
+        "spya-fva080"
+      ],
+      "sentences": [
+        {
+          "text": "Early scientists called it an ostrich, a vulture or an albatross, but in 1842 a Danish zoologist argued from a skull that it was a pigeon.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "DNA work in 2002 confirmed this, placing the extinct Rodrigues solitaire as its closest relative and the Nicobar pigeon as its closest living one.",
+          "id": "spya-dbqyy9",
+          "key": "the Nicobar pigeon"
+        },
+        {
+          "text": "The article warns that this DNA came from one degraded specimen in Oxford, so the results still need checking independently.",
+          "id": "spya-fva080"
+        }
+      ]
+    },
+    {
+      "text": "Old bones show the dodo stood about 62.6 to 75 cm tall, with males larger than females. Weight estimates disagree, but wild birds may have weighed about 10.6 to 17.5 kg. Most scientists now think the famously fat paintings show overfed captive birds or badly stuffed specimens.",
+      "ids": [
+        "spya-w2anzw",
+        "spya-naj2n2"
+      ],
+      "sentences": [
+        {
+          "text": "Old bones show the dodo stood about 62.6 to 75 cm tall, with males larger than females.",
+          "id": "spya-w2anzw"
+        },
+        {
+          "text": "Weight estimates disagree, but wild birds may have weighed about 10.6 to 17.5 kg.",
+          "id": "spya-w2anzw",
+          "key": "10.6 to 17.5 kg"
+        },
+        {
+          "text": "Most scientists now think the famously fat paintings show overfed captive birds or badly stuffed specimens.",
+          "id": "spya-naj2n2"
+        }
+      ]
+    },
+    {
+      "text": "Studies of the bones and skull have filled in some of its life. Tests of leg-bone strength suggest it could run quite fast, and its small wings may still have helped with balance and display. A 2016 cast of the inside of its skull showed a brain-to-body ratio like modern pigeons, so it was probably about as smart, despite its reputation. A 2017 study of thin slices of bone suggests dodos bred around August and their chicks grew fast.",
+      "ids": [
+        "spya-axn5h3",
+        "spya-rzgebh",
+        "spya-tztj7t"
+      ],
+      "sentences": [
+        {
+          "text": "Studies of the bones and skull have filled in some of its life.",
+          "id": null
+        },
+        {
+          "text": "Tests of leg-bone strength suggest it could run quite fast, and its small wings may still have helped with balance and display.",
+          "id": "spya-axn5h3"
+        },
+        {
+          "text": "A 2016 cast of the inside of its skull showed a brain-to-body ratio like modern pigeons, so it was probably about as smart, despite its reputation.",
+          "id": "spya-rzgebh",
+          "key": "probably about as smart"
+        },
+        {
+          "text": "A 2017 study of thin slices of bone suggests dodos bred around August and their chicks grew fast.",
+          "id": "spya-tztj7t"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Hunting was not the main cause of extinction, the article says, despite popular belief. Fewer than 50 people lived there, but they brought pigs, macaques, dogs, cats and rats, which raided nests and competed for food, while forests were cut down. The last widely accepted sighting is 1662, though a 2003 statistical study estimated 1693, likely between 1688 and 1715. Some researchers argue later \"dodo\" reports really describe the red rail, another flightless bird, so the true date may never be settled.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-h0vyww",
+        "spya-sm68v6"
+      ],
+      "sentences": [
+        {
+          "text": "Hunting was not the main cause of extinction, the article says, despite popular belief.",
+          "id": "spya-rdu8bv",
+          "key": "Hunting was not the main cause"
+        },
+        {
+          "text": "Fewer than 50 people lived there, but they brought pigs, macaques, dogs, cats and rats, which raided nests and competed for food, while forests were cut down.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "The last widely accepted sighting is 1662, though a 2003 statistical study estimated 1693, likely between 1688 and 1715.",
+          "id": "spya-h0vyww"
+        },
+        {
+          "text": "Some researchers argue later \"dodo\" reports really describe the red rail, another flightless bird, so the true date may never be settled.",
+          "id": "spya-sm68v6"
+        }
+      ]
+    },
+    {
+      "text": "Only a few pieces survive from birds taken to Europe, including a dried head in Oxford, the only soft tissue left. Most bones come from the Mare aux Songes swamp, which has yielded remains of over 300 dodos since 1865.",
+      "ids": [
+        "spya-u26jjs",
+        "spya-ras4ad"
+      ],
+      "sentences": [
+        {
+          "text": "Only a few pieces survive from birds taken to Europe, including a dried head in Oxford, the only soft tissue left.",
+          "id": "spya-u26jjs"
+        },
+        {
+          "text": "Most bones come from the Mare aux Songes swamp, which has yielded remains of over 300 dodos since 1865.",
+          "id": "spya-ras4ad"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that the old picture of a fat, clumsy bird doomed to die out is wrong. The dodo is now thought to have been well suited to its island, until humans and the animals they brought changed it.",
+      "ids": [
+        "spya-tre7b7",
+        "spya-w59b0k"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that the old picture of a fat, clumsy bird doomed to die out is wrong.",
+          "id": "spya-w59b0k"
+        },
+        {
+          "text": "The dodo is now thought to have been well suited to its island, until humans and the animals they brought changed it.",
+          "id": "spya-tre7b7",
+          "key": "well suited to its island"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article is about the dodo, a flightless bird that once lived only on Mauritius. It belonged to the pigeon and dove family. It died out less than a century after sailors first wrote about it in 1598. That made people notice, for the first time, that humans could wipe out whole species.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-ae8a2x"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about the dodo, a flightless bird that once lived only on Mauritius.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It belonged to the pigeon and dove family.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It died out less than a century after sailors first wrote about it in 1598.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "That made people notice, for the first time, that humans could wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans could wipe out whole species"
+        }
+      ]
+    },
+    {
+      "text": "Hunting by people was not the main cause, the article says. Pigs, monkeys and other animals people brought raided nests and competed for food, while forests were cut down. The last widely accepted sighting was in 1662. Though often shown as fat and clumsy, the dodo is now thought to have suited its home well.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-tre7b7",
+        "spya-ae8a2x"
+      ],
+      "sentences": [
+        {
+          "text": "Hunting by people was not the main cause, the article says.",
+          "id": "spya-rdu8bv",
+          "key": "not the main cause"
+        },
+        {
+          "text": "Pigs, monkeys and other animals people brought raided nests and competed for food, while forests were cut down.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "The last widely accepted sighting was in 1662.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "Though often shown as fat and clumsy, the dodo is now thought to have suited its home well.",
+          "id": "spya-tre7b7"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

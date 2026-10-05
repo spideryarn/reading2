@@ -5433,10 +5433,19 @@ export interface SimpleLevelLimits {
  * smaller fallback shipped, so a longer Fuller later remains a prompt-only
  * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
  * stored before then still reads.
+ *
+ * Fuller's were raised again on 2026-10-05 (Greg, spya-gttwhn; plan 261005b),
+ * from 8 paragraphs and 850 words: the length Fuller is asked for now follows
+ * the length of the piece, and a book's is asked for about 900 words in eight
+ * to eleven paragraphs. Brief is asked for one length whatever the piece, so
+ * its limits did not move. **One cap for every length of
+ * piece**, because a reader of a stored row has no article to measure; the
+ * prompt's own "never more than" is what holds a shorter piece's summary short.
+ * The minimums did not move, so every stored summary still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
-  fuller: { minParagraphs: 3, maxParagraphs: 8, maxWords: 850 },
+  fuller: { minParagraphs: 3, maxParagraphs: 13, maxWords: 1400 },
 };
 
 /** Passages per paragraph, at every level. */

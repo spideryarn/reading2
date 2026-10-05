@@ -58,6 +58,8 @@ interface ArmFile {
   costUsd: number | null;
   tokens: { input: number; output: number; reasoning: number | null } | null;
   bodyWords: number;
+  /** Since plan 261005b: the length band the write was asked in. Absent before. */
+  band?: string;
   bodyBlocks: number;
   ok: boolean;
   error?: string;
@@ -167,7 +169,6 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
   const { costStore } = await import("../../src/store/ai-calls.js");
   const { closeDb } = await import("../../src/db/client.js");
   const sourceSha256 = createHash("sha256").update(fs.readFileSync(SOURCE)).digest("hex");
-  const systemsSha256 = createHash("sha256").update(JSON.stringify(simple.SIMPLE_SYSTEMS)).digest("hex");
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
     await Promise.all(
@@ -177,6 +178,14 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
         const article = await loadArticle(slug);
         const body = article.blocks.filter(isBodyEvidence);
         const articleHash = simple.inputFingerprint(article.blocks, article.tree, article.meta);
+        /* The length band production picks for this body, and a hash of the
+           pair of system prompts that band sends (plan 261005b; GPT Sol's plan
+           review, F1). A file from before hashed the one pair there was. */
+        const bodyWords = body.reduce((n, b) => n + b.words, 0);
+        const band = simple.bandFor(bodyWords);
+        const systemsSha256 = createHash("sha256")
+          .update(JSON.stringify(simple.SIMPLE_SYSTEMS_BY_BAND[band]))
+          .digest("hex");
         const base = {
           arm,
           effort,
@@ -185,7 +194,8 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
           version: simple.SIMPLE_PROMPT_VERSION,
           sourceSha256,
           at: new Date().toISOString(),
-          bodyWords: body.reduce((n, b) => n + b.words, 0),
+          bodyWords,
+          band,
           bodyBlocks: body.length,
           /* The resolved call model, including a one-off eval override — not the
              stable generator stamp stored on production artefacts. */
