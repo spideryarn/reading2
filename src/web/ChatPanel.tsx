@@ -92,6 +92,7 @@ import { CitedMarkdown } from "./Cited.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
+import { holdTarget, roomNeeded } from "./chat-hold.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { RememberSubModesAbout } from "./RememberAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
@@ -1080,6 +1081,7 @@ export function Conversation({
   onDraft,
   kind,
   visible = true,
+  sized = "fixed",
   live,
   onStartLive,
 }: {
@@ -1114,6 +1116,13 @@ export function Conversation({
   /** A collapsed dialog keeps its conversation mounted, but hidden geometry
    * must not change whether the reader is following the latest answer. */
   visible?: boolean | undefined;
+  /**
+   * Whether the transcript's height is the panel's (`fixed`: the band, the
+   * floating and docked dialog) or its own content's up to a cap (`content`:
+   * the card in the Marginalia column). It decides whether a held answer may
+   * be given room — § A streamed answer stays where it starts, below.
+   */
+  sized?: "fixed" | "content" | undefined;
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
@@ -1134,10 +1143,12 @@ export function Conversation({
   const [away, setAway] = useState(false);
 
   /**
-   * Follow the answer down as it arrives — but only if the reader is already at
-   * the bottom.
+   * Follow new content down — but only if the reader is already at the bottom,
+   * and **never a typed answer as it streams**: that is the hold, below. What
+   * is left to follow is a Live conversation's spoken lines and their saved
+   * turns.
    *
-   * Scrolling up to re-read an earlier turn while the next one streams in is an
+   * Scrolling up to re-read an earlier turn while the next one arrives is an
    * ordinary thing to do, and yanking the view back to the bottom every few
    * words would make it impossible. The 60px slack is for the fact that "at the
    * bottom" is never exact once a line is half-rendered.
@@ -1177,10 +1188,138 @@ export function Conversation({
   const liveLines = live?.lines ?? [];
   const liveChars = liveSize(liveLines);
   const empty = thread.messages.length === 0 && liveLines.length === 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
-  useEffect(() => {
+  const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
+  /**
+   * ## A streamed answer stays where it starts
+   *
+   * Greg, 2026-10-05: *"it immediately starts scrolling down so I can't read
+   * from the beginning of the response. What I would prefer is if it streams
+   * in, but stays in position."* So when an answer starts, the question is put
+   * at the top of the panel **once**, and from then on nothing the stream does
+   * moves the transcript. The reader starts at the first sentence, and it is
+   * still there when they finish it. "Latest" appears when the answer outgrows
+   * the panel, and one press of it jumps; it does not start following.
+   *
+   * - **Room.** A scroller cannot put its last item at the top unless a
+   *   panel's height of content follows it, so `.chat-room` after the last
+   *   turn is exactly that tall and shrinks as the answer grows into it.
+   * - **The hold starts on a rising edge**: the last message *becoming*
+   *   pending, or a different number of turns under a pending one. Not on the
+   *   message's id: Retry keeps the id, and the server's `begin` frame changes
+   *   it in the middle of an answer.
+   * - **Live ends it.** Spoken lines are heard rather than read from the top,
+   *   and they arrive after the saved turns without changing the last message,
+   *   so the first one retires the hold and its room in the same pass.
+   * - **A card gets room only at its cap** (`sized`). Below it the card's
+   *   height is its content's, and room would inflate it by most of a screen.
+   *   A transcript that overflows is a card at its cap, where room is free.
+   * - **A tool row arriving mid-answer** is drawn above the text and pushes
+   *   the line being read down a row. Once text has started, a change in its
+   *   offset inside the turn is added to `scrollTop`.
+   *
+   * The arithmetic is chat-hold.ts; the plan, the measurement and GPT Sol's
+   * review are docs/plans/261005f-a-streamed-answer-stays-where-it-starts.md.
+   */
+  const room = useRef<HTMLDivElement>(null);
+  const hold = useRef<{
+    /** How many turns there were when it started. */
+    count: number;
+    /** False until the question has been put in place, and again after the
+     * panel was hidden, which loses a scroll position. */
+    placed: boolean;
+    /** The `scrollTop` it was placed at. */
+    target: number;
+    /** The answer text's offset inside its turn, once there is text. */
+    textAt: number | null;
+  } | null>(null);
+  const wasBusy = useRef(false);
+  const sizedNow = useRef(sized);
+  sizedNow.current = sized;
+  /**
+   * Size the room, place or compensate, and say whether there is more below.
+   * Every read is before the first write, so a streamed word costs the one
+   * layout it already did. Called by the effect and by the resize observer.
+   */
+  const settle = () => {
     const el = scroller.current;
-    if (!el || !visible) return;
+    const gap = room.current;
+    const h = hold.current;
+    if (!el || !gap || !h) return;
+    const turns = el.querySelectorAll<HTMLElement>(":scope > [data-turn]");
+    const answer = turns[turns.length - 1];
+    if (!answer) return;
+    const before = turns[turns.length - 2];
+    const question = before?.dataset.turn === "user" ? before : null;
+    const edge = el.getBoundingClientRect().top;
+    let top = el.scrollTop;
+    const within = (n: Element) => n.getBoundingClientRect().top - edge + top;
+    const answerTop = within(answer);
+    /* The first thing in the turn that is not the tool strip: the waiting
+       line, then the words. Only the words are worth holding still. */
+    const text = answer.querySelector<HTMLElement>(":scope > :not(.chat-tools)");
+    const textAt =
+      text && !text.classList.contains("chat-thinking") ? within(text) - answerTop : null;
+    const client = el.clientHeight;
+    const roomNow = gap.offsetHeight;
+    const natural = el.scrollHeight - roomNow;
+    const placing = !h.placed;
+    if (placing) {
+      h.target = holdTarget({
+        questionTop: question ? within(question) : null,
+        answerTop,
+        clientHeight: client,
+        pad: Number.parseFloat(getComputedStyle(el).paddingTop) || 0,
+      });
+    } else if (h.textAt !== null && textAt !== null && textAt !== h.textAt) {
+      h.target += textAt - h.textAt;
+      top += textAt - h.textAt;
+    }
+    h.textAt = textAt;
+    const roomy = sizedNow.current === "fixed" || natural > client + 1;
+    let want = roomy ? roomNeeded({ target: h.target, clientHeight: client, naturalHeight: natural }) : 0;
+    if (placing) {
+      /* Where it actually lands. A card below its cap has nowhere to scroll
+         to, and a target it never reached must not ask for room later. */
+      h.target = Math.min(h.target, Math.max(0, natural + want - client));
+      want = roomy ? roomNeeded({ target: h.target, clientHeight: client, naturalHeight: natural }) : 0;
+      top = h.target;
+      h.placed = true;
+    }
+    if (want !== roomNow) gap.style.height = `${want}px`;
+    if (el.scrollTop !== top) el.scrollTop = top;
+    /* Nobody scrolled, so no scroll event will say the answer has grown past
+       the fold. Guarded, because a same-value set is not free: see `awayNow`. */
+    const atBottom = natural + want - top - client < 60;
+    stick.current = atBottom;
+    if (awayNow.current !== !atBottom) setAway(!atBottom);
+  };
+  const settleNow = useRef(settle);
+  settleNow.current = settle;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads refs, and these are what say "something has been painted"
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const count = thread.messages.length;
+    const speaking = liveLines.length > 0;
+    const h = hold.current;
+    if (speaking || (h && !busy && h.count !== count)) {
+      hold.current = null;
+      if (room.current) room.current.style.height = "0px";
+    } else if (busy && (!wasBusy.current || !h || h.count !== count)) {
+      hold.current = { count, placed: false, target: 0, textAt: null };
+    }
+    wasBusy.current = busy;
+    if (!visible) {
+      /* A hidden panel has no scroll position to keep; place again when it
+         comes back. */
+      if (hold.current) hold.current.placed = false;
+      return;
+    }
+    if (hold.current) {
+      settle();
+      return;
+    }
     /* **An empty conversation reads from the top.** There is no latest turn to
        follow, and what is in the scroller is the opening hint and the
        suggestions, read top down. Following "the bottom" here scrolled a
@@ -1200,18 +1339,26 @@ export function Conversation({
       stick.current = true;
       if (awayNow.current) setAway(false);
     }
-    /* `last?.status` is in here for a reason that is easy to leave out and was.
-       The frame that ends an answer usually changes neither of the other two —
-       `done` carries the same text the deltas already built, and adds no row —
-       while adding the action row and, if the model searched, the whole list of
-       sources. So the one commit that reliably grows the transcript by more
-       than the 60px slack was the one commit this effect did not run on: the
-       reader was pinned to the bottom, the answer finished, and they were left
-       above the sources with no Latest button either, because `away` is only
-       ever cleared in here. That is the *same* bug the note above describes,
-       surviving its own fix in the dependency array. Found by a GPT-5.6 review,
-       2026-08-26. */
-  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase, visible]);
+    /* `last?.status` is in here for a reason that is easy to leave out and was:
+       the frame that ends an answer usually changes neither the text nor the
+       row count, while adding the action row and, if the model searched, the
+       whole list of sources. Found by a GPT-5.6 review, 2026-08-26. `toolsNow`
+       is the same kind of thing: a tool row starting or finishing changes the
+       turn's height and none of the others. */
+  }, [chars, thread.messages.length, last?.status, toolsNow, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase, visible, sized]);
+
+  /* **The panel changing size is not a streamed word**, and the room depends
+     on the panel's height: the "Latest" pill, a growing composer, a keyboard.
+     jsdom has no `ResizeObserver`. */
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !visible || typeof ResizeObserver === "undefined") return;
+    const seen = new ResizeObserver(() => {
+      if (hold.current?.placed) settleNow.current();
+    });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [visible]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -1290,6 +1437,9 @@ export function Conversation({
         {/* The spoken words still on their way to being saved, as the end of
             this same conversation. ./live/LiveTail.tsx. */}
         {live && <LiveTail live={live} />}
+        {/* What lets a held question reach the top: § A streamed answer stays
+            where it starts. Sized by `settle`, and zero outside a hold. */}
+        <div className="chat-room" ref={room} aria-hidden="true" />
       </div>
       {/* The jump button sits *outside* the scroller so it does not scroll with
           it, and only exists while the reader is somewhere else — a permanent
@@ -1613,7 +1763,7 @@ export function Turn({
       );
     }
     return (
-      <div className="chat-turn you">
+      <div className="chat-turn you" data-turn="user">
         {message.text}
         {message.editedAt && (
           /* The only trace that this conversation once went elsewhere. Without
@@ -1669,7 +1819,7 @@ export function Turn({
      (src/converse.ts runs rounds), so a line that named the next step would be
      guessing. GPT Sol, plan 261003p F5. */
   return (
-    <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`}>
+    <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`} data-turn="assistant">
       <ToolStrip tools={message.tools} searches={message.searches} />
       {waiting ? (
         <span className="chat-thinking">
@@ -2047,7 +2197,7 @@ function EditQuestion({
     el.setSelectionRange(el.value.length, el.value.length);
   }, []);
   return (
-    <div className="chat-turn you editing">
+    <div className="chat-turn you editing" data-turn="user">
       <textarea
         ref={box}
         className="chat-edit-box"

@@ -475,6 +475,16 @@
   line-height: 1.5;
 }
 
+/* The empty block that lets a just-asked question sit at the top of the panel
+   while its answer arrives under it. Its height is set from JS and is zero the
+   rest of the time (ChatPanel.tsx § A streamed answer stays where it starts).
+   `flex: none` because a dialog's transcript may be laid out as a column. */
+.chat-room {
+  flex: none;
+  height: 0;
+  pointer-events: none;
+}
+
 .chat-turn { margin: 0 0 0.85rem; }
 .chat-turn.you {
   padding: 0.45rem 0.6rem;
