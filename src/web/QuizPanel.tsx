@@ -600,6 +600,10 @@ export function QuizPanel({
     /* One box per question: an answer offered back under a different question
        would be the wrong answer. */
     keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),
+    /* A double press on Stop also answers (dictation.md § A double press). */
+    onDone: () => submit(),
+    /* One box across every question: an answer goes to the one it was said to. */
+    doneKey: question?.id,
   });
 
   /**
@@ -1158,7 +1162,7 @@ export function QuizPanel({
                     </span>
                   )}
                 </div>
-                <DictationStrip dictation={dictate.dictation} />
+                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
                 {mine && (
                   <Mark
@@ -1623,7 +1627,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   if (!dictate.dictation.supported) return null;
   return (
     <span className="quiz-mic">
-      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} />
+      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
       <span className="quiz-mic-label">
         {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
       </span>

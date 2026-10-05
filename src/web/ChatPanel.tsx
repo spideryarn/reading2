@@ -2307,6 +2307,8 @@ export function Composer({
     context: { kind: "article", slug },
     transcribe: sendForTranscription,
     keep: keepDictation(`chat:${slug}`),
+    /* A double press on Stop also sends (dictation.md § A double press). */
+    onDone: () => void submit(),
   });
 
   // A Live ticket can still be pending before Live claims the microphone.
@@ -2504,13 +2506,13 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
             <span className="chat-talk-label" aria-hidden="true">
               {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
             </span>
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a
@@ -2528,7 +2530,7 @@ export function Composer({
           continues={continuesLive}
         />
       )}
-      <DictationStrip dictation={dictate.dictation} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
       {live && onStartLive && <LiveStatus
         live={live}
         onRestart={onStartLive}

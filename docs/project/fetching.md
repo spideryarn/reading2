@@ -60,6 +60,15 @@ was one, and `retryable`. The codes are `invalid-url`, `unsupported-scheme`, `bl
 `dns`, `connection`, `certificate`, `timeout`, `too-many-redirects`, `unauthorized`, `forbidden`,
 `not-found`, `rate-limited`, `server-error`, `http-error`, `too-large`, `unsupported-type`, `empty`.
 
+**That message is not what the job card shows.** It can name the host, and a stored failure is not a
+place for a reading history ([logging.md](logging.md)). When the pipeline's fetch step fails, each
+code is given a sentence and a kind of its own by `fetchFailed` in
+[`src/messages.ts`](../../src/messages.ts), and the kind decides whether Retry is offered:
+[ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under).
+The diagnostic that reaches the log is rewritten at the same place, from the code and the status
+alone. The other callers (link previews, figures, the bibliographic lookups) classify a failure
+their own way and are unchanged.
+
 **Everything it touches from outside is injectable** — the fetch, the clock, the sleep, the DNS
 lookup, the jitter. That is not ceremony. It is the only reason
 [`tests/fetch.test.ts`](../../tests/fetch.test.ts) can pin an incomplete certificate chain, a
@@ -116,7 +125,8 @@ previews, paper text, figures and the bibliographic lookups each pass a tighter 
 `src/messages.ts`), which names the limit and is `blocked`, so no Retry is offered for the same
 over-limit document. The content at an address can change;
 this refusal does not predict its future size. The plan is
-[261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+[261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md). It was the first fetch
+failure to have a sentence of its own; every other code has one now, through `fetchFailed`.
 
 **The number also has a floor with a source.** The previous version used 4 MB
 ([original-version/extraction.md](original-version/extraction.md#the-fetch-and-one-hard-won-fix)),

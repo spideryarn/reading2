@@ -516,6 +516,24 @@ describe("the headings breadcrumb", () => {
       expect(host.querySelector("nav.crumbs")).toBeNull();
     });
 
+    /**
+     * **At the very top, above the first part, the head names the first part.**
+     * The fixture as it is: its first block (the title) lies outside its first
+     * part, and jsdom's reader is at the top with no `?at=`. The breadcrumb is
+     * hidden while the column is drawn, so until 261004l nothing on the page
+     * said where the reader was (qi-2ymfq3ek). notes.ts § `headBlock`.
+     * docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § D
+     */
+    it("at the very top, above the first part, Marginalia's head names the first part", async () => {
+      await open("?margin=1");
+      expect(new URLSearchParams(location.search).get("at"), "no position in the address").toBeNull();
+      expect(host.querySelector(".marg-narrow"), "there is room for the column").toBeNull();
+      expect(host.querySelector(".marg-head .marg-path")?.textContent, "the head names the first part").toContain(
+        "The argument it makes",
+      );
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+    });
+
     it("with Marginalia on but no room for its column, the breadcrumb stays", async () => {
       vi.stubGlobal("innerWidth", 600);
       await open("?margin=1");

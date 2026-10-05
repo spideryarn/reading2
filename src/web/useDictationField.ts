@@ -61,9 +61,15 @@
  * see the content check on `span`, and `readOnly` on the send button in the
  * chat composer.
  */
-import { type RefObject, useCallback, useRef } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import type { DictationKeeper, Transcriber } from "./transcriber.js";
 import { type UseDictation, useDictation } from "./useDictation.js";
+
+/**
+ * **How soon after Stop a second press still counts as a double press.** The
+ * usual system double-click interval is 500 ms; the rest is for a finger.
+ */
+export const DOUBLE_PRESS_MS = 600;
 
 export interface UseDictationField {
   dictation: UseDictation;
@@ -90,12 +96,25 @@ export interface UseDictationField {
    * box loses the focus.
    */
   toggle(): void;
+  /**
+   * **The second press of a double press on Stop**: the box's `onDone` runs
+   * once the transcript is in the box. Hand it to `DictationButton`. **Present
+   * only while a second press would count** — a box with an `onDone`, for
+   * {@link DOUBLE_PRESS_MS} after the Stop press, and not once taken — so the
+   * button is live exactly as long as pressing it does something.
+   * docs/project/dictation.md § A double press on Stop also sends.
+   */
+  again?: () => void;
+  /** A double press was taken: the box will send when the words arrive. */
+  sendingAfter: boolean;
 }
 
 export function useDictationField<C>({
   value,
   onChange,
   onCommit,
+  onDone,
+  doneKey,
   box,
   context,
   transcribe,
@@ -105,6 +124,22 @@ export function useDictationField<C>({
   onChange(next: string): void;
   /** Blur, Cmd/Ctrl+Enter, or the end of a dictation. Optional. */
   onCommit?(): void;
+  /**
+   * **The box's own done action** — Send, Answer, Save — exactly as its button
+   * calls it, with all its own refusals. Given one, a double press on Stop runs
+   * it once the transcript has arrived (Greg, spya-rp8676). It is called from
+   * an effect, on the render after the dictation ended, so it sees the box
+   * with the words in it and `busy` false.
+   */
+  onDone?(): void;
+  /**
+   * **What the box is about, if that can change under it** — the comment's id,
+   * the quiz question's. A double press is a wish to send *this* one; if the
+   * key has moved by the time the words arrive, nothing is sent. The comment
+   * dialog and the quiz panel reuse one mounted box across comments and
+   * questions (GPT Sol's plan review of 261005a, F1).
+   */
+  doneKey?: string | undefined;
   box: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
   /**
    * Where this dictation is going, passed through to {@link transcribe}
@@ -176,6 +211,63 @@ export function useDictationField<C>({
    */
   const valueAtEnd = useRef<string | null>(null);
 
+  /**
+   * **A double press on Stop**, in three small facts. `againOpen` is that Stop
+   * was pressed less than {@link DOUBLE_PRESS_MS} ago; `wantSend` is that a
+   * second press followed in that time, and what the box was about then;
+   * `delivered` is that this ending put a real transcript in the box. Only all
+   * three send — so a failed upload, an empty transcript, a transcript refused
+   * because the box changed, and a later Try again all send nothing.
+   */
+  const [againOpen, setAgainOpen] = useState(false);
+  const againTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeAgain = useCallback(() => {
+    if (againTimer.current !== null) clearTimeout(againTimer.current);
+    againTimer.current = null;
+    setAgainOpen(false);
+  }, []);
+  useEffect(() => closeAgain, [closeAgain]);
+  const wantSend = useRef<{ key: string | undefined } | null>(null);
+  const delivered = useRef(false);
+  const [sendingAfter, setSendingAfter] = useState(false);
+  const key = useRef(doneKey);
+  key.current = doneKey;
+  const previousKey = useRef(doneKey);
+  useEffect(() => {
+    if (previousKey.current === doneKey) return;
+    previousKey.current = doneKey;
+    /* A reused box now means something else. Withdraw both an offered second
+       press and one already accepted immediately, rather than merely refusing
+       it at the eventual ending: the new target must not accept the old
+       target's Stop, and the strip must not keep promising a send that cannot
+       happen. This also makes Feedback's shut render final even if it is
+       opened again before the transcript returns. */
+    wantSend.current = null;
+    delivered.current = false;
+    setSendingAfter(false);
+    closeAgain();
+  }, [doneKey, closeAgain]);
+  /* **The send is an effect, not a call.** Every box's send closes over its
+     render's value and refuses while `busy`; called from `onEnd` it would see
+     the value from before the transcript, and refuse without a word. The bump
+     below is in the same tick as the hook's own return to idle, so the next
+     render has both, and `done` is that render's `onDone`. */
+  const [sendTick, setSendTick] = useState(0);
+  const done = useRef(onDone);
+  done.current = onDone;
+  const sentTick = useRef(0);
+  const sendKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (sendTick === sentTick.current) return;
+    sentTick.current = sendTick;
+    /* The action is deferred so it sees the landed transcript and idle phase.
+       That also gives a reused box one last chance to change targets: a parent
+       can move to the next question in the same React batch as `onEnd`, after
+       the check below but before this effect. Never call that target's latest
+       `onDone` for words spoken to the previous one. */
+    if (sendKey.current !== key.current) return;
+    done.current?.();
+  }, [sendTick]);
 
   const commit = useRef(onCommit);
   commit.current = onCommit;
@@ -240,8 +332,24 @@ export function useDictationField<C>({
     /* **Replaces, never appends.** On Chromium the span holds the recogniser's
        guesses and this is the correction; on Safari and Firefox the span is
        empty and this is the insertion. One line either way. */
-    onTranscript: (text) => put(text, true),
+    onTranscript: (text) => {
+      const landed = put(text, true);
+      if (landed) delivered.current = true;
+      return landed;
+    },
     onEnd: () => {
+      /* Read and cleared here, at every ending, so a wish to send never
+         outlives the ending it was made for. */
+      const wish = wantSend.current;
+      const send = wish !== null && delivered.current && wish.key === key.current;
+      wantSend.current = null;
+      delivered.current = false;
+      setSendingAfter(false);
+      closeAgain();
+      if (send) {
+        sendKey.current = wish.key;
+        setSendTick((n) => n + 1);
+      }
       /* If the hook immediately restarts on a newly chosen device, it does so
          without another field-button press. Continue after the words this
          session kept, rather than reusing the caret from its original press and
@@ -270,7 +378,16 @@ export function useDictationField<C>({
   });
 
   const toggle = useCallback(() => {
+    if (dictation.armed) {
+      /* The Stop press: a second one counts from now, for a moment. */
+      closeAgain();
+      setAgainOpen(true);
+      againTimer.current = setTimeout(closeAgain, DOUBLE_PRESS_MS);
+    }
     if (!dictation.armed) {
+      wantSend.current = null;
+      delivered.current = false;
+      closeAgain();
       /* A press during the previous session's transcription supersedes that
          session. Its rough Chromium words stay in the box, but they are now
          ordinary text: the new session's authoritative transcript must replace
@@ -294,11 +411,23 @@ export function useDictationField<C>({
       const at = pressedAt.current;
       if (at !== null) el.setSelectionRange(at, at);
     });
-  }, [box, dictation]);
+  }, [box, dictation, closeAgain]);
 
   /* Derived, not stored. The box is closed exactly while the hook says a
      transcript is on its way — one source, so there is no state to leave locked
      when a dictation ends in a way nobody anticipated. */
   const readOnly = dictation.transcribing;
-  return { dictation, readOnly, busy: readOnly || dictation.armed, toggle };
+  const again = useCallback(() => {
+    closeAgain();
+    wantSend.current = { key: key.current };
+    setSendingAfter(true);
+  }, [closeAgain]);
+  return {
+    dictation,
+    readOnly,
+    busy: readOnly || dictation.armed,
+    toggle,
+    ...(onDone && againOpen && readOnly ? { again } : {}),
+    sendingAfter,
+  };
 }

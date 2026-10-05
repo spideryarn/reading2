@@ -27,7 +27,7 @@ import {
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
-import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
+import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
   MarginNotesSlot,
@@ -137,7 +137,7 @@ import {
   type BandMode,
   type Mode,
 } from "../params.js";
-import { subModeParams } from "../sub-modes.js";
+import { returnToSubMode, subModeParams } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
@@ -618,7 +618,9 @@ export function Reader({
    * Marginalia "on" means *drawn*: `?margin=1` on a window with no room for the
    * column shows no head, so the breadcrumb stays there. For an owner the bar
    * goes with it (`showBar` below), which `layoutKey` already hears. The plan
-   * records the empty-head and contained-failure exceptions.
+   * records the empty-head and contained-failure exceptions; the commonest
+   * empty head, the rows above the first part, was closed by 261004l
+   * (notes.ts § `headBlock`), and a gap further down the tree still draws none.
    * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
    *
    * The tree itself is not built while the switch is off. `Reader` renders for
@@ -3363,6 +3365,10 @@ export function Reader({
    */
   function marginColumn(): ReactNode {
     if (!marginOpen) return null;
+    /* One block for the path and the arc both, so they cannot name different
+       parts; above the first part it is the first part's first block
+       (notes.ts § `headBlock`, qi-2ymfq3ek). */
+    const headAt = headBlock(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null);
     return (
       <ModeBoundary
         mode="marginalia"
@@ -3375,8 +3381,8 @@ export function Reader({
           <MarginaliaHead
             room={fit.margW > 0}
             beside={bandOpen}
-            path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
-            arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+            path={headPath(article.tree, rowOf, headAt)}
+            arc={arcAt(liveArc, rowOf, headAt)}
           />
         )}
       </ModeBoundary>
@@ -4186,7 +4192,16 @@ export function Reader({
              recovery paths do not depend on that write — the token minted in
              Dock is their signal. */
           if (sub === undefined) {
-            if (next !== mode) void setMode(next);
+            if (next !== mode) {
+              /* **`mode` alone, with one exception**: returning to Remember
+                 while `remember=quiz` is still in the address is a navigation
+                 to Quiz, so it clears `thread` in the same pushed entry rather
+                 than mounting the Quiz over Chat's conversation for
+                 `RememberBand` to repair (sub-modes.ts § `returnToSubMode`). */
+              const back = returnToSubMode(next, { remember: subNav.remember });
+              if (back === null) void setMode(next);
+              else void setSubNav(back, { history: "push" });
+            }
           } else void setSubNav(subModeParams(sub), { history: "push" });
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */
