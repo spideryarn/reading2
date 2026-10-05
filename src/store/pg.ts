@@ -700,6 +700,9 @@ const REVISION_READ_POLICY: Record<
   abstract: { article: "value", library: "value" },
   doi: { article: "value", library: "value" },
   journal: { article: "value", library: "value" },
+  /* A `Meta` field the Metadata page shows, so `article`. No card prints it and
+     no prompt reads it: the title a model is shown is `title` (plan 261005g). */
+  titleOriginal: { article: "value" },
   /* A `Meta` field, so `article`; and the shelf sorts and prints it beside
      `publishedAt`, so `library`. **Not `timeline` or `metadata`**, which
      `publishedAt` is on: no fingerprint reads the year, because a year is too
@@ -1081,6 +1084,7 @@ const META_COLUMNS = {
   abstract: articleRevisions.abstract,
   doi: articleRevisions.doi,
   journal: articleRevisions.journal,
+  titleOriginal: articleRevisions.titleOriginal,
   publishedYear: articleRevisions.publishedYear,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
@@ -1866,6 +1870,7 @@ function metaFrom(
     ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
     ...(revision.doi === null ? {} : { doi: revision.doi }),
     ...(revision.journal === null ? {} : { journal: revision.journal }),
+    ...(revision.titleOriginal === null ? {} : { titleOriginal: revision.titleOriginal }),
     ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of

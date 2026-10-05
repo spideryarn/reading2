@@ -775,6 +775,31 @@ title belongs in that test.** `plainTitle` is not a sanitiser: its output is tex
 escaped like any other text wherever it becomes markup. The class is in
 [../postmortems/260929b-outside-titles-stored-with-their-markup.md](../postmortems/260929b-outside-titles-stored-with-their-markup.md).
 
+## A title in capitals is tidied, and the original kept
+
+> As part of the import process, could we apply very light editing to the article title (e.g. this
+> one is in all caps) to make them more consistent and readable. Ideally follow the author's intent
+> and don't change the contents substantively
+>
+> — Greg, 2026-10-04, report `spya-fyj3m4`
+
+After `plainTitle`, both extractors pass the title through `tidiedTitle` in
+[`src/title-tidy.ts`](../../src/title-tidy.ts). It makes two changes: a title **wholly** in
+capitals becomes title case, and trailing footnote markers (`*`, `†`, `‡`) come off. A title already
+in mixed case is never recased. There is no model in it; a word stays in capitals when the
+article's own body writes it that way, which is how `NASA` survives.
+
+Only `meta.title` is tidied. The page's `<h1>`, which becomes a block of the prose, keeps the
+author's capitals. When tidying changed the title, the original goes in `Meta.titleOriginal`
+(`article_revisions.title_original`), and the Metadata page shows it with a button that puts it back
+as the reader's own title. Articles imported before 2026-10-05 are not touched.
+
+The rules, what was left out and why, and the two questions still open (a model for the recasing;
+a backfill) are in
+[../plans/261005g-tidy-an-imported-title-and-keep-the-original.md](../plans/261005g-tidy-an-imported-title-and-keep-the-original.md);
+the style guides behind them are in
+[../research/261005c-title-capitalisation-and-light-tidying-at-import.md](../research/261005c-title-capitalisation-and-light-tidying-at-import.md).
+
 ## What it gets wrong, and how we know
 
 **An accordion is closed, not absent — and Readability cannot tell.** It skips

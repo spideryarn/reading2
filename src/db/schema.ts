@@ -628,6 +628,15 @@ export const articleRevisions = spideryarn.table(
 
     // The identity of the piece, as this extraction saw it — `Meta` in src/types.ts.
     title: text("title"),
+    /**
+     * **`Meta.titleOriginal`: the title as it arrived, when import tidied it**
+     * (`tidyTitle`, src/title-tidy.ts) — `THE ORDER OF TIME` beside a `title`
+     * of `The Order of Time`. Null whenever tidying changed nothing, and on
+     * everything imported before 2026-10-05. Kept so the tidying can be undone:
+     * the Metadata page offers it back as the reader's own title.
+     * docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md.
+     */
+    titleOriginal: text("title_original"),
     byline: text("byline"),
     /**
      * **`Meta.authors` — each author's name and affiliations, in the page's

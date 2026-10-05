@@ -3060,6 +3060,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */
   "tests/nav-label-status-pg.test.ts": "private-postgres",
+  /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
+     one column read back through four reads. */
+  "tests/title-original-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the
