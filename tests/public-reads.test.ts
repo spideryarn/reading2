@@ -53,6 +53,23 @@ describe("the public revision read", () => {
     }
   });
 
+  /* A visitor has no quiz, so nothing public may reach the owner's kept
+     answers (plan 261005b). The owner's side — a stranger's slug is a 404 — is
+     tests/quiz-attempts-route.test.ts. */
+  it("never asks for the owner's quiz answers in any public read", () => {
+    for (const [name, sql] of [
+      ["article", articleQuery.sql],
+      ["head", headQuery.sql],
+      ["asset", assetQuery.sql],
+      ["blocks", blocks],
+      ["comments", commentsQuery.sql],
+      ["searches", searchesQuery.sql],
+      ["listing", publicListing.sql],
+    ] as const) {
+      expect(sql, name).not.toContain("quiz_attempts");
+    }
+  });
+
   /**
    * **The predicate, in the statement.** `publicSlug` being right is one thing;
    * the query using it is another, and this is the only place they meet.

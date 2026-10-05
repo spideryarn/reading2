@@ -74,6 +74,7 @@ import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
 import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
@@ -222,7 +223,22 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
     byline,
     meta.siteName,
     `${stats.words.toLocaleString()} words`,
-    `~${stats.minutes} min`,
+    /* **The one fact here with a card**, because it is the one that is an
+       estimate — ReadTimeCard.tsx. Focusable so a keyboard and a finger reach
+       what a pointer does; it is not a button because pressing it does
+       nothing. */
+    <Tooltip
+      key="read-time"
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+      content={<ReadTimeCard words={stats.words} supplementWords={stats.supplementWords} />}
+    >
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
+      <span className="read-time-trigger" tabIndex={0}>
+        {`~${stats.minutes} min`}
+      </span>
+    </Tooltip>,
     `${stats.parts} parts`,
     `${stats.sections} sections`,
   ].filter(Boolean) as ReactNode[];

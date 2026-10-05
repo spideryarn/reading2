@@ -162,6 +162,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
+    ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
     ["../src/store/pg-high-power.js", "pgHighPowerStore", "high-power"],
@@ -380,6 +381,9 @@ describe("no Postgres store is selected without a guard", () => {
          bound parameters in `pgLinkSummaryStore` are a URL somebody hovered
          *and* a model's paragraph about what they are reading. */
       "pgLinkSummaryStore",
+      /* Kept quiz answers, 2026-10-05 (plan 261005b): its parameters are the
+         reader's answer and the mark it was given. */
+      "pgQuizAttemptStore",
       "pgReaderStore",
       "pgReadingTimeStore",
       "pgRealtimeSessionStore",

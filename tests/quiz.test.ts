@@ -309,6 +309,7 @@ describe("withOldClientBands", () => {
     stale: false,
     outdated: false,
     profileChanged: false,
+    attempts: [],
   });
 
   it("gives every question a band and a value an old ladder can walk", () => {

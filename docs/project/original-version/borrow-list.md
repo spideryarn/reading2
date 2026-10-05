@@ -20,7 +20,7 @@ sites, more prompts, or more marks on the page.
 | **Time every model call from the outside** | The SDK's own timestamp fields were empty in production, and read as zero rather than as missing | [llm-plumbing.md](llm-plumbing.md#one-real-gotcha-worth-stealing-outright) |
 | **A global `prefers-reduced-motion` rule** | Ours is a view built on motion. Retrofitting per-component is how theirs ended up covering almost nothing | [design-system.md](design-system.md#accessibility-and-motion) |
 | **The two-sided extraction ratio check** | Catches the extraction failure that errors nothing: a page that extracted *something*, but not the article | [extraction.md](extraction.md#quality-measurement-real-and-worth-rebuilding) |
-| **Adopt 238 wpm with its citation** | Ours uses an uncited 230. One number, one reference, one module already built for it | [difficulty-and-reading-time.md](difficulty-and-reading-time.md#reading-time-the-good-one) |
+| ~~**Adopt 238 wpm with its citation**~~ — **done**, 2026-10-05 | Ours used an uncited 230. One number, one reference, one module already built for it | [difficulty-and-reading-time.md](difficulty-and-reading-time.md#reading-time-the-good-one) |
 | **A fatal error on any id collision** | Their guard is the thing that would have caught their real "headings vanish after reload" bug early | [ids.md](ids.md#three-more-things-they-learned-the-hard-way) |
 | ~~**Size cap, timeout and browser-like headers on the fetch**~~ — **done**, 2026-08-25 | Taken, with none of their numbers: their 4 MB cap would have refused one of Greg's own example PDFs, and their SSL-root-CA fix depends on a package dead since 2019 | [../fetching.md](../fetching.md), [extraction.md](extraction.md#the-fetch-and-one-hard-won-fix) |
 

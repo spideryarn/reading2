@@ -386,6 +386,11 @@ const BODIES: Record<string, unknown> = {
     stale: false,
     outdated: false,
     profileChanged: false,
+    /* As the route sends it: the reader has answered nothing. Left off, the
+       panel says their earlier answers could not be loaded and draws its own
+       Try again — which is true of a response with no `attempts`, and not what
+       this row is about. */
+    attempts: [],
   },
   illustrated: {
     illustrated: {

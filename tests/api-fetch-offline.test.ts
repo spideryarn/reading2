@@ -514,17 +514,18 @@ describe("the media type is parsed, not searched", () => {
 });
 
 /**
- * **A write that leaves our copy correct must not throw it away.**
+ * **A write that leaves our copy's questions correct must not throw it away.**
  *
  * `POST /api/quiz/<slug>/mark` marks one answer against one question and
- * streams the marking back; it stores **no quiz state** — no attempt, no score,
- * no answer, no change to the questions (src/routes.ts § quiz — *"SSE,
- * stateless"*), so `GET /api/quiz/<slug>` still answers what we cached. It is
- * not a write that writes *nothing*: the model call behind it puts a row in the
- * `ai_calls` ledger, which no cached read reflects — see
- * `leavesCachedResourceCurrent` in src/web/lib/api.ts. `resourceOf` maps it to
+ * streams the marking back; it changes nothing about the questions. (Until
+ * 2026-10-05 it stored no quiz state at all. It now keeps each finished mark,
+ * which `GET /api/quiz/<slug>` returns as `attempts` — so the copy is one
+ * answer behind after a mark, and is brought up to date by the read
+ * `useQuiz.mark` makes afterwards rather than by eviction: see
+ * `leavesCachedResourceCurrent` in src/web/lib/api.ts, and the last case
+ * below.) `resourceOf` maps the mark to
  * `/api/quiz/<slug>` all the same, because it maps a URL to *its own* resource
- * and cannot know that this one is read-only. So the reader's quiz was evicted
+ * and cannot know what this one leaves alone. So the reader's quiz was evicted
  * by the act of answering a question of it, and adding `/api/quiz/` to
  * `CACHEABLE` on its own would have bought them exactly one question offline.
  * GPT Sol found it reviewing T0.1;
@@ -579,6 +580,73 @@ describe("marking an answer keeps the quiz it did not change", () => {
 
     expect(res.headers.get("x-spideryarn-offline")).toBe("copy");
     expect(await res.json()).toEqual({ a: 1 });
+  });
+
+  /* Kept answers, plan 261005b F1: the mark leaves the copy alone, and the read
+     that follows a stored mark is what puts the answer into it. The hook's half
+     — that it makes that read, and only after a mark that was stored — is
+     tests/quiz-kept-answers.test.tsx. */
+  it("has the answer offline too, once the quiz has been read again after the mark", async () => {
+    const quiz = (attempts: unknown[]) =>
+      new Response(JSON.stringify({ quiz: { batchId: "b" }, attempts }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.resolve(new Response("data: ok\n\n", { status: 200 })));
+    await apiFetch("/api/quiz/gibbon/mark", { method: "POST", body: "{}" });
+    await settle();
+    /* One answer behind, and still the questions. */
+    expect(held.get("/api/quiz/gibbon")).toEqual({ quiz: { batchId: "b" }, attempts: [] });
+
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([{ questionId: "q", answer: "mine" }])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const res = await apiFetch("/api/quiz/gibbon");
+    expect(res.headers.get("x-spideryarn-offline")).toBe("copy");
+    expect(await res.json()).toEqual({
+      quiz: { batchId: "b" },
+      attempts: [{ questionId: "q", answer: "mine" }],
+    });
+  });
+
+  it("a partial quiz read cannot roll back a full read that commits while it checks the copy", async () => {
+    const quiz = (attempts: unknown) => new Response(JSON.stringify({
+      quiz: { batchId: "b" }, attempts,
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([{ questionId: "q", answer: "old" }])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+
+    let checked!: () => void;
+    const checking = new Promise<void>((resolve) => { checked = resolve; });
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    readCache.mockImplementationOnce(async (url: string) => {
+      const earlier = { body: held.get(url), savedAt: 1000 };
+      checked();
+      await blocked;
+      return earlier;
+    });
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz(null)));
+    await apiFetch("/api/quiz/gibbon");
+    await checking;
+
+    // Another tab finishes its full read while the partial read holds an old copy.
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([{ questionId: "q", answer: "new" }])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+    release();
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const res = await apiFetch("/api/quiz/gibbon");
+    expect((await res.json()).attempts).toEqual([{ questionId: "q", answer: "new" }]);
   });
 
   /* The other direction, so "never invalidate anything" is not a passing

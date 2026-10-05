@@ -352,13 +352,14 @@ describe("the clock, over the real corpus", () => {
    * every block's words, which is what both callers summed until now.
    */
   const cases: { fixture: string; before: number; after: number }[] = [
-    { fixture: "gwern", before: 73, after: 55 },
-    { fixture: "wiki_transformer", before: 50, after: 35 },
-    { fixture: "acx_footnotes", before: 28, after: 23 },
-    { fixture: "tufte", before: 10, after: 9 },
+    { fixture: "gwern", before: 71, after: 53 },
+    { fixture: "wiki_transformer", before: 48, after: 34 },
+    { fixture: "acx_footnotes", before: 27, after: 23 },
+    // Moved a minute (10 → 9) at 230 a minute; at 238 both sides round to 9.
+    { fixture: "tufte", before: 9, after: 9 },
     // The control, and the reason the other four are evidence: a fixture with
     // no notes must not move by a minute.
-    { fixture: "ar5iv", before: 24, after: 24 },
+    { fixture: "ar5iv", before: 23, after: 23 },
   ];
 
   for (const { fixture, before, after } of cases) {

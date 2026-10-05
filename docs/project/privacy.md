@@ -83,6 +83,7 @@ The four that mattered:
   The page mentioned an email address only under bug reports.
 - **Quiz answers are not stored at all** — v1 marks and discards
   ([`src/db/schema.ts`](../../src/db/schema.ts) § `quiz`). The page had them on the kept list.
+  **True then, reversed on 2026-10-05**: [§ Quiz answers](#quiz-answers) below.
 
 Also corrected: the account fields we actually hold, what a public link exposes, that OpenRouter
 allows fallbacks so the upstream may be a cloud host rather than the model's maker, that ZDR covers
@@ -538,6 +539,38 @@ all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to
 **Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
 `BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
 dial, and requires the page to name each. A fourth index turns it red until the page names it.
+
+## Quiz answers
+
+**Stored since 2026-10-05, at Greg's request** — the reversal of a sentence this page had carried
+since the review above: *"Quiz answers are the exception: they go to a model to be marked and are
+not stored."* That was true until then. Greg, 2026-10-04 (report `spya-e8ujxn`):
+
+> I think when I tried with the quiz, I answered a question or two and then came back to it and it
+> looked like the answers had been thrown away. Is there a way for us to store those answers?
+
+So each mark that finishes is one row in `quiz_attempts`
+([`src/db/schema.ts`](../../src/db/schema.ts)): the reader's answer, the reply it was given, the
+question's words and when. The page's *What you write* bullet lists them and the exception sentence
+is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
+[261005b](../plans/261005b-quiz-answers-are-kept-and-restored.md); how it behaves is
+[quiz.md § Answers are kept](quiz.md#answers-are-kept).
+
+What the code has to keep true for the page to stay honest:
+
+- **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
+  no column for it; the hidden verdict lives in the panel for the length of a visit, as before
+  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)).
+- **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
+  and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
+- **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never
+  name the table (`tests/public-reads.test.ts`).
+- **They go when the article does** (a cascade from `articles`), and they are in both exports —
+  including answers to a batch of questions that has since been rewritten, which the panel no
+  longer shows.
+
+`tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
+there.
 
 ## What is pinned by a test, and what is not
 

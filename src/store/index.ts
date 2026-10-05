@@ -76,6 +76,7 @@ import type {
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
+  QuizAttemptStore,
   FeedbackStore,
   FetchAllowanceStore,
   GlossaryLookupStore,
@@ -113,6 +114,7 @@ import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
+import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -344,6 +346,8 @@ export const citationFindStore: CitationFindStore = guarded("citation-finds", pg
 export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
 /** The glossary entries an owner hid on one article — plan 261002c § 2. */
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
+/** The reader's finished quiz marks, kept since 2026-10-05 — plan 261005b. */
+export const quizAttemptStore: QuizAttemptStore = guarded("quiz-attempts", pgQuizAttemptStore);
 
 /**
  * Explaining a term the reader typed into the glossary's box.

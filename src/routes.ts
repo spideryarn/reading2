@@ -47,6 +47,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  quizAttemptStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -2204,7 +2205,9 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  *
  * The one case with **no** terminal frame is the reader leaving: `sse`'s `gone`
  * aborts the model call, `markAnswerStream` ends without a `done`, and there is
- * nobody on the other end of the socket to tell either way.
+ * nobody on the other end of the socket to tell either way. (Leaving later,
+ * during the verdict call, is different: the mark is already whole, the stream
+ * still yields its `done`, and only the frame has nowhere to go — see below.)
  *
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
@@ -2215,10 +2218,25 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
  * half-opened stream. Everything after `sse(res)` is frames, including failure.
  *
- * **Nothing is stored.** No attempt row, no thread, no `pending` write to
- * recover — which is why this handler has none of `answer`'s three writes. A
- * reload starts the quiz fresh; the questions persist because they are an
- * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not stored.
+ * ## A finished mark is kept — one write, when the stream says `done`
+ *
+ * Nothing was stored here until 2026-10-05; Greg asked for the answers to be
+ * kept (report spya-e8ujxn, docs/plans/261005b-quiz-answers-are-kept-and-restored.md).
+ * So when `markAnswerStream` yields its `done`, one row goes into
+ * `quiz_attempts` — the answer, the mark, and the question's words — **and
+ * then** the `done` frame is sent, carrying the row's own time as `answeredAt`.
+ * Still no `pending` write and nothing to recover: a mark that did not finish
+ * leaves no row at all.
+ *
+ * - **The row is the record that a mark finished; the frame is not.** A reader
+ *   who leaves during the verdict call still gets a `done` out of the stream,
+ *   so the row is written with nobody listening, and they find the answer
+ *   there when they come back.
+ * - **A save that fails does not fail the mark.** The reader has watched it
+ *   arrive. It is reported, and `done` goes with `kept: false` and no
+ *   `answeredAt`, so the panel can say the answer will not be there later.
+ * - **The verdict is not stored**, and neither the answer nor the mark is
+ *   logged — from here or from the store.
  */
 async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
@@ -2307,7 +2325,8 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          would ever see, and being paid for it, until it finished on its own —
          and a reader who came back and pressed Answer again started a second
          one beside the first. There is no stop button in the quiz panel and no
-         attempt row to reconcile, so this is the only cancellation there is.
+         pending row to reconcile (a row is written only for a mark that
+         finished), so this is the only cancellation there is.
          `markAnswerStream` tells this signal apart from its own deadline and
          stall clocks and ends the mark without a `done`. */
       signal: gone,
@@ -2337,10 +2356,29 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          screen even by accident, because nothing renders this frame's fields
          except the tick. It is often absent, which is normal: the ladder reads
          absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+      /* **Kept first, then told.** In this order so that `answeredAt` is the
+         row's own time, and so that a `done` the reader receives without
+         `kept: false` is a mark that really is in the table. Not gated on
+         `alive()`: a mark that finished is kept whether or not anybody is
+         still there to hear so. The catch reports the failure and nothing
+         else — `captureFailure` gets the slug and the phase, never the words. */
+      let answeredAt: string | null = null;
+      try {
+        answeredAt = await quizAttemptStore.record(slug, {
+          batchId: found.quiz.batchId,
+          questionId: question.id,
+          question: question.question,
+          answer: written,
+          reply: event.reply,
+        });
+      } catch (keepErr) {
+        captureFailure(keepErr, { route: "quiz-mark", slug, phase: "keep-answer" });
+      }
       frame("done", {
         reply: event.reply,
         model: event.model,
         ...(event.verdict ? { verdict: event.verdict } : {}),
+        ...(answeredAt ? { answeredAt } : { kept: false }),
       });
     }
   } catch (err) {
@@ -9260,7 +9298,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      `mark` below is the exception, and it is the same exception the glossary's
      `lookup` is: *writing* the questions is one call over a whole article and so
      is a job, but marking ONE answer is a single question with a reader sitting
-     in front of it. It stores nothing — see `markOneAnswer`. */
+     in front of it. It keeps each finished mark (`quiz_attempts`, since
+     2026-10-05) and changes nothing about the questions — see `markOneAnswer`. */
   {
     kind: "pattern",
     method: "GET",
@@ -9275,13 +9314,28 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          ladder; it stays until there is an enforceable client-version boundary
          — src/quiz.ts says why. */
       const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        withOldClientBands(
-          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
-        ),
+      const found = await withProfileChanged<Omit<QuizResponse, "attempts">>(
+        at,
+        () => loadQuiz(at),
+        (quiz) => quiz.quiz,
       );
+      /* **The reader's kept answers to this batch**, since 2026-10-05 (plan
+         261005b) — on this read rather than a second endpoint, so the panel
+         gets questions and answers in one commit.
+
+         **A failed read of them does not take the questions away, and does not
+         say "none" either**: `null`, which the client reads as *keep what you
+         had* — `[]` would un-answer every question on a transient failure.
+         `QuizResponse.attempts` in src/types.ts. */
+      let attempts: QuizResponse["attempts"];
+      try {
+        attempts = await quizAttemptStore.latestForBatch(at, found.quiz.batchId);
+      } catch (err) {
+        captureFailure(err, { route: "quiz", slug: at, phase: "kept-answers" });
+        attempts = null;
+      }
+      const response: QuizResponse = { ...found, attempts };
+      send(res, 200, withOldClientBands(response));
     },
   },
 
