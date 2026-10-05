@@ -20,6 +20,10 @@ for about 80 words whatever the piece, as before. Two things were built, measure
 Brief whose length also followed the piece, and a sentence telling the summary of a long piece to
 cover the whole of it.
 
+**Later the same day Brief's ask went from about 80 words to about 100**, still for every piece,
+on Greg's word and a third round: [§ A slightly longer Brief](#a-slightly-longer-brief-round-three).
+Everything below that says "about 80" describes the day's first two rounds.
+
 ## What was asked
 
 1. Does the length follow the piece today? (No.)
@@ -190,6 +194,117 @@ This did not establish an overall preference benefit. Coverage favored the sente
 and the long article's writes were longer; that is evidence of a possible effect, not evidence of
 no effect. With only two writes per piece, variable control judgments and three claim suspicions,
 the sentence was left out pending stronger evidence, keeping the simpler prompt.
+
+## A slightly longer Brief: round three
+
+Greg, 2026-10-05, answering whether a book should get a longer Brief anyway:
+
+> maybe Brief could be ever so slightly longer but not much
+
+**What shipped: Brief is asked for about 100 words and never more than 150, where it was about
+80 and 130, for every piece** (`simple-prompt/10`). On the page that is about 110 words where it
+was about 97. The judge's preference split was 6 to 4 with one tie. This small sample does not
+establish that the change is better or no worse; the padding judgments below count against it.
+
+Two new arms, the same six pieces, two writes each, on Opus with the guard on:
+`high-none-brief90a|b` (about 90, never more than 140) and `high-none-brief100a|b` (about 100,
+never more than 150). Nothing else in the prompt moved. The before side is `len0a|len0b` from
+round one: Brief's prompt was the same bytes from then until this change.
+
+### The words written are not the words asked for
+
+| piece (band) | asked 80 (before) | asked 90 | asked 100 |
+|---|---|---|---|
+| *Identity* (short) | 88, 105 | 103, 106 | 94, 106 |
+| *Haters* (short) | 98, 94 | 92, 99 | 96, 101 |
+| *Dodo* (standard) | 91, 98 | 114, 141 | 120, 137 |
+| *Scaling* (standard) | 97 | 99, 112 | 126, 102 |
+| *Race* (long) | 98, 91 | 94, 91 | 91, 103 |
+| *Geometric DL* (book) | 113, 95 | 90, 99 | 116, 122 |
+| **mean (range)** | **97** (88 to 113) | **103** (90 to 141) | **110** (91 to 137) |
+
+- **Twenty words more in the ask is about thirteen more on the page.** Asked for 80 the model
+  already wrote 97; asked for 100 it wrote 110.
+- **No write failed**, and none came near Brief's stored limit of 240 words. One went over its
+  prompt's own "never more than": 141 against 140, in the 90 arm, on a second try the guard
+  asked for.
+- Three Briefs of the 24 new ones ran to a third paragraph (two at 90, one at 100); none of the
+  eleven before did. The prompt allows it "only if the piece truly needs it".
+- The longest sentence was 19 words before, 20 at 90 and 21 at 100, against "every sentence
+  under 18".
+- The waits in these files are not comparable with round one's: the box was badly overloaded
+  while they were written.
+
+### The blind judge
+
+27 pairs, Brief only: each old write against the 90 and the 100 of the same letter, and old
+against old as the control, shuffled together. The new side was A in 11 of the 22 test pairs and
+B in 11. The first seed tried put it on B 16 times, so the next seed was taken, chosen from the
+side counts alone before any pair was judged. A fresh subagent read only the pairs file; its
+instructions are saved beside its answers (`judge-brief-instructions.md`). The two short essays
+were given in full, the others as headings. *Scaling* has no `len0a`, so it has one test pair an
+arm and no control.
+
+Which would you rather be given before reading the piece:
+
+| pairs | longer | old (80) | no difference |
+|---|---:|---:|---:|
+| asked 100: 11 | 6 | 4 | 1 |
+| asked 90: 11 | 3 | 8 | 0 |
+| control, old against old: 5 | 4 to one write, 1 to the other | | |
+
+- **The control shows variation between writes.** Two writes of the old prompt split 4 to 1.
+  That is not an equivalence margin for the test arms: it does not establish that 100 is no
+  worse or that 90 is worse. The judge often gives content reasons, such as whether a write
+  includes *"can need impossibly many examples"* or the essay's last line. Content differences
+  still matter to the reader, whatever caused them.
+- **Padding, the bar this had to clear.** The judge called the 100 the padded side in 5 pairs
+  and the old one in 2 (both in 1, neither in 3). For the 90 it was 2 and 2. In the control it
+  called one old write padded in 2 of 5. These counts are adverse evidence for 100. This small
+  sample does not establish that the extra padding is chance, or that the "not padded" bar
+  has been met.
+- **A bent claim**: 100 alone once, old alone three times; 90 alone three times, old alone
+  once, both twice. In the control one old write was flagged in 3 of 5.
+- **Coverage**, on the seven pairs an arm given headings: the longer side gave the truer picture
+  of the whole in 4, for both arms, and the old side in 1 (at 100) and 0 (at 90).
+- **Omission**, on the four short-essay pairs an arm: the longer side left out a point the essay
+  marks as important once in each arm, and the old side never. So more room did not buy the
+  thing round one's 60-word Brief lost; that was already there at 80.
+
+### Every piece, or only the long ones
+
+| asked 100, preferred | longer | old | no difference |
+|---|---:|---:|---:|
+| the short essays and the standard articles: 7 | 5 | 2 | 0 |
+| the long article and the book: 4 | 1 | 2 | 1 |
+
+- **Nothing here argues for a longer Brief on long pieces alone, which is where the question
+  began.** For the book the judge preferred the old Brief in all four pairs, two at each ask,
+  as it did in both of round one's. Its reasons there were about content; that does not erase
+  the unfavorable result. The book's two old writes split in the control too.
+- A longer Brief for the shorter pieces alone is what the table leans towards. That subgroup
+  is small and does not establish which pieces should get the increase.
+- Keeping **one length for every piece** is the simpler product choice, but the measurement
+  does not establish that increasing it for every piece is harmless. Leaving Brief alone is
+  the conservative choice on this evidence.
+
+### Why 100 and not 90
+
+The brief for this work was: if the judge still prefers the current Brief, take the smallest
+increase that is not judged worse. The judge preferred the old Brief over 90 by 8 to 3, and
+100 over the old Brief by 6 to 4 with one tie. These are descriptive results, not evidence
+that 90 is worse while 100 is no worse. The control cannot justify dismissing the first result
+as noise and then using it to rule 90 out. The 90 arm moved the mean by six words and 100 by
+thirteen; choosing 100 for that larger increase is a product judgment. The measurement has
+not established that either increase clears the "not padded" bar.
+
+### What this does not show
+
+- That a reader prefers the longer Brief, or that it is no worse. The control shows that
+  writes vary; it does not show that the judge could not distinguish a prompt effect.
+- Anything about a profiled reader, a narrative book, or a piece over 50,000 words, as above.
+- The four arms cost about $4.50 for 24 writes. Four writes came back unpriced by the provider
+  and are estimated from their twins in the other draw.
 
 ## What reading them found
 
