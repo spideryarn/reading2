@@ -305,20 +305,19 @@ no change to it: **zero `checkTree` problems as a finished, non-provisional tree
 every internal node, nothing the labels step could not ask about. About 100 seconds of wall time
 against a step budget of 700.
 
-**The cascade was not run.** Its one measurement (260904d, a 2,569-block book) cost about $2.50
-and took 516 to 740 seconds for a wave that still leaves every node it started from without a
-gist. And it can only divide downwards: D's parts for this book hide three stories under one
-heading, and nothing in the cascade regroups upwards. Slices are chosen on that evidence. Review
-F7 asked for the comparison under one deadline; it is this, and it is analytic on the cascade's
-side.
+**The cascade was not run.** It leaves every node it starts from without a gist, and it can only
+divide downwards: D's parts for this book hide three stories under one heading, and nothing in
+the cascade regroups upwards. Slices are chosen for that and for being simpler. Its earlier
+measurements (260904d) cover its whole step with labels, so they cannot be set against this
+structure-only spike; the cost comparison review F7 asked for is unmeasured (review F20 below).
 
 **What the spike found that the hypothesis did not have:**
 
 - **A slice does not know it is a slice.** Three of four slices cut their stories into scenes at
-  the top level (*Visit the Sins* became five parts). Two plain sentences ahead of the blocks,
-  saying this is one stretch of a longer document and its top-level sections should be the
-  document's own chapters, gave exactly the stories: 19 parts instead of 27. The system prompt is
-  untouched, so the evaluated call is the same call. Tried on two slices of one book.
+  the top level (*Visit the Sins* became five parts). A four-sentence note ahead of the blocks,
+  written for this book, on two of the slices, brought the tree from 27 parts to 19 (not exactly
+  one per story: *Human Readable* is still three). An ordinary article's request is unchanged,
+  because the note exists only on this path. See review F19 below.
 - **A chapter can come back with no sections and 183 blocks in it**, swallowing two stories. The
   tree checks pass it. Asking again for that range alone (18 seconds, $0.05) gave three chapters.
   So: a top-level section with no sections of its own and more blocks than the labels batch size
@@ -360,6 +359,43 @@ side.
   finished tree when the model answers and D's when it does not.
 - Then the real book end to end through the queue, its labels, and a browser check at three
   widths. Budget $5.
+
+### The review of this plan, and what changed
+
+GPT Sol, read-only, on `923013789`: [the review](261005a-long-documents-stage-e-plan-review-sol.md),
+**build with changes**. It checked the spike's numbers against the raw files (correct) and that
+the shared checkpoint namespace is safe. All seven findings are taken:
+
+- **F15 (P1, established): a slice can vanish in the stitch.** An answer with a root and no
+  sections is valid on its own, contributes nothing when its sections are promoted, and the final
+  build quietly stretches a neighbour over its blocks, with a gist written for text that model
+  never saw. So: a slice or refill is accepted only if its promoted sections are non-empty and
+  exactly tile the blocks it was given. Anything else is a failed answer (one re-ask, then D).
+  The final build must report zero repairs at slice seams.
+- **F16 (P1): the deadline.** If the queue's own deadline fires, the job ends as interrupted even
+  if E then returns D. So E keeps its own, earlier deadline (the step budget or the queue's
+  deadline, whichever is sooner, less a reserve for finishing); every call has a time cap; a call
+  is admitted only if its cap fits; E aborts its own calls with its own signal, waits for them,
+  and finishes with D inside the reserve. A reader's Stop is still a cancellation. Refills are
+  skipped first when time is short.
+- **F17 (P1): spend.** On a failure E stops admitting calls and **waits for every call already
+  started** before returning D, so their cost is inside the step's ledger scope; each good answer
+  is checkpointed even when a peer failed; usage is read before the answer is judged.
+- **F18 (P1): a second run buys nothing only if refills and the root are checkpointed too.** They
+  are, each under its own canonical request.
+- **F19 (P2): I overstated the note.** What the spike tried was four sentences written for this
+  book, on two slices, and it gave 19 parts, not exactly one per story. The production note is
+  generic, and is measured before it is kept: note against no note on a slice of the book, a slice
+  of a paper and a headingless slice, written up under `docs/investigations/`.
+- **F20 (P2): the cascade's numbers were for its whole step, labels included**, so the cost and
+  time comparison above does not stand. Slices are chosen for fit (the cascade cannot regroup
+  upwards or write gists for the nodes it starts from) and for being simpler. The comparison of
+  cost is unmeasured.
+- **F21 (P2): an import cycle.** `structure-slices.ts` imports no values from `structure.ts`; the
+  request and parse helpers are passed in or moved.
+
+Also from the review: one re-ask per slice, as today; a refilled chapter that is still sectionless
+is kept if the tree and labels checks pass; D's windows are never mixed into a model tree.
 
 **What it gives up, said plainly.** Each slice is cut without sight of the others, so a story
 that runs across a seam would be two parts (seams are put on headings to make that rare, and a
