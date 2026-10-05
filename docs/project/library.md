@@ -1034,17 +1034,41 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
-**It is body words at 238 a minute, and it does not know how hard the piece is.** 238 is the average
-for an adult reading English non-fiction silently (Brysbaert 2019); it was a folk 230 until
-2026-10-05. Greg asked whether the number takes difficulty into account (`spya-jew7ds`), and it does
-not: the cheap formula sees long words and not hard ideas in plain ones, which was his example, and a
-model's rating has not been checked against reading time on our articles. So the number stays flat and **the card behind it says so** —
-[`ReadTimeCard.tsx`](../../src/web/ReadTimeCard.tsx), on the masthead's minutes and on Metadata's
-*Read time* tile: the words, the rate, the range most adults fall in (175 to 300 a minute), what
-the estimate cannot see, and the notes it left out. The working is
-[261005a](../research/261005a-reading-time-estimates-and-text-difficulty.md); what was built and
-what was put to Greg is
-[261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
+**It is body words at 238 a minute, adjusted for how hard the piece is when a model has rated
+it.** 238 is the average for an adult reading English non-fiction silently (Brysbaert 2019); it was
+a folk 230 until 2026-10-05. Greg asked whether the number takes difficulty into account
+(`spya-jew7ds`), and chose a model's rating over a word-length formula, because the formula sees
+long words and not hard ideas in plain ones, which was his example:
+
+> yes, either difficult language and/or difficult ideas both slow down reading time.
+>
+> — Greg, 2026-10-05
+
+- **The rating** is language 1 to 5, ideas 1 to 5, and one sentence saying why, from one cheap call
+  at the end of the `blocks` step over a sample of about 3,000 words
+  ([`src/reading-difficulty.ts`](../../src/reading-difficulty.ts), job `reading-difficulty`). It
+  never fails an import: a piece it could not rate is left unrated.
+- **The multiplier** is one small table per scale, multiplied, between 0.84 and 1.40, applied
+  before rounding. The tables and the bounds live in `src/reading-time.ts` and nowhere else. They
+  are provisional: argued from published studies of other readers, not measured on ours.
+- **Stored** as five columns on the revision, with the model and the time, carried forward by any
+  revision that does not split the blocks again. A visitor's page gets the two numbers and the
+  sentence, so its minutes match the owner's.
+- **An article imported before 2026-10-05 has no rating** and reads at the flat rate until a
+  backfill is run, which is a write to production and not yet written.
+- **The card behind the number says all of this** —
+  [`ReadTimeCard.tsx`](../../src/web/ReadTimeCard.tsx), on the masthead's minutes and on
+  Metadata's *Read time* tile: the words, 238 as the starting rate, the model's two ratings and its
+  sentence, the range most adults fall in with the same adjustment, that it does not know who is
+  reading, and the notes it left out. Unrated, it says so.
+
+The numbers and the paid check of the call are in
+[261005b](../investigations/261005b-reading-time-difficulty-multiplier-coefficients-and-where-the-rating-comes-from.md);
+the plan is
+[261005j](../plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md),
+the earlier research
+[261005a](../research/261005a-reading-time-estimates-and-text-difficulty.md), and the card's first
+version [261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
 The spine's reading-time chart keeps its own 230 on purpose ([reading-time.md](reading-time.md)): it
 is the unit of a brightness scale and also supplies the gutter card's estimate for a single block.
 

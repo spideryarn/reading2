@@ -73,6 +73,15 @@ async function main(articleSlug: string): Promise<number> {
     console.error("--write: not built yet. Nothing was read, bought or stored.");
     return 2;
   }
+  /* A dry run still writes: the call's row in the cost ledger. On a laptop
+     that is nothing; on the remote it is a write to production that nobody
+     asked for, made by a command that says it changes nothing. */
+  if (!isLocalDatabaseUrl(url ?? "")) {
+    console.error(
+      "This is not a local database, and even a dry run writes one cost-ledger row. Nothing was read, bought or stored.",
+    );
+    return 2;
+  }
   console.log("Mode: dry run (the article is not changed; one ledger row is written for the call)");
 
   const owner = (ownerArg ?? environmentOwnerId()) as OwnerId;

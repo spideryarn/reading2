@@ -487,7 +487,9 @@ export function PrivacyPage() {
           out);{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first
-          two pages of a PDF you add in a batch, for which it is shown the text of those two pages;{" "}
+          two pages of a PDF you add in a batch, for which it is shown the text of those two pages, and to
+          judge how hard an article is to read so that its reading time can allow for it, for which it is
+          shown passages from the article, about 3,000 words at most;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

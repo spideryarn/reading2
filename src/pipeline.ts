@@ -130,6 +130,7 @@ import {
   previousCitationsFrom,
 } from "./citations.js";
 import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
+import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
@@ -223,7 +224,7 @@ import {
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
   TWEETS_OUTPUT_SCHEMA,
 } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName, StepPreview } from "./types.js";
+import type { Block, JobUpload, Meta, StepName, StepPreview, StoredReadingDifficulty } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
@@ -1962,6 +1963,44 @@ async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: M
 /** The real registry. An object, so a test of a step can hand it a lookup that never leaves the process. */
 export const articleRegistryDeps: { lookup: (id: WorkId) => Promise<LookupResult> } = { lookup: lookupWork };
 
+/** The real rating call. An object, like `articleRegistryDeps`, so a test of the step never reaches a model. */
+export const readingDifficultyDeps: { rate: typeof rateReadingDifficulty } = { rate: rateReadingDifficulty };
+
+/**
+ * **How hard the piece is to read, rated from the blocks stage 3 has just
+ * made** (src/reading-difficulty.ts), as the artefact `blocks` writes beside
+ * them. Here and not in `extract`, so the rating is always about the text the
+ * reader is served: an extract-only revision carries its old blocks forward.
+ * Plan 261005j.
+ *
+ * **It never fails the step.** The call already answers "unrated" for a
+ * refusal, its own 15-second deadline and a bad answer. What it throws beyond
+ * that (a transport error, a missing key) is caught here too and logged as an
+ * error, by class and never by message: an article with flat minutes is a
+ * state the reader's card names, and an import that died for want of a
+ * reading-time estimate is not. Only the step's own cancellation gets out.
+ */
+async function ratedReadingDifficulty(ctx: StepContext, blocks: readonly Block[]): Promise<StoredReadingDifficulty> {
+  const started = Date.now();
+  try {
+    const outcome = await readingDifficultyDeps.rate(ratingParagraphs(blocks), { signal: ctx.signal });
+    plog.info(
+      { slug: ctx.slug, step: "blocks", readingDifficulty: outcome.kind === "rated" ? "rated" : outcome.why, ratingMs: Date.now() - started },
+      `blocks ${ctx.slug}: reading difficulty ${outcome.kind === "rated" ? "rated" : `not rated (${outcome.why})`}`,
+    );
+    if (outcome.kind !== "rated") return { rated: false };
+    const { language, ideas, reason, model } = outcome;
+    return { rated: true, language, ideas, reason, model, ratedAt: new Date().toISOString() };
+  } catch (err) {
+    if (ctx.signal.aborted) throw err;
+    plog.error(
+      { slug: ctx.slug, step: "blocks", errorClass: err instanceof Error ? err.name : typeof err, ratingMs: Date.now() - started },
+      `blocks ${ctx.slug}: the reading-difficulty call threw; left unrated`,
+    );
+    return { rated: false };
+  }
+}
+
 /**
  * **`meta` with what a registry says about the article itself** — its journal,
  * its DOI and, when the page stated no date, the day it was published
@@ -2636,17 +2675,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          blocks cleaned by the current sanitiser policy from blocks cleaned by
          nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
          every article read back as *predates the sanitiser* for ever. */
-      /* **`readingDifficulty` is always "unrated" for now.** The step has to
-         return every kind it declares (`checkProduct`, src/store/session.ts),
-         and the model call that rates the blocks above is not wired in yet:
-         it is stage 3 of plan 261005j, and replaces this literal. Until then
-         a re-split piece is left unrated, which is also what every piece is
-         today. */
       return {
         parts: {
           blocks: blocksArtefact(run.blocks),
           stampedHtml: run.html,
-          readingDifficulty: { rated: false },
+          /* Always written, rated or not: the step returns every kind it
+             declares (`checkProduct`, src/store/session.ts), and "unrated"
+             clears a rating that was about the blocks this run replaced. */
+          readingDifficulty: await ratedReadingDifficulty(ctx, run.blocks),
         },
         detail: `${total} blocks, ${minted} new ids (${kept} kept)`,
       };
