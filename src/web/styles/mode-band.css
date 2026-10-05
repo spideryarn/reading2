@@ -363,10 +363,12 @@
   cursor: pointer;
 }
 .chat-thread-open:hover { color: var(--ink); }
-/* Two lines, then cut. A title is up to sixty characters (`titleFrom` in
-   src/chat.ts) and the panel fits rather fewer than that on a line, so one line
-   was throwing away the end of the sentence that says what the question was
-   about; two lines shows all of it. `line-clamp` needs the prefixed pair to
+/* Two lines, then cut. A stored title is up to sixty characters (`titleFrom`
+   in src/chat-title.ts) and the panel fits rather fewer than that on a line, so one
+   line was throwing away the end of the sentence that says what the question
+   was about. Since 2026-10-05 the row draws the whole first question where the
+   title was only its start (chat-list-row.ts), so this clamp is now what cuts
+   a long one. `line-clamp` needs the prefixed pair to
    work anywhere; both are still required in 2026. */
 .chat-thread-title {
   min-width: 0;
@@ -388,6 +390,27 @@
   white-space: nowrap;
   color: var(--ink-faint);
   font-size: 0.88rem;
+}
+/* **A narrow window gives each row more of itself** (plan 261005h; Greg on an
+   iPhone, 2026-10-05: the list "truncates both the thread title and the first
+   response a little bit too aggressively, so it's quite hard to tell what each
+   chat's really about"). Measured at 390px the title has 302px, and one line of
+   preview held about 35 characters. Three lines of title — which since the
+   same day is the whole first question where the stored title was only its
+   start (chat-list-row.ts) — and two of preview. A short question still takes
+   one line. A wide window is left as it was. */
+@media (max-width: 731px) {
+  .chat-thread-title {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+  .chat-thread-last {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+  }
 }
 .chat-thread-meta {
   display: flex;

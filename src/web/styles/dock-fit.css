@@ -183,8 +183,8 @@
    (§ a coarse pointer).
 
    **Rung 4 went in at the bottom on 2026-10-02**, so nothing renumbered: it is
-   rung 3 exactly, plus the bar's quick-search box turning into the ⚡
-   (styles/dock-quick-search.css). Rung 3 keeps a compact box. An owner's
+   rung 3 exactly, less the bar's quick-search box (it turned into a ⚡ until
+   2026-10-05; now nothing is drawn — styles/dock-quick-search.css). Rung 3 keeps a compact box. An owner's
    reading view was already on rung 3 at 1440×900, so while the box went at
    rung 3 a laptop never saw a search *bar* at all (plan 261002h). **Every
    rung-3 selector below has a rung-4 twin in the same list** — a bar wears one
@@ -274,7 +274,7 @@
    docs/plans/261001j-….
 
    Rung 3 — every button in the bar, not just the modes (and rung 4, which is
-   rung 3 plus the search box gone to the ⚡). The modes tighten by
+   rung 3 less the search box). The modes tighten by
    0.15rem from rung 2; loose non-mode buttons tighten by 0.05rem from their
    base padding, and their remaining labels disappear. It was written when 0.55rem brought thirteen icons to 401px against
    390 of bar and this rung was what made a phone fit; the modes have outgrown

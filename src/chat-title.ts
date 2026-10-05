@@ -1,0 +1,21 @@
+/**
+ * A thread's name, taken from the first thing the reader typed.
+ *
+ * Cut on a word boundary, and only when there is something to cut — a short
+ * question is its own title and does not need an ellipsis it has not earned.
+ * Newlines collapse first, because a pasted paragraph would otherwise put a
+ * line break in the middle of a list item.
+ *
+ * **In a file of its own since 2026-10-05** so the browser can ask the same
+ * question the server did: src/chat.ts reads files and cannot be imported
+ * into the client, and Chat's list needs to know whether a stored title is
+ * exactly this cut (src/web/chat-list-row.ts). src/chat.ts re-exports it.
+ */
+export function titleFrom(text: string): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length === 0) return "New chat";
+  if (clean.length <= 60) return clean;
+  const cut = clean.slice(0, 60);
+  const space = cut.lastIndexOf(" ");
+  return `${space > 20 ? cut.slice(0, space) : cut}…`;
+}
