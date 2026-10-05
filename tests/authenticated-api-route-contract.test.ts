@@ -932,7 +932,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 /** Loud failure controls. Never the oracle — see the header. */
 /* 93 since the private link's one matcher, 2026-10-05 (plan 261005e). */
 const EXPECTED_MATCHER_COUNT = 93;
-const EXPECTED_GUARD_COUNT = 112;
+/* 115 since its three verbs, each a guard. */
+const EXPECTED_GUARD_COUNT = 115;
 
 /* ------------------------------------------------------------- the source read */
 
