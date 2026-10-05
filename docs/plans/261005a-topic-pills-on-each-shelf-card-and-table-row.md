@@ -201,13 +201,17 @@ slot.
 - **[Q-pressable]** Should pressing a pill on a card filter the shelf to that topic? Built: no, a
   label. The other option and its costs are above. My recommendation: leave them as labels until
   the lack is felt.
+  **Decided: yes, low priority** — Greg, 2026-10-05: "ideally yes, unless it's a hassle. not a high
+  priority". Queued.
 - **[Q-more]** Should there be a way to see the topics behind `+N` from the card? Built: no; they
   are in the Topics row's *More detail* view. Options: a hover card on `+N` (a mouse only, and the
   `+N` then has to open the article when pressed, or it is a dead patch); or pressing `+N` unfolds
   the rest in place (works on a phone; makes `+N` a button inside the card's link). My
   recommendation: wait and see whether five or more topics on one article is common enough to
   matter.
+  **Decided: wait** — Greg, 2026-10-05: "waiting is fine".
 - **[Q-which-three]** Which three, when there are more? Built: the row's own order, broad first
   (*AI & Computing* before *Memory & Learning*). The other option is finest first, which says more
   about the one article and less about where it sits. My recommendation: broad first, because it
   matches the row above and the paper card.
+  **Decided: broadest, as built** — Greg, 2026-10-05: "broadest".
