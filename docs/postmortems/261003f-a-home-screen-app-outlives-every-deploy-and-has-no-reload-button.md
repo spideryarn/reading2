@@ -45,6 +45,11 @@ does not find it; something has to construct it.
   two builds compared here, so it survives most deploys by luck.
 - `SPIDERYARN-READING2-BJ`, 78 seconds before the report: the whole-app `[render]` crash on a copy
   eleven hours and two deploys old. Not reproduced; same state, different failure.
+  **Found on 2026-10-05**
+  ([261005d](../plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md)): the Metadata
+  page looked up a stage's icon by a name the newer server sent (`relations`) and the older copy's
+  table lacked. The shape has a name of its own: **a `Record<Union, …>` indexed by a value off the
+  wire**. The type says every key is there, and it is, for the union that bundle was compiled with.
 
 ## Which commit introduced it
 

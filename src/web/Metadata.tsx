@@ -207,6 +207,7 @@ import {
   Blocks,
   Bot,
   BookA,
+  CircleDashed,
   Lightbulb,
   BookOpen,
   Clock,
@@ -400,6 +401,23 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simple: Layers,
 };
+
+/**
+ * The glyph for a stage **the server named**, which may be one this copy of
+ * the app was built before.
+ *
+ * `STAGE_ICONS` is complete for the names in this bundle and the type says so,
+ * but a stage row's `step` comes off the wire, and a copy opened from a
+ * home-screen icon outlives several deploys. When `relations` was added, every
+ * older copy looked it up, got `undefined`, and React took the whole app to
+ * the `[render]` screen for a missing 13-pixel icon (`SPIDERYARN-READING2-BJ`,
+ * `-CB`). The server sends the row's label, so with a neutral glyph the row is
+ * complete. tests/metadata-unknown-stage.test.tsx.
+ */
+function stageIcon(step: string): ComponentType<{ size?: number }> {
+  const known: Partial<Record<string, ComponentType<{ size?: number }>>> = STAGE_ICONS;
+  return known[step] ?? CircleDashed;
+}
 
 /*
  * **`SOON` and its one row stood here until 2026-09-07, and the row was this
@@ -3543,7 +3561,7 @@ function StageRow({
   const { step, label, outputs, done } = stage;
   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
   // destructured here, so a reader of `<Wrote>` can see which they are.
-  const Icon = STAGE_ICONS[step];
+  const Icon = stageIcon(step);
   return (
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
       <div className="tw:flex tw:items-center tw:gap-3">
