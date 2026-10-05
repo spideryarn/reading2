@@ -242,31 +242,59 @@ address, not the route.
 
 ### Stage: the resolver and its three callers, arXiv as PDF only
 
-- [ ] Tests first, red: `tests/paper-sources.test.ts` — every link shape in § Goal resolves to the
+- [x] Tests first, red: `tests/paper-sources.test.ts` — every link shape in § Goal resolves to the
       same paper; near-misses do not (`arxiv.org/list/…`, `arxiv.org/abs/` alone, `notarxiv.org`,
       `arxiv.org.evil.example`, `arxiv.org:444/abs/…`, an id with trailing junk, a userinfo
       address, a non-arXiv DOI, `doi.org:444`). `identityOf`'s existing any-version tests stay green.
-- [ ] `src/paper-sources.ts`, and the id pattern's other readers pointed at it.
-- [ ] Tests first, red: `urlKey` and `slugFromUrl` over the same shapes (`tests/ingest.test.ts`);
+- [x] `src/paper-sources.ts`, and the id pattern's other readers pointed at it.
+- [x] Tests first, red: `urlKey` and `slugFromUrl` over the same shapes (`tests/ingest.test.ts`);
       `urlKey` of an ordinary address is byte-for-byte what it was.
-- [ ] Tests first, red, for the deploy window: the three Postgres sequences in § Caller 1 (these
+- [x] Tests first, red, for the deploy window: the three Postgres sequences in § Caller 1 (these
       need Postgres and are mine to run, and their raw output goes to the code reviewer).
-- [ ] Tests first, red: the fetch step over an injected fetch — candidate served and right kind →
+- [x] Tests first, red: the fetch step over an injected fetch — candidate served and right kind →
       stored; first is 404 → second stored; first is 410 → second; first is the wrong kind or lacks
       its marker → second; first is 503, a timeout, a blocked address, too large → that failure,
       **no second request**; last is the wrong kind → failure, nothing stored; Stop during the
       first → no second request; a non-source address → one request, as today.
-- [ ] Tests first, red: the extract step resolves a relative `<img>` against the manifest's final
+- [x] Tests first, red: the extract step resolves a relative `<img>` against the manifest's final
       URL, and against the job's address when the manifest has none.
-- [ ] Build it, with arXiv's candidates `[pdf]`. `npm run typecheck`, the touched test files,
+- [x] Build it, with arXiv's candidates `[pdf]`. `npm run typecheck`, the touched test files,
       `npm run lint` on them.
-- [ ] Mutate: reverse the candidate order, drop the kind check, let a 503 fall through, remove the
+- [x] Mutate: reverse the candidate order, drop the kind check, let a 503 fall through, remove the
       hand-back in `enqueue` — each must turn a test red.
-- [ ] One real import, locally, of Greg's link, end to end through the queue: the article is the
-      paper.
-- [ ] Docs: `fetching.md` (a new section, and loose end 1 closed), `ingest-queue.md`,
+- [ ] One real import, locally, of Greg's link, end to end through the queue. **Not done, and why:**
+      `npm run ingest` queued the job under the right slug (`arxiv-2608-13566-…`) and then failed
+      on a query, because the shared local database is missing four migrations and its ledger
+      holds a row from another worktree's regenerated migration, so `db:migrate` refuses. That
+      ledger is not this session's to repair. Checked instead, against live arXiv, with
+      `evals/arxiv-html-vs-pdf/fetch-step-live.ts` (the step's own loop and the real
+      `fetchDocument`): Greg's link fetches the 22-page PDF; so does a paper with no HTML and an
+      old-style id; an ordinary page is one request as before. Output in
+      `261005l-evidence/fetch-step-live-pdf-only.txt`. The PDF's extraction is the PDF arm the
+      eval already ran on this paper.
+- [x] Docs: `fetching.md` (a new section, and loose end 1 closed), `ingest-queue.md`,
       `architecture.md` § Shared code.
 - [ ] GPT Sol code review (write-capable, fixes inside the stage), gates, commit, push to `dev`.
+
+**What landed, and what changed from the plan** (2026-10-05):
+
+- The loop is `fetchFirstCandidate` in `src/pipeline.ts`, taking its candidates and `fetchDocument`
+  as arguments so a test can count requests.
+- **A last candidate of the wrong kind fails with `[fetch-incomplete]`** (`fetchFailed("http-error", null)`),
+  which offers Retry. `unsupported-type` was passed over: its sentence says the document is
+  neither a web page nor a PDF, which is false of an HTML error page, and it says trying again
+  will not help, when such a page is usually a rate limit or a challenge.
+- The step's detail reads `1040 KB, arXiv PDF`; the source's display name is a small table in
+  `src/pipeline.ts`.
+- `urlKey` is called by `src/link-facts.ts`, the prose hover card and the shelf lookup too, so
+  those also treat every shape of an arXiv link as one article now. Wanted, not planned.
+- `src/paper-sources.ts` joined the list of modules the reader's first bundle may load
+  (`tests/eager-client-graph.test.ts`), because `src/ingest.ts` imports it.
+- The hand-back in `enqueue` shares one function with the insert's own `sameWork` answer. A retry
+  cannot reach it: a retry's allocation is never taken from the queue.
+- **Known and left:** the hand-back compares the one holder the in-flight lookup returned. Two
+  active pre-deploy jobs on one unpublished article, with the lookup returning the other, would
+  still duplicate. That needs two jobs for one paper already queued at the instant of the deploy.
 
 ### Stage: the HTML arm's faults (LaTeXML pages), and HTML first
 

@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /var/tmp/spideryarn-worktrees/fbayettj-arxiv-import
+
+  [private lane] spideryarn_test_261005214840_9b764fa516f7404aa3e33dee250b7cd3 in 4.6s, leased as spideryarn-test-lease-1112, priced reader/researcher
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > is seeded with the keys the old build really wrote 10ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands back the job queued from the pdf/ address when the abs/ address is pasted 210ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands back the job queued from the html/ address when the abs/ address is pasted 60ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands a paste the retry of a failed job from before the resolver 108ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > still queues a different piece of work behind it, on the same article 63ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  22:48:39
+   Duration  14.87s (transform 6.00s, setup 277ms, import 8.44s, tests 467ms, environment 0ms)
+
+  [private lane] dropped spideryarn_test_261005214840_9b764fa516f7404aa3e33dee250b7cd3
