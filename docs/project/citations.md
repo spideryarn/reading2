@@ -813,10 +813,10 @@ behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is 
 (§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
 is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
 what that means. The page's words and its address are not in the row. `loadCitations` attaches the
-owner's kept answers, so the tool needed no wider read. A row with Crossref's citation count says
-it after the scores, *cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the
-number and the day `readCitationRegistry` let through, and our words outside the fence say what
-the count leaves out.
+owner's kept answers, so the tool needed no wider read. Crossref counts appear outside the article's
+fence as *Row 2: cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the number
+and the day `readCitationRegistry` let through. The displayed row number ties each count to its
+work inside the fence, after filtering and caps; our words also say what the count leaves out.
 
 ## Making it again
 
