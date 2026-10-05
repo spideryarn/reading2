@@ -599,7 +599,9 @@ const { App } = await import("../src/web/App.js");
    `onAuthStateChange` at module load; a static import at the top of this file
    would run that before `authListeners` above had been initialised, and the
    whole suite would fail to load rather than fail a test. */
-const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
+const { resetForTests: resetExperimental, snapshot: experimentalSnapshot } = await import(
+  "../src/web/experimental-store.js"
+);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -3541,8 +3543,16 @@ describe("the same address, as the owner", () => {
 
     const lines = () => trace.map((r) => `${r.method} ${r.url}`);
     await vi.waitFor(() => expect(lines()).toContain(`GET /api/reading-time/${SLUG}`));
-    /* The switch was really read as off, rather than never read. */
+    /* A request alone could leave the store at its unloaded off default. */
     expect(lines()).toContain("GET /api/reader");
+    await vi.waitFor(() =>
+      expect(experimentalSnapshot()).toMatchObject({
+        loaded: true,
+        on: false,
+        since: null,
+        loadError: null,
+      }),
+    );
   });
 
   /**
