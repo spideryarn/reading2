@@ -713,5 +713,5 @@ export const batchUpload: BatchUpload = createBatchUpload({
   },
   /* The same warning uploadEngine.ts raises, and the fact safe-to-reload.ts
      reads — unload-guard.ts. */
-  guardUnload: warnBeforeUnload,
+  guardUnload: () => warnBeforeUnload("upload"),
 });

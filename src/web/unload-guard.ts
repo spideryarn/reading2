@@ -13,12 +13,18 @@
  * Counted rather than a boolean, because two engines can hold it at once and
  * one finishing must not release the other's.
  *
- * ProfileBox.tsx § `useUnsavedWarning` has a `beforeunload` of its own and was
- * left where it is: the boxes it speaks for are unmounted by the time a reader
- * is on `/changelog`, the one page that reloads itself. If a second page ever
- * does, that warning belongs behind this function too.
+ * **Every `beforeunload` in the client goes through here**, with the reason it
+ * is held. ProfileBox.tsx § `useUnsavedWarning` had one of its own until
+ * 2026-10-05; and useAutosavedText.ts holds one for the window after its box
+ * has unmounted with the newest words still waiting behind an older save,
+ * which nothing warned about before, because the field that would have was
+ * gone (GPT Sol's F12, plan 261005d).
  */
 
+/** Why the tab is being held: a transfer in flight, or words not yet saved. */
+export type UnloadReason = "upload" | "unsaved";
+
+const holds: Record<UnloadReason, number> = { upload: 0, unsaved: 0 };
 let held = 0;
 
 function warn(e: BeforeUnloadEvent): void {
@@ -31,19 +37,21 @@ function warn(e: BeforeUnloadEvent): void {
 }
 
 /** Warn on leaving, from now until the returned function is called. */
-export function warnBeforeUnload(): () => void {
+export function warnBeforeUnload(why: UnloadReason): () => void {
+  holds[why] += 1;
   held += 1;
   if (held === 1) window.addEventListener("beforeunload", warn);
   let released = false;
   return () => {
     if (released) return;
     released = true;
+    holds[why] -= 1;
     held -= 1;
     if (held === 0) window.removeEventListener("beforeunload", warn);
   };
 }
 
-/** Whether anything is holding the tab open right now. */
-export function unloadGuarded(): boolean {
-  return held > 0;
+/** Whether anything is holding the tab open right now, for that reason. */
+export function unloadGuarded(why: UnloadReason): boolean {
+  return holds[why] > 0;
 }

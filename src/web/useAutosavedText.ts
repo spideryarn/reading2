@@ -46,6 +46,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { warnBeforeUnload } from "./unload-guard.js";
+
 /**
  * Where a box's text stands against what the server holds — what
  * `ProfileBox` draws under it.
@@ -124,6 +126,15 @@ export function useAutosavedText({
   /* An unmount save must be ordered after an ordinary write already in flight.
      Sending two independent PATCHes at once lets the older one land last. */
   const leaveAfterFlight = useRef(false);
+  /* While that wait lasts, the newest words exist only in this hook, and the
+     box that would have warned about leaving is gone. So the wait itself
+     holds the tab, and tells a page that reloads itself for a new build to
+     hold off (unload-guard.ts, safe-to-reload.ts). */
+  const releaseLeaveHold = useRef<(() => void) | null>(null);
+  const endLeaveHold = useCallback(() => {
+    releaseLeaveHold.current?.();
+    releaseLeaveHold.current = null;
+  }, []);
   /* Bumped by `seed`, so a save begun for the previous value — Metadata's box
      moving to another article — cannot land on the new one. */
   const epoch = useRef(0);
@@ -143,13 +154,15 @@ export function useAutosavedText({
     epoch.current++;
     inFlight.current = false;
     queued.current = false;
+    leaveAfterFlight.current = false;
+    endLeaveHold();
     now.current = { saved: value, draft: value };
     setSaved(value);
     setDraftState(value);
     setSending(null);
     setError(null);
     setSavedThisVisit(false);
-  }, []);
+  }, [endLeaveHold]);
 
   const fail = useCallback((message: string) => setError(message), []);
 
@@ -157,8 +170,9 @@ export function useAutosavedText({
     epoch.current++;
     queued.current = false;
     leaveAfterFlight.current = false;
+    endLeaveHold();
     now.current.saved = now.current.draft;
-  }, []);
+  }, [endLeaveHold]);
 
   /* The page, or the box, is going: send what the server does not have, with
      nothing awaited first. */
@@ -225,6 +239,7 @@ export function useAutosavedText({
           leaveAfterFlight.current = false;
           queued.current = false;
           lastChance();
+          endLeaveHold();
           return;
         }
         if (queued.current) {
@@ -232,7 +247,7 @@ export function useAutosavedText({
           commit();
         }
       });
-  }, [lastChance]);
+  }, [lastChance, endLeaveHold]);
 
   useEffect(() => {
     const hidden = () => {
@@ -260,8 +275,13 @@ export function useAutosavedText({
      so the first cleanup finds `saved` null and sends nothing. */
   useEffect(
     () => () => {
-      if (inFlight.current) leaveAfterFlight.current = true;
-      else lastChance();
+      if (inFlight.current) {
+        leaveAfterFlight.current = true;
+        const { saved: stored, draft: text } = now.current;
+        if (stored !== null && text !== stored && releaseLeaveHold.current === null) {
+          releaseLeaveHold.current = warnBeforeUnload("unsaved");
+        }
+      } else lastChance();
     },
     [lastChance],
   );

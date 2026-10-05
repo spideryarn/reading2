@@ -66,6 +66,8 @@
  * growing its own — docs/project/web-client.md § Shared code (client).
  */
 import { buildCommit, buildTime } from "./build-stamp.js";
+import { noteNoConnection, noteReachedServer } from "./offline.js";
+import { safeToReload } from "./safe-to-reload.js";
 
 /**
  * The `sessionStorage` key holding every build this session has reloaded for,
@@ -106,6 +108,8 @@ export interface StaleShellDeps {
   reload: () => void;
   /** The address the reader is at, read before the check and again after. */
   address: () => string;
+  /** Whether a reload now would lose nothing the reader has not sent — safe-to-reload.ts. */
+  safe: () => boolean;
   timeoutMs: number;
 }
 
@@ -173,6 +177,7 @@ function browserDeps(): StaleShellDeps {
     storage: sessionNote(),
     reload: reloadPage,
     address: () => window.location.href,
+    safe: safeToReload,
     timeoutMs: CHECK_TIMEOUT_MS,
   };
 }
@@ -242,6 +247,10 @@ export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promi
   /* Before the note is written, not only before the reload: a note left for a
      page the reader walked away from would spend the one reload on nothing. */
   if (deps.address() !== failedAt) return false;
+  /* The page that failed has nothing to lose, but the app around it may: Chat
+     words on an article, a Feedback draft, an upload. Then the reader gets the
+     message and its Reload button instead, and the one reload is not spent. */
+  if (!deps.safe()) return false;
 
   if (!claimReload(storage, theirs)) return false;
 
@@ -383,7 +392,19 @@ function browserWatchDeps(): DeployWatchDeps {
   return {
     production: import.meta.env.PROD,
     mine: buildIdentity(buildCommit(), buildTime()),
-    fetch: (input, init) => fetch(input, init),
+    fetch: async (input, init) => {
+      try {
+        const response = await fetch(input, init);
+        noteReachedServer();
+        return response;
+      } catch (error) {
+        /* A deadline abort is not evidence that the network is gone. A
+           transport failure is, and an old noticed build may still be read
+           by a page that subscribes after this failed check. */
+        if (!init?.signal?.aborted) noteNoConnection();
+        throw error;
+      }
+    },
     timeoutMs: CHECK_TIMEOUT_MS,
     everyMs: CHECK_EVERY_MS,
     visible: () => document.visibilityState === "visible",

@@ -12,12 +12,16 @@
  * real component rather than a stand-in, but without paying for the whole
  * changelog on every run.
  */
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { commitUrl, parseChangelog, parsePending, type ChangelogVersion } from "../src/changelog.js";
 import type { ReloadForNewBuildSource } from "../src/web/useReloadForNewBuild.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
+import { noteNoConnection, noteReachedServer } from "../src/web/offline.js";
+import { noteFeedbackDraft } from "../src/web/safe-to-reload.js";
+import { warnBeforeUnload } from "../src/web/unload-guard.js";
 import {
   ChangelogBody,
   ChangelogPage,
@@ -864,11 +868,44 @@ describe("a new build going live while the page is open", () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["Chat draft", () => { chatDraftsFor("a-piece").setList("unsent"); return forgetChatDrafts; }],
+    ["Feedback draft", () => { noteFeedbackDraft(true); return () => noteFeedbackDraft(false); }],
+    ["upload", () => warnBeforeUnload("upload")],
+    ["unsaved text", () => warnBeforeUnload("unsaved")],
+    ["offline connection", () => { noteNoConnection(); return noteReachedServer; }],
+  ] as const)("uses the real safety check for a retained %s", async (_why, hold) => {
+    const w = watcher();
+    const reload = vi.fn();
+    const release = hold();
+    try {
+      await act(async () => root.render(<ChangelogPage reloading={{ subscribe: w.subscribe, reload, storage: sessionNoteStandIn() }} />));
+      w.say(BUILD_B);
+      expect(reload).not.toHaveBeenCalled();
+      release();
+      w.say(BUILD_B);
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
+  });
+
   it("does not reload once the reader has gone somewhere else", async () => {
     const w = watcher();
     const reload = await open({ subscribe: w.subscribe });
     history.replaceState(null, "", "/read/an-article");
     w.say(BUILD_B);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("does not adopt another page's address if navigation happens before its passive effect", async () => {
+    const w = watcher(BUILD_B);
+    const reload = vi.fn();
+    function Leaving() {
+      useLayoutEffect(() => history.replaceState(null, "", "/read/an-article"), []);
+      return <ChangelogPage reloading={{ subscribe: w.subscribe, reload, storage: sessionNoteStandIn(), safe: () => true }} />;
+    }
+    await act(async () => root.render(<Leaving />));
     expect(reload).not.toHaveBeenCalled();
   });
 

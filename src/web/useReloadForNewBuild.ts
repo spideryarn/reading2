@@ -21,6 +21,7 @@
  */
 import { useEffect } from "react";
 
+import { parseRoute } from "./router.js";
 import { safeToReload } from "./safe-to-reload.js";
 import {
   onDeployNoticed,
@@ -40,13 +41,11 @@ const THE_BROWSER: Partial<ReloadForNewBuildSource> = {};
 
 export function useReloadForNewBuild(over: Partial<ReloadForNewBuildSource> = THE_BROWSER): void {
   useEffect(() => {
-    /* The page this was mounted for. Being mounted nearly says it, but the
-       address moves before the old page's effects are torn down, and the
-       reload must not land on wherever the reader went. */
-    const at = window.location.pathname;
+    /* The address can move before this page's passive effect runs. Always
+       check the page that owns this hook, rather than adopting that address. */
     const deps: ReloadForNewBuildDeps = {
       visible: () => document.visibilityState === "visible",
-      onPage: () => window.location.pathname === at,
+      onPage: () => parseRoute(window.location.pathname).kind === "changelog",
       safe: safeToReload,
       storage: sessionNote(),
       reload: reloadPage,

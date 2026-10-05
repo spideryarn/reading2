@@ -427,7 +427,8 @@ to somehow poll every 15 minutes or so, and if there's a new version, then refre
   The app now asks `/build.json` whether a different build is live when the page wakes and every
   fifteen minutes while it is visible (`src/web/stale-shell.ts` § `watchForDeploy`), and
   `/changelog` reloads when the answer is yes, the page is being looked at, and nothing unsent would
-  be lost: no Chat, Remember or Feedback draft held, no upload going, not offline
+  be lost: no Chat, Remember or Feedback draft held, no autosaved text still unsent, no upload going,
+  not offline
   (`src/web/safe-to-reload.ts`). At most once per build in a session; a refused reload is tried
   again at the next check. The address survives, `#release-126` included; which releases the reader
   had opened by hand does not. **No other page does this** — an unasked reload under an article

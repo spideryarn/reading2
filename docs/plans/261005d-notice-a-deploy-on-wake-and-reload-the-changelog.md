@@ -213,9 +213,8 @@ to Greg as a question rather than being forced.
 - any Chat or Remember draft is held, or the Feedback dialog holds text or a screenshot (F1);
 - an upload or a batch is in flight (F2).
 
-A refused reload is simply tried again at the next check. Pending autosaves (F3) cannot exist on
-`/changelog`: the fields that own them are unmounted by the time the reader is there, and unmount
-is the ordered path. `safeToReload()` is the start of what part 2 would need, and is written to be
+A refused reload is simply tried again at the next check. (This paragraph first said pending
+autosaves cannot exist on `/changelog`. They can; see the code review below, F12.) `safeToReload()` is the start of what part 2 would need, and is written to be
 added to.
 
 **The loop guard remembers every build it has reloaded for**, not just the last (F6). Sol's probe:
@@ -267,10 +266,41 @@ key is present, and it is, for the union this bundle was compiled with.
 ## Stages (as built)
 
 - [x] 1 — GPT Sol's plan review: build it with changes; reduced as above.
-- [ ] 2 — the `[render]` crash: failing test, fix. Its own commit.
-- [ ] 3 — the watcher, `safeToReload()`, the changelog refresh, the shared loop guard, the script,
-      docs. GPT Sol code review (write-capable), browser check, full `npm test`, feedback notes,
-      push to `dev`.
+- [x] 2 — the `[render]` crash: failing test, fix. `f87a3ca94`.
+- [x] 3 — the watcher, `safeToReload()`, the changelog refresh, the shared loop guard, the script,
+      docs: `0019c8c0c`. GPT Sol's code review and what followed are below.
+
+## GPT Sol's code review
+
+[The review](261005d-notice-a-deploy-on-wake-code-review-sol.md) of `f87a3ca94` and `0019c8c0c`:
+*do not ship*, on one finding it was not allowed to fix (F12). Its diff was read line by line, and
+each finding checked.
+
+| # | Finding | Outcome |
+|---|---|---|
+| F12 (P0) | A box that unmounts with newer words behind an unanswered save keeps the only copy of them in a callback; the field's leave warning is gone, so `safeToReload()` said yes. | Fixed by me, red first (`tests/autosaved-text.test.tsx`): that wait now holds the tab through `unload-guard.ts`, for the reason `unsaved`, which is a veto. `ProfileBox.tsx` § `useUnsavedWarning` moved behind the same guard, so every `beforeunload` in the client is one counted fact. |
+| F13 (P0) | The Feedback veto missed audio: recording, transcribing, or failed and kept for retry. | Fixed by Sol, three tests red first. |
+| F14 (P1) | The watcher's requests did not update the connectivity fact, in either direction. | Fixed by Sol: a successful check says connected, a transport failure says not; a deadline abort says neither. |
+| F15 (P1) | The hook read the address in an effect, which can run after the reader has moved, and would have adopted the new page as the one to reload. | Fixed by Sol; I changed its literal `/changelog` to `parseRoute(...).kind === "changelog"` so the trailing-slash spelling counts. |
+| F16 (P1) | `__proto__`, `constructor` and `toString` as stage names got past the icon fallback. | Fixed by Sol: own keys only. |
+| F17 (P2) | The page tests supplied their own `safe`, so the real wiring was untested. | Fixed by Sol: four cases through the real check; I added a fifth for `unsaved`. |
+| F18 (P0) | The older lazy-route reload (`reloadIfStale`, 261003m) never asked whether a reload was safe: a Chat draft on an article was lost when a lazy page's code had moved. Older than this plan. | Fixed by me, red first (`tests/stale-shell.test.ts`): it asks `safeToReload()`; refused, the reader gets the `[chunk]` message and its Reload button, and the one reload is not spent. |
+| F19 (P1) | `?by=constructor` on the shelf: `id in natural` accepts inherited names, and the shelf then calls what it finds. | Fixed by me, red first (`tests/table-sort.test.ts`): own keys only. |
+| F20 (P2) | Six other tables indexed by a value off the wire (`SourceScanNotice`, `MirrorPanel`, `CriteriaPanel`, `MarginaliaColumn`, `ProfilePage`, `useGptLive`). No wrong behaviour with today's server. | **Not fixed.** Listed in the review with lines; reported to the Overseer as a follow-up, since each wants its own decision about what an unknown value should draw. |
+
+F12 and F18 were fixed after the review's snapshot, so each gets a narrow check of the fix (below),
+as engineering-manager.md asks. Discovery is closed.
+
+**The two-build check**, `npx tsx scripts/check-two-builds.ts`, run by the implementing agent on
+`0019c8c0c`: PASS (the open `/changelog` reloaded and the running client was build two), and with
+`--control` (`/build.json` still answering build one) every assertion failed, as it must.
+
+**Browser check**, Sonnet, Playwright and system Chrome, desktop 1440, iPad 1024 and phone 390:
+`/changelog` signed in and out loads, opens and closes a release, asks `/build.json` zero times in
+dev and does not reload on a faked hide-and-show; the Metadata page draws an intercepted unknown
+stage as a row with the dashed circle, aligned with the others. One signed-out run on a cold dev
+server lost its `window` marker at two widths and did not on a re-run; with zero `/build.json`
+requests it cannot have been this code.
 
 ## Decisions for Greg (as built)
 

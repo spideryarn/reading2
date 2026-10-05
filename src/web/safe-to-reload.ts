@@ -56,7 +56,11 @@ const VETOES: readonly ReloadVeto[] = [
   { why: "feedback-draft", holds: () => feedbackDraft },
   /* An upload or a batch in flight: the very fact that warns on closing the
      tab, so the two cannot disagree — unload-guard.ts. */
-  { why: "upload", holds: unloadGuarded },
+  { why: "upload", holds: () => unloadGuarded("upload") },
+  /* Words in an autosaved box that the server does not have yet — including
+     the window after the box has unmounted, when the newest text is waiting
+     behind an older save and exists nowhere else (useAutosavedText.ts). */
+  { why: "unsaved", holds: () => unloadGuarded("unsaved") },
 ];
 
 /** The first reason not to reload, or `null` when there is none. */

@@ -120,6 +120,18 @@ describe("safeToReload", () => {
     expect(safeToReload()).toBe(true);
   });
 
+  it("one upload finishing does not release a batch's veto", async () => {
+    uploadEngine.start("reader-a");
+    await uploadEngine.send(aFile());
+    batchUpload.start("reader-a");
+    batchUpload.add([aFile("one.pdf"), aFile("two.pdf")]);
+    uploadEngine.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reloadVeto()).toBe("upload");
+    batchUpload.cancel();
+    expect(safeToReload()).toBe(true);
+  });
+
   it("says no when requests are not reaching the server, though the browser says it is online", () => {
     /* A captive portal, a dead router: `navigator.onLine` stays true and a
        reload is a browser error page, in an app with no back button. F4. */
@@ -137,4 +149,43 @@ describe("safeToReload", () => {
     expect(reloadVeto([{ why: "something-else", holds: () => true }])).toBe("something-else");
     expect(safeToReload([{ why: "something-else", holds: () => false }])).toBe(true);
   });
+});
+
+it("the production watcher records lost and restored connectivity, before listeners consider a reload", async () => {
+  vi.resetModules();
+  vi.stubEnv("PROD", true);
+  vi.stubGlobal("__SPIDERYARN_BUILD_COMMIT__", "a".repeat(40));
+  vi.stubGlobal("__SPIDERYARN_BUILD_TIME__", "2026-10-04T00:00:00.000Z");
+  let online = true;
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    if (!online) throw new TypeError("Load failed");
+    return new Response(JSON.stringify({ commit: "b".repeat(40), builtAt: "2026-10-05T00:00:00.000Z" }));
+  }));
+  const connection = await import("../src/web/offline.js");
+  const safety = await import("../src/web/safe-to-reload.js");
+  const shell = await import("../src/web/stale-shell.js");
+  connection.noteNoConnection();
+  const allowed: boolean[] = [];
+  const unsubscribe = shell.onDeployNoticed((build) => {
+    if (build) allowed.push(safety.safeToReload());
+  });
+  const stop = shell.watchForDeploy();
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  try {
+    await settle();
+    expect(allowed, "a valid build response proves the connection came back").toEqual([true]);
+    online = false;
+    window.dispatchEvent(new Event("pageshow"));
+    await settle();
+    expect(safety.reloadVeto(), "a transport failure must veto acting on an old snapshot").toBe("offline");
+    online = true;
+    window.dispatchEvent(new Event("pageshow"));
+    await settle();
+    expect(allowed).toEqual([true, true]);
+  } finally {
+    stop();
+    unsubscribe();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  }
 });

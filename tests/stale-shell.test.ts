@@ -60,6 +60,7 @@ function deps(over: Partial<StaleShellDeps> = {}): Deps {
     storage: memory(),
     reload: vi.fn(),
     address: () => "https://www.spideryarn.com/changelog",
+    safe: () => true,
     timeoutMs: 1000,
     ...over,
   } as Deps;
@@ -222,6 +223,17 @@ describe("reloadIfStale", () => {
     expect(await deciding).toBe(false);
     expect(d.reload).not.toHaveBeenCalled();
     expect(reloadedFor(d.storage), "the one reload is not spent on nothing").toEqual([]);
+  });
+
+  it("does not reload, or leave a note, while a reload would lose unsent work", async () => {
+    /* The page that failed has no state yet, but the app around it can: Chat
+       words typed on an article, a Feedback report begun and dismissed, an
+       upload still going. The reader gets the message and its Reload button,
+       and chooses. GPT Sol's F18, plan 261005d. */
+    const d = deps({ safe: () => false });
+    expect(await reloadIfStale(d)).toBe(false);
+    expect(d.reload).not.toHaveBeenCalled();
+    expect(reloadedFor(d.storage), "the one reload is kept for when it is safe").toEqual([]);
   });
 
   it("does not reload when there is nowhere to remember that it did", async () => {

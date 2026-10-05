@@ -166,12 +166,17 @@ describe("a stage row on the Metadata page", () => {
     const page = await pageWithStage("fetch");
     expect(page.caught).toBeNull();
     expect(page.text).toContain("Some stage");
+    expect(host.querySelector(".lucide-download")).not.toBeNull();
   });
 
-  it("draws a stage this copy has never heard of, rather than crashing the app", async () => {
-    const page = await pageWithStage("a-stage-from-a-newer-server");
-    expect(page.caught).toBeNull();
-    expect(page.text).toContain("Some stage");
-    expect(page.text).toContain("a-stage-from-a-newer-server");
-  });
+  it.each(["a-stage-from-a-newer-server", "__proto__", "constructor", "toString"])(
+    "draws unknown stage %s with a neutral icon",
+    async (step) => {
+      const page = await pageWithStage(step);
+      expect(page.caught).toBeNull();
+      expect(page.text).toContain("Some stage");
+      expect(page.text).toContain(step);
+      expect(host.querySelector(".lucide-circle-dashed")).not.toBeNull();
+    },
+  );
 });

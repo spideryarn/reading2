@@ -618,5 +618,5 @@ export const uploadEngine: UploadEngine = createUploadEngine({
   },
   /* Shared with the batch engine, and read by safe-to-reload.ts: "a transfer
      has asked for the warning" is also when a page must not reload itself. */
-  guardUnload: warnBeforeUnload,
+  guardUnload: () => warnBeforeUnload("upload"),
 });

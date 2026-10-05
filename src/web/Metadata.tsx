@@ -416,7 +416,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
  */
 function stageIcon(step: string): ComponentType<{ size?: number }> {
   const known: Partial<Record<string, ComponentType<{ size?: number }>>> = STAGE_ICONS;
-  return known[step] ?? CircleDashed;
+  return (Object.hasOwn(known, step) ? known[step] : undefined) ?? CircleDashed;
 }
 
 /*

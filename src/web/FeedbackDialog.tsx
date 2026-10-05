@@ -388,18 +388,6 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   /** A pasted image is still being decoded and re-encoded. See `takeFile`. */
   const [preparing, setPreparing] = useState(false);
 
-  /* **Say when there is a draft here, to the one thing that needs to know.**
-     The draft is this component's state so that it survives being dismissed,
-     which also makes it invisible from outside — and `/changelog` reloads
-     itself for a new build, which would delete it without anybody seeing it
-     go. `open` is deliberately not part of this: the dismissed draft is the
-     one at risk. safe-to-reload.ts. */
-  const holdsDraft = body.trim() !== "" || shot !== null || preparing;
-  useEffect(() => {
-    noteFeedbackDraft(holdsDraft);
-    return () => noteFeedbackDraft(false);
-  }, [holdsDraft]);
-
   /**
    * **The latch, and `disabled` is not a substitute for it.**
    *
@@ -728,6 +716,16 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
   const dictationBusy = dictate.busy;
+  /* Dismissed words, screenshots and audio all survive navigation here.
+     Audio may have no transcript yet, and its device backup is best effort.
+     `open` is deliberately not part of the reload veto. */
+  const holdsDraft =
+    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+  useEffect(() => {
+    noteFeedbackDraft(holdsDraft);
+    return () => noteFeedbackDraft(false);
+  }, [holdsDraft]);
+
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 

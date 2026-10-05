@@ -129,8 +129,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `src/web/useReloadForNewBuild.ts`, whose one caller is `src/web/ChangelogPage.tsx`. Both reloads
   share one note of the builds this session has reloaded for (`claimReload`), so neither can loop.
 - **`src/web/safe-to-reload.ts` § `safeToReload`** — ask before replacing the page under the reader:
-  no while offline, while a Chat, Remember or Feedback draft is held, or while an upload is going
-  (`src/web/unload-guard.ts`, the same fact that warns on closing the tab). A new kind of unsent
+  no while offline, while a Chat, Remember or Feedback draft is held, or while an upload is going or
+  autosaved text is unsent (`src/web/unload-guard.ts` § `warnBeforeUnload`, the one place a
+  `beforeunload` warning is raised, so the two cannot disagree). Both automatic reloads ask it. A new kind of unsent
   work is one more line in its `VETOES`, not a second check somewhere else.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.

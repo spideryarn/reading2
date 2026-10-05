@@ -56,7 +56,7 @@ vi.mock("../src/web/router.js", () => ({
  * and that closing the dialog calls `toggle` — the guards GPT Sol's review of
  * the plan asked for, both of which pass by accident if the mock is a constant.
  */
-const mic = { supported: true, armed: false, transcribing: false, artifact: 7 };
+const mic = { supported: true, armed: false, transcribing: false, artifact: 7, recording: null as object | null };
 const micToggles: string[] = [];
 /** What `dismiss` was handed, in order. Plan 261001k. */
 const micDismissals: number[] = [];
@@ -2225,6 +2225,34 @@ describe("a prefill", () => {
  * reload deletes it. safe-to-reload.ts; GPT Sol's F1 on plan 261005d.
  */
 describe("saying it holds a draft, to anything about to reload the page", () => {
+  it("holds a failed recording awaiting retry, even with an empty text box", () => {
+    mic.recording = {};
+    try {
+      mount();
+      expect(firstBox().value).toBe("");
+      expect(reloadVeto()).toBe("feedback-draft");
+      mic.recording = null;
+      show(true);
+      expect(reloadVeto()).toBeNull();
+    } finally {
+      mic.recording = null;
+    }
+  });
+
+  it.each(["armed", "transcribing"] as const)("holds while dictation is %s before any transcript exists", (phase) => {
+    mic[phase] = true;
+    try {
+      mount();
+      expect(firstBox().value).toBe("");
+      expect(reloadVeto()).toBe("feedback-draft");
+      mic[phase] = false;
+      show(true);
+      expect(reloadVeto()).toBeNull();
+    } finally {
+      mic[phase] = false;
+    }
+  });
+
   it("says nothing is held while the form is empty", () => {
     mount();
     expect(reloadVeto()).toBeNull();
