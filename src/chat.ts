@@ -30,12 +30,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ChatAnchor,
+  ThreadOrigin,
   ChatMessage,
   ChatThread,
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isSingleThreadKind, isThreadKind } from "./types.js";
+import { isSingleThreadKind, isThreadKind, sameOrigin } from "./types.js";
 import { titleFrom } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
@@ -179,6 +180,13 @@ export interface Turn {
    */
   anchor?: ChatAnchor;
   /**
+   * The item in another mode this conversation was started from — **only
+   * meaningful when this turn creates the thread**, like `anchor` above, and
+   * the route refuses a different one sent for a thread that already exists.
+   * See `ThreadOrigin` in src/types.ts.
+   */
+  origin?: ThreadOrigin;
+  /**
    * Chat or Remember — **only meaningful when this turn creates the thread**,
    * which is the only branch `withTurn` applies it on, exactly like `anchor`
    * above.
@@ -245,7 +253,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, kind, help }: Turn,
+  { threadId, question, anchor, origin, kind, help }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -264,6 +272,12 @@ export function withTurn(
      rule as the anchor check in the route. */
   if (existing && kind && existing.kind !== kind) {
     throw new ChatConflict("That conversation is already a different kind.");
+  }
+  /* The route's turn lock is per process. Another server can create this
+     thread after its origin check, so decide again from the snapshot read
+     under the database's article lock, before writing either message. */
+  if (existing && origin && !(existing.origin && sameOrigin(existing.origin, origin))) {
+    throw new ChatConflict("That conversation was not started from that item");
   }
   const user: ChatMessage = {
     id: mintUniqueId(ids),
@@ -319,6 +333,9 @@ export function withTurn(
        is on and the two stores are compared field for field, where an explicit
        undefined and an absent key are not the same thing. */
     ...(anchor ? { anchor } : {}),
+    /* Where it was started from: only on this branch too, and by the same
+       conditional spread. */
+    ...(origin ? { origin } : {}),
     /* **Only on this branch**, the same rule and the same reason as `anchor`
        just above, sharpened: the kind chooses the system prompt, so a thread
        that changed kind halfway would have a first half answered by one set of

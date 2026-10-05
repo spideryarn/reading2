@@ -1,5 +1,5 @@
 /**
- * **The built client `index.html`, compiled into the serverless function** —
+ * **The built client `shell.html`, compiled into the serverless function** —
  * and the four checks that stop a stale one getting there.
  *
  * Stage 2 of the public-link work serves `/read/<slug>` from a function so the
@@ -44,6 +44,7 @@ import {
   MANAGED_HEAD_START,
   requireMarkersInHead,
 } from "../src/public/page-head.js";
+import { SHELL_FILE } from "../src/site-pages.js";
 import { sameCommit } from "./build-stamp.js";
 
 /** The built shell, and the digest of exactly the bytes that were read. */
@@ -118,6 +119,36 @@ export function assertShellShape(html: string): void {
   }
 }
 
+/**
+ * **The shell compiled into the function is the default one**: its managed head
+ * says `noindex`, and names no address.
+ *
+ * The function serves this head, untouched, for every `/read/` address that is
+ * not a shared article: a private one, an absent one, the shelf at
+ * `/read/public`. Since 2026-10-05 the build also holds heads that a search
+ * engine *may* list — the homepage's is `dist/index.html`, the file this used
+ * to read — and every one of them passes `assertShellShape`, being the same
+ * shell with different tags. Compiling one in would put the homepage's
+ * canonical, and no `noindex`, on every private article's address. GPT Sol,
+ * plan review, 2026-10-05.
+ */
+export function assertDefaultHead(html: string): void {
+  const managed = html.slice(html.indexOf(START), html.indexOf(END));
+  if (!/<meta\s+name="robots"\s+content="noindex, nofollow"\s*\/?>/.test(managed)) {
+    throw new Error(
+      "Client shell: its managed head does not say noindex, so this is not the default shell. " +
+        "It looks like one of our own pages' heads (dist/index.html is the homepage's). The function " +
+        "must compile in dist/shell.html.",
+    );
+  }
+  if (/property="og:url"|rel="canonical"/.test(managed)) {
+    throw new Error(
+      "Client shell: its managed head names an address, so this is not the default shell, which is " +
+        "served at every address that is not a shared article.",
+    );
+  }
+}
+
 function once(html: string, marker: string): void {
   const first = html.indexOf(marker);
   if (first === -1) throw new Error(`Client shell: no ${marker} sentinel.`);
@@ -136,7 +167,7 @@ function count(html: string, marker: string): number {
 }
 
 /**
- * Read `dist/index.html`, prove it belongs to this build, and hash it.
+ * Read `dist/shell.html`, prove it belongs to this build, and hash it.
  *
  * @param distDir the client build output, normally `<repo>/dist`.
  * @param apiCommit the commit this API build is stamping itself with —
@@ -147,12 +178,17 @@ function count(html: string, marker: string): number {
  * somebody's day, and this one fails on a machine that is not yours.
  */
 export function readClientShell(distDir: string, apiCommit: string): ClientShell {
-  const shellPath = path.join(distDir, "index.html");
+  /* **`shell.html`, not `index.html`, since 2026-10-05.** `index.html` in the
+     build now carries the homepage's own head, which may be listed by a search
+     engine; the shell with the default head, which says `noindex`, is the copy
+     scripts/build-site-pages.ts leaves beside it. Compiling `index.html` in
+     would serve the homepage's canonical on every unshared `/read/` address. */
+  const shellPath = path.join(distDir, SHELL_FILE.slice(1));
   const stampPath = path.join(distDir, "build.json");
 
   /* Read as bytes, then decode. The digest must be of the file as served —
      `X-Spideryarn-Shell-SHA256` is compared against the SHA-256 of
-     `GET /index.html` by the deployed check — and hashing a re-encoded string
+     `GET /shell.html` by the deployed check — and hashing a re-encoded string
      would be a different number the day the file is not clean UTF-8. */
   const bytes = read(shellPath, "the built client shell");
   const html = bytes.toString("utf8");
@@ -167,13 +203,14 @@ export function readClientShell(distDir: string, apiCommit: string): ClientShell
     throw new Error(
       `Client shell is not from this build: ${stampPath} says commit "${clientCommit || "(missing)"}" ` +
         `and this API build says "${apiCommit}". Re-run \`npm run build\`, which does both passes in ` +
-        "order — the API build compiles dist/index.html into the function, so a stale one ships a " +
+        "order — the API build compiles dist/shell.html into the function, so a stale one ships a " +
         "stale page with no other symptom. " +
         '(Note that "unknown" never matches, including itself.)',
     );
   }
 
   assertShellShape(html);
+  assertDefaultHead(html);
 
   return { html, sha256: createHash("sha256").update(bytes).digest("hex") };
 }

@@ -1,0 +1,45 @@
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > answers when the connection drops once and then works — the reproduction
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > answers when a 503 is followed by a good response
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > gives up after three goes, with three rows and the last attempt's own error
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > does not buy again a 503 whose body carries a cost
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > says an unpriced refusal was unpriced
+ × 'openRouterJson' — a transport blip is retried, and every attempt is a row > ends as the abort it is when the signal fires during the backoff
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > answers when the connection drops once and then works — the reproduction
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > answers when a 503 is followed by a good response
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > gives up after three goes, with three rows and the last attempt's own error
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > does not buy again a 503 whose body carries a cost
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > says an unpriced refusal was unpriced
+ × 'openRouterImage' — a transport blip is retried, and every attempt is a row > ends as the abort it is when the signal fires during the backoff
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > answers when the connection drops once and then works — the reproduction
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > answers when a 503 is followed by a good response
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > gives up after three goes, with three rows and the last attempt's own error
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > does not buy again a 503 whose body carries a cost
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > says an unpriced refusal was unpriced
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > asks again after a 503 whose cost is the zero this wire does not believe
+ × 'openRouterTranscription' — a transport blip is retried, and every attempt is a row > ends as the abort it is when the signal fires during the backoff
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > answers when the connection drops once and then works — the reproduction
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > answers when a 503 is followed by a good response
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > gives up after three goes, with three rows and the last attempt's own error
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > does not buy again a 503 whose body carries a cost
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > says an unpriced refusal was unpriced
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > asks again after a 503 whose cost is the zero this wire does not believe
+ × 'openRouterDecisions' — a transport blip is retried, and every attempt is a row > ends as the abort it is when the signal fires during the backoff
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > answers when the connection drops once and then works — the reproduction
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > answers when a 503 is followed by a good response
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > gives up after three goes, with three rows and the last attempt's own error
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > does not buy again a 503 whose body carries a cost
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > says an unpriced refusal was unpriced
+ × 'openRouterStream' — a transport blip is retried, and every attempt is a row > ends as the abort it is when the signal fires during the backoff
+ × worthAskingAgain > is true for a transient refusal that priced nothing, and false once it priced something
+ × worthAskingAgain > is false for a 429 and for a verdict
+ × worthAskingAgain > is false for a TypeError that did not come from fetch, and for anything that is not an error
+ × worthAskingAgain > is true for the error an opted-out seam throws when fetch itself failed
+ × worthAskingAgain > is false for a fetch that rejected with something that is not a TypeError, or not an object
+ × openRouterStream — nothing is retried once a 200 is in hand > hands the consumer each chunk once across a retry
+ × openRouterStream — nothing is retried once a 200 is in hand > clears `end` at the start of every attempt, not only the first
+ × openRouterStream — nothing is retried once a 200 is in hand > resets the caller's stall clock before the backoff and again before the next request
+ × the PDF reader's own loop, through the real gateway > asks again after an unpriced 503 — the gap its loop had
+ × the PDF reader's own loop, through the real gateway > makes three requests on three 503s, not nine — its loop is the only loop
+ × embedBatch's own loop, through the real gateway > asks again after a dropped connection — the gap its loop had
+ × embedBatch's own loop, through the real gateway > does not buy a priced 503 again
+ × embedBatch's own loop, through the real gateway > makes five requests on five dropped connections, not fifteen — its loop is the only loop

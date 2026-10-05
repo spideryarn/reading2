@@ -27,7 +27,7 @@
  *
  * Logged by the caller as counts only: no identifier, no title.
  */
-import { doiFor, lookupWork, parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
+import { doiFor, lookupWork, parseWorkId, type LookupResult, type WorkId, type WorkRecord } from "./bibliographic.js";
 import { tokens } from "./citation-lookup.js";
 import { registryIdentifiesCitation } from "./paper-evidence.js";
 import { registryWorkOf } from "./registry-work.js";
@@ -57,6 +57,8 @@ export interface RegistryCounts {
   identified: number;
   asked: number;
   found: number;
+  /** Found rows that carry Crossref's citation count (plan 261005i). A subset of `found`. */
+  counted: number;
   conflict: number;
   notFound: number;
   unavailable: number;
@@ -122,6 +124,19 @@ export function titlesDifferByObjectQualifier(a: string, b: string): boolean {
   return tail.some((word) => DIFFERENT_OBJECT_WORDS.has(word));
 }
 
+/**
+ * **A confirmed record as the row keeps it, with Crossref's citation count
+ * when it gave one** (plan 261005i). Only here, on the `found` verdict: a
+ * conflict's record is a different work and its count is not this row's.
+ * Only from Crossref, and only with the moment it was read, because the row
+ * names both.
+ */
+function foundFor(record: WorkRecord): Extract<CitationRegistry, { kind: "found" }> {
+  const { citedByCount: count, citedByCountReadAt: readAt } = record;
+  const citedBy = record.source === "crossref" && count !== undefined && readAt !== undefined ? { count, readAt } : null;
+  return { kind: "found", ...registryWorkOf(record), ...(citedBy !== null ? { citedBy } : {}) };
+}
+
 /** What one answer puts on the row, judged against the article's own title. */
 export function registryFor(
   work: Pick<CitedWork, "title" | "year" | "reference" | "entry">,
@@ -139,7 +154,7 @@ export function registryFor(
      first author and year matched it, and the record's own title must still
      be distinctive enough to lend the row. */
   if (agreed === "label") {
-    return registryTitleIsDistinctive(result.record.title) ? { kind: "found", ...registryWorkOf(result.record) } : null;
+    return registryTitleIsDistinctive(result.record.title) ? foundFor(result.record) : null;
   }
   /* A weak exact title is not a disagreement, so it gets no alarming conflict
      message; it is simply not enough evidence to lend metadata to the row. */
@@ -147,7 +162,7 @@ export function registryFor(
   if (titlesDifferByObjectQualifier(work.title, result.record.title)) {
     return { kind: "conflict", source: result.record.source };
   }
-  return { kind: "found", ...registryWorkOf(result.record) };
+  return foundFor(result.record);
 }
 
 /** `items` through `fn`, at most `limit` at a time, while `mayStart` remains true. */
@@ -201,6 +216,7 @@ export async function attachCitationRegistry(
     identified: 0,
     asked: 0,
     found: 0,
+    counted: 0,
     conflict: 0,
     notFound: 0,
     unavailable: 0,
@@ -250,6 +266,7 @@ export async function attachCitationRegistry(
       return rest;
     }
     counts[registry.kind]++;
+    if (registry.kind === "found" && registry.citedBy !== undefined) counts.counted++;
     return { ...rest, registry };
   });
   return { citations: { ...citations, citations: rows }, counts };

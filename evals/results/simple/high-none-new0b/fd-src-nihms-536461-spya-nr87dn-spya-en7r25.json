@@ -1,0 +1,300 @@
+{
+  "arm": "high-none-new0b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/9",
+  "sourceSha256": "ea4e45d25a2fbd7530eb71c965ad2678410afc34564f404deb0865a37da0213d",
+  "at": "2026-10-05T16:44:06.879Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 30242,
+  "costUsd": 0.2546426,
+  "tokens": {
+    "input": 17182,
+    "output": 4196,
+    "reasoning": 972
+  },
+  "briefReadyMs": 23131,
+  "fullerReadyMs": 30238,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 527,
+  "briefWords": 125,
+  "fuller": [
+    {
+      "text": "This is a review and theory paper about cognitive control: the brain's ability to steer thinking toward a goal and screen out distractions. The authors say this control comes mainly from the prefrontal cortex, the front part of the brain, which works like a filter on incoming information. They propose the Matched Filter Hypothesis, borrowing a term for a filter that best pulls a signal out of noise. Its claim is that performance is best when the amount of control matches what the task needs, not when control is simply high.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This is a review and theory paper about cognitive control: the brain's ability to steer thinking toward a goal and screen out distractions.",
+          "id": "spya-vxet4b",
+          "key": "cognitive control"
+        },
+        {
+          "text": "The authors say this control comes mainly from the prefrontal cortex, the front part of the brain, which works like a filter on incoming information.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "They propose the Matched Filter Hypothesis, borrowing a term for a filter that best pulls a signal out of noise.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        },
+        {
+          "text": "Its claim is that performance is best when the amount of control matches what the task needs, not when control is simply high.",
+          "id": "spya-tvhpk0"
+        }
+      ]
+    },
+    {
+      "text": "The prefrontal cortex is usually seen as essential for complex thought, and research on children mostly treats their weak control as a deficit. Yet a growing body of work shows that not all complex thinking benefits from control. In one guessing game, an option pays off 75% of the time. Adults pick it 75% of the time and win about 62.5%, while children pick it always and win 75%.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The prefrontal cortex is usually seen as essential for complex thought, and research on children mostly treats their weak control as a deficit.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Yet a growing body of work shows that not all complex thinking benefits from control.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "In one guessing game, an option pays off 75% of the time.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Adults pick it 75% of the time and win about 62.5%, while children pick it always and win 75%.",
+          "id": "spya-egkn3d",
+          "key": "win about 62.5%"
+        }
+      ]
+    },
+    {
+      "text": "High control should help with tasks that are explicit, rule-based, verbal or abstract, and that fit in working memory, the small space for holding things in mind. Low control, which the authors call hypofrontality, should help with tasks that are implicit, driven by what you see, and too complex for working memory. How well the match works may depend on age, genes, brain damage, or short-term disruption such as a second task or brain stimulation. Some limits are fixed by biology, but people may sometimes shift their level of control through training, stimulation or drugs.",
+      "ids": [
+        "spya-kyvz4a",
+        "spya-c7tq65"
+      ],
+      "sentences": [
+        {
+          "text": "High control should help with tasks that are explicit, rule-based, verbal or abstract, and that fit in working memory, the small space for holding things in mind.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Low control, which the authors call hypofrontality, should help with tasks that are implicit, driven by what you see, and too complex for working memory.",
+          "id": "spya-kyvz4a",
+          "key": "hypofrontality"
+        },
+        {
+          "text": "How well the match works may depend on age, genes, brain damage, or short-term disruption such as a second task or brain stimulation.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Some limits are fixed by biology, but people may sometimes shift their level of control through training, stimulation or drugs.",
+          "id": "spya-c7tq65"
+        }
+      ]
+    },
+    {
+      "text": "The learning evidence comes from earlier studies the authors bring together. Doing a second task at the same time helps adults learn rules they cannot put into words, and magnetic disruption of the prefrontal cortex improved hidden motor learning. Adults steer attention away from some cues to cut errors fast, which distorts what they learn; 3-year-olds show less of this than 4-year-olds. Given messy language input, adults copy the noise, while children produce only the most common form and so outperform adults.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-wx0kxu",
+        "spya-pttrqz"
+      ],
+      "sentences": [
+        {
+          "text": "The learning evidence comes from earlier studies the authors bring together.",
+          "id": null
+        },
+        {
+          "text": "Doing a second task at the same time helps adults learn rules they cannot put into words, and magnetic disruption of the prefrontal cortex improved hidden motor learning.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Adults steer attention away from some cues to cut errors fast, which distorts what they learn; 3-year-olds show less of this than 4-year-olds.",
+          "id": "spya-wx0kxu"
+        },
+        {
+          "text": "Given messy language input, adults copy the noise, while children produce only the most common form and so outperform adults.",
+          "id": "spya-pttrqz",
+          "key": "children produce only the most common form"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "For creativity, people thinking up unusual uses for objects showed less prefrontal activity and more activity in visual areas. Mild electric stimulation that dampened the left prefrontal cortex made people produce creative uses faster and in greater numbers. Jazz musicians showed low prefrontal activity while improvising, but not while playing well-practised pieces. Children also get stuck less than adults on seeing an object only by its usual use, though no study has yet tied this to brain development.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq"
+      ],
+      "sentences": [
+        {
+          "text": "For creativity, people thinking up unusual uses for objects showed less prefrontal activity and more activity in visual areas.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Mild electric stimulation that dampened the left prefrontal cortex made people produce creative uses faster and in greater numbers.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Jazz musicians showed low prefrontal activity while improvising, but not while playing well-practised pieces.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Children also get stuck less than adults on seeing an object only by its usual use, though no study has yet tied this to brain development.",
+          "id": "spya-gfuefq"
+        }
+      ]
+    },
+    {
+      "text": "The authors admit direct evidence in adults is sparse, and children's advantages could come from other differences, such as knowledge or strategies. Studies of creativity are few, and some results conflict. Judging whether a new idea actually works likely needs the prefrontal cortex again, so creative work may switch back and forth between states. The exact brain mechanisms that set the right level of control remain unknown.",
+      "ids": [
+        "spya-s0bmee",
+        "spya-xmgzpp",
+        "spya-t9zbas"
+      ],
+      "sentences": [
+        {
+          "text": "The authors admit direct evidence in adults is sparse, and children's advantages could come from other differences, such as knowledge or strategies.",
+          "id": "spya-s0bmee"
+        },
+        {
+          "text": "Studies of creativity are few, and some results conflict.",
+          "id": "spya-t9zbas"
+        },
+        {
+          "text": "Judging whether a new idea actually works likely needs the prefrontal cortex again, so creative work may switch back and forth between states.",
+          "id": "spya-xmgzpp"
+        },
+        {
+          "text": "The exact brain mechanisms that set the right level of control remain unknown.",
+          "id": "spya-t9zbas"
+        }
+      ]
+    },
+    {
+      "text": "The unifying point is that filtering input always has a cost: it can speed up correct responses now but lose detail needed later. The authors conclude that cognitive control is a tool suited to some common challenges, not an all-purpose system that improves every task.",
+      "ids": [
+        "spya-xbrswq",
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "The unifying point is that filtering input always has a cost: it can speed up correct responses now but lose detail needed later.",
+          "id": "spya-xbrswq"
+        },
+        {
+          "text": "The authors conclude that cognitive control is a tool suited to some common challenges, not an all-purpose system that improves every task.",
+          "id": "spya-e5g0a5",
+          "key": "a tool suited to some common challenges"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review looks at \"cognitive control\": the brain's way of focusing on a goal and tuning out distractions. It comes mostly from the front part of the brain. The authors ask when this control helps us, and when it actually gets in the way.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This review looks at \"cognitive control\": the brain's way of focusing on a goal and tuning out distractions.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "It comes mostly from the front part of the brain.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "The authors ask when this control helps us, and when it actually gets in the way.",
+          "id": "spya-tvhpk0"
+        }
+      ]
+    },
+    {
+      "text": "They propose the Matched Filter Hypothesis: we do best when our level of control fits the task. Strong control suits tasks with clear rules that fit in our short-term memory. Less control may help with some kinds of learning and with coming up with new ideas. For example, people thinking up unusual uses for everyday objects showed less activity in the front of the brain.",
+      "ids": [
+        "spya-bgeecc",
+        "spya-whdqvc",
+        "spya-peqnf8"
+      ],
+      "sentences": [
+        {
+          "text": "They propose the Matched Filter Hypothesis: we do best when our level of control fits the task.",
+          "id": "spya-bgeecc",
+          "key": "the Matched Filter Hypothesis"
+        },
+        {
+          "text": "Strong control suits tasks with clear rules that fit in our short-term memory.",
+          "id": "spya-bgeecc"
+        },
+        {
+          "text": "Less control may help with some kinds of learning and with coming up with new ideas.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "For example, people thinking up unusual uses for everyday objects showed less activity in the front of the brain.",
+          "id": "spya-peqnf8"
+        }
+      ]
+    },
+    {
+      "text": "The main point: control is a tool for some problems, not a fix for every problem.",
+      "ids": [
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "The main point: control is a tool for some problems, not a fix for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": false,
+        "stored": 2
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

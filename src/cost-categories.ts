@@ -256,6 +256,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A batch-added paper's title, authors and abstract, read inside the bulk
      import's `metadata` step. src/paper-metadata.ts. */
   "paper-metadata": "step-driven",
+  /* An imported title, tidied inside `extract` or the bulk import's
+     `metadata` step. src/title-tidy-model.ts. */
+  "title-tidy": "step-driven",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

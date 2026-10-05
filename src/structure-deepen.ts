@@ -673,7 +673,7 @@ export class ExpansionTruncated extends Error {
  *
  * **Since 2026-10-03 there is a third, underneath this one**, and "sent" above
  * means sent *by this loop*: the gateway re-sends a call whose transport failed
- * before the answer began (src/messages-stream.ts § `TRANSPORT_ATTEMPTS`). It
+ * before the answer began (src/transport-retry.ts § `TRANSPORT_ATTEMPTS`). It
  * never retries a 429, so the two loops answer different failures; they only
  * multiply in a run that meets both, where the worst case is nine requests.
  */

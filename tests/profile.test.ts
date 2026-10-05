@@ -99,11 +99,16 @@ describe("profileIsStale", () => {
     expect(profileIsStale(undefined, null)).toBe(false);
   });
 
-  it("says no for one written deliberately without a profile", () => {
-    /* The line the whole design rests on. A reader who unchecked the box and
-       paid for a plain glossary must not then be told it is out of date — that
-       would be a control whose result the app immediately complains about. */
-    expect(profileIsStale(null, now)).toBe(false);
+  it("says yes for one written with no profile, once the reader has one", () => {
+    /* Greg, 2026-10-05: "B treat a first profile as a change". Until then this
+       was the line the design rested on, from when writing without a profile
+       was a choice (a *Use your profile* box, removed 2026-09-13). Now `null`
+       only means the reader had none yet, and a first profile is as good a
+       reason to offer a rewrite as an edited one. */
+    expect(profileIsStale(null, now)).toBe(true);
+  });
+
+  it("says no for one written with no profile while the reader still has none", () => {
     expect(profileIsStale(null, null)).toBe(false);
   });
 

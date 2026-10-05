@@ -74,6 +74,7 @@ import { MODEL_REFUSED, NOT_CONFIGURED } from "./messages.js";
 import { isHighPowerModel, type ModelPower, type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
 import { truncationFailure } from "./token-budget.js";
+import { TRANSIENT_STATUSES, TRANSPORT_ATTEMPTS, backoffMs, waitOrStop } from "./transport-retry.js";
 
 /** Where the Anthropic Messages protocol is served from. Not `api.anthropic.com`. */
 /* Not exported — see `OPENROUTER_BASE` in ai-call.ts for the same reasoning:
@@ -707,7 +708,10 @@ export function streamMessage(
             throw err;
           }
           try {
-            await waitOrStop(TRANSPORT_BACKOFF_MS * 3 ** (attempt - 1) * (0.75 + Math.random() / 2), options.signal);
+            await waitOrStop(backoffMs(attempt), options.signal);
+            /* A Stop can land after the wait resolves. Checked again here, so
+               it cannot open an attempt, and a row, for a request never sent. */
+            options.signal?.throwIfAborted();
           } catch {
             stoppedWhileWaiting = true;
             throw new Anthropic.APIUserAbortError();
@@ -776,33 +780,6 @@ export function streamMessage(
 }
 
 /**
- * **Three goes in total, not three retries** — `src/pdf-read.ts` §
- * `TRANSPORT_ATTEMPTS` is the precedent and uses the same number.
- */
-const TRANSPORT_ATTEMPTS = 3;
-
-/**
- * The first wait; the second is three times it, each with ±25% jitter. Short on
- * purpose: what this retries is a dropped connection or a provider's bad second,
- * and a reader may be watching. A step's deadline is a minute or more
- * (src/jobs.ts), so both waits together are a small part of it.
- */
-const TRANSPORT_BACKOFF_MS = 500;
-
-/**
- * The statuses that mean "not now" rather than "not this request".
- *
- * **Not 429**, though it is the most transient of all. A rate limit is a queue,
- * and the callers that meet one already have a policy this loop would trample:
- * `src/structure-deepen.ts` turns a 429 into `ExpansionRateLimited`, honours
- * its `Retry-After` and narrows a shared `WidthGate`. Two blind retries in
- * here would hide two of every three 429s from that gate and ignore the delay
- * the provider asked for. GPT Sol, reviewing the plan. 409 is here because the
- * SDK's own retry treats it as a lock timeout.
- */
-const TRANSIENT_STATUSES: ReadonlySet<number> = new Set([408, 409, 500, 502, 503, 504, 529]);
-
-/**
  * The `error` events a `200` stream can open with that are worth asking again.
  * The SDK keeps the event's `type` on the error it throws (core/streaming.js),
  * and the rest of that closed set — authentication, permission, billing,
@@ -836,25 +813,6 @@ function worthAnotherAttempt(err: unknown): boolean {
   if (typeof err.status === "number") return TRANSIENT_STATUSES.has(err.status);
   if (err instanceof Anthropic.APIConnectionError) return true;
   return err.type === null || err.type === undefined || TRANSIENT_EVENT_TYPES.has(err.type);
-}
-
-/** Wait, or reject the moment the signal fires — a Stop must not sit out a backoff. */
-function waitOrStop(ms: number, signal: AbortSignal | undefined): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new Error("aborted"));
-      return;
-    }
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new Error("aborted"));
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
 }
 
 /**

@@ -76,12 +76,14 @@ describe("the referrer policy", () => {
     const policy = everyPath?.headers.find((h) => h.key === "Referrer-Policy");
     expect(policy?.value).toBe("no-referrer");
 
-    /* The rule it shares a block with, asserted so that a rewrite of this block
-       cannot quietly drop one while satisfying the other. Stage 1 leaves
-       `noindex` exactly as it is — the indexing decision belongs to stage 2,
-       when the pages are worth indexing. */
-    expect(everyPath?.headers.find((h) => h.key === "X-Robots-Tag")?.value).toBe(
-      "noindex, nofollow",
-    );
+    /* **A rule of its own since 2026-10-05.** It shared a block with
+       `X-Robots-Tag: noindex`, which now covers every path except our own
+       pages (tests/site-pages.test.ts). Had the referrer policy stayed in that
+       block, the pages a search engine may list would have lost it. So: this
+       block is the policy and nothing else, and the other rule still exists. */
+    expect(everyPath?.headers).toEqual([{ key: "Referrer-Policy", value: "no-referrer" }]);
+    const robots = config.headers?.filter((h) => h.headers.some((k) => k.key === "X-Robots-Tag"));
+    expect(robots).toHaveLength(1);
+    expect(robots?.[0]?.source).not.toBe("/(.*)");
   });
 });

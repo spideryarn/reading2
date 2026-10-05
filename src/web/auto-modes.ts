@@ -57,9 +57,14 @@ import { modeStep } from "./activation.js";
  * Tweets would have dropped the pair without a word (GPT Sol, F2 of the 261003l
  * review) — tests/auto-modes.test.tsx asserts the whole list for that reason.
  *
- * Diagram, the other delegated mode, is behind the experimental switch and so
+ * Diagram, another delegated mode, is behind the experimental switch and so
  * is not a main mode; if it leaves the switch, its row here is a decision to
  * make then, not a default to inherit.
+ *
+ * **Marginalia is a main mode, delegated, and absent on purpose.** Its
+ * relation words are made the first time the column is shown, not on import
+ * (Greg, 2026-10-05; src/web/useRelations.ts). A row here would queue them
+ * for every article again.
  */
 const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
   summary: ["simple", "tweets"],

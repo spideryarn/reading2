@@ -1,0 +1,7 @@
+**D1 — P2 — fixed:** The “no transcript” test passed for the wrong reason: its empty draft gave an erroneous Enter nothing to run. It now supplies runnable live words, verifies they survive without running, and confirms a subsequent Enter runs them. The missing-fixture assertion went red first; removing the delivery guard also made the strengthened test fail.
+
+I found no production violation of Enter equivalence or at-most-once execution. Added coverage checks both transcript paths, non-first selection, stale proposals, pending actions, close/reopen, unmounting, and signed-out unmatched words. The shared hook is unchanged; the five existing boxes’ wording remains byte-for-byte identical.
+
+Validation: the original four suites passed 75 tests; the expanded command-bar suite passed all 16. Typechecking, touched-file lint, and diff checks passed. Changes remain uncommitted.
+
+**ship with the fixes made** — changed: [tests/command-bar-double-stop.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/command-bar-double-stop/tests/command-bar-double-stop.test.tsx), [root-cause postmortem](/home/greg/code/spideryarn2/.claude/worktrees/command-bar-double-stop/docs/postmortems/261005i-a-refusal-test-gives-the-forbidden-action-nothing-to-act-on.md).

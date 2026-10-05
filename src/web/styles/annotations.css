@@ -487,10 +487,12 @@ mark.hit[data-wash][data-wash-end]:dir(rtl) {
    tier, and a continuous fade inside each. Still two tiers and not three, for
    the blind test of 2026-09-07.
 
-   **The two base strengths are the theme's**, `--quote-fill-light` and
-   `--quote-fill-heavy` beside `--quote-rgb` in styles/tokens.css, since
-   2026-10-05: the dark page needed a stronger fill than the light one
-   (`spya-s0gppw`, plan 261005f), and the token file is where the themes differ.
+   **The colour and the two base strengths are the theme's**:
+   `--quote-prose-rgb`, `--quote-fill-light` and `--quote-fill-heavy` in
+   styles/tokens.css, since 2026-10-05. On the dark page the fill is a deeper
+   purple than the spine strip's `--quote-rgb`, drawn stronger (`spya-s0gppw`,
+   plans 261005f and 261005j); on the light page the two colours are one. The
+   token file is where the themes differ.
 
    **The words keep their colour, and their contrast is tested.**
    tests/quote-fill.test.ts composites the strongest fill over the page from
@@ -500,8 +502,9 @@ mark.hit[data-wash][data-wash-end]:dir(rtl) {
    inside a heavy quote came out at 2.9:1 on the light page (GPT Sol's plan
    review asked for the other two foregrounds; the sum found it). A link is
    only 5.7:1 on the bare light page, so no visible fill keeps it at 4.5. On
-   the dark page the blue automatic search outline holds the heavy tier down;
-   the visibility floor and the step between tiers bound the light one.
+   the dark page the blue automatic search outline and the soft ink in a block
+   drawn on `--muted` hold the heavy tier down; the visibility floor and the
+   step between tiers bound the light one.
 
    **Square pieces, rounded true ends.** `annotateHtml` emits one `<mark>` per
    text node and splits again at every annotation boundary, so ONE quote
@@ -517,7 +520,7 @@ mark.hit[data-wash][data-wash-end]:dir(rtl) {
    quote; the outline had the same problem and solved it with inset caps. */
 mark.hit[data-quote] {
   --quote-fill: var(--quote-fill-light);
-  background-color: rgb(var(--quote-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)));
+  background-color: rgb(var(--quote-prose-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)));
   border-radius: 0;
   -webkit-box-decoration-break: slice;
   box-decoration-break: slice;

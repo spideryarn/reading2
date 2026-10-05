@@ -323,7 +323,7 @@ describe("findInfluence — best-effort, and never throws", () => {
     ["the page is not about the work", reply(claim({ source: 1, quote: OTHER_COUNT })), "page-not-the-work"],
     ["the quote is not on the page", reply(claim({ quote: "These six words are not there at all" })), "quote-not-found"],
     ["the number is out of range", reply(claim({ influence: 4000 })), "out-of-range"],
-    ["refused", () => Promise.reject(new ProviderRefused(429, "", new Headers())), "refused"],
+    ["refused", () => Promise.reject(new ProviderRefused(429, "", new Headers(), false)), "refused"],
     ["unreadable", async () => ({ json: jsonAnswer("nope"), answeredBy: null, generationId: null }), "unreadable"],
     ["a transport failure", () => Promise.reject(new TypeError("fetch failed")), "error"],
   ] as const)("keeps nothing when %s", async (_name, call, why) => {

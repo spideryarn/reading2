@@ -18,6 +18,7 @@ import { parseSource, walkAst } from "./helpers/ts-ast.js";
 
 import {
   assetUrlsIn,
+  hasDisallowAll,
   bucketDrift,
   codeMayNotHaveShipped,
   declaredBuckets,
@@ -1520,5 +1521,37 @@ describe("GATE_TOOLING_BUILDS", () => {
   it("names only scripts package.json has", () => {
     const scripts = JSON.parse(readFileSync(path.join(repo, "package.json"), "utf8")).scripts as Record<string, string>;
     expect(GATE_TOOLING_BUILDS.filter((b) => !Object.hasOwn(scripts, b.script))).toEqual([]);
+  });
+});
+
+/**
+ * **A directive, not the word.** The check this replaced was `/disallow/i`
+ * over the whole of `robots.txt`, and the file's comments say "Disallow"
+ * several times. docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
+ */
+describe("hasDisallowAll", () => {
+  const shipped = readFileSync(path.resolve(import.meta.dirname, "..", "public", "robots.txt"), "utf8");
+
+  it("finds the directive in the file we ship", () => {
+    expect(hasDisallowAll(shipped)).toBe(true);
+  });
+
+  /* The control that exposed it: every real directive gone, every comment
+     kept. The old check said yes to this. */
+  it("is not satisfied by comments that mention it", () => {
+    const commentsOnly = shipped
+      .split("\n")
+      .filter((line) => !/^Disallow:/i.test(line.trim()))
+      .join("\n");
+    expect(commentsOnly).toMatch(/disallow/i);
+    expect(hasDisallowAll(commentsOnly)).toBe(false);
+  });
+
+  it("wants the whole site, and reads past a trailing comment", () => {
+    expect(hasDisallowAll("User-agent: *\nDisallow: /profile\n")).toBe(false);
+    expect(hasDisallowAll("User-agent: *\nDisallow:\n")).toBe(false);
+    expect(hasDisallowAll("User-agent: *\n# Disallow: /\n")).toBe(false);
+    expect(hasDisallowAll("User-agent: *\ndisallow: /   # everything\n")).toBe(true);
+    expect(hasDisallowAll("<!doctype html><title>Spideryarn</title>")).toBe(false);
   });
 });

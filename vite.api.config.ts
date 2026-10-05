@@ -78,7 +78,7 @@ const BUNDLE_ANYWAY = ["html-encoding-sniffer", "@exodus/bytes"];
 const stamp = resolveBuildStamp();
 
 /**
- * **The built client `index.html`, compiled in — or no build at all.**
+ * **The built client `shell.html`, compiled in — or no build at all.**
  *
  * `/read/<slug>` is served by this function so the `<head>` can be about the
  * article rather than about the app (src/public/page-head.ts), and to do that it
@@ -127,7 +127,7 @@ function builtClientShell(): Plugin {
           /* The digest of the shell **as it was read**, before any head was
              composed into it. Served as `X-Spideryarn-Shell-SHA256`, so the
              deployed check can compare it against the SHA-256 of
-             `GET /index.html` and prove the function and the CDN are serving the
+             `GET /shell.html` and prove the function and the CDN are serving the
              same build. Hashing the composed output instead would make that
              comparison always fail, and hashing nothing would make it always
              pass. */

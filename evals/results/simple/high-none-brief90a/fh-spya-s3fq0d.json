@@ -1,0 +1,218 @@
+{
+  "arm": "high-none-brief90a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fh-spya-s3fq0d",
+  "version": "simple-prompt/9",
+  "sourceSha256": "2e8c225377af5fd75a998468fc4e0aa8f37c5338a0169a1f5ea55ce1326a15dc",
+  "at": "2026-10-05T17:01:11.003Z",
+  "bodyWords": 1398,
+  "band": "short",
+  "bodyBlocks": 33,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d0d920580e8f12ce",
+  "systemsSha256": "af84d485e12513bf5a3e07fddb05c123c4504e13517f769db5b2e962d64d5f05",
+  "power": "high",
+  "guard": true,
+  "wallMs": 33735,
+  "costUsd": null,
+  "tokens": {
+    "input": 8701,
+    "output": 1608,
+    "reasoning": null
+  },
+  "briefReadyMs": 32650,
+  "fullerReadyMs": 33725,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 255,
+  "briefWords": 92,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham about haters: people who become obsessed with disliking someone famous. He first wrote it for startup founders, who are often surprised by the attention they get as their companies grow. But he says it applies to anyone who becomes famous, because haters are a worse side of fame than over-eager fans.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-fgn6m7",
+        "spya-zecn6c"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham about haters: people who become obsessed with disliking someone famous.",
+          "id": null,
+          "key": "haters"
+        },
+        {
+          "text": "He first wrote it for startup founders, who are often surprised by the attention they get as their companies grow.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "But he says it applies to anyone who becomes famous, because haters are a worse side of fame than over-eager fans.",
+          "id": "spya-zecn6c"
+        }
+      ]
+    },
+    {
+      "text": "His argument starts with \"fanboys\": fans who are obsessive and uncritical, think everything you do is good, and want everyone to know it. He then describes haters in the same words, with good and bad swapped. His key idea is that haters are just fanboys with the sign switched.",
+      "ids": [
+        "spya-vnhntv",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "His argument starts with \"fanboys\": fans who are obsessive and uncritical, think everything you do is good, and want everyone to know it.",
+          "id": "spya-vnhntv"
+        },
+        {
+          "text": "He then describes haters in the same words, with good and bad swapped.",
+          "id": "spya-jbw53x"
+        },
+        {
+          "text": "His key idea is that haters are just fanboys with the sign switched.",
+          "id": "spya-j02p09",
+          "key": "fanboys with the sign switched"
+        }
+      ]
+    },
+    {
+      "text": "He draws on his own years of watching haters, not on any study, and notes several patterns. Haters are not one-off trolls but a small group who attack again and again over a long time. They call their target a \"fraud\", the only way to square fame they overrate with talent they underrate. They have rarely achieved much, sometimes from frustrated talent, and he is \"fairly confident\" haters never do great work.",
+      "ids": [
+        "spya-ynrwzr",
+        "spya-j6y6p4",
+        "spya-hwxfgs"
+      ],
+      "sentences": [
+        {
+          "text": "He draws on his own years of watching haters, not on any study, and notes several patterns.",
+          "id": null
+        },
+        {
+          "text": "Haters are not one-off trolls but a small group who attack again and again over a long time.",
+          "id": "spya-ynrwzr"
+        },
+        {
+          "text": "They call their target a \"fraud\", the only way to square fame they overrate with talent they underrate.",
+          "id": "spya-j6y6p4"
+        },
+        {
+          "text": "They have rarely achieved much, sometimes from frustrated talent, and he is \"fairly confident\" haters never do great work.",
+          "id": "spya-hwxfgs"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "He admits some people really are frauds; to tell them apart, see whether thoughtful, neutral people like the person. He also excuses teenagers, who may grow out of it, but not anyone over 25.",
+      "ids": [
+        "spya-xjaj8b",
+        "spya-zb2je7"
+      ],
+      "sentences": [
+        {
+          "text": "He admits some people really are frauds; to tell them apart, see whether thoughtful, neutral people like the person.",
+          "id": "spya-xjaj8b"
+        },
+        {
+          "text": "He also excuses teenagers, who may grow out of it, but not anyone over 25.",
+          "id": "spya-zb2je7"
+        }
+      ]
+    },
+    {
+      "text": "His conclusion is that a hater is not someone you have a real dispute with, so trying to understand or fix things wastes time. Treat them like obsessive fans and simply don't think much about them: it's not you, it's them.",
+      "ids": [
+        "spya-au77ew",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "His conclusion is that a hater is not someone you have a real dispute with, so trying to understand or fix things wastes time.",
+          "id": "spya-au77ew"
+        },
+        {
+          "text": "Treat them like obsessive fans and simply don't think much about them: it's not you, it's them.",
+          "id": "spya-ry7vzc",
+          "key": "it's not you, it's them"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham is about haters: people who become obsessed with disliking someone famous. He wrote it for startup founders, but says it fits anyone who gets famous. His big idea is that haters are just fanboys with the sign switched, like overeager fans flipped to the opposite.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham is about haters: people who become obsessed with disliking someone famous.",
+          "id": "spya-kkfuss",
+          "key": "haters"
+        },
+        {
+          "text": "He wrote it for startup founders, but says it fits anyone who gets famous.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "His big idea is that haters are just fanboys with the sign switched, like overeager fans flipped to the opposite.",
+          "id": "spya-j02p09",
+          "key": "fanboys with the sign switched"
+        }
+      ]
+    },
+    {
+      "text": "Haters seem to come with fame, and the person's fame makes them angrier. They often call the famous person a fraud, and have rarely achieved much themselves. So his advice is not to think much about them: it's not you, it's them.",
+      "ids": [
+        "spya-nf2q02",
+        "spya-hwxfgs",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "Haters seem to come with fame, and the person's fame makes them angrier.",
+          "id": "spya-nf2q02"
+        },
+        {
+          "text": "They often call the famous person a fraud, and have rarely achieved much themselves.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "So his advice is not to think much about them: it's not you, it's them.",
+          "id": "spya-ry7vzc",
+          "key": "it's not you, it's them"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

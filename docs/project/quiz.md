@@ -304,7 +304,7 @@ Sol reviews and the browser check:
 - **Which question is open is deliberately not in the URL.** The rule `?at=` and `?thread=` serve is
   that a shared link lands you where the link-maker was, and a quiz is its owner's alone. (The reason
   given here until 2026-10-05 was that the answer did not survive a reload. It does now, and the
-  walk still opens at the first question — with your answer and its mark showing.)
+  walk opens at the first question you have not answered — [§ Answers are kept](#answers-are-kept).)
 - The answer box is the shared `useDictationField` — [dictation.md](dictation.md) — because an
   answer from memory arrives as speech more readily than as typing.
 - **The answer box is as tall as the answer** (Greg, 2026-10-03, spya-qnrxuw: *"show the whole
@@ -354,8 +354,13 @@ what was passed over (`localStorage`; a client `PUT` after the mark) are
   under the mark says it could not be saved and will not be there later.
 - **A new batch shows none of the old answers** — Greg's *"ok to lose answers"*, below. The rows
   stay in the table and in both exports, readable on their own because each carries its question.
-- **The question that opens is still the first**, now with its answer showing. Opening at the first
-  unanswered question instead is an open question in the plan (Q-quiz-resume).
+- **The question that opens is the first you have not answered.** Greg, 2026-10-05: *"yes, first
+  unanswered question"*. Previous walks back to the answered ones, each with its answer and mark.
+  It is chosen once for a batch, before any question is drawn, among the questions
+  [the reading filter](#only-what-you-have-read) lets you land on; answers that arrive later fill
+  the box and move nothing. With every question answered it opens at the first. A question pressed
+  in the prose still wins. The interactions are in
+  [the plan § Opening at the first unanswered question](../plans/261005b-quiz-answers-are-kept-and-restored.md#opening-at-the-first-unanswered-question).
 - **Whether you got it right is not kept.** After a return the next step shows its premise (the
   "no verdict" case, which errs towards help) and [Where to look again](#where-to-look-again) starts
   empty until something is answered this visit. Storing it is the plan's other open question
@@ -566,7 +571,8 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 - **The verdict is not stored, and neither is where you were.** Answers and their marks are kept
   since 2026-10-05 ([§ Answers are kept](#answers-are-kept)); until then this bullet read "Attempts
   are not stored. A reload starts fresh." What still dies with the visit is the position on the
-  path and the hidden verdict map (which also resets on a new batch). The verdict is not written to
+  path — coming back opens at the first unanswered question, which is worked out from the kept
+  answers, not remembered — and the hidden verdict map (which also resets on a new batch). The verdict is not written to
   a log either — a per-answer right/wrong on a log line is a stored grade wearing a different hat,
   and [privacy.md § Quiz answers](privacy.md#quiz-answers) records the decision not to keep one.
 - **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is

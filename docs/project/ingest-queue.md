@@ -617,8 +617,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
-relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
 cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.
@@ -2156,7 +2155,7 @@ running branch's** — `draftRevisionId` included, because the running branch de
 pointer for the claimant to dispose of, and a terminal row still holding one is a draft
 `sweepAbandonedDrafts` spares for ever — a sweep which, checked 2026-09-04, **nothing called**, so
 failed drafts accumulated without bound. (Since 2026-09-11 it runs on each job's first step, scoped
-to that article, and only counts until the first deletion is approved —
+to that article; it deletes abandoned drafts —
 [cron-scheduler.md](cron-scheduler.md#what-we-do-instead-for-now).) Ranked and deliberately not built in
 [260904a](../postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). And the condition is written **once**, as `over`, and reused
 across every `case`: seven branches that have to agree is the shape of the bug this section is about.

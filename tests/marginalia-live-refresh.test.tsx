@@ -65,6 +65,16 @@ vi.mock("../src/web/lib/api.js", async () => {
     const there = kind !== undefined && present.has(kind);
     if (kind === "faq" && holdFaq) await holdFaq;
     if (there) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
+    /* **The relation words are already stored.** Since 2026-10-05 the column
+       asks for them when it opens on an article with none
+       (tests/marginalia-relations-on-open.test.tsx), which is a job of its
+       own; every claim below is about the lists the margin reads and never
+       makes, on an article at rest. */
+    if (url.startsWith("/api/relations/")) {
+      return new Response(JSON.stringify({ relations: { relations: {} }, stale: false, outdated: false }), {
+        status: 200,
+      });
+    }
     return new Response(null, { status: 404 });
   };
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
@@ -101,7 +111,7 @@ async function settle(): Promise<void> {
 }
 
 async function openMargin(): Promise<void> {
-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, onFeed })));
+  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
   await settle();
 }
 
@@ -230,7 +240,7 @@ describe("the open margin, at rest", () => {
       });
       expect(trace.filter((l) => l === "GET /api/jobs").length, "the session's first poll").toBe(1);
 
-      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, onFeed })));
+      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_000);
       });

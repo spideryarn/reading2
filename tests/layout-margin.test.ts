@@ -20,8 +20,10 @@ import {
   fitView,
   MARG_IDEAL,
   MARG_MIN,
+  MARG_WIDE,
   MODE_MIN,
   MODE_PROSE_FLOOR,
+  PROSE_MIN,
   proseAloneMaxPx,
   SPINE_W,
 } from "../src/web/layout.js";
@@ -95,8 +97,90 @@ describe("the marginalia column", () => {
       expect(fit.tableW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_PROSE_FLOOR);
       expect(fit.tableW).toBeLessThanOrEqual(proseAloneMaxPx(c.rootFontPx));
       expect(fit.margW).toBeGreaterThanOrEqual(MARG_MIN);
-      expect(fit.margW).toBeLessThanOrEqual(MARG_IDEAL);
+      expect(fit.margW).toBeLessThanOrEqual(MARG_WIDE);
     }
+  });
+
+  /* Greg, 2026-10-05: "Maybe if the screen is wide we allow the Marginalia
+     column to be a bit wider". Only into room the centred prose already
+     leaves beside it, so nothing else on the page moves. */
+  describe("on a wide window", () => {
+    /** What the column was before it could widen: `fitMargin`'s old line. */
+    const before = (c: (typeof CASES)[number]) => {
+      const spine = fitView({ ...c, margin: true }).spine === "on" ? SPINE_W : 0;
+      return Math.min(MARG_IDEAL, Math.max(MARG_MIN, c.windowWidth - spine - PROSE_MIN));
+    };
+
+    it("is 24rem at its widest", () => {
+      expect(MARG_IDEAL).toBe(288);
+      expect(MARG_WIDE).toBe(384);
+    });
+
+    it("grows into the room beside the centred prose: 310px at 1440, 384px at 1920 and 2560", () => {
+      expect(proseAloneMaxPx(16)).toBe(808);
+      /* (1440 − 12 of rail − 808 of prose) / 2. */
+      expect(fitView({ windowWidth: 1440, margin: true }).margW).toBe(310);
+      expect(fitView({ windowWidth: 1920, margin: true }).margW).toBe(MARG_WIDE);
+      expect(fitView({ windowWidth: 2560, margin: true }).margW).toBe(MARG_WIDE);
+    });
+
+    it("is exactly what it was wherever that room is no more than the old column", () => {
+      /* 1396px with the rail at a 16px root: 12 + 808 + 2 × 288. */
+      expect(fitView({ windowWidth: 1396, margin: true }).margW).toBe(MARG_IDEAL);
+      expect(fitView({ windowWidth: 1398, margin: true }).margW).toBe(MARG_IDEAL + 1);
+      let same = 0;
+      let wider = 0;
+      for (const c of CASES) {
+        const fit = fitView({ ...c, margin: true });
+        if (fit.margW === 0) continue;
+        const spine = fit.spine === "on" ? SPINE_W : 0;
+        const room = (c.windowWidth - spine - fitView(c).tableW) / 2;
+        if (room <= MARG_IDEAL) {
+          same += 1;
+          expect(fit.margW, JSON.stringify(c)).toBe(before(c));
+        } else {
+          wider += 1;
+          expect(fit.margW, JSON.stringify(c)).toBe(Math.min(Math.floor(room), MARG_WIDE));
+          /* And it is spare room it grew into: nothing is reserved for it. */
+          expect(fit.margReserve, JSON.stringify(c)).toBe(0);
+        }
+      }
+      expect(same).toBeGreaterThan(100);
+      expect(wider).toBeGreaterThan(100);
+    });
+
+    it("moves and narrows the prose exactly as the old column did, at every width", () => {
+      for (const c of CASES) {
+        const fit = fitView({ ...c, margin: true });
+        if (fit.margW === 0) continue;
+        const spine = fit.spine === "on" ? SPINE_W : 0;
+        const avail = c.windowWidth - spine;
+        const old = before(c);
+        const proseW = Math.min(fitView(c).tableW, avail - old);
+        expect(fit.tableW, JSON.stringify(c)).toBe(proseW);
+        expect(fit.margReserve, JSON.stringify(c)).toBe(Math.max(0, 2 * old + proseW - avail));
+      }
+    });
+
+    it("beside a band, grows only into what was already reserved right of the prose", () => {
+      let wider = 0;
+      for (const c of BANDED) {
+        const fit = fitView({ ...c, modeBand: true, margin: true });
+        if (fit.margW === 0) continue;
+        expect(fit.margW, JSON.stringify(c)).toBe(
+          Math.max(
+            Math.min(MARG_IDEAL, fit.margReserve),
+            Math.min(Math.floor(fit.margReserve), MARG_WIDE),
+          ),
+        );
+        if (fit.margW > MARG_IDEAL) wider += 1;
+      }
+      expect(wider).toBeGreaterThan(100);
+      /* Greg's layout, a Structure band at 1440: no spare room, so no change. */
+      expect(
+        fitView({ windowWidth: 1440, modeBand: true, bandShape: "structure", margin: true }).margW,
+      ).toBe(MARG_IDEAL);
+    });
   });
 
   it("gives up the column below the floor, and the page is then Plain's", () => {
@@ -148,7 +232,7 @@ describe("the marginalia column", () => {
       expect(fit.tableW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_PROSE_FLOOR);
       expect(fit.tableW, JSON.stringify(c)).toBeLessThanOrEqual(proseAloneMaxPx(c.rootFontPx));
       expect(fit.margW).toBeGreaterThanOrEqual(MARG_MIN);
-      expect(fit.margW).toBeLessThanOrEqual(MARG_IDEAL);
+      expect(fit.margW).toBeLessThanOrEqual(MARG_WIDE);
       expect(fit.modeW, JSON.stringify(c)).toBeGreaterThanOrEqual(MODE_MIN);
     }
   });
@@ -157,9 +241,11 @@ describe("the marginalia column", () => {
     for (const c of BANDED) {
       const fit = fitView({ ...c, modeBand: true, margin: true });
       if (fit.margW === 0) continue;
+      /* The column the band is shared around is never the widened one: that
+         grows afterwards, into room already right of the prose. */
       const narrower = fitView({
         ...c,
-        windowWidth: c.windowWidth - fit.margW,
+        windowWidth: c.windowWidth - Math.min(fit.margW, MARG_IDEAL),
         modeBand: true,
       });
       expect(fit.modeW, JSON.stringify(c)).toBe(narrower.modeW);
