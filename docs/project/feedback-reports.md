@@ -386,6 +386,15 @@ sessions of the 2026-09-06 sweep predate it and are named for their work, of whi
    header, then stop without a second note; if delivery fails, leave this report unresolved for the
    next sweep. Then **each agent decides for itself** what to build, using § Who sent it above — Opus and GPT Sol are
    its calls to make, not this loop's.
+
+   **A sibling report's session is the likeliest author of the fix, and `gjd-remote ls` cannot
+   show it.** Two symptoms of one cause arrive as two reports. On 2026-09-08 the fix for `-2H`
+   landed from `-2J`'s session, under `-2J`'s name, fourteen minutes after `-2H`'s session took its
+   opening snapshot; `-2H` was still unresolved and no session carried its id, both correctly.
+   Those commits reach a worktree only when `npm run worktree:setup` merges them, and all it prints
+   is *"merged origin/dev (…) — N commits this worktree did not have"*
+   (`scripts/worktree-freshen.ts`), so a `git log` read before setup cannot see them —
+   [260908c](../plans/260908c-the-feedback-box-zoom-was-fixed-ten-minutes-before-i-started.md).
 4. **It lands on `dev` and stops there**: green tests, a GPT Sol review of the code,
    `git push origin HEAD:dev`. **The loop never deploys.** Production is `npm run deploy`, and it
    stays Greg's.

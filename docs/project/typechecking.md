@@ -183,6 +183,17 @@ thing it is guarding, not a copy of it.* An assertion whose premise is written i
 test seam whose default is a stub, are the same failure — an instrument disconnected from its
 subject.
 
+**Measured on one guard, 2026-09-08: GPT Sol broke it three review rounds running, seven bypasses in
+all, and every one was a single edit that moved the guard's subject and its definition of "correct"
+together.** "The type mentions `EXPECTED` somewhere" passed a `string |` member. "The `satisfies`
+target is spelled `readonly Expected[]`" passed once the interface was widened instead. "This one
+literal is not assignable" passed once the alias in between was widened. `string extends keyof T`
+missed a `` `w${string}` `` pattern index, which is narrower. Two degenerate cases sit under all of
+them: `any` compares equal to everything, and a widened source widens both halves of a comparison
+derived from it. Asking the compiler was not, by itself, the stronger question: a sampled literal
+and an enumerated mechanism were both checks on a spelling. And a false `as` assertion cannot be
+disproved from inside the type system at all, while it is trivially found as text.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed

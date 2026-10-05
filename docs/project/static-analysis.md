@@ -34,6 +34,10 @@ working. `npm run check` is the pre-commit gate, and you should expect to wait â
 [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
 *system* memory pressure here. `--fast` skips the build but **not** the suite.
 
+Started beside an `npm test` it is two full suites. On 2026-09-05 both ran in tmux at once: each
+took over half an hour, available memory fell to 6 GB of 30, and six waiters were OOM-killed in one
+burst. Ending the `check` session let the suite finish in minutes.
+
 Its neighbours: [linting.md](linting.md) is Biome as a *linter* (why not ESLint, which rules are off
 and why), [typechecking.md](typechecking.md) is `tsc` and the three projects, and
 [testing.md](testing.md) is what we run rather than what we read.

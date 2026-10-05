@@ -962,6 +962,9 @@ Two things worth knowing:
   kills it; fourteen had piled up by 2026-08-31. `node ~/gjd-remote/sessions.mjs` reports which are
   finished (`--kill` reaps only those), judging by the transcript's last message rather than tmux's
   activity time or the file's mtime, both of which move on idle sessions.
+  The script is not in this repo and nothing under `infra/hetzner/` installs it: `~/gjd-remote` on
+  the box is a drop directory, so it survives a rebuild only because `/home` does. `--selftest`
+  checks its classifier.
 - **The file being right and the keyboard being right are two facts.** A tmux server reads its
   config once, at start, and the box's server outlives provisioning by weeks — so provisioning
   rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
@@ -1194,6 +1197,27 @@ form.
   `/var/tmp/spideryarn-worktrees/` since then —
   [worktrees.md § Where a worktree's bytes live](worktrees.md#where-a-worktrees-bytes-live). Anything
   else large and disposable belongs on `/` too.
+- **`gh` is installed and not logged in.** `gh auth status` answers *"You are not logged into any
+  GitHub hosts"* and `GH_TOKEN` is unset (2026-09-02, unchanged 2026-10-05). `git` push and fetch to
+  `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
+  settings, Actions. Those are done from Greg's Mac.
+- **The `Write` tool refuses a path outside the session's working directories.** `/tmp/foo.txt`
+  comes back as *"Path is outside allowed working directories"*, and in an unattended session that
+  refusal is final, because it counts as a permission request nobody can answer (2026-09-22). Bash
+  has no such limit: a quoted heredoc (`cat > /tmp/foo.txt <<'EOF'`) writes the file and keeps
+  backticks and `$` literal.
+- **`npm run <script> <word>` passes the word to the script, with no `--`** (npm 11). On 2026-09-09
+  `npm run fleet:restart go`, typed to find out whether npm forwards a bare argument, restarted the
+  live fleet dashboard. The header of [`scripts/fleet-restart.ts`](../../scripts/fleet-restart.ts)
+  has the story, and it is why that script has no default mode.
+- **Holding the production credential is not being allowed to read with it.** On 2026-10-03 the
+  auto-mode classifier refused an unattended feedback session three reads of real shelf data: a
+  read-only dump of production ("Production Reads"), `evals/shelf-topics/build-cases.ts` against
+  the local shelf's real titles ("PII Data Handling"), and a one-row read-only lookup made after
+  Greg had said yes in chat. The refusal is about the outcome, so a yes in chat does not change it.
+  What was allowed: synthetic shelves, and a query for an owner that does not exist, which proves
+  the SQL. The work was finished with a one-command read-only script for Greg to run himself
+  (`npm run shelf-topics:preview`).
 
 ## Known holes
 

@@ -1,0 +1,13 @@
+allowed to run that command and similar yourself in future to free up memory
+You are allowed to remove worktrees where it's safe to do so (e.g. we've already pushed their contents, or we have explicitly agreed that we are throwing them away)
+And you are allowed to remove temp files where safe to do so
+you have permission any time to delete Codex transcripts more than a week old
+Keep going until you hit 100% of your weekly usage limits, and then I'll find a way to reset them
+if you see bugs, fix them without asking me
+if there are clear no-tradeoffs-improvements that won't add much complexity, you should always do them
+You have my permission this time to run the command
+But going forwards, you still need to ask my permission for any action that involves SUPABASE_ACCESS_TOKEN
+when you wake up, pull the latest changes to avoid a big merge conflict at the
+by no means the only reason the app
+The glossary, concept-search, remembering, diagramming, etc all feel
+this sentence was never typed by anybody zzqx control

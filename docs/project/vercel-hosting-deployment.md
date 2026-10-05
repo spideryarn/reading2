@@ -88,6 +88,13 @@ Four things, each learned by getting it wrong first:
   diagnostic that exists anywhere: Sentry withholds that sentence on purpose
   ([job-failure.ts](../../src/job-failure.ts) § The log, and not Sentry), and nothing writes it to a
   store. One day of retention, then it is gone.
+- **The result usually overflows the tool limit and is written to a file.** Grep that file rather
+  than reading it.
+- **An unattended session may be refused the call while the credential is fine.** Measured
+  2026-09-20 and 2026-09-21 in the feedback sweep: `list_teams` answered, and `list_projects` and
+  `get_runtime_logs` were each refused with *"requires approval, and this session has no approval
+  surface"*. Some tools are pre-approved and these are not, so a refusal there is a permission
+  answer and not a lost login. The Supabase MCP was refused the same way on 2026-09-19.
 
 That `level` one is the dangerous one: it answers a real outage with silence, and silence reads as
 health. Why our lines look like that at all is
