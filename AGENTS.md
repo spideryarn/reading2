@@ -218,9 +218,9 @@ Four things are ours:
   new doc's line under its entry point, or a pointer's wording, needs no approval. Greg, 2026-09-02.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the doc that owns
-  it and delete the question. That file should shrink. The same goes for anything you learn: your own
-  auto-memory is for preferences and machine-local state, not for knowledge Greg and the other agents
-  need.
+  it and delete the question. That file should shrink. The same goes for anything you learn, and for
+  any preference or permission Greg gives you: write it into the doc that owns it, in Git, not into
+  your own auto-memory, which lives on one machine and is lost with it. (Greg, 2026-10-05.)
 - **Keep this file short.** Detail goes in the doc; this file gets a line.
 
 ## Working agreements for agents
