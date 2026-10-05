@@ -2,8 +2,15 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05: **stage D built (§ Result: stage D); stage E not started.** Queue item
-`qi-kbkbw4rp`.
+Status as of 2026-10-05: **both stages built and on `dev`** (§ Result: stage D, § Result: stage
+E). Evidence: `src/structure-slices.ts` and `buildBoundedHeadingTree` exist and
+`generateStructure` calls both; a real 250-page book went through each path on the local stack.
+Not deployed by this work. Queue item `qi-kbkbw4rp`.
+
+**Read this first if you read nothing else.** § The design was written before the code and two
+of its claims were corrected later: § The plan review (uniform depth) and § The E spike (the
+cascade, the note). What was built is § Stage E, as it will be built, with § The review of this
+plan; what happened is the two Result sections.
 
 ## What this is for
 
@@ -230,12 +237,12 @@ several days, stop after a working stage and debrief.
 
 ## Stages
 
-- [ ] Plan review by GPT Sol (read-only).
-- [ ] **D**: tests red; build; gates; Sol code review (write-capable); the real 250-page book;
+- [x] Plan review by GPT Sol (read-only).
+- [x] **D**: tests red; build; gates; Sol code review (write-capable); the real 250-page book;
   browser check; docs; push to `dev`.
-- [ ] **E plan**: a spike on the local book first (one group through the ordinary call, does it
+- [x] **E plan**: a spike on the local book first (one group through the ordinary call, does it
   parse and build on a slice), then the detailed plan and its Sol review.
-- [ ] **E**: build, gates, Sol code review, the real book end to end, browser check, docs, push.
+- [x] **E**: build, gates, Sol code review, the real book end to end, browser check, docs, push.
 - [ ] Debrief to the Overseer; remove the worktree after `worktree:check`.
 
 ## Result: stage D
@@ -405,6 +412,69 @@ characters, so a document of enormous paragraphs can still overflow a call's inp
 unchanged). Past about 45 slices (roughly 40,000 blocks) the step runs out of time and returns
 D's tree. A chapter with no sections still leaves its paragraphs at depth 2, as in any model
 tree today.
+
+## Result: stage E
+
+Built 2026-10-05. `a079914e2` is the stage as first built; `618ab1509` carries GPT Sol's review
+fixes.
+
+**What landed.** `src/structure-slices.ts` (the planner, the acceptance rule, the join, the
+refill rule, the note, the root call, the deadline, `runSlices`), and its call from
+`generateStructure` where one answer will not fit. `StructureRun.source` has a slices value and
+the headings reason says why slices failed. The step's own budget now reaches the step
+(`stepBudgetMs`, from `src/jobs.ts`). No migration: slices, refills and the root share the
+existing checkpoint namespace under their own request keys.
+
+**The code review.** [GPT Sol](261005a-long-documents-stage-e-code-review-sol.md): ship with the
+fixes it made, eight of them, each seen red first: F22 (the call count left out failed calls and
+retries), F23 (a root "question" that was a statement), F24 (a call answering after its time cap
+could still publish), F25, F26 (a failed slice stopped admission a moment late), F27, F28, F30.
+Two new test files, one of which drives the real job walk through the queue.
+
+- **F28 changes a decision of mine.** I had a failed refill keep the section it was meant to
+  improve. The reviewer made it return the headings tree, as any failed call does. That throws
+  away a finished tree for one optional call that failed after its retries. I have left it: it is
+  the simpler rule, the slices are checkpointed so a re-run buys only the refill, and it should be
+  rare. It is the first thing to revisit if the fallback rate is not near zero.
+- **F29 (P2, wider, not built).** Checkpoint reads and writes have no time limit of their own, so
+  the reserve at the end of the step is an allowance and not a bound. Reported.
+
+**The gates.** Typecheck and the import-cycle check green. The full suite on `618ab1509`: 1,593
+files passed and 6 failed. Five are the ones a fresh worktree always fails for want of a build
+(`fleet-composed-access`, `cold-start-lazy-imports`, `fleet-decisions-route`,
+`fleet-reports-route`, `pdf-bundle-trace`). The sixth was real: the reviewer's new queue test
+reused an owner uuid another test file claims, which `tests/fixture-ids.test.ts` refuses. It has
+its own id now, and both files pass.
+
+**Not red-first.** The implementer wired the step before writing its integration tests, so those
+passed on first run. Five mutations of the finished code each turned one red, and every review
+fix was red first.
+
+**The real book, through the queue.** `npm run structure -- s3-doctorow-250p-spya-jg872v --force`:
+4 slices, no refill, no re-ask, 5 calls, 131 seconds, $1.00. 25 parts, mostly the book's stories
+by name, each starting on its own heading with no gaps (checked block by block). Labels: 221
+seconds, 65 calls, 3,052 paragraphs, $1.53.
+
+**Spend on E:** $1.26 spike, $1.47 note comparison, $1.00 and $1.53 for the run above: $5.26
+against a budget of $5 for the run plus $6 and $3 for the two measurements.
+
+**The browser check** (Sonnet, Playwright, 1440, 820 and 390; `261005a-shot-e*.png`): the article
+opens and reads at all three, Structure shows the 25 parts with their gists, no empty titles, no
+overflow, author's titles in the serif and the model's in mono.
+
+**One real problem it found, which is not this work's.** After a click on a part or section in
+Structure the prose lands correctly, and about two seconds later the address's `?at=` is
+rewritten to a block several hundred pixels *above* the view, and the highlighted row follows it
+to the previous section. It does not correct itself. **It reproduces on an ordinary 1,025-block
+article** (`s3-gdl-45mb-spya-cc9kr8`, a model-built tree, nothing of this plan in it), where `at=`
+ended up between 22 and 1,419 pixels above the view after five clicks. The book's tree was
+checked block by block and every part starts on its own heading, so it is the reading view and
+not the tree. Not investigated; reported to the Overseer with the measurements
+(`261005a-shot-e1x-1440-book-after-click.png`).
+
+**Also seen, as in any model tree:** a part with no sections (a dedication, an afterword) shows
+"This part is not divided into sections" on a wide screen, and in the breadcrumb its "section"
+is a paragraph's label.
 
 ## The simpler options passed over
 

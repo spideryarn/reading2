@@ -134,7 +134,42 @@ describe("stage E adversarial regressions", () => {
       return ROOT_ONLY;
     };
     expect(await run()).toMatchObject({ ok: false, failure: "out-of-time" });
+    /* One since F31, two before it: the clock passes the first call's cap
+       before its peer is admitted, so the peer is never started. */
+    expect(calls).toHaveLength(1);
+  });
+
+  it("F31 a re-ask is not admitted once a pending peer's cap has passed, even before its timer runs", async () => {
+    vi.useFakeTimers({ now: 1_800_000_000_000 });
+    let settled = 0;
+    let bAsked = 0;
+    respond = async (call) => {
+      try {
+        if (call.ids[0] === body[0]!.id) {
+          /* A: pending until its own signal aborts. */
+          return await new Promise((_, reject) => call.signal.addEventListener("abort", () => reject(new Error("aborted"))));
+        }
+        if (bAsked++ === 0) await new Promise((resolve) => setTimeout(resolve, SLICE_CALL_CAP_MS - 1));
+        return ROOT_ONLY;
+      } finally {
+        settled += 1;
+      }
+    };
+    /* B's invalid answer arrives at cap - 1 ms; reading it carries the clock
+       past A's cap, and no timer can be dispatched during that work. */
+    const slow = { ...deps, parse: (...args: Parameters<typeof parseWholeDocumentAnswer>) => {
+      if (args[0] === ROOT_ONLY) vi.setSystemTime(Date.now() + 2);
+      return parseWholeDocumentAnswer(...args);
+    } };
+    const going = run({ deps: slow });
+    await vi.advanceTimersByTimeAsync(SLICE_CALL_CAP_MS - 1);
+    expect(calls, "B's re-ask was started after A's cap had passed").toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(2);
+    const out = await going;
+    expect(out).toMatchObject({ ok: false, failure: "out-of-time" });
     expect(calls).toHaveLength(2);
+    expect(settled, "every started call is awaited").toBe(2);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("F25 a pre-aborted reader starts no call", async () => {

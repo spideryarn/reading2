@@ -418,6 +418,8 @@ export async function runSlices(opts: {
   let stopped = false;
   let callError: unknown;
   let failure: SlicesFailure | null = null;
+  /** When each call still out must have ended. A cap can pass before its timer is dispatched. */
+  const active = new Map<AbortController, number>();
   const fail = (not: NotAsked, as: SlicesFailure): void => {
     stopped = true;
     if (not.why !== "stopped") failure ??= not.why === "out-of-time" ? "out-of-time" : as;
@@ -466,11 +468,13 @@ export async function runSlices(opts: {
     }
     for (let attempt = 1; ; attempt++) {
       if (stopped || signal?.aborted) return { ok: false, why: "stopped" };
+      if ([...active.values()].some((expiry) => Date.now() >= expiry)) return refused("out-of-time");
       if (Date.now() + q.capMs + q.thenMs > deadline) {
         return q.skipIfShort ? { ok: false, why: "out-of-time" } : refused("out-of-time");
       }
       const expiresAt = Date.now() + q.capMs;
       const own = new AbortController();
+      active.set(own, expiresAt);
       const onStop = (): void => own.abort();
       if (signal?.aborted) own.abort();
       else signal?.addEventListener("abort", onStop, { once: true });
@@ -493,6 +497,7 @@ export async function runSlices(opts: {
       } finally {
         if (call !== undefined) spend.calls += call.attempts();
         clearTimeout(timer);
+        active.delete(own);
         signal?.removeEventListener("abort", onStop);
       }
       /* Usage precedes acceptance: a refusal, truncation or late answer still spent tokens. */

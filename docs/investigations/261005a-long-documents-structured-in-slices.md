@@ -54,6 +54,11 @@ Joined: 27 top-level sections, 118 below them, no problem from the tree checker 
 tree, and nothing the labels step could not ask about. Side by side the wall time is the slowest
 slice plus the root call, about 100 seconds, against a step budget of 700.
 
+**And as built, through the queue** (`npm run structure -- <slug> --force`, the same day, after
+the code review): 4 slices, no refill, no re-ask, 5 calls, 131 seconds, **$1.00**, 25 top-level
+sections that are mostly the book's stories by name. The labels step then ran on that tree as on
+any other.
+
 ## What went wrong, and what fixed it
 
 - **Three of four slices cut their stories into scenes at the top level.** *Visit the Sins* came

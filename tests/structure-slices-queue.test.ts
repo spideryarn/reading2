@@ -48,7 +48,7 @@ const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, STEP_BUDGET_MS } = await 
 const { STEPS } = await import("../src/pipeline.js");
 const { runAsOwner } = await import("../src/owner.js");
 const { SLICE_CALL_CAP_MS } = await import("../src/structure-slices.js");
-const OWNER = "00000000-0000-4000-8000-000000000001" as OwnerId;
+const OWNER = "51ce5e0e-0000-4000-8000-0000000000e1" as OwnerId;
 const blocks = paragraphs(3000);
 
 const settle = async (transition: JobEndTransition) => {
