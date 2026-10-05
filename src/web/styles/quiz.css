@@ -52,6 +52,16 @@
   padding: 0.15rem 0.5rem;
   cursor: pointer;
 }
+/* **Four chips (the Experimental switch on) tighten their side padding**; three keep
+   0.5rem. On an iPad the band is 288px, so the head row has 234px of content (the
+   (i) keeps the right 41.6px). Four chips are 220px, and the bin Recall, Tutorial and
+   Explore add beside them is 22px plus a 7px gap: 250px, 16px too much, so Quiz
+   wrapped. At 0.25rem the chips total 188px and chips plus bin 218px, which leaves
+   18px. A touch screen has 226px of row content, not 234px, and keeps 10px there.
+   Measured 2026-10-05, plan 261005h item B. */
+.remember-submode:has(> .remember-submode-btn:nth-child(4)) > .remember-submode-btn {
+  padding-inline: 0.25rem;
+}
 .remember-submode-btn:hover { color: var(--ink); }
 .remember-submode-btn.on {
   background: var(--rule);
