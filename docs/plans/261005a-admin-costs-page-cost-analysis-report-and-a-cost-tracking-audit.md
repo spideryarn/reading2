@@ -281,3 +281,18 @@ alternative is a private artifact link. Recommendation: the file, since it names
 
 - 2026-10-05 — prior-work check, measurements, plan written. `/home` on the box was full; this
   worktree's `node_modules` is a symlink to `/tmp/spya-nm-fbmykvhz/node_modules` on the root disk.
+- 2026-10-05 — **Stage 1 landed** (`aabcde9a7`, review fixes `6963e7cb2`). `spendCube`,
+  `src/cost-cube.ts`, `GET /api/admin/costs`. GPT Sol's code review:
+  [approve](261005a-admin-costs-stage-1-code-review-sol.md), four fixes of its own — the important
+  one is that an article's key in the address bar is now always an opaque keyed hash (HMAC), the
+  administrator's own slug included. Sol could not run Postgres and wrote the digest with
+  pgcrypto's `digest()`; changed to the built-in `sha256()` and the Postgres suite run green.
+  Reported and not fixed in stage 1: a failed account listing fails the whole page (F5, fixed in
+  stage 5); no index leads on `started_at` (F6, queued); `category` is a string on the wire (F7,
+  left); a renamed own article is labelled by whichever slug arrives first (F8, left — totals are
+  right).
+- 2026-10-05 — **The audit's first draft is in** (`docs/investigations/261005a`). In short: what
+  the ledger records matches OpenRouter to the nano-dollar (49 of 49 sampled); it is short by a
+  known $2.11 of $90.80 (dictation never priced; stopped and failed calls recorded as free); two
+  owners is true; completeness cannot be proven from the box. Its scripts are kept under
+  `evals/cost/audit-261005/`.

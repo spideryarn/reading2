@@ -75,6 +75,7 @@ const ADMIN_PAGE_TITLE: Record<AdminPage, string> = {
   users: "Users",
   feedback: "Feedback",
   vouchers: "Gift vouchers",
+  costs: "Costs",
 };
 
 /**

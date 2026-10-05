@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { ChartColumn, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -41,6 +41,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
+  ADMIN_COSTS_HREF,
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
@@ -232,6 +233,12 @@ export function AdminHome() {
           icon={<Gift size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
           title="Gift vouchers"
           blurb="Give an email address extra free articles, and see who has claimed theirs"
+        />
+        <Entry
+          href={ADMIN_COSTS_HREF}
+          icon={<ChartColumn size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Costs"
+          blurb="What model calls cost, by user, article, mode or task, model and day"
         />
         {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
             > Move the Design link on the logged-in Homepage into /admin
