@@ -188,7 +188,7 @@ describe("every seam an outside title enters by", () => {
   it("keeps a hostile plainTitle result as text in the public title and og:title", () => {
     const title = plainTitle("&lt;/title&gt;&lt;script&gt;owned&lt;/script&gt;");
     const shell = `<html><head>${MANAGED_HEAD_START}${MANAGED_HEAD_END}</head><body></body></html>`;
-    const markup = composeShell(shell, { slug: "hostile", title, gist: null, canonical: null });
+    const markup = composeShell(shell, { slug: "hostile", title, gist: null, canonical: null, authors: [] });
     const doc = new JSDOM(markup).window.document;
     expect(doc.querySelector("script")).toBeNull();
     expect(doc.title).toBe(`${title} · Spideryarn`);

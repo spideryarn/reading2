@@ -272,11 +272,12 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
             file and still carries a disallow rule — and reports the deploy as failed if it is not.
           </p>
           <p>
-            There is one narrow hole and it is worth naming: Facebook's and Twitter's link-preview
-            fetchers are allowed at <code className="tw:text-foreground">/read/</code>, so that
-            pasting a shared link into a chat shows a title and a one-line description instead of a
-            bare URL. Neither of those puts a page into a search result, and both still receive the
-            noindex header.
+            There is one narrow hole and it is worth naming: the link-preview fetchers of Facebook,
+            X, LinkedIn, WhatsApp, Telegram, Discord and Slack are allowed at{" "}
+            <code className="tw:text-foreground">/read/</code>, at our homepage and at the one
+            picture of our own logo that a preview shows, so that pasting a shared link into a chat
+            shows a title and a one-line description instead of a bare URL. None of those puts a
+            page into a search result, and all of them still receive the noindex header.
           </p>
           <p>
             Where that address is one we can safely republish, the page also carries a{" "}

@@ -61,8 +61,8 @@ import { headText } from "../src/html.js";
 /* The card's clamp, from the composer that applies it, rather than a `120`
    written out here — a checker that carries its own copy of the number it is
    checking cannot notice the number changing. */
-import { CARD_TITLE } from "../src/public/page-head.js";
-import { documentTitle } from "../src/title-text.js";
+import { CARD_TITLE, OG_CARD } from "../src/public/page-head.js";
+import { APP_NAME, SEP, TAGLINE, documentTitle } from "../src/title-text.js";
 
 /* ------------------------------------------------------------------ */
 /* Facts about the feature, fixed rather than guessed                  */
@@ -79,6 +79,13 @@ const PRODUCTION_ORIGIN = "https://www.spideryarn.com";
 
 /** index.html:17. The unmodified shell's `<title>` — checked, not assumed. */
 const DEFAULT_TITLE = "Spideryarn";
+/**
+ * The default shell's `og:title`, since 2026-10-05: every page that is not a
+ * shared article has a card too (index.html). So an `og:title` no longer says
+ * a head was composed for an article. **`og:url` does**: the default head has
+ * none, because one static head is served at every path.
+ */
+const DEFAULT_CARD_TITLE = `${APP_NAME}${SEP}${TAGLINE}`;
 
 /* ------------------------------------------------------------------ */
 /* Saying things — deliberately close to scripts/deploy.ts's look      */
@@ -269,7 +276,9 @@ export function judgeCommonHeaders(head: ParsedHead): string[] {
 /**
  * Everything about the public head **except both titles**, which
  * {@link judgeTitleAgainstArticle} owns outright — `<title>` and `og:title`,
- * each compared exactly against the article's own.
+ * the tab compared exactly against the article's own and the card permitted
+ * to append the public authors. Image tags must name our actual card file:
+ * fetching the PNG separately does not prove that the head points to it.
  *
  * This docblock used to say it checked `og:title` was present. It never did:
  * the loop below has three keys and that is not one of them. Harmless while the
@@ -289,6 +298,15 @@ export function judgePublicHead(head: ParsedHead, body: string, opts: { slug: st
   const ogUrl = metaContent(body, "og:url");
   const expectedOgUrl = `${PRODUCTION_ORIGIN}/read/${encodeURIComponent(opts.slug)}`;
   if (ogUrl !== null && ogUrl !== expectedOgUrl) problems.push(`meta og:url: expected '${expectedOgUrl}', got '${ogUrl}'`);
+
+  for (const [key, expected] of [
+    ["og:image", OG_CARD.url],
+    ["twitter:image", OG_CARD.url],
+    ["twitter:card", "summary_large_image"],
+  ] as const) {
+    const actual = metaContent(body, key);
+    if (actual !== expected) problems.push(`meta ${key}: expected '${expected}', got ${actual === null ? "none" : `'${actual}'`}`);
+  }
 
   return problems;
 }
@@ -370,6 +388,7 @@ export function judgeTitleAgainstArticle(body: string, articleTitle: string): Ti
      `"   "` normalises to `""`, which is as titleless as one that was never
      set, and both sides say `Untitled` for it. */
   const expectedOgTitle = headText(articleTitle, CARD_TITLE) || "Untitled";
+  const mayNameAuthors = !blank && expectedOgTitle === headText(articleTitle, Number.MAX_SAFE_INTEGER);
   const expectedTitle = documentTitle(articleTitle);
 
   const decodedTitle = title === null ? null : unescapeHead(title);
@@ -380,8 +399,14 @@ export function judgeTitleAgainstArticle(body: string, articleTitle: string): Ti
   const rawOgTitle = metaContent(body, "og:title");
   const ogTitle = rawOgTitle === null ? null : unescapeHead(rawOgTitle);
   if (ogTitle === null) problems.push("meta og:title: missing");
-  else if (ogTitle !== expectedOgTitle)
-    problems.push(`meta og:title: expected '${expectedOgTitle}' (from /api/public/article's meta.title, clamped to 120), got '${ogTitle}'`);
+  /* **The title alone, or the title and then who wrote it** (`cardTitle` in
+     src/public/page-head.ts, 2026-10-05). The names come from a column the
+     public payload does not carry, so they cannot be predicted here; what is
+     still held exactly is that the card *starts* with this article's title and
+     the separator. A title the clamp cut gets no names, so it is still compared
+     whole. */
+  else if (ogTitle !== expectedOgTitle && !(mayNameAuthors && ogTitle === headText(ogTitle, CARD_TITLE) && ogTitle.startsWith(expectedOgTitle + SEP) && ogTitle.length > (expectedOgTitle + SEP).length))
+    problems.push(`meta og:title: expected '${expectedOgTitle}'${mayNameAuthors ? `, or that followed by '${SEP}' and the authors` : ""} (from /api/public/article's meta.title, clamped to 120), got '${ogTitle}'`);
 
   return blank
     ? {
@@ -431,7 +456,10 @@ export function judgeDefaultShell(head: ParsedHead, body: string, expectedStatus
   if (title !== DEFAULT_TITLE)
     problems.push(`title: expected exactly '${DEFAULT_TITLE}', got ${title === null ? "no <title> tag" : `'${title}'`}`);
 
-  if (metaContent(body, "og:title") !== null) problems.push("meta og:title: present on what should be the unmodified default shell");
+  const ogTitle = metaContent(body, "og:title");
+  if (ogTitle === null || unescapeHead(ogTitle) !== DEFAULT_CARD_TITLE)
+    problems.push(`meta og:title: expected the default shell's '${DEFAULT_CARD_TITLE}', got ${ogTitle === null ? "none" : `'${ogTitle}'`}`);
+  if (metaContent(body, "og:url") !== null) problems.push("meta og:url: present on what should be the unmodified default shell");
 
   return problems;
 }
@@ -477,7 +505,9 @@ export function judgeMalformedPath(head: ParsedHead, body: string): string[] {
   if (head.status !== null && head.status >= 500) problems.push(`status: ${head.status} is a 5xx`);
   const title = extractTitle(body);
   if (title !== null && title !== DEFAULT_TITLE) problems.push(`title: got an enhanced-looking title '${title}' for a malformed path`);
-  if (metaContent(body, "og:title") !== null) problems.push("meta og:title: present for a malformed path");
+  const ogTitle = metaContent(body, "og:title");
+  if (ogTitle !== null && unescapeHead(ogTitle) !== DEFAULT_CARD_TITLE) problems.push(`meta og:title: got an enhanced-looking '${ogTitle}' for a malformed path`);
+  if (metaContent(body, "og:url") !== null) problems.push("meta og:url: present for a malformed path");
   return problems;
 }
 
@@ -534,7 +564,15 @@ export function judgeRobotsHeaderOnRead(head: ParsedHead): string[] {
  * file itself carries the whole argument; this is the list, lower-cased because
  * a robots.txt user-agent match is case-insensitive.
  */
-const PREVIEW_BOTS = ["facebookexternalhit", "twitterbot"];
+const PREVIEW_BOTS = ["facebookexternalhit", "twitterbot", "linkedinbot", "whatsapp", "telegrambot", "discordbot", "slackbot"];
+
+/**
+ * What those robots may fetch, and it is the whole of a card: a shared
+ * article's page, the one picture every card carries (`OG_CARD` in
+ * src/public/page-head.ts), and the homepage alone (`$` ends the match). Since
+ * 2026-10-05; it was `/read/` only, for Meta's and X's robots only.
+ */
+const PREVIEW_ALLOWS = ["/read/", "/og-card.png", "/$"];
 
 /**
  * **`Allow:` is not the same thing as indexing, and this check used to say it
@@ -550,8 +588,11 @@ const PREVIEW_BOTS = ["facebookexternalhit", "twitterbot"];
  * anybody does with a red they believe is spurious is stop reading the output.
  * So the rule is now the one the file actually keeps — **the anonymous group is
  * still `Disallow: /`, and every `Allow:` belongs to a group naming only the
- * preview bots** — and a third bot, or an `Allow:` in the `*` group, still
- * fails.
+ * preview bots** — and an unknown bot with an `Allow:`, or an `Allow:` in the
+ * `*` group, still fails. Every named group must block the rest of the site,
+ * even if it has no `Allow:` lines: an empty group implicitly permits all.
+ * Each preview bot must retain all three permissions, so the older file that
+ * blocks the image or a newly named platform is no longer a passing deployment.
  */
 export function judgeRobotsTxt(contentType: string, body: string): string[] {
   const problems: string[] = [];
@@ -581,6 +622,9 @@ export function judgeRobotsTxt(contentType: string, body: string): string[] {
     problems.push("the 'User-agent: *' group does not say 'Disallow: /'");
 
   for (const group of groups) {
+    /* A named group inherits nothing from `*`, even when it has no rules. */
+    if (!group.rules.some((r) => /^Disallow:\s*\/$/i.test(r)))
+      problems.push(`the group for '${group.agents.join(", ")}' has no 'Disallow: /' of its own`);
     const allows = group.rules.filter((r) => /^Allow:/i.test(r));
     if (allows.length === 0) continue;
     const unexpected = group.agents.filter((a) => !PREVIEW_BOTS.includes(a));
@@ -589,8 +633,23 @@ export function judgeRobotsTxt(contentType: string, body: string): string[] {
         `an 'Allow:' line under '${unexpected.join(", ")}' — only ${PREVIEW_BOTS.join(" and ")} are meant to have one`,
       );
     for (const allow of allows)
-      if (!/^Allow:\s*\/read\/$/i.test(allow))
-        problems.push(`unexpected rule '${allow}' — the only hole is 'Allow: /read/'`);
+      if (!PREVIEW_ALLOWS.includes(allow.replace(/^Allow:\s*/i, "")))
+        problems.push(`unexpected rule '${allow}' — the only holes are ${PREVIEW_ALLOWS.join(", ")}`);
+  }
+
+  for (const bot of PREVIEW_BOTS) {
+    /* RFC 9309 merges groups that name the same bot. Permit equivalent split
+       groups too; it is the available paths that matter, not the formatting. */
+    const matching = groups.filter((g) => g.agents.includes(bot));
+    if (matching.length === 0) {
+      problems.push(`no 'User-agent: ${bot}' group found`);
+      continue;
+    }
+    const allows = matching.flatMap((g) => g.rules)
+      .filter((r) => /^Allow:/i.test(r))
+      .map((r) => r.replace(/^Allow:\s*/i, ""));
+    for (const path of PREVIEW_ALLOWS)
+      if (!allows.includes(path)) problems.push(`the group for '${bot}' is missing 'Allow: ${path}'`);
   }
 
   return problems;
@@ -744,7 +803,9 @@ function runSelfTest(): void {
     '<meta property="og:title" content="My Great Article">' +
     '<meta property="og:description" content="A description of the article.">' +
     '<meta property="og:url" content="https://www.spideryarn.com/read/my-great-article">' +
-    '<meta name="twitter:card" content="summary">' +
+    '<meta property="og:image" content="https://www.spideryarn.com/og-card.png">' +
+    '<meta name="twitter:image" content="https://www.spideryarn.com/og-card.png">' +
+    '<meta name="twitter:card" content="summary_large_image">' +
     "</head><body>…</body></html>";
   const goodShaHeaders = createHash("sha256").update("the base shell bytes").digest("hex");
   const goodHead = parseHeaderDump(
@@ -756,6 +817,18 @@ function runSelfTest(): void {
     }),
   );
   check("judgePublicHead: the good fixture passes clean", judgePublicHead(goodHead, goodBody, { slug: "my-great-article" }).length === 0, judgePublicHead(goodHead, goodBody, { slug: "my-great-article" }));
+  check(
+    "judgePublicHead: catches a head that lost its image tags",
+    judgePublicHead(goodHead, goodBody.replace(/<meta (?:property="og:image"|name="twitter:image")[^>]*>/g, ""), { slug: "my-great-article" }).some((p) => p.startsWith("meta og:image:")),
+  );
+  check(
+    "judgePublicHead: catches the wrong image address",
+    judgePublicHead(goodHead, goodBody.replaceAll("/og-card.png", "/missing.png"), { slug: "my-great-article" }).some((p) => p.startsWith("meta og:image:")),
+  );
+  check(
+    "judgePublicHead: catches the old small Twitter card",
+    judgePublicHead(goodHead, goodBody.replace("summary_large_image", "summary"), { slug: "my-great-article" }).some((p) => p.startsWith("meta twitter:card:")),
+  );
   check("judgeRobotsHeaderOnRead: the good fixture passes clean", judgeRobotsHeaderOnRead(goodHead).length === 0);
 
   /* ---- Fixture 2: a duplicated x-robots-tag ---- */
@@ -945,10 +1018,54 @@ function runSelfTest(): void {
       "x-spideryarn-shell-sha256": goodShaHeaders,
     }),
   );
-  check("judgeDefaultShell: a clean 404 default shell passes", judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title></head></html>`, 404).length === 0);
+  /* Spelled out, not built from `DEFAULT_CARD_TITLE`, which the judge uses. */
+  const defaultCard = `<meta property="og:title" content="Spideryarn · AI-assisted reading">`;
+  check("judgeDefaultShell: a clean 404 default shell passes", judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title>${defaultCard}</head></html>`, 404).length === 0);
   check(
-    "judgeDefaultShell: catches an og:title that should not be there",
-    judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title><meta property="og:title" content="leak"></head></html>`, 404).length > 0,
+    "judgeDefaultShell: catches an og:title that is not the default's",
+    judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title><meta property="og:title" content="leak"></head></html>`, 404).some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeDefaultShell: catches a default shell that has lost its card",
+    judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title></head></html>`, 404).some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeDefaultShell: catches an og:url, which only a composed head has",
+    judgeDefaultShell(clean404Head, `<html><head><title>${DEFAULT_TITLE}</title>${defaultCard}<meta property="og:url" content="https://www.spideryarn.com/read/x"></head></html>`, 404).some((p) => p.startsWith("meta og:url:")),
+  );
+  /* ---- judgeTitleAgainstArticle: authors after the title ---- */
+  const withAuthors = (og: string, tab = "My Great Article · Spideryarn"): string =>
+    `<title>${tab}</title><meta property="og:title" content="${og}">`;
+  check(
+    "judgeTitleAgainstArticle: the title followed by its authors passes",
+    judgeTitleAgainstArticle(withAuthors("My Great Article · Jane Doe et al."), "My Great Article").problems.length === 0,
+  );
+  check(
+    "judgeTitleAgainstArticle: a longer title that merely starts the same does not",
+    judgeTitleAgainstArticle(withAuthors("My Great Article Two"), "My Great Article").problems.some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeTitleAgainstArticle: a separator with nobody after it does not",
+    judgeTitleAgainstArticle(withAuthors("My Great Article · "), "My Great Article").problems.some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeTitleAgainstArticle: a suffix beyond the whole card's budget fails",
+    judgeTitleAgainstArticle(withAuthors(`My Great Article · ${"A".repeat(120)}`), "My Great Article").problems.some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeTitleAgainstArticle: a whitespace-only author suffix fails",
+    judgeTitleAgainstArticle(withAuthors("My Great Article ·    "), "My Great Article").problems.some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeTitleAgainstArticle: a clamped title is still compared whole, names or not",
+    judgeTitleAgainstArticle(
+      `<title>${"A".repeat(64)}… · Spideryarn</title><meta property="og:title" content="${"A".repeat(120)} · Jane Doe">`,
+      "A".repeat(200),
+    ).problems.some((p) => p.startsWith("meta og:title:")),
+  );
+  check(
+    "judgeTitleAgainstArticle: a blank title takes no names",
+    judgeTitleAgainstArticle(`<title>Untitled · Spideryarn</title><meta property="og:title" content="Untitled · Jane Doe">`, "  ").problems.some((p) => p.startsWith("meta og:title:")),
   );
 
   /* ---- judgeByteIdentical ---- */
@@ -960,6 +1077,8 @@ function runSelfTest(): void {
 
   /* ---- judgeMalformedPath ---- */
   check("judgeMalformedPath: a 400 default shell passes", judgeMalformedPath(parseHeaderDump(dump("HTTP/1.1 400 Bad Request", {})), `<title>${DEFAULT_TITLE}</title>`).length === 0);
+  check("judgeMalformedPath: an og:url on a malformed path fails", judgeMalformedPath(parseHeaderDump(dump("HTTP/1.1 400 Bad Request", {})), `<title>${DEFAULT_TITLE}</title><meta property="og:url" content="https://www.spideryarn.com/read/x">`).length > 0);
+  check("judgeMalformedPath: an article's og:title on a malformed path fails", judgeMalformedPath(parseHeaderDump(dump("HTTP/1.1 400 Bad Request", {})), `<title>${DEFAULT_TITLE}</title><meta property="og:title" content="Somebody's article">`).length > 0);
   check("judgeMalformedPath: a 500 fails", judgeMalformedPath(parseHeaderDump(dump("HTTP/1.1 500 Internal Server Error", {})), `<title>${DEFAULT_TITLE}</title>`).length > 0);
   check(
     "judgeMalformedPath: an enhanced title on a malformed path fails",
@@ -1000,16 +1119,53 @@ function runSelfTest(): void {
      the repo said. */
   const shippedRobots =
     "User-agent: *\nDisallow: /\n\n" +
-    "User-agent: facebookexternalhit\nAllow: /read/\nDisallow: /\n\n" +
-    "User-agent: Twitterbot\nAllow: /read/\nDisallow: /\n";
+    "User-agent: facebookexternalhit\nUser-agent: Twitterbot\nUser-agent: LinkedInBot\nUser-agent: WhatsApp\n" +
+    "User-agent: TelegramBot\nUser-agent: Discordbot\nUser-agent: Slackbot\n" +
+    "Allow: /read/\nAllow: /og-card.png\nAllow: /$\nDisallow: /\n";
+  for (const bot of ["LinkedInBot", "Slackbot"]) {
+    check(
+      `judgeRobotsTxt: catches the missing ${bot} permission`,
+      judgeRobotsTxt("text/plain", shippedRobots.replace(`User-agent: ${bot}\n`, "")).length > 0,
+    );
+  }
+  for (const allow of ["/read/", "/og-card.png", "/$"]) {
+    check(
+      `judgeRobotsTxt: catches the missing ${allow} permission`,
+      judgeRobotsTxt("text/plain", shippedRobots.replace(`Allow: ${allow}\n`, "")).length > 0,
+    );
+  }
   check(
-    "judgeRobotsTxt: the shipped file — Disallow-all plus the two preview holes — passes",
+    "judgeRobotsTxt: catches an empty named group opening the whole site",
+    judgeRobotsTxt("text/plain", `${shippedRobots}\nUser-agent: Googlebot\n`).length > 0,
+  );
+  check(
+    "judgeRobotsTxt: the old two-bot file fails because it blocks the image and other platforms",
+    judgeRobotsTxt(
+      "text/plain",
+      "User-agent: *\nDisallow: /\n\nUser-agent: facebookexternalhit\nAllow: /read/\nDisallow: /\n\nUser-agent: Twitterbot\nAllow: /read/\nDisallow: /\n",
+    ).length > 0,
+  );
+  check(
+    "judgeRobotsTxt: catches a preview group that lost its own Disallow, which is the open door",
+    judgeRobotsTxt("text/plain", "User-agent: *\nDisallow: /\n\nUser-agent: Twitterbot\nAllow: /read/\n").length > 0,
+  );
+  check(
+    "judgeRobotsTxt: catches a fourth hole",
+    judgeRobotsTxt("text/plain", "User-agent: *\nDisallow: /\n\nUser-agent: Twitterbot\nAllow: /read/\nAllow: /profile\nDisallow: /\n").length > 0,
+  );
+  /* ---- judgeOgCard ---- */
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+  check("judgeOgCard: a PNG served as one passes", judgeOgCard(200, "image/png", png).length === 0);
+  check("judgeOgCard: catches the SPA shell answering for it", judgeOgCard(200, "text/html; charset=utf-8", Buffer.from("<!doctype html>")).length === 2);
+  check("judgeOgCard: catches a 404", judgeOgCard(404, "image/png", png).length === 1);
+  check(
+    "judgeRobotsTxt: the shipped file — seven bots and three paths — passes",
     judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots).length === 0,
     judgeRobotsTxt("text/plain; charset=utf-8", shippedRobots),
   );
   check(
-    "judgeRobotsTxt: the older Disallow-all-and-nothing-else file still passes",
-    judgeRobotsTxt("text/plain; charset=utf-8", "User-agent: *\nDisallow: /\n").length === 0,
+    "judgeRobotsTxt: the older blanket block fails because no preview robot is allowed",
+    judgeRobotsTxt("text/plain; charset=utf-8", "User-agent: *\nDisallow: /\n").length > 0,
   );
   check("judgeRobotsTxt: catches being served as text/html (the SPA ate it)", judgeRobotsTxt("text/html", "User-agent: *\nDisallow: /\n").length > 0);
   check(
@@ -1017,7 +1173,7 @@ function runSelfTest(): void {
     judgeRobotsTxt("text/plain", "User-agent: *\nAllow: /read/\nDisallow: /\n").length > 0,
   );
   check(
-    "judgeRobotsTxt: catches a third bot being let in beside the two",
+    "judgeRobotsTxt: catches a search engine being let in beside the preview robots",
     judgeRobotsTxt("text/plain", `${shippedRobots}\nUser-agent: Googlebot\nAllow: /read/\nDisallow: /\n`).length > 0,
   );
   check(
@@ -1202,7 +1358,25 @@ function checkRobots(host: string, publicSlug: string | undefined): void {
 
   const r = curlRequest(`${host}/robots.txt`);
   const contentType = headerValues(r.head, "content-type")[0] ?? "";
-  report("/robots.txt is unchanged (text/plain, Disallow: /)", problemsOf([r], () => judgeRobotsTxt(contentType, r.bodyText)));
+  report("/robots.txt allows seven preview bots at three paths and blocks the rest", problemsOf([r], () => judgeRobotsTxt(contentType, r.bodyText)));
+
+  /* 7c. The picture every card names. A missing file is answered by the SPA
+     catch-all with `200 text/html`, which a preview draws as no picture and
+     nothing else would report. */
+  const card = curlRequest(`${host}${OG_CARD.path}`);
+  report(
+    `${OG_CARD.path} is a real PNG`,
+    problemsOf([card], () => judgeOgCard(card.head.status, headerValues(card.head, "content-type")[0] ?? "", card.bodyBuffer)),
+  );
+}
+
+/** The card's picture: a 200, served as a PNG, and actually one. */
+export function judgeOgCard(status: number | null, contentType: string, body: Buffer): string[] {
+  const problems: string[] = [];
+  if (status !== 200) problems.push(`status: expected 200, got ${status ?? "(no status line)"}`);
+  if (!contentType.toLowerCase().startsWith("image/png")) problems.push(`served as '${contentType}', not image/png`);
+  if (!body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) problems.push("the body is not a PNG");
+  return problems;
 }
 
 /** A `{commit}` or `{build: {commit}}` shape — accepted either way, matching scripts/deploy-checks.ts's HealthBody. */

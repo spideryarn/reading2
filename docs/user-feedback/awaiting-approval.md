@@ -13,6 +13,14 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-04 · spya-qfu4uz · improving SEO: not built, because the whole site is `noindex` on
+  purpose and says so to authors, so nothing a search engine could read is read until that
+  changes. Two questions. Recommended: let search engines list Spideryarn's own pages (the homepage,
+  `/features`, `/pricing`, `/help`, `/changelog`, `/privacy`; about a day), and keep shared articles
+  out of search, which is what Google asks of a republisher · qi-jge946v7 ·
+  [261005f § Questions for Greg](../plans/261005f-link-previews-and-seo-for-shared-links.md#questions-for-greg) ·
+  [note](261004_1711-improve-spideryarn-seo.md)
+
 - 2026-10-04 · spya-hwdefp and spya-v322fd (SPIDERYARN-READING2-D7) · sharing an article with some
   people: not built, because Greg asked to discuss first and every version changes who may read
   an article, a listed defence. Three stages, three questions. Recommended: a private link first

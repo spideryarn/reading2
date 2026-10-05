@@ -29,7 +29,7 @@ import { effectiveInfluence, INFLUENCE_VERSION } from "../src/citation-effective
 import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
-import { publicArticle } from "../src/public/dto.js";
+import { publicArticle, publicAuthorNames } from "../src/public/dto.js";
 import type {
   Arc,
   Block,
@@ -2862,5 +2862,33 @@ describe("the debate a shared link carries", () => {
       ...NO_ARTEFACTS,
     });
     expect("debate" in bare).toBe(false);
+  });
+});
+
+/**
+ * **The names on a link preview are the names a visitor is already shown.**
+ * `authors` is not in the public payload and `byline` is, so the byline is the
+ * licence. docs/plans/261005f-link-previews-and-seo-for-shared-links.md.
+ */
+describe("publicAuthorNames", () => {
+  const authors = [
+    { name: "Jane Doe", affiliations: ["A Private Lab"] },
+    { name: "John Smith", affiliations: [] },
+  ];
+
+  it("gives the names the public byline contains, and never an affiliation", () => {
+    expect(publicAuthorNames(authors, "Jane Doe; John Smith")).toEqual(["Jane Doe", "John Smith"]);
+  });
+
+  /* Mutation: return every name whatever the byline says. Red here. */
+  it("holds back a name the byline does not show", () => {
+    expect(publicAuthorNames(authors, "Jane Doe")).toEqual(["Jane Doe"]);
+    expect(publicAuthorNames(authors, null)).toEqual([]);
+    expect(publicAuthorNames(authors, "")).toEqual([]);
+  });
+
+  it("gives none for a page with a byline and no structured authors", () => {
+    expect(publicAuthorNames(null, "By Jane Doe | Staff reporter")).toEqual([]);
+    expect(publicAuthorNames([{ name: "  " }], "By   somebody")).toEqual([]);
   });
 });

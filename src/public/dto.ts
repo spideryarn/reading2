@@ -1366,3 +1366,22 @@ function optionalSourceGuess(row: SourceGuessRow | null): { sourceGuess?: Public
   const guess = row === null ? null : publicSourceGuess(row);
   return guess === null ? {} : { sourceGuess: guess };
 }
+
+/**
+ * **The authors' names a visitor is already shown**, for the end of a link
+ * preview's title (`PublicHead.authors`, src/store/public-reader.ts).
+ *
+ * A visitor is sent `byline` and never `authors`, so a name is published here
+ * only when the public byline already contains it. For a paper the byline is
+ * derived from these names, so that is all of them; for a web page with no
+ * structured authors it is none, and the page's own free-text byline ("By Jane
+ * Doe | Staff reporter") is not clean enough to print in a title. Names only:
+ * an affiliation never leaves through this.
+ */
+export function publicAuthorNames(
+  authors: readonly { name: string }[] | null,
+  byline: string | null,
+): string[] {
+  if (authors === null || byline === null) return [];
+  return authors.map((a) => a.name).filter((name) => name.trim() !== "" && byline.includes(name));
+}
