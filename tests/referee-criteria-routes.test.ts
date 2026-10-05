@@ -143,7 +143,7 @@ const stored = (): Promise<SavedCriterion[]> =>
 
 /** One criterion, begun through the store the route writes through. */
 const begin = (criterion: string): Promise<SavedCriterion> =>
-  asTestOwner(async () => (await refereeCriteriaStore.begin(SLUG, criterion, { kind: "single" })).row);
+  asTestOwner(async () => (await refereeCriteriaStore.begin(SLUG, "feedfacefeedface", criterion, { kind: "single" })).row);
 
 describe("Referee's criteria routes", { timeout: 60_000 }, () => {
   let article: ScratchArticle;
