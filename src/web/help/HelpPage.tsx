@@ -50,7 +50,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { MODE_CATALOG } from "../../mode-catalog.js";
 import type { Mode } from "../../modes.js";
 import { MODE_LABEL } from "../../title-text.js";
-import { BackLink } from "../BackLink.js";
+import { HomeLink } from "../BackLink.js";
 import { scrollToAndFlash } from "../flash.js";
 import { Link } from "../Link.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
@@ -263,8 +263,9 @@ export function HelpPage() {
       onClickCapture={onClickCapture}
       className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-5xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans"
     >
-      {/* "Home", for ChangelogPage.tsx's reason: most people here were sent. */}
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
+      {/* Signed out only, as on `/changelog`: signed in, the corner logo is the
+          way home. BackLink.tsx § `HomeLink`. */}
+      <HomeLink className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Help</h1>
       <p className="tw:mt-2 tw:mb-0 tw:max-w-2xl tw:text-sm tw:leading-relaxed tw:text-muted-foreground">

@@ -180,6 +180,26 @@ afterEach(() => {
   host.remove();
 });
 
+describe("shelf actions when the saved row has no shelf card", () => {
+  it("does not insert a null card when restoring an article", async () => {
+    answers.set("/api/library", async () => shelfOf("another-article"));
+    answers.set("/api/library?archived=1", async () => ({ articles: [entry({
+      slug: "restored-article", archivedAt: "2026-10-04T12:00:00Z",
+    })] }));
+    answers.set("/api/library/restored-article", async () => ({ entry: null, purpose: null }));
+    paint();
+    await settle();
+    await act(async () => { await shelfNow_!.loadArchived(); });
+
+    await act(async () => { await shelfNow_!.restore("restored-article"); });
+
+    expect(shelfNow()).toEqual(["another-article"]);
+    expect(shelfNow_!.archived?.map((article) => article.slug)).toEqual(["restored-article"]);
+    expect(actionErrorNow()).toContain("saved");
+    expect(actionErrorNow()).not.toContain("[page-fault]");
+  });
+});
+
 describe("the admin lists use the same failure boundary", () => {
   it("recognises the users request's Safari wording by apiFetch's brand", async () => {
     answers.set("/api/admin/users", () =>

@@ -618,6 +618,7 @@ function PanelBody({
           disabled={about.saved === null}
           rows={3}
           save={about.state}
+          inFlight={about.inFlight}
           onBusyChange={setAboutBusy}
         />
       ) : (
@@ -647,6 +648,7 @@ function PanelBody({
           disabled={purpose.saved === null}
           rows={2}
           save={purpose.state}
+          inFlight={purpose.inFlight}
           onBusyChange={setPurposeBusy}
         />
       ) : (

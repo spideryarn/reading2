@@ -244,9 +244,13 @@ export function useArticleRename(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title }),
       })
-        .then((r) => readJson<{ entry: LibraryEntry }>(r))
+        .then((r) => readJson<{ entry: LibraryEntry | null }>(r))
         .then(({ entry }) => {
           if (seq.current !== mine) return;
+          if (entry === null) {
+            setError("the server gave no article back to show. It may have saved; refresh the page to check.");
+            return;
+          }
           setWritten({ slug, overridden: Boolean(entry.titleOverridden) });
           /* **The slug goes back with the title.** This resolves after the
              component that owns it may have gone: the reader renames one

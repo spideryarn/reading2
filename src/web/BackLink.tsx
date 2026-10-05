@@ -42,7 +42,12 @@
  *
  * `className` is the caller's spacing (a `tw:mb-*`), since each page puts its
  * heading a different distance below.
+ *
+ * **The house is drawn only where there is no corner logo** — `HomeLink`
+ * below, since 2026-10-05. `/profile` and the admin index lost their arrow to
+ * the library the same day, for the same reason: `HomeLogo` is beside both.
  */
+import { createContext, useContext } from "react";
 import { ArrowLeft, House } from "lucide-react";
 
 import { Link } from "./Link.js";
@@ -73,4 +78,45 @@ export function BackLink({
       </Link>
     </Tooltip>
   );
+}
+
+/**
+ * **Is this page inside the signed-in shell?** `App.tsx` provides `true`
+ * around every signed-in page and nothing provides it signed out, so the
+ * default is the stranger's answer.
+ *
+ * A context because the fact is `App`'s and its reader is five pages away, two
+ * of them behind `LazyPage`, whose loaders take no props. Not `useSession()`
+ * in the page: each call is a subscription of its own that starts at
+ * `loading`, so a signed-in reader would see the house for a frame on every
+ * visit.
+ */
+export const SignedInShell = createContext(false);
+
+/**
+ * **The way home from a page people are sent to — where there is not one
+ * already.**
+ *
+ * > We don't need a Home icon on /changelog, because we have the logo right next to it. Look for
+ * > anywhere else that has a superfluous link back to home at the top and remove that too.
+ * >
+ * > — Greg, 2026-10-04 (spya-gqj660)
+ *
+ * Signed in, `App.tsx` draws `HomeLogo` in the corner beside each of the five
+ * pages that use this (`/changelog`, `/privacy`, `/contact`, `/opensource`,
+ * `/help`), and the house under it went to the same place. Signed out it draws
+ * those pages bare — there is no shelf for a corner logo to link at — so there
+ * the house is the only way home and stays (GPT Sol, plan review F2). The rule
+ * is this one line rather than a condition in five pages;
+ * tests/home-link-only-without-the-corner-logo.test.tsx walks both shells, and
+ * checks the logo is there wherever the house is not.
+ *
+ * "Home", not "Back", since 2026-09-08: it goes to `/` rather than
+ * `history.back()`, and most people who open these pages were sent to them, so
+ * there was often no "back" for it to mean. It is also the footer's label for
+ * the same destination.
+ */
+export function HomeLink({ className }: { className: string }) {
+  if (useContext(SignedInShell)) return null;
+  return <BackLink href="/" label="Home" icon="home" className={className} />;
 }

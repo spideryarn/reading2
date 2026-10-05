@@ -52,7 +52,6 @@ import { useEffect, useRef, useState } from "react";
 import { BookOpen, Cpu, SlidersHorizontal, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { readHref } from "./router.js";
@@ -227,8 +226,9 @@ export function ProfilePage() {
       ref={body}
       className={`tw:mx-auto ${CONTENTS_MARGIN} tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans`}
     >
-      <BackLink href="/" label="Back to your library" className="tw:mb-6" />
-
+      {/* No back arrow above this since 2026-10-05: the corner logo beside it
+          goes to the library too (BackLink.tsx § `HomeLink`). The 3.5rem above
+          is what keeps the heading clear of that logo, which is 2.75rem tall. */}
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
       {/* Three things now, and the sentence names all three: what the model is
           told, what your account may do, and what you have switched on. It used
@@ -313,6 +313,7 @@ export function ProfilePage() {
                profile you believe every glossary is written to is a string the
                server never got. */
             save={profile.state}
+            inFlight={profile.inFlight}
           />
           <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-ink-faint">
             Changing this can give existing personalised text the person-and-pencil icon. Nothing

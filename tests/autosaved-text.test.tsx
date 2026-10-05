@@ -84,6 +84,16 @@ describe("what lands after a save", () => {
     expect(get().state).toEqual({ kind: "error", message: "Over the limit" });
   });
 
+  /* The idle timer arms only on `dirty`. A refusal of older text shown over
+     newer words would leave them unsent until the next keystroke or blur. */
+  it("does not call newer words refused when an older save fails", async () => {
+    act(() => get().setDraft("Too much"));
+    act(() => get().commit());
+    act(() => get().setDraft("Less"));
+    await act(async () => sent[0]?.fail("Over the limit"));
+    expect(get().state.kind).toBe("dirty");
+  });
+
   it("drops a failed attempt's error when the reader changes the draft", async () => {
     act(() => get().setDraft("Too much"));
     act(() => get().commit());
