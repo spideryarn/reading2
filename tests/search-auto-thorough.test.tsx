@@ -14,7 +14,7 @@
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { NuqsAdapter } from "nuqs/adapters/react";
+import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Block, BlockId, SearchHit, SearchRun } from "../src/types.js";
@@ -58,6 +58,13 @@ Object.defineProperty(window, "localStorage", {
     key: (i: number) => [...stored.keys()][i] ?? null,
   },
 });
+
+/* **As the app does** (src/web/main.tsx): a write to `history` that is not
+   nuqs's own is shown to nuqs, which then drops any write of its own it was
+   still holding. Without it the `replaceState` each case begins with left the
+   last case's held `?runs=` in the queue, to land on this case's URL a few
+   tens of milliseconds in ("the harness" below is the guard). */
+enableHistorySync();
 
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { searchDraftFor } = await import("../src/web/search-draft.js");
@@ -326,7 +333,7 @@ async function recolour(words: string): Promise<number> {
 
 const WORDS = "arguments against";
 
-beforeEach(() => {
+function setup(): void {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick`);
   host = document.createElement("div");
@@ -336,11 +343,49 @@ beforeEach(() => {
   // The draft outlives the band (one per article, for the page's life): empty
   // it, or typing the same words as the last case is not an edit at all.
   searchDraftFor(SLUG).set("");
-});
+}
 
-afterEach(async () => {
+async function teardown(): Promise<void> {
   await act(async () => root.unmount());
   host.remove();
+}
+
+beforeEach(setup);
+afterEach(teardown);
+
+describe("the harness", () => {
+  /* nuqs holds a URL write for its throttle in a queue that is the page's, not
+     the band's, so unmounting does not cancel it. A case that ends inside that
+     window used to hand its `?runs=` to the next case, which then opened with
+     the last case's row ticked (the flake of 2026-10-05). */
+  it("a URL write still queued when a case ends does not land in the next case", async () => {
+    const s = server();
+    mount();
+    await flush();
+    type(WORDS);
+    enter();
+    await flush();
+    await urlRuns(s.posts("quick")[0]!.id);
+    const tick = () => click(must('input[aria-label^="Also mark: "]', rowFor(WORDS)));
+    tick();
+    // Polled every millisecond: the next write has to follow this one closely to be held.
+    await act(async () => {
+      await vi.waitFor(() => expect(inUrl()).toBe("none"), { interval: 1 });
+    });
+    tick();
+    expect(ticked(), "control: the row was ticked again").toEqual([WORDS]);
+    expect(inUrl(), "control: that write is held, not landed").toBe("none");
+
+    /* The case ends here, and the next one begins. Unmounted without an
+       await, unlike `teardown`: a yield here is long enough, some of the
+       time, for the held write to land before `setup` and be overwritten,
+       and then this passes whether or not anything cancels it. */
+    act(() => root.unmount());
+    host.remove();
+    setup();
+    await wait(200);
+    expect(inUrl(), "the last case's ?runs= arrived in this one").toBeNull();
+  });
 });
 
 describe("a quick search starts the thorough one", () => {
