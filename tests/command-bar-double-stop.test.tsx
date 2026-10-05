@@ -22,7 +22,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COMMAND_PICK_PATH, type PickAnswer, type PickKey, type PickRequest } from "../src/command-pick.js";
 import type { ArchiveControl } from "../src/web/useArchive.js";
-import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
+import { EXPERIMENTAL_OFF, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -36,6 +36,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 interface Options {
+  onText(text: string): void;
   onTranscript(text: string): boolean | undefined;
   onEnd(): void;
 }
@@ -75,8 +76,10 @@ let root: Root;
 let openedModes: string[];
 let archiveSet: ReturnType<typeof vi.fn>;
 let asked: { body: PickRequest; answer: (json: unknown) => void }[];
+let setting = EXPERIMENTAL_OFF;
 
-function draw(): void {
+function draw(nextSetting = setting): void {
+  setting = nextSetting;
   act(() => {
     root.render(
       // biome-ignore lint/suspicious/noExplicitAny: as tests/command-bar.test.tsx § reading
@@ -85,7 +88,7 @@ function draw(): void {
         view: "article",
         mode: "plain",
         onMode: (mode: string) => openedModes.push(mode),
-        experimental: EXPERIMENTAL_OFF,
+        experimental: setting,
         shelfRow: {
           archive: { at: null, lost: false, busy: false, error: null, set: archiveSet } as unknown as ArchiveControl,
           tags: { edit: vi.fn(async () => []) },
@@ -110,6 +113,16 @@ const options = (): Options => mic.options as Options;
 
 function openBar(): void {
   act(() => host.querySelector<HTMLButtonElement>(".dock-commands")?.click());
+}
+function key(key: string, repeat = false): void {
+  act(() => input().dispatchEvent(new KeyboardEvent("keydown", { key, repeat, bubbles: true })));
+}
+function type(text: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    setter?.call(input(), text);
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i++) {
@@ -167,6 +180,7 @@ beforeEach(() => {
   mic.armed = false;
   mic.transcribing = false;
   mic.toggles = 0;
+  setting = EXPERIMENTAL_OFF;
   openedModes = [];
   archiveSet = vi.fn(async () => ({ kind: "done" }) as const);
   asked = [];
@@ -260,11 +274,17 @@ describe("a double press on Stop in the command bar", () => {
 
   it("runs nothing when no transcript arrived", async () => {
     start();
+    act(() => options().onText("plain"));
     stop();
+    expect(micButton().disabled).toBe(false);
     pressAgain();
+    expect(strip()).toBe("Turning that into text, then pressing Enter…");
     await end(null);
     expect(openedModes).toEqual([]);
     expect(asked).toEqual([]);
+    expect(input().value, "rough words must name a runnable row for this refusal to be tested").toBe("plain");
+    key("Enter");
+    expect(openedModes, "Enter really could have run the surviving live words").toEqual(["plain"]);
   });
 
   it("runs nothing once the bar has been shut, even if it is opened again before the words", async () => {
@@ -277,6 +297,131 @@ describe("a double press on Stop in the command bar", () => {
     expect(strip(), "the promise went with the bar").toBe("Turning that into text…");
     await end("plain");
     expect(openedModes).toEqual([]);
+  });
+
+  it.each([false, true])("resets a non-first selection for the transcript (live words: %s)", async (liveWords) => {
+    type("s");
+    key("Enter");
+    expect(openedModes).toHaveLength(1);
+    const freshEnter = [...openedModes];
+    openedModes.length = 0;
+    openBar();
+    start();
+    if (liveWords) act(() => options().onText("s"));
+    expect(listed().length).toBeGreaterThan(1);
+    key("ArrowDown");
+    const second = dialog().querySelectorAll('[role="option"]')[1];
+    expect(input().getAttribute("aria-activedescendant")).toBe(second?.id);
+    stop();
+    pressAgain();
+    // Chromium replaces its live span; Safari/Firefox inserts into the empty draft.
+    await end("s");
+    expect(openedModes).toEqual(freshEnter);
+  });
+
+  it("drops an old proposal before pressing Enter on the new transcript", async () => {
+    type(SENTENCE);
+    key("Enter");
+    await settle();
+    await answer({ kind: "row", key: GLOSSARY, confidence: 0.99, others: [] });
+    expect(heading()).toBe("Did you mean");
+    input().setSelectionRange(SENTENCE.length, SENTENCE.length);
+    start();
+    stop();
+    pressAgain();
+    await end("please");
+    expect(openedModes).toEqual([]);
+    expect(asked.map((a) => a.body.sentence)).toEqual([SENTENCE, `${SENTENCE} please`]);
+    await answer({ kind: "row", key: GLOSSARY, confidence: 0.99, others: [] });
+    draw();
+    expect(heading()).toBe("Did you mean");
+    expect(openedModes).toEqual([]);
+    key("Enter", true);
+    expect(openedModes).toEqual([]);
+    key("Enter");
+    expect(openedModes).toEqual(["glossary"]);
+  });
+
+  it("withdraws the second-press offer when shut during its window", async () => {
+    start();
+    stop();
+    expect(micButton().disabled).toBe(false);
+    act(() => dialog().dispatchEvent(new Event("close")));
+    openBar();
+    expect(micButton().disabled).toBe(true);
+    pressAgain();
+    expect(strip()).toBe("Turning that into text…");
+    await end("plain");
+    expect(openedModes).toEqual([]);
+  });
+
+  it("does not offer Enter while an earlier action is pending, including after reopening", async () => {
+    archiveSet.mockImplementation(() => new Promise(() => {}));
+    type("archive this article");
+    key("Enter");
+    await settle();
+    expect(status()).toBe("Starting…");
+    act(() => dialog().dispatchEvent(new Event("close")));
+    openBar();
+    expect(status()).toBe("Starting…");
+    start();
+    stop();
+    expect(micButton().disabled).toBe(true);
+    pressAgain();
+    expect(strip()).toBe("Turning that into text…");
+    await end("plain");
+    expect(openedModes).toEqual([]);
+    expect(archiveSet).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Enter if the pending action settles during the second-press window", async () => {
+    let finish = () => {};
+    archiveSet.mockImplementation(() => new Promise((resolve) => {
+      finish = () => resolve({ kind: "failed", message: "Could not archive." });
+    }));
+    type("archive this article");
+    key("Enter");
+    await settle();
+    type("");
+    start();
+    stop();
+    expect(micButton().disabled).toBe(true);
+    finish();
+    await settle();
+    expect(micButton().disabled).toBe(false);
+    pressAgain();
+    await end("plain");
+    expect(openedModes).toEqual(["plain"]);
+  });
+
+  it("presses Enter without asking for a signed-out reader's unmatched words", async () => {
+    draw(EXPERIMENTAL_SIGNED_OUT);
+    start();
+    stop();
+    pressAgain();
+    expect(strip()).toBe("Turning that into text, then pressing Enter…");
+    await end(SENTENCE);
+    expect(input().value).toBe(SENTENCE);
+    expect(asked).toEqual([]);
+    expect(openedModes).toEqual([]);
+    key("Enter");
+    expect(asked).toEqual([]);
+  });
+
+  it("cannot execute a pending done action after the Dock unmounts", async () => {
+    start();
+    stop();
+    pressAgain();
+    const ending = options();
+    act(() => root.render(null));
+    act(() => {
+      ending.onTranscript("archive this article");
+      ending.onEnd();
+    });
+    await settle();
+    expect(archiveSet).not.toHaveBeenCalled();
+    expect(openedModes).toEqual([]);
+    expect(asked).toEqual([]);
   });
 });
 

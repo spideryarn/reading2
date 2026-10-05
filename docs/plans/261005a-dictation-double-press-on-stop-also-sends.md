@@ -248,3 +248,30 @@ Tests: `tests/command-bar-double-stop.test.tsx`, over the real bar, field and bu
 "nothing runs" cases, which pass with no wiring at all; of those, the shut-bar one was made to fail
 by removing the bar's `open` check and `doneKey`. The one-press and no-transcript cases pin rules
 that live in the shared hook and were mutated there in the first stage.
+
+**GPT Sol's code review** of `8ac1d0f6d`
+([answer](261005a-dictation-double-press-command-bar-code-review-sol.md)): ship with the fixes made,
+and no production change. One finding, D1 (P2), fixed: the no-transcript test started from an empty
+box, so an Enter pressed in error would have had nothing to run and the test could not tell.
+It now leaves live words that name a row, and removing the hook's delivery check turns it red
+([postmortem](../postmortems/261005i-a-refusal-test-gives-the-forbidden-action-nothing-to-act-on.md)).
+Sol also added eight cases around the sentence it was asked to break — a selection moved off the
+first row, an old proposal on screen, a run still starting, shut and reopened, unmounted, signed
+out — and all held.
+
+**Browser check** (Sonnet, Playwright with Chrome's fake microphone, `/api/transcribe` and
+`/api/command-pick` answered by the test; nothing reached a real server), on `8ac1d0f6d`, at 1440 px
+by mouse and 390 px by touch. The box was badly overloaded at the time, so gaps between presses
+drifted by about 300 ms, and the check was cut short when the Overseer asked for heavy work to stop.
+
+- Both widths: a double press with "structure" shows "Press Enter when the words arrive" in the
+  window, then "Turning that into text, then pressing Enter…", then the bar closes and Structure
+  opens, once. One press leaves the word in the box and runs nothing. A second press about a second
+  after Stop is not taken.
+- 390 px: a sentence that names nothing posts once to the picker and its answer is drawn under
+  "Did you mean", with nothing run. The page did not zoom on the two taps and nothing overflowed
+  sideways.
+- 1440 px: Escape after the second press, and nothing runs when the words arrive.
+- **Not exercised**: "Did you mean" seen at 1440 (the one run there used a wrong row id); Escape at
+  390 (the second tap landed late); whether the longer strip sentence fits on one line at 390 (no
+  screenshot survived); 820 px; a real iPhone or microphone. The unit tests cover the first two.
