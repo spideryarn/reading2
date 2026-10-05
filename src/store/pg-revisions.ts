@@ -1247,8 +1247,8 @@ export interface OpenDraftResult extends BeginRevisionResult {
 export async function openOrBeginJobDraft(opts: {
   readonly slug: string;
   readonly job: { readonly id: string; readonly attemptId: string };
-  /** Tests only: the mode defaults to `STEP_START_DRAFT_SWEEP`. */
-  readonly sweep?: Partial<DraftSweepOptions>;
+  /** Tests only: threshold, batch size or race barrier. Production passes nothing. */
+  readonly sweep?: DraftSweepOptions;
   /** What the article is born as if this claim creates it — `lockOrCreateArticle`'s `birth`. */
   readonly processing?: "minimal";
 }): Promise<OpenDraftResult> {
@@ -1408,10 +1408,7 @@ export async function openOrBeginJobDraft(opts: {
      * `current_revision_id` while the sweep decides. In a savepoint, so a sweep
      * that fails costs the reader nothing — see `sweepOnStepStart`.
      */
-    const sweep = await sweepOnStepStart(tx, article.id, {
-      mode: STEP_START_DRAFT_SWEEP,
-      ...opts.sweep,
-    });
+    const sweep = await sweepOnStepStart(tx, article.id, opts.sweep ?? {});
     const begun = await beginDraftIn(tx, { slug, job });
     /* **A reset's draft starts without the extras**, in the transaction that
        copied them, so there is no moment at which the draft has them. Read off
@@ -3296,26 +3293,6 @@ export const ABANDONED_DRAFT_MS = 6 * 60 * 60 * 1000;
 export const DRAFT_SWEEP_BATCH = 10;
 
 /**
- * `count` enumerates with the real predicate and deletes nothing; `delete`
- * deletes. There is no third mode — in particular, no whole-library one.
- */
-export type DraftSweepMode = "count" | "delete";
-
-/**
- * **What a job's first step does about its article's abandoned drafts.**
- *
- * `count`, until Greg approves the first deletion against production. The
- * on-demand design is decided (docs/project/cron-scheduler.md); what is not yet
- * approved is the first destructive run over real readers' data, and deploying
- * this with `delete` would *be* that run, unreviewed, on the next step anybody
- * started. In `count` mode every step start still runs the exact selection and
- * logs what it would have taken, so production measures itself. Flipping this
- * to `delete` is the approval, and it is a one-line commit.
- * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § O.
- */
-export const STEP_START_DRAFT_SWEEP: DraftSweepMode = "count";
-
-/**
  * **The one definition of an abandoned draft**, shared by the sweep and by
  * `scripts/draft-sweep-inventory.ts` so that a count and a deletion can never be
  * of two different sets.
@@ -3352,9 +3329,10 @@ export function abandonedDraftCondition(olderThanMs: number): SQL {
 }
 
 export interface DraftSweepOptions {
-  readonly mode: DraftSweepMode;
   readonly olderThanMs?: number;
   readonly limit?: number;
+  /** One-off backlog only: restrict deletion to the exact ids independently surveyed. */
+  readonly revisionIds?: readonly string[];
   /**
    * **A test's barrier between enumerating and deleting**, and nothing else.
    * The race cases in tests/draft-sweep-on-step-start.test.ts commit a
@@ -3365,7 +3343,6 @@ export interface DraftSweepOptions {
 
 /** What one sweep did. `deleted` is the `DELETE`'s own row count, never the candidate count. */
 export interface SweptDrafts {
-  readonly mode: DraftSweepMode;
   /** How many the predicate named, up to the batch limit. */
   readonly candidates: number;
   /** True when the predicate named more than the batch — the rest wait for the next job. */
@@ -3375,7 +3352,13 @@ export interface SweptDrafts {
 
 /**
  * Delete **one article's** drafts that nobody owns and nobody is going to
- * publish — or, in `count` mode, say how many there are.
+ * publish.
+ *
+ * **It deletes; there is no mode that only counts.** There was one from
+ * 2026-09-11 until 2026-10-05, so that production could measure itself before
+ * the first destructive run. Greg approved that run on 2026-10-04
+ * (*"Q-draft-sweep yes"*) and the mode went with the question.
+ * docs/plans/261005j-draft-sweep-deletes-and-the-count-mode-goes.md.
  *
  * **Begin-time copying has a retention cost, and a review was right that nobody
  * had costed it.** A 360-block article is roughly 1.31 MiB of copied payload
@@ -3389,7 +3372,7 @@ export interface SweptDrafts {
  * **Scoped to the article the caller has already resolved**, by id rather than
  * by slug, and never the whole library: until 2026-09-11 this was a global
  * delete with no caller, and a global delete run because one reader started a
- * step would charge that reader for everybody's backlog. Its one caller is
+ * step would charge that reader for everybody's backlog. Its application caller is
  * `openOrBeginJobDraft`, on the branch that mints — the first step of every
  * job — and docs/project/cron-scheduler.md is the decision it implements.
  *
@@ -3415,8 +3398,8 @@ export interface SweptDrafts {
  * That argument needs read committed, and the function checks rather than
  * trusts it: under repeatable read step 3 would see step 1's snapshot again.
  *
- * `revision_blocks` and `revision_step_runs` cascade from the delete, and
- * `block_identities` deliberately does not: an id, once minted, is never
+ * `revision_blocks`, `revision_phrase_runs` and `revision_step_runs` cascade
+ * from the delete, and `block_identities` deliberately does not: an id, once minted, is never
  * deleted. docs/project/block-ids.md.
  *
  * It does not log: a line written inside a transaction announces something a
@@ -3429,19 +3412,21 @@ export async function sweepAbandonedDrafts(
 ): Promise<SweptDrafts> {
   const olderThanMs = opts.olderThanMs ?? ABANDONED_DRAFT_MS;
   const limit = opts.limit ?? DRAFT_SWEEP_BATCH;
+  if (opts.revisionIds?.length === 0) return { candidates: 0, more: false, deleted: 0 };
   const inThisArticle = eq(articleRevisions.articleId, articleId);
+  const inSurvey = opts.revisionIds ? inArray(articleRevisions.id, [...opts.revisionIds]) : undefined;
   const abandoned = abandonedDraftCondition(olderThanMs);
 
   /* One more than the batch, so "there is more" is a fact rather than a guess. */
   const found = await tx
     .select({ id: articleRevisions.id })
     .from(articleRevisions)
-    .where(and(inThisArticle, abandoned))
+    .where(and(inThisArticle, inSurvey, abandoned))
     .orderBy(asc(articleRevisions.createdAt), asc(articleRevisions.id))
     .limit(limit + 1);
   const ids = found.slice(0, limit).map((row) => row.id);
-  const enumerated = { mode: opts.mode, candidates: ids.length, more: found.length > limit };
-  if (opts.mode === "count" || ids.length === 0) return { ...enumerated, deleted: 0 };
+  const enumerated = { candidates: ids.length, more: found.length > limit };
+  if (ids.length === 0) return { ...enumerated, deleted: 0 };
 
   const [isolation] = (
     await tx.execute(sql`select current_setting('transaction_isolation') as level`)
@@ -3484,7 +3469,7 @@ export async function sweepAbandonedDrafts(
  */
 export type DraftSweepOutcome =
   | ({ readonly kind: "swept"; readonly ms: number } & SweptDrafts)
-  | { readonly kind: "failed"; readonly mode: DraftSweepMode; readonly ms: number; readonly error: string };
+  | { readonly kind: "failed"; readonly ms: number; readonly error: string };
 
 /**
  * Run the sweep inside a savepoint of the step-start transaction, and turn any
@@ -3520,7 +3505,6 @@ async function sweepOnStepStart(
     await tx.execute(sql`rollback to savepoint draft_sweep`);
     return {
       kind: "failed",
-      mode: opts.mode,
       ms: ms(),
       error: err instanceof Error ? err.name : typeof err,
     };
@@ -3531,7 +3515,7 @@ async function sweepOnStepStart(
 function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutcome): void {
   if (outcome.kind === "failed") {
     logger.warn(
-      { slug, articleId, mode: outcome.mode, ms: outcome.ms, error: outcome.error },
+      { slug, articleId, ms: outcome.ms, error: outcome.error },
       "abandoned-draft sweep failed; the step went ahead without it",
     );
     return;
@@ -3541,14 +3525,11 @@ function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutco
     {
       slug,
       articleId,
-      mode: outcome.mode,
       candidates: outcome.candidates,
       more: outcome.more,
       deleted: outcome.deleted,
       ms: outcome.ms,
     },
-    outcome.mode === "count"
-      ? "abandoned draft revisions counted (count mode: nothing deleted)"
-      : "abandoned draft revisions swept",
+    "abandoned draft revisions swept",
   );
 }

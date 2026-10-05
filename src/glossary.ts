@@ -436,9 +436,9 @@ function toEntries(
  * keeps the reader's `?term=` links alive across the change. Found by GPT Sol's
  * review of docs/plans/260826t-reader-profile.md, 2026-08-26.
  *
- * Note this is a stricter test than `profileIsStale`: there, `null` never
- * counts as stale, because a reader who asked for a plain glossary should not
- * be nagged. Here any difference matters, including `null` against a hash — the
+ * Note this is a stricter test than `profileIsStale`: there, a reader who has
+ * cleared their profile is not told anything changed. Here any difference
+ * matters, in either direction — the
  * question is not "should we warn them" but "may these two lists be merged",
  * and entries written for a physicist may not be merged with entries written
  * for nobody in particular.
@@ -963,9 +963,8 @@ export function buildGlossary(
     sourceHash: opts.sourceHash,
     /* `null`, never absent, and never omitted the way an empty field usually is
        here. Absent means "written before this existed"; `null` means "written
-       deliberately without a profile", and the panel needs to tell those two
-       apart to decide whether its checkbox starts ticked.
-       src/profile.ts § profileIsStale. */
+       with no profile", and `profileIsStale` treats the two differently: only
+       `null` reads as changed once the reader has a profile. src/profile.ts. */
     profileHash: runProfileHash(opts.profile ?? null),
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
@@ -1575,9 +1574,9 @@ export async function generateGlossary(opts: {
    * was written from. src/jobs.ts resolves it once and carries it, exactly as
    * it already does for the summary steer.
    *
-   * Absent means "written deliberately without one", which the artefact records
-   * as `profileHash: null` — a real answer, and never stale. src/profile.ts §
-   * profileIsStale.
+   * Absent means "written without one", which the artefact records as
+   * `profileHash: null` — a real answer, and stale only once the reader has a
+   * profile. src/profile.ts § profileIsStale.
    */
   profile?: string | null;
   /**

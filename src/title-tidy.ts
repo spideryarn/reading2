@@ -38,7 +38,27 @@ export interface TidyContext {
 }
 
 /** `title` tidied, and the original when tidying changed it — the shape `Meta` spreads. */
-export function tidiedTitle(title: string, context: TidyContext = {}): { title: string; titleOriginal?: string } {
+export type TidiedTitle = { title: string; titleOriginal?: string };
+
+/** What a title-making seam knows beside the title. */
+export type TitleTidyContext = TidyContext & {
+  /** The site's name as the page declared it (`Meta.siteName`), when it did. */
+  siteName?: string | null | undefined;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * **What a title-making seam is handed** (`runExtract`, `runPdfExtract`, the
+ * `metadata` step). It answers unless the step was cancelled. Import hands in the model's
+ * (`modelTitleTidier`, src/title-tidy-model.ts), which falls back to the rule
+ * below; a seam handed none uses the rule alone and makes no call.
+ */
+export type TitleTidier = (title: string, context?: TitleTidyContext) => Promise<TidiedTitle>;
+
+/** The rule as a `TitleTidier`: what a seam uses when it is handed no other. */
+export const ruleTitleTidier: TitleTidier = async (title, context = {}) => tidiedTitle(title, context);
+
+export function tidiedTitle(title: string, context: TidyContext = {}): TidiedTitle {
   const tidy = tidyTitle(title, context);
   return tidy === title ? { title } : { title: tidy, titleOriginal: title };
 }

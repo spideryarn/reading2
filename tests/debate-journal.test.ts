@@ -334,6 +334,7 @@ describe("a non-2xx", () => {
           429,
           "rate limited: too many requests from this key",
           new Headers({ "retry-after": "12" }),
+          false,
         );
       },
     ];
@@ -360,6 +361,7 @@ describe("a non-2xx", () => {
           404,
           "No endpoints available matching your guardrail restrictions",
           new Headers(),
+          false,
         );
       },
     ];

@@ -122,9 +122,11 @@ export const ILLUSTRATED_WAIT = "four to seven minutes";
  * anyway. **The objection was to the hiding, not to the chain**, so the chain
  * lands and the second step — and its wait — is named before the press.
  */
-export const SKETCH_THEN_PAINT =
+const SKETCH_THEN_PAINT_WORK =
   `The Sketch first: one model call, taking ${SKETCH_WAIT}. Then the painting: ` +
-  `${ILLUSTRATED_WORK}, taking ${ILLUSTRATED_WAIT}. Two steps for one press — Stop takes ` +
+  `${ILLUSTRATED_WORK}, taking ${ILLUSTRATED_WAIT}.`;
+export const SKETCH_THEN_PAINT =
+  `${SKETCH_THEN_PAINT_WORK} Two steps for one press — Stop takes ` +
   `effect after the step that is running, so stopping during the Sketch leaves the painting unstarted.`;
 
 /**
@@ -422,6 +424,7 @@ function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote })
   const busy = view.job !== null || view.starting;
   return (
     <div className="ill-run">
+      {view.profileChanged && <p className="ill-empty-why">{SKETCH_THEN_PAINT_WORK}</p>}
       <Button
         type="button"
         variant="outline"
@@ -430,7 +433,7 @@ function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote })
         onClick={() => void view.regenerate(steer.note)}
       >
         <Brush size={13} />
-        Paint again
+        {view.profileChanged ? "Draw the Sketch, then paint again" : "Paint again"}
       </Button>
     </div>
   );
@@ -539,7 +542,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
   if (lost > 0) {
     notes.push(`${lost} of the passages it drew from are no longer in this article, so their rows are gone.`);
   }
-  if (view.profileChanged) notes.push("It was painted from a Sketch drawn for a reader profile you have since changed.");
+  if (view.profileChanged) notes.push("It was painted from a Sketch drawn before your profile said what it says now.");
 
   /**
    * **One body, rendered in whichever container is open** — not two instances,
@@ -937,7 +940,7 @@ function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
     const why = {
       absent: "There is no Sketch of this article yet, and the painting is made from the Sketch rather than from the article.",
       stale: "The Sketch of this article is out of date — the article has moved underneath it — so a painting made from it would be out of date the moment it landed.",
-      "profile-changed": "The Sketch of this article was drawn for a reader profile you have since changed, and a painting inherits whose it was.",
+      "profile-changed": "The Sketch of this article was drawn before your profile said what it says now, and a painting inherits whose it was.",
     }[sketch.kind];
     return (
       <>

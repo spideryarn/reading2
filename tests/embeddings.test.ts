@@ -203,7 +203,16 @@ describe("what an embedding failure says about itself", () => {
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("fetch failed");
     });
-    await expect(reasonOf()).resolves.toBe("provider");
+    /* Since 2026-10-05 a dropped connection is asked again, five goes with the
+       same backoff as a 5xx, so the clock is faked rather than sat through. */
+    vi.useFakeTimers();
+    try {
+      const reason = reasonOf();
+      await vi.runAllTimersAsync();
+      await expect(reason).resolves.toBe("provider");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not answer a permanent refusal with 'try again'", async () => {
@@ -244,7 +253,14 @@ describe("what an embedding failure says about itself", () => {
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("fetch failed");
     });
-    await expect(failureOf().then((f) => f.status)).resolves.toBeNull();
+    vi.useFakeTimers();
+    try {
+      const status = failureOf().then((f) => f.status);
+      await vi.runAllTimersAsync();
+      await expect(status).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses an entry of the response that is not an object at all", async () => {

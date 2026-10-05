@@ -1178,8 +1178,8 @@ export function buildQuotes(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent. Absent means "written before this existed"; `null`
-       means "written deliberately without a profile", and the panel needs to
-       tell those two apart to decide whether its checkbox starts ticked.
+       means "written with no profile", and `profileIsStale` treats the two
+       differently: only `null` reads as changed once the reader has one.
        src/profile.ts § profileIsStale.
 
        **On an append, the list's own stamp is kept** — the pass that started

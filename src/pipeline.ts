@@ -135,7 +135,10 @@ import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
-import { extractHtmlMetadata, extractPaperMetadata, paperMeta } from "./paper-metadata.js";
+import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
+import { modelTitleTidier } from "./title-tidy-model.js";
+import { plainTitle } from "./html.js";
+import type { TitleTidier } from "./title-tidy.js";
 import {
   generateSkim,
   PROMPT_VERSION as SKIM_PROMPT_VERSION,
@@ -1922,6 +1925,47 @@ export const metadataReaders = {
 };
 
 /**
+ * **What tidies an imported title** in `extract` and `metadata`: a small model,
+ * with the rule behind it (src/title-tidy-model.ts, plan 261005j). In an
+ * object for `metadataReaders`' reason, so a test can `vi.spyOn` it and run
+ * the real step with no network.
+ */
+export const titleTidiers = {
+  import: modelTitleTidier(),
+};
+
+/**
+ * **The tidier one run of `extract` or `metadata` hands its seam**: import's,
+ * bound to the step's own cancellation, and **holding a title steady across a
+ * re-extraction**.
+ *
+ * `title` is in the fingerprint of every generated mode
+ * (`articleFingerprint`, src/source-hash.ts), and a model does not give the
+ * same answer every time: asked twice, it differed on a few titles in a
+ * hundred (docs/investigations/261005b-title-tidying-rule-against-a-small-model.md).
+ * So when the title arriving is the one the last revision tidied, that
+ * revision's pair is kept and no call is made.
+ *
+ * Only a title that **was** changed is held. One stored as it came is asked
+ * about again, because "the model looked and left it" and "imported before
+ * there was any tidying" are the same row, and the second should still be
+ * tidied when it is next extracted.
+ */
+function stepTitleTidier(ctx: StepContext, store: ArtifactReads): TitleTidier {
+  return async (title, context = {}) => {
+    ctx.signal.throwIfAborted();
+    const previous = await store.read(ctx.slug, "extract", "meta");
+    ctx.signal.throwIfAborted();
+    /* `metaColumns` makes the original plain on write too. In particular,
+       paper metadata can still contain inline markup before that boundary. */
+    if (previous?.titleOriginal !== undefined && previous.titleOriginal === plainTitle(title)) {
+      return { title: previous.title, titleOriginal: previous.titleOriginal };
+    }
+    return await titleTidiers.import(title, { ...context, signal: ctx.signal });
+  };
+}
+
+/**
  * **`extract`'s `meta`, keeping a minimal paper's abstract and DOI** when it
  * found none of its own. *Read this* re-reads the paper over a draft copied
  * from the minimal revision, and `metaColumns` writes every meta column `??
@@ -2173,14 +2217,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         manifest.kind === "pdf"
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
+      const paper = { slug: ctx.slug, ...(manifest.filename ? { filename: manifest.filename } : {}), found };
       const meta = await withArticleRegistry(
         ctx,
         "metadata",
         paperMeta({
-          slug: ctx.slug,
+          ...paper,
           kind: manifest.kind,
-          ...(manifest.filename ? { filename: manifest.filename } : {}),
-          found,
+          /* The abstract is the only prose a minimal paper has, so it is the
+             rule's evidence of which title words are acronyms. */
+          tidied: await stepTitleTidier(ctx, store)(paperTitle(paper), { body: found.abstract }),
         }),
         [],
       );
@@ -2316,7 +2362,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug });
+          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
           /* **The audit line for the one step that deletes by policy.**
              `removePlatformFurniture` (src/furniture.ts) is the only place in
              this pipeline that removes an element *because of what the
@@ -2410,6 +2456,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const result = await runPdfExtract({
         frontMatter: openRouterFrontMatterReader(modelFor("pdf-frontmatter", ctx.power)),
         authors: openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)),
+        titleTidier: stepTitleTidier(ctx, store),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -4432,7 +4479,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            every illustration stale the moment they edited their profile box,
            and re-drawing it would then stamp the Sketch's anyway — a stage that
            never reports itself done and pays $0.30 an open to find out. */
-        profileHash: sketch.profileHash ?? null,
+        ...(sketch.profileHash === undefined ? {} : { profileHash: sketch.profileHash }),
       };
     },
     async run(ctx, store) {
@@ -4462,8 +4509,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the panel offers to paint again, and the next paint inherits the same
          hash and reports the same thing — one press of a $0.30 button per
          circuit, for ever. `profileIsStale` is the three-state rule
-         (src/profile.ts): an artefact written deliberately without a profile,
-         and a reader who has since cleared theirs, are both *not* a mismatch. */
+         (src/profile.ts): a reader who has since cleared theirs is *not* a
+         mismatch; a Sketch drawn when they had none, once they have one, is
+         (since 2026-10-05), and the sketch step's own stamp already called
+         that Sketch not current, so the panel's one press redraws it first. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
         refuseToIllustrate("wrong-profile");
       }
@@ -4536,7 +4585,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         figuresFingerprint(assets),
         ctx.illustrationNote ?? "",
       );
-      run.illustrated.profileHash = sketch.profileHash ?? null;
+      /* A legacy Sketch's unknown provenance stays unknown. Turning absence
+         into null would make a permitted painting immediately profile-changed. */
+      if (sketch.profileHash === undefined) delete run.illustrated.profileHash;
+      else run.illustrated.profileHash = sketch.profileHash;
       /* The note this was painted with, from the same `ctx` value the two
          hashes above and in `stamp` use — `isStale` reads it back. */
       if (ctx.illustrationNote) run.illustrated.note = ctx.illustrationNote;

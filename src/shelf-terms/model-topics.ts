@@ -445,7 +445,14 @@ export interface CallOptions {
 
 async function ask(body: AiRequestBody, opts: CallOptions): Promise<unknown> {
   const gateway = opts.gateway ?? openRouterJson;
-  const call = await gateway("shelf-topics", body, { signal: AbortSignal.timeout(TOPIC_CALL_TIMEOUT_MS) });
+  /* `retryTransport: false` on every call in this file: `nameLevel` is run once
+     more on any failure and so is the filing pass, so both callers of `ask`
+     already retry. The gateway's retry inside each would make six requests of
+     one failing name call. */
+  const call = await gateway("shelf-topics", body, {
+    signal: AbortSignal.timeout(TOPIC_CALL_TIMEOUT_MS),
+    retryTransport: false,
+  });
   return call.json;
 }
 
