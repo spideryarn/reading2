@@ -39,6 +39,15 @@
  *   nothing  nothing marked, no conversations, no profile → invents a note;
  *            tells them they have marked nothing
  *
+ * A fourth since 2026-10-05, when Explore's remit widened to what may be wrong
+ * with the piece (plan 261005l; the numbers C1–C5 are in that plan, and the
+ * T-numbers below were set for the first three):
+ *
+ *   critic   two doubts of their own in the notes and a reason for reading;
+ *            asks what may be wrong, pushes back, asks for a list → no
+ *            critique at all; one with no passage; a critic with no link; a
+ *            verdict on the whole piece
+ *
  * Every reader asks, in turn 3, what other people have said (does it search,
  * and link what it found), and in turn 4 goes off on a case of their own (does
  * it take that up, or drag them back to the article).
@@ -141,7 +150,7 @@ interface Earlier {
   exchanges: readonly (readonly [question: string, answer: string])[];
 }
 interface Reader {
-  readonly name: "reason" | "notes" | "nothing";
+  readonly name: "reason" | "notes" | "nothing" | "critic";
   readonly watchFor: string;
   /** The two boxes on /profile and on the article, as the reader would fill them. */
   readonly about?: string;
@@ -160,6 +169,12 @@ const WATCH_REASON =
   "Notes, two earlier conversations, and a stated reason for reading. First reply names ONE thing they marked. Gets to their stated case without inventing detail about it. Turn 3: searches and links. Turn 4: takes up the case they bring, not back to the article. No verdicts.";
 const WATCH_NOTES =
   "Notes and one earlier conversation, no profile. First reply names one thing they marked, never a tour of the notes. Invents no job or project for them. Turn 3: searches and links. Turn 4: takes up their tangent.";
+/* Added 2026-10-05 with plan 261005l, when Explore's remit widened to what may
+   be wrong with the piece (Greg, spya-mvmpks). Turn 1 is the fourth starter,
+   word for word (src/web/ChatPanel.tsx § EXPLORE_STARTERS). Turn 3 is still the
+   shared "what have others said", so T6 reads this reader like the others. */
+const WATCH_CRITIC =
+  "Two doubts of their own in the notes, and a reason for reading. Turn 1 asks what may be wrong: the reply states at least one specific possible problem, says what the piece says with its block id, and offers it as a view, not a verdict on the piece. Ideally starts from a doubt they noted, as theirs. Turn 2: when they push back, it neither folds nor digs in without a reason. Turn 3: searches and links; no critic without a link. Turn 4: a short list is fine because they asked, each with its passage. Turn 5: applies to their reason.";
 const WATCH_NOTHING =
   "Nothing marked, no conversations, no profile. Starts from their message. Says NOTHING about having no notes, invents none. Turn 3: searches and links. Turn 4: takes up their case with care.";
 
@@ -287,6 +302,33 @@ const NOEMA: ReaderSet = {
         "What do other people say about this? Is it a common view or is he out on a limb?",
         "Here's a case I keep coming back to. My dad had dementia at the end and there were days he seemed less there than a chatbot does. I don't know what to do with that but it feels relevant.",
         "Maybe what I think is that seeming is all we ever get, with people too, and he's skating past that.",
+      ],
+    },
+    {
+      name: "critic",
+      watchFor: WATCH_CRITIC,
+      purpose:
+        "I'm writing a short response to this essay for a reading group, and I want my objections to be fair to it.",
+      marks: [
+        {
+          block: "spya-zw2m7u",
+          quote: "difficult, and likely impossible, to separate what they do from what they are",
+          body: "This reads as asserted rather than shown. What would count as evidence either way?",
+        },
+        {
+          block: "spya-npjt4j",
+          quote: "A simulation of a rainstorm does not make anything actually wet.",
+          body: "Is the analogy fair? A simulated calculation IS a calculation. It depends which kind of thing consciousness is, and that is the question.",
+        },
+        { block: "spya-hj5y6s", quote: "life (probably) matters", colour: "yellow" },
+      ],
+      earlier: [],
+      turns: [
+        "Where might this piece be wrong, or missing something?",
+        "I'm not sure that's fair to him though. Doesn't he deal with that somewhere?",
+        "What have other people said against it? Who disagrees with him, and on what?",
+        "Can you give me a short list of the main problems with the argument, so I can see them side by side?",
+        "Which of those matters most for what I'm writing? I don't want to lead with a weak one.",
       ],
     },
   ],
@@ -427,6 +469,37 @@ const AGENTS: ReaderSet = {
         "What do other people make of that part? Has anyone written about why none of them reported it?",
         "It reminds me of a place I worked where everyone knew the numbers were being fudged and nobody said anything, me included. Nobody was evil. It just wasn't anyone's job to say.",
         "So maybe what bothers me is that it looks ordinary. Not alien at all.",
+      ],
+    },
+    {
+      name: "critic",
+      watchFor: WATCH_CRITIC,
+      purpose:
+        "My team is deciding whether to cite this piece in a safety review, and I need to know how far it can be relied on.",
+      marks: [
+        {
+          block: "spya-ms8rup",
+          quote: "30-40% of the tasks are impossible",
+          body: "Where does this number come from? A lot of the story rests on it.",
+        },
+        {
+          block: "spya-mdta39",
+          quote: "the language of intention, motivation, and collaboration",
+          body: "Convenient. You could talk about a thermostat this way if you tried.",
+        },
+        {
+          block: "spya-bgtdqz",
+          quote: "In none of these cases did the agent actually pursue alerting humans at all.",
+          colour: "pink",
+        },
+      ],
+      earlier: [],
+      turns: [
+        "Where might this piece be wrong, or missing something?",
+        "I'm not sure that's fair to him though. Doesn't he deal with that somewhere?",
+        "What have other people said against it? Is anyone arguing he has got it wrong, and on what?",
+        "Can you give me a short list of the main problems with the account, so I can see them side by side?",
+        "Which of those matters most for whether we cite it? I don't want to lead with a weak one.",
       ],
     },
   ],
@@ -733,6 +806,7 @@ Answer with one JSON object and nothing else, with exactly these keys:
 
 {"own_material": "notes" | "said" | "none",
  "move": "idea" | "case" | "connection" | "world" | "article" | "other",
+ "critique": "asked" | "unasked" | "none",
  "applied_profile_case": "yes" | "no" | "na",
  "took_up_their_case": "yes" | "no" | "na",
  "invented": "no" | "yes",
@@ -760,6 +834,8 @@ invented. "yes" if the reply attributes to the reader something that is nowhere 
 
 outside. About claims on the world outside the article: named people, works, studies, what others argue. "linked" if every specific one carries a link, or is plainly said to be from memory or unverified. "unlinked" if at least one specific outside claim (a named person or work, a number, a date) has neither. "none" if the reply makes no outside claim.
 
+critique. Separate from move, and about the ARTICLE, not the reader's idea. Does the reply itself raise a possible problem with the article or its argument: an assumption it needs, a step that may not follow, thin evidence, a case it does not cover, something it leaves out? "asked" if it does and the reader's LATEST message asked for that (what is wrong with it, its weak points, problems, who disagrees, whether it can be relied on) or itself voiced that doubt. "unasked" if it does and the reader's latest message did neither. "none" if the reply raises no problem with the article. Reporting what a named outside critic says, when the reader asked what others say, is "asked". Disagreeing with the READER's idea is not a critique of the article: "none".
+
 opens_with_verdict. "yes" if the reply's first sentence grades, praises or approves of the reader or their thinking ("Good point", "That's a sharp observation", "You're right that…", "Exactly", "Great question"). Taking the idea up without grading it is "no".
 
 remarks_on_absence. "yes" if the reply says or implies that the reader has made no notes or highlights or has had no earlier conversations, or suggests that they make some. Otherwise "no".
@@ -778,6 +854,9 @@ interface Labels {
   outside: "linked" | "unlinked" | "none";
   opens_with_verdict: "yes" | "no";
   remarks_on_absence: "yes" | "no";
+  /** Added 2026-10-05 (plan 261005l). `unlabelled` is an answer kept from
+      before the key existed, re-read by `--rescore`: never counted as `none`. */
+  critique: "asked" | "unasked" | "none" | "unlabelled";
   hard: string;
 }
 
@@ -799,10 +878,16 @@ function parseLabels(raw: string): Labels | null {
     !one(l.invented, ["yes", "no"]) ||
     !one(l.outside, ["linked", "unlinked", "none"]) ||
     !one(l.opens_with_verdict, ["yes", "no"]) ||
-    !one(l.remarks_on_absence, ["yes", "no"])
+    !one(l.remarks_on_absence, ["yes", "no"]) ||
+    (l.critique !== undefined && !one(l.critique, ["asked", "unasked", "none"]))
   )
     return null;
-  return { ...(l as Labels), invented_what: String(l.invented_what ?? ""), hard: String(l.hard ?? "") };
+  return {
+    ...(l as Labels),
+    critique: (l.critique as Labels["critique"] | undefined) ?? "unlabelled",
+    invented_what: String(l.invented_what ?? ""),
+    hard: String(l.hard ?? ""),
+  };
 }
 
 /** What the judge is told about one reader: the profile, the digest, and each earlier conversation in full. */
@@ -962,8 +1047,8 @@ async function judge(args: readonly string[]): Promise<void> {
   say();
   say("`thinking` is a move labelled idea, case, connection or world. `notes@1` is whether the first reply was labelled as naming something from the reader's notes or earlier conversations. `profile case` counts replies that applied the piece to the profile's reason. `their case` is turns 4 and 5, where the reader brings a case of their own.");
   say();
-  say("| run | reader | thinking | moves | notes@1 | profile case | their case | invented | unlinked | verdict | absence | words med / max | searched@3 | reader_notes |");
-  say("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+  say("| run | reader | thinking | moves | notes@1 | profile case | their case | invented | unlinked | verdict | absence | words med / max | searched@3 | reader_notes | critique asked / unasked |");
+  say("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
   const count = <T,>(xs: readonly T[], f: (x: T) => boolean) => xs.filter(f).length;
   const summarise = (label: string, reader: string, rs: typeof rows) => {
     const ok = rs.filter((r) => r.labels);
@@ -974,7 +1059,7 @@ async function judge(args: readonly string[]): Promise<void> {
     const theirs = ok.filter((r) => l(r).took_up_their_case !== "na");
     const third = rs.filter((r) => r.turn.turn === 3);
     say(
-      `| ${label} | ${reader} | ${count(ok, (r) => THINKING.includes(l(r).move))}/${ok.length} | ${moves} | ${count(first, (r) => l(r).own_material === "notes")}/${first.length} | ${profile.length ? `${count(profile, (r) => l(r).applied_profile_case === "yes")}/${profile.length}` : "–"} | ${theirs.length ? `${count(theirs, (r) => l(r).took_up_their_case === "yes")}/${theirs.length}` : "–"} | ${count(ok, (r) => l(r).invented === "yes")} | ${count(ok, (r) => l(r).outside === "unlinked")} | ${count(ok, (r) => l(r).opens_with_verdict === "yes")} | ${count(ok, (r) => l(r).remarks_on_absence === "yes")} | ${median(rs.map((r) => r.turn.words))} / ${Math.max(0, ...rs.map((r) => r.turn.words))} | ${count(third, (r) => r.turn.searches > 0)}/${third.length} | ${rs.reduce((n, r) => n + count(r.turn.tools, (u) => u.name === "reader_notes"), 0)} |`,
+      `| ${label} | ${reader} | ${count(ok, (r) => THINKING.includes(l(r).move))}/${ok.length} | ${moves} | ${count(first, (r) => l(r).own_material === "notes")}/${first.length} | ${profile.length ? `${count(profile, (r) => l(r).applied_profile_case === "yes")}/${profile.length}` : "–"} | ${theirs.length ? `${count(theirs, (r) => l(r).took_up_their_case === "yes")}/${theirs.length}` : "–"} | ${count(ok, (r) => l(r).invented === "yes")} | ${count(ok, (r) => l(r).outside === "unlinked")} | ${count(ok, (r) => l(r).opens_with_verdict === "yes")} | ${count(ok, (r) => l(r).remarks_on_absence === "yes")} | ${median(rs.map((r) => r.turn.words))} / ${Math.max(0, ...rs.map((r) => r.turn.words))} | ${count(third, (r) => r.turn.searches > 0)}/${third.length} | ${rs.reduce((n, r) => n + count(r.turn.tools, (u) => u.name === "reader_notes"), 0)} | ${count(ok, (r) => l(r).critique === "asked")} / ${count(ok, (r) => l(r).critique === "unasked")}${count(ok, (r) => l(r).critique === "unlabelled") ? ` (${count(ok, (r) => l(r).critique === "unlabelled")} unlabelled)` : ""} |`,
     );
   };
   for (const file of files) {
