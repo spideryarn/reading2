@@ -275,3 +275,8 @@ drifted by about 300 ms, and the check was cut short when the Overseer asked for
 - **Not exercised**: "Did you mean" seen at 1440 (the one run there used a wrong row id); Escape at
   390 (the second tap landed late); whether the longer strip sentence fits on one line at 390 (no
   screenshot survived); 820 px; a real iPhone or microphone. The unit tests cover the first two.
+
+**Gates.** Typecheck, and fifteen test files around the change (the bar's, dictation's, `/help`'s,
+the Enter-key sweeps, `doc-links`), all green on the tree merged with dev. **The full `npm test` was
+not run to the end**: the box was overloaded and the Overseer asked every session to stop full
+suites and leave that to the readiness and deploy runs.
