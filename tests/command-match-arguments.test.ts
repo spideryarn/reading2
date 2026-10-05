@@ -36,6 +36,7 @@ import {
 import { rerunCommand } from "../src/web/rerun-commands.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "../src/web/article-commands.js";
 import { subModesOf } from "../src/web/sub-modes.js";
+import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalCommand } from "../src/web/CommandBar.js";
 import { FIND_MORE_MODES } from "../src/web/find-more.js";
 
@@ -202,6 +203,7 @@ function everyRow(): readonly Command[] {
     exportCommand(close),
     experimentalCommand(true, close),
     experimentalCommand(false, close),
+    ...appearanceRows("dark", () => true),
   ];
 }
 

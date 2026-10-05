@@ -99,6 +99,14 @@ whitespace *between two lines of one paragraph* is around 10px, and once the gap
 stops clearly exceeding that, the paragraph stops being a unit the eye can see. A fifth would be
 past it.
 
+**The column ends with a mark**: a short hairline, a small diamond, a short hairline, in a footer
+row after the last block, six pads above it and eight below. Greg, 2026-10-04 (report
+`spya-zgf8p2`): *"Add some subtle pleasant visual marker at the very end of the article in the text
+column to show that it is the end."* It is a `<tfoot>` and not a block, so nothing that finds a
+block can find it; `TableView.tsx` § Where the article ends and `prose.css` § the end of the article
+say why, and the plan is
+[261005e](../plans/261005e-an-end-of-article-mark-and-the-publication-date-on-the-shelf-card.md).
+
 **Scoped to the reading column on purpose.** The chrome keeps its per-rule `rem` values; sweeping
 1,800 lines onto a scale is a different job, and Greg scoped this one to the article. Do not reach
 for `--rhythm` or `--block-pad` outside `.prose` / `td.text` — the one exception is the section of

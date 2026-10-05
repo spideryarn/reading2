@@ -83,6 +83,10 @@ describe("sortingFromUrl", () => {
     expect(sortingFromUrl([], [], natural, ["added"])).toEqual([{ id: "added", desc: true }]);
     // Without a fallback it is still allowed to be empty — the caller decides.
     expect(sortingFromUrl(["nonsense"], [], natural)).toEqual([]);
+    /* A name every object inherits is not a column either. `in` said it was,
+       and the shelf then called whatever it found under that name
+       (GPT Sol's F19, plan 261005d). */
+    expect(sortingFromUrl(["constructor", "toString", "__proto__"], [], natural)).toEqual([]);
   });
 });
 

@@ -1722,6 +1722,31 @@ function TableViewInner({
           </tr>
         ))}
       </tbody>
+      {/* **Where the article ends** — Greg, 2026-10-04: *"Add some subtle
+          pleasant visual marker at the very end of the article in the text
+          column to show that it is the end."* Without it the page just stopped,
+          which is also what a page that has not finished loading looks like.
+
+          A `<tfoot>`, so it is **not a block**: no `data-block`, no `td.text`,
+          and not in `<tbody>`, which is everything a jump, a selection, the
+          row hover and the reading position look for. It is not CSS `::after`
+          on the last cell because folding the last section takes that cell
+          away, and the cell also holds the margin notes and the quiz. The
+          ornament is drawn by prose.css § the end of the article; the words
+          are for a screen reader. Nothing for an article with no blocks, which
+          has not ended so much as not begun. Plan 261005e. */}
+      {blocks.length > 0 && (
+        <tfoot>
+          <tr>
+            <td className="article-end">
+              <div className="article-end-mark" aria-hidden="true">
+                <span />
+              </div>
+              <span className="sr-only">End of article</span>
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </table>
     {/* One overlay for the whole article, always mounted and empty until a
         figure is pressed. Mounted rather than conditionally rendered because

@@ -4250,8 +4250,19 @@ export interface When {
   phrase: string;
   /** Where in the block `phrase` sits, so the reader can go and check. */
   at: { blockId: BlockId; start: number; end: number };
-  /** True when the parser supplied the year from the publication date. */
+  /** True when the parser supplied the year rather than the article writing it here. */
   yearFilled: boolean;
+  /**
+   * **Where a supplied year came from, when it was not the publication date**:
+   * `"piece"` is the one year the piece itself states (`pieceYear`,
+   * src/timeline-time.ts), used when we have no publication date. It is an
+   * assumption and the panel says so. Absent on a year taken from the
+   * publication date, and on everything written before 2026-10-05.
+   *
+   * On the row rather than the artefact so that it travels wherever the event
+   * does, a shared link's payload included, and cannot disagree with the row.
+   */
+  yearFrom?: "piece";
 }
 
 /**

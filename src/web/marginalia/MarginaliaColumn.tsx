@@ -322,8 +322,15 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
  */
 function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timeline" }>["items"] }) {
   const only = items.length === 1 ? items[0] : undefined;
-  const when = (event: TimelineEvent) => datingWords(event.dating, true).text;
-  const whenVoice = (event: TimelineEvent): Voice => (event.dating.kind === "words" ? "author" : "ui");
+  const when = (event: TimelineEvent) => {
+    const words = datingWords(event.dating, true).text;
+    // The margin has no header to explain the assumption.
+    return event.dating.kind === "dated" && event.dating.when.yearFrom === "piece"
+      ? `${words} (year assumed)` : words;
+  };
+  /* The tone, not the kind: a year-less date is drawn as the article's own words too. */
+  const whenVoice = (event: TimelineEvent): Voice =>
+    datingWords(event.dating, true).tone === "words" ? "author" : "ui";
   return (
     <ShutNote
       kind="timeline"

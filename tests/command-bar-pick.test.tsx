@@ -35,6 +35,7 @@ import {
   RUN_AT_ONCE,
 } from "../src/command-pick.js";
 import type { Block } from "../src/types.js";
+import { setAppearance } from "../src/web/appearance.js";
 import type { CommandExecutor } from "../src/web/command-proposal.js";
 import type { DockExperimental } from "../src/web/Dock.js";
 import type { ArchiveControl } from "../src/web/useArchive.js";
@@ -450,6 +451,21 @@ describe("a pick that generates, writes or takes words never runs without a seco
     press("Enter");
     await settle();
     expect(shelf.set.mock.calls).toEqual([[true]]);
+  });
+
+  it("draws an appearance row, however sure the model was (plan 261005d, F3)", async () => {
+    reading();
+    openBar();
+    await ask("I would rather the page were white");
+    const before = document.documentElement.dataset.theme;
+    await answer(row({ id: "action:appearance-light", label: "Appearance: Light" }, 1));
+    expect(document.documentElement.dataset.theme).toBe(before);
+    expect(listed()).toEqual(["Appearance: Light"]);
+    press("Enter");
+    await settle();
+    expect(document.documentElement.dataset.theme).toBe("light");
+    setAppearance("dark");
+    delete document.documentElement.dataset.theme;
   });
 
   it("draws an argument answer as the row its verb would have made", async () => {

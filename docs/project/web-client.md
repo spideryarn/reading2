@@ -119,9 +119,20 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   "on" before the date — `src/web/Metadata.tsx` § `whenSaid`, which replaced that file's private
   `ago` on 2026-10-04.
 - **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
-  `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
-  home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
-  fetches on demand without it.
+  `/build.json` whether a different build is live and reloads once if so, because a copy opened from
+  a home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller;
+  `src/web/maths.ts` fetches on demand without it.
+- **`src/web/stale-shell.ts` § `watchForDeploy`, `onDeployNoticed`** — whether a different build has
+  gone live, when nothing has failed yet: asked when the page wakes and every fifteen minutes while
+  it is visible, production builds only, installed once from `src/web/main.tsx`. It records the
+  answer and reloads nothing. A page that wants to act on it uses
+  `src/web/useReloadForNewBuild.ts`, whose one caller is `src/web/ChangelogPage.tsx`. Both reloads
+  share one note of the builds this session has reloaded for (`claimReload`), so neither can loop.
+- **`src/web/safe-to-reload.ts` § `safeToReload`** — ask before replacing the page under the reader:
+  no while offline, while a Chat, Remember or Feedback draft is held, or while an upload is going or
+  autosaved text is unsent (`src/web/unload-guard.ts` § `warnBeforeUnload`, the one place a
+  `beforeunload` warning is raised, so the two cannot disagree). Both automatic reloads ask it. A new kind of unsent
+  work is one more line in its `VETOES`, not a second check somewhere else.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
 - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
@@ -514,8 +525,11 @@ What is true of the dark palette, and still worth knowing before touching it:
 
 - **No cross-device sync.** Set it on each device; a profile column would need a migration and still
   a local copy to avoid the flash.
-- **The only picker is on /profile.** Signed-out pages obey a choice saved on that device, but offer
-  none.
+- **There are two pickers, and both need the reader to be at home**: /profile, and since 2026-10-05
+  the command bar's three *Appearance* rows
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), which
+  call the same `setAppearance`. Signed-out pages, and a visitor on somebody else's article, obey a
+  choice saved on that device but offer none.
 - **The installed iPhone app's status bar stays `black-translucent`** — white clock text over the
   page, which on a light page is pale on pale. iOS reads the meta at launch, so it cannot follow a
   runtime switch, and nothing on the box can show it. A known gap.
