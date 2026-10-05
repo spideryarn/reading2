@@ -18,6 +18,7 @@ import {
   foldedPivot,
   formatCostNanos,
   formatShare,
+  shadeAlpha,
   nextDrillDimension,
   periodWindow,
   scopedRows,
@@ -86,6 +87,28 @@ describe("formatCostNanos", () => {
     expect(formatCostNanos(0)).toBe("$0.00");
     expect(amountText({ recordedNanos: 0, pricedCalls: 2 })).toBe("$0.00");
     expect(amountText({ recordedNanos: 0, pricedCalls: 0 })).toBe("—");
+  });
+});
+
+describe("shadeAlpha", () => {
+  it("leaves a zero or empty cell unshaded", () => {
+    expect(shadeAlpha(0, 100)).toBeNull();
+    expect(shadeAlpha(0, 0)).toBeNull();
+    expect(shadeAlpha(5, 0)).toBeNull();
+  });
+
+  it("runs from 0.08 for the smallest real amount to 0.45 for the largest", () => {
+    expect(shadeAlpha(1, 1_000_000)).toBe(0.08);
+    expect(shadeAlpha(1_000_000, 1_000_000)).toBe(0.45);
+    expect(shadeAlpha(2_000_000, 1_000_000)).toBe(0.45);
+  });
+
+  it("never goes down as the amount goes up, in nine steps", () => {
+    const alphas = Array.from({ length: 101 }, (_, i) => shadeAlpha(i + 1, 101) ?? Number.NaN);
+    for (let i = 1; i < alphas.length; i++) {
+      expect(alphas[i]).toBeGreaterThanOrEqual(alphas[i - 1] ?? Number.NaN);
+    }
+    expect(new Set(alphas).size).toBe(9);
   });
 });
 

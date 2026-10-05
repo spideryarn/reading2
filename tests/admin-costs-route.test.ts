@@ -29,6 +29,7 @@ const seen = vi.hoisted(() => ({
   calls: [] as string[],
   tooLarge: false,
   privacyKeyProvided: false,
+  accountsFail: false,
 }));
 
 function group(over: Partial<CostCubeGroup>): CostCubeGroup {
@@ -105,6 +106,7 @@ vi.mock("../src/store/admin-accounts.js", async () => {
     },
     listAccounts: async () => {
       seen.calls.push("listAccounts()");
+      if (seen.accountsFail) throw new TypeError("auth is down: secret-detail");
       return [
         account(TEST_SUB, TEST_EMAIL),
         account(KNOWN, "known-reader@example.test"),
@@ -176,6 +178,7 @@ beforeEach(() => {
   seen.calls.length = 0;
   seen.tooLarge = false;
   seen.privacyKeyProvided = false;
+  seen.accountsFail = false;
 });
 
 describe("the cost cube, for the administrator", () => {
@@ -210,6 +213,30 @@ describe("the cost cube, for the administrator", () => {
     /* An account with no ledger rows is nobody this page is about. */
     expect(byId.has(BYSTANDER)).toBe(false);
     expect(costs.owners).toHaveLength(3);
+  });
+
+  it("says the emails are available when the listing answered", async () => {
+    const costs = JSON.parse((await request(PATH)).body) as AdminCosts;
+    expect(costs.emailsAvailable).toBe(true);
+  });
+
+  it("still answers the cube when the account listing fails, with no emails and a flag saying so", async () => {
+    seen.accountsFail = true;
+    const sent = await request(`${PATH}?since=${SINCE}&until=${UNTIL}`);
+    expect(sent.status).toBe(200);
+    expect(sent.body).not.toContain("secret-detail");
+    const costs = JSON.parse(sent.body) as AdminCosts;
+    expect(costs.emailsAvailable).toBe(false);
+    expect(costs.rows).toHaveLength(4);
+    expect(costs.owners).toHaveLength(3);
+    expect(costs.owners.every((o) => o.email === null)).toBe(true);
+    expect(sent.body).not.toContain("@");
+  });
+
+  it("does not hide a failed cube behind the same fallback", async () => {
+    seen.accountsFail = true;
+    seen.tooLarge = true;
+    expect((await request(PATH)).status).toBe(400);
   });
 
   it("means everything when neither bound is given", async () => {

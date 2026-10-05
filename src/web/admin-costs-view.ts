@@ -208,6 +208,23 @@ export function formatShare(part: number, total: number): string {
   return `${Math.round(percent)}%`;
 }
 
+const SHADE_STEPS = 9;
+const SHADE_MIN = 0.08;
+const SHADE_MAX = 0.45;
+
+/**
+ * How strongly a pivot cell is shaded: an alpha in nine steps from 0.08 (the
+ * smallest real amount) to 0.45 (the largest in the table), or null for a cell
+ * with nothing in it. One hue, with the amount in the alpha, because a
+ * multi-hue ramp at low alpha reads as categories rather than as more.
+ */
+export function shadeAlpha(nanos: number, largest: number): number | null {
+  if (nanos <= 0 || largest <= 0) return null;
+  const step = Math.round(Math.min(1, nanos / largest) * (SHADE_STEPS - 1));
+  const alpha = SHADE_MIN + (step / (SHADE_STEPS - 1)) * (SHADE_MAX - SHADE_MIN);
+  return Math.round(alpha * 1000) / 1000;
+}
+
 /* ------------------------------------------------------- the Other fold -- */
 
 /** The folded column's preferred key; `foldedPivot` suffixes it if a real value collides. */

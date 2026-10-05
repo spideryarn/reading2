@@ -87,6 +87,11 @@ export interface AdminCosts {
   rows: CostCubeRow[];
   /** Every owner in `rows`. `email: null` when the Auth service has no such account. */
   owners: { id: string; email: string | null }[];
+  /**
+   * False when the account listing failed: every `email` is then null because
+   * it could not be read, not because the account is gone.
+   */
+  emailsAvailable: boolean;
 }
 
 /* ------------------------------------------------------------- the money -- */

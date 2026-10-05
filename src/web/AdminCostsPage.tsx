@@ -69,6 +69,7 @@ import {
   nextDrillDimension,
   periodWindow,
   scopedRows,
+  shadeAlpha,
 } from "./admin-costs-view.js";
 import { Shell } from "./AdminPage.js";
 import { RankBar, StackedDayChart } from "./cost-charts.js";
@@ -180,6 +181,13 @@ const SELECT =
   "tw:h-7 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-2 tw:text-xs tw:text-foreground";
 const ROW_OF_CONTROLS = "tw:flex tw:flex-wrap tw:items-center tw:gap-2";
 const SMALL_LABEL = "tw:text-xs tw:text-muted-foreground";
+
+/**
+ * A row label's width: capped so that at 390px the label and the amount beside
+ * it are both on screen, and let out on a wider window. The text truncates
+ * inside it and its `title` has the whole of it.
+ */
+const LABEL_WIDTH = "tw:min-w-0 tw:max-w-40 tw:sm:max-w-72 tw:lg:max-w-md";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
@@ -334,6 +342,11 @@ function Explorer({
   return (
     <>
       <WindowLine costs={costs} />
+      {!costs.emailsAvailable && (
+        <p className={`tw:m-0 tw:mb-3 ${SMALL_LABEL}`}>
+          Email addresses could not be loaded; users are shown by id.
+        </p>
+      )}
 
       {active.length > 0 && (
         <ul aria-label="Filters" className={`${ROW_OF_CONTROLS} tw:m-0 tw:mb-3 tw:list-none tw:p-0`}>
@@ -612,39 +625,41 @@ function rankingColumns({
       accessorFn: (g) => g.label,
       sortDescFirst: false,
       sortingFn: localeText<CubeGroup>(),
-      meta: { label: DIMENSION_LABEL[dim], hint: "What the row is", ends: ["A to Z", "Z to A"], fluid: true },
+      /* **Not the fluid column.** That one carries a 224px floor
+         (lib/DataTable.tsx § `FLUID_CELL`), which at 390px pushed the amount
+         off the right-hand edge. The label is capped instead, so label and
+         amount fit a phone together; the bar takes the leftover width. */
+      meta: { label: DIMENSION_LABEL[dim], hint: "What the row is", ends: ["A to Z", "Z to A"] },
       cell: ({ row }) => {
         const g = row.original;
         const ownerId = dim === "article" ? articleOwner.get(g.key) : undefined;
         const owner = ownerId === undefined ? undefined : (owners.get(ownerId) ?? ownerId.slice(0, 8));
         const slug = dim === "article" ? ownSlugs.get(g.key) : undefined;
         return (
-          <div className="tw:min-w-0">
-            <div className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-2">
-              <button
-                type="button"
-                data-drill=""
-                title={`Filter to ${g.label}`}
-                onClick={() => drill(dim, g.key)}
-                className="tw:min-w-0 tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline"
-              >
-                {g.label}
-              </button>
-              {owner !== undefined && (
-                <span className="tw:shrink tw:truncate tw:text-xs tw:text-muted-foreground">{owner}</span>
-              )}
-              {slug !== undefined && (
-                <Link
-                  href={readHref(slug, "", "metadata")}
-                  className="tw:shrink-0 tw:text-xs tw:text-muted-foreground"
-                >
-                  metadata
-                </Link>
-              )}
-            </div>
-            <div className="tw:mt-1">
-              <RankBar share={largest > 0 ? g.recordedNanos / largest : 0} />
-            </div>
+          <div data-label="" className={LABEL_WIDTH}>
+            <button
+              type="button"
+              data-drill=""
+              title={`Filter to ${g.label}`}
+              onClick={() => drill(dim, g.key)}
+              className="tw:block tw:max-w-full tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline"
+            >
+              {g.label}
+            </button>
+            {(owner !== undefined || slug !== undefined) && (
+              <div className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-2 tw:text-xs tw:text-muted-foreground">
+                {owner !== undefined && (
+                  <span className="tw:min-w-0 tw:truncate" title={owner}>
+                    {owner}
+                  </span>
+                )}
+                {slug !== undefined && (
+                  <Link href={readHref(slug, "", "metadata")} className="tw:shrink-0 tw:text-muted-foreground">
+                    metadata
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         );
       },
@@ -681,6 +696,21 @@ function rankingColumns({
         noChip: true,
       },
       cell: ({ row }) => formatShare(row.original.recordedNanos, total),
+    },
+    {
+      /* The graph of a ranking: each row against the largest. After the
+         figures it draws, and the one column that absorbs spare width. */
+      id: "bar",
+      header: "",
+      enableSorting: false,
+      meta: {
+        label: "Bar",
+        hint: "Recorded amount against the largest row",
+        ends: ["", ""],
+        fluid: true,
+        noChip: true,
+      },
+      cell: ({ row }) => <RankBar share={largest > 0 ? row.original.recordedNanos / largest : 0} />,
     },
     count("calls", "Calls", "Every model call in the row", (g) => g.calls),
     {
@@ -775,15 +805,27 @@ function Ranking({
 
 const CELL = "tw:px-3 tw:py-2 tw:text-right tw:tabular-nums tw:whitespace-nowrap";
 const HEAD = "tw:px-3 tw:py-2 tw:text-xs tw:font-normal tw:text-muted-foreground tw:whitespace-nowrap";
+/**
+ * The label column, held at the left while the table scrolls sideways. Opaque
+ * in the page's own colour — the table sits on the page, not on a card — so a
+ * shaded cell passing under it does not show through, in either theme. The
+ * shadow is the column's right-hand rule: a collapsed border does not travel
+ * with a sticky cell.
+ */
+const PINNED = "tw:sticky tw:left-0 tw:z-10 tw:bg-background tw:shadow-[1px_0_0_var(--border)]";
 
 /**
  * Rows × columns, with both sets of totals. A plain table rather than
  * `DataTable`: its columns are data, it has a totals row and a totals column,
  * and it does not sort — none of which that seam has a place for.
  *
- * Cells are shaded on the viridis ramp at a wash, so the figures stay in the
- * text colour and legible in both themes; the ramp's quiet end is the one
- * nearest the page in each (styles/colourscales.css).
+ * Cells are shaded in one categorical hue at an alpha that carries the amount,
+ * so the figures stay in the text colour and legible in both themes. It was
+ * the viridis ramp at a fixed wash until a browser pass read that as a rainbow.
+ *
+ * **The total comes straight after the label**, not at the far right: on a
+ * wide pivot, and always on a phone, the far right is off screen, and the
+ * total is the figure a row is read for.
  */
 function PivotTable({
   pivot,
@@ -800,10 +842,11 @@ function PivotTable({
     0,
     ...[...pivot.cells.values()].flatMap((across) => [...across.values()].map((c) => c.recordedNanos)),
   );
-  const shade = (nanos: number) =>
-    nanos > 0 && largest > 0
-      ? { background: `rgb(var(--vir-${Math.round((nanos / largest) * 8)}-rgb) / 0.32)` }
-      : undefined;
+  /* One hue, the rank bar's, with the amount in the alpha — `shadeAlpha`. */
+  const shade = (nanos: number) => {
+    const alpha = shadeAlpha(nanos, largest);
+    return alpha === null ? undefined : { background: `rgb(var(--cat-0-rgb) / ${alpha})` };
+  };
 
   return (
     <>
@@ -818,33 +861,47 @@ function PivotTable({
           </caption>
           <thead>
             <tr className="tw:border-b tw:border-border">
-              <th scope="col" className={`${HEAD} tw:text-left`}>
+              <th scope="col" className={`${HEAD} ${PINNED} tw:text-left`}>
                 {DIMENSION_LABEL[rowDim]}
               </th>
-              {pivot.columns.map((col) => (
-                <th key={col.key} scope="col" data-col={col.key} className={`${HEAD} tw:text-right`}>
-                  {col.label}
-                </th>
-              ))}
               <th scope="col" className={`${HEAD} tw:text-right`}>
                 Total
               </th>
+              {pivot.columns.map((col) => (
+                <th
+                  key={col.key}
+                  scope="col"
+                  data-col={col.key}
+                  title={col.label}
+                  className={`${HEAD} tw:text-right`}
+                >
+                  <span data-col-label="" className="tw:ml-auto tw:block tw:max-w-40 tw:truncate">
+                    {col.label}
+                  </span>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {pivot.rows.map((row) => (
               <tr key={row.key} className="tw:border-b tw:border-border/60">
-                <th scope="row" className="tw:px-3 tw:py-2 tw:text-left tw:font-normal tw:whitespace-nowrap">
+                <th
+                  scope="row"
+                  className={`tw:px-3 tw:py-2 tw:text-left tw:font-normal tw:whitespace-nowrap ${PINNED}`}
+                >
                   <button
                     type="button"
                     data-drill=""
                     title={`Filter to ${row.label}`}
                     onClick={() => drill(rowDim, row.key)}
-                    className="tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline"
+                    className={`tw:block tw:truncate tw:border-0 tw:bg-transparent tw:p-0 tw:text-left tw:text-sm tw:text-foreground tw:underline-offset-2 tw:hover:underline ${LABEL_WIDTH}`}
                   >
                     {row.label}
                   </button>
                 </th>
+                <td data-row-total="" data-nanos={row.recordedNanos} className={`${CELL} tw:text-foreground`}>
+                  {amountWithFloor(row)}
+                </td>
                 {pivot.columns.map((col) => {
                   const cell = pivot.cells.get(row.key)?.get(col.key);
                   return (
@@ -860,25 +917,22 @@ function PivotTable({
                     </td>
                   );
                 })}
-                <td data-row-total="" data-nanos={row.recordedNanos} className={`${CELL} tw:text-foreground`}>
-                  {amountWithFloor(row)}
-                </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row" className={`${HEAD} tw:text-left`}>
+              <th scope="row" className={`${HEAD} ${PINNED} tw:text-left`}>
                 Total
               </th>
+              <td data-grand-total="" data-nanos={pivot.total.recordedNanos} className={`${CELL} tw:text-foreground`}>
+                {amountWithFloor(pivot.total)}
+              </td>
               {pivot.columns.map((col) => (
                 <td key={col.key} data-col-total="" data-nanos={col.recordedNanos} className={`${CELL} tw:text-foreground`}>
                   {amountWithFloor(col)}
                 </td>
               ))}
-              <td data-grand-total="" data-nanos={pivot.total.recordedNanos} className={`${CELL} tw:text-foreground`}>
-                {amountWithFloor(pivot.total)}
-              </td>
             </tr>
           </tfoot>
         </table>

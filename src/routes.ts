@@ -8384,9 +8384,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         }),
         /* The account listing alone, for the emails — not the users page's
            nine-query read. */
-        listAccounts(gotruePages(url, key)),
+        /* **A failed listing costs the emails, not the page**: the money is
+           the ledger's and does not need the Auth service. Only the error's
+           class is logged — its message may carry the endpoint. */
+        listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+          log("http").warn(
+            { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+            "admin costs: the account listing failed, so the answer carries no emails",
+          );
+          return null;
+        }),
       ]);
-      const emails = new Map(accounts.map((a) => [a.id, a.email]));
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
       /* Every owner in the rows, and only those. One the Auth service does not
          know — a deleted account's ledger rows outlive it — has no email. */
       const owners = [...new Set(groups.map((g) => g.ownerId))].map((id) => ({
@@ -8399,6 +8408,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         label: costWindowLabel(asked.since, asked.until),
         rows: groups.map((g) => ({ ...g, category: costCategoryOf(g) })),
         owners,
+        emailsAvailable: accounts !== null,
       };
       send(res, 200, costs);
     },

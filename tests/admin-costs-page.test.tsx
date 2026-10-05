@@ -147,6 +147,7 @@ function cube(rows: CostCubeRow[]): AdminCosts {
       { id: GREG, email: ADMIN_EMAIL_LOCAL },
       { id: BEN, email: BEN_EMAIL },
     ],
+    emailsAvailable: true,
   };
 }
 
@@ -304,7 +305,12 @@ describe("the default view", () => {
     const greg = [...host.querySelectorAll("[data-ranking] tbody tr")].find((tr) =>
       tr.textContent?.includes(ADMIN_EMAIL_LOCAL),
     );
-    expect(greg?.querySelectorAll("td")[4]?.textContent).toBe("$1.00");
+    /* By its header, not its position: the bar column moved it once already. */
+    const at = [...host.querySelectorAll("[data-ranking] thead th")].findIndex((th) =>
+      (th.textContent ?? "").includes("Per priced call"),
+    );
+    expect(at).toBeGreaterThan(0);
+    expect(greg?.querySelectorAll("td")[at]?.textContent).toBe("$1.00");
   });
 
   it("leaves eval and CLI rows out until the switch is on", async () => {
@@ -557,6 +563,105 @@ describe("URL state", () => {
     expect(host.textContent).toContain("No calls match");
     await click(host.querySelector('[data-filter="user"] button'), "the stale filter's remove button");
     expect(ranking()).toHaveLength(1);
+  });
+});
+
+/* jsdom lays nothing out, so these hold the structure a narrow window needs:
+   the order of the columns, and the classes that pin and cap them. What it
+   looks like at 390px is a browser's to say. */
+describe("what a narrow window needs", () => {
+  it("puts the pivot's Total straight after the row label, in every row", async () => {
+    await show("?by=user&then=task");
+    const table = host.querySelector("table[data-pivot]");
+    const head = [...(table?.querySelectorAll("thead tr > *") ?? [])].map((c) => c.textContent);
+    expect(head).toEqual(["User", "Total", "structure", "glossary", "chat"]);
+    for (const tr of table?.querySelectorAll("tbody tr, tfoot tr") ?? []) {
+      const cells = [...tr.children];
+      expect(cells[0]?.tagName).toBe("TH");
+      expect(cells[1]?.matches("[data-row-total], [data-grand-total]"), tr.textContent ?? "").toBe(true);
+      expect(cells).toHaveLength(5);
+    }
+    /* The totals row is still the last one. */
+    expect(table?.querySelector("tfoot tr > th")?.textContent).toBe("Total");
+  });
+
+  it("pins the pivot's label column, opaque, while the rest scrolls", async () => {
+    await show("?by=user&then=task");
+    const table = host.querySelector("table[data-pivot]");
+    const pinned = [...(table?.querySelectorAll("tr > :first-child") ?? [])];
+    expect(pinned).toHaveLength(4);
+    for (const cell of pinned) {
+      const classes = cell.className.split(/\s+/);
+      expect(classes).toContain("tw:sticky");
+      expect(classes).toContain("tw:left-0");
+      expect(classes).toContain("tw:bg-background");
+    }
+  });
+
+  it("caps a long pivot column header and keeps its whole name in a title", async () => {
+    const long = "vendor/an-eval-label-that-goes-on-and-on-and-on-well-past-any-sensible-column";
+    await show("?by=user&then=model", [
+      row({ creditsNanos: DOLLAR, requestedModel: long, answeredModel: long }),
+      row({ ownerId: BEN, creditsNanos: DOLLAR / 2 }),
+    ]);
+    const th = [...host.querySelectorAll("table[data-pivot] thead th[data-col]")].find(
+      (c) => c.textContent === long,
+    );
+    expect(th?.getAttribute("title")).toBe(long);
+    const inner = th?.querySelector("[data-col-label]");
+    expect(inner?.className).toContain("tw:truncate");
+    expect(inner?.className).toMatch(/tw:max-w-/);
+  });
+
+  it("orders the ranking label, recorded amount, share, bar, then the counts", async () => {
+    await show();
+    const head = [...host.querySelectorAll("[data-ranking] thead th")].map((th) => (th.textContent ?? "").trim());
+    expect(head).toEqual(["User", "Recorded amount", "Share", "", "Calls", "Per priced call", "Unpriced", "Failed"]);
+    const first = host.querySelector("[data-ranking] tbody tr");
+    const cells = [...(first?.children ?? [])];
+    expect(cells[1]?.querySelector("[data-amount]")).not.toBeNull();
+    expect(cells[3]?.querySelector("[data-rank-bar]")).not.toBeNull();
+    /* The label is capped, not the column that takes the leftover width. */
+    const label = cells[0]?.querySelector("[data-label]");
+    expect(label?.className).toMatch(/tw:max-w-/);
+    expect(cells[0]?.className).not.toContain("tw:min-w-56");
+    expect(first?.querySelector("[data-drill]")?.getAttribute("title")).toContain(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("still sorts from a header, and says so in the address", async () => {
+    await show();
+    const calls = [...host.querySelectorAll<HTMLElement>("[data-ranking] thead th button")].find((b) =>
+      (b.textContent ?? "").includes("Calls"),
+    );
+    await click(calls, "the Calls header");
+    await waitFor("the sort in the address", () => location.search.includes("sort=calls"));
+    expect(ranking().map((r) => r.label)).toEqual([ADMIN_EMAIL_LOCAL, BEN_EMAIL]);
+  });
+});
+
+describe("when the account listing failed", () => {
+  it("shows users by short id and says why, once", async () => {
+    answer(() =>
+      json({
+        ...cube(ROWS),
+        owners: [
+          { id: GREG, email: null },
+          { id: BEN, email: null },
+        ],
+        emailsAvailable: false,
+      }),
+    );
+    await show();
+    expect(ranking().map((r) => r.label)).toEqual([GREG.slice(0, 8), BEN.slice(0, 8)]);
+    const said = "Email addresses could not be loaded; users are shown by id.";
+    expect(host.textContent).toContain(said);
+    expect((host.textContent ?? "").split(said)).toHaveLength(2);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("says nothing of the kind when they loaded", async () => {
+    await show();
+    expect(host.textContent).not.toContain("could not be loaded");
   });
 });
 

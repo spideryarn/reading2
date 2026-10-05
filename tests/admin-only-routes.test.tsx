@@ -88,7 +88,7 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
         : url.startsWith("/api/admin/vouchers")
           ? '{"vouchers":[]}'
           : url.startsWith("/api/admin/costs")
-            ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[]}'
+            ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[],"emailsAvailable":true}'
           : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
