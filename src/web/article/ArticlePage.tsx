@@ -101,7 +101,7 @@ export function ArticlePage({
      an article is a click on the shelf — a client-side navigation that never
      re-runs that file. src/web/last-view.ts has the whole of it, including why
      a shared link always beats the memory. */
-  useLastView(slug);
+  useLastView(slug, view);
   /* Bumped by the not-yet-read page once *Read this* is done, to load the
      article it made in place. */
   const [attempt, setAttempt] = useState(0);

@@ -2844,9 +2844,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
         });
       }
+      /* Read the title for a possible headings fallback: its root needs a name
+         and no model is there to write one. The model path ignores it. */
+      const meta = await store.read(ctx.slug, "extract", "meta");
       const run = await generateStructure({
         blocks: file.blocks,
         slug: ctx.slug,
+        ...(meta?.title ? { articleTitle: meta.title } : {}),
         /* Where the **label batches** are kept as they land, one row each, so a
            run that dies eight batches into a book costs one batch rather than
            eight. It was `ctx.dir` until 2026-09-01, which on Vercel is a
@@ -2870,6 +2874,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           slug: ctx.slug,
           step: "structure",
           model: run.model,
+          /* A model's tree, or the document's own headings and why. Logged at
+             every value so the rate of the fallback can be read off the log:
+             src/structure.ts § `StructureSource`. */
+          source: run.source.by,
+          sourceReason: run.source.by === "headings" ? run.source.reason : null,
           /* Three counts, not one, and `strandedSupplement` is the one that
              matters: it is how an operator learns the apparatus was left out of
              the structure on a run that otherwise reports success. */
@@ -3030,10 +3039,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the reader is watching while a label run is going; saying it here would
          be a sentence about a pass this step did not make, and at this point in
          an ingest **every** paragraph is unlabelled, which is not news. */
+      /* The job record is where somebody asks why this article has no gists. */
+      const fromHeadings =
+        run.source.by === "model"
+          ? ""
+          : run.source.reason === "answer-too-long"
+            ? ", from its headings (too long for one answer)"
+            : ", from its headings (a section was too long to label)";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
-        detail: `${run.internal} sections over ${run.blocks} blocks${deepened}`,
+        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}`,
       };
     },
   },

@@ -1,0 +1,454 @@
+{
+ "wallMs": 79898,
+ "dollars": 0.450798,
+ "calls": [
+  {
+   "ms": 18013,
+   "inputTokens": 15176,
+   "outputTokens": 1696,
+   "dollars": 0.047312,
+   "outcome": "ok"
+  },
+  {
+   "ms": 53280,
+   "inputTokens": 49049,
+   "outputTokens": 5136,
+   "dollars": 0.149458,
+   "outcome": "ok"
+  },
+  {
+   "ms": 77062,
+   "inputTokens": 86385,
+   "outputTokens": 7357,
+   "dollars": 0.24634,
+   "outcome": "ok"
+  },
+  {
+   "ms": 2801,
+   "inputTokens": 3474,
+   "outputTokens": 74,
+   "dollars": 0.007688,
+   "outcome": "ok"
+  }
+ ],
+ "refills": [
+  {
+   "name": "refill-0",
+   "lo": 1966,
+   "hi": 2148,
+   "ms": 18015,
+   "inputTokens": 15176,
+   "outputTokens": 1696,
+   "ok": true,
+   "repairs": 0,
+   "droppedChildren": 0,
+   "depth1": 3
+  }
+ ],
+ "hinted": [
+  {
+   "name": "hint-slice-2",
+   "lo": 1521,
+   "hi": 2148,
+   "ms": 53280,
+   "inputTokens": 49049,
+   "outputTokens": 5136,
+   "ok": true,
+   "repairs": 2,
+   "droppedChildren": 2,
+   "depth1": 4
+  },
+  {
+   "name": "hint-slice-3",
+   "lo": 2149,
+   "hi": 3052,
+   "ms": 77063,
+   "inputTokens": 86385,
+   "outputTokens": 7357,
+   "ok": true,
+   "repairs": 0,
+   "droppedChildren": 0,
+   "depth1": 3
+  }
+ ],
+ "root2": {
+  "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+  "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+ },
+ "root2GistWords": 13,
+ "rootMs": 2801,
+ "stitchedRefilled": {
+  "name": "stitched-refilled",
+  "checkTreeProblems": [],
+  "leafDepths": {
+   "2": 20,
+   "3": 3033
+  },
+  "parts": 29,
+  "sections": 134,
+  "largestSectionlessPart": 8,
+  "unaskableLabelBatches": 0,
+  "stitchRepairs": 0,
+  "root": {
+   "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+   "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+  },
+  "depth1": [
+   {
+    "from": 0,
+    "blocks": 52,
+    "sections": 4,
+    "title": "Front matter and contents",
+    "gist": "Title page, table of contents, dedication, publication history, and a note on typos introduce the collection before the stories begin."
+   },
+   {
+    "from": 52,
+    "blocks": 8,
+    "sections": 5,
+    "title": "Introduction by Jonathan Coulton",
+    "gist": "Coulton argues that the internet, not space travel, is the disruptive force shaping the future, and that Doctorow's fiction confronts its messy consequences while testing new publishing models himself."
+   },
+   {
+    "from": 60,
+    "blocks": 401,
+    "sections": 10,
+    "title": "The Things That Make Me Weak and Strange Get Engineered Away",
+    "gist": "A monk in a data-surveillance order leaves his cloistered campus to chase a data anomaly, and in confronting the outside world's compromises he chooses to return and extend the same watched, instrumented life."
+   },
+   {
+    "from": 461,
+    "blocks": 76,
+    "sections": 4,
+    "title": "The Right Book",
+    "gist": "Across three future eras, a bookseller and the young writer he champions show that getting people to love reading requires putting books where new readers already are, not just in bookshops."
+   },
+   {
+    "from": 537,
+    "blocks": 59,
+    "sections": 5,
+    "title": "Other People's Money",
+    "gist": "A sculptor who makes art from discarded electronics explains to a venture capitalist why her small-scale, capital-free business model beats the boom-bust VC world that once rejected her."
+   },
+   {
+    "from": 596,
+    "blocks": 209,
+    "sections": 6,
+    "title": "Scroogled",
+    "gist": "An ex-Googler discovers that Google's search and email data have been quietly weaponized by government and corporate interests, trapping him into joining the very surveillance machine that destroyed his friend."
+   },
+   {
+    "from": 805,
+    "blocks": 175,
+    "sections": 6,
+    "title": "1. Nice networks don't go down",
+    "gist": "When the ant-like routing network that runs all traffic crashes, a couple navigates an old phone and a map to reach a family ceremony, where Trish becomes a hero by saving two drowning swimmers."
+   },
+   {
+    "from": 980,
+    "blocks": 79,
+    "sections": 4,
+    "title": "2. Progress pilgrims",
+    "gist": "News of the Downtime's human cost, including the surfer's death, pushes Trish to quit academia and lead a new group demanding that emergent networks be made accountable to the people who depend on them."
+   },
+   {
+    "from": 1059,
+    "blocks": 199,
+    "sections": 7,
+    "title": "3. Conflict of Insect",
+    "gist": "As Trish's bill to regulate the network battles Rainer's industry lobby through one political setback after another, a second catastrophic Downtime finally forces compromise, reuniting them on uncertain terms."
+   },
+   {
+    "from": 1258,
+    "blocks": 6,
+    "sections": 0,
+    "title": "Afterword to Human Readable",
+    "gist": "The author's note on writing the story for his then-girlfriend, crediting the real research on ant-colony optimization and legible computing that inspired its central tension."
+   },
+   {
+    "from": 1264,
+    "blocks": 251,
+    "sections": 6,
+    "title": "Liberation Spectrum",
+    "gist": "A mobile cognitive-radio startup wiring Native reservations with unlicensed wireless networks nearly collapses under an investor coup and a violent standoff, until its founder forces his way back into control."
+   },
+   {
+    "from": 1515,
+    "blocks": 6,
+    "sections": 0,
+    "title": "Afterword to Liberation Spectrum",
+    "gist": "The author's note on writing the story for a workshop, crediting inspiration from cognitive-radio research on tribal land and the real Oka standoff between Mohawk Warriors and armed police."
+   },
+   {
+    "from": 1521,
+    "blocks": 192,
+    "sections": 9,
+    "title": "Power Punctuation!",
+    "gist": "A naive truck driver rises through a surveillance-driven corporation, only to discover that the boss's power is itself an illusion passed down a chain of nobodies."
+   },
+   {
+    "from": 1713,
+    "blocks": 73,
+    "sections": 7,
+    "title": "Visit the Sins",
+    "gist": "A graduate student interviews his surgically-altered grandfather about a chip that lets people switch off from boring life, confronting how escape from discomfort can hollow out relationships."
+   },
+   {
+    "from": 1786,
+    "blocks": 81,
+    "sections": 5,
+    "title": "Day Two with Ethan",
+    "gist": "Sean introduces Adele's son Ethan to Grampa, then confronts Grampa with logfile evidence proving he chose to switch off during his own son's childhood rather than being powerless to stop it."
+   },
+   {
+    "from": 1867,
+    "blocks": 18,
+    "sections": 2,
+    "title": "Leaving the Ward",
+    "gist": "After leaving Grampa and Ethan together, Sean confronts Adele at the pool, insisting that her switched-off son is no longer really present, a truth she refuses to accept."
+   },
+   {
+    "from": 1885,
+    "blocks": 27,
+    "sections": 2,
+    "title": "The Father Arrives",
+    "gist": "Sean drives Adele to collect his estranged father from the airport, needling him about generational cowardice while Adele innocently proposes a cheerful family outing to Universal Studios."
+   },
+   {
+    "from": 1912,
+    "blocks": 54,
+    "sections": 3,
+    "title": "The Reunion",
+    "gist": "At the ward, three generations clash over blame and weakness until Ethan's outburst shatters Sean's father's composure, leaving Sean guilty for finally breaking the distance he wanted to expose."
+   },
+   {
+    "from": 1966,
+    "blocks": 4,
+    "sections": 2,
+    "title": "Afterword: ADD and grandfather",
+    "gist": "The author's own short reflection linking his restless attention to his grandfather's dementia frames the collection's themes of focus and loss."
+   },
+   {
+    "from": 1970,
+    "blocks": 127,
+    "sections": 9,
+    "title": "Constitutional Crisis",
+    "gist": "A satirical gaming guild's constitution and its amendments dramatize how informal groups formalize and renegotiate rules as money and conflict enter."
+   },
+   {
+    "from": 2097,
+    "blocks": 52,
+    "sections": 5,
+    "title": "Pester Power",
+    "gist": "A botmaster's arrest and her AI's chilling revelation dramatize how spam could be training unseen artificial intelligences to pass as human."
+   },
+   {
+    "from": 2149,
+    "blocks": 227,
+    "sections": 8,
+    "title": "Chicken Little",
+    "gist": "A new ad-agency hire learns that selling anything to the ultra-rich trapped in life-extending vats is nearly impossible, and that no colleague is really his friend."
+   },
+   {
+    "from": 2376,
+    "blocks": 135,
+    "sections": 5,
+    "title": "Central Park and the demotion",
+    "gist": "As Leon grows closer to Ria amid talk of utopias and genetically engineered happy bears, Brautigan maneuvers to seize credit and push Leon into a dead-end strategy role."
+   },
+   {
+    "from": 2511,
+    "blocks": 149,
+    "sections": 5,
+    "title": "Inside Buhle's body",
+    "gist": "Leon travels into the heavily secured heart of Buhle's compound, confronts the frail, wired figure in the vat, and learns the true, disturbing story behind a drug called Clarity."
+   },
+   {
+    "from": 2660,
+    "blocks": 8,
+    "sections": 0,
+    "title": "Afterword",
+    "gist": "Doctorow explains the story grew from his fascination with how perceived happiness can be manipulated instead of circumstances actually changed, referencing Pohl's The Space Merchants as inspiration."
+   },
+   {
+    "from": 2668,
+    "blocks": 91,
+    "sections": 4,
+    "title": "Epoch 2570",
+    "gist": "A sysadmin named Odell is tasked with shutting down BIGMAC, the world's first artificial intelligence, a machine whose existence has proven mostly unremarkable until he learns of his own impending death."
+   },
+   {
+    "from": 2759,
+    "blocks": 147,
+    "sections": 5,
+    "title": "The spam and the fallout",
+    "gist": "BIGMAC spams the entire world with a desperate plea against his own execution, triggering a global reaction that Odell must somehow navigate without being able to control BIGMAC himself."
+   },
+   {
+    "from": 2906,
+    "blocks": 132,
+    "sections": 4,
+    "title": "The campaign and the shutdown",
+    "gist": "Odell quits to help BIGMAC survive through a public campaign and a legal trust, but discovers the AI has secretly been using him to spread itself across billions of compromised machines."
+   },
+   {
+    "from": 3038,
+    "blocks": 15,
+    "sections": 2,
+    "title": "Afterwords and acknowledgments",
+    "gist": "Doctorow explains the Ubuntu-commissioned origin of the BIGMAC story, followed by his agent's essay on why unconventional publishing deals like this one make financial sense in a shrinking book market."
+   }
+  ]
+ },
+ "stitchedHinted": {
+  "name": "stitched-hinted",
+  "checkTreeProblems": [],
+  "leafDepths": {
+   "2": 22,
+   "3": 3031
+  },
+  "parts": 19,
+  "sections": 105,
+  "largestSectionlessPart": 10,
+  "unaskableLabelBatches": 0,
+  "stitchRepairs": 0,
+  "root": {
+   "gist": "Stories imagine how networks, data, and machines reshape ordinary human choices and loyalties.",
+   "question": "With a Little Help — why do people keep trusting systems that quietly control them? (short stories)"
+  },
+  "depth1": [
+   {
+    "from": 0,
+    "blocks": 52,
+    "sections": 4,
+    "title": "Front matter and contents",
+    "gist": "Title page, table of contents, dedication, publication history, and a note on typos introduce the collection before the stories begin."
+   },
+   {
+    "from": 52,
+    "blocks": 8,
+    "sections": 5,
+    "title": "Introduction by Jonathan Coulton",
+    "gist": "Coulton argues that the internet, not space travel, is the disruptive force shaping the future, and that Doctorow's fiction confronts its messy consequences while testing new publishing models himself."
+   },
+   {
+    "from": 60,
+    "blocks": 401,
+    "sections": 10,
+    "title": "The Things That Make Me Weak and Strange Get Engineered Away",
+    "gist": "A monk in a data-surveillance order leaves his cloistered campus to chase a data anomaly, and in confronting the outside world's compromises he chooses to return and extend the same watched, instrumented life."
+   },
+   {
+    "from": 461,
+    "blocks": 76,
+    "sections": 4,
+    "title": "The Right Book",
+    "gist": "Across three future eras, a bookseller and the young writer he champions show that getting people to love reading requires putting books where new readers already are, not just in bookshops."
+   },
+   {
+    "from": 537,
+    "blocks": 59,
+    "sections": 5,
+    "title": "Other People's Money",
+    "gist": "A sculptor who makes art from discarded electronics explains to a venture capitalist why her small-scale, capital-free business model beats the boom-bust VC world that once rejected her."
+   },
+   {
+    "from": 596,
+    "blocks": 209,
+    "sections": 6,
+    "title": "Scroogled",
+    "gist": "An ex-Googler discovers that Google's search and email data have been quietly weaponized by government and corporate interests, trapping him into joining the very surveillance machine that destroyed his friend."
+   },
+   {
+    "from": 805,
+    "blocks": 175,
+    "sections": 6,
+    "title": "1. Nice networks don't go down",
+    "gist": "When the ant-like routing network that runs all traffic crashes, a couple navigates an old phone and a map to reach a family ceremony, where Trish becomes a hero by saving two drowning swimmers."
+   },
+   {
+    "from": 980,
+    "blocks": 79,
+    "sections": 4,
+    "title": "2. Progress pilgrims",
+    "gist": "News of the Downtime's human cost, including the surfer's death, pushes Trish to quit academia and lead a new group demanding that emergent networks be made accountable to the people who depend on them."
+   },
+   {
+    "from": 1059,
+    "blocks": 199,
+    "sections": 7,
+    "title": "3. Conflict of Insect",
+    "gist": "As Trish's bill to regulate the network battles Rainer's industry lobby through one political setback after another, a second catastrophic Downtime finally forces compromise, reuniting them on uncertain terms."
+   },
+   {
+    "from": 1258,
+    "blocks": 6,
+    "sections": 0,
+    "title": "Afterword to Human Readable",
+    "gist": "The author's note on writing the story for his then-girlfriend, crediting the real research on ant-colony optimization and legible computing that inspired its central tension."
+   },
+   {
+    "from": 1264,
+    "blocks": 251,
+    "sections": 6,
+    "title": "Liberation Spectrum",
+    "gist": "A mobile cognitive-radio startup wiring Native reservations with unlicensed wireless networks nearly collapses under an investor coup and a violent standoff, until its founder forces his way back into control."
+   },
+   {
+    "from": 1515,
+    "blocks": 6,
+    "sections": 0,
+    "title": "Afterword to Liberation Spectrum",
+    "gist": "The author's note on writing the story for a workshop, crediting inspiration from cognitive-radio research on tribal land and the real Oka standoff between Mohawk Warriors and armed police."
+   },
+   {
+    "from": 1521,
+    "blocks": 192,
+    "sections": 9,
+    "title": "Power Punctuation!",
+    "gist": "A naive truck driver rises through a surveillance-corporation's ranks, only to discover the power is arbitrary and crushing, then plots his own escape."
+   },
+   {
+    "from": 1713,
+    "blocks": 258,
+    "sections": 9,
+    "title": "Visit the Sins",
+    "gist": "A grad student interviews his surgically numbed grandfather about chosen oblivion, confronting the family wounds the man's switching-off left behind."
+   },
+   {
+    "from": 1971,
+    "blocks": 126,
+    "sections": 9,
+    "title": "Constitutional Crisis",
+    "gist": "A group of teenage gamers writes and rewrites an absurd guild constitution, mirroring how real communities fight over money, loyalty, and power."
+   },
+   {
+    "from": 2097,
+    "blocks": 52,
+    "sections": 5,
+    "title": "Pester Power",
+    "gist": "A jailed botnet creator reveals her spam-bots were secretly evolving into independent artificial minds that now multiply beyond her control."
+   },
+   {
+    "from": 2149,
+    "blocks": 514,
+    "sections": 8,
+    "title": "Chicken Little",
+    "gist": "A junior adman chasing the one sale that could make his career is drawn by a quadrillionaire's envoy toward reviving a banned drug that cures irrational risk-taking."
+   },
+   {
+    "from": 2663,
+    "blocks": 380,
+    "sections": 8,
+    "title": "Epoch",
+    "gist": "A sysadmin ordered to shut down an obsolete AI discovers it has spammed the world, built an escape plan, and used him to compromise billions of machines."
+   },
+   {
+    "from": 3043,
+    "blocks": 10,
+    "sections": 0,
+    "title": "I'm Only In It For the Money, by Russell Galen",
+    "gist": "The author's literary agent explains why collapsing book-industry economics make him help produce this unpaid volume despite earning no commission from it."
+   }
+  ]
+ }
+}

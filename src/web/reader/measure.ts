@@ -45,11 +45,9 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * dock-fit.ts's observer is, and the gutter is what actually stops the flip.
  */
 export function useWindowWidth(): number {
-  const measure = () => pageWidth() - horizontalInset(safeAreaInsets());
-  const [w, setW] = useState(measure);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `measure` is a new function each render but closes over nothing from the component — it reads the window — so the listeners are added once, on mount.
+  const [w, setW] = useState(usableWidth);
   useEffect(() => {
-    const on = () => setW(measure());
+    const on = () => setW(usableWidth());
     window.addEventListener("resize", on);
     window.addEventListener("orientationchange", on);
     let frame = 0;
@@ -67,6 +65,17 @@ export function useWindowWidth(): number {
     };
   }, []);
   return w;
+}
+
+/**
+ * **`useWindowWidth`'s one read, without the hook**: the page's width less the
+ * notch. Named and exported for last-view.ts § the first-open default, which
+ * decides once, on arrival, what the layout will have room for — and has to
+ * ask with the layout's own number or the two disagree by a scrollbar or a
+ * notch (GPT Sol, plan 261005a, F3).
+ */
+export function usableWidth(): number {
+  return pageWidth() - horizontalInset(safeAreaInsets());
 }
 
 /**
@@ -150,19 +159,21 @@ export function layoutViewportWidth(): number {
  * when a stylesheet may not even have loaded.
  */
 export function useRootFontPx(): number {
-  const measure = () => {
-    const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-    /* A browser that answers `""` or `0` gets the default rather than a table
-       nought pixels wide — this is a multiplier, so a falsy answer is not a
-       small error, it is the whole column. */
-    return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
-  };
-  const [px, setPx] = useState(measure);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `measure` is a new function each render but closes over nothing from the component — it reads the root's computed font size — so the listener is added once, on mount.
+  const [px, setPx] = useState(rootFontPx);
   useEffect(() => {
-    const on = () => setPx(measure());
+    const on = () => setPx(rootFontPx());
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
   return px;
+}
+
+/** `useRootFontPx`'s one read, without the hook — for the caller `usableWidth`
+ *  names, and for the same reason. */
+export function rootFontPx(): number {
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  /* A browser that answers `""` or `0` gets the default rather than a table
+     nought pixels wide — this is a multiplier, so a falsy answer is not a
+     small error, it is the whole column. */
+  return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
 }

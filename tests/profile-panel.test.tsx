@@ -123,6 +123,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
+const { AUTOSAVE_IDLE_MS } = await import("../src/web/ProfileBox.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -631,4 +632,22 @@ describe("more than one personalised badge on a page", () => {
     await settle();
     expect(document.querySelectorAll(".prof-panel")).toHaveLength(1);
   });
+});
+
+
+it("Done completes after an older refused purpose save is replaced by newer words", async () => {
+  render();
+  await open();
+  type(box(1), "A");
+  act(() => button(/^Done$/)?.click());
+  type(box(1), "B");
+  patches[0]?.answer(new Response(JSON.stringify({ error: "A was refused" }), { status: 503 }));
+  await settle();
+  expect(document.querySelector(".prof-panel")?.textContent).not.toContain("A was refused");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_IDLE_MS + 30)); });
+  expect(patches.map((p) => p.body)).toEqual([{ purpose: "A" }, { purpose: "B" }]);
+  expect(document.querySelector(".prof-panel")).not.toBeNull();
+  patches[1]?.answer(ok({ purpose: "B" }));
+  await settle();
+  expect(document.querySelector(".prof-panel"), "the close latch waited forever after an unrelated refusal").toBeNull();
 });

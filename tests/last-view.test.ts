@@ -23,11 +23,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   ARTICLE_PARAMS,
+  claimFirstOpen,
+  firstOpenHref,
+  firstOpenSearch,
   hasArticleState,
   NEVER_REMEMBERED,
+  readLastView,
   REMEMBERED,
   rememberableSearch,
   restoredHref,
+  writeLastView,
 } from "../src/web/last-view.js";
 
 describe("rememberableSearch", () => {
@@ -301,6 +306,170 @@ describe("restoredHref", () => {
     );
     expect(rememberableSearch("?at=spya-a&section=ai-processing")).toBe("?at=spya-a");
     expect(NEVER_REMEMBERED).toContain("section");
+  });
+});
+
+/**
+ * **The first-open default** — Greg, 2026-10-04 (spya-ax5tmm):
+ *
+ * > When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
+ * > room) and (if there's even more room) Marginalia mode in right-hand
+ *
+ * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
+ * The storage is a hand-made one handed in, because this file runs in node and
+ * the two failures that matter — a read that throws, a write that throws — are
+ * not ones a real `localStorage` can be asked to produce.
+ */
+describe("the first-open default", () => {
+  const KEY = "spya.lastView.x";
+
+  /** A `localStorage` over a map, with either verb made to throw. */
+  function storage(initial: Record<string, string> = {}, broken: { read?: boolean; write?: boolean } = {}) {
+    const held = new Map(Object.entries(initial));
+    const source = () =>
+      ({
+        getItem(key: string) {
+          if (broken.read) throw new Error("blocked");
+          return held.get(key) ?? null;
+        },
+        setItem(key: string, value: string) {
+          if (broken.write) throw new Error("blocked");
+          held.set(key, value);
+        },
+      }) as unknown as Storage;
+    return { held, source };
+  }
+
+  describe("firstOpenSearch: what the window has room for", () => {
+    it("is the article alone just below 700 usable px, and Summary from 700", () => {
+      expect(firstOpenSearch(699, 16, true)).toBe("");
+      expect(firstOpenSearch(700, 16, true)).toBe("?mode=summary");
+    });
+
+    it("adds the notes from 900, and not at 899", () => {
+      expect(firstOpenSearch(899, 16, true)).toBe("?mode=summary");
+      expect(firstOpenSearch(900, 16, true)).toBe("?mode=summary&margin=1");
+    });
+
+    it("leaves the notes out at any width for a reader whose experimental switch is off", () => {
+      expect(firstOpenSearch(900, 16, false)).toBe("?mode=summary");
+      expect(firstOpenSearch(2400, 16, false)).toBe("?mode=summary");
+      expect(firstOpenSearch(699, 16, false)).toBe("");
+    });
+  });
+
+  describe("readLastView: a failed read is not a missing key", () => {
+    it("tells the three answers apart", () => {
+      expect(readLastView("x", storage().source)).toEqual({ kind: "none" });
+      expect(readLastView("x", storage({ [KEY]: "" }).source)).toEqual({ kind: "stored", search: "" });
+      expect(readLastView("x", storage({ [KEY]: "?at=spya-a" }).source)).toEqual({
+        kind: "stored",
+        search: "?at=spya-a",
+      });
+      expect(readLastView("x", storage({}, { read: true }).source)).toEqual({ kind: "failed" });
+    });
+  });
+
+  describe("writeLastView: Plain is stored, not forgotten", () => {
+    it("keeps the key, empty, when there is nothing to remember", () => {
+      const s = storage({ [KEY]: "?mode=summary" });
+      expect(writeLastView("x", "", s.source)).toBe(true);
+      expect(s.held.get(KEY)).toBe("");
+    });
+
+    it("says so when the write did not happen", () => {
+      expect(writeLastView("x", "?at=spya-a", storage({}, { write: true }).source)).toBe(false);
+    });
+  });
+
+  describe("claimFirstOpen: is this the first open, and is it on record", () => {
+    it("claims a bare address with nothing stored, and leaves the marker behind", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(true);
+      expect(s.held.get(KEY)).toBe("");
+      /* The marker is what makes it once: the same question again is a no. */
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+    });
+
+    it("keeps a foreign parameter from counting as state", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", "?utm_source=nl", readLastView("x", s.source), s.source)).toBe(true);
+    });
+
+    it("lets a link that says anything win, and writes no marker for it", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", "?at=spya-sent", readLastView("x", s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", "?note=spya-a", readLastView("x", s.source), s.source)).toBe(false);
+      expect(s.held.has(KEY)).toBe(false);
+    });
+
+    it("does not take a stored empty view for a first open", () => {
+      const s = storage({ [KEY]: "" });
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+    });
+
+    it("stays Plain for a reader who went back to Plain and reopens", () => {
+      const s = storage();
+      /* First open, the default lands, the reader presses Plain at the top. */
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(true);
+      writeLastView("x", rememberableSearch("?mode=summary&margin=1"), s.source);
+      writeLastView("x", rememberableSearch(""), s.source);
+      const again = readLastView("x", s.source);
+      expect(again).toEqual({ kind: "stored", search: "" });
+      expect(claimFirstOpen("x", "", again, s.source)).toBe(false);
+      expect(restoredHref("/read/x", "", again.kind === "stored" ? again.search : null)).toBe(null);
+    });
+
+    it("claims nothing when the storage cannot be read", () => {
+      const s = storage({}, { read: true });
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+    });
+
+    it("claims nothing when the marker cannot be written", () => {
+      /* Otherwise every open would be a first one, and the default would
+         override a later choice of Plain on every visit. GPT Sol, F1. */
+      const s = storage({}, { write: true });
+      expect(claimFirstOpen("x", "", readLastView("x", s.source), s.source)).toBe(false);
+    });
+
+    it("claims nothing where there is no storage at all", () => {
+      /* The default source reads `window.localStorage`, and node has no window. */
+      expect(readLastView("x")).toEqual({ kind: "failed" });
+      expect(writeLastView("x", "")).toBe(false);
+    });
+  });
+
+  describe("firstOpenHref: the address to arrive at, once the switch has answered", () => {
+    const signedIn = { signedIn: true };
+
+    it("puts the default on a bare address", () => {
+      expect(firstOpenHref("x", "/read/x", "", signedIn, "?mode=summary&margin=1")).toBe(
+        "/read/x?mode=summary&margin=1",
+      );
+      expect(firstOpenHref("x", "/read/x", "?utm_source=nl", signedIn, "?mode=summary")).toBe(
+        "/read/x?utm_source=nl&mode=summary",
+      );
+    });
+
+    it("gives a signed-out reader no default", () => {
+      expect(firstOpenHref("x", "/read/x", "", { signedIn: false }, "?mode=summary")).toBe(null);
+    });
+
+    it("leaves the address alone where there is no room", () => {
+      expect(firstOpenHref("x", "/read/x", "", signedIn, "")).toBe(null);
+    });
+
+    it("leaves a reader who has moved since the page opened alone", () => {
+      /* On a cold load the switch answers a moment after the article draws. */
+      expect(firstOpenHref("x", "/read/x", "?at=spya-a", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/read/x", "?mode=quotes", signedIn, "?mode=summary")).toBe(null);
+    });
+
+    it("applies only to the reading view of the article it was claimed for", () => {
+      expect(firstOpenHref("x", "/read/y", "", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/read/x/metadata", "", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/", "", signedIn, "?mode=summary")).toBe(null);
+    });
   });
 });
 

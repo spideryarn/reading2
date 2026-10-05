@@ -705,12 +705,16 @@ export interface ShelfStore {
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
-   * assuming what the write did.
+   * assuming what the write did. **`null` means the owned row was found, but no
+   * shelf card was available to return** — for example, an article mid-import,
+   * or a concurrent edit moving it to the other archive state before the card
+   * is read. Any supplied changes were written. A slug with no owned row still
+   * rejects with not-found, including an empty change.
    */
   patch(
     slug: string,
     change: { archived?: boolean; title?: string | null; purpose?: string | null },
-  ): Promise<LibraryEntry>;
+  ): Promise<LibraryEntry | null>;
 
   /**
    * One more open.
