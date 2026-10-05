@@ -107,6 +107,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { relativeAgo, type RelativeStyle } from "./relative-time.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { useNow } from "./useNow.js";
+import { type ReloadForNewBuildSource, useReloadForNewBuild } from "./useReloadForNewBuild.js";
 /* The 210 KB the header above is about. Only ever reached through this
    lazily-loaded module — see LazyPage.tsx and App.tsx § loadChangelog.
 
@@ -810,8 +811,18 @@ export function withPending(history: ChangelogVersion[], pending: PendingRelease
 
 const RELEASES = withPending(PARSED.versions, parsePending(pendingText, PARSED.versions).pending);
 
-export function ChangelogPage() {
+/**
+ * `reloading` is for tests/changelog-page.test.tsx; the app passes nothing and
+ * gets the browser.
+ */
+export function ChangelogPage({ reloading }: { reloading?: Partial<ReloadForNewBuildSource> } = {}) {
   useDocumentTitle(pageTitle({ kind: "changelog" }));
+  /* The list above is compiled into this bundle, so a copy left open goes on
+     showing an old one. When a different build is live and nothing unsent
+     would be lost, the page reloads itself — Greg, 2026-10-04 (spya-ym9dum).
+     The address survives it, `#release-126` included; which releases the
+     reader had opened by hand does not. useReloadForNewBuild.ts. */
+  useReloadForNewBuild(reloading);
 
   return (
     <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">

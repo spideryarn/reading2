@@ -419,6 +419,23 @@ And one on 2026-09-30, from Greg's feedback (SPIDERYARN-READING2-6P):
   tab left open does not rot.
   [260930i](../plans/260930i-changelog-release-dates-as-relative-time.md).
 
+And one on 2026-10-05, from Greg's feedback the day before (spya-ym9dum): *"Could you set this page
+to somehow poll every 15 minutes or so, and if there's a new version, then refresh the page."*
+
+- **The page reloads itself when a new build is live.** The list is compiled into the bundle, so a
+  copy left open — for days, in the app opened from a home-screen icon — went on showing an old one.
+  The app now asks `/build.json` whether a different build is live when the page wakes and every
+  fifteen minutes while it is visible (`src/web/stale-shell.ts` § `watchForDeploy`), and
+  `/changelog` reloads when the answer is yes, the page is being looked at, and nothing unsent would
+  be lost: no Chat, Remember or Feedback draft held, no autosaved text still unsent, no upload going,
+  not offline
+  (`src/web/safe-to-reload.ts`). At most once per build in a session; a refused reload is tried
+  again at the next check. The address survives, `#release-126` included; which releases the reader
+  had opened by hand does not. **No other page does this** — an unasked reload under an article
+  somebody is reading is not what was asked for.
+  [261005d](../plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md);
+  `scripts/check-two-builds.ts` is the check that runs it against two real builds.
+
 ## Running it
 
 **`run docs/project/changelog.md`** means this section, and since 2026-10-01 it is a command:

@@ -64,3 +64,20 @@ Two more things:
 - `qi-58e7v32s` — the `[render]` crash above, `SPIDERYARN-READING2-BJ`.
 
 Both are proposals: nothing starts on either until you authorise it.
+
+## 2026-10-05: both looked at
+
+Authorised on 2026-10-04 and done in
+[261005d](../plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md), on `dev`, not
+deployed.
+
+- **`qi-58e7v32s`, the `[render]` crash: found and fixed.** An older copy of the app crashed on the
+  Metadata page of any article once the server started reporting a pipeline stage (`relations`) that
+  the older copy had no icon for. The mechanism is reproduced by a test. That it is what Sentry
+  recorded is strongly supported (both crashes are on copies built before that stage, both after
+  the deploy that added it) but Sentry kept no address, so it is not proven, and which screen you
+  were looking at when you wrote this report is still not known.
+- **`qi-wxt4gtyn`, noticing a deploy on waking: half built.** The app now notices, and "What's new"
+  reloads itself. Making the next navigation a full page load was **not** built: it would have
+  thrown away unsent Chat text and Feedback drafts and interrupted uploads. Whether to do it
+  properly is a question for you, in the plan.

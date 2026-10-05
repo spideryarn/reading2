@@ -49,6 +49,7 @@ import { useEffect, useRef } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import type { SaveState } from "./useAutosavedText.js";
 import { useDictationField } from "./useDictationField.js";
 
@@ -122,13 +123,9 @@ export function useIdleCommit({
 export function useUnsavedWarning(unsaved: boolean): void {
   useEffect(() => {
     if (!unsaved) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Older Chromium and Safari want the legacy return value as well.
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
+    /* The shared guard, so a page that reloads itself for a new build hears
+       the same fact the reader is warned by — safe-to-reload.ts. */
+    return warnBeforeUnload("unsaved");
   }, [unsaved]);
 }
 
