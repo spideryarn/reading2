@@ -103,7 +103,7 @@ job.
 
 ## Results
 
-**Plan review, GPT Sol, 2026-10-05** ([answer](261005j-plan-review-sol.md)): build with changes. No
+**Plan review, GPT Sol, 2026-10-05** ([answer](261005j-draft-sweep-plan-review-sol.md)): build with changes. No
 P0 or P1. One P2: the second query must check age as well, and must be tested against ids it should
 reject. Both done — `young` is a sixth count, and a test hands `proveUnprotected` one wrong id of
 each kind. It checked the lifecycle for a needed revision that could match the rule and found none,
@@ -124,7 +124,7 @@ target the transaction pooler as `spideryarn_app`, inside a read-only transactio
 - `spideryarn_app` may delete from `article_revisions`, so the step-start sweep will not fail into
   its savepoint for want of a privilege.
 
-**Code review, GPT Sol, 2026-10-05** ([answer](261005j-code-review-sol.md)), fixing as it went. It
+**Code review, GPT Sol, 2026-10-05** ([answer](261005j-draft-sweep-code-review-sol.md)), fixing as it went. It
 found nothing wrong in the sweep itself or in what removing the mode touched. Three P1s, all in the
 backlog script as first built, all fixed by it:
 

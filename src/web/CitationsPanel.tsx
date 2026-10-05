@@ -31,6 +31,10 @@
  * (GlossaryPanel.tsx § rowScores). The combination is our arithmetic, not the
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
+ *
+ * A row whose DOI Crossref holds also says *cited 357 times · Crossref*
+ * (plan 261005i, § `CitedBy`): a real count, in words, with its source and
+ * the day it was read. It is neither of the two scores and moves no order.
  */
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTapReveal } from "./useTapReveal.js";
@@ -47,9 +51,10 @@ import {
   type CitedMatchedBy,
   type CitedWork,
   type InvestigateStage,
+  type RegistryCitedBy,
   type RegistrySource,
 } from "../types.js";
-import { readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
+import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
 import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
@@ -603,6 +608,34 @@ function influenceFromWebNote(host: string, day: string): string {
 /** The words on a row with no influence, in place of a bar. Never a bar at zero. */
 export const INFLUENCE_UNKNOWN = "influence unknown";
 
+/* ------------------------------------------------- Crossref's count -- */
+
+/**
+ * **Crossref's citation count for the row's work, or null** (plan 261005i) —
+ * through `readCitationRegistry`, which keeps one only beside a found Crossref
+ * record. The one source on a row that is a count and not a judgement, so it
+ * is drawn as the number itself with where it came from, alongside the
+ * model's influence and never in its place. It moves neither the bar nor any
+ * order.
+ */
+export function citedByOf(work: Pick<ShownWork, "registry">): RegistryCitedBy | null {
+  const registry = readCitationRegistry(work.registry);
+  return registry?.kind === "found" ? (registry.citedBy ?? null) : null;
+}
+
+/** What the row says: the number and its source. The day is in the card. */
+export function citedByLine(count: number): string {
+  return `${citedByWords(count)} · ${REGISTRY_NAME.crossref}`;
+}
+
+/** The card on those words: whose count, on which day, and what it leaves out. */
+export function citedByNote(readAt: string): string {
+  return `${REGISTRY_NAME.crossref}’s count on ${dayOf(readAt)}. It counts citations from works whose reference lists publishers have deposited with ${REGISTRY_NAME.crossref}, so it is usually lower than Google Scholar’s, and it is not comparable across fields or ages.`;
+}
+
+/** In the band's (i), after the influence sentences, for owner and visitor alike. */
+export const CITED_BY_NOTE = `A row that says “cited 357 times · ${REGISTRY_NAME.crossref}” shows ${REGISTRY_NAME.crossref}’s own count for a work the article gives a DOI for, as it stood on the day in its card. It is a real count, separate from influence, and it does not change the order or what the threshold hides.`;
+
 /** The card on those words, as a visitor reads it: they have no *Dig deeper*. */
 const INFLUENCE_UNKNOWN_NOTE_SHARED =
   "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
@@ -908,6 +941,7 @@ export function CitationsPanel({
         {citations.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
+        <p>{CITED_BY_NOTE}</p>
         <p>
           {all.length} {all.length === 1 ? "work" : "works"} cited.
         </p>
@@ -1213,6 +1247,7 @@ function WorkRow({
   const note = investigate?.note ?? null;
   const scores = scoresOf(work);
   const web = webInfluenceOf(work);
+  const citedBy = citedByOf(work);
   const line = workByLine(work);
   const by = byLineOf(work);
   /* The found page's own title, in the tooltip: the search result's words,
@@ -1250,6 +1285,7 @@ function WorkRow({
         {influenceIsUnknown(work) && (
           <UnknownInfluence canDig={investigate !== null} />
         )}
+        {citedBy !== null && <CitedBy citedBy={citedBy} />}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
             {source.host} · {source.how}
@@ -1385,6 +1421,40 @@ function UnknownInfluence({ canDig }: { canDig: boolean }) {
         }}
       >
         {INFLUENCE_UNKNOWN}
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * ***cited 357 times · Crossref*, on the row's quiet line** (plan 261005i):
+ * the number itself and its source, in words and never a bar, because nothing
+ * maps a count onto 0–1. The card gives the day it was read and what the count
+ * leaves out; it opens on hover, focus or tap, as `UnknownInfluence` does, so
+ * all three are reachable by a finger. A dated snapshot: the row never says
+ * the number is current.
+ */
+function CitedBy({ citedBy }: { citedBy: RegistryCitedBy }) {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={citedByNote(citedBy.readAt)}
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-cited-by"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {citedByLine(citedBy.count)}
       </button>
     </Tooltip>
   );

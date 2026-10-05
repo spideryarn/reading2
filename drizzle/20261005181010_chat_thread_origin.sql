@@ -1,0 +1,9 @@
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_mode" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_item_id" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_block_id" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "origin_quote" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_identity_fk" FOREIGN KEY ("article_id","origin_block_id") REFERENCES "spideryarn"."block_identities"("article_id","block_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_mode" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."origin_mode" in ('debate','summary','glossary','citations'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_none" CHECK ("spideryarn"."chat_threads"."origin_mode" is not null or ("spideryarn"."chat_threads"."origin_item_id" is null and "spideryarn"."chat_threads"."origin_block_id" is null and "spideryarn"."chat_threads"."origin_quote" is null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_debate" CHECK ("spideryarn"."chat_threads"."origin_mode" is distinct from 'debate' or ("spideryarn"."chat_threads"."origin_block_id" is not null and "spideryarn"."chat_threads"."origin_quote" is not null and "spideryarn"."chat_threads"."origin_item_id" is null));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_origin_chat_only" CHECK ("spideryarn"."chat_threads"."origin_mode" is null or "spideryarn"."chat_threads"."kind" = 'chat');

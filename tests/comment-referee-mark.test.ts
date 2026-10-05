@@ -138,7 +138,7 @@ async function call(method: string, url: string, body?: unknown): Promise<Reply>
 /** A criterion of another kind, which has no scale for a placement to sit on. */
 async function aScalelessCriterion(): Promise<string> {
   const { row } = await asTestOwner(() =>
-    refereeCriteriaStore.begin(SLUG, "Does this cite the relevant prior work?", {
+    refereeCriteriaStore.begin(SLUG, "feedfacefeedface", "Does this cite the relevant prior work?", {
       kind: "literature",
     }),
   );
@@ -148,7 +148,7 @@ async function aScalelessCriterion(): Promise<string> {
 /** A `diverging` criterion on this article, so a placement has something to be on. */
 async function aCriterion(): Promise<string> {
   const { row } = await asTestOwner(() =>
-    refereeCriteriaStore.begin(SLUG, "Are the controls adequate?", {
+    refereeCriteriaStore.begin(SLUG, "feedfacefeedface", "Are the controls adequate?", {
       kind: "diverging",
       poles: { against: "the controls are inadequate", favour: "the controls are adequate" },
       scale: "rg",
@@ -298,7 +298,7 @@ describe("what the route refuses, and it refuses rather than rounds", () => {
        two ways to be wrong in a file whose whole value is that a reader can
        tell what it proves.) */
     const { row: other } = await asTestOwner(() =>
-      refereeCriteriaStore.begin(ELSEWHERE, "someone else's question", { kind: "single" }),
+      refereeCriteriaStore.begin(ELSEWHERE, "feedfacefeedface", "someone else's question", { kind: "single" }),
     );
     await refused({ criterionId: other.id, valence: -50 }, /not one of your criteria/);
   });

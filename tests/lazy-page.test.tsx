@@ -45,7 +45,11 @@ vi.mock("../src/web/log-buffer.js", async (importOriginal) => ({
    off a build — so the cases above the new `describe` are exactly as they were. */
 const reloadIfStale = vi.fn(async () => false);
 const reloadPage = vi.fn();
-vi.mock("../src/web/stale-shell.js", () => ({ reloadIfStale, reloadPage }));
+vi.mock("../src/web/stale-shell.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/stale-shell.js")>()),
+  reloadIfStale,
+  reloadPage,
+}));
 
 import type { PageLoader } from "../src/web/LazyPage.js";
 

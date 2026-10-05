@@ -768,6 +768,44 @@ describe("the public article payload", () => {
     expect(JSON.stringify(out)).not.toContain("whoAsked");
   });
 
+  /**
+   * **A stored node with no `children` key is a leaf, and a visitor still gets
+   * the article.** The tree is JSON out of the database and its type is a claim,
+   * not a check; spreading a list that is not there throws, and the public
+   * route turns that into a 500. The node goes out with `children: []`, which
+   * is the shape the client's own mend gives it (src/web/tree.ts §
+   * `withChildLists`). Review finding C-4 on plan 261005h.
+   */
+  it.each([
+    ["the root", "n0"],
+    ["an inner node", "n1"],
+  ] as const)("sends %s with an empty children list when the stored node has none", (_which, id) => {
+    const { children: _dropped, ...listless } = TREE.nodes[id]!;
+    const stored: Tree = { ...TREE, nodes: { ...TREE.nodes, [id]: listless as TreeNode } };
+    const out = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [BLOCK],
+      tree: stored,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(out.tree.nodes[id]!.children).toEqual([]);
+    /* And the node beside it is untouched. */
+    const other = id === "n0" ? "n1" : "n0";
+    expect(out.tree.nodes[other]!.children).toEqual(TREE.nodes[other]!.children);
+  });
+
   /** `null` from Postgres becomes an absent key, not `undefined`. */
   it("leaves an absent field absent rather than null", () => {
     const bare = publicArticle({
@@ -1314,6 +1352,9 @@ describe("the artefacts a shared link carries", () => {
           moreAuthors: 3,
           year: 2004,
           venue: "Journal of Works",
+          /* Crossref's count and the day it was read (plan 261005i): public
+             data about a public DOI, rebuilt field by field like the rest. */
+          citedBy: { count: 357, readAt: "2026-10-04T12:00:00.000Z", extra: "cited-by extra must not cross" },
           ownerOnlySentinel: "citation registry extra must not cross",
         } as CitationRegistry & { ownerOnlySentinel: string },
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
@@ -1409,6 +1450,17 @@ describe("the artefacts a shared link carries", () => {
         citedInBody: false,
         url: "http://192.168.0.1/paper",
         linkFrom: "article",
+        /* A well-formed count on a DataCite record: nothing we write, but a
+           stored row is not revalidated, and the panel would label it
+           Crossref's (plan 261005i, GPT Sol's F2). The record crosses; the
+           count does not. */
+        registry: {
+          kind: "found",
+          source: "datacite",
+          title: "A work on a private host",
+          authors: [],
+          citedBy: { count: 424242, readAt: "2026-10-04T12:00:00.000Z" },
+        },
       },
       {
         /* A `web` link is the owner's own *Find it*: dropped unjudged. */
@@ -2123,6 +2175,9 @@ describe("the artefacts a shared link carries", () => {
         "citations[].registry.authors",
         "citations[].registry.authors[].family",
         "citations[].registry.authors[].given",
+        "citations[].registry.citedBy",
+        "citations[].registry.citedBy.count",
+        "citations[].registry.citedBy.readAt",
         "citations[].registry.kind",
         "citations[].registry.moreAuthors",
         "citations[].registry.source",
@@ -2144,6 +2199,13 @@ describe("the artefacts a shared link carries", () => {
     expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
     expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
     expect(json).not.toContain("conflict");
+    /* Crossref's count crosses with its day and nothing else; a DataCite record keeps its metadata and loses a count. */
+    expect(built.citations?.citations[0]?.registry?.citedBy).toEqual({ count: 357, readAt: "2026-10-04T12:00:00.000Z" });
+    expect(json).not.toContain("cited-by extra must not cross");
+    const datacite = built.citations?.citations.find((w) => w.id === "w-private")?.registry;
+    expect(datacite).toMatchObject({ kind: "found", source: "datacite", title: "A work on a private host" });
+    expect(datacite).not.toHaveProperty("citedBy");
+    expect(json).not.toContain("424242");
     expect(built.citations?.capped).toBe(true);
   });
 

@@ -151,6 +151,26 @@ describe("the profile page's sections", () => {
       expect(el.getAttribute("title")).not.toContain("undefined");
     }
   });
+
+  /* The `?? m.provider` fallback already shows a provider or a wire this copy
+     has no label for. What gets past it is a name every object inherits:
+     `PROVIDER_LABEL["__proto__"]` is an object, not `undefined`.
+     docs/plans/261005h, Stage A. */
+  it.each(["a-newer-value", "__proto__", "constructor", "toString"])(
+    "shows provider and wire %s as the server sent them",
+    async (value) => {
+      posed.models = [
+        { task: "glossary", model: "claude-sonnet-5", id: "anthropic/claude-sonnet-5", provider: value, wire: value, source: "default" },
+      ];
+      await paint();
+      act(() => toggle("What's running")?.click());
+      const here = section("What's running");
+      expect(here.textContent).toContain(`claude-sonnet-5 · ${value} (${value})`);
+      expect(here.querySelector("[title]")?.getAttribute("title")).toBe(
+        `anthropic/claude-sonnet-5 · via ${value} · ${value} API`,
+      );
+    },
+  );
 });
 
 /* Greg, 2026-10-03, asked whether Profile gets Metadata's contents list too:

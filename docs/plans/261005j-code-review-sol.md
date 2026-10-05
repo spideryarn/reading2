@@ -1,26 +1,25 @@
-Fixed the scoped findings. Changes remain uncommitted; no production, deletion-script, or deployment commands were run.
+No P0 or P1 findings.
 
-Findings, ranked; links point to the corrected locations:
+- **P2 — [annotations.css:418](/tmp/spideryarn-worktrees/dark-quote-prose-colour/src/web/styles/annotations.css:418): some low-confidence search outlines lose contrast.** Bluish green at `--hit-a: 0.45` falls from **2.550→2.504**; at zero confidence, **1.647→1.529**. Opaque bands improve for all 16 colours. **Left for your decision:** accepting this loss or changing the confidence outline is a product trade-off. I documented it and kept the palette as built.
+- **P2 — [quote-fill.test.ts:238](/tmp/spideryarn-worktrees/dark-quote-prose-colour/tests/quote-fill.test.ts:238): preservation checks were incomplete.** **Fixed:** pinned the original dark spine triplet and extended search coverage from eight to sixteen colours.
+- **P3 — [quote-fill.test.ts:348](/tmp/spideryarn-worktrees/dark-quote-prose-colour/tests/quote-fill.test.ts:348): “no worse” was inaccurate.** The cross-reference rule falls **2.5635→2.5562**, hidden by rounding. **Fixed:** renamed the check as minimum floors, tightened its floor to 2.55, and corrected the docs.
+- **P3 — [plan:32](/tmp/spideryarn-worktrees/dark-quote-prose-colour/docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md:32): incorrect and incomplete numerical claims.** **Fixed:** ink is **8.90→9.56**, rather than 9.29→9.99. Chroma increases about 1.7 times. Tier luminance contrast, the page-coloured gap, and contrast beside reader washes also decline; their OKLab distances improve. All table rows were independently recomputed.
+- **P3 — [feedback note:73](/tmp/spideryarn-worktrees/dark-quote-prose-colour/docs/user-feedback/261005_0715-quote-fill-stronger-in-the-dark-appearance.md:73): unfinished or misleading status text.** **Fixed:** removed the placeholder and the claim that this uncommitted work was on `dev`.
 
-- **P1 — deletion escaped the proven set.** [draft-sweep-backlog.ts:238](/home/greg/code/spideryarn2/.claude/worktrees/draft-sweep-delete/scripts/draft-sweep-backlog.ts:238) accepted article IDs and selected revisions afresh. It now deletes only exact surveyed IDs.
-- **P1 — lineage proof covered the whole survey, rather than the actual batch.** [draft-sweep-backlog.ts:269](/home/greg/code/spideryarn2/.claude/worktrees/draft-sweep-delete/scripts/draft-sweep-backlog.ts:269) could delete a base while its surveyed child survived a skipped lock or awaited another batch. Each locked, eligible batch now receives an independent proof before deletion.
-- **P1 — shell targeting remained possible.** [draft-sweep-backlog.ts:286](/home/greg/code/spideryarn2/.claude/worktrees/draft-sweep-delete/scripts/draft-sweep-backlog.ts:286) could inherit `DATABASE_URL` when `.env.local` was missing or pinned. It now reads the named file directly and prints its provenance.
-- **P2 — the read-only test missed the survey.** [draft-sweep-on-step-start.test.ts:633](/home/greg/code/spideryarn2/.claude/worktrees/draft-sweep-delete/tests/draft-sweep-on-step-start.test.ts:633) tested a separate transaction. It now injects a write into the survey’s actual transaction and requires PostgreSQL’s read-only rejection.
-- **P3 — stale documentation.** Corrected the remaining “only counts” signpost and claims that production deletion and backlog clearance had already happened.
+Token routing is correct everywhere checked. The new token exists in both theme blocks wherever annotations load. Quotes rows, hover-card scores and ScoreBars require no colour migration. Light values remain unchanged; absent `data-theme` remains the existing dark default, and System resolves through the unchanged appearance code. Greg’s added quotations match the permitted wording. Selection colour remains browser/OS-dependent and unverified.
 
-File-by-file changes:
+The actual colour-test source passed **26 assertion groups** in a lightweight Node harness. Separate mutations turned the changed checks red: restoring lavender, changing token routing, adding another live token use, reducing either base rule opacity, changing light or strip values, substituting incompatible prose colours, raising heavy strength, moving reader-highlight hue, and darkening `--cat-14`. `ruleAlpha` reads the base rules and ignores later variants. The changed block-flash literal also rejects the old token. Details are recorded in the plan.
 
-- `scripts/draft-sweep-backlog.ts`: exact IDs, finite batches, locked batch proofs, direct file targeting, and CLI error/argument redaction.
-- `src/store/pg-revisions.ts`: optional revision allowlist; an empty list selects nothing. Corrected the caller comment.
-- `tests/draft-sweep-on-step-start.test.ts`: added changing-candidate, lineage, allowlist, and independent-count cases; repaired the read-only test.
-- `tests/draft-sweep-backlog-safety.test.ts` **new**: seven database-free tests for transaction settings, targeting, refusal, and bounded attempts.
-- `scripts/draft-sweep-inventory.ts`: corrected deletion-status wording.
-- `docs/project/cron-scheduler.md`: corrected deploy and backlog status.
-- `docs/project/ingest-queue.md`: removed the stale counting claim.
-- [Postmortem](/home/greg/code/spideryarn2/.claude/worktrees/draft-sweep-delete/docs/postmortems/261005i-a-proven-list-does-not-prove-a-fresh-query.md): recorded the proof/action mismatch and its cause.
+**Vitest is unverified:** the locked mutation attempt exited 1 without output. Direct checks remained queued and were cancelled. No `REFUSING TO START` appeared. Whitespace checking passed. No full suite, browser, build, typecheck, commit or mutating git command ran.
 
-Found no defect in the sweep’s published, current, job-owned, or six-hour protections, including concurrent publish/claim locking. Mode removal preserved the other paths. The independent proof’s counts are correct for the supplied set; `EXISTS` counts each base once. Transactions hold no locks across articles and use no `SET`, session-dependent state, or named prepared statements. No wider finding needs action.
+Permanent edits:
 
-Verification: **23 unit/doc-link tests passed**, typechecking passed via `node --import tsx scripts/typecheck.ts`, touched-file lint passed, and three mutations failed as intended: writable survey, shell targeting, and bypassed batch proof. The focused PostgreSQL suite and `npm test` were blocked before execution by sandbox `EPERM` on local Postgres/Docker; database regressions remain unverified.
+- `styles/tokens.css`
+- `tests/quote-fill.test.ts`
+- `docs/project/quotes.md`
+- `docs/user-feedback/261005_0715-quote-fill-stronger-in-the-dark-appearance.md`
+- `docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md`
 
-**Verdict: not yet — run the PostgreSQL regression suite successfully before production deletion.**
+Temporary mutations to `annotations.css` and `spine.css` were restored. Only scratch scripts/results under `/tmp/dark-quote-*` were written outside the listed repository files.
+
+VERDICT: do not ship

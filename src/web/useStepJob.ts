@@ -92,7 +92,10 @@ interface StepRun<S extends StepName> {
    * or blanket force. **Every step this hook is used for is in
    * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts), and it is not a coincidence — a
    * step a surface offers a button for is a step that knows whether it is
-   * current.
+   * current. (**One exception since 2026-10-05**: `structure`, from
+   * StructureNotice.tsx. It has no freshness check at all, so naming it is
+   * what makes a one-step job run, and nothing follows it in that job for the
+   * cascade to sweep in.)
    *
    * The concrete callers now cover all thirteen members of that set. Metadata's
    * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate subset:
