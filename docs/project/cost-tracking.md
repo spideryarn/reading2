@@ -127,20 +127,20 @@ uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
 
 ## What the ledger is known to get wrong
 
-Audited 2026-10-05 against OpenRouter's own records
-([261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md)). What it
-records, it records exactly: 49 of 49 sampled production rows matched to the nano-dollar. Three
-things it does not:
+The 2026-10-05 audit against OpenRouter's own records found three limits. Open it for the measured
+scope, counts and amounts
+([261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md)):
 
 - **Dictation's transcription calls are recorded with no money.** The provider's reply says the
   call cost nothing, and the gateway refuses to record that as free.
-- **A call that was stopped or that failed is recorded with no money**, though it was usually
+- **Some calls that were stopped or failed are recorded with no money**, though they were usually
   charged. A stopped chat answer is the common case.
 - **The scan for calls that go round the gateway is a tripwire, not a wall.** It knows four
   provider hosts; a provider it has never heard of passes it.
 
-`npm run cost:analyse -- --lookup-unpriced` asks OpenRouter what the first two really cost and
-prints the shortfall ($2.11 of $90.80 on the day of the audit). Each fix has a queue entry.
+`npm run cost:analyse -- --lookup-unpriced` asks OpenRouter about a bounded set of those calls when
+they carry a generation id, and prints the resulting known shortfall as a floor. Each fix has a
+queue entry.
 
 ## Spend that keeps going
 

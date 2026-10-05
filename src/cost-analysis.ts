@@ -263,10 +263,11 @@ export interface CostAnalysisInput {
 
 /** The cube and the detail rows do not describe the same ledger. */
 export class CostReadsDisagree extends Error {
-  constructor(what: string, cube: number, detail: number) {
+  constructor(what: string, cube: number, detail: number, message?: string) {
     super(
-      `the two reads of the ledger disagree on ${what}: the cube says ${cube}, the detail rows say ${detail}. ` +
-        "No report was built. A call written between the two reads would do this; run it again.",
+      message ??
+        (`the two reads of the ledger disagree on ${what}: the cube says ${cube}, the detail rows say ${detail}. ` +
+          "No report was built. A call written between the two reads would do this; run it again."),
     );
     this.name = "CostReadsDisagree";
   }
@@ -305,6 +306,115 @@ export function assertReadsAgree(
   ];
   for (const [what, fromCube, fromDetail] of checks) {
     if (fromCube !== fromDetail) throw new CostReadsDisagree(what, fromCube, fromDetail);
+  }
+
+  /* Grand totals are necessary but not sufficient: losing one task and adding
+     another call for the same money would otherwise pass, then let the cube's
+     rankings and the detail-derived leads describe different populations.
+     SQL may emit two rows that become identical after another owner's slug is
+     masked, so merge equal public keys on both sides before comparing. */
+  interface AgreementTotals {
+    calls: number;
+    creditsNanos: number;
+    byokNanos: number;
+    computedNanos: number;
+    unpricedCalls: number;
+  }
+  const keyOf = (row: {
+    day: string;
+    ownerId: string;
+    articleId: string | null;
+    articleSlug: string | null;
+    recordedSlugHash: string | null;
+    scopeKind: string;
+    job: string;
+    stepName: string | null;
+    wire: string;
+    requestedModel: string;
+    answeredModel: string | null;
+    upstream: string | null;
+    providerAccount: string;
+    costSource: string;
+    isByok: boolean | null;
+    outcome: string;
+  }): string =>
+    JSON.stringify([
+      row.day,
+      row.ownerId,
+      row.articleId,
+      row.articleSlug,
+      row.recordedSlugHash,
+      row.scopeKind,
+      row.job,
+      row.stepName,
+      row.wire,
+      row.requestedModel,
+      row.answeredModel,
+      row.upstream,
+      row.providerAccount,
+      row.costSource,
+      row.isByok,
+      row.outcome,
+    ]);
+  const addAgreement = (
+    groups: Map<string, AgreementTotals>,
+    key: string,
+    values: AgreementTotals,
+  ): void => {
+    const seen = groups.get(key) ?? {
+      calls: 0,
+      creditsNanos: 0,
+      byokNanos: 0,
+      computedNanos: 0,
+      unpricedCalls: 0,
+    };
+    seen.calls += values.calls;
+    seen.creditsNanos += values.creditsNanos;
+    seen.byokNanos += values.byokNanos;
+    seen.computedNanos += values.computedNanos;
+    seen.unpricedCalls += values.unpricedCalls;
+    groups.set(key, seen);
+  };
+  const cubeGroups = new Map<string, AgreementTotals>();
+  for (const row of cube) {
+    addAgreement(cubeGroups, keyOf(row), {
+      calls: row.calls,
+      creditsNanos: row.creditsNanos,
+      byokNanos: row.byokNanos,
+      computedNanos: row.computedNanos,
+      unpricedCalls: row.unpricedCalls,
+    });
+  }
+  const detailGroups = new Map<string, AgreementTotals>();
+  for (const row of detail) {
+    addAgreement(detailGroups, keyOf({ ...row, day: row.startedAt.slice(0, 10) }), {
+      calls: 1,
+      creditsNanos: row.creditsUsedNanos ?? 0,
+      byokNanos: row.byokUpstreamNanos ?? 0,
+      computedNanos: row.computedCostNanos ?? 0,
+      unpricedCalls: detailIsUnpriced(row) ? 1 : 0,
+    });
+  }
+  let cubeDifferent = 0;
+  let detailDifferent = 0;
+  let differentGroups = 0;
+  const groupKeys = new Set([...cubeGroups.keys(), ...detailGroups.keys()]);
+  for (const key of groupKeys) {
+    const fromCube = cubeGroups.get(key);
+    const fromDetail = detailGroups.get(key);
+    if (JSON.stringify(fromCube) === JSON.stringify(fromDetail)) continue;
+    differentGroups++;
+    if (fromCube) cubeDifferent++;
+    if (fromDetail) detailDifferent++;
+  }
+  if (cubeDifferent > 0 || detailDifferent > 0) {
+    throw new CostReadsDisagree(
+      "the grouped population",
+      cubeDifferent,
+      detailDifferent,
+      `the two reads of the ledger disagree on the grouped population: ${groupKeys.size} bucket(s) were compared and ${differentGroups} differed. ` +
+        "No report was built.",
+    );
   }
 }
 

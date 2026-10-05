@@ -22,7 +22,9 @@ import {
   parseCostAnalysisArgs,
   readSnapshot,
   summaryLines,
+  unpricedLookupOfGeneration,
 } from "../scripts/cost-analysis.js";
+import { type GenerationLookup, lookupGeneration } from "../scripts/openrouter-generation.js";
 import { analyseCosts } from "../src/cost-analysis.js";
 
 const NOW = new Date("2026-10-05T02:15:09.123Z");
@@ -248,6 +250,53 @@ describe("who the users are", () => {
     expect(failed.emails.size).toBe(0);
     expect(failed.note).toMatch(/shown as ids/);
     expect(failed.note).not.toContain("secret-detail");
+  });
+});
+
+describe("an unpriced generation lookup", () => {
+  const found = (over: Partial<Extract<GenerationLookup, { kind: "found" }>>): GenerationLookup => ({
+    kind: "found",
+    totalCostNanos: null,
+    upstreamCostNanos: null,
+    isByok: null,
+    promptTokens: null,
+    completionTokens: null,
+    cachedTokens: null,
+    record: {},
+    ...over,
+  });
+
+  it("accepts only the money pocket the provider identifies", () => {
+    expect(unpricedLookupOfGeneration(found({ isByok: false, totalCostNanos: 23 }))).toEqual({
+      kind: "found",
+      creditsNanos: 23,
+      upstreamNanos: 0,
+    });
+    expect(unpricedLookupOfGeneration(found({ isByok: true, totalCostNanos: 0, upstreamCostNanos: 45 }))).toEqual({
+      kind: "found",
+      creditsNanos: 0,
+      upstreamNanos: 45,
+    });
+  });
+
+  it("never turns a missing or ambiguous cost into a known zero", () => {
+    expect(unpricedLookupOfGeneration(found({ isByok: false }))).toEqual({ kind: "failed" });
+    expect(unpricedLookupOfGeneration(found({ isByok: true }))).toEqual({ kind: "failed" });
+    expect(unpricedLookupOfGeneration(found({ isByok: true, upstreamCostNanos: 45 }))).toEqual({
+      kind: "failed",
+    });
+    expect(unpricedLookupOfGeneration(found({ totalCostNanos: 0, upstreamCostNanos: 0 }))).toEqual({
+      kind: "failed",
+    });
+    expect(unpricedLookupOfGeneration({ kind: "failed", status: 503 })).toEqual({ kind: "failed" });
+  });
+
+  it("treats a successful HTTP response without a generation record as a failed lookup", async () => {
+    const answer = await lookupGeneration("gen-1", "secret", {
+      attempts: 1,
+      fetch: async () => new Response("{}", { status: 200 }),
+    });
+    expect(answer).toEqual({ kind: "failed", status: 200 });
   });
 });
 

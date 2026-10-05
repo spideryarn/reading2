@@ -1,13 +1,13 @@
 /**
  * The pure half of `/admin/costs` that is about *showing* the cube: the
- * periods, the product-scope switch, the money formatter, the "Other" fold and
+ * periods, the product-scope switch, the "Other" fold and
  * the per-day series. No React, no nuqs, no browser — the analysis script
  * (plan 261005a stage 3) imports this beside [cost-charts.tsx](cost-charts.tsx).
  *
  * The arithmetic itself is [src/cost-cube.ts](../cost-cube.ts); nothing here
  * re-derives a figure that module already defines.
  */
-import { formatSpendNanos } from "../admin.js";
+import { formatCostNanos } from "../admin.js";
 import {
   type CostCubeRow,
   type CubeGroup,
@@ -17,6 +17,8 @@ import {
   groupRows,
   pivotRows,
 } from "../cost-cube.js";
+
+export { formatCostNanos };
 
 /* ------------------------------------------------------- the dimensions -- */
 
@@ -162,29 +164,6 @@ export function daysInWindow(
 
 /* ------------------------------------------------------------ the money -- */
 
-/** One ten-thousandth of a dollar: the smallest figure drawn as itself. */
-const SMALLEST_DRAWN_NANOS = 100_000;
-
-/**
- * **The page's one money formatter**: two decimals from a dollar up, up to
- * four below, and `<$0.0001` for a real cost smaller than that — never a
- * free-looking zero.
- *
- * Built on `formatSpendNanos` rather than writing a currency sign of its own:
- * src/admin.ts is the one module tests/no-ai-cost-for-readers.test.ts allows
- * to. The honest home for this function is beside it.
- */
-export function formatCostNanos(nanos: number): string {
-  if (nanos > 0 && nanos < SMALLEST_DRAWN_NANOS) return `<${formatSpendNanos(SMALLEST_DRAWN_NANOS)}`;
-  /* 0.99995 and up would print as 1.0000 at four decimals. */
-  if (nanos === 0 || nanos >= 999_950_000) {
-    const cents = Math.round(nanos / 1e7);
-    return formatSpendNanos(cents * 1e7).slice(0, -2);
-  }
-  /* Four decimals, less any trailing zeros past the cents. */
-  return formatSpendNanos(nanos).replace(/(\.\d{2}\d*?)0+$/, (_all, kept: string) => kept);
-}
-
 /** A group's recorded amount, or an em dash when no call in it was priced. */
 export function amountText(totals: { recordedNanos: number; pricedCalls: number }): string {
   return totals.pricedCalls > 0 ? formatCostNanos(totals.recordedNanos) : "—";
@@ -219,7 +198,7 @@ const SHADE_MAX = 0.45;
  * multi-hue ramp at low alpha reads as categories rather than as more.
  */
 export function shadeAlpha(nanos: number, largest: number): number | null {
-  if (nanos <= 0 || largest <= 0) return null;
+  if (!Number.isFinite(nanos) || !Number.isFinite(largest) || nanos <= 0 || largest <= 0) return null;
   const step = Math.round(Math.min(1, nanos / largest) * (SHADE_STEPS - 1));
   const alpha = SHADE_MIN + (step / (SHADE_STEPS - 1)) * (SHADE_MAX - SHADE_MIN);
   return Math.round(alpha * 1000) / 1000;

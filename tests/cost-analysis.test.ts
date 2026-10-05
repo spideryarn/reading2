@@ -237,6 +237,34 @@ describe("the two reads", () => {
   it("accepts two reads that agree", () => {
     expect(analyse(detail).totals.calls).toBe(2);
   });
+
+  const groupingChanges = [
+    ["UTC day", { startedAt: "2031-03-11T10:00:00.000Z" }],
+    ["owner", { ownerId: THEM }],
+    ["article id", { articleId: "c057a11c-0000-4000-8000-000000000099" }],
+    ["visible slug", { articleSlug: "a-different-own-article" }],
+    ["masked slug hash", { articleSlug: null, recordedSlugHash: "e".repeat(64) }],
+    ["scope", { scopeKind: "request" }],
+    ["job", { job: "chat" }],
+    ["step", { stepName: "a-different-step" }],
+    ["wire", { wire: "chat" }],
+    ["requested model", { requestedModel: "openai/gpt-6-luna" }],
+    ["answered model", { answeredModel: "openai/gpt-6-luna" }],
+    ["upstream", { upstream: "OpenAI" }],
+    ["provider account", { providerAccount: "openai" }],
+    ["cost source", { costSource: "other" }],
+    ["BYOK status", { isByok: null }],
+    ["outcome", { outcome: "error" }],
+  ] satisfies [string, Partial<SpendDetailRow>][];
+
+  it.each(groupingChanges)(
+    "rejects a different %s population even when the grand totals agree",
+    (_name, changed) => {
+      const cube = cubeOf(detail);
+      const different = detail.map((row, index) => (index === 0 ? { ...row, ...changed } : row));
+      expect(() => analyse(different, { cube })).toThrow(/grouped population/);
+    },
+  );
 });
 
 describe("the scope", () => {

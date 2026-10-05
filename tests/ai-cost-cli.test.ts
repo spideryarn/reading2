@@ -15,6 +15,7 @@ import {
   by,
   duplicateJobSteps,
   marginPeriod,
+  ownerReconciliationDetails,
   parseArgs,
   printMargin,
   reconcileGapLine,
@@ -575,5 +576,21 @@ describe("--reconcile's gap", () => {
     expect(RECONCILE_CAVEAT).toMatch(/another machine or database/);
     expect(RECONCILE_CAVEAT).toMatch(/reported no money/);
     expect(RECONCILE_CAVEAT).not.toMatch(/before the ledger|baseline/);
+  });
+
+  it("uses that same caveat and percentage in the per-owner report", () => {
+    const lines = ownerReconciliationDetails({
+      fingerprint: "abc123",
+      month: "2026-10",
+      ourCreditsNanos: 206_206_000_000,
+      ourCalls: 7968,
+      theirCredits: 283.715006,
+      otherCalls: 7,
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("27.3% of their figure");
+    expect(text).toContain("Both figures are this month's");
+    expect(text).toContain("7 call(s) this month were paid on another key");
+    expect(text).not.toMatch(/before the ledger|stored baseline|Watch whether/);
   });
 });

@@ -15,24 +15,27 @@ Plan: [261005a](../plans/261005a-admin-costs-page-cost-analysis-report-and-a-cos
 
 The **ledger** is the table `spideryarn.ai_calls`, one row per model call. Every number below says
 which database it came from. "Production" means the production database, read on 2026-10-05 inside
-a read-only transaction that was rolled back. Nothing was written anywhere.
+a read-only transaction that was rolled back. Nothing was written to that database.
 
 ## The verdict
 
-- **What the ledger records, it records correctly.** 49 of 49 comparable production rows matched
-  OpenRouter's own figure to the nano-dollar, tokens included, and all 59 rows we price ourselves
-  recompute exactly.
+- **Every comparable row sampled agreed.** 49 of 49 sampled production rows with usable
+  OpenRouter records matched its money figure to the nano-dollar; the token comparisons described
+  in check 1 agreed too. All 59 rows we price ourselves recomputed exactly. This is evidence about
+  those populations, not proof that every recorded row is right.
 - **It is short by a known $2.11 (2.3% of $90.80), in two places.** Dictation's transcription calls
-  are never priced (264 rows, really $0.79), and calls that were stopped or failed are recorded
-  with no money although OpenRouter charged for them (17 rows, really $1.32).
-- **$5.91 of it (51 web-search rows) could not be checked**: OpenRouter's record for the id we
-  stored is empty. The ledger's figure may well be right; nothing here proves it.
-- **Two owners is true to life.** Every independent trace of paid work in production (jobs, step
-  runs, chat messages, searches, voice sessions) belongs to the same two accounts.
-- **Completeness cannot be proven from here.** The one check that could (the production key's
-  month against the production ledger) cannot be run from this box, and calls that wrote no row
-  leave only a log line that is kept for about a day. New work is guarded by a tripwire that
-  catches the obvious route round the gateway and passed eight of the ten others tried.
+  are never priced (264 rows, really $0.79). The generation lookup found another $1.32 across the
+  17 stopped or failed rows; one was free and one had no OpenRouter record.
+- **$5.91 of it (51 web-search rows) could not be checked**: OpenRouter returned zero cost and zero
+  tokens for every stored id. The ledger's figure may well be right; nothing here proves it.
+- **Two ledger owners is consistent with every paid-work trace this audit could query.** Jobs, step
+  runs, chat messages, searches and voice sessions belong to the same two accounts. This does not
+  establish that a signed-out call never reached a model; check 2 names that limit.
+- **Completeness cannot be proven from here.** The strongest missing cross-check (the production
+  key's month against the production ledger) cannot be run from this box, and would not by itself
+  prove completeness; calls that wrote no row leave only a log line that is kept for about a day.
+  New work is guarded by a tripwire that catches the obvious route round the gateway and let eight
+  of the ten evasions tried pass.
 
 ## What cannot be proven, said once
 
@@ -290,16 +293,18 @@ run `npm run test:paid` after touching the gateway.
    a stopped chat answer is the commonest, and adds 19% to chat's recorded $5.00. *Smallest
    addition:* have the cost analysis ask the generation endpoint about unpriced rows and print the
    shortfall. Writing it back to the row is a larger decision, since rows are never amended.
-3. **Production has never been reconciled, and cannot be from the box.** *Established* (the
-   fingerprints differ). *Smallest addition:* the admin costs endpoint, which runs where the
-   production key and database both are, calls `GET /api/v1/key` and shows the month's gap for its
-   own fingerprint.
-4. **The reconcile report's caveat is out of date.** *Established.* It says the gap "holds
-   everything spent on this key before the ledger existed"; it compares a month with a month. The
-   sentence teaches the reader to ignore a $77 gap. *Fix:* reword it, and print the gap as a share.
+3. **This audit did not reconcile production, and could not do it from the box's configured key.**
+   *Established* that the key fingerprints differ; that does not establish whether somebody made a
+   matching reconciliation before this audit. *Smallest addition:* the admin costs endpoint, which
+   runs where the production key and database both are, calls `GET /api/v1/key` and shows the month's
+   gap for its own fingerprint.
+4. **The reconcile report's caveat was out of date.** *Established.* It said the gap "holds
+   everything spent on this key before the ledger existed" while comparing a month with a month.
+   *Fixed in this work:* both report forms now describe same-month sources of missing rows and print
+   the gap as a share.
 5. **51 web-search rows ($5.91, 6.5% of the ledger) cannot be checked.** *Established* that
-   OpenRouter's record for the stored id is empty on all 51; *reasoned* that the response header's
-   id names a wrapper and the charge sits under another id. *Smallest addition:* one paid
+   OpenRouter's record for the stored id reports zero cost and zero tokens on all 51; *reasoned*
+   that the response header's id names a wrapper and the charge sits under another id. *Smallest addition:* one paid
    web-search probe (a few cents) that records every id the response carries and looks each up.
 6. **An allow-listed file can grow a raw provider call unseen.** *Established* by the scratch run.
    *Smallest addition:* move the "presence check only" files from `ALLOWED` to the narrower
@@ -320,8 +325,9 @@ run `npm run test:paid` after touching the gateway.
     addition:* a test that fails when the date is older than a chosen number of days.
 12. **`/api/command-pick` attributes nothing to the article it was typed in.** *Reasoned*; no
     production rows yet. A decision rather than a fix.
-13. **A controlled balance check on a quiet key** is the only thing that would prove completeness.
-    Deferred, with a queue entry.
+13. **A controlled balance check on a quiet key** would be the strongest independent check of
+    OpenRouter-credit completeness, though equal and opposite errors or spend outside that account
+    mean it would not prove completeness on its own. Deferred, with a queue entry.
 
 One thing that is not a tracking defect but came out of the same queries: 51 of 394 article-steps
 in production were bought more than once, and those 51 hold $23.27. That is a lead for the cost

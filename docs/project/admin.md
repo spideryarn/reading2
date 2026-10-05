@@ -1,9 +1,9 @@
 # The admin page
 
-**`/admin`, with `/admin/users` and `/admin/feedback` under it.** One person can see them. The
-first shows who has signed up and how much each of them has read — counts and dates. The second
-shows the bug reports readers filed with the Feedback button, in their own words. Two more arrived
-later: `/admin/vouchers` (below) and `/admin/costs`, which has a doc of its own —
+**`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
+and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
+with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
+`/admin/costs`, which has a doc of its own —
 [admin-costs.md](admin-costs.md).
 
 Greg, 2026-08-27:
@@ -132,11 +132,11 @@ own address arrives on an id we do not know — which is either Greg on a new ac
 who has taken his address, and both are things to find out immediately. Fixed prose, nothing
 interpolated: a message is the one field redaction cannot reach ([logging.md](logging.md)).
 
-[`src/admin.ts`](../../src/admin.ts) is one constant, one three-line function and one log sentence,
-with no imports at all — so the browser and the server ask the *same* function rather than two
-spellings of one idea. It is on the shared-module allowlist in `tests/client-imports.test.ts`
-because it qualifies, not because it was convenient. The id is not a secret: it travels in every
-JWT that account holds, and it identifies rather than authorises.
+[`src/admin.ts`](../../src/admin.ts) is the import-free boundary shared by the browser and server:
+the administrator's ids and check, the miss explanation, and the administrator-only response shapes
+and money formatters. It is on the shared-module allowlist in `tests/client-imports.test.ts` because
+it qualifies, not because it was convenient. The id is not a secret: it travels in every JWT that
+account holds, and it identifies rather than authorises.
 
 ### One account per Supabase project, which is why it is a list
 
@@ -233,10 +233,11 @@ still a fact about the account rather than about their reading: what their model
 a stated month, with no article, model or job named. See
 [The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
 
-**`/admin/costs` goes further, because Greg asked it to (2026-10-04).** It shows spend per article,
-mode and model for every account: which of an account's articles the money went on, and on what.
-It still does not say what any other reader's article is called — theirs are opaque ids, and no
-other owner's slug leaves the database. [admin-costs.md](admin-costs.md#what-the-administrator-sees-of-other-peoples-articles).
+**`/admin/costs` goes further, because Greg asked it to (2026-10-04).** For each account with a
+ledger row in the selected period, it shows which article the money went on and the mode or task
+and model behind it. It still does not say what any other reader's article is called — theirs are
+opaque ids, and no other owner's slug leaves the database.
+[admin-costs.md](admin-costs.md#what-the-administrator-sees-of-other-peoples-articles).
 
 **The plan is the same kind of thing**, added 2026-09-03: which tier the account is entitled to, the
 raw Stripe subscription status beside it, and how many ingests of the allowance are gone. A tier id

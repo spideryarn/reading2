@@ -89,7 +89,10 @@ export async function lookupGeneration(
       if (!response.ok) continue;
       const body = (await response.json()) as { data?: GenerationRecord | null };
       const record = body.data;
-      if (!record) return { kind: "no-record" };
+      /* A 404 is the provider's "no record" answer. A nominally successful
+         response without the promised record is a malformed answer: retry it,
+         then report that the lookup failed rather than inventing an answer. */
+      if (!record) continue;
       return {
         kind: "found",
         totalCostNanos: nanos(record.total_cost),

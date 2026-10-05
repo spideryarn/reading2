@@ -50,7 +50,7 @@ import path from "node:path";
 
 import pg from "pg";
 
-import { ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
+import { ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD, formatCostNanos } from "../src/admin.js";
 import {
   type CostAnalysis,
   CostReadsDisagree,
@@ -74,13 +74,16 @@ import {
   spendCube,
   spendDetail,
 } from "../src/store/ai-calls-spend-pg.js";
-import { formatCostNanos } from "../src/web/admin-costs-view.js";
 import { monthRange } from "./ai-cost.js";
 import { resolveBuildStamp } from "./build-stamp.js";
 import { dayChartMarkup } from "./cost-analysis-chart.js";
 import { cellText, renderCostReport, trusted, writePrivateFile } from "./cost-analysis-html.js";
 import { CannotTell, productionClient } from "./feedback-reporter.js";
-import { localOpenRouterKey, lookupGenerations } from "./openrouter-generation.js";
+import {
+  type GenerationLookup,
+  localOpenRouterKey,
+  lookupGenerations,
+} from "./openrouter-generation.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -397,6 +400,31 @@ interface LookupRun {
 }
 
 /**
+ * The money an OpenRouter generation record establishes for an unpriced call.
+ * A missing cost, or a record whose BYOK status does not say which pocket the
+ * figure belongs in, is "could not check" — never a known zero.
+ */
+export function unpricedLookupOfGeneration(answer: GenerationLookup): UnpricedLookup {
+  if (answer.kind === "no-record") return { kind: "no-record" };
+  if (answer.kind === "failed") return { kind: "failed" };
+  if (answer.isByok === false && answer.totalCostNanos !== null) {
+    return { kind: "found", creditsNanos: answer.totalCostNanos, upstreamNanos: 0 };
+  }
+  if (
+    answer.isByok === true &&
+    answer.totalCostNanos !== null &&
+    answer.upstreamCostNanos !== null
+  ) {
+    return {
+      kind: "found",
+      creditsNanos: answer.totalCostNanos,
+      upstreamNanos: answer.upstreamCostNanos,
+    };
+  }
+  return { kind: "failed" };
+}
+
+/**
  * Ask OpenRouter about the unpriced calls in scope that carry a generation
  * id, the most recent first, up to the cap. Prints what was asked and what
  * came back; a lookup that failed stays "could not check".
@@ -424,23 +452,15 @@ async function lookupUnpriced(
   const lookups = new Map<string, UnpricedLookup>();
   const tally = { found: 0, noRecord: 0, failed: 0 };
   for (const [id, answer] of answers) {
-    if (answer.kind === "found") {
+    const lookup = unpricedLookupOfGeneration(answer);
+    if (lookup.kind === "found") {
       tally.found++;
-      lookups.set(id, {
-        kind: "found",
-        creditsNanos: answer.totalCostNanos ?? 0,
-        /* A call their record says was not BYOK has no second bill: the
-           provider was paid out of the credits figure. So an upstream cost is
-           counted as extra money only when the record does not say that. */
-        upstreamNanos: answer.isByok === false ? 0 : (answer.upstreamCostNanos ?? 0),
-      });
-    } else if (answer.kind === "no-record") {
+    } else if (lookup.kind === "no-record") {
       tally.noRecord++;
-      lookups.set(id, { kind: "no-record" });
     } else {
       tally.failed++;
-      lookups.set(id, { kind: "failed" });
     }
+    lookups.set(id, lookup);
   }
   const skipped = askable.length - asking.length;
   return {

@@ -64,11 +64,12 @@ Each of these was a way the first design was wrong
 ## What the administrator sees of other people's articles
 
 Until 2026-10-05 the admin pages showed money per account and never which articles somebody has.
-Greg's request above widened that: spend is now shown per article, mode and model for every
-account. **What an article is called is still not shown.** Another reader's article is an opaque id
-(`article 3f9a2c1e`), and a row whose article is gone is a keyed hash; only the administrator's own
-articles carry a slug. No other owner's slug leaves the database — the masking is in SQL, in
-`spendCube`. The address bar holds ids and hashes, never an email or a slug.
+Greg's request above widened that: spend is now shown per article, mode and model for each account
+with a ledger row in the selected period. **What an article is called is still not shown.** Another
+reader's article is an opaque id (`article 3f9a2c1e`), and a row whose article is gone is a keyed
+hash; only the administrator's own articles carry a slug. No other owner's slug leaves the database:
+SQL removes it and the shared helpers used by `spendCube` and `spendDetail` finish the one-way key.
+The address bar holds ids and hashes, never an email or a slug.
 
 Whether to show slugs, and with them an article's size and kind, is Greg's to decide: [Q-1] in the
 plan.
@@ -91,8 +92,8 @@ agent needs to know:
   breakdown by task and model, every task with its per-call spread and models.
 - **Leads are where to look, not conclusions.** Each says what was measured and what that does not
   show. The cache lead's amount is everything the flagged tasks spent, not a saving.
-- **`--lookup-unpriced`** asks OpenRouter what it recorded for calls the ledger has no money for
-  (free). The difference is the known shortfall —
+- **`--lookup-unpriced`** asks OpenRouter about a bounded set of the most recent unpriced calls that
+  carry a generation id (free). What its usable records establish is the known shortfall —
   [the audit](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md) says why
   there is one.
 - **Your own conclusions go in with `--commentary <file>`**, and appear at the top of the report
@@ -101,10 +102,10 @@ agent needs to know:
   be a prompt that cannot share a prefix
   ([prompt-caching.md](prompt-caching.md)), and a step bought twice may be a reader pressing
   *Find more*.
-- **The report is one file with no script in it**, written with mode `0600` under `logs/cost-reports/`
-  (gitignored). It is not committed when it holds production figures. On the box, Greg copies it
-  down: `scp <box>:<the printed path> . && open <file>`. A production report names users by id:
-  production email addresses are not read from the box.
+- **The report is one file with no script in it**, written with mode `0600`; its default path is
+  under `logs/cost-reports/` (gitignored). It is not committed when it holds production figures. On
+  the box, Greg copies it down: `scp <box>:<the printed path> . && open <file>`. A production report
+  names users by id: production email addresses are not read from the box.
 
 ## Charts and tables: what was chosen
 

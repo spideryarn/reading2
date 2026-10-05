@@ -23,12 +23,12 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { chmodSync, closeSync, mkdirSync, openSync, renameSync, rmSync, writeSync } from "node:fs";
+import { chmodSync, closeSync, mkdirSync, openSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { formatCostNanos } from "../src/admin.js";
 import type { Cell, CostAnalysis, EvidenceTable, Lead, Slice } from "../src/cost-analysis.js";
 import { OPENROUTER_CREDIT_FEE } from "../src/cost-cube.js";
-import { formatCostNanos } from "../src/web/admin-costs-view.js";
 
 /* --------------------------------------------------------------- escaping -- */
 
@@ -562,7 +562,9 @@ export function writePrivateFile(file: string, text: string): string {
   /* `wx`: fail rather than write through a file or a link somebody left there. */
   const fd = openSync(temp, "wx", 0o600);
   try {
-    writeSync(fd, text);
+    /* `writeFileSync` owns the full-write loop. One `writeSync` may legally
+       write only a prefix, which would still be renamed as a complete report. */
+    writeFileSync(fd, text);
   } catch (err) {
     closeSync(fd);
     rmSync(temp, { force: true });

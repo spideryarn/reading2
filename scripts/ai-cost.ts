@@ -415,9 +415,9 @@ function table(title: string, rows: Breakdown[]): void {
  * failure: each of those used to print a line and return success, which is a
  * check that passes when it did not happen.
  *
- * What it still is not: there is **no stored baseline**, so the gap includes
- * everything spent on this key before the ledger existed, and every stage CLI
- * and eval run since. Watch whether the gap *moves*, not whether it is zero.
+ * What it still is not: a proof of where the gap came from. It includes spend
+ * on this key that wrote no row in this database — another machine, a declared
+ * path, or a row that reported no money.
  */
 /**
  * What OpenRouter says about the key in the environment, or `null`.
@@ -526,6 +526,25 @@ export const RECONCILE_CAVEAT =
   "  Both figures are this month's. The gap is spend on this key that wrote no row in\n" +
   "  this database: another machine or database using the same key, the declared paths\n" +
   "  that write no row (listed above), and rows here that reported no money.";
+
+/** The same-month reconciliation block used inside the per-owner report. */
+export function ownerReconciliationDetails(input: {
+  fingerprint: string;
+  month: string;
+  ourCreditsNanos: number;
+  ourCalls: number;
+  theirCredits: number;
+  otherCalls: number;
+}): string[] {
+  const ours = input.ourCreditsNanos / 1e9;
+  return [
+    `key ${input.fingerprint}, ${input.month} (UTC), as of now:`,
+    `ours $${ours.toFixed(6)} in credits over ${input.ourCalls} call(s)`,
+    `theirs $${input.theirCredits.toFixed(6)}   ${reconcileGapLine(input.theirCredits, input.ourCreditsNanos).trim()}`,
+    ...(input.otherCalls > 0 ? [`${input.otherCalls} call(s) this month were paid on another key.`] : []),
+    ...RECONCILE_CAVEAT.split("\n").map((line) => line.trim()),
+  ];
+}
 
 /**
  * One pocket's worth of money, with the three kinds of figure kept apart.
@@ -1397,22 +1416,20 @@ async function reconciliationLine(args: Args): Promise<void> {
   const tallies = await spend.credentialsInWindow(month.since, month.until);
   const mine = tallies.find((t) => t.fingerprint === usage.fingerprint);
   const others = tallies.filter((t) => t.fingerprint !== usage.fingerprint);
-  const ours = (mine?.creditsNanos ?? 0) / 1e9;
   if (usage.credits === null) {
     say("Reconciliation", `key ${usage.fingerprint} — OpenRouter reported no monthly usage figure.`);
     return;
   }
   say(
     "Reconciliation",
-    `key ${usage.fingerprint}, ${month.label} (UTC), as of now:`,
-    `ours $${ours.toFixed(6)} in credits over ${mine?.calls ?? 0} call(s)`,
-    `theirs $${usage.credits.toFixed(6)}   gap $${(usage.credits - ours).toFixed(6)} (theirs minus ours)`,
-    ...(others.length > 0
-      ? [`${others.reduce((n, o) => n + o.calls, 0)} call(s) this month were paid on another key.`]
-      : []),
-    "There is no stored baseline, so the gap also holds everything spent on",
-    "this key before the ledger existed, plus every CLI and eval run since.",
-    "Watch whether the gap MOVES, not whether it is zero.",
+    ...ownerReconciliationDetails({
+      fingerprint: usage.fingerprint,
+      month: month.label,
+      ourCreditsNanos: mine?.creditsNanos ?? 0,
+      ourCalls: mine?.calls ?? 0,
+      theirCredits: usage.credits,
+      otherCalls: others.reduce((n, o) => n + o.calls, 0),
+    }),
   );
 }
 

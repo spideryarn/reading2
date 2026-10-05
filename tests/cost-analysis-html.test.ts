@@ -160,6 +160,7 @@ function input(over: Partial<CostAnalysisInput> = {}): CostAnalysisInput {
 }
 
 const ANALYSIS = analyseCosts(input());
+const REACT_GLOBAL_BEFORE = Object.getOwnPropertyDescriptor(globalThis, "React");
 const chart = await dayChartMarkup(ANALYSIS);
 const REPORT = renderCostReport(ANALYSIS, {
   commentary: `# Findings ${ATTACK}\n\nSpend on **labels** is high. ${IMG}\n\n- try \`--top 3\`\n- [a link](https://example.test/x)`,
@@ -286,6 +287,10 @@ describe("the report: no other owner's slug", () => {
 });
 
 describe("the report: self-contained", () => {
+  it("does not install React on the process global to load the shared chart", () => {
+    expect(Object.getOwnPropertyDescriptor(globalThis, "React")).toEqual(REACT_GLOBAL_BEFORE);
+  });
+
   it("makes no request: no attribute that loads anything, no import, no font", () => {
     /* A URL somebody typed into the commentary is text and stays text; what
        must not exist is an element or a rule that would fetch one. */

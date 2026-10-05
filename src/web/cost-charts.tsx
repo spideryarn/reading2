@@ -1,3 +1,5 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
 /**
  * The charts of `/admin/costs`: a stacked bar per UTC day, its legend, and the
  * inline bar of a ranking row. Hand-written, no chart library — plan 261005a
@@ -9,6 +11,11 @@
  * reading a CSS custom property — no `tw:` class, no hook, no hex. `CHART_TOKENS`
  * is every property read, so the report can define exactly those; a test holds
  * the list to the markup (tests/cost-charts.test.tsx).
+ *
+ * The JSX pragmas make the automatic React runtime explicit for the node-side
+ * report renderer as well as Vite. Without them, `tsx` follows the root node
+ * project's classic default and this shared component would require a mutable
+ * `globalThis.React` shim before it could be imported.
  */
 import type { CSSProperties } from "react";
 

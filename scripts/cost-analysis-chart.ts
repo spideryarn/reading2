@@ -15,10 +15,8 @@
  * tests/cost-analysis-html.test.ts assigns the real module to, in the tests
  * project where both compile, so a changed prop is a type error there.
  *
- * And `tsx` compiles a `.tsx` it meets here with the *classic* JSX transform
- * (the root tsconfig says nothing else), which calls a global `React`. The
- * component file imports only React's types, so that global is set before the
- * import. Under vitest the transform is the automatic one and it goes unused.
+ * The component names the automatic React JSX runtime in its own pragma, so
+ * loading it here does not need to mutate `globalThis`.
  */
 
 import path from "node:path";
@@ -58,7 +56,6 @@ export function daySeriesOf(analysis: CostAnalysis): DaySeries {
 export const CATEGORY_COLOUR_ORDER: readonly string[] = [...COST_CATEGORIES].sort();
 
 async function loadCharts(): Promise<ChartModule> {
-  (globalThis as { React?: unknown }).React ??= React;
   /* From the directory, not `import.meta.url`: under a jsdom test that is an
      `http:` address. */
   const file = pathToFileURL(path.join(import.meta.dirname, "../src/web/cost-charts.tsx")).href;

@@ -95,6 +95,8 @@ describe("shadeAlpha", () => {
     expect(shadeAlpha(0, 100)).toBeNull();
     expect(shadeAlpha(0, 0)).toBeNull();
     expect(shadeAlpha(5, 0)).toBeNull();
+    expect(shadeAlpha(Number.NaN, 100)).toBeNull();
+    expect(shadeAlpha(5, Number.POSITIVE_INFINITY)).toBeNull();
   });
 
   it("runs from 0.08 for the smallest real amount to 0.45 for the largest", () => {
