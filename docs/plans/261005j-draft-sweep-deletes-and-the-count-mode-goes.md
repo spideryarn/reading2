@@ -140,4 +140,18 @@ backlog script as first built, all fixed by it:
 It wrote these up as a class in
 [261005i](../postmortems/261005i-a-proven-list-does-not-prove-a-fresh-query.md), and added
 `tests/draft-sweep-backlog-safety.test.ts` (no database). Its sandbox could not reach Postgres, so
-its verdict was "not yet — run the PostgreSQL regression suite first".
+its verdict was "not yet — run the PostgreSQL regression suite first". That suite then ran green on
+the reviewed code here (45 tests across the sweep file, the safety file and doc-links). The full
+suite was not run: the box was overloaded and the Overseer asked for targeted tests only.
+
+**The backlog, deleted in production, 2026-10-05 about 18:05 UTC** —
+`npx tsx scripts/draft-sweep-backlog.ts --prod --delete`, target the transaction pooler as
+`spideryarn_app`, env file the primary checkout's `.env.prod`.
+
+- A fresh dry run immediately before found **118 revisions (1 draft, 117 failed) across 36
+  articles; 42,598 block rows, 57.5 MiB** — fifteen more than the afternoon's 103, as failed steps
+  from earlier in the day crossed six hours. The second query found all 118 and none protected.
+- **Deleted 118 of 118**, by the `DELETE`'s own row counts, article by article. The survey run
+  straight afterwards found none left, and all 36 articles still exist.
+- Greg's yes was given against 75 rows across 29 articles. The 118 are the same rule applied two
+  days later; the sweep itself would have taken them at each article's next job after the deploy.

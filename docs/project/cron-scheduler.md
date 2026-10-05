@@ -75,9 +75,9 @@ which reaches production at the next deploy.**
   The count mode was removed with the question, so there is one behaviour to keep working.
   `npx tsx scripts/draft-sweep-inventory.ts` (read-only) still says what is waiting.
 - **An article nobody runs a job on keeps its drafts**, which is what on demand means. The backlog
-  that had built up by the time of the approval can be cleared once, across the library, by
-  `npx tsx scripts/draft-sweep-backlog.ts` — a dry run unless given `--delete`; the deletion has
-  not yet been run. It is the only whole-library form of this and it is a command a person runs,
+  that had built up by the time of the approval was cleared once, across the library, on 2026-10-05
+  (118 revisions across 36 articles) by `npx tsx scripts/draft-sweep-backlog.ts` — a dry run unless
+  given `--delete`. It is the only whole-library form of this and it is a command a person runs,
   not a path a reader's request takes.
 
 The reasoning, the race tests and the local measurements are in
