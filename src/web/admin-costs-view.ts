@@ -190,6 +190,16 @@ export function amountText(totals: { recordedNanos: number; pricedCalls: number 
   return totals.pricedCalls > 0 ? formatCostNanos(totals.recordedNanos) : "—";
 }
 
+/** A recorded amount, marked as a floor when the same aggregate contains an unpriced call. */
+export function amountWithFloor(totals: {
+  recordedNanos: number;
+  calls: number;
+  pricedCalls: number;
+}): string {
+  const marker = totals.calls > totals.pricedCalls && totals.pricedCalls > 0 ? "+" : "";
+  return `${amountText(totals)}${marker}`;
+}
+
 /** A share of a total as a whole percentage; a real share under one is `<1%`. */
 export function formatShare(part: number, total: number): string {
   if (total <= 0) return "—";
@@ -200,7 +210,7 @@ export function formatShare(part: number, total: number): string {
 
 /* ------------------------------------------------------- the Other fold -- */
 
-/** The folded column's key. Not a value any dimension records. */
+/** The folded column's preferred key; `foldedPivot` suffixes it if a real value collides. */
 export const OTHER_KEY = "__other__";
 export const OTHER_LABEL = "Other";
 
@@ -223,6 +233,8 @@ export interface FoldedPivot {
   /** Row key → column key → cell. A pair with no ledger rows has no cell. */
   cells: Map<string, Map<string, FoldedCell>>;
   total: FoldedCell;
+  /** The synthetic folded column, disjoint from every real dimension key. */
+  otherKey: string | null;
 }
 
 function plus(into: FoldedCell, from: FoldedCell): void {
@@ -247,6 +259,12 @@ export function foldedPivot(
   const kept = pivot.columns.slice(0, keep);
   const folded = pivot.columns.slice(keep);
   const keptKeys = new Set(kept.map((c) => c.key));
+  const allKeys = new Set(pivot.columns.map((c) => c.key));
+  let otherKey: string | null = null;
+  if (folded.length > 0) {
+    otherKey = OTHER_KEY;
+    for (let suffix = 1; allKeys.has(otherKey); suffix++) otherKey = `${OTHER_KEY}:${suffix}`;
+  }
 
   const columns: FoldedColumn[] = kept.map((c) => ({
     key: c.key,
@@ -255,8 +273,8 @@ export function foldedPivot(
     calls: c.calls,
     pricedCalls: c.pricedCalls,
   }));
-  if (folded.length > 0) {
-    const other: FoldedColumn = { key: OTHER_KEY, label: OTHER_LABEL, recordedNanos: 0, calls: 0, pricedCalls: 0 };
+  if (otherKey !== null) {
+    const other: FoldedColumn = { key: otherKey, label: OTHER_LABEL, recordedNanos: 0, calls: 0, pricedCalls: 0 };
     for (const c of folded) plus(other, c);
     columns.push(other);
   }
@@ -265,7 +283,8 @@ export function foldedPivot(
   for (const [rowKey, across] of pivot.cells) {
     const out = new Map<string, FoldedCell>();
     for (const [colKey, cell] of across) {
-      const key = keptKeys.has(colKey) ? colKey : OTHER_KEY;
+      const key = keptKeys.has(colKey) ? colKey : otherKey;
+      if (key === null) throw new Error("a folded pivot has no Other key");
       let into = out.get(key);
       if (!into) {
         into = { recordedNanos: 0, calls: 0, pricedCalls: 0 };
@@ -285,6 +304,7 @@ export function foldedPivot(
       calls: pivot.total.calls,
       pricedCalls: pivot.total.pricedCalls,
     },
+    otherKey,
   };
 }
 
@@ -297,7 +317,7 @@ export interface DaySeries {
   /** Every day on the x axis, oldest first, empty ones included. */
   days: string[];
   /** Largest first, "Other" last. */
-  series: { key: string; label: string }[];
+  series: { key: string; label: string; isOther?: boolean }[];
   /** Day → series key → recorded nano-dollars. */
   values: Map<string, Map<string, number>>;
 }
@@ -330,7 +350,7 @@ export function daySeries(pivot: FoldedPivot, days: readonly string[]): DaySerie
   }
   return {
     days: [...days],
-    series: pivot.columns.map((c) => ({ key: c.key, label: c.label })),
+    series: pivot.columns.map((c) => ({ key: c.key, label: c.label, isOther: c.key === pivot.otherKey })),
     values,
   };
 }

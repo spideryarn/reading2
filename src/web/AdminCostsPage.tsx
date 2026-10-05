@@ -18,7 +18,7 @@
  *
  * The whole view: period, the evals switch, both groupings, the sort and every
  * filter — **by key, never by label**. A user is an owner id and an article is
- * its opaque key, so no email and no slug is ever in a link somebody pastes.
+ * its opaque key, so no email and no slug enters this page's query state.
  *
  * ## Nothing here is a gate
  *
@@ -55,7 +55,7 @@ import {
   PERIODS,
   type PageDimension,
   type Period,
-  amountText,
+  amountWithFloor,
   articleOwners,
   colourOrder,
   dayPivot,
@@ -90,7 +90,7 @@ import {
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { parseAsBit, sortDirParam } from "./params.js";
-import { ADMIN_HREF, readHref } from "./router.js";
+import { ADMIN_COSTS_HREF, ADMIN_HREF, readHref } from "./router.js";
 import { useAdminCosts } from "./useAdminCosts.js";
 
 /* ------------------------------------------------------- the URL's state -- */
@@ -151,6 +151,27 @@ const QUESTIONS: readonly { label: string; by: PageDimension }[] = [
   { label: "By model", by: "model" },
   { label: "Over time", by: "day" },
 ];
+
+const VIEW_PARAMS = new Set([
+  "period",
+  "evals",
+  "by",
+  "then",
+  "sort",
+  "dir",
+  ...PAGE_DIMENSIONS,
+]);
+
+/** A question is a real, copyable link containing only this page's declared state. */
+function questionHref(by: PageDimension): string {
+  const search = new URLSearchParams(location.search);
+  for (const key of [...search.keys()]) {
+    if (!VIEW_PARAMS.has(key)) search.delete(key);
+  }
+  search.set("by", by);
+  search.delete("then");
+  return `${ADMIN_COSTS_HREF}?${search.toString()}`;
+}
 
 /** The most columns a pivot draws before the rest fold into "Other". */
 const MAX_PIVOT_COLUMNS = 8;
@@ -342,15 +363,14 @@ function Explorer({
       <div className={`${ROW_OF_CONTROLS} tw:mb-3`}>
         <span className={SMALL_LABEL}>Questions:</span>
         {QUESTIONS.map((question) => (
-          <button
+          <Link
             key={question.by}
-            type="button"
-            aria-pressed={by === question.by && then === null}
-            onClick={() => void setQ({ by: question.by, thenBy: null })}
-            className={chipClass(by === question.by && then === null)}
+            href={questionHref(question.by)}
+            aria-current={by === question.by && then === null ? "page" : undefined}
+            className={`${chipClass(by === question.by && then === null)} tw:no-underline`}
           >
             {question.label}
-          </button>
+          </Link>
         ))}
       </div>
 
@@ -362,7 +382,9 @@ function Explorer({
             value={by}
             onChange={(e) => {
               const next = e.target.value;
-              if (isPageDimension(next)) void setQ({ by: next, ...(next === then ? { thenBy: null } : {}) });
+              if (isPageDimension(next)) {
+                void setQ({ by: next, ...(then === null || next === then ? { thenBy: null } : {}) });
+              }
             }}
           >
             {PAGE_DIMENSIONS.map((dim) => (
@@ -480,8 +502,7 @@ function Headline({ totals }: { totals: CubeTotals }) {
           nanos={totals.recordedNanos}
           hint="Credits, BYOK and computed amounts added, as the ledger recorded them"
         >
-          {amountText(totals)}
-          {totals.unpricedCalls > 0 && totals.pricedCalls > 0 ? "+" : ""}
+          {amountWithFloor(totals)}
         </Figure>
         <Figure name="calls" label="Calls" hint="Every model call in the ledger for this view">
           {totals.calls.toLocaleString("en-US")}
@@ -511,7 +532,9 @@ function Headline({ totals }: { totals: CubeTotals }) {
           nanos={cash}
           hint="The recorded amount with OpenRouter's credit-purchase fee added to the credits part only"
         >
-          {totals.pricedCalls > 0 ? `about ${formatCostNanos(cash)}` : "—"}
+          {totals.pricedCalls > 0
+            ? `about ${formatCostNanos(cash)}${totals.unpricedCalls > 0 ? "+" : ""}`
+            : "—"}
         </Figure>
       </dl>
       <ul className="tw:m-0 tw:mt-3 tw:list-none tw:space-y-1 tw:p-0 tw:text-xs tw:text-muted-foreground">
@@ -640,8 +663,7 @@ function rankingColumns({
       },
       cell: ({ row }) => (
         <span data-amount="">
-          {amountText(row.original)}
-          {row.original.unpricedCalls > 0 && row.original.pricedCalls > 0 ? "+" : ""}
+          {amountWithFloor(row.original)}
         </span>
       ),
     },
@@ -834,12 +856,12 @@ function PivotTable({
                       className={`${CELL} ${cell ? "tw:text-foreground" : "tw:text-ink-faint"}`}
                       title={cell ? `${plural(cell.calls, "call")}` : "No calls"}
                     >
-                      {cell ? amountText(cell) : ""}
+                      {cell ? amountWithFloor(cell) : ""}
                     </td>
                   );
                 })}
                 <td data-row-total="" data-nanos={row.recordedNanos} className={`${CELL} tw:text-foreground`}>
-                  {amountText(row)}
+                  {amountWithFloor(row)}
                 </td>
               </tr>
             ))}
@@ -851,11 +873,11 @@ function PivotTable({
               </th>
               {pivot.columns.map((col) => (
                 <td key={col.key} data-col-total="" data-nanos={col.recordedNanos} className={`${CELL} tw:text-foreground`}>
-                  {amountText(col)}
+                  {amountWithFloor(col)}
                 </td>
               ))}
               <td data-grand-total="" data-nanos={pivot.total.recordedNanos} className={`${CELL} tw:text-foreground`}>
-                {amountText(pivot.total)}
+                {amountWithFloor(pivot.total)}
               </td>
             </tr>
           </tfoot>
@@ -888,7 +910,7 @@ function OverTime({
   drill: (dim: PageDimension, key: string) => void;
 }) {
   const pivot = useMemo(() => dayPivot(rows, stack, owners), [rows, stack, owners]);
-  const days = useMemo(() => daysInWindow(since, until, rows, now), [since, until, rows, now]);
+  const days = useMemo(() => daysInWindow(since, until, allRows, now), [since, until, allRows, now]);
   /* From the whole cube, so a filter does not repaint the series that remain. */
   const colourKeys = useMemo(() => colourOrder(allRows, stack), [allRows, stack]);
 

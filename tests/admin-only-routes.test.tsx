@@ -105,6 +105,9 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
    has, so a badly written loader still fails here. */
 await import("../src/web/AdminPage.js");
 await import("../src/web/DesignPage.js");
+/* The costs page is the heaviest of them (the table, the charts), and missed
+   the bounded wait below when it was left to load on demand. */
+await import("../src/web/AdminCostsPage.js");
 
 const { App } = await import("../src/web/App.js");
 

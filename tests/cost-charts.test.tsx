@@ -63,11 +63,15 @@ describe("the stacked chart per UTC day", () => {
   it("is one svg that scales to its box, with a bar group for every day — empty days too", () => {
     const el = chart(ALL);
     const svg = el.querySelector("svg");
+    expect(svg?.getAttribute("role")).toBe("img");
+    expect(svg?.getAttribute("aria-label")).toBe("Recorded amount per UTC day");
     expect(svg?.getAttribute("viewBox")).toMatch(/^0 0 \d+ \d+$/);
     expect(svg?.getAttribute("width")).toBe("100%");
     expect([...el.querySelectorAll("g[data-day]")].map((g) => g.getAttribute("data-day"))).toEqual(DAYS);
     expect(el.querySelectorAll('g[data-day="2033-05-02"] [data-series]')).toHaveLength(0);
     expect(el.querySelectorAll('g[data-day="2033-05-01"] [data-series]')).toHaveLength(3);
+    expect(el.querySelector("[data-cost-chart]")?.getAttribute("style")).toContain("overflow-x");
+    expect(svg?.getAttribute("style")).toContain("min-width:640px");
   });
 
   it("draws each segment as tall as its share of the money", () => {
@@ -98,6 +102,20 @@ describe("the stacked chart per UTC day", () => {
     const ticks = chart(ALL).querySelectorAll("[data-y-tick]");
     expect(ticks.length).toBeGreaterThanOrEqual(3);
     expect(ticks.length).toBeLessThanOrEqual(5);
+  });
+
+  it("does not invent positive tick labels when every recorded amount is zero", () => {
+    const empty: DaySeries = {
+      days: DAYS,
+      series: [{ key: "alpha", label: "ALPHA" }],
+      values: new Map(),
+    };
+    const el = parse(
+      renderToStaticMarkup(
+        <StackedDayChart data={empty} colourKeys={["alpha"]} label="Recorded amount per UTC day" />,
+      ),
+    );
+    expect([...el.querySelectorAll("[data-y-tick] text")].map((tick) => tick.textContent)).toEqual(["$0.00"]);
   });
 
   it("draws a legend for two series and none for one", () => {

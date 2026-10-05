@@ -41,6 +41,7 @@ Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
 const { AdminCostsPage } = await import("../src/web/AdminCostsPage.js");
 
 enableHistorySync();
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /* The 20th of a month, so "This month" is twenty days and none of them moves. */
 const NOW = Date.parse("2033-05-20T12:00:00.000Z");
@@ -154,6 +155,7 @@ const json = (body: unknown, status = 200) =>
 
 let host: HTMLDivElement;
 let root: Root;
+let storageWrites: [string, string][];
 /** Every address the page asked for. */
 let asked: string[];
 /** Whether a test has said what the server answers; `show` answers with the cube otherwise. */
@@ -169,6 +171,18 @@ function answer(reply: () => Response): void {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  storageWrites = [];
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: () => null,
+      setItem: (key: string, value: string) => storageWrites.push([key, value]),
+      removeItem() {},
+      clear() {},
+      key: () => null,
+      length: 0,
+    },
+  });
   /* Only the clock: the page's timers and the waits below stay real. */
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   asked = [];
@@ -224,6 +238,16 @@ async function click(el: Element | null | undefined, what: string): Promise<void
   await settle();
 }
 
+async function change(el: Element | null | undefined, value: string, what: string): Promise<void> {
+  if (!el) throw new Error(`nothing to change: ${what}`);
+  await act(async () => {
+    const select = el as HTMLSelectElement;
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
 /** The ranking table's rows: label, drawn amount, and the button that drills in. */
 function ranking() {
   return [...host.querySelectorAll<HTMLTableRowElement>("[data-ranking] tbody tr")].map((tr) => ({
@@ -269,7 +293,18 @@ describe("the default view", () => {
     expect(figure("failed")?.textContent).toContain("$0.25");
     /* The fee is on the credits pocket only: 7.25 × 1.055 + 0.5 + 0.5. */
     expect(figureNanos("cash")).toBe(Math.round(7.25 * DOLLAR * 1.055) + DOLLAR);
+    expect(figure("cash")?.textContent).toMatch(/\+$/);
     expect(host.textContent).toContain("floor");
+    expect(host.textContent).toContain("Settled, computed and unpriced overlap");
+    expect(host.textContent).toContain("do not add up to the calls");
+  });
+
+  it("shows the known amount per priced call, never the amount per all calls", async () => {
+    await show();
+    const greg = [...host.querySelectorAll("[data-ranking] tbody tr")].find((tr) =>
+      tr.textContent?.includes(ADMIN_EMAIL_LOCAL),
+    );
+    expect(greg?.querySelectorAll("td")[4]?.textContent).toBe("$1.00");
   });
 
   it("leaves eval and CLI rows out until the switch is on", async () => {
@@ -317,6 +352,10 @@ describe("drilling down", () => {
     expect(address).not.toContain("@");
     expect(address).not.toContain(GREG_SLUG);
     expect(address).not.toContain("own-piece");
+    expect(document.title).toBe("Costs · Admin · Spideryarn");
+    const stored = storageWrites.flat().join("\n");
+    expect(stored).not.toContain("@");
+    expect(stored).not.toContain(GREG_SLUG);
   });
 
   it("removes a filter from its chip", async () => {
@@ -361,6 +400,17 @@ describe("the pivot", () => {
     expect(p.grand).toBe(8.25 * DOLLAR);
   });
 
+  it("marks every priced aggregate containing an unpriced call as a floor", async () => {
+    await show("?by=user&then=task");
+    const table = host.querySelector("table[data-pivot]");
+    const gregRow = [...(table?.querySelectorAll("tbody tr") ?? [])].find((tr) =>
+      tr.textContent?.includes(ADMIN_EMAIL_LOCAL),
+    );
+    expect(gregRow?.textContent).toContain("$1.00+");
+    expect(gregRow?.querySelector("[data-row-total]")?.textContent).toBe("$5.00+");
+    expect(table?.querySelector("[data-grand-total]")?.textContent).toBe("$8.25+");
+  });
+
   it("folds the columns past the eighth into Other without losing any money", async () => {
     /* Eleven models: $11 down to $1, split across the two owners. */
     const many = Array.from({ length: 11 }, (_, i) =>
@@ -394,6 +444,119 @@ describe("over time", () => {
     /* Stacked by category unless told otherwise. */
     expect(host.querySelectorAll("[data-chart-legend] [data-series]")).toHaveLength(3);
     expect(pivot().grand).toBe(figureNanos("recorded"));
+  });
+
+  it("keeps the All-period axis fixed when a filter removes its first day", async () => {
+    answer(() =>
+      json({ ...cube(ROWS), since: null, until: null, label: "all recorded calls" }),
+    );
+    await show(`?period=all&by=day&user=${BEN}`);
+    const days = [...host.querySelectorAll("svg g[data-day]")].map((g) => g.getAttribute("data-day"));
+    expect(days).toEqual(["2033-05-01", "2033-05-02", "2033-05-03"]);
+    expect(host.querySelector('svg g[data-day="2033-05-01"] [data-series]')).toBeNull();
+  });
+});
+
+describe("URL state", () => {
+  it("writes ranking sort and direction into the address", async () => {
+    await show();
+    const calls = host.querySelector('th[data-column-id="calls"] button');
+    await click(calls, "the Calls header");
+    await waitFor("Calls sort in the address", () => location.search.includes("sort=calls"));
+    expect(location.search).not.toContain("dir=");
+    await click(calls, "the Calls header again");
+    await waitFor("ascending direction in the address", () => location.search.includes("dir=asc"));
+  });
+
+  it("makes each question a copyable link that preserves the rest of the view state", async () => {
+    await show(`?period=30d&by=user&then=task&sort=calls&dir=asc&user=${BEN}`);
+    const link = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
+      (anchor) => anchor.textContent === "By model",
+    );
+    expect(link).toBeDefined();
+    const href = new URL(link?.href ?? "", "https://spideryarn.test");
+    expect(href.pathname).toBe("/admin/costs");
+    expect(href.searchParams.get("period")).toBe("30d");
+    expect(href.searchParams.get("user")).toBe(BEN);
+    expect(href.searchParams.get("sort")).toBe("calls");
+    expect(href.searchParams.get("dir")).toBe("asc");
+    expect(href.searchParams.get("by")).toBe("model");
+    expect(href.searchParams.has("then")).toBe(false);
+  });
+
+  it("restores period and scope through Back and Forward", async () => {
+    await show();
+    const period = (label: string) =>
+      [...host.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Period"] button')].find(
+        (button) => button.textContent === label,
+      );
+    await click(period("Last month"), "Last month");
+    await waitFor("period in the address", () => location.search.includes("period=last-month"));
+    await click(host.querySelector("input[data-include-evals]"), "the evals switch");
+    await waitFor("scope in the address", () => location.search.includes("evals=1"));
+
+    history.back();
+    await waitFor("Back restores product scope", () => !location.search.includes("evals=1"));
+    expect((host.querySelector("input[data-include-evals]") as HTMLInputElement | null)?.checked).toBe(false);
+    expect(location.search).toContain("period=last-month");
+
+    history.forward();
+    await waitFor("Forward restores the expanded scope", () => location.search.includes("evals=1"));
+    expect((host.querySelector("input[data-include-evals]") as HTMLInputElement | null)?.checked).toBe(true);
+  });
+
+  it("drops an old period's response when it arrives after the new one", async () => {
+    answered = true;
+    const pending = new Map<string, (response: Response) => void>();
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
+      asked.push(url);
+      return new Promise<Response>((resolve) => pending.set(url, resolve));
+    });
+    await show();
+    const first = asked[0];
+    if (!first) throw new Error("the page made no first request");
+
+    const lastMonth = [...host.querySelectorAll<HTMLButtonElement>('[role="group"][aria-label="Period"] button')].find(
+      (button) => button.textContent === "Last month",
+    );
+    await click(lastMonth, "Last month");
+    await waitFor("the second request", () => asked.length === 2);
+    const second = asked[1];
+    if (!second) throw new Error("the page made no second request");
+
+    await act(async () => {
+      pending.get(second)?.(
+        json({
+          ...cube([row({ creditsNanos: 2 * DOLLAR })]),
+          since: "2033-04-01T00:00:00.000Z",
+          until: "2033-05-01T00:00:00.000Z",
+          label: "from 2033-04-01T00:00:00.000Z to before 2033-05-01T00:00:00.000Z (UTC)",
+        }),
+      );
+    });
+    await waitFor("the newer response", () => figureNanos("recorded") === 2 * DOLLAR);
+
+    await act(async () => pending.get(first)?.(json(cube([row({ creditsNanos: 99 * DOLLAR })]))));
+    await settle();
+    expect(figureNanos("recorded")).toBe(2 * DOLLAR);
+    expect(host.textContent).toContain("2033-04-01");
+  });
+
+  it("does not revive an invalid same-dimension then-by after group-by changes", async () => {
+    await show("?by=user&then=user");
+    expect(host.querySelector("table[data-pivot]")).toBeNull();
+    await change(host.querySelector("label select"), "article", "group by");
+    expect(host.querySelector("table[data-pivot]")).toBeNull();
+    expect(location.search).not.toContain("then=");
+  });
+
+  it("keeps an absent filter visible and removable instead of silently dropping it", async () => {
+    await show(`?user=${BEN}`, ROWS.filter((item) => item.ownerId === GREG));
+    expect(host.querySelector('[data-filter="user"]')?.textContent).toContain(BEN.slice(0, 8));
+    expect(host.textContent).toContain("No calls match");
+    await click(host.querySelector('[data-filter="user"] button'), "the stale filter's remove button");
+    expect(ranking()).toHaveLength(1);
   });
 });
 

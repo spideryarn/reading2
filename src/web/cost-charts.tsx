@@ -35,8 +35,8 @@ const SURFACE = "var(--background)";
  * `colourOrder` sorts them), so the same entity keeps its hue whatever else is
  * on screen. "Other" is neutral. Past eight entities the hues repeat.
  */
-export function seriesColour(key: string, colourKeys: readonly string[]): string {
-  if (key === OTHER_KEY) return TEXT;
+export function seriesColour(key: string, colourKeys: readonly string[], isOther = key === OTHER_KEY): string {
+  if (isOther) return TEXT;
   const at = colourKeys.indexOf(key);
   return `var(--cat-${(at === -1 ? 0 : at) % HUES})`;
 }
@@ -58,7 +58,7 @@ export function ChartLegend({
   series,
   colourKeys,
 }: {
-  series: readonly { key: string; label: string }[];
+  series: readonly { key: string; label: string; isOther?: boolean }[];
   colourKeys: readonly string[];
 }) {
   return (
@@ -72,7 +72,7 @@ export function ChartLegend({
               height: "10px",
               borderRadius: "2px",
               flex: "none",
-              background: seriesColour(s.key, colourKeys),
+              background: seriesColour(s.key, colourKeys, s.isOther),
             }}
           />
           {s.label}
@@ -142,10 +142,10 @@ export function StackedDayChart({
   const { days, series, values } = data;
   const dayTotal = (day: string) =>
     series.reduce((n, s) => n + (values.get(day)?.get(s.key) ?? 0), 0);
-  const max = Math.max(1, ...days.map(dayTotal));
-  const step = niceStep(max / 3);
-  const tickCount = Math.ceil(max / step);
-  const top = tickCount * step;
+  const max = Math.max(0, ...days.map(dayTotal));
+  const step = max > 0 ? niceStep(max / 3) : 1;
+  const tickCount = max > 0 ? Math.ceil(max / step) : 0;
+  const top = tickCount > 0 ? tickCount * step : 1;
 
   const plotW = WIDTH - LEFT - RIGHT;
   const plotH = HEIGHT - TOP - BOTTOM;
@@ -157,13 +157,13 @@ export function StackedDayChart({
   const labelEvery = Math.max(1, Math.ceil(days.length / 10));
 
   return (
-    <div data-cost-chart="">
+    <div data-cost-chart="" style={{ overflowX: "auto" }}>
       <svg
         role="img"
         aria-label={label}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
-        style={{ display: "block", height: "auto", maxWidth: "100%" }}
+        style={{ display: "block", height: "auto", minWidth: `${WIDTH}px` }}
       >
         {Array.from({ length: tickCount + 1 }, (_, i) => i * step).map((tick) => (
           <g key={tick} data-y-tick="">
@@ -197,7 +197,7 @@ export function StackedDayChart({
                 const shared = {
                   "data-series": part.key,
                   "data-height": h,
-                  fill: seriesColour(part.key, colourKeys),
+                  fill: seriesColour(part.key, colourKeys, part.isOther),
                 };
                 const hover = `${part.label} · ${day} · ${formatCostNanos(part.nanos)}`;
                 return at === parts.length - 1 ? (

@@ -13,6 +13,7 @@ import {
   amountText,
   colourOrder,
   dayPivot,
+  daySeries,
   daysInWindow,
   foldedPivot,
   formatCostNanos,
@@ -185,6 +186,30 @@ describe("the Other fold", () => {
     expect(pivot.columns.at(-1)?.key).toBe(OTHER_KEY);
     expect(pivot.columns.at(-1)?.recordedNanos).toBe(6 * DOLLAR);
     expect(pivot.columns.at(-1)?.calls).toBe(9 + 10 + 11);
+  });
+
+  it("keeps a real value named like the synthetic Other bucket separate", () => {
+    const collision = [
+      row({ requestedModel: OTHER_KEY, answeredModel: OTHER_KEY, creditsNanos: 20 * DOLLAR }),
+      ...Array.from({ length: 9 }, (_, i) =>
+        row({
+          requestedModel: `vendor/c${i}`,
+          answeredModel: `vendor/c${i}`,
+          creditsNanos: (10 - i) * DOLLAR,
+        }),
+      ),
+    ];
+    const pivot = foldedPivot(collision, "user", "model", 8);
+    expect(pivot.columns).toHaveLength(9);
+    expect(new Set(pivot.columns.map((column) => column.key)).size).toBe(9);
+    expect(pivot.columns.filter((column) => column.label === OTHER_KEY)).toHaveLength(1);
+    expect(pivot.columns.filter((column) => column.label === "Other")).toHaveLength(1);
+    expect(pivot.columns.reduce((total, column) => total + column.recordedNanos, 0)).toBe(
+      totalsOf(collision).recordedNanos,
+    );
+    const chart = daySeries(dayPivot(collision, "model"), ["2033-05-01"]);
+    expect(chart.series.find((series) => series.label === OTHER_KEY)?.isOther).toBe(false);
+    expect(chart.series.find((series) => series.label === "Other")?.isOther).toBe(true);
   });
 
   it("loses no money and no calls: cells, rows and columns all reach the same total", () => {
