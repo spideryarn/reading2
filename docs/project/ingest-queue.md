@@ -617,7 +617,8 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
+relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
 cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.
@@ -2004,7 +2005,8 @@ identical artefact again. That is what separates the two lists:
 | an answer too long for one response (`TooLongForOnePass`) | a model answer that would not parse |
 | a missing source URL — Retry asks the same `meta.json` | the wrong number of arc sentences |
 | a page Readability already refused, over cached bytes | an empty answer, a refusal, a timeout |
-| a tree that does not contain its own root | a fetch that failed at somebody else's server |
+| a tree that does not contain its own root | a fetch that failed for the moment at somebody else's server: too slow, a dropped connection, a site that is busy or in trouble |
+| a fetch the site or the address will answer the same way again: no page there, a sign-in wall, a refusal, a redirect loop, a bad certificate, something that is not a page or a PDF, a document over the size limit | |
 | a PDF over the page cap, or a chunk over the request cap | a nav-label batch that came back truncated |
 | a PDF that will not open — locked with a password, or damaged past parsing | |
 | a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
@@ -2060,6 +2062,18 @@ rather than a truncation. Hiding the button there would be wrong on both counts.
 `FetchFailure.retryable` in [`src/fetch.ts`](../../src/fetch.ts) is deliberately **not** wired into
 this. It marks a plain HTTP 500 non-retryable while 502–504 are retryable, which is a sensible
 enough thing for a fetch layer to believe and not a claim that the page will never load.
+
+What the card asks instead is `fetchFailed` in [`src/messages.ts`](../../src/messages.ts): one
+sentence and one kind for each `FetchFailureCode`, declared by the fetch step at its one `.catch`
+(`fetchStepFailure` in [`src/pipeline.ts`](../../src/pipeline.ts)). Until 2026-10-04 only a
+document over the size limit had one, and every other fetch failure took the generic sentence and
+a Retry, a page that is not there included. Two of the kinds are judgement calls, recorded beside
+the map: a server name that does not resolve keeps its Retry, and so does an empty page. The
+fetcher's catch-all, `http-error`, is split by its status, because a 4xx will be repeated and a
+body that arrived in part may not be. The codes are the `fetch-` family in
+[copy.md § The bracketed code](copy.md#the-bracketed-code);
+[`tests/fetch-failure-sentences.test.ts`](../../tests/fetch-failure-sentences.test.ts) holds the
+kind for each.
 
 ## The one security check
 

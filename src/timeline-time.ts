@@ -87,7 +87,7 @@ export interface WhenInput {
    * The publication date, or null. ISO; a full timestamp is fine, the day is
    * taken off the front. Nineteen of the test article's twenty-four
    * expressions are year-less, so with no frame most of them stay undated —
-   * which is the point. **No year is ever guessed.**
+   * unless `assumedYear` is supplied and marked as an assumption.
    */
   frame: string | null;
   /**
@@ -98,6 +98,15 @@ export interface WhenInput {
   within?: Span;
   /** Defaults to `"past"`. Pass `"future"` for a prediction. */
   direction?: WhenDirection;
+  /**
+   * The year to read a year-less date in **when there is no `frame`** — the one
+   * year the piece itself states, from `pieceYear`. Ignored when `frame` is
+   * usable: a publication day says which side of it a date falls, and a bare
+   * year cannot.
+   */
+  assumedYear?: number | null;
+  /** A label displays its own year, so that year must also be stated in the passage. */
+  requireStatedYear?: boolean;
 }
 
 /**
@@ -353,6 +362,40 @@ function sameDate(want: RawDate, have: RawDate): boolean {
   return true;
 }
 
+/**
+ * **The one year the piece itself states**, or null — the fallback frame for an
+ * article with no publication date.
+ *
+ * Greg, 2026-10-04 (spya-fyjac4), on a piece whose every row read "dated — but
+ * which year?" under a header saying everything was in 2026: *"it's fine if it
+ * includes a confidence where it's saying, look, I think this is July the
+ * 7th"*. That article writes the year exactly once, in `2026-07-19`, and
+ * twenty other dates without it.
+ *
+ * Deliberately narrow, because a wrong year looks exactly like a right one:
+ *
+ * - only a year written **with a month** counts — `May 2026`, `July 7, 2026`,
+ *   `2026-07-19`. A bare `1984` is as likely a book as a date;
+ * - **exactly one** distinct year across the whole piece. Two, and we do not
+ *   know which one a year-less date belongs to, so the rows stay as they were.
+ *
+ * It is an assumption and the panel says so once, above the list.
+ * docs/plans/261005d-timeline-dates-without-a-publication-date.md has what it
+ * got right and wrong on the articles whose publication date we do know.
+ */
+export function pieceYear(texts: readonly string[]): number | null {
+  const years = new Set<number>();
+  for (const text of texts) {
+    for (const date of scanDates(text, { bareMonthsMustBeCapitalised: true })) {
+      if (date.y !== undefined && date.m !== undefined && intervalIn(date.y, date) !== null) {
+        years.add(date.y);
+      }
+    }
+  }
+  const [only] = [...years];
+  return years.size === 1 && only !== undefined ? only : null;
+}
+
 // ---------------------------------------------------------------------------
 // Resolving one expression to an interval
 // ---------------------------------------------------------------------------
@@ -371,6 +414,8 @@ interface Atom {
   /** Inclusive. */
   end: string;
   yearFilled: boolean;
+  /** The filled year is `assumedYear`, not the publication date's. */
+  yearFromPiece?: true;
 }
 
 /** The days this expression would cover in `year`, or null if it cannot. */
@@ -396,9 +441,9 @@ function intervalIn(year: number, raw: RawDate): { start: string; end: string } 
  * A stated year is used as stated. A year-less date takes **the nearest
  * instance on the side `direction` names** — by default the most recent one at
  * or before publication, so a piece published on 3 January mentioning December
- * means last December and not the December two years back. With no frame, no
- * year is guessed at all: the expression yields no date, which is the correct
- * answer rather than a plausible one.
+ * means last December and not the December two years back. With no frame,
+ * `assumedYear` is used as stated and marked as an assumption; without either,
+ * the expression yields no date.
  *
  * **It picks rather than widening.** An earlier draft spanned both candidate
  * years wherever a year-less date landed after publication, which is honest and
@@ -415,14 +460,23 @@ function resolveAtom(
   raw: RawDate,
   frame: string | null,
   direction: WhenDirection,
+  assumedYear: number | null,
 ): Atom | WhenRefusal {
   if (raw.y !== undefined) {
     const only = intervalIn(raw.y, raw);
     return only === null ? "unparseablePhrase" : { ...only, yearFilled: false };
   }
-  if (frame === null) return "noYearFrame";
-  const frameYear = parseIsoDay(frame)?.y;
-  if (frameYear === undefined) return "noYearFrame";
+  const frameYear = frame === null ? undefined : parseIsoDay(frame)?.y;
+  if (frame === null || frameYear === undefined) {
+    /* No publication day. The piece's own single stated year is the next best
+       thing (`pieceYear`), and it is used as it stands: with no day to stand
+       on there is no "this side of publication" to choose between. */
+    if (assumedYear === null) return "noYearFrame";
+    const assumed = intervalIn(assumedYear, raw);
+    return assumed === null
+      ? "unparseablePhrase"
+      : { ...assumed, yearFilled: true, yearFromPiece: true };
+  }
 
   /* The publication year first, then the year on the far side of it. An
      interval that straddles publication counts as this year's either way, so
@@ -592,11 +646,19 @@ function refuse(reason: WhenRefusal): WhenResult {
  * through July 19" picks the 19th that follows the 13th rather than an earlier
  * one somewhere else in the paragraph.
  */
-function selectDates(wanted: RawDate[], found: RawDate[], anchorAt: number): RawDate[] | null {
+function selectDates(
+  wanted: RawDate[],
+  found: RawDate[],
+  anchorAt: number,
+  requireStatedYear: boolean,
+): RawDate[] | null {
   const taken: RawDate[] = [];
   let anchor = anchorAt;
   for (const want of wanted) {
-    const candidates = found.filter((f) => !taken.includes(f) && sameDate(want, f));
+    const candidates = found.filter((f) =>
+      !taken.includes(f) && sameDate(want, f) &&
+      (!requireStatedYear || want.y === undefined || want.y === f.y),
+    );
     if (candidates.length === 0) return null;
     candidates.sort((x, y) => Math.abs(x.start - anchor) - Math.abs(y.start - anchor));
     const pick = candidates[0];
@@ -660,7 +722,7 @@ export function readWhen(input: WhenInput): WhenResult {
 
   const all = scanDates(text, { bareMonthsMustBeCapitalised: true });
   const found = all.filter((d) => inside(within, d));
-  const dates = selectDates(wanted, found, within?.start ?? 0);
+  const dates = selectDates(wanted, found, within?.start ?? 0, input.requireStatedYear ?? false);
   if (dates === null) return refuse("phraseNotInOccurrence");
 
   const frame = dayFrame(input.frame);
@@ -675,10 +737,13 @@ export function readWhen(input: WhenInput): WhenResult {
   const kind: CueKind = isRange ? "extended" : (cue?.kind ?? "plain");
 
   const direction = input.direction ?? "past";
-  const early = resolveAtom(first, frame, direction);
+  const assumedYear = input.assumedYear ?? null;
+  const early = resolveAtom(first, frame, direction, assumedYear);
   if (typeof early === "string") return refuse(early);
-  const late = isRange ? resolveAtom(last, frame, direction) : early;
+  const late = isRange ? resolveAtom(last, frame, direction, assumedYear) : early;
   if (typeof late === "string") return refuse(late);
+  // A bare year cannot justify rolling one range end into another year.
+  if (isRange && early.start > late.end) return refuse("unparseablePhrase");
 
   const bounds = boundsFrom(isRange ? { ...early, end: late.end } : early, kind);
   if (bounds === null) return refuse("unparseablePhrase");
@@ -694,6 +759,7 @@ export function readWhen(input: WhenInput): WhenResult {
       phrase: text.slice(start, last.end),
       at: { blockId, start, end: last.end },
       yearFilled: early.yearFilled || late.yearFilled,
+      ...(early.yearFromPiece || late.yearFromPiece ? { yearFrom: "piece" as const } : {}),
     },
   };
 }

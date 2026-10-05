@@ -913,6 +913,22 @@ clearest reason a headless table was the right kind of library: TanStack owns th
 no opinion at all about how a row is drawn, so this feature survived the switch untouched. A
 batteries-included grid would have made it a fight.
 
+### The card says when the piece was published
+
+On the line under the title, after the author and the site: `Rich Sutton · incompleteideas.net ·
+13 Mar 2019 · ~6 min · 21 blocks`. Greg, 2026-10-04 (report `spya-cqjhbn`):
+
+> Show the publication date in the logged-in homepage Shelf
+
+Until then a card said it only while the shelf was sorted by Published. It is printed by
+[`publishedOf`](../../src/web/relative-time.ts), the same reader the sort and the Metadata page use,
+so a paper dated only to a year says `2017` and a piece with no date says nothing. **Bare, with no
+"published" in front**: beside the author and the site a date reads as the piece's own, and the
+times that belong to the reader (added, opened) are on the bottom row. While the shelf is sorted by
+Published the note on the bottom row says the date as well; that repeat is known and left
+([261005e](../plans/261005e-an-end-of-article-mark-and-the-publication-date-on-the-shelf-card.md)).
+The Table view is unchanged: its Published column still starts hidden.
+
 ### Three rules a browser cannot check
 
 The sort moved from the server into the client, and three things came with it that look right on
@@ -1010,6 +1026,20 @@ The reading time comes from [`src/reading-time.ts`](../../src/reading-time.ts), 
 the card and the masthead cannot drift. They run on opposite sides of the wire, so nothing would ever
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
+
+**It is body words at 238 a minute, and it does not know how hard the piece is.** 238 is the average
+for an adult reading English non-fiction silently (Brysbaert 2019); it was a folk 230 until
+2026-10-05. Greg asked whether the number takes difficulty into account (`spya-jew7ds`), and it does
+not: the cheap formula sees long words and not hard ideas in plain ones, which was his example, and a
+model's rating has not been checked against reading time on our articles. So the number stays flat and **the card behind it says so** —
+[`ReadTimeCard.tsx`](../../src/web/ReadTimeCard.tsx), on the masthead's minutes and on Metadata's
+*Read time* tile: the words, the rate, the range most adults fall in (175 to 300 a minute), what
+the estimate cannot see, and the notes it left out. The working is
+[261005a](../research/261005a-reading-time-estimates-and-text-difficulty.md); what was built and
+what was put to Greg is
+[261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
+The spine's reading-time chart keeps its own 230 on purpose ([reading-time.md](reading-time.md)): it
+is the unit of a brightness scale and also supplies the gutter card's estimate for a single block.
 
 **A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
 the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks

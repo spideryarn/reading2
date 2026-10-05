@@ -4,12 +4,13 @@
  * and the one job that writes them.
  *
  * Marginalia otherwise generates nothing (docs/project/marginalia.md). This is
- * its one artefact of its own, so unlike the FAQ or the Timeline it reads there
- * is no band to make it in: **the press that turns the column on asks for it**,
- * through the same activation every self-starting mode uses
+ * its one artefact of its own. New imports queue it with the other main modes
+ * (src/auto-mode-steps.ts); where none was stored — an older article, an opted-out
+ * import or a failed queued run — **the press that turns the column on asks for
+ * it**, through the same activation every self-starting mode uses
  * (src/web/useAutoRun.ts; Marginalia's row in activation.ts § `MODE_TARGET`).
- * A mount is not a press, so a pasted `?margin=1` link, a Back step and a
- * reload all spend nothing.
+ * A mount is not a press, so a pasted `?margin=1` link, a Back step, a reload
+ * and the first-open default all spend nothing.
  *
  * Owner only, and not because of a check here: the one caller is
  * `OwnerMarginFeed`, mounted under the owner's arm. A visitor's payload does

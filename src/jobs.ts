@@ -1111,6 +1111,7 @@ async function runStep(
        recomputed: a step that can decline to start work it cannot finish needs
        to know *when*, not only *that*. See `StepContext.deadlineAt`. */
     deadlineAt,
+    stepBudgetMs: STEP_BUDGET_MS[step.name],
     /* Mark the article when any *other* step of this job is in the same cache
        group — in either direction. The list used to be `slice(i + 1)`, later
        steps only, which marked the stage that writes the entry and never the one

@@ -207,6 +207,19 @@ describe("the privacy page", () => {
     expect(prose).toContain("never the article’s text, and nothing about who you are");
   });
 
+  it("says quiz answers are kept, and no longer that they are not", () => {
+    /* Plan 261005b: until 2026-10-05 the page said quiz answers "are not
+       stored", and it was true. `quiz_attempts` now holds each answer and the
+       mark it was given, so that sentence would be a false promise on a public
+       page. Held to the table too: if the table goes, this claim should. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).not.toContain("Quiz answers are the exception");
+    expect(prose).not.toContain("are not stored");
+    expect(prose).toContain("your answers to quiz questions, with what the AI wrote back about each");
+    const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
+    expect(schema).toContain('"quiz_attempts"');
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

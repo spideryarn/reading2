@@ -1,0 +1,207 @@
+{
+  "arm": "high-none-len1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "identity-spya-k8x09v",
+  "version": "simple-prompt/9",
+  "sourceSha256": "174771191677a59aa4594cdabdbd437b2c77e47ffc768b175603b68073923d95",
+  "at": "2026-10-05T02:27:44.265Z",
+  "bodyWords": 879,
+  "band": "short",
+  "bodyBlocks": 27,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "c88bcb88ff224afc",
+  "systemsSha256": "89945d81a7ea6067af223ad0c15d3b675974b5768aebbac858cc02dcea8fb609",
+  "power": "high",
+  "guard": true,
+  "wallMs": 15065,
+  "costUsd": 0.0648256,
+  "tokens": {
+    "input": 8461,
+    "output": 1657,
+    "reasoning": 159
+  },
+  "briefReadyMs": 9044,
+  "fullerReadyMs": 15061,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 281,
+  "briefWords": 87,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham asking why talk about politics and religion turns out so uniquely useless. He starts from what he has seen online: any mention of religion on a forum turns into a religious argument, while Javascript or baking does not. He notes that people feel no need for expertise to give opinions on religion, so on that topic everyone acts as an expert.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-znm6fz",
+        "spya-pfruy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham asking why talk about politics and religion turns out so uniquely useless.",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "He starts from what he has seen online: any mention of religion on a forum turns into a religious argument, while Javascript or baking does not.",
+          "id": "spya-znm6fz"
+        },
+        {
+          "text": "He notes that people feel no need for expertise to give opinions on religion, so on that topic everyone acts as an expert.",
+          "id": "spya-pfruy3"
+        }
+      ]
+    },
+    {
+      "text": "He first tests one explanation: these topics have no definite answers, so nobody can be proven wrong. He rejects it, because political questions with clear answers, like what a new policy will cost, go just as badly. His answer is identity: these topics become part of who people think they are, and nobody argues fruitfully about that.",
+      "ids": [
+        "spya-ah2ape",
+        "spya-gv44uj",
+        "spya-kwzcxp"
+      ],
+      "sentences": [
+        {
+          "text": "He first tests one explanation: these topics have no definite answers, so nobody can be proven wrong.",
+          "id": "spya-ah2ape"
+        },
+        {
+          "text": "He rejects it, because political questions with clear answers, like what a new policy will cost, go just as badly.",
+          "id": "spya-gv44uj"
+        },
+        {
+          "text": "His answer is identity: these topics become part of who people think they are, and nobody argues fruitfully about that.",
+          "id": "spya-kwzcxp"
+        }
+      ]
+    },
+    {
+      "text": "From this he draws several points about which discussions go wrong. It depends on the people, not the topic: a recent battle sparks fights, but a Bronze Age one does not, since nobody knows whose side to take. A question that starts fights can still have an answer, so some programming languages really are better designed than others. Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe to discuss with some people.",
+      "ids": [
+        "spya-uz3ta2",
+        "spya-s6tp4k",
+        "spya-zdmhnz"
+      ],
+      "sentences": [
+        {
+          "text": "From this he draws several points about which discussions go wrong.",
+          "id": null
+        },
+        {
+          "text": "It depends on the people, not the topic: a recent battle sparks fights, but a Bronze Age one does not, since nobody knows whose side to take.",
+          "id": "spya-uz3ta2",
+          "key": "depends on the people, not the topic"
+        },
+        {
+          "text": "A question that starts fights can still have an answer, so some programming languages really are better designed than others.",
+          "id": "spya-s6tp4k"
+        },
+        {
+          "text": "Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe to discuss with some people.",
+          "id": "spya-zdmhnz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Graham says the theory, if right, matters because it shows how to have better ideas, not just which talks to avoid. If people cannot think clearly about what is part of their identity, the best plan is to let as few things in as possible. He allows one possible exception: calling yourself a scientist commits you to no belief, only to following the evidence. His conclusion is that the more labels you have for yourself, the dumber they make you.",
+      "ids": [
+        "spya-xv45wq",
+        "spya-nt9xpg",
+        "spya-mz9mzj"
+      ],
+      "sentences": [
+        {
+          "text": "Graham says the theory, if right, matters because it shows how to have better ideas, not just which talks to avoid.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "If people cannot think clearly about what is part of their identity, the best plan is to let as few things in as possible.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "He allows one possible exception: calling yourself a scientist commits you to no belief, only to following the evidence.",
+          "id": "spya-mz9mzj"
+        },
+        {
+          "text": "His conclusion is that the more labels you have for yourself, the dumber they make you.",
+          "id": "spya-nt9xpg",
+          "key": "the dumber they make you"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "In this short essay, Paul Graham asks why talk about politics and religion turns into useless fights. His answer: these topics become part of people's identity, meaning who they feel they are. People can never argue well about something tied to who they are.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-kwzcxp",
+        "spya-uz3ta2"
+      ],
+      "sentences": [
+        {
+          "text": "In this short essay, Paul Graham asks why talk about politics and religion turns into useless fights.",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "His answer: these topics become part of people's identity, meaning who they feel they are.",
+          "id": "spya-kwzcxp",
+          "key": "part of people's identity"
+        },
+        {
+          "text": "People can never argue well about something tied to who they are.",
+          "id": "spya-kwzcxp"
+        }
+      ]
+    },
+    {
+      "text": "He says this explains not just which arguments to avoid, but how to have better ideas. People can't think clearly about what has become part of who they are. So his advice is to let as few labels as possible into your identity.",
+      "ids": [
+        "spya-xv45wq",
+        "spya-nt9xpg"
+      ],
+      "sentences": [
+        {
+          "text": "He says this explains not just which arguments to avoid, but how to have better ideas.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "People can't think clearly about what has become part of who they are.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "So his advice is to let as few labels as possible into your identity.",
+          "id": "spya-nt9xpg",
+          "key": "as few labels as possible"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 2,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

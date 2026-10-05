@@ -198,6 +198,15 @@ Filled in as they are made. Each is Greg's to overturn.
 - **A chunk whose context page makes it too big is sent without that page** (260928b's B). What it
   costs: a paragraph that runs across that one page break comes out as two. What it buys: the
   article imports instead of failing whole.
+- **The structure ceiling: D first, then E.** Greg, 2026-10-04, answering [Q-long-documents] (the
+  options A to E under § The decision this will probably end on, where the recommendation was D
+  first, then E):
+
+  > go with your recommendation
+
+  So a document too long for one structure answer gets its tree from its own headings with no
+  model (D), and that tree is then filled in a section at a time (E). The work is
+  [261005a](261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 
 ## The simpler option passed over
 
@@ -258,7 +267,8 @@ database as `s3-doctorow-250p-spya-sw2jbz` (a failed draft) and `s3-gdl-45mb-spy
 ### Not built, and where each went
 
 - **The structure ceiling**, options A to E above. Greg's. `qi-kbkbw4rp`, and a line in
-  `awaiting-approval.md`. Recommended: D, then E.
+  `awaiting-approval.md`. Recommended: D, then E. Greg chose that (§ Decisions), and both are built
+  in [261005a](261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 - **The 32 MB fetch cap.** Greg's; a listed defence. `qi-bv9nbj5z`. Since built, on his answer
   (§ Decisions): [261004k](261004k-one-size-limit-for-an-upload-and-an-address.md).
 - **The article response against 4.5 MB.** `qi-sbytr395`.

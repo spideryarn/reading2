@@ -12,13 +12,19 @@
  * real component rather than a stand-in, but without paying for the whole
  * changelog on every run.
  */
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { commitUrl, parseChangelog, parsePending, type ChangelogVersion } from "../src/changelog.js";
+import type { ReloadForNewBuildSource } from "../src/web/useReloadForNewBuild.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
+import { noteNoConnection, noteReachedServer } from "../src/web/offline.js";
+import { noteFeedbackDraft } from "../src/web/safe-to-reload.js";
+import { warnBeforeUnload } from "../src/web/unload-guard.js";
 import {
   ChangelogBody,
+  ChangelogPage,
   groupForDisplay,
   withPending,
   releaseAnchor,
@@ -778,6 +784,137 @@ describe("a file whose lines are partly broken", () => {
     expect(versions).toHaveLength(1);
     await draw(versions);
     expect(host.textContent).toContain("A release that parsed fine");
+  });
+});
+
+/**
+ * **The page reloads itself when a new build is live**, because its list is
+ * compiled into the bundle and a copy left open shows an old one. Greg,
+ * 2026-10-04 (spya-ym9dum). The decision and each of its refusals are
+ * tests/stale-shell.test.ts § `reloadForNewBuild`; what only a render can say
+ * is that the page is actually listening, to the watcher's current answer as
+ * well as its later ones, and stops when it goes.
+ */
+describe("a new build going live while the page is open", () => {
+  const BUILD_B = `${SHA_B} 2026-10-04T08:00:00.000Z`;
+  const BUILD_C = `${SHA_C} 2026-10-05T08:00:00.000Z`;
+
+  /** The watcher, as the page sees it: an answer now, and more later. */
+  function watcher(now: string | null = null) {
+    const listeners = new Set<(build: string | null) => void>();
+    let current = now;
+    return {
+      listeners,
+      subscribe(listener: (build: string | null) => void) {
+        listeners.add(listener);
+        listener(current);
+        return () => void listeners.delete(listener);
+      },
+      say(build: string | null) {
+        current = build;
+        for (const l of [...listeners]) l(build);
+      },
+    };
+  }
+
+  function sessionNoteStandIn() {
+    const held = new Map<string, string>();
+    return {
+      getItem: (k: string) => held.get(k) ?? null,
+      setItem: (k: string, v: string) => void held.set(k, v),
+    };
+  }
+
+  async function open(over: Partial<ReloadForNewBuildSource>) {
+    const reload = vi.fn();
+    const source = { storage: sessionNoteStandIn(), reload, safe: () => true, ...over };
+    await act(async () => root.render(<ChangelogPage reloading={source} />));
+    return reload;
+  }
+
+  beforeEach(() => history.replaceState(null, "", "/changelog"));
+  afterEach(() => history.replaceState(null, "", "/"));
+
+  it("reloads once, and not again for a second notice of the same build", async () => {
+    const w = watcher();
+    const reload = await open({ subscribe: w.subscribe });
+    expect(reload).not.toHaveBeenCalled();
+
+    w.say(BUILD_B);
+    expect(reload).toHaveBeenCalledTimes(1);
+    w.say(BUILD_B);
+    expect(reload).toHaveBeenCalledTimes(1);
+    /* A later deploy is a different build, and gets its own. */
+    w.say(BUILD_C);
+    expect(reload).toHaveBeenCalledTimes(2);
+  });
+
+  it("reloads for a build that was noticed before the page had loaded", async () => {
+    /* `/changelog`'s code is fetched on demand, so the watcher can have its
+       answer while this component does not exist yet. */
+    const w = watcher(BUILD_B);
+    const reload = await open({ subscribe: w.subscribe });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reload while something unsent would be lost, and does at the next notice", async () => {
+    let safe = false;
+    const w = watcher();
+    const reload = await open({ subscribe: w.subscribe, safe: () => safe });
+    w.say(BUILD_B);
+    expect(reload).not.toHaveBeenCalled();
+    safe = true;
+    w.say(BUILD_B);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["Chat draft", () => { chatDraftsFor("a-piece").setList("unsent"); return forgetChatDrafts; }],
+    ["Feedback draft", () => { noteFeedbackDraft(true); return () => noteFeedbackDraft(false); }],
+    ["upload", () => warnBeforeUnload("upload")],
+    ["unsaved text", () => warnBeforeUnload("unsaved")],
+    ["offline connection", () => { noteNoConnection(); return noteReachedServer; }],
+  ] as const)("uses the real safety check for a retained %s", async (_why, hold) => {
+    const w = watcher();
+    const reload = vi.fn();
+    const release = hold();
+    try {
+      await act(async () => root.render(<ChangelogPage reloading={{ subscribe: w.subscribe, reload, storage: sessionNoteStandIn() }} />));
+      w.say(BUILD_B);
+      expect(reload).not.toHaveBeenCalled();
+      release();
+      w.say(BUILD_B);
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+    }
+  });
+
+  it("does not reload once the reader has gone somewhere else", async () => {
+    const w = watcher();
+    const reload = await open({ subscribe: w.subscribe });
+    history.replaceState(null, "", "/read/an-article");
+    w.say(BUILD_B);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("does not adopt another page's address if navigation happens before its passive effect", async () => {
+    const w = watcher(BUILD_B);
+    const reload = vi.fn();
+    function Leaving() {
+      useLayoutEffect(() => history.replaceState(null, "", "/read/an-article"), []);
+      return <ChangelogPage reloading={{ subscribe: w.subscribe, reload, storage: sessionNoteStandIn(), safe: () => true }} />;
+    }
+    await act(async () => root.render(<Leaving />));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("stops listening when the page is left", async () => {
+    const w = watcher();
+    await open({ subscribe: w.subscribe });
+    expect(w.listeners.size).toBe(1);
+    await act(async () => root.render(<div />));
+    expect(w.listeners.size).toBe(0);
   });
 });
 

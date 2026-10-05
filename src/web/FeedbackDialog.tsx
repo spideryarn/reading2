@@ -122,6 +122,7 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
@@ -692,6 +693,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
        see it. One box for the whole site: a recording is offered back on
        whichever page Feedback is next opened. Plan 260929h. */
     ...(open ? { keep: keepDictation("feedback") } : {}),
+    /* A double press on Stop also sends (dictation.md § A double press). `send`
+       refuses by itself on Earlier, over length, or with nothing said. **Not
+       when shut**: this dialog stays mounted, and a reader who closed it while
+       the words were on their way did not ask for a report to be filed unseen. */
+    onDone: () => {
+      if (open) void send();
+    },
+    /* And shutting it, even for a moment, withdraws the wish. */
+    doneKey: open ? "open" : "shut",
   });
 
   /**
@@ -706,6 +716,16 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
   const dictationBusy = dictate.busy;
+  /* Dismissed words, screenshots and audio all survive navigation here.
+     Audio may have no transcript yet, and its device backup is best effort.
+     `open` is deliberately not part of the reload veto. */
+  const holdsDraft =
+    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+  useEffect(() => {
+    noteFeedbackDraft(holdsDraft);
+    return () => noteFeedbackDraft(false);
+  }, [holdsDraft]);
+
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 
@@ -1161,6 +1181,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 dictation={dictate.dictation}
                 toggle={dictate.toggle}
                 disabled={stage.kind === "sending"}
+                again={dictate.again}
+                sendingAfter={dictate.sendingAfter}
               />
             )}
             {/* **"Not sure what to write?" used to open here**, and it is gone —
@@ -1173,7 +1195,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 the next person to want help text here will reach for a tooltip
                 too. */}
           </div>
-          <DictationStrip dictation={dictate.dictation} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
           {over ? (
             <span className="fb-over">

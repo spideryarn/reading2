@@ -1,0 +1,441 @@
+{
+  "arm": "high-none-len1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-gdl-45mb-spya-cc9kr8",
+  "version": "simple-prompt/9",
+  "sourceSha256": "4489cb29836c49d266fdadbd055eead7a950f26a63beb5d18a4c744ebf8c45f0",
+  "at": "2026-10-05T02:33:01.484Z",
+  "bodyWords": 47957,
+  "band": "book",
+  "bodyBlocks": 970,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "846bc84795bcda32",
+  "systemsSha256": "cdef5d889f3579b9b0d1ffdf9de808ffdbc3f9ce06646add05d05ff83fa7765a",
+  "power": "high",
+  "guard": true,
+  "wallMs": 53413,
+  "costUsd": 0.1758124,
+  "tokens": {
+    "input": 14529,
+    "output": 5592,
+    "reasoning": 1565
+  },
+  "briefReadyMs": 22832,
+  "fullerReadyMs": 53408,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 834,
+  "briefWords": 159,
+  "fuller": [
+    {
+      "text": "This is a long survey text by four researchers that tries to bring order to deep learning, the branch of AI built on large neural networks. It borrows an idea from Felix Klein, a 19th-century mathematician who defined each kind of geometry by its symmetries: the changes that leave its key properties unchanged. The authors call their version Geometric Deep Learning. They aim to derive many popular network designs from first principles of symmetry rather than treat them as separate inventions.",
+      "ids": [
+        "spya-m8ms9j",
+        "spya-rhgqxa"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long survey text by four researchers that tries to bring order to deep learning, the branch of AI built on large neural networks.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "It borrows an idea from Felix Klein, a 19th-century mathematician who defined each kind of geometry by its symmetries: the changes that leave its key properties unchanged.",
+          "id": "spya-rhgqxa"
+        },
+        {
+          "text": "The authors call their version Geometric Deep Learning.",
+          "id": "spya-m8ms9j",
+          "key": "Geometric Deep Learning"
+        },
+        {
+          "text": "They aim to derive many popular network designs from first principles of symmetry rather than treat them as separate inventions.",
+          "id": "spya-m8ms9j"
+        }
+      ]
+    },
+    {
+      "text": "The authors say deep learning today looks like geometry did before Klein: a \"zoo\" of network designs with few shared principles. This makes it hard to see how methods relate, so the same ideas get reinvented and renamed in different fields. A shared framework would help people study the most successful designs together. It would also give a principled way to build physical knowledge into future designs.",
+      "ids": [
+        "spya-m8ms9j",
+        "spya-ze4mju"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say deep learning today looks like geometry did before Klein: a \"zoo\" of network designs with few shared principles.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "This makes it hard to see how methods relate, so the same ideas get reinvented and renamed in different fields.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "A shared framework would help people study the most successful designs together.",
+          "id": "spya-ze4mju"
+        },
+        {
+          "text": "It would also give a principled way to build physical knowledge into future designs.",
+          "id": "spya-ze4mju"
+        }
+      ]
+    },
+    {
+      "text": "The argument starts with a problem called the curse of dimensionality. When inputs have many numbers, or dimensions, the examples needed to learn a merely smooth function grow exponentially with that number. Even for modest dimensions, the sample count could exceed the number of atoms in the universe. The authors use a simple geometric example of a bumpy function over a high-dimensional space to make this point concrete. Real tasks like vision or chemistry have long-range patterns, so the escape must come from the structure of the data itself.",
+      "ids": [
+        "spya-jx8gmv",
+        "spya-p3tfez",
+        "spya-wkks40"
+      ],
+      "sentences": [
+        {
+          "text": "The argument starts with a problem called the curse of dimensionality.",
+          "id": "spya-jx8gmv",
+          "key": "curse of dimensionality"
+        },
+        {
+          "text": "When inputs have many numbers, or dimensions, the examples needed to learn a merely smooth function grow exponentially with that number.",
+          "id": "spya-jx8gmv"
+        },
+        {
+          "text": "Even for modest dimensions, the sample count could exceed the number of atoms in the universe.",
+          "id": "spya-jx8gmv"
+        },
+        {
+          "text": "The authors use a simple geometric example of a bumpy function over a high-dimensional space to make this point concrete.",
+          "id": "spya-p3tfez"
+        },
+        {
+          "text": "Real tasks like vision or chemistry have long-range patterns, so the escape must come from the structure of the data itself.",
+          "id": "spya-wkks40"
+        }
+      ]
+    },
+    {
+      "text": "That structure comes from the domain the data lives on, such as the pixel grid of an image. The text names two guiding principles: symmetry and scale separation. A function is invariant if transforming the input, say shifting an image, leaves the answer unchanged, as in labelling a photo \"cat\". It is equivariant if the output shifts in the same way as the input, as an object outline should follow a moved object.",
+      "ids": [
+        "spya-kummbt",
+        "spya-scvsfc",
+        "spya-jjkfs5"
+      ],
+      "sentences": [
+        {
+          "text": "That structure comes from the domain the data lives on, such as the pixel grid of an image.",
+          "id": "spya-kummbt"
+        },
+        {
+          "text": "The text names two guiding principles: symmetry and scale separation.",
+          "id": "spya-kummbt",
+          "key": "symmetry and scale separation"
+        },
+        {
+          "text": "A function is invariant if transforming the input, say shifting an image, leaves the answer unchanged, as in labelling a photo \"cat\".",
+          "id": "spya-scvsfc"
+        },
+        {
+          "text": "It is equivariant if the output shifts in the same way as the input, as an object outline should follow a moved object.",
+          "id": "spya-jjkfs5"
+        }
+      ]
+    },
+    {
+      "text": "Exact symmetry is too strict for the messy real world, where objects bend and move separately. Small distortions cannot be treated as a symmetry group, because many small ones add up to a large one. Instead, the authors ask for deformation stability: small distortions should change the output only a little. They show that Fourier features, which split a signal into global waves, can change a lot however small the distortion. Wavelets, which split a signal into local pieces at different scales, change only in proportion to the distortion.",
+      "ids": [
+        "spya-uz0tkt",
+        "spya-hhxagw",
+        "spya-dy24xd"
+      ],
+      "sentences": [
+        {
+          "text": "Exact symmetry is too strict for the messy real world, where objects bend and move separately.",
+          "id": "spya-uz0tkt"
+        },
+        {
+          "text": "Small distortions cannot be treated as a symmetry group, because many small ones add up to a large one.",
+          "id": "spya-uz0tkt"
+        },
+        {
+          "text": "Instead, the authors ask for deformation stability: small distortions should change the output only a little.",
+          "id": "spya-uz0tkt"
+        },
+        {
+          "text": "They show that Fourier features, which split a signal into global waves, can change a lot however small the distortion.",
+          "id": "spya-hhxagw"
+        },
+        {
+          "text": "Wavelets, which split a signal into local pieces at different scales, change only in proportion to the distortion.",
+          "id": "spya-dy24xd"
+        }
+      ]
+    },
+    {
+      "text": "These ideas combine into what the authors call the Geometric Deep Learning Blueprint, a recipe of stacked building blocks. A local equivariant layer looks at small neighbourhoods and respects the domain's symmetry. A non-linear step is added, because a purely linear invariant function can only see the input's average, such as an image's mean colour. A coarsening step, called pooling, shrinks the domain so later layers see larger regions. A final global invariant layer turns everything into one answer that ignores the symmetry.",
+      "ids": [
+        "spya-mvq7cr",
+        "spya-h4sgj5",
+        "spya-v8wgq4"
+      ],
+      "sentences": [
+        {
+          "text": "These ideas combine into what the authors call the Geometric Deep Learning Blueprint, a recipe of stacked building blocks.",
+          "id": "spya-mvq7cr",
+          "key": "Geometric Deep Learning Blueprint"
+        },
+        {
+          "text": "A local equivariant layer looks at small neighbourhoods and respects the domain's symmetry.",
+          "id": "spya-mvq7cr"
+        },
+        {
+          "text": "A non-linear step is added, because a purely linear invariant function can only see the input's average, such as an image's mean colour.",
+          "id": "spya-h4sgj5"
+        },
+        {
+          "text": "A coarsening step, called pooling, shrinks the domain so later layers see larger regions.",
+          "id": "spya-mvq7cr"
+        },
+        {
+          "text": "A final global invariant layer turns everything into one answer that ignores the symmetry.",
+          "id": "spya-v8wgq4"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The text then walks through five kinds of domain, the \"5 Gs\": grids, groups, graphs, geodesics and gauges. On graphs, networks of nodes and links, nodes have no natural order, so functions must not depend on how nodes are numbered. On grids, the authors show that convolution, the core operation of image networks, follows directly from requiring shift symmetry. Groups covers domains like the sphere, where every point can be rotated onto every other.",
+      "ids": [
+        "spya-y6p4d9",
+        "spya-jxmery",
+        "spya-a2kf9m"
+      ],
+      "sentences": [
+        {
+          "text": "The text then walks through five kinds of domain, the \"5 Gs\": grids, groups, graphs, geodesics and gauges.",
+          "id": "spya-y6p4d9"
+        },
+        {
+          "text": "On graphs, networks of nodes and links, nodes have no natural order, so functions must not depend on how nodes are numbered.",
+          "id": "spya-a2kf9m"
+        },
+        {
+          "text": "On grids, the authors show that convolution, the core operation of image networks, follows directly from requiring shift symmetry.",
+          "id": "spya-jxmery"
+        },
+        {
+          "text": "Groups covers domains like the sphere, where every point can be rotated onto every other.",
+          "id": "spya-y6p4d9"
+        }
+      ]
+    },
+    {
+      "text": "Geodesics concerns manifolds, curved surfaces such as the shape of a body, which usually have no global symmetry. Here the useful symmetries are bendings that keep distances along the surface the same. The authors warn that some filters built from surface \"frequencies\" can change dramatically under tiny near-distance-preserving changes. Gauges are local reference directions; since surfaces have no single \"up\", good networks give the same result whichever local directions are chosen.",
+      "ids": [
+        "spya-wdxa47",
+        "spya-gx6qb3",
+        "spya-y6ztqa"
+      ],
+      "sentences": [
+        {
+          "text": "Geodesics concerns manifolds, curved surfaces such as the shape of a body, which usually have no global symmetry.",
+          "id": "spya-wdxa47"
+        },
+        {
+          "text": "Here the useful symmetries are bendings that keep distances along the surface the same.",
+          "id": "spya-wdxa47"
+        },
+        {
+          "text": "The authors warn that some filters built from surface \"frequencies\" can change dramatically under tiny near-distance-preserving changes.",
+          "id": "spya-gx6qb3"
+        },
+        {
+          "text": "Gauges are local reference directions; since surfaces have no single \"up\", good networks give the same result whichever local directions are chosen.",
+          "id": "spya-y6ztqa"
+        }
+      ]
+    },
+    {
+      "text": "Finally, the authors match well-known designs to their domain and symmetry. Image networks, or CNNs, use grids and shifts; graph networks use permutations; Transformers act like graph networks on fully connected graphs. They sort graph networks into three types, each able to express the one before: convolution, attention, and message passing. They also argue that the gates in LSTMs, a memory network for sequences, are exactly what invariance to stretching or squeezing time requires.",
+      "ids": [
+        "spya-te4bjg",
+        "spya-xrzrvx",
+        "spya-aqrufs"
+      ],
+      "sentences": [
+        {
+          "text": "Finally, the authors match well-known designs to their domain and symmetry.",
+          "id": "spya-te4bjg"
+        },
+        {
+          "text": "Image networks, or CNNs, use grids and shifts; graph networks use permutations; Transformers act like graph networks on fully connected graphs.",
+          "id": "spya-te4bjg"
+        },
+        {
+          "text": "They sort graph networks into three types, each able to express the one before: convolution, attention, and message passing.",
+          "id": "spya-xrzrvx"
+        },
+        {
+          "text": "They also argue that the gates in LSTMs, a memory network for sequences, are exactly what invariance to stretching or squeezing time requires.",
+          "id": "spya-aqrufs"
+        }
+      ]
+    },
+    {
+      "text": "The authors are open about limits. They do not claim to summarise all research, only to study well-known designs in depth. They note that common graph networks are no more powerful than a classic test that cannot tell a six-node ring from two triangles. The time-stretching result only guarantees an LSTM could fit each warped signal, possibly with very different settings, not transfer between them.",
+      "ids": [
+        "spya-r5kkwh",
+        "spya-hcfy74",
+        "spya-x72ug7"
+      ],
+      "sentences": [
+        {
+          "text": "The authors are open about limits.",
+          "id": null
+        },
+        {
+          "text": "They do not claim to summarise all research, only to study well-known designs in depth.",
+          "id": "spya-r5kkwh"
+        },
+        {
+          "text": "They note that common graph networks are no more powerful than a classic test that cannot tell a six-node ring from two triangles.",
+          "id": "spya-hcfy74"
+        },
+        {
+          "text": "The time-stretching result only guarantees an LSTM could fit each warped signal, possibly with very different settings, not transfer between them.",
+          "id": "spya-x72ug7"
+        }
+      ]
+    },
+    {
+      "text": "The text also surveys uses, such as a graph network that helped find Halicin, a diabetes drug candidate, to be a potent antibiotic. Another graph network now predicts travel times in Google Maps. The main conclusion is that a large class of current architectures fits one scheme and can be derived from common geometric principles. Methods differ mainly in their choice of domain, symmetry group and building-block details.",
+      "ids": [
+        "spya-crec06",
+        "spya-qjw73j",
+        "spya-debnr5"
+      ],
+      "sentences": [
+        {
+          "text": "The text also surveys uses, such as a graph network that helped find Halicin, a diabetes drug candidate, to be a potent antibiotic.",
+          "id": "spya-qjw73j"
+        },
+        {
+          "text": "Another graph network now predicts travel times in Google Maps.",
+          "id": "spya-debnr5"
+        },
+        {
+          "text": "The main conclusion is that a large class of current architectures fits one scheme and can be derived from common geometric principles.",
+          "id": "spya-crec06",
+          "key": "derived from common geometric principles"
+        },
+        {
+          "text": "Methods differ mainly in their choice of domain, symmetry group and building-block details.",
+          "id": "spya-crec06"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is a long guide to deep learning, the kind of computer learning behind many modern AI tools. The authors say the field has a messy zoo of designs with few shared ideas. They borrow a fix from 1872, when Felix Klein tidied up geometry. Klein sorted geometries by what stays the same when you move or change things.",
+      "ids": [
+        "spya-m8ms9j",
+        "spya-tjpt5z",
+        "spya-rhgqxa"
+      ],
+      "sentences": [
+        {
+          "text": "This is a long guide to deep learning, the kind of computer learning behind many modern AI tools.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "The authors say the field has a messy zoo of designs with few shared ideas.",
+          "id": "spya-m8ms9j"
+        },
+        {
+          "text": "They borrow a fix from 1872, when Felix Klein tidied up geometry.",
+          "id": "spya-rhgqxa"
+        },
+        {
+          "text": "Klein sorted geometries by what stays the same when you move or change things.",
+          "id": "spya-rhgqxa"
+        }
+      ]
+    },
+    {
+      "text": "Learning from huge, complex data is very hard without some built-in clues. Real data comes with handy patterns from the physical world, like shapes that look the same when shifted. Using these patterns gives one common way to understand today's designs and to invent new ones.",
+      "ids": [
+        "spya-nyjasu",
+        "spya-ze4mju",
+        "spya-jx8gmv"
+      ],
+      "sentences": [
+        {
+          "text": "Learning from huge, complex data is very hard without some built-in clues.",
+          "id": "spya-jx8gmv"
+        },
+        {
+          "text": "Real data comes with handy patterns from the physical world, like shapes that look the same when shifted.",
+          "id": "spya-nyjasu"
+        },
+        {
+          "text": "Using these patterns gives one common way to understand today's designs and to invent new ones.",
+          "id": "spya-ze4mju"
+        }
+      ]
+    },
+    {
+      "text": "The key idea is symmetry: a change that leaves what matters untouched. A cat is still a cat if it moves across a photo. The authors call their shared recipe the Geometric Deep Learning Blueprint. They show that many popular designs follow it, each matched to a different kind of data and its symmetries.",
+      "ids": [
+        "spya-ynypgp",
+        "spya-mvq7cr",
+        "spya-crec06"
+      ],
+      "sentences": [
+        {
+          "text": "The key idea is symmetry: a change that leaves what matters untouched.",
+          "id": null,
+          "key": "symmetry"
+        },
+        {
+          "text": "A cat is still a cat if it moves across a photo.",
+          "id": "spya-ynypgp"
+        },
+        {
+          "text": "The authors call their shared recipe the Geometric Deep Learning Blueprint.",
+          "id": "spya-mvq7cr",
+          "key": "Geometric Deep Learning Blueprint"
+        },
+        {
+          "text": "They show that many popular designs follow it, each matched to a different kind of data and its symmetries.",
+          "id": "spya-crec06"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

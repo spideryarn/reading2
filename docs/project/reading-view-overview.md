@@ -10,8 +10,8 @@ goes stale.
 what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
 which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
 [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
-Marginalia, which draws a column of notes to the right of the prose instead, behind the
-experimental switch — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
+Marginalia, which draws a column of notes to the right of the prose instead (behind the
+experimental switch until 2026-10-05) — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
 beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mode.md)). So *a mode
 is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
@@ -161,15 +161,15 @@ readers never are.
   column of notes, each level with the block it is about and scrolling with the text — each
   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
   a head pinned at the top saying which part and section you are in and, from the arc, where the
-  argument has got to. It opens no band, generates nothing, and hides its notes on a window too
+  argument has got to. It opens no band, generates only its own relation words ([marginalia.md](marginalia.md#relation-words)), and hides its notes on a window too
   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
   band you choose; where there is no room for both (under 900px) but room for the column alone
   (612px with the rail, 600 without), whichever you pressed last wins, and below that the notes
   stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
-  to the text, the middle for the text, the right for what is. Behind the switch. Since 261002b
-  it also carries, shut, the FAQ, Debate, Citations and comments other modes have stored.
+  to the text, the middle for the text, the right for what is. Since 261002b it also carries, shut,
+  the FAQ, Debate, Citations and comments other modes have stored.
   **[marginalia.md](marginalia.md)** is its doc: what it shows, and the rule to keep an eye out for
   new kinds of item that belong there. The plans before it:
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
@@ -275,9 +275,11 @@ empty state preferred to a helpful guess.
 
 **Since 2026-10-03 a signed-in reader can ask what a sentence meant**
 ([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)).
-When nothing matches, the empty line adds *Press Enter to ask what you meant.*, and Enter sends the
+When nothing matches, the empty line adds an **Ask what you meant** button, and it or Enter sends the
 sentence to a fast model that picks among the bar's own rows — *what's changed on this site*, *is
-consciousness mentioned anywhere*. Nothing is guessed until that Enter. A pick the model is sure of,
+consciousness mentioned anywhere*. Nothing is guessed until that press. It is a button, and *Try
+again* after a retryable failure, because the reported phone had no on-screen Enter after dictation
+([261005f](../plans/261005f-command-bar-ask-button-a-finger-can-press.md)). A pick the model is sure of,
 of a row that only moves the reader, runs at once. Everything else — a less sure pick, anything that
 writes, spends or generates, and every command that takes words — is drawn as the bar's ordinary
 rows under *Did you mean* and waits for a fresh press. Signed out, the empty line is as before and
@@ -310,6 +312,44 @@ takes the reader to Metadata's *AI processing* section (`?section=ai-processing`
 flashed, [url-state.md](url-state.md)), where that step's row shows it — **never to the mode**,
 whose generate-on-open would start a second, unforced paid run beside it. The words and labels live
 once, in [`src/web/rerun-commands.ts`](../../src/web/rerun-commands.ts), which Metadata reads too.
+
+**The two bands with a *Find more* button have a row for it since 2026-10-04** — *Glossary › Find
+more* and *Quotes › Find more*
+([261004k](../plans/261004k-command-bar-find-more-rows-and-more-mode-aliases.md)):
+
+> There are lots of cases where we have a sort of find more button, for example in the glossary
+> mode. Let's make that be part of the command bar as well.
+>
+> — Greg, 2026-10-04 (spya-rbxrgc)
+
+Typed-only, marked `generates`, and answering to whole phrases as *Run again* does — `find more
+terms`, `more quotes`, `add more jargon`, `excerpts find more`, and a bare `find more` for both.
+**A row is drawn only while its list can be added to**, which the reading view reads off the
+glossary and quotes reads it already holds: a settled read, a list, and for Glossary the server's
+word that the run appends (`panelRun`, an absent verdict counting as no); for Quotes not stale, not
+outdated and under the ceiling. So there is no row on an article with no list, on one whose run would
+write a new list, for a visitor, or on the Metadata page — no row, never a row that opens a band and
+does nothing. **Enter posts nothing**: it leaves a one-shot press in memory
+([`find-more-handoff.ts`](../../src/web/find-more-handoff.ts), the glossary ask's guards: slug,
+nonce, session, ten seconds) and opens the band with the plain mode setter, and the band presses the
+function its own button calls, in the list's own profile setting. That is why it is not a word on
+*Run again*, which posts with the reader's current profile and lands on Metadata. The band takes the
+press once its read has settled and **makes it only if a fresh Find more is what it is offering at
+that moment** — no job, no *Starting…*, no failure with its Retry, no forced run waiting for its
+list; otherwise the press is used up and dropped, so it cannot fire when a job finishes seconds
+later ([`useFindMoreHandOff.ts`](../../src/web/useFindMoreHandOff.ts)). **"No job" is read off a job
+list asked for after the press**, not the one the tab already had: leaving the press asks for the
+list at once, and the band does not take it until that list — never one already on the wire — has
+been applied (`afterFreshList` in [`jobEngine.ts`](../../src/web/jobEngine.ts)). A run started in
+another tab, or by Metadata's *Run again* in a different profile, which the server does not collapse
+into the band's, is otherwise in no snapshot yet and the press would be a second paid run beside it.
+If no such list arrives inside the ten seconds, nothing is pressed
+(`tests/find-more-waits-for-a-fresh-job-list.test.tsx`). The words and the two
+predicates are [`find-more.ts`](../../src/web/find-more.ts), which the band's own control reads too.
+`find more …` is also what the `find` verb below takes: the row comes first and *Find “more …” in
+this article* after it, the one declared exception in the collision matrix
+(`tests/command-match-arguments.test.ts`). No other band has a button that adds to a list; the rest
+have a rewrite, which is *Run again*.
 
 **Five more of Metadata's controls have rows, typed-only like *Run again*** (the empty list keeps
 the Metadata row as their stand-in), and none of them spends. Three go to a section —
@@ -362,6 +402,29 @@ tags and nothing else. The rows are typed-only and follow the ranked ones, as fi
   whose label follows the state, the rule Archive set.
   [experimental-features.md § The three controls](experimental-features.md#the-three-controls).
 
+**Light, Dark and System are three rows since 2026-10-05** — *Appearance: Dark*, *Appearance:
+Light*, *Appearance: System*
+([261005d](../plans/261005d-theme-commands-in-the-command-bar.md)):
+
+> Add a command in the command bar to be able to switch between dark and light mode, and I guess
+> system mode as well.
+>
+> — Greg, 2026-10-04 (spya-c5wdn7)
+
+A second door to the setting /profile has, not a second setting: Enter calls the same
+`setAppearance` ([web-client.md § Appearance](web-client.md#appearance-light-dark-and-system)), so
+the choice is kept on the device and applied at once. Typed-only; `theme`, `appearance` and `colour
+scheme` list all three, and `dark mode`, `light mode`, `night mode`, `system` put theirs first.
+**All three are always there and the one in force is marked `current`**, which is not the rule
+Archive and the experimental switch follow (one row whose label follows the state): those are
+toggles, this is a choice among three, and a reader in Dark who types `dark mode` should get a row
+rather than `No command matches.` The mark is a field of its own (`marker`) and not part of the
+description, because the description is what the sentence-picking model is shown, held once per row
+in a checked-in file. A row the model picks waits for Enter, as every row that changes something
+does. If the device refuses to keep the choice the colours still change and the bar stays open to
+say it will last only until the page is closed. Words in
+[`src/web/appearance-commands.ts`](../../src/web/appearance-commands.ts).
+
 **The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
 microphone every other box has, and nothing can be pressed while it is listening —
 [dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box).
@@ -375,8 +438,11 @@ Three pieces of it are worth knowing about:
 - **The words it will accept** are the mode's name, its description, and its **aliases** — `toc` for
   Structure, `define and `terms` for Glossary — which live in
   [`src/mode-catalog.ts`](../../src/mode-catalog.ts) beside the sentence each mode is described by.
-  Aliases are deliberately sparse: the cost of a loose one is not a missed match, it is the *wrong*
-  mode ranked first for somebody who typed the right thing. The ranking is five named tiers in
+  Six to twelve a mode since 2026-10-04, when Greg asked for more (*"structure mode could have aliases
+  for hierarchy, table of contents, TOC, headings, etc."*, spya-uzkmn3); they were two to four. What
+  still limits a word is that the cost of a loose one is not a missed match, it is the *wrong* row
+  ranked first for somebody who typed the right thing — the rules are on `aliases` in that file, and
+  `tests/command-match-mode-aliases.test.ts` types every one into the whole list. The ranking is five named tiers in
   [`src/web/command-match.ts`](../../src/web/command-match.ts), and ties break in Dock order.
 - **The other rows are ranked by the same five tiers**, over words they carry themselves rather than
   out of the catalog — `src/web/CommandBar.tsx` § `besideTheModes` is the whole list, and another one

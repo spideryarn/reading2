@@ -14,6 +14,7 @@
  * public projection — is tests/source-guess-pg.test.ts.
  */
 import { describe, expect, it } from "vitest";
+import { PDFDocument } from "pdf-lib";
 
 import type { FoundWorkPage, WorkToFind } from "../src/citation-find.js";
 import type { PaperText } from "../src/paper-text.js";
@@ -490,6 +491,32 @@ describe("an HTML upload's first pages", () => {
     expect(text).toContain(TITLE);
     expect(text).toContain(DOI);
     expect(text).not.toContain("secret");
+  });
+});
+
+/**
+ * **An upload may be longer than a paper.** src/uploads.ts allows 250 pages,
+ * and this read used to hand `pass0` a 150-page refusal: every upload of 151
+ * to 250 pages threw `TooManyPages`, the route answered 500 twice, and a false
+ * `none / provider-failed` was stored (plan 261005c § (h)). Only the first
+ * pages are wanted, so only those are read — tests/pdf-page-cap.test.ts has
+ * the half that says page three is never asked for.
+ */
+describe("a PDF upload's first pages", () => {
+  async function pdfOfPages(count: number): Promise<Uint8Array> {
+    const doc = await PDFDocument.create();
+    for (let n = 1; n <= count; n++) doc.addPage().drawText(`Leaf ${n} of a long book`);
+    return doc.save();
+  }
+
+  it.each([151, 250])("an upload longer than 150 pages is still read for its first pages (%i)", async (count) => {
+    const text = await defaultFirstPages({ bytes: await pdfOfPages(count), kind: "pdf", filename: "book.pdf" });
+    expect(text).toBe("Leaf 1 of a long book\n\nLeaf 2 of a long book");
+  });
+
+  it("a one-page upload gives its one page", async () => {
+    const text = await defaultFirstPages({ bytes: await pdfOfPages(1), kind: "pdf", filename: "note.pdf" });
+    expect(text).toBe("Leaf 1 of a long book");
   });
 });
 

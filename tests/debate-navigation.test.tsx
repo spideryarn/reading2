@@ -90,7 +90,7 @@ let root: Root;
 
 function Page() {
   const route = useRoute();
-  useLastView(SLUG);
+  useLastView(SLUG, "article");
   const [mode] = useQueryState("mode", modeParam);
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "debate") return createElement("p", null, `band: ${mode}`);

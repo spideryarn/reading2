@@ -73,7 +73,10 @@ import {
 const BEHIND_THE_SWITCH: readonly Mode[] = [
   "timeline",
   "referee",
-  "remember",
+  /* Remember was here from 2026-09-03 until 2026-10-05, when Greg asked for
+     Recall, Quiz and Tutorial in the mainstream features (spya-cnqcjf). Its
+     Explore chip stays behind the switch, one level down:
+     tests/remember-header-cards.test.tsx § "Explore is behind the switch". */
   "debate",
   /* 2026-09-11: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
@@ -98,10 +101,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
      yet."* The whole mode this time, not only four of its pictures.
      docs/project/experimental-features.md. */
   "diagram",
-  /* 2026-10-01: a first experiment with a column right of the prose, which
-     Greg asked to "play with" (SPIDERYARN-READING2-7K) —
-     docs/project/experimental-features.md. */
-  "marginalia",
+  /* Marginalia was here from 2026-10-01 to 2026-10-05, when Greg asked for it
+     to be "a mainstream feature available to everybody" (spya-vv54j2).
+     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
 ];
 
 /**
@@ -243,20 +245,19 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
-  it("every one of the four, and never more than one radio checked", () => {
+  it("draws every current experimental mode, and never more than one radio checked", () => {
     for (const mode of BEHIND_THE_SWITCH) {
-      /* Marginalia is a switch, not a band, since 2026-10-01: the next test. */
-      if (mode === "marginalia") continue;
       reading({ mode, experimental: EXPERIMENTAL_OFF });
       expect(radioModes(), mode).toContain(MODE_LABEL[mode]);
       expect(checked(), mode).toEqual([MODE_LABEL[mode]]);
     }
   });
 
-  /* **Marginalia's toggle obeys the same rule** (261001i): with its notes on
-     it stays drawn with the switch off, pressed, so the one control that turns
-     them off cannot vanish — and it is never one of the checked radios. */
-  it("Marginalia's toggle stays drawn and pressed while its notes are on", () => {
+  /* **Marginalia's toggle is drawn with the switch off, pressed or not**,
+     since 2026-10-05 when the mode left the switch (plan 261005d) — and it is
+     never one of the checked radios. Before that it obeyed the rule above:
+     drawn only while its notes were on. */
+  it("Marginalia's toggle is drawn with the switch off, and pressed while its notes are on", () => {
     reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
     const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
     expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
@@ -264,7 +265,9 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
     expect(checked()).toEqual([MODE_LABEL.glossary]);
     reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
-    expect(host.querySelector('.dock-modes [aria-pressed]')).toBeNull();
+    const closed = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
+    expect(closed?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
+    expect(closed?.getAttribute("aria-pressed")).toBe("false");
   });
 
   /**
@@ -334,8 +337,8 @@ describe("the fit signature", () => {
     fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
-    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "remember").length);
-    expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
+    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "referee").length);
+    expect(sig(false, "timeline")).not.toBe(sig(false, "referee"));
   });
 
   /* Marginalia's toggle pressed is `.on`, which gets its label back at rung 2,

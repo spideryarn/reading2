@@ -313,6 +313,27 @@ describe("the headings breadcrumb", () => {
     expect(host.querySelector("nav.crumbs")).toBeNull();
   });
 
+  it("a tree containing only labelled block leaves has no empty controls bar", async () => {
+    experimentalSince = "2026-10-02T00:00:00.000Z";
+    const original = OWNED.tree;
+    OWNED.tree = {
+      ...TREE,
+      nodes: {
+        n0: { ...TREE.nodes.n0!, children: ["n3"] },
+        n3: { ...TREE.nodes.n3!, parent: "n0", depth: 1 },
+      },
+    };
+    try {
+      await open();
+      expect(host.textContent, "the article is up").toContain(PARAGRAPH);
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+      expect(host.querySelector(".reader > .controls")).toBeNull();
+      expect(host.querySelector(".bar-sentinel")).toBeNull();
+    } finally {
+      OWNED.tree = original;
+    }
+  });
+
   it("with the switch on, the bar holds the path and the last crumb is current", async () => {
     experimentalSince = "2026-10-02T00:00:00.000Z";
     await open();
@@ -511,6 +532,24 @@ describe("the headings breadcrumb", () => {
       }
       expect(host.querySelector(".marg-narrow"), "there is room for the column").toBeNull();
       expect(host.querySelector(".marg-head .marg-path")?.textContent, "the head names the part").toContain(
+        "The argument it makes",
+      );
+      expect(host.querySelector("nav.crumbs")).toBeNull();
+    });
+
+    /**
+     * **At the very top, above the first part, the head names the first part.**
+     * The fixture as it is: its first block (the title) lies outside its first
+     * part, and jsdom's reader is at the top with no `?at=`. The breadcrumb is
+     * hidden while the column is drawn, so until 261004l nothing on the page
+     * said where the reader was (qi-2ymfq3ek). notes.ts § `headBlock`.
+     * docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § D
+     */
+    it("at the very top, above the first part, Marginalia's head names the first part", async () => {
+      await open("?margin=1");
+      expect(new URLSearchParams(location.search).get("at"), "no position in the address").toBeNull();
+      expect(host.querySelector(".marg-narrow"), "there is room for the column").toBeNull();
+      expect(host.querySelector(".marg-head .marg-path")?.textContent, "the head names the first part").toContain(
         "The argument it makes",
       );
       expect(host.querySelector("nav.crumbs")).toBeNull();

@@ -28,6 +28,7 @@ import {
   formatSpendNanos,
 } from "../admin.js";
 import { CARD } from "./card.js";
+import { taskOf } from "../cost-cube.js";
 import { currentStepName } from "../step-order.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -39,12 +40,11 @@ export type ArticleCostLoad =
 /** What a line is called: the pipeline step for step work, the job otherwise. */
 export function lineName(line: ArticleCostLine): string {
   // The append-only ledger keeps old names; only their presentation changes.
-  const step = line.stepName === null ? null : currentStepName(line.stepName);
+  const name = taskOf(line);
   const job = currentStepName(line.job);
-  const name = step ?? job;
   /* Historical labels calls ran inside the structure step. Keep that detail
      so the two kinds of calls remain distinguishable. */
-  const detail = step && job !== step ? ` · ${job}` : "";
+  const detail = line.stepName && job !== name ? ` · ${job}` : "";
   return `${name.replaceAll("_", " ")}${detail.replaceAll("_", " ")}`;
 }
 

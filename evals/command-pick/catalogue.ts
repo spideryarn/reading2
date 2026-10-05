@@ -8,8 +8,9 @@
  *
  * The first run (plan 261002c Stage D) used a hand copy of 51 rows, now
  * ./catalogue-261002c.ts, retired. Its results are `results/jev.json`,
- * `results/chat.json` and `results/summary.md`; this run's are in
- * `results/261003/`, and no answer is shared between the two.
+ * `results/chat.json` and `results/summary.md`; every run since has its own
+ * `results/<yyMMdd>/` (run.ts § `CURRENT_RUN`), and no answer is shared
+ * between any two.
  *
  * The argument options' words are ours and trusted.
  */
@@ -98,7 +99,8 @@ export function writesOrSpends(id: string): boolean {
     id === "action:experimental" ||
     id === "arg:tag-add" ||
     id === "arg:tag-remove" ||
-    id.startsWith("action:rerun-")
+    id.startsWith("action:rerun-") ||
+    id.startsWith("action:find-more-")
   );
 }
 

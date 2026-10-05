@@ -41,7 +41,7 @@ import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
-import { exactly } from "./relative-time.js";
+import { exactly, publishedOf } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
@@ -210,10 +210,18 @@ export function ShelfCard({
      length and no blocks to count; what it has is a title, its authors and an
      abstract, and the one button that reads the rest. */
   const minimal = entry.processing === "minimal";
+  /* **When the piece was published, after who wrote it and where** — Greg,
+     2026-10-04: *"Show the publication date in the logged-in homepage Shelf"*.
+     Until then a card said it only while the shelf was sorted by Published.
+     Bare, with no "published" in front: beside the author and the site a date
+     reads as the piece's own, and the times that are the reader's (added,
+     opened) are on the bottom row. `publishedOf` prints it, so a paper dated
+     only to a year says the year. Plan 261005e. */
+  const published = publishedOf(entry)?.label;
   const facts = (
     minimal
-      ? [entry.byline, entry.siteName]
-      : [entry.byline, entry.siteName, `~${entry.minutes} min`, `${entry.blocks} blocks`]
+      ? [entry.byline, entry.siteName, published]
+      : [entry.byline, entry.siteName, published, `~${entry.minutes} min`, `${entry.blocks} blocks`]
   ).filter(Boolean) as string[];
 
   return (
@@ -259,9 +267,15 @@ export function ShelfCard({
         )}
       </div>
 
-      <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      <p
+        data-shelf-facts=""
+        className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground"
+      >
         {facts.map((f, i) => (
-          <span key={f} className="tw:min-w-0 tw:max-w-full tw:break-words">
+          /* Keyed by position as well as text: an author called "2011" and a
+             paper of 2011 are two facts, and two equal keys would drop one. */
+          // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
+          <span key={`${i}:${f}`} data-shelf-fact="" className="tw:min-w-0 tw:max-w-full tw:break-words">
             {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
             {f}
           </span>

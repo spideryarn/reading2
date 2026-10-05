@@ -16,7 +16,7 @@
 import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
 import { withoutOwnNumber } from "./heading-number.js";
-import { PREAMBLE_TITLE, sameHeading } from "../heading-text.js";
+import { PREAMBLE_TITLE, sameHeading, UNTITLED_WINDOW_TITLE } from "../heading-text.js";
 import type { Voice } from "./voice.js";
 
 export interface Cell {
@@ -369,7 +369,9 @@ export function titleVoice(node: TreeNode): Voice {
   if (node.sourceHeading !== undefined) {
     return sameHeading(node.title, node.sourceHeading) ? "author" : "ai";
   }
-  if (node.title === PREAMBLE_TITLE) return "ui";
+  /* A tree no model wrote quotes the passage's opening words where there is no heading. */
+  if (node.titleFrom === "opening-words") return "author";
+  if (node.title === PREAMBLE_TITLE || node.title === UNTITLED_WINDOW_TITLE) return "ui";
   return "ai";
 }
 

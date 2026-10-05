@@ -302,6 +302,23 @@ describe("renaming from the masthead", () => {
     expect(renamed).not.toHaveBeenCalled();
   });
 
+  it("explains a saved title with no shelf card without dereferencing null", async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ entry: null, purpose: null }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    mount("The Barn Owl");
+    act(() => pencil().click());
+    type("Owls, revisited");
+    submit();
+    await act(async () => {});
+
+    expect(renamed).not.toHaveBeenCalled();
+    expect(find("h1").textContent).toBe("The Barn Owl");
+    expect(find('[role="alert"]').textContent).toContain("saved");
+    expect(find('[role="alert"]').textContent).not.toContain("Cannot read");
+  });
+
   it("says so when the write fails, and leaves the heading alone", async () => {
     apiFetch.mockResolvedValue(
       new Response(JSON.stringify({ error: "No such article" }), {

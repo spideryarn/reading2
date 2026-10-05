@@ -36,7 +36,9 @@ import {
 import { rerunCommand } from "../src/web/rerun-commands.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "../src/web/article-commands.js";
 import { subModesOf } from "../src/web/sub-modes.js";
+import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalCommand } from "../src/web/CommandBar.js";
+import { FIND_MORE_MODES } from "../src/web/find-more.js";
 
 const close = () => ({ kind: "close" }) as const;
 const one = (query: string): readonly ArgumentQuery[] => parseArgumentQuery(query);
@@ -180,6 +182,10 @@ function everyRow(): readonly Command[] {
       archive: { at: null, lost: false, busy: false, error: null, set: async () => ({ kind: "done" }) as const },
       tags: { edit: async () => [] },
     },
+    /* Both bands offering an append, so the two *Find more* rows are in the
+       list by the path production takes (GPT Sol's F5 on plan 261004k: a
+       synthetic list that left them out would keep the matrix green falsely). */
+    executor: { runners: {}, sources: {}, findMore: { glossary: close, quotes: close } },
   };
   return [
     ...MODES.map(modeCommand),
@@ -197,18 +203,47 @@ function everyRow(): readonly Command[] {
     exportCommand(close),
     experimentalCommand(true, close),
     experimentalCommand(false, close),
+    ...appearanceRows("dark", () => true),
   ];
 }
 
+/**
+ * **The two rows whose words the `find` verb also takes**, by id — the one
+ * declared exception to the matrix (plan 261004k, GPT Sol's F5). `find more
+ * terms` is *Glossary › Find more*'s own phrase and also a search for *more
+ * terms*; the verb is not narrowed, and the bar draws the row first and the
+ * *Find “more terms” in this article* row after it
+ * (tests/find-more-commands.test.tsx § the rows, in the bar).
+ */
+const ALSO_A_FIND: ReadonlySet<string> = new Set(FIND_MORE_MODES.map((mode) => `find-more-${mode}`));
+
 describe("the collision matrix (GPT Sol's F7)", () => {
-  const names = [
+  const declared = (command: Command) => command.kind === "action" && ALSO_A_FIND.has(command.id);
+  const namesOf = (commands: readonly Command[]) => [
     ...new Set(
-      everyRow().flatMap((command) => {
+      commands.flatMap((command) => {
         const text = commandText(command);
         return [text.label, ...text.aliases];
       }),
     ),
   ];
+  const names = namesOf(everyRow().filter((command) => !declared(command)));
+  const findMoreNames = namesOf(everyRow().filter(declared));
+
+  it("holds both Find more rows, so the exception below is about rows the bar draws", () => {
+    const ids = everyRow().flatMap((command) => (command.kind === "action" ? [command.id] : []));
+    for (const id of ALSO_A_FIND) expect(ids).toContain(id);
+    expect(findMoreNames).toContain("find more");
+    expect(findMoreNames).toContain("find more terms");
+    expect(findMoreNames).toContain("define find more");
+  });
+
+  it("lets a Find more row's `find more …` be a find as well, and none of its other words anything", () => {
+    for (const name of findMoreNames) {
+      const want = name.startsWith("find more") ? [{ kind: "find", words: name.slice("find ".length) }] : [];
+      expect(parseArgumentQuery(name), name).toEqual(want);
+    }
+  });
 
   it("has every mode's label and nickname in it, so the matrix is not empty", () => {
     for (const mode of MODES) {

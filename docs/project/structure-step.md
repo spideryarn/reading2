@@ -1098,6 +1098,10 @@ Two failures, deliberately kept distinct, because they are not the same problem:
   that call actually cost. It is deliberately not an asymptotic claim; `buildTree` enforces neither
   the depth nor the fan-out the prompt asks for, so no bound here would be a bound the runtime keeps.
   [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+  **Since 2026-10-05 this is no longer the step failing.** `generateStructure` catches that one
+  throw and builds the tree with no model:
+  [§ When one answer will not fit](#when-one-answer-will-not-fit).
 - **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
   the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
   suggest retrying, because the Retry button makes the identical call.
@@ -1117,6 +1121,82 @@ JSON, and it is not — it now reads the answer with `parseJsonAnswer`
 sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
 an offset that could mean either thing.
 [260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md).
+
+## When one answer will not fit
+
+A document past the boundary above (a 250-page novel is about 3,100 blocks) used to be refused
+here, after its transcription had been paid for. Since 2026-10-05 it is not. Greg's decision and
+the options he chose between are in
+[261004f § Decisions](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#decisions);
+the design, its reviews and the results are in
+[261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md),
+and the measurements in
+[the investigation](../investigations/261005a-long-documents-structured-in-slices.md).
+
+Two things happen, in this order.
+
+### First: the tree is asked for in slices
+
+`runSlices` in [`src/structure-slices.ts`](../../src/structure-slices.ts). The body is cut into
+slices of about 1,000 blocks, on the document's own headings where it has them. Each slice goes
+through the ordinary structure call, eight at a time, with a short note ahead of its blocks saying
+it is one stretch of a longer document (`SLICE_NOTE`). The system prompt is untouched, and an
+ordinary article's request is byte for byte what it was. Every slice's top-level sections are then
+put under one root, whose gist and question come from one small call over those sections' titles
+and gists. The result goes through the same final `buildTree`, tree checks and labels check as any
+tree, and is an ordinary finished tree.
+
+- **A slice's answer is accepted only if its sections are there and exactly tile the blocks it was
+  given.** An answer with a root and no sections is valid on its own and would vanish in the join,
+  leaving a neighbour's gist stretched over text that model never read.
+- **A top-level section that comes back with no sections of its own and more than `MAX_BATCH`
+  blocks is asked for once more**, alone, and replaced by what comes back if that is two or more
+  sections.
+- **Slices, refills and the root are each checkpointed** under their own request, so a second run
+  on unchanged blocks asks for nothing.
+- **The slices keep a deadline of their own, ahead of the queue's**, and every call has a time
+  cap. If the queue's deadline fired first the job would end as interrupted, whatever this step
+  returned.
+- **On any failure it stops starting calls, waits for the ones in flight, and falls back** to the
+  tree below. A failed slice (after one re-ask), a failed refill, a failed root call, a joined tree
+  that will not build, a section the labels step could not ask about, or time running out. What
+  was spent is still counted. A reader's Stop is a cancellation, not a fallback.
+
+What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
+seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is
+not time, so the step falls back.
+
+### The fallback: a tree from the document's own headings
+
+`buildBoundedHeadingTree` in [`src/heading-tree.ts`](../../src/heading-tree.ts), with no model
+call. It is what the reader gets when the slices fail, so that a long document never fails at
+this step.
+
+- **It has the shape the model prompt asks for**: root, parts, sections, and every body block at depth 3.
+  The reading view takes "the section level" to be one above the deepest paragraph, for the whole
+  article (`sectionDepth`, [`src/web/position.ts`](../../src/web/position.ts)), so a tree whose
+  branches end at different depths breaks section navigation. That is why this is not
+  `buildHeadingTree`, which stays as it was for the structure eval.
+- **No body section holds more than the labels step's batch size** (`MAX_BATCH`). The labels step never
+  cuts a section, so a run of 3,000 paragraphs under one heading was one call it refused. Longer
+  runs are cut into consecutive "windows". Without a usable heading, a window takes its title
+  from the opening words of its first non-heading block with at least three words containing a
+  letter, dropping dot leaders. With no qualifying block or usable heading, it wears the stock
+  title (`UNTITLED_WINDOW_TITLE`).
+- **A heading repeated five or more times is page furniture, not a section** (`REPEATED_HEADING_MIN`),
+  and so is the article's own title met twice, or a heading with no letter in it. Equality uses
+  `sameHeading`, which folds typographic punctuation and whitespace but preserves case,
+  trailing punctuation and numbering. These blocks remain leaves but neither cut nor supply
+  a fallback title. A PDF's running header is often transcribed as a
+  heading on every page: on the first real book through this path, 58 of 76 parts were called
+  *With a Little Help*. With the rule it is 13 parts, named for the stories.
+- **It has no gists**, and is marked `provisional: "headings"`, which is what excuses it from the
+  gist rule in `checkTree`. Nothing treats that mark as "still arriving".
+- **A model's tree takes the same path when the labels step could not start on it**: one holding a
+  section too long for one labels call (`unaskableBatches`, [`src/labels.ts`](../../src/labels.ts)).
+- **`StructureRun.source` says which path ran** (one answer, slices, or headings and why), and the
+  step logs it at every value and puts it in its `detail`, so a fallback that became the common
+  case would show.
 
 ## The generation prompt
 

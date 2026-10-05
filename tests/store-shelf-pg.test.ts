@@ -36,6 +36,7 @@
  * rather than show a green tick for having checked nothing.
  */
 
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, getTableName, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -59,6 +60,7 @@ import {
   glossaryLookups,
   ingestEvents,
   linkSummaries,
+  quizAttempts,
   realtimeSessions,
   refereeClaims,
   refereeCriteria,
@@ -318,6 +320,13 @@ describe("the Postgres shelf and library search", () => {
     }
   }
 
+  /** A patch of the published fixture, which is on the shelf and so has a card to answer with. */
+  const patchCard = async (change: Parameters<typeof pgShelfStore.patch>[1]) => {
+    const entry = await pgShelfStore.patch(SLUG, change);
+    if (!entry) throw new Error("a published article's patch answered with no shelf card");
+    return entry;
+  };
+
   const mine = async (query: string, limit = 20) =>
     (await pgLibrarySearch.searchLibrary(query, limit)).hits.filter((h) => h.slug === SLUG);
 
@@ -536,7 +545,7 @@ describe("the Postgres shelf and library search", () => {
     });
 
     it("renames, and the reading view agrees with the card", async () => {
-      const entry = await pgShelfStore.patch(SLUG, { title: "What I call it" });
+      const entry = await patchCard({ title: "What I call it" });
       expect(entry.title).toBe("What I call it");
       expect(entry.titleOverridden).toBe(true);
 
@@ -551,7 +560,7 @@ describe("the Postgres shelf and library search", () => {
       expect((await mine(RARE))[0]?.title).toBe("What I call it");
       expect((await mine(RARE))[0]?.titleOverridden).toBe(true);
 
-      const cleared = await pgShelfStore.patch(SLUG, { title: null });
+      const cleared = await patchCard({ title: null });
       expect(cleared.title).toBe("The Current Title");
       expect(cleared.titleOverridden).toBeUndefined();
       /* Cleared everywhere at once: the article's own title is the author's. */
@@ -583,15 +592,15 @@ describe("the Postgres shelf and library search", () => {
     });
 
     it("applies both fields in one write", async () => {
-      const entry = await pgShelfStore.patch(SLUG, { title: "Both", archived: true });
+      const entry = await patchCard({ title: "Both", archived: true });
       expect(entry.title).toBe("Both");
       expect(entry.archivedAt).toBeTruthy();
       await pgShelfStore.patch(SLUG, { title: null, archived: false });
     });
 
     it("keeps the first archive date when archived twice", async () => {
-      const first = await pgShelfStore.patch(SLUG, { archived: true });
-      const second = await pgShelfStore.patch(SLUG, { archived: true });
+      const first = await patchCard({ archived: true });
+      const second = await patchCard({ archived: true });
       expect(second.archivedAt).toBe(first.archivedAt);
       await pgShelfStore.patch(SLUG, { archived: false });
     });
@@ -606,7 +615,7 @@ describe("the Postgres shelf and library search", () => {
          answers typecheck. */
       expect((await pgArticleReader.articleMetadata(SLUG)).archivedAt).toBe(null);
 
-      const archived = await pgShelfStore.patch(SLUG, { archived: true });
+      const archived = await patchCard({ archived: true });
       expect((await pgArticleReader.articleMetadata(SLUG)).archivedAt).toBe(archived.archivedAt);
 
       await pgShelfStore.patch(SLUG, { archived: false });
@@ -719,6 +728,23 @@ describe("the Postgres shelf and library search", () => {
       expect((await pgShelfStore.read(SLUG)).purpose).toBe("again");
       await pgShelfStore.patch(SLUG, { purpose: null });
       expect((await pgShelfStore.read(SLUG)).purpose).toBeUndefined();
+    });
+
+    it("stores a purpose on an article that is still being imported, and does not call that a failure", async () => {
+      /* The add page saves the purpose while the import runs (plan 261004l):
+         the row exists from the job's claim, and no revision is published, so
+         there is no card to answer with. Throwing 404 here, after the UPDATE,
+         told the box "Not saved" about words that were in the column. */
+      const id = randomUUID();
+      const slug = `importing-${mintId().toLowerCase()}`;
+      const db = getDb();
+      await db.insert(articles).values({ id, ownerId: currentOwnerId(), slug });
+      try {
+        await expect(pgShelfStore.patch(slug, { purpose: "  the evidence  " })).resolves.toBeNull();
+        expect((await pgShelfStore.read(slug)).purpose).toBe("the evidence");
+      } finally {
+        await db.delete(articles).where(eq(articles.id, id));
+      }
     });
 
     it("settles a pasted purpose's line endings before storing it", async () => {
@@ -986,6 +1012,16 @@ describe("destroying an article", () => {
       glossary_hidden_entries: () =>
         db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
       article_tags: () => db.insert(articleTags).values({ articleId: GONE_ARTICLE, tag: "gone" }),
+      /* A kept quiz answer — plan 261005b. It goes with the article. */
+      quiz_attempts: () =>
+        db.insert(quizAttempts).values({
+          articleId: GONE_ARTICLE,
+          batchId: "spya-qzgone",
+          questionId: "spya-qzgqst",
+          question: "What did it say?",
+          answer: "something nobody will read again",
+          reply: "a mark nobody will read again",
+        }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({
           articleId: GONE_ARTICLE,

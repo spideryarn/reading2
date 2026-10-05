@@ -100,13 +100,14 @@ import {
   type Section,
 } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
-import { BackLink } from "./BackLink.js";
+import { HomeLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { CHANGELOG_LABEL } from "./router.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { relativeAgo, type RelativeStyle } from "./relative-time.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { useNow } from "./useNow.js";
+import { type ReloadForNewBuildSource, useReloadForNewBuild } from "./useReloadForNewBuild.js";
 /* The 210 KB the header above is about. Only ever reached through this
    lazily-loaded module — see LazyPage.tsx and App.tsx § loadChangelog.
 
@@ -810,18 +811,25 @@ export function withPending(history: ChangelogVersion[], pending: PendingRelease
 
 const RELEASES = withPending(PARSED.versions, parsePending(pendingText, PARSED.versions).pending);
 
-export function ChangelogPage() {
+/**
+ * `reloading` is for tests/changelog-page.test.tsx; the app passes nothing and
+ * gets the browser.
+ */
+export function ChangelogPage({ reloading }: { reloading?: Partial<ReloadForNewBuildSource> } = {}) {
   useDocumentTitle(pageTitle({ kind: "changelog" }));
+  /* The list above is compiled into this bundle, so a copy left open goes on
+     showing an old one. When a different build is live and nothing unsent
+     would be lost, the page reloads itself — Greg, 2026-10-04 (spya-ym9dum).
+     The address survives it, `#release-126` included; which releases the
+     reader had opened by hand does not. useReloadForNewBuild.ts. */
+  useReloadForNewBuild(reloading);
 
   return (
     <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
-          `history.back()`, and most people who open this page were *sent* to it
-          — from an email, from the footer of another page, from a link in an
-          article — so there was often no "back" for it to mean. It is also the
-          label the footer uses for the same destination, and one page should not
-          call one address two things. */}
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
+      {/* Signed out only: signed in, the corner logo is the way home, and the
+          house beside it is what Greg reported on this page (spya-gqj660).
+          BackLink.tsx § `HomeLink`, which also says why "Home" and not "Back". */}
+      <HomeLink className="tw:mb-6" />
 
       {/* The same string the footer, the command bar and the tab title use —
           router.ts § `CHANGELOG_LABEL`. A heading that had drifted from the

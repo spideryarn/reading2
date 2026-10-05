@@ -42,7 +42,7 @@ import { useEffect } from "react";
 
 import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
-import { BackLink } from "./BackLink.js";
+import { HomeLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { PUBLIC_SHARING_HREF, TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "4 October 2026";
+const LAST_UPDATED = "5 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -137,13 +137,9 @@ export function PrivacyPage() {
 
   return (
     <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
-          `history.back()`, and most people who open this page were *sent* to it
-          — from an email, from the footer of another page, from a link in an
-          article — so there was often no "back" for it to mean. It is also the
-          label the footer uses for the same destination, and one page should not
-          call one address two things. */}
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
+      {/* Signed out only: signed in, the corner logo is the way home.
+          BackLink.tsx § `HomeLink`, which also says why "Home" and not "Back". */}
+      <HomeLink className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
@@ -194,11 +190,19 @@ export function PrivacyPage() {
             <strong className="tw:text-foreground">The articles you add</strong> — we fetch the page
             you point us at and store its text and images. A PDF you upload is stored as a file.
           </li>
+          {/* **Quiz answers are on this list since 2026-10-05**, and until then
+              the bullet ended "Quiz answers are the exception: they go to a
+              model to be marked and are not stored" — true at the time. Greg
+              asked for the answers to be kept so they are still there when a
+              reader comes back (report spya-e8ujxn), and `quiz_attempts` now
+              holds each answer and the reply it was given. What is still not
+              kept is whether an answer was judged right or wrong.
+              docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
-            highlights, chat and voice conversations, saved searches, and the “about you” profile
-            you can fill in, which is there to be given to the model. Quiz answers are the exception:
-            they go to a model to be marked and are not stored.
+            highlights, chat and voice conversations, saved searches, your answers to quiz
+            questions, with what the AI wrote back about each, and the “about you” profile you can
+            fill in, which is there to be given to the model.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures

@@ -94,6 +94,17 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 so all three push, and all three land an unrecognised value on the default rather than on an error
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
+**A sub-mode parameter outlives its mode, deliberately.** `remember`, `diagram`, `referee`,
+`summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
+buttons write `mode` alone. So `?mode=chat&remember=quiz` is not a leak: the parameter is read only
+by its own mode and does nothing under any other, and it is what makes pressing Remember again
+return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
+key: back to Remember with `remember=quiz` kept also clears `?thread=`, in the same pushed entry,
+because Quiz and a selected conversation cannot both be shown
+([`sub-modes.ts`](../../src/web/sub-modes.ts) § `returnToSubMode`;
+`tests/sub-mode-param-outlives-its-mode.test.tsx`;
+[261004l](../plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md) § C).
+
 **`dx` and `dhue` replace where `diagram` pushes**, and the split is the one this
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo
 it, where the other two are ways of looking at one picture — a reader flicking
@@ -565,9 +576,14 @@ position is a top-of-section fact. `ScrollAlign` in [`scroll.ts`](../../src/web/
 asks "where is the reader" — the spy that writes `?at=`, the next jump's origin (so the chip),
 `beginJump`'s "already there", ↑ / ↓, `whereIsBlock` — measures at the reading line just under the
 bars, and a centred block's top sits below it, so every one of them would otherwise name the block
-*above*. `scroll.ts` keeps one *arrival anchor*, set when a centred movement settles and cleared by
-the next movement of any kind or by the reader scrolling; those callers answer with it while it
-holds. [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
+*above*. Structure's current row (`useColumnContext`, since 2026-10-05) reads at 40% of the window;
+a short centred heading sits below that line too. `scroll.ts` keeps one *arrival anchor*, set when
+a centred movement settles and cleared by the next movement of any kind or by the reader scrolling;
+those callers answer with it while it holds. "The reader scrolling" means a scroll event at
+**a different pixel** from the one the arrival
+reached: the jump's own scroll event can turn up a second late behind a render, and until 2026-10-05
+a clock decided whose it was, so `?at=` was rewritten to the section before the one clicked
+([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)). [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
 § After the plan review, F1.
 
 ### Debounced, not throttled
@@ -687,6 +703,56 @@ that is the one that bites: a link carrying only the new parameter would look li
 and be written over. `tests/last-view.test.ts` scans the client for `useQueryState` keys and fails on
 one that neither list has heard of, so the next parameter is a decision rather than an
 omission.
+
+### An article never opened here arrives at a default
+
+> When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
+> room) and (if there's even more room) Marginalia mode in right-hand
+>
+> — Greg, 2026-10-04 (spya-ax5tmm)
+
+One more case in the same decision, since 2026-10-05
+([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)).
+A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
+it, arrives at:
+
+| Usable width (rail on) | Arrives at |
+|---|---|
+| below 700px | the article alone — a band would cover the prose |
+| 700px and up | `?mode=summary` (Brief) |
+| 900px and up | `?mode=summary&margin=1` |
+
+The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
+([`layout.ts`](../../src/web/layout.ts)) and `notesFit`
+([`marginalia/press.ts`](../../src/web/marginalia/press.ts)), which are what the reading view and
+the Marginalia button use, with the reader's own two measurements
+([`reader/measure.ts`](../../src/web/reader/measure.ts)). So the default cannot name a column the
+layout would decline to draw. It is measured once, on arrival; resizing afterwards never reapplies
+it.
+
+- **The link always wins**, as for a restore, and so does anything the reader has done: the default
+  is applied only while the address still says nothing.
+- **It does not override a later choice.** An empty view is stored as `""` rather than the key being
+  removed, so going back to Plain at the top and reopening stays Plain. Only *no key* is a first
+  open.
+- **"First open" means first open in this browser.** An article read on another device gets the
+  default once here. A bare Metadata visit does not use up the article's first open. The key is
+  written on every open of the reading view, so a visit while signed out, or on a
+  window too narrow for a band, uses the first open up: the default is not held over for a wider
+  window or a later sign-in. An article already in this browser that was last left in Plain at the
+  top had no key before this shipped, so it gets the default once.
+- **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
+  experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
+  switch on. The default still waits for the settings store's answer, because that is where
+  "signed in" comes from. If settings are already loaded, the address is settled before paint;
+  otherwise the default waits for them, whether the article payload has arrived yet or not. The
+  shelf does not load settings itself. A store that never answers means no default.
+- **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
+- **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
+  open would be a first one. `readLastView` tells *failed* from *no key* for this.
+- **It starts nothing.** Arriving in Summary or with the notes on spends nothing
+  ([summaries.md](summaries.md), [marginalia.md](marginalia.md)); with no summary stored the owner
+  sees the empty state and **Write it**.
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

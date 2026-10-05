@@ -47,6 +47,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  quizAttemptStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -246,7 +247,14 @@ import {
 } from "./jobs.js";
 import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
-import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
+import { type AdminCosts, costWindowLabel, parseCostWindow } from "./cost-cube.js";
+import { authAdminEndpoint, gotruePages, listAccounts } from "./store/admin-accounts.js";
+import {
+  silentLiveSessionsForArticle,
+  SpendCubeTooLarge,
+  spendCube,
+  spendForArticle,
+} from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type {
   ClaimsFinish,
@@ -2197,7 +2205,9 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  *
  * The one case with **no** terminal frame is the reader leaving: `sse`'s `gone`
  * aborts the model call, `markAnswerStream` ends without a `done`, and there is
- * nobody on the other end of the socket to tell either way.
+ * nobody on the other end of the socket to tell either way. (Leaving later,
+ * during the verdict call, is different: the mark is already whole, the stream
+ * still yields its `done`, and only the frame has nowhere to go — see below.)
  *
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
@@ -2208,10 +2218,25 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
  * half-opened stream. Everything after `sse(res)` is frames, including failure.
  *
- * **Nothing is stored.** No attempt row, no thread, no `pending` write to
- * recover — which is why this handler has none of `answer`'s three writes. A
- * reload starts the quiz fresh; the questions persist because they are an
- * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not stored.
+ * ## A finished mark is kept — one write, when the stream says `done`
+ *
+ * Nothing was stored here until 2026-10-05; Greg asked for the answers to be
+ * kept (report spya-e8ujxn, docs/plans/261005b-quiz-answers-are-kept-and-restored.md).
+ * So when `markAnswerStream` yields its `done`, one row goes into
+ * `quiz_attempts` — the answer, the mark, and the question's words — **and
+ * then** the `done` frame is sent, carrying the row's own time as `answeredAt`.
+ * Still no `pending` write and nothing to recover: a mark that did not finish
+ * leaves no row at all.
+ *
+ * - **The row is the record that a mark finished; the frame is not.** A reader
+ *   who leaves during the verdict call still gets a `done` out of the stream,
+ *   so the row is written with nobody listening, and they find the answer
+ *   there when they come back.
+ * - **A save that fails does not fail the mark.** The reader has watched it
+ *   arrive. It is reported, and `done` goes with `kept: false` and no
+ *   `answeredAt`, so the panel can say the answer will not be there later.
+ * - **The verdict is not stored**, and neither the answer nor the mark is
+ *   logged — from here or from the store.
  */
 async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
@@ -2300,7 +2325,8 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          would ever see, and being paid for it, until it finished on its own —
          and a reader who came back and pressed Answer again started a second
          one beside the first. There is no stop button in the quiz panel and no
-         attempt row to reconcile, so this is the only cancellation there is.
+         pending row to reconcile (a row is written only for a mark that
+         finished), so this is the only cancellation there is.
          `markAnswerStream` tells this signal apart from its own deadline and
          stall clocks and ends the mark without a `done`. */
       signal: gone,
@@ -2330,10 +2356,29 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          screen even by accident, because nothing renders this frame's fields
          except the tick. It is often absent, which is normal: the ladder reads
          absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+      /* **Kept first, then told.** In this order so that `answeredAt` is the
+         row's own time, and so that a `done` the reader receives without
+         `kept: false` is a mark that really is in the table. Not gated on
+         `alive()`: a mark that finished is kept whether or not anybody is
+         still there to hear so. The catch reports the failure and nothing
+         else — `captureFailure` gets the slug and the phase, never the words. */
+      let answeredAt: string | null = null;
+      try {
+        answeredAt = await quizAttemptStore.record(slug, {
+          batchId: found.quiz.batchId,
+          questionId: question.id,
+          question: question.question,
+          answer: written,
+          reply: event.reply,
+        });
+      } catch (keepErr) {
+        captureFailure(keepErr, { route: "quiz-mark", slug, phase: "keep-answer" });
+      }
       frame("done", {
         reply: event.reply,
         model: event.model,
         ...(event.verdict ? { verdict: event.verdict } : {}),
+        ...(answeredAt ? { answeredAt } : { kept: false }),
       });
     }
   } catch (err) {
@@ -5473,7 +5518,7 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
 async function patchShelf(
   slug: string,
   body: unknown,
-): Promise<{ entry: LibraryEntry; purpose: string | null }> {
+): Promise<{ entry: LibraryEntry | null; purpose: string | null }> {
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
      be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
      folded into the checks below. */
@@ -5509,6 +5554,9 @@ async function patchShelf(
     change.archived = archived;
   }
 
+  /* `entry` is `null` for an article still being imported: written, with no
+     card to show for it yet. The add page saves the purpose then, and reads
+     only `purpose` back (src/web/purpose.ts). */
   const entry = await shelfStore.patch(slug, change);
   /* **`purpose` is answered beside the entry, not on it.** `LibraryEntry` is the
      shelf card, and it already refuses to carry the superseded title for the
@@ -8344,6 +8392,69 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The cost cube**, for `/admin/costs` — Greg, 2026-10-04 (report
+     spya-mykvhz). The ledger over `?since=&until=`, grouped by user, article,
+     task, model and day; the page filters, groups and pivots it in the browser
+     (src/cost-cube.ts). Behind the namespace gate like its siblings, which is
+     the check. docs/plans/261005a-admin-costs-page-cost-analysis-report-and-a-cost-tracking-audit.md.
+
+     **Asked as the administrator**, and that argument is the privacy rule: the
+     query names only the asker's own slugs, and anybody else's article is an
+     opaque id (src/store/ai-calls-spend-pg.ts § `spendCube`). */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/costs",
+    article: "none",
+    handler: async ({ user, request: { res, query } }) => {
+      /* A bound we cannot read is a 400, never "everything": a total over a
+         period nobody asked for looks exactly like the one they did. */
+      const asked = parseCostWindow(query.get("since"), query.get("until"));
+      if (!asked.ok) throw httpError(400, asked.message);
+      res.setHeader("Cache-Control", "private, no-store");
+      const { url, key } = authAdminEndpoint();
+      const [groups, accounts] = await Promise.all([
+        spendCube(asked.since ?? undefined, asked.until ?? undefined, user.id, key).catch((err) => {
+          if (err instanceof SpendCubeTooLarge) {
+            throw httpError(
+              400,
+              `That window has more than ${err.maxGroups} groups of calls. Ask for a shorter period.`,
+            );
+          }
+          throw err;
+        }),
+        /* The account listing alone, for the emails — not the users page's
+           nine-query read. */
+        /* **A failed listing costs the emails, not the page**: the money is
+           the ledger's and does not need the Auth service. Only the error's
+           class is logged — its message may carry the endpoint. */
+        listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+          log("http").warn(
+            { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+            "admin costs: the account listing failed, so the answer carries no emails",
+          );
+          return null;
+        }),
+      ]);
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
+      /* Every owner in the rows, and only those. One the Auth service does not
+         know — a deleted account's ledger rows outlive it — has no email. */
+      const owners = [...new Set(groups.map((g) => g.ownerId))].map((id) => ({
+        id,
+        email: emails.get(id) ?? null,
+      }));
+      const costs: AdminCosts = {
+        since: asked.since,
+        until: asked.until,
+        label: costWindowLabel(asked.since, asked.until),
+        rows: groups.map((g) => ({ ...g, category: costCategoryOf(g) })),
+        owners,
+        emailsAvailable: accounts !== null,
+      };
+      send(res, 200, costs);
+    },
+  },
+
   /* An EXACT match, which is what this row has always been for: a stray
      `/api/library/anything` must 404 rather than quietly serve the whole shelf.
      The shelf takes `?archived=1`, which is why it was the first route moved
@@ -9187,7 +9298,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      `mark` below is the exception, and it is the same exception the glossary's
      `lookup` is: *writing* the questions is one call over a whole article and so
      is a job, but marking ONE answer is a single question with a reader sitting
-     in front of it. It stores nothing — see `markOneAnswer`. */
+     in front of it. It keeps each finished mark (`quiz_attempts`, since
+     2026-10-05) and changes nothing about the questions — see `markOneAnswer`. */
   {
     kind: "pattern",
     method: "GET",
@@ -9202,13 +9314,28 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          ladder; it stays until there is an enforceable client-version boundary
          — src/quiz.ts says why. */
       const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        withOldClientBands(
-          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
-        ),
+      const found = await withProfileChanged<Omit<QuizResponse, "attempts">>(
+        at,
+        () => loadQuiz(at),
+        (quiz) => quiz.quiz,
       );
+      /* **The reader's kept answers to this batch**, since 2026-10-05 (plan
+         261005b) — on this read rather than a second endpoint, so the panel
+         gets questions and answers in one commit.
+
+         **A failed read of them does not take the questions away, and does not
+         say "none" either**: `null`, which the client reads as *keep what you
+         had* — `[]` would un-answer every question on a transient failure.
+         `QuizResponse.attempts` in src/types.ts. */
+      let attempts: QuizResponse["attempts"];
+      try {
+        attempts = await quizAttemptStore.latestForBatch(at, found.quiz.batchId);
+      } catch (err) {
+        captureFailure(err, { route: "quiz", slug: at, phase: "kept-answers" });
+        attempts = null;
+      }
+      const response: QuizResponse = { ...found, attempts };
+      send(res, 200, withOldClientBands(response));
     },
   },
 

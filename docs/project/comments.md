@@ -1374,6 +1374,12 @@ Docked or floating, the block the panel is about wears a 2px rule down its right
 belongs to. A conversation about the whole piece marks nothing. The plan is
 [261003p](../plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md).
 
+**The caret follows the composer.** The panel stays open while the conversation in it changes, and
+each conversation has its own composer, so a change removes the box the reader may be typing in.
+When it does, focus goes to the composer that replaces it, in every placement, and only then: a
+reader on any other control is left there (`ChatDialog.tsx` § The caret follows the composer;
+[261004l § B](../plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md)).
+
 ### On trial since 2026-10-04: a card in the column, level with its block
 
 The dock was option A. Asked whether to try option B, a card beside the block:

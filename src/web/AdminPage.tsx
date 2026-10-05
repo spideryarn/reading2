@@ -24,7 +24,7 @@
  * note the `tw:` prefix, without which the class does nothing.
  */
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
+import { ChartColumn, Gift, MessageSquareWarning, Palette, RefreshCw, Users } from "lucide-react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
 import { throttle, useQueryState } from "nuqs";
@@ -41,12 +41,12 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_DEFAULT_BY, adminByParam, sortDirParam } from "./params.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import {
+  ADMIN_COSTS_HREF,
   ADMIN_FEEDBACK_HREF,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
   ADMIN_VOUCHERS_HREF,
   DESIGN_HREF,
-  LIBRARY_HREF,
 } from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
@@ -72,11 +72,16 @@ const idOf = (u: AdminUser) => u.id;
  * The page shell every admin page wears: the back-link, the heading, the width.
  * Exported for AdminVouchersPage.tsx, which is a file of its own because it is
  * the one admin page with forms in it.
+ *
+ * **`back` is for a page under the index, and the index passes none.** It
+ * defaulted to an arrow to the library until 2026-10-05; `App.tsx` draws
+ * `HomeLogo` in the corner beside every admin page, which goes there already
+ * (BackLink.tsx § `HomeLink`). *Back to Admin* is not a way home, so it stays.
  */
 export function Shell({
   title,
   children,
-  back = { href: LIBRARY_HREF, label: "Back to your library" },
+  back,
 }: {
   title: string;
   children: ReactNode;
@@ -86,9 +91,12 @@ export function Shell({
     /* Wider than the shelf's `max-w-4xl`: this page's content is a table with
        eleven columns, and a narrower page would spend its whole life scrolling
        sideways inside `DataTable`'s own overflow box. */
-    <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:py-10 tw:font-sans">
+    /* `--safe-top` in the top padding since 2026-10-05: with no arrow above
+       it the index's heading is the first thing on the page, 4px below the
+       corner logo's box, and a notch would have pushed the logo down over it. */
+    <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:pb-10 tw:font-sans">
       <header className="tw:mb-8">
-        <BackLink href={back.href} label={back.label} />
+        {back && <BackLink href={back.href} label={back.label} />}
         <h1 className="tw:mt-2 tw:font-prose tw:text-3xl tw:text-foreground">{title}</h1>
       </header>
       {children}
@@ -232,6 +240,12 @@ export function AdminHome() {
           icon={<Gift size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
           title="Gift vouchers"
           blurb="Give an email address extra free articles, and see who has claimed theirs"
+        />
+        <Entry
+          href={ADMIN_COSTS_HREF}
+          icon={<ChartColumn size={18} className="tw:shrink-0 tw:text-muted-foreground" />}
+          title="Costs"
+          blurb="What model calls cost, by user, article, mode or task, model and day"
         />
         {/* **Moved off the shelf's masthead on 2026-09-05**, at Greg's request:
             > Move the Design link on the logged-in Homepage into /admin

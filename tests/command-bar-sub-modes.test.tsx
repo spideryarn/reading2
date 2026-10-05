@@ -33,7 +33,7 @@ import {
   summaryParam,
   threadParam,
 } from "../src/web/params.js";
-import { subModeParams, subModesOf, withSubMode, type SubMode } from "../src/web/sub-modes.js";
+import { returnToSubMode, subModeParams, subModesOf, withSubMode, type SubMode } from "../src/web/sub-modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 let host: HTMLDivElement;
@@ -88,7 +88,7 @@ function reading(props: Record<string, unknown> = {}): void {
  */
 function ReaderNavHarness(): ReturnType<typeof createElement> {
   const [mode, setMode] = useQueryState("mode", modeParam);
-  const [, setSubNav] = useQueryStates({
+  const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
     remember: rememberParam,
     thread: threadParam,
@@ -106,7 +106,11 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     onMode(next, sub) {
       /* Marginalia is a switch, not a band (`BandMode`); not under test here. */
       if (sub === undefined) {
-        if (isBandMode(next)) void setMode(next);
+        if (isBandMode(next) && next !== mode) {
+          const back = returnToSubMode(next, { remember: subNav.remember });
+          if (back === null) void setMode(next);
+          else void setSubNav(back, { history: "push" });
+        }
       } else void setSubNav(subModeParams(sub), { history: "push" });
     },
   });
@@ -253,10 +257,17 @@ describe("which sub-mode rows the bar offers", () => {
     const modeRows = rows()
       .filter((r) => r.dataset.kind === "mode")
       .map((r) => r.querySelector(".cmdbar-name")?.textContent);
-    expect(modeRows).not.toContain("Remember");
+    expect(modeRows).not.toContain("Referee");
     const names = subRows().map(fullName);
-    expect(names.some((n) => n.startsWith("Remember"))).toBe(false);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
+    /* Remember is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
+       three of its four parts; Explore is still behind the switch. */
+    expect(modeRows).toContain("Remember");
+    expect(names.filter((n) => n.startsWith("Remember"))).toEqual([
+      "Remember › Recall",
+      "Remember › Tutorial",
+      "Remember › Quiz",
+    ]);
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
     /* And not nothing: Summary's levels are for everybody. */
@@ -294,6 +305,32 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).toContain("Diagram › Trail");
     expect(names).not.toContain("Diagram › Drift");
   });
+
+  it.each(["article", "metadata"] as const)(
+    "with the switch off, offers Explore only for the carried Remember mode on %s",
+    (view) => {
+      for (const [search, offered] of [
+        ["?mode=remember&remember=explore", true],
+        ["?mode=chat&remember=explore", false],
+        ["?remember=explore", false],
+        ["?mode=remember&remember=unknown", false],
+        ["?mode=remember&remember=quiz", false],
+      ] as const) {
+        if (view === "metadata") metadataPage({ experimental: EXPERIMENTAL_OFF }, search);
+        else {
+          history.replaceState(null, "", `/read/a-piece${search}`);
+          reading({ experimental: EXPERIMENTAL_OFF, mode: search.includes("mode=remember") ? "remember" : "chat" });
+        }
+        openBar();
+        const names = subRows().map(fullName);
+        expect(names.includes("Remember › Explore"), search).toBe(offered);
+        expect(names).toEqual(expect.arrayContaining([
+          "Remember › Recall", "Remember › Tutorial", "Remember › Quiz",
+        ]));
+        act(() => dialog().close());
+      }
+    },
+  );
 
   it("gives every row a distinct id", () => {
     reading();
@@ -456,6 +493,17 @@ describe("Enter on a sub-mode row, on the reading view", () => {
         params.get("thread") === "spya-k3m9qt"
       );
     });
+  });
+
+  it("the Reader harness also clears a Chat thread on a plain return to retained Quiz", async () => {
+    readingThroughReader("?mode=chat&remember=quiz&thread=spya-k3m9qt");
+    const push = vi.spyOn(history, "pushState");
+    const remember = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Remember"]');
+    expect(remember).not.toBeNull();
+    act(() => remember?.click());
+    await until(() => new URLSearchParams(location.search).get("mode") === "remember");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(location.search).get("thread")).toBeNull();
   });
 });
 

@@ -36,7 +36,7 @@
 import { basename } from "node:path";
 
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { type Client, Pool } from "pg";
 
 import { loadEnvLocal } from "../env.js";
 import { log } from "../log.js";
@@ -200,8 +200,23 @@ export function getDb(): Db {
     "database pool created",
   );
 
-  database = drizzle(pool, { schema });
+  database = drizzleOver(pool);
   return database;
+}
+
+/**
+ * **A typed handle over a connection somebody else made** — the one place the
+ * Drizzle options are written, so a second handle maps columns exactly as
+ * `getDb()`'s does.
+ *
+ * For a script that must not use the ambient `DATABASE_URL`:
+ * `npm run cost:analyse -- --prod` builds its own verified `pg.Client` for
+ * production (scripts/feedback-reporter.ts § `productionClient`), opens
+ * `begin read only` on it and hands this handle to the query. Whoever made the
+ * connection owns it; nothing here connects, caches or closes.
+ */
+export function drizzleOver(connection: Pool | Client): Db {
+  return drizzle(connection, { schema });
 }
 
 /**

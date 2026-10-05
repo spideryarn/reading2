@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import * as messages from "../src/messages.js";
 import { OWNED_ARTEFACT, sharingPersonalisedList } from "../src/messages.js";
 import type { ProfileCarrying } from "../src/store/pg.js";
+import type { FetchFailureCode } from "../src/types.js";
 import {
   canRetry,
   CODE_KINDS,
@@ -29,6 +30,7 @@ import {
   articleHadNoText,
   documentHadTooLittleText,
   documentHasNoArticle,
+  fetchFailed,
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
@@ -104,6 +106,26 @@ type FactoryName = {
  * too few calls is not caught by anything, so the comments say which branches
  * each one is reaching.
  */
+const EVERY_FETCH_CODE: Record<FetchFailureCode, true> = {
+  "invalid-url": true,
+  "unsupported-scheme": true,
+  "blocked-address": true,
+  dns: true,
+  connection: true,
+  certificate: true,
+  timeout: true,
+  "too-many-redirects": true,
+  unauthorized: true,
+  forbidden: true,
+  "not-found": true,
+  "rate-limited": true,
+  "server-error": true,
+  "http-error": true,
+  "too-large": true,
+  "unsupported-type": true,
+  empty: true,
+};
+
 const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   providerHttpFailure: [
     400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599,
@@ -181,6 +203,15 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
   pdfPagesFiltered: [pdfPagesFiltered([12, 13])],
   pdfPagesIncomplete: [pdfPagesIncomplete([12, 13])],
+  /* Every code, and `http-error` three times for its two answers: no status
+     and a 5xx are one sentence, a 4xx is the other. The list of codes is a
+     `Record` over the union, so a new code cannot be left out of this sweep.
+     tests/fetch-failure-sentences.test.ts holds the kind each one should be. */
+  fetchFailed: [
+    ...(Object.keys(EVERY_FETCH_CODE) as FetchFailureCode[]).map((code) => fetchFailed(code, null)),
+    fetchFailed("http-error", 413),
+    fetchFailed("http-error", 599),
+  ],
 };
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...Object.values(FROM_FACTORIES).flat()];

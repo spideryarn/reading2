@@ -562,6 +562,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.articleTags.length) {
     at("tags.json", { tags: rows.articleTags.map((row) => rowJson(row)) });
   }
+  if (rows.quizAttempts.length) {
+    at("quiz-attempts.json", { attempts: rows.quizAttempts.map((row) => rowJson(row)) });
+  }
   return out;
 }
 
@@ -622,6 +625,7 @@ one thing that will make the rest of these files make sense.
                            which search results it read, and what it read of each paper.
       reading-time.json    How many seconds you have spent on each block.
       tags.json            Your own tags on the article.
+      quiz-attempts.json   Your answers to the quiz questions, and the mark each was given.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
@@ -811,6 +815,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/tags.json": "Your own tags on the article.",
+  "augmentations/quiz-attempts.json": "Your answers to the quiz questions, and the mark each was given.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
@@ -966,6 +971,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "blocks with reading time", n: rows.readingTime.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },
+    { label: "quiz answers", n: rows.quizAttempts.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

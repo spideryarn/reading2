@@ -56,8 +56,9 @@ import { dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { isMain } from '../src/is-main.js';
 import {
-  answerIsUsable, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole,
-  runChild, sameWriteTarget, sanitisedEnv, type RunResult,
+  ABSENT_TARGET, answerIsUsable, answerWriteConflict, type ChildStdin, elapsedSeconds, formatAnswer, loadRepoEnv,
+  placeAnswer, readAnswerForConsole, runChild, sameWriteTarget, sanitisedEnv, snapshotWriteTarget,
+  type RunResult, type WriteTargetSnapshot,
 } from './subagent-cli.js';
 import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
 
@@ -675,14 +676,19 @@ export function authHint(log: string, usedKey = true): string {
  * and sending somebody to top that account up would point at the wrong one.
  */
 async function runPlan(
-  args: Args, promptPath: string, tmpDir: string, plan: boolean[], modelFamily?: string,
+  args: Args, promptPath: string, tmpDir: string, plan: boolean[],
+  snapshotTarget: () => WriteTargetSnapshot, preserveTarget: (before: WriteTargetSnapshot) => void,
+  modelFamily?: string,
 ): Promise<{
   run: RunResult; outFile: string; logs: string[]; attempt: number; model: string;
+  /** What the answer target held just before the last attempt was spawned — see `placeAnswer`. */
+  targetBeforeAttempt: WriteTargetSnapshot;
   modelFailure?: Extract<ModelPick, { ok: false }>;
 }> {
   const logs: string[] = [];
   let run!: RunResult;
   let outFile = '';
+  let targetBeforeAttempt = snapshotTarget();
   let attempt = 0;
   let model = args.model;
   for (let nextAttempt = 0; nextAttempt < plan.length; nextAttempt++) {
@@ -694,13 +700,16 @@ async function runPlan(
       const newest = await resolveModelFamily(
         modelFamily, childEnv(process.env, args.passEnv, withKey), args.repoDir,
       );
-      if (!newest.ok) return { run, outFile, logs, attempt, model, modelFailure: newest };
+      if (!newest.ok) return { run, outFile, logs, attempt, model, targetBeforeAttempt, modelFailure: newest };
       model = newest.model;
     }
     attempt = nextAttempt;
     // A fresh -o path per attempt. Sharing one would let a first attempt's partial answer stand in
     // for a retry that produced nothing — indistinguishable, from out here, from the retry working.
     outFile = join(tmpDir, `output-${attempt + 1}.txt`);
+    // Per attempt, like the -o path and for the same reason: a report an EARLIER attempt wrote to
+    // the answer target must not be taken for this attempt's (plan 261005c § (f), G2).
+    targetBeforeAttempt = snapshotTarget();
     /**
      * **A FRESH FD PER ATTEMPT, and this is the trap in the whole change.**
      *
@@ -741,11 +750,14 @@ async function runPlan(
       && answerIsUsable(outFile);
     if (worked || attempt === plan.length - 1) break;
     if (!shouldFallBack(run, log, { streamed: args.stream, sandbox: args.sandbox })) break;
+    // Save bytes before the next child can overwrite them; a hash at the next attempt only detects
+    // the loss after it happened. Keep the target too, as that attempt's freshness baseline.
+    preserveTarget(targetBeforeAttempt);
     // Said out loud, because a run that quietly cost twice what the caller expected is the whole
     // risk of doing this automatically. Names the credential; never its value.
     console.log(`${credentialName(withKey)} could not run this — retrying with ${credentialName(plan[attempt + 1]!)}.`);
   }
-  return { run, outFile, logs, attempt, model };
+  return { run, outFile, logs, attempt, model, targetBeforeAttempt };
 }
 
 /**
@@ -810,6 +822,14 @@ async function main(): Promise<void> {
   }
   // Fresh temp dir per run, so a run's -o file can never be a previous run's leftover.
   const tmpDir = mkdtempSync(join(tmpdir(), 'run-codex-'));
+  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
+  const transcriptTarget = args.activityLog
+    ? resolve(args.activityLog)
+    : launch ? launch.defaults.transcript : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+  if (answerTarget !== undefined) {
+    const conflict = answerWriteConflict(answerTarget, transcriptTarget);
+    if (conflict) fail(conflict);
+  }
   // `--output x --activity-log x` wrote the answer over the log, exited 0, and printed both paths.
   // This wrapper never had the check at all; it arrived here with the Claude one, and the shared
   // helper asks the filesystem rather than comparing strings. GPT Sol's F13, 2026-09-06.
@@ -867,13 +887,35 @@ async function main(): Promise<void> {
   // re-hashed against the launch's pin.
   const promptMismatch = launch?.promptProblem(readFileSync(promptPath));
   if (promptMismatch) fail(`--launch-dir: ${promptMismatch}`, 'prompt-unverified');
-  const { run, outFile, logs, attempt, model, modelFailure } = await runPlan(
-    args, promptPath, tmpDir, plan, modelFamily,
+  // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
+  /* What that target holds now, and again before each credential attempt, so a report the run
+     writes there itself is kept rather than replaced by codex's one-line last message. Taken here —
+     after the `sameWriteTarget` preflight, which can create the file empty — and on the effective
+     target, not on the flag. docs/plans/261005c-long-document-follow-ups-…-page-cap.md § (f). */
+  const snapshotTarget = (): WriteTargetSnapshot =>
+    answerTarget === undefined ? ABSENT_TARGET : snapshotWriteTarget(answerTarget);
+  const targetAtStart = snapshotTarget();
+  const preserveTarget = (before: WriteTargetSnapshot): void => {
+    if (answerTarget === undefined || snapshotTarget() === before || !answerIsUsable(answerTarget)) return;
+    const aside = `${answerTarget}.earlier-attempt.txt`;
+    copyFileSync(answerTarget, aside);
+    console.log(`Saved ${answerTarget} from the failed credential attempt at ${aside} before retrying.`);
+  };
+  const { run, outFile, logs, attempt, model, targetBeforeAttempt, modelFailure } = await runPlan(
+    args, promptPath, tmpDir, plan, snapshotTarget, preserveTarget, modelFamily,
   );
   modelNote = askedFor === model ? model : `${model}, the newest ${askedFor}`;
   launch?.noteRun(run);
-  // --output when given; under `--launch-dir` an unset one defaults into the attempt directory.
-  const answerTarget = args.output ? resolve(args.output) : launch?.defaults.answer;
+  /** The last message into `target`, or beside it when the run wrote a report there. Says so. */
+  const place = (target: string): string => {
+    mkdirSync(dirname(target), { recursive: true });
+    const placed = placeAnswer({
+      target, lastMessage: { kind: 'file', path: outFile },
+      atStart: targetAtStart, beforeFinalAttempt: targetBeforeAttempt,
+    });
+    if (placed.note !== undefined) console.log(placed.note);
+    return placed.answerPath;
+  };
   /* **Under `--launch-dir` the answer is made durable BEFORE the failure ladder**, because every
      branch of that ladder exits: a run refused as empty or non-zero still leaves what it wrote
      where exit.json says, never in this run's temp directory (F21). Only a file the last attempt
@@ -883,9 +925,7 @@ async function main(): Promise<void> {
   let durableCopyFailed: string | undefined;
   if (launch !== undefined && answerTarget !== undefined && existsSync(outFile)) {
     try {
-      mkdirSync(dirname(answerTarget), { recursive: true });
-      copyFileSync(outFile, answerTarget);
-      answerPath = answerTarget;
+      answerPath = place(answerTarget);
     } catch (e) {
       durableCopyFailed = (e as Error).message;
     }
@@ -895,9 +935,7 @@ async function main(): Promise<void> {
   let logPath: string | undefined;
   if (logs.length) {
     // Under `--launch-dir` an unset --activity-log defaults into the attempt directory.
-    logPath = args.activityLog
-      ? resolve(args.activityLog)
-      : launch ? launch.defaults.transcript : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+    logPath = transcriptTarget;
     mkdirSync(dirname(logPath), { recursive: true });
     writeFileSync(logPath, logs.join('\n'));
     launch?.notePaths({ transcript: logPath });
@@ -936,11 +974,7 @@ async function main(): Promise<void> {
 
   // A launched run's copy was made above; one that could not be made fails as the success path always did.
   if (durableCopyFailed !== undefined) fail(`the answer could not be copied to ${answerTarget}: ${durableCopyFailed}`);
-  if (launch === undefined && answerTarget !== undefined) {
-    answerPath = answerTarget;
-    mkdirSync(dirname(answerPath), { recursive: true });
-    copyFileSync(outFile, answerPath);
-  }
+  if (launch === undefined && answerTarget !== undefined) answerPath = place(answerTarget);
 
   console.log(`Done — codex exec (${modelNote}, ${args.effort}, ${args.sandbox}, ${credentialName(plan[attempt]!)}).`);
   console.log(`Output: ${answerPath}`);

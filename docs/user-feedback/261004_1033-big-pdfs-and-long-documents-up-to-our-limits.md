@@ -38,7 +38,9 @@ Paid spend: $2.15, on two real PDFs.
 ## What was not done
 
 - **Making a too-long document into an article.** Greg's call, five options, a recommendation:
-  `qi-kbkbw4rp`, and on [awaiting-approval.md](awaiting-approval.md).
+  `qi-kbkbw4rp`, and on [awaiting-approval.md](awaiting-approval.md). Greg chose D then E on
+  2026-10-04; both are built, so the 250-page book now imports with a full table of contents:
+  [261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 - **A document pasted as an address stops at 32 MB**, not 50. A listed security defence, so left
   for Greg: `qi-bv9nbj5z`. Greg answered 2026-10-04 and it is built: one 50 MiB limit for both,
   [261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md).

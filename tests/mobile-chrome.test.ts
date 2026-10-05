@@ -220,11 +220,13 @@ describe("stickyOffset with a status bar", () => {
    * **A bar that is halfway back reserves the room it is going to need.**
    *
    * `stickyOffset` returned the bar's *current* coverage, and that is only the
-   * right answer at rest. `scrollToBlock` calls this **once** and hands the
-   * number to `glide()` as a fixed destination; `markOurScroll` then stops the
-   * bar reacting to the jump, but it cannot stop a CSS transition that is
-   * already running. So a reader who scrolls up — starting the 180ms reveal —
-   * and clicks a gist 90ms later got a target placed under a bar on its way
+   * right answer at rest. At the time of this defect, `scrollToBlock` asked
+   * once and handed `glide()` a fixed destination. Suppressing the bar's
+   * reaction to the jump could not stop a CSS transition already running.
+   * Today `aimAt` re-measures every frame, still using `stickyDestination`
+   * to predict the coverage when the bar arrives. A reader who scrolled up
+   * — starting the 180ms reveal — and clicked a gist 90ms later got a target
+   * placed under a bar on its way
    * back to covering it, and the row they asked for finished underneath the
    * chrome.
    *

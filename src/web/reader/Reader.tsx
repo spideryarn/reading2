@@ -27,7 +27,7 @@ import {
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
-import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
+import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
   MarginNotesSlot,
@@ -68,6 +68,7 @@ import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
 import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
+import { isCrumbSection } from "../crumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -103,6 +104,7 @@ import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
 import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
@@ -136,7 +138,7 @@ import {
   type BandMode,
   type Mode,
 } from "../params.js";
-import { subModeParams } from "../sub-modes.js";
+import { returnToSubMode, subModeParams } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
@@ -617,7 +619,9 @@ export function Reader({
    * Marginalia "on" means *drawn*: `?margin=1` on a window with no room for the
    * column shows no head, so the breadcrumb stays there. For an owner the bar
    * goes with it (`showBar` below), which `layoutKey` already hears. The plan
-   * records the empty-head and contained-failure exceptions.
+   * records the empty-head and contained-failure exceptions; the commonest
+   * empty head, the rows above the first part, was closed by 261004l
+   * (notes.ts § `headBlock`), and a gap further down the tree still draws none.
    * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
    *
    * The tree itself is not built while the switch is off. `Reader` renders for
@@ -631,7 +635,7 @@ export function Reader({
     !bandCovers &&
     mode !== "structure" &&
     !marginRoom &&
-    (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
+    (crumbsRoot?.children.some((c) => isCrumbSection(c) && nodeLabel(c, c.title) !== null) ?? false);
   /**
    * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
    * is in it, and since 2026-10-02 for anybody it holds the breadcrumb for.
@@ -2442,9 +2446,23 @@ export function Reader({
    *    which arms generate-on-open (F1). The term travels in the one-shot
    *    hand-off (glossary-ask-handoff.ts), not the address.
    *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
+   *  - `findMore` names a band **only while its list can be added to**, as the
+   *    read mounted here says (find-more.ts § `glossaryAppendOnOffer`,
+   *    `quotesAppendOnOffer`; plan 261004k, GPT Sol's F3) — and only a band
+   *    the Dock draws. The opener is the plain mode setter here too: the bar's
+   *    press leaves a hand-off (find-more-handoff.ts) and the band presses its
+   *    own Find more.
    */
   const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
   const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
+  const dockDraws = (target: FindMoreMode) =>
+    shownBehindTheSwitch({
+      experimental: MODE_CATALOG[target].experimental,
+      on: experimental.on,
+      current: mode === target,
+    });
+  const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
+  const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
   const executor = useMemo(
     () =>
       readingExecutor({
@@ -2460,8 +2478,27 @@ export function Reader({
             }
           : undefined,
         bookmark: canBookmark ? bookmarkBlock : undefined,
+        findMore: isOwner
+          ? {
+              glossary: moreTerms ? () => showBand("glossary") : undefined,
+              quotes: moreQuotes ? () => showBand("quotes") : undefined,
+            }
+          : undefined,
       }),
-    [slug, article.blocks, jumpTo, isOwner, glossaryReady, terms, openTermInGlossary, showBand, canBookmark, bookmarkBlock],
+    [
+      slug,
+      article.blocks,
+      jumpTo,
+      isOwner,
+      glossaryReady,
+      terms,
+      openTermInGlossary,
+      showBand,
+      canBookmark,
+      bookmarkBlock,
+      moreTerms,
+      moreQuotes,
+    ],
   );
   /**
    * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
@@ -3329,6 +3366,10 @@ export function Reader({
    */
   function marginColumn(): ReactNode {
     if (!marginOpen) return null;
+    /* One block for the path and the arc both, so they cannot name different
+       parts; above the first part it is the first part's first block
+       (notes.ts § `headBlock`, qi-2ymfq3ek). */
+    const headAt = headBlock(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null);
     return (
       <ModeBoundary
         mode="marginalia"
@@ -3341,8 +3382,8 @@ export function Reader({
           <MarginaliaHead
             room={fit.margW > 0}
             beside={bandOpen}
-            path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
-            arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+            path={headPath(article.tree, rowOf, headAt)}
+            arc={arcAt(liveArc, rowOf, headAt)}
           />
         )}
       </ModeBoundary>
@@ -4152,7 +4193,16 @@ export function Reader({
              recovery paths do not depend on that write — the token minted in
              Dock is their signal. */
           if (sub === undefined) {
-            if (next !== mode) void setMode(next);
+            if (next !== mode) {
+              /* **`mode` alone, with one exception**: returning to Remember
+                 while `remember=quiz` is still in the address is a navigation
+                 to Quiz, so it clears `thread` in the same pushed entry rather
+                 than mounting the Quiz over Chat's conversation for
+                 `RememberBand` to repair (sub-modes.ts § `returnToSubMode`). */
+              const back = returnToSubMode(next, { remember: subNav.remember });
+              if (back === null) void setMode(next);
+              else void setSubNav(back, { history: "push" });
+            }
           } else void setSubNav(subModeParams(sub), { history: "push" });
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */

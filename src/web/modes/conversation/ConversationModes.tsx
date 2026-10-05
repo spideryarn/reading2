@@ -30,6 +30,7 @@ import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle }
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
+import { useExperimental } from "../../useExperimental.js";
 import { softKeyboardIsUp } from "../../useVisualViewport.js";
 import { useLive } from "../../live/useLive.js";
 import { ChatPanel } from "../../ChatPanel.js";
@@ -113,6 +114,9 @@ export function RememberBand({
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
   useRenderCount("RememberBand");
+  /* Only for which chips the row draws: Explore is behind the switch
+     (QuizPanel.tsx § `RememberSubModeToggle`). */
+  const { on: experimentalOn } = useExperimental();
   const [{ remember, thread }, setBoth] = useQueryStates({
     remember: rememberParam,
     thread: threadParam,
@@ -131,6 +135,7 @@ export function RememberBand({
     <RememberSubModeToggle
       value={remember}
       slug={slug}
+      experimental={experimentalOn}
       onChange={(next) =>
         /* Rule 1. Both keys in one call, so this is one history entry — and
            `thread: null` on the way to Quiz rather than only on arrival, so

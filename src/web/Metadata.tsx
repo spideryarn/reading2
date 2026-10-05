@@ -59,7 +59,7 @@
  *    scan down. The 4-column table also needed `overflow-x` on a narrow window;
  *    rows that wrap do not.
  *  - **Tooltips that say what a number means.** Read time is the clearest case:
- *    ours is words ÷ 230, and the reader has no way to know that. Dotted
+ *    ReadTimeCard.tsx explains the flat rate and what it cannot see. Dotted
  *    underline, `cursor-help`, same convention theirs used.
  *
  * What did **not** come across, deliberately: their gradient icon chips and
@@ -207,6 +207,7 @@ import {
   Blocks,
   Bot,
   BookA,
+  CircleDashed,
   Lightbulb,
   BookOpen,
   Clock,
@@ -260,7 +261,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
-import { WPM } from "../reading-time.js";
+import { ReadTimeCard } from "./ReadTimeCard.js";
 import { isWebUrl } from "../urls.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
 import { Dock, withPanel } from "./Dock.js";
@@ -400,6 +401,23 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simple: Layers,
 };
+
+/**
+ * The glyph for a stage **the server named**, which may be one this copy of
+ * the app was built before.
+ *
+ * `STAGE_ICONS` is complete for the names in this bundle and the type says so,
+ * but a stage row's `step` comes off the wire, and a copy opened from a
+ * home-screen icon outlives several deploys. When `relations` was added, every
+ * older copy looked it up, got `undefined`, and React took the whole app to
+ * the `[render]` screen for a missing 13-pixel icon (`SPIDERYARN-READING2-BJ`,
+ * `-CB`). The server sends the row's label, so with a neutral glyph the row is
+ * complete. tests/metadata-unknown-stage.test.tsx.
+ */
+function stageIcon(step: string): ComponentType<{ size?: number }> {
+  const known: Partial<Record<string, ComponentType<{ size?: number }>>> = STAGE_ICONS;
+  return (Object.hasOwn(known, step) ? known[step] : undefined) ?? CircleDashed;
+}
 
 /*
  * **`SOON` and its one row stood here until 2026-09-07, and the row was this
@@ -1070,13 +1088,10 @@ export function Metadata({
                 value={`${stats.minutes} min`}
                 /* The bottom bar carried a dimmed "Reading time" placeholder
                    until 2026-08-26, when Greg said it *"should be part of
-                   Metadata"* — and it already was, right here. What only the
-                   placeholder knew is now in this sentence: the original
-                   version dropped the standard readability formulas for a
-                   model's judgement, then scaled the estimate by how confident
-                   the model said it was. See Dock.tsx, and
-                   original-version/difficulty-and-reading-time.md. */
-                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is.`}
+                   Metadata"* — and it already was, right here. The same card
+                   as the masthead's minutes since 2026-10-05 (spya-jew7ds):
+                   ReadTimeCard.tsx. */
+                card={<ReadTimeCard words={stats.words} supplementWords={stats.supplementWords} />}
               />
               <Stat
                 icon={Blocks}
@@ -1197,6 +1212,7 @@ export function Metadata({
               disabled={purpose.saved === null}
               rows={2}
               save={purpose.state}
+              inFlight={purpose.inFlight}
             />
 
             {/* The global half, shown rather than edited. A reader looking at
@@ -3447,16 +3463,28 @@ function Stat({
   icon: Icon,
   label,
   value,
-  tip,
+  ...said
 }: {
   icon: ComponentType<{ size?: number }>;
   label: string;
   value: string;
-  tip: string;
-}) {
+  /* A sentence, or a whole card of short paragraphs set in `ControlTip`'s
+     classes — one or the other, so a tile cannot say two things. */
+} & ({ tip: string; card?: undefined } | { card: ReactNode; tip?: undefined })) {
   return (
-    <Tooltip placement="top" content={<TipNote>{tip}</TipNote>}>
-      <div className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40`}>
+    <Tooltip
+      placement="top"
+      {...(said.card !== undefined
+        ? { className: "tip-soon", content: said.card }
+        : { content: <TipNote>{said.tip}</TipNote> })}
+    >
+      {/* Focusable since 2026-10-05: the card is the only place the
+          explanation is, and a keyboard had no way to it (GPT Sol, plan 261005c). */}
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the explanation; pressing does nothing
+        tabIndex={0}
+        className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40 tw:focus-visible:border-highlight-text`}
+      >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
           <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
@@ -3533,7 +3561,7 @@ function StageRow({
   const { step, label, outputs, done } = stage;
   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
   // destructured here, so a reader of `<Wrote>` can see which they are.
-  const Icon = STAGE_ICONS[step];
+  const Icon = stageIcon(step);
   return (
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
       <div className="tw:flex tw:items-center tw:gap-3">

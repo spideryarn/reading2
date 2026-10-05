@@ -74,9 +74,9 @@ type StepAutoRunTarget = StepTarget<
   /* Summary's plain-words work, armed by its bar button and by its Brief and
      Fuller segments and command rows — docs/plans/261002a-summary-generates-on-open.md. */
   | "simple"
-  /* Marginalia's relation words (so, but, vs): its own artefact, armed by the
-     press that turns the column on —
-     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+  /* Marginalia's relation words (so, but, vs): its own artefact. Imports queue
+     it; this automatic-run target is the fallback armed by the press that
+     turns the column on — plans 261003f and 261005d. */
   | "relations"
 >;
 

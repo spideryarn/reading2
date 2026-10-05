@@ -507,6 +507,25 @@ export interface Pass0Options {
   /** Refuse, before any page is read, a document with more pages than this (`TooManyPages`). */
   maxPages?: number;
   /**
+   * **Read only this many pages from the front, and stop** — a bound, not a
+   * refusal: a 250-page document with `firstPages: 2` gives its pages 1 and 2
+   * and page 3 is never asked for. For a caller that wants the opening of a
+   * document of any length (src/source-guess-run.ts § `defaultFirstPages`,
+   * which used to pass `maxPages` instead and so refused every long upload —
+   * plan 261005c § (h)). Aborting from `onPage` is not a way to do this: an
+   * abort rejects, and the pages read so far go with it.
+   *
+   * **The result then describes the pages read, not the document.**
+   * `pages.length` is at most this, and there is no total anywhere in a
+   * `Pass0`; `isScan` and `furniture` are judged on those pages alone, so a
+   * running header needs `FURNITURE_PAGES` of them to be noticed and a caller
+   * that bounds the read should not lean on either. `metaTitle` is the
+   * document's and is unaffected. `maxPages` is independent and still compares
+   * the document's real length; `maxChars` and `maxItems` count only what was
+   * read.
+   */
+  firstPages?: number;
+  /**
    * Stop, and throw `TooManyCharacters`, once the text read so far passes this
    * many characters. Checked as each text run is added, so a single enormous
    * page is bounded too.
@@ -939,7 +958,8 @@ export async function pass0(
     metaTitle = info?.Title?.trim() || null;
     let chars = 0;
     let textItems = 0;
-    for (let n = 1; n <= doc.numPages; n++) {
+    const lastPage = opts.firstPages === undefined ? doc.numPages : Math.min(doc.numPages, opts.firstPages);
+    for (let n = 1; n <= lastPage; n++) {
       /* Between pages, which is where pdf.js hands control back. */
       signal?.throwIfAborted();
       const page = await doc.getPage(n);

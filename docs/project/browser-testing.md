@@ -452,7 +452,10 @@ real layout. Four checks, in order — each one catches a different failure:
 4. **Scroll to the very top.** `?at=` should disappear from the URL entirely.
 
 Then click a gist to jump: that one *should* add a history entry, so Back returns you to where you
-jumped from. It is the only scroll that does.
+jumped from. It is the only scroll that does. **Then wait two seconds and read the address again**,
+on a long article: a jump's `?at=` was right on landing and rewritten after the debounce for six
+days, and every check that stopped at the landing passed
+([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)).
 
 The failure mode to watch for is a **feedback loop** — scrolling writes the URL and the URL scrolls
 the page, so a broken guard shows up as the page fighting you or juddering, not as an error.

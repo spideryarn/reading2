@@ -94,6 +94,8 @@ import type {
   IllustratedFound,
   SketchFound,
   QuizFound,
+  QuizKeptAnswer,
+  QuizQuestionId,
   FaqFound,
   RelationsResponse,
   CrossrefsFound,
@@ -705,12 +707,16 @@ export interface ShelfStore {
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
-   * assuming what the write did.
+   * assuming what the write did. **`null` means the owned row was found, but no
+   * shelf card was available to return** — for example, an article mid-import,
+   * or a concurrent edit moving it to the other archive state before the card
+   * is read. Any supplied changes were written. A slug with no owned row still
+   * rejects with not-found, including an empty change.
    */
   patch(
     slug: string,
     change: { archived?: boolean; title?: string | null; purpose?: string | null },
-  ): Promise<LibraryEntry>;
+  ): Promise<LibraryEntry | null>;
 
   /**
    * One more open.
@@ -1653,6 +1659,32 @@ export interface ReadingTimeStore {
    * caller validates the shape before this is reached.
    */
   add(slug: string, seconds: Record<string, number>): Promise<void>;
+}
+
+/**
+ * The owner's finished quiz marks on one article — `quiz_attempts`,
+ * docs/plans/261005b-quiz-answers-are-kept-and-restored.md. Both methods are
+ * owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface QuizAttemptStore {
+  /**
+   * **Append one finished mark**, and return when the database says it
+   * happened (the row's `created_at`, ISO). Never an upsert: answering again
+   * is a second row.
+   */
+  record(
+    slug: string,
+    attempt: {
+      batchId: string;
+      questionId: QuizQuestionId;
+      /** The question's words, copied in — the batch they came from can be replaced. */
+      question: string;
+      answer: string;
+      reply: string;
+    },
+  ): Promise<string>;
+  /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
+  latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
 }
 
 /**

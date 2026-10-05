@@ -24,7 +24,7 @@ let numPages = 0;
 
 const destroyTask = vi.fn(async () => {});
 
-const getPage = vi.fn(async () => ({
+const getPage = vi.fn(async (_n: number) => ({
   getTextContent: async () => ({
     items: [{ str: "some words on the page", hasEOL: true, transform: [1, 0, 0, 1, 72, 700] }],
   }),
@@ -84,5 +84,59 @@ describe("the page cap fires before the parse", () => {
     numPages = 250;
     const pass = await pass0(BYTES);
     expect(pass.pages).toHaveLength(250);
+  });
+});
+
+/**
+ * **`firstPages` is the other bound, and it is not a refusal.** A caller that
+ * wants only the opening pages of a document of any length — the search for an
+ * upload's source, src/source-guess-run.ts § `defaultFirstPages` — reads those
+ * and stops. As above, the assertion that matters is which pages `getPage` was
+ * asked for: "two pages came back" would also pass against a loop that walked
+ * all 250 and sliced (plan 261005c § (h), GPT Sol's G4).
+ */
+describe("firstPages reads the opening pages and stops", () => {
+  it("reads pages 1 and 2 only — page three is never read", async () => {
+    numPages = 250;
+    const seen: number[] = [];
+    const pass = await pass0(BYTES, { firstPages: 2, onPage: (n) => seen.push(n) });
+    expect(seen).toEqual([1, 2]);
+    expect(getPage.mock.calls.map(([n]) => n)).toEqual([1, 2]);
+    expect(pass.pages.map((p) => p.page)).toEqual([1, 2]);
+    /* The worker is released on the early finish as on a full read. */
+    expect(destroyTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads every page of a document shorter than the bound", async () => {
+    numPages = 1;
+    const pass = await pass0(BYTES, { firstPages: 2 });
+    expect(pass.pages.map((p) => p.page)).toEqual([1]);
+  });
+
+  it("without the option, every page is read as before", async () => {
+    numPages = 5;
+    const seen: number[] = [];
+    const pass = await pass0(BYTES, { onPage: (n) => seen.push(n) });
+    expect(seen).toEqual([1, 2, 3, 4, 5]);
+    expect(getPage).toHaveBeenCalledTimes(5);
+    expect(pass.pages).toHaveLength(5);
+  });
+
+  it("is independent of the cap: `maxPages` still refuses on the document's real length", async () => {
+    numPages = 250;
+    await expect(pass0(BYTES, { firstPages: 2, maxPages: 100 })).rejects.toThrow(/250/);
+    expect(getPage).not.toHaveBeenCalled();
+  });
+
+  it("still gives up between pages when the caller aborts", async () => {
+    numPages = 250;
+    const controller = new AbortController();
+    const reading = pass0(BYTES, {
+      firstPages: 2,
+      signal: controller.signal,
+      onPage: () => controller.abort(new Error("the caller's deadline")),
+    });
+    await expect(reading).rejects.toThrow("the caller's deadline");
+    expect(getPage).toHaveBeenCalledTimes(1);
   });
 });

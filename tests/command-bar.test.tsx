@@ -29,7 +29,7 @@ import { MODES, type Mode } from "../src/modes.js";
 import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
-import { ASK_HINT, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
+import { ASK_LABEL, ASK_OR_ENTER, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
 import { TitleEditor } from "../src/web/TitleEditor.js";
@@ -414,9 +414,11 @@ describe("a query that matches nothing", () => {
     type("zzzq");
     expect(rows()).toEqual([]);
     const empty = dialog().querySelector(".cmdbar-empty");
-    expect(empty?.textContent).toBe(`${NO_MATCH} ${ASK_HINT}`);
+    expect(empty?.textContent).toBe(`${NO_MATCH} ${ASK_LABEL} ${ASK_OR_ENTER}`);
     expect(NO_MATCH).toBe("No command matches.");
-    expect(ASK_HINT).toBe("Press Enter to ask what you meant.");
+    /* A button, since 2026-10-05 (spya-qem46c): a phone has no Enter. */
+    expect(empty?.querySelector("button.cmdbar-ask")?.textContent).toBe("Ask what you meant");
+    expect(ASK_OR_ENTER).toBe("or press Enter");
     /* Nothing else in the panel below the box: no list, no fallback row, no
        "everything" list quietly restored. */
     expect(dialog().querySelector('[role="listbox"]')).toBeNull();

@@ -119,8 +119,10 @@ export const STEP_ORDER = [
      Its fingerprint also covers the ordered paragraph pairs, rather than
      FAQ's whole tree — src/relations.ts § inputFingerprint.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
-     over the whole article, started by the owner's press that turns Marginalia
-     on. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+     over the whole article, queued when an article is imported since
+     2026-10-05 (src/auto-mode-steps.ts) and otherwise started by the owner's
+     press that turns Marginalia on.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
   /* With the other body-only `ids` stages: `high` effort (measured against
      `medium` in stage 1, src/models.ts § STAGE_EFFORT) and its own schema.

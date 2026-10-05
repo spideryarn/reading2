@@ -63,7 +63,9 @@
  *     what they meant** (spya-t0dg9u, plan 261003k): a sentence that names no
  *     row goes to a fast model, which answers with one of this bar's own rows
  *     or with nothing. Still no guess — nothing is asked or drawn until that
- *     Enter. `ask` below, and src/command-pick.ts.
+ *     Enter, or a press on the button that says so (2026-10-05, `ASK_LABEL`:
+ *     a phone may have no on-screen Enter after dictation). `ask` below, and
+ *     src/command-pick.ts.
  *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
  *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
  *     since the rest are the bar's own. The surviving half is still true *by
@@ -148,12 +150,15 @@ import {
   runProposal,
 } from "./command-proposal.js";
 import { type TagsControl, tagRunners } from "./command-runners.js";
+import { Button } from "./components/ui/button.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
+import { setAppearance, useAppearance } from "./appearance.js";
+import { appearanceRows } from "./appearance-commands.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
 import { useDictationField } from "./useDictationField.js";
-import { type MetadataSection, type Mode, withSection } from "./params.js";
+import { type MetadataSection, type Mode, type RememberView, modeParam, rememberInSearch, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
 import { downloadExport } from "./export-download.js";
@@ -176,6 +181,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 
 /**
  * **The article the bar was opened over**, or `undefined` where there is none.
@@ -258,6 +264,10 @@ export interface CommandBarArticle {
    * glossary read (GPT Sol's F1), so there it is absent and those rows are
    * never drawn — not drawn and refused. Tags are not in it; they come with
    * `shelfRow`, on both pages.
+   *
+   * **And, since 2026-10-04, which bands' *Find more* it may press**
+   * (`findMoreRows`, plan 261004k) — for the same reason the reading view's
+   * alone: there is no band on the Metadata page.
    */
   readonly executor?: CommandExecutor | undefined;
 }
@@ -372,6 +382,9 @@ export function besideTheModes({
        a section, Archive, Export — then the fourteen *Run again*: on a tie the
        one-of-a-kind row is the likelier meaning. */
     ...(article === undefined ? [] : metadataRows(article)),
+    /* Before the *Run again* rows: for `glossary`, adding to the list is the
+       likelier and the gentler meaning than writing it again. */
+    ...(article === undefined ? [] : findMoreRows(article)),
     ...(article === undefined ? [] : rerunRows(article, queue)),
     helpRow(article?.help),
     ...(openComments === undefined
@@ -534,6 +547,38 @@ function rerunRows(article: CommandBarArticle, queue: RerunQueue): readonly Comm
       return goToSection(article, RERUN_LANDS_IN);
     }),
   );
+}
+
+/**
+ * **A *Find more* row for each band that offers one right now** — Greg,
+ * 2026-10-04 (spya-rbxrgc): *"There are lots of cases where we have a sort of
+ * find more button, for example in the glossary mode. Let's make that be part
+ * of the command bar as well."* The words are find-more.ts's; which bands, and
+ * the press, are the reading view's (`CommandExecutor.findMore`).
+ *
+ * **Drawn only while the list can be added to** (GPT Sol's F3 on plan
+ * 261004k): the reading view names a band here only when its own read says an
+ * append is on offer, so there is no row on an article with no list, on one
+ * whose run would rewrite, on a full list, for a visitor, or on the Metadata
+ * page, which hands in no executor. No row, never a row that opens a band and
+ * does nothing.
+ *
+ * **Enter posts nothing.** Unlike `rerunRows` below, the press leaves a
+ * hand-off and opens the band, and the band presses its own button — in the
+ * list's own profile setting, which only the band's hook has read
+ * (find-more.ts § Why this is not a word on the *Run again* row).
+ *
+ * **`find more …` is also the `find` verb's**, so for those words the bar
+ * draws these rows and then *Find “more …” in this article* after them
+ * (`matched` below). The one declared exception to the collision matrix.
+ */
+function findMoreRows(article: CommandBarArticle): readonly Command[] {
+  const presses = article.executor?.findMore;
+  if (presses === undefined) return [];
+  return FIND_MORE_MODES.flatMap((mode) => {
+    const press = presses[mode];
+    return press === undefined ? [] : [findMoreCommand(mode, press)];
+  });
 }
 
 /**
@@ -962,8 +1007,8 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
     description: "Your shelf, and the box you paste a new article into.",
     /* Greg's `Homepage`, and the four other words for the same place. `add` and
        `add an article` because a bare `/add` lands here anyway — see the
-       docblock above. Sparse elsewhere, for the reason the mode aliases are
-       (docs/project/reading-view-overview.md § The command bar): the cost of a
+       docblock above. Sparse elsewhere, for the reason that still limits the
+       mode aliases (docs/project/reading-view-overview.md § The command bar): the cost of a
        loose alias is not a missed match, it is the wrong row ranked first. */
     aliases: ["home", "homepage", "shelf", "my articles", "add", "add an article"],
     generates: false,
@@ -1075,6 +1120,11 @@ function commandGenerates(command: Command): boolean {
   }
 }
 
+/** A row's `marker`, which only a row with words of its own can carry. */
+function commandMarker(command: Command): string | undefined {
+  return command.kind === "page" || command.kind === "action" ? command.marker : undefined;
+}
+
 /**
  * **Whether pressing this row does nothing but take the reader somewhere** —
  * the one question that decides whether a row a model picked from a sentence
@@ -1107,14 +1157,19 @@ function onlyMovesTheReader(command: Command): boolean {
 /**
  * **The sub-mode rows to offer**: every sub-mode of every mode the Dock drew,
  * in Dock order and then chip order — and, inside a mode, only the chips that
- * mode would draw with the switch as it is (Diagram's pictures are the one
- * case: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
+ * mode would draw with the switch as it is (Diagram's pictures and Remember's
+ * Explore: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
  * and `visibleModes` in Dock.tsx share). A mode the Dock did not draw offers
  * no sub-mode at all, so the experimental switch is decided once, upstream.
  *
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
  * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
+ * **And the part of Remember currently open**, since 2026-10-05, when Explore
+ * became the second kind of sub-mode behind the switch: the chips' own rule
+ * again (sub-modes.ts § `visibleRememberViews`). The caller passes `undefined`
+ * outside Remember; a retained `remember=explore` is a last view, not an open
+ * Explore. Metadata uses the mode in its carried address.
  *
  * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
  * command-pick eval measures against from the functions the bar itself calls.
@@ -1122,7 +1177,7 @@ function onlyMovesTheReader(command: Command): boolean {
 export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
-  diagram: DiagramKind,
+  current: { readonly diagram: DiagramKind; readonly remember: RememberView | undefined },
 ): readonly Command[] {
   return modes.flatMap((mode) =>
     subModesOf(mode)
@@ -1130,7 +1185,9 @@ export function subModeRows(
         shownBehindTheSwitch({
           experimental: subModeWords(sub).experimental,
           on: experimentalOn,
-          current: sub.mode === "diagram" && sub.view === diagram,
+          current:
+            (sub.mode === "diagram" && sub.view === current.diagram) ||
+            (sub.mode === "remember" && sub.view === current.remember),
         }),
       )
       .map(subModeCommand),
@@ -1152,9 +1209,26 @@ export const NO_MATCH = "No command matches.";
  * **What follows it, since 2026-10-03, for a signed-in reader who has typed
  * something**: a sentence that names no row can be asked about (plan 261003k).
  * Greg's call 3 — an honest empty state over a guessed fallback — still holds:
- * nothing is guessed until the reader presses Enter for it.
+ * nothing is guessed until the reader asks for it.
+ *
+ * **A button, with Enter as its other route, since 2026-10-05** (spya-qem46c,
+ * plan 261005f). It was a sentence, *Press Enter to ask what you meant.*, and
+ * Greg dictated a question on an iPhone: *"there was no way to kick off that
+ * action on an iPhone because I don't have an enter key."* A dictation can
+ * finish with no phone keyboard on screen, so the offer has to be something a
+ * finger can press.
  */
-export const ASK_HINT = "Press Enter to ask what you meant.";
+export const ASK_LABEL = "Ask what you meant";
+/** Beside the button where the main pointer is not a finger. Enter works either way. */
+export const ASK_OR_ENTER = "or press Enter";
+/**
+ * The same button under `COULD_NOT_TELL`, where *Ask what you meant* would read
+ * as the bar contradicting itself (`offerToAsk`). That state is also a timeout
+ * or a dropped connection, and Enter was its only retry.
+ */
+export const ASK_AGAIN_LABEL = "Try again";
+/** A local, deterministic refusal: retrying unchanged cannot help. */
+export const ASK_TOO_LONG = "That sentence is too long. Shorten it and try again.";
 
 /** The line under the box while the sentence is with the model. */
 const ASKING = "Working out what you meant…";
@@ -1183,7 +1257,7 @@ interface Props {
   activateSubMode(sub: SubMode): void;
   /**
    * **The reader's experimental switch** — `on` for the one decision `modes`
-   * cannot carry, which of Diagram's pictures to offer (`subModeRows`), and
+   * cannot carry, which experimental sub-modes to offer (`subModeRows`), and
    * the rest for the row that turns it on or off (`experimentalRows`, since
    * 2026-10-03).
    */
@@ -1384,18 +1458,29 @@ export function CommandBar({
    * call site would make it bite, and the day the Dock's own renders get
    * expensive is the day to do that rather than now.
    */
+  /* The appearance in force, for which of its three rows is marked `current`
+     (appearance-commands.ts). The store's own hook, as /profile reads it. */
+  const appearance = useAppearance();
   const commands = useMemo(
     () => [
       ...modes.map(modeCommand),
       /* After every mode and before every page: the mode rows stay exactly the
          Dock's, first, and a sub-mode loses a tie to its own mode. */
-      ...subModeRows(modes, experimental.on, diagram),
+      ...subModeRows(modes, experimental.on, {
+        diagram,
+        remember: modeParam.parse(new URLSearchParams(article?.search ?? "").get("mode") ?? "") === "remember"
+          ? rememberInSearch(article?.search ?? "")
+          : undefined,
+      }),
       ...besideTheModes({ article, openComments, openFeedback, queue }),
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */
       ...experimentalRows(experimental),
+      /* Typed-only too, and last for the same reason. No gate of their own:
+         the choice is the device's, and the write is synchronous. */
+      ...appearanceRows(appearance, setAppearance),
     ],
-    [modes, experimental, diagram, article, openComments, openFeedback, queue],
+    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance],
   );
   /**
    * **The ranked rows, and the argument rows after them when the query has
@@ -1405,7 +1490,8 @@ export function CommandBar({
    * After, not first: a query that both names a row and parses as an argument
    * should go where it names — and the collision matrix
    * (tests/command-match-arguments.test.ts) holds that no label or alias the
-   * bar offers parses as one at all. Not ranked, because each row's label is
+   * bar offers parses as one at all, bar the two *Find more* rows' `find
+   * more …`, which is where this order shows. Not ranked, because each row's label is
    * made of the query; ranking it against itself would always hit.
    */
   const matched = useMemo(() => {
@@ -1466,7 +1552,10 @@ export function CommandBar({
    * still asks again — a timeout deserves a second try — it is only the
    * invitation that waits for a changed sentence.
    */
-  const offerToAsk = canAsk && !(said?.kind === "message" && said.text === COULD_NOT_TELL);
+  const askMessage = said?.kind === "message" ? said.text : null;
+  const offerToAsk = canAsk && askMessage !== COULD_NOT_TELL && askMessage !== ASK_TOO_LONG;
+  /* A timeout may recover; an unchanged over-limit sentence cannot. */
+  const showAskButton = canAsk && askMessage !== ASK_TOO_LONG;
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -1589,6 +1678,13 @@ export function CommandBar({
    * take whichever row the half-heard words happened to select.
    */
   const dictationBusy = dictate.busy;
+  /**
+   * **When a press on the ask button would be refused** — `ask`'s own guards,
+   * as the reader can see them: a sentence already out, a run starting, the
+   * microphone on or its words on their way. `ask` is still the lock; this is
+   * the row's `aria-disabled` again, for the same reason.
+   */
+  const askRefused = dictationBusy || said?.kind === "asking" || said?.kind === "pending";
   /* **The bar stays mounted when it closes**, so the hook's cleanup never runs
      and a microphone left on would go on recording behind a shut bar.
      `dictation.toggle`, not the field's, which would put the focus back into a
@@ -1737,7 +1833,7 @@ export function CommandBar({
     const sentence = draft.trim();
     /* The route would refuse it; a paragraph is not a command. */
     if (sentence.length > MAX_SENTENCE) {
-      setSaid({ kind: "message", text: COULD_NOT_TELL });
+      setSaid({ kind: "message", text: ASK_TOO_LONG });
       return;
     }
     const request: PickRequest = { sentence, rows: keys, argumentKinds: argumentKindsHere(article) };
@@ -1911,10 +2007,51 @@ export function CommandBar({
         {results.length === 0 ? (
           /* Greg's answer 3: no search fallback, no list of everything, and
              nothing guessed. Beside it, for a signed-in reader who has typed
-             something, only the offer to ask (`ASK_HINT`) — which does
-             nothing until they press Enter for it. */
-          <p className="cmdbar-empty tw:m-0 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
-            {offerToAsk ? `${NO_MATCH} ${ASK_HINT}` : NO_MATCH}
+             something, only the offer to ask (`ASK_LABEL`) — which does
+             nothing until they press it, or Enter. */
+          <p className="cmdbar-empty tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
+            {NO_MATCH}
+            {showAskButton && (
+              <>
+                {" "}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  /* 44px for a finger (narrow-windows.md § the finger floor). */
+                  className={`cmdbar-ask tw:pointer-coarse:min-h-11 ${askRefused ? "tw:cursor-default tw:opacity-50" : ""}`}
+                  /* `aria-disabled`, not `disabled`: a disabled button takes no
+                     mousedown, so a press on it would pull the focus out of
+                     the box. `ask` refuses, and this says so. */
+                  aria-disabled={askRefused || undefined}
+                  /* **The focus stays in the box.** At a desk the arrows and
+                     Enter go on working on the rows that come back; on a phone
+                     the keyboard stays as it was, up or down. The click still
+                     fires. */
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    /* Enter and Space activate a focused button with a
+                       zero-detail click. Put focus back on the combobox before
+                       suggestions replace this button; a finger tap must not
+                       summon the phone keyboard. */
+                    const fromKeyboard = e.detail === 0 && document.activeElement === e.currentTarget;
+                    ask();
+                    if (fromKeyboard && !askRefused) inputRef.current?.focus({ preventScroll: true });
+                  }}
+                >
+                  {offerToAsk ? ASK_LABEL : ASK_AGAIN_LABEL}
+                </Button>
+                {/* Three words a phone has no use for. `pointer`, the main
+                    one, as the size rules ask (touch.md): a touchscreen laptop
+                    keeps them. */}
+                {offerToAsk && (
+                  <span className="cmdbar-or-enter tw:pointer-coarse:hidden">
+                    {" "}
+                    {ASK_OR_ENTER}
+                  </span>
+                )}
+              </>
+            )}
           </p>
         ) : (
           <>
@@ -2001,6 +2138,14 @@ export function CommandBar({
                 {commandGenerates(command) && (
                   <span className="cmdbar-generates tw:shrink-0 tw:text-xs tw:text-ink-faint">
                     {GENERATES_MARKER}
+                  </span>
+                )}
+                {/* The same kind of note, about the reader rather than the
+                    row: `current` on the appearance in force (command-match.ts
+                    § `CommandWords.marker`). */}
+                {commandMarker(command) !== undefined && (
+                  <span className="cmdbar-marker tw:shrink-0 tw:text-xs tw:text-ink-faint">
+                    {commandMarker(command)}
                   </span>
                 )}
               </div>

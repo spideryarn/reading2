@@ -47,7 +47,12 @@ Tests: [`quiz.test.ts`](../../tests/quiz.test.ts),
 [`quiz-step-registration.test.ts`](../../tests/quiz-step-registration.test.ts),
 [`quiz-ladder.test.ts`](../../tests/quiz-ladder.test.ts),
 [`quiz-verdict.test.ts`](../../tests/quiz-verdict.test.ts),
-[`quiz-sections.test.ts`](../../tests/quiz-sections.test.ts).
+[`quiz-sections.test.ts`](../../tests/quiz-sections.test.ts),
+[`quiz-attempts-route.test.ts`](../../tests/quiz-attempts-route.test.ts) (a finished mark is kept, and
+the read hands it back),
+[`quiz-kept-answers.test.tsx`](../../tests/quiz-kept-answers.test.tsx) (and the panel puts it back).
+Kept answers: [`src/store/pg-quiz-attempts.ts`](../../src/store/pg-quiz-attempts.ts) and
+[`src/db/schema.ts`](../../src/db/schema.ts) § `quizAttempts` — [§ Answers are kept](#answers-are-kept).
 Eval: [`evals/quiz.ts`](../../evals/quiz.ts) — **read this before editing either prompt.**
 The plan, the spike and two cross-family reviews:
 [260831al](../plans/260831al-review-quiz-sub-mode.md) and
@@ -229,8 +234,10 @@ Answer, *Write them again* can replace every reference answer while the question
 document's shape stay as they were. `POST /api/quiz/:slug/mark` reads the question, its reference
 answer and its evidence from the server's copy, and answers **409** when the batch the reader was
 shown is not the batch that is there. Never a silent fall-forward to the question with that id in
-the new batch. It is also what keeps the door open for stored attempts: an attempt row can point at
-an immutable batch instead of copying the question into itself.
+the new batch. It is also what a stored answer is filed under ([§ Answers are kept](#answers-are-kept)):
+the read returns only the current batch's. This paragraph used to say an attempt row could *"point at
+an immutable batch instead of copying the question into itself"*; the batch is not immutable — it is
+one JSON column that *Write them again* overwrites — so each row copies the question's words in.
 
 **Every one of those refusals is asked twice.** Reading the quiz and reading the article are two
 separate resolutions of "the current revision", so a publication landing between them would hand the
@@ -247,7 +254,9 @@ waiting.
 Two ways a mark can look finished when it is not, and both are refusals rather than ticks:
 `finish_reason: "length"` is the reply hitting `MARK_MAX_TOKENS` mid-sentence, which arrives with a
 perfectly ordinary `[DONE]` after it; and a reader who navigates away aborts the **provider** call,
-not merely the writing of frames, and gets no `done` at all.
+not merely the writing of frames, and gets no `done` at all. (A reader who leaves a moment later,
+while the hidden verdict is being asked for, has a whole mark: the stream still finishes, and the
+answer is kept though nobody receives the frame.)
 
 ## On screen
 
@@ -293,9 +302,9 @@ Sol reviews and the browser check:
   Previous and the list stay live, so a reader who does not want to wait can still leave, which
   aborts the mark as it always did.
 - **Which question is open is deliberately not in the URL.** The rule `?at=` and `?thread=` serve is
-  that a shared link lands you where the link-maker was; here what a link would frame is an answer
-  that does not survive a reload anyway. It arrives with stored attempts, which is what would make
-  it true.
+  that a shared link lands you where the link-maker was, and a quiz is its owner's alone. (The reason
+  given here until 2026-10-05 was that the answer did not survive a reload. It does now, and the
+  walk still opens at the first question — with your answer and its mark showing.)
 - The answer box is the shared `useDictationField` — [dictation.md](dictation.md) — because an
   answer from memory arrives as speech more readily than as typing.
 - **The answer box is as tall as the answer** (Greg, 2026-10-03, spya-qnrxuw: *"show the whole
@@ -306,17 +315,70 @@ Sol reviews and the browser check:
 - **A question is ticked answered only when its mark reaches `done`.** A stream that stops cleanly
   without finishing looks exactly like one that finished, which is the whole reason `attempt.status`
   and not a non-empty reply is what the tick reads. [silent-success.md](../reusable/silent-success.md).
+  The tick covers earlier visits too: it is "there is a kept answer to this question".
 - **A mark stays bound to the exact answer it was computed for.** The box goes editable again as
   soon as a mark lands, so the reader can end up reading feedback about a sentence they have
   deleted. Every attempt carries the answer it was marked on, and when the box no longer matches it
   the band says *"This mark is about your previous answer"* and stops calling the question answered.
-  The mark itself stays on screen — it is the thing the reader is editing against, nothing stores
-  it, and taking it away for a keystroke aimed at a typo would be its own kind of wrong. Put the old
-  words back and it is a current mark again.
+  The mark itself stays on screen — it is the thing the reader is editing against, and taking it
+  away for a keystroke aimed at a typo would be its own kind of wrong. Put the old words back and it
+  is a current mark again. A restored answer behaves the same way.
 - **A new batch takes the mark with it.** *Write them again* mints a new `batchId`, and the panel
   clears the attempt along with the index, the draft and the verdicts. Not tidiness: a mark still streaming holds
   `useQuiz`'s one live request, and without the clear the new batch's Answer button is enabled and
   does nothing.
+
+## Answers are kept
+
+**Since 2026-10-05.** Until then nothing about an answer was stored, on purpose, and it went on a
+reload, on leaving Quiz for another mode, and on Next followed by Previous. Greg, 2026-10-04
+(report `spya-e8ujxn`):
+
+> I think when I tried with the quiz, I answered a question or two and then came back to it and it
+> looked like the answers had been thrown away. Is there a way for us to store those answers? Is
+> that very complicated? If so, let's discuss.
+
+So every mark that **finishes** is one row in `quiz_attempts`: the answer, the mark, the question's
+words, and when. Come back to a question any of those three ways and the box holds your answer with
+its mark under it, and the question says answered. The plan, GPT Sol's eight findings on it and
+what was passed over (`localStorage`; a client `PUT` after the mark) are
+[261005b](../plans/261005b-quiz-answers-are-kept-and-restored.md).
+
+- **Append, and the read takes the latest.** Answering again adds a row; `GET /api/quiz/:slug`
+  returns the newest per question, for **the current batch only**, as `attempts`.
+- **The server writes it, not the client**: in `markOneAnswer`, when the stream says `done` and
+  before the `done` frame goes, so the frame can carry the row's own time. A mark that finished is
+  kept whether or not its last frame was delivered. A mark that failed leaves no row.
+- **A save that fails does not fail the mark.** `done` goes with `kept: false`, the answer stays
+  usable for the rest of the visit (Next and Previous still bring it back), and one quiet line
+  under the mark says it could not be saved and will not be there later.
+- **A new batch shows none of the old answers** — Greg's *"ok to lose answers"*, below. The rows
+  stay in the table and in both exports, readable on their own because each carries its question.
+- **The question that opens is still the first**, now with its answer showing. Opening at the first
+  unanswered question instead is an open question in the plan (Q-quiz-resume).
+- **Whether you got it right is not kept.** After a return the next step shows its premise (the
+  "no verdict" case, which errs towards help) and [Where to look again](#where-to-look-again) starts
+  empty until something is answered this visit. Storing it is the plan's other open question
+  (Q-quiz-verdict), and [privacy.md § Quiz answers](privacy.md#quiz-answers) says why it is not a
+  detail.
+- **No new words on screen** beyond two failure lines: the one above, and *"Your earlier answers
+  could not be loaded"* with *Try again*, when the questions arrived and the answers could not be
+  read. That is told apart from "none" on the wire (`attempts: null`, not `[]`), or a flaky read
+  would un-answer every question.
+
+Three things in the client are arranged against losing an answer that was just given, and each is
+commented where it lives ([`useQuiz.ts`](../../src/web/useQuiz.ts) § `useQuizRead`,
+[`QuizPanel.tsx`](../../src/web/QuizPanel.tsx)):
+
+- **What the server said and what was marked this visit are two records**, merged per question by
+  which is later. A read that set off before a save and lands after it can then only replace the
+  first, never erase the second.
+- **One effect puts an answer back**, after everything that can move the walk has run, and only
+  into an empty box with no mark of its own — never over a draft. A restored mark is flagged, so it
+  is not mistaken for a new unjudged one and does not wipe a verdict earned this visit.
+- **The offline copy of the quiz is refreshed by a read** after a stored mark, rather than thrown
+  away by the mark: eviction would cost the reader their questions whenever a mark then failed
+  ([`lib/api.ts`](../../src/web/lib/api.ts) § `LEAVE_CACHED_RESOURCE_CURRENT`).
 
 ## In the prose, in every mode
 
@@ -500,12 +562,12 @@ section's first missed question — the steer. The plan and GPT Sol's review are
 
 ## What is deliberately not here
 
-- **Attempts are not stored.** A reload starts fresh. `batchId` is the shape that keeps the door
-  open; nothing else about v1 assumes statelessness. **The adaptive walk did not change this**: the
-  path, the position in it and the hidden verdict map are React state and die with the visit (the
-  verdict map also resets on a new batch). The verdict is not written to a log either — a per-answer
-  right/wrong on a log line is a stored grade wearing a different hat, and
-  [privacy.md](privacy.md) makes a public promise about it.
+- **The verdict is not stored, and neither is where you were.** Answers and their marks are kept
+  since 2026-10-05 ([§ Answers are kept](#answers-are-kept)); until then this bullet read "Attempts
+  are not stored. A reload starts fresh." What still dies with the visit is the position on the
+  path and the hidden verdict map (which also resets on a new batch). The verdict is not written to
+  a log either — a per-answer right/wrong on a log line is a stored grade wearing a different hat,
+  and [privacy.md § Quiz answers](privacy.md#quiz-answers) records the decision not to keep one.
 - **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is
   a label for the badge; nothing re-runs on it.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,

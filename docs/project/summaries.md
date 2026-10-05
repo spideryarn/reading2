@@ -86,8 +86,10 @@ failed took Brief and Fuller with it.
 - **Brief's and Fuller's prompts did not change by a byte when the level went**
   ([`simple-two-levels.test.ts`](../../tests/simple-two-levels.test.ts) pins them), so the prompt
   version stayed `simple-prompt/7` and nothing stored became outdated. It is `simple-prompt/8`
-  since later the same day, for [the longer Fuller](#a-longer-fuller-since-2026-10-04). Brief's
-  bytes are still the pinned ones.
+  since later the same day, for [the longer Fuller](#a-longer-fuller-since-2026-10-04), and
+  `simple-prompt/9` since 2026-10-05, when
+  [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05). For a piece
+  of ordinary length both prompts' bytes are still the pinned ones.
 - **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
   when Summary is written:
 
@@ -197,7 +199,8 @@ So Summary's band has two presses that rewrite, and each is drawn only when its 
   and [`ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) draws it only when the profile changed.
 - **The server decides both reasons; the band only reads them.** *Stale* is the stored
   `sourceHash` against the article as it is now ([`simple-summary.ts`](../../src/simple-summary.ts)
-  § `isStale`). The fingerprint covers the rendered article's text and head and the fixed,
+  § `isStale`). The fingerprint covers the rendered article's text and head, the length band
+  for prompts since `/9`, and the fixed,
   profile-free user message; prompt-version and model stamps are separate. Changing those stamps
   alone never makes a summary stale. The store also reports stale when the article's tree is
   missing, because it cannot check the fingerprint (`pg.ts` § `loadSimpleSummary`).
@@ -312,7 +315,10 @@ the paragraphs.
 
   [261002a](../plans/261002a-summary-generates-on-open.md)). Arriving on `?mode=summary` — a link,
   Back, a restored view — spends nothing, as for every mode ([mode.md](mode.md), `useAutoRun`), and
-  with nothing stored the owner sees an empty state with **Write it**. The add page's *Generate the
+  with nothing stored the owner sees an empty state with **Write it**. That is also what lets
+  Summary be where a signed-in reader's first open of an article lands, where there is room
+  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
+  The add page's *Generate the
   main modes* box includes Summary for the same reason (Greg confirmed it on 2026-10-02,
   Q-summary-on-add), and it writes what the press writes: both plain-words levels, Brief and
   Fuller, all or none, through the `simple` step. Like the press it writes only when the article
@@ -335,7 +341,9 @@ The design, the measurements and the review are
 > — Greg, 2026-10-03 (`spya-azft06`, SPIDERYARN-READING2-BC)
 
 Fuller is asked for about 500 words in five to eight paragraphs of two to five sentences, and told
-never more than 600 (`simple-prompt/8`). It went there in two steps on the same day:
+never more than 600 (`simple-prompt/8`). Since 2026-10-05 that is the ask for a piece of ordinary
+length, and [a short or long piece is asked for less or more](#length-follows-the-piece-since-2026-10-05).
+It went there in two steps on the same day:
 
 - **About 350 words first** (`simple-prompt/7`), in four to seven paragraphs and never more than
   430, where it had been asked for about 220 in three to five. Measured, it came back at 338–412
@@ -349,14 +357,60 @@ never more than 600 (`simple-prompt/8`). It went there in two steps on the same 
 
 Its prompt says what the room is for: how the work was done, the evidence and numbers behind each
 main finding, the limits the piece itself names, and how the steps of the argument connect. The
-stored limit is 3 to 8 paragraphs and 850 words (`SIMPLE_LIMITS` in
-[`types.ts`](../../src/types.ts)), unchanged by either step; the minimum stayed at 3 so every Fuller
-stored before still reads. Brief is asked for what it was, byte for byte. No stored summary was
+stored limit was 3 to 8 paragraphs and 850 words (`SIMPLE_LIMITS` in
+[`types.ts`](../../src/types.ts)), unchanged by either step, and is 3 to 13 and 1,400 since
+2026-10-05; the minimum stayed at 3 so every Fuller stored before still reads. Brief is asked for what it was, byte for byte. No stored summary was
 rewritten by either step, and an unforced job will not rewrite one for it: a stored summary is
 *outdated*, which is silent, and Metadata's Rerun writes the longer one. So does *Write it again*,
 on the occasions it is offered
 ([§ When Summary offers a rewrite](#when-summary-offers-a-rewrite-since-2026-10-04)).
 [261004b](../plans/261004b-summary-fuller-longer-and-bold-and-bullets.md) has the measurements.
+
+### Length follows the piece (since 2026-10-05)
+
+> The length of the summaries should somewhat reflect the length of the text. Not linearly. But a
+> book will surely need (at least somewhat) longer summaries than a short article. Hopefully we can
+> add a tweak to the prompts to this effect.
+>
+> — Greg, 2026-10-04 (`spya-gttwhn`)
+
+**Fuller's length follows the piece; Brief's does not.** The Fuller above is what a piece of
+ordinary length is asked for. A short piece is asked for less and a long one for more, in **four
+bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `bandFor` and
+`FULLER_LENGTH` in [`simple-summary.ts`](../../src/simple-summary.ts)):
+
+| band | body words | Fuller: paragraphs · about · never more than |
+|---|---|---|
+| short | under 2,500 | three to five · 250 · 330 |
+| standard | 2,500 to 14,999 | five to eight · 500 · 600 |
+| long | 15,000 to 39,999 | six to nine · 700 · 820 |
+| book | 40,000 and up | eight to eleven · 900 · 1,050 |
+
+- **The band changes three values in Fuller's LENGTH section and nothing else.** The standard
+  band's Fuller prompt is `simple-prompt/8` byte for byte, so an article of ordinary length is
+  asked exactly what it was. The version is `simple-prompt/9`.
+- **Before, the length did not follow the piece.** Asked for about 500 words whatever the piece,
+  Fuller gave an 879-word essay 402 and 492 words, and a 48,000-word book 489 and 515. With bands
+  the essay got 281 and 237, and the book 834 and 846. A blind judge preferred the banded Fuller
+  in all eight pairs where its prompt differed
+  ([261005a](../investigations/261005a-summary-length-bands-measured.md)).
+- **Brief is about 80 words for every piece**, byte for byte as it was. It was banded too in the
+  first build, 60 words for a short piece and up to 140 for a book, and the same judge preferred
+  the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay turned on
+  every time, and the book's longer one read as padded.
+- **The band is counted over the body only**, the blocks the prompt shows, so a long bibliography
+  or appendix does not make a piece "a book".
+- **Fuller's stored limit rose once, for every band**, to 13 paragraphs and 1,400 words
+  (`SIMPLE_LIMITS`); Brief's did not move. It is one cap a level, not one a band, because a reader
+  of a stored row has no article to measure. The prompt's "never more than" is what holds a
+  shorter piece's summary short.
+- **Nothing stored was rewritten.** A stored summary is *outdated*, which is silent; Metadata's
+  Rerun writes the new length.
+- **A longer Fuller is a longer wait for Fuller**: 47 and 53 s to a book's Fuller in the two
+  writes measured, against 34 and 88 s before. Brief is on screen long before either.
+
+The plan, the option passed over and Sol's reviews are
+[261005b](../plans/261005b-summary-length-follows-the-length-of-the-piece.md).
 
 ### Bold and bullets (since 2026-10-04)
 

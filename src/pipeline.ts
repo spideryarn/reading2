@@ -187,7 +187,7 @@ import {
   articleHadNoText,
   documentHadTooLittleText,
   documentHasNoArticle,
-  FETCH_TOO_BIG,
+  fetchFailed,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
@@ -215,6 +215,7 @@ import {
   type StepStamp,
 } from "./store/artifacts.js";
 import { checkCoverage, generateStructure } from "./structure.js";
+import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
   generateTweets,
@@ -677,6 +678,12 @@ export interface StepContext {
    * than two computed in two places.
    */
   deadlineAt?: number;
+  /**
+   * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
+   * which this file cannot import. The structure step's slices path stops
+   * itself inside it. `undefined` from a command line or a test.
+   */
+  stepBudgetMs?: number;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -2142,25 +2149,40 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
 }
 
 /**
- * **A document fetched by address that is over the size limit, as the reader's
- * own sentence**, or `null` for every other failure.
+ * **A fetch by address that failed, as the failure the job card shows.**
+ * Anything that is not a `FetchFailure` is handed back untouched.
  *
- * `FetchFailure` declares no `readerFailure`, so `readerFailureOf` gives each
- * of its codes the generic copy and offers Retry. For this one code that was
- * a button that cannot import the same over-limit document. The
- * upload half has said so since it was written (`UPLOAD_TOO_BIG`); this is the
- * fetched half saying the same thing, with the same number
- * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+ * `FetchFailure` declares no `readerFailure`, so left alone `readerFailureOf`
+ * gives every one of its codes the generic copy and a Retry. Each code has its
+ * own sentence and kind instead (src/messages.ts § `fetchFailed`), so a page
+ * that is not there is no longer offered a button that asks for it again.
+ * `too-large` was the first, on 2026-10-04
+ * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md); the rest
+ * followed the same day
+ * (docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § A).
  *
- * Only `too-large`. The other codes still take the generic sentence, which is
- * wider than that plan and is recorded there rather than changed here.
+ * **The diagnostic is written here and is three things only**: fixed wording,
+ * the code, and the status when it is a whole number. It is `{ authored }`, so
+ * it reaches Sentry, and that claim would be false if it copied `err.url`,
+ * `err.message` or the cause's message: several of the fetcher's messages name
+ * the host, and a log of article addresses is a reading history
+ * (docs/project/logging.md). The original error is not kept as a `cause`
+ * either, for the same reason. What that gives up is the Node error code
+ * behind a `connection` failure, which the log used to carry.
  *
- * The diagnostic is authored here and carries no address: a log of article
- * URLs is a reading history (docs/project/logging.md).
+ * **A Stop or a deadline arrives here too**, as code `timeout` ("Fetch
+ * cancelled."), and is given `timeout`'s sentence like any other. Nobody sees
+ * it: `runStep` in src/jobs.ts asks whether its own signal fired before it asks
+ * what was thrown, and writes `STEP_STOPPED` or `INTERRUPTED` instead.
  */
-function overTheSizeLimit(err: unknown): Error | null {
-  if (!(err instanceof FetchFailure) || err.code !== "too-large") return null;
-  return stageFailure(FETCH_TOO_BIG, { authored: `The fetched document is over ${MAX_UPLOAD_BYTES} bytes.` });
+function fetchStepFailure(err: unknown): unknown {
+  if (!(err instanceof FetchFailure)) return err;
+  const failure = fetchFailed(err.code, err.status);
+  if (err.code === "too-large") {
+    return stageFailure(failure, { authored: `The fetched document is over ${MAX_UPLOAD_BYTES} bytes.` });
+  }
+  const status = Number.isInteger(err.status) ? `, HTTP ${err.status}` : "";
+  return stageFailure(failure, { authored: `The fetch by address failed: ${err.code}${status}.` });
 }
 
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
@@ -2171,9 +2193,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      The work is src/fetch.ts, which is stage 1's own module and does a great
      deal more than a `fetch().then(r => r.text())`: byte caps that count the
      decompressed size, the page's declared encoding rather than an assumed
-     UTF-8, PDFs told apart by their bytes, and typed failures with a sentence a
-     reader can act on. Those messages are what a failed step shows, which is
-     most of why this step is three lines. */
+     UTF-8, PDFs told apart by their bytes, and typed failures. A failed step
+     shows the sentence `fetchStepFailure` picks for the failure's code, not
+     the fetcher's own message, which can name the host. */
   fetch: {
     name: "fetch",
     label: "Fetching the page",
@@ -2198,7 +2220,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const host = new URL(url).hostname;
       ctx.report(host);
       const doc = await fetchDocument(url, { signal: ctx.signal }).catch((err: unknown) => {
-        throw overTheSizeLimit(err) ?? err;
+        throw fetchStepFailure(err);
       });
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on
@@ -2844,9 +2866,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
         });
       }
+      /* Read the title for a possible headings fallback: its root needs a name
+         and no model is there to write one. The model path ignores it. */
+      const meta = await store.read(ctx.slug, "extract", "meta");
       const run = await generateStructure({
         blocks: file.blocks,
         slug: ctx.slug,
+        ...(meta?.title ? { articleTitle: meta.title } : {}),
         /* Where the **label batches** are kept as they land, one row each, so a
            run that dies eight batches into a book costs one batch rather than
            eight. It was `ctx.dir` until 2026-09-01, which on Vercel is a
@@ -2859,6 +2885,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            another scoped call — see `StepContext.deadlineAt`. With the flag off
            it changes nothing at all. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
+        ...(ctx.stepBudgetMs !== undefined ? { stepBudgetMs: ctx.stepBudgetMs } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2870,6 +2897,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           slug: ctx.slug,
           step: "structure",
           model: run.model,
+          /* A model's tree, or the document's own headings and why. Logged at
+             every value so the rate of the fallback can be read off the log:
+             src/structure.ts § `StructureSource`. */
+          source: run.source.by,
+          sourceReason: run.source.by === "headings" ? run.source.reason : null,
+          /* The slices path: how many, how many re-asked and refilled, or why
+             it gave way to the headings. src/structure-slices.ts. */
+          slices: run.source.by === "slices" ? run.source : null,
+          slicesFailed:
+            run.source.by === "headings" && run.source.reason === "answer-too-long" ? run.source.slicesFailed : null,
           /* Three counts, not one, and `strandedSupplement` is the one that
              matters: it is how an operator learns the apparatus was left out of
              the structure on a run that otherwise reports success. */
@@ -2925,7 +2962,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              evals/deepen/ was reduced to doing. */
           wholeDocumentResumed: run.wholeDocumentResumed,
           /* 2 is an answer that did not become a tree, asked for again —
-             src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read. */
+             src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read.
+             On the slices path it counts every request started, including failures and transport retries. */
           wholeDocumentCalls: run.wholeDocumentCalls,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
@@ -3030,10 +3068,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the reader is watching while a label run is going; saying it here would
          be a sentence about a pass this step did not make, and at this point in
          an ingest **every** paragraph is unlabelled, which is not news. */
+      /* The job record is where somebody asks why this article has no gists. */
+      const fromHeadings =
+        run.source.by === "model"
+          ? ""
+          : run.source.by === "slices"
+            ? `, read in ${run.source.slices} parts`
+            : run.source.reason === "answer-too-long"
+              ? `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[run.source.slicesFailed]})`
+              : ", from its headings (a section was too long to label)";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
-        detail: `${run.internal} sections over ${run.blocks} blocks${deepened}`,
+        detail: `${run.internal} sections over ${run.blocks} blocks${fromHeadings}${deepened}`,
       };
     },
   },
@@ -4239,7 +4286,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       const stored = await store.stampFor(ctx.slug, "simple");
       return {
-        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta, stored?.promptVersion),
         promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
         model: stored?.model ?? CAPABLE_MODEL,
       };

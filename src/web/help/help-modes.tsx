@@ -173,7 +173,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
-          the box, to edit before you send; a recording stops after five minutes.{" "}
+          the box, to edit before you send; a recording stops after five minutes. Press Stop twice
+          quickly and it sends by itself once the words arrive; this works here, in Feedback, in a
+          comment follow-up, in a quiz answer and when you annotate a passage.{" "}
           <strong>Live</strong>, beside it, is a spoken conversation you can interrupt. Your audio goes
           directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a
           while, and press <strong>Live</strong> again. A call ends after five minutes of quiet, or
@@ -256,7 +258,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           again after that, or after a break, starts a new one. Its paragraphs are marked with a
           bar down the side and a mark in the spine, not a highlight over the words. Use it for a
           first look; <strong>thorough</strong> on a quick search runs the full meaning search on
-          the same words, in about half a minute, and replaces the quick one.
+          the same words, in about half a minute, and replaces the quick one. You do not have to
+          press it: once you stop typing and the quick answer has settled for two seconds, the
+          thorough search starts by itself (at once if you pressed Enter). The quick search shows a spinner in place of its{" "}
+          <strong>thorough</strong> button while it runs. On success its results take the quick ones' place; if it fails, the quick
+          results stay.
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
@@ -532,7 +538,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             case (your own, when your reason for reading gives one), makes a connection, or looks
             up what others have said and links it. It says which parts come from the article, the
             web, your notes and its own view. One Explore conversation per article; typed or
-            dictated, with no Live conversation yet.
+            dictated, with no Live conversation yet. Explore is one of the{" "}
+            <HelpRef to="experimental-features">experimental features</HelpRef>, so its chip appears
+            with those on, and stays visible while Explore is open.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered

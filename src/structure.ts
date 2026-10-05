@@ -44,13 +44,14 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
-import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile } from "./labels.js";
+import { buildBoundedHeadingTree } from "./heading-tree.js";
+import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile, unaskableBatches } from "./labels.js";
 import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
-import { appendSupplement, splitBlocks } from "./supplement.js";
+import { appendSupplement, type BlockSplit, splitBlocks } from "./supplement.js";
 import { type KeptChild, snapStartsToHeadings } from "./heading-snap.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
-import { budgetFor } from "./token-budget.js";
+import { budgetFor, TooLongForOnePass } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import { PRODUCTION_EFFORT as EFFORT, PROMPT_VERSION, renderBlocks } from "./structure-prompt.js";
@@ -78,6 +79,8 @@ import {
   type ExpansionExecutor,
 } from "./structure-deepen.js";
 import { log } from "./log.js";
+/* Values flow one way: that file takes this one's helpers as `SliceDeps`. */
+import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailure } from "./structure-slices.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 
@@ -2211,7 +2214,37 @@ export interface StructureArtefacts {
   blocks: ReturnType<typeof blocksArtefact>;
 }
 
+/**
+ * **Where a run's tree came from**: one model answer, several answers over
+ * slices of a long document (src/structure-slices.ts), or the document's own
+ * headings with no model (src/heading-tree.ts § `buildBoundedHeadingTree`).
+ *
+ * The last is a fallback, and a fallback that has quietly become the common
+ * case must show: the pipeline logs this at every value.
+ *
+ * - `slices`: the whole table of contents would not fit one answer, so the
+ *   body was asked about in `slices` slices. `reasked` answers did not pass and
+ *   were asked for again; `refilled` sections came back undivided and were
+ *   divided by a call of their own.
+ * - `answer-too-long`: the same document, where the slices did not make a
+ *   tree; `slicesFailed` says which step gave out. What was asked for on the
+ *   way is in the run's counts.
+ * - `labels-could-not-ask`: a model's tree was sound but held a section too
+ *   long for one labels call, so the labels step would have refused it. That
+ *   run's call was made and paid for; its counts say so.
+ *
+ * There is no `input-too-long`. Nothing in this codebase estimates whether the
+ * whole-document call's *input* fits, and this was not the place to invent it.
+ */
+export type StructureSource =
+  | { by: "model" }
+  | { by: "slices"; slices: number; refilled: number; reasked: number }
+  | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
+  | { by: "headings"; reason: "labels-could-not-ask" };
+
 export interface StructureRun {
+  /** Which path produced `parts.tree`. */
+  source: StructureSource;
   /**
    * What this run produced, for the caller to store. Assignable to
    * `ArtifactParts` (src/store/artifacts.ts) as it stands, so the pipeline step
@@ -2250,7 +2283,10 @@ export interface StructureRun {
      because the unit of deletion was a whole file. One row per batch has
      nothing to delete on success; retention is the sweep's.
      src/store/checkpoints.ts § Retention. */
-  /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
+  /**
+   * Which model wrote it, or the headings builder's own name where none did.
+   * `CAPABLE_MODEL` is private here, and the queue logs what a tree cost.
+   */
   model: string;
   blocks: number;
   /**
@@ -2360,8 +2396,11 @@ export interface StructureRun {
    * ordinarily, 2 when the first answer could not become a tree and was asked
    * for again — `REASK_STRUCTURE`. Logged at every value, because a re-ask that
    * has quietly become the common case doubles the stage's bill and its wait.
+   *
+   * On the slices path it is every request started: slices, re-asks, refills,
+   * the root and transport retries, including failed and aborted calls.
    */
-  wholeDocumentCalls: 0 | 1 | 2;
+  wholeDocumentCalls: number;
   /**
    * **What the deepening wave did**, or `null` where it was not run at all —
    * which is every reader today, because the flag is off
@@ -2454,6 +2493,11 @@ export async function generateStructure(opts: {
   /** Stamped into the tree and the labels file; the article's own name. */
   slug: string;
   /**
+   * The article's title, for the root of a tree built from headings. A model
+   * writes its own, so the model path never reads this.
+   */
+  articleTitle?: string;
+  /**
    * Where each finished **label batch** goes as it lands — passed straight down
    * to `generateLabels`. It was the only thing here that checkpointed until the
    * whole-document call and the deepening wave gained rows of their own; this option
@@ -2502,11 +2546,16 @@ export async function generateStructure(opts: {
    * the wave runs to completion, which is what a command line and a test want.
    */
   deadlineAt?: number;
+  /**
+   * How long the queue allows this step (`STEP_BUDGET_MS.structure`, which
+   * lives in src/jobs.ts and cannot be imported here). Only the slices path
+   * reads it, to stop itself before the queue would.
+   */
+  stepBudgetMs?: number;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
 }): Promise<StructureRun> {
   const { blocks, slug } = opts;
-  const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
 
   /* **The tree is built from the body alone, and the apparatus is appended
@@ -2515,14 +2564,105 @@ export async function generateStructure(opts: {
      one. Everything below this line therefore works over `body`, up to the
      append — including the token budget, which was being asked to pay for a
      tree over gwern's forty endnotes. src/supplement.ts. */
-  const { body, groups, stranded } = splitBlocks(blocks);
+  const split = splitBlocks(blocks);
+  const { body, groups } = split;
+
+  /**
+   * **The tree for a document no model's answer can serve**, from its own
+   * headings, finished exactly as a model's is. `spent` is what this attempt
+   * bought before it came to that, which is nothing unless a model was asked.
+   */
+  const fromHeadings = (
+    source: Extract<StructureSource, { by: "headings" }>,
+    spent: StructureSpend,
+    tree: Tree = buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree,
+  ): StructureRun =>
+    finishStructureRun({
+      blocks,
+      slug,
+      power: opts.power,
+      started,
+      split,
+      structure: tree,
+      /* Nothing was mended: the tree being returned was never a model's answer. */
+      built: emptyBuildReport(),
+      source,
+      ...spent,
+    });
 
   /* Before the call, and before a minute of anyone's time is spent: an article
-     whose table of contents cannot fit in one response is refused here rather
+     whose table of contents cannot fit in one response is found here rather
      than discovered six minutes in. `budgetFor`, inside `wholeDocumentRequest`,
-     throws for that case. */
+     throws for that case, and until 2026-10-05 that throw was the step failing.
+     Only this call is inside the `try`: the same class thrown from anywhere
+     later is a different fault and must stay one. */
   const answerTokens = estimateStructureTokens(body);
-  const { maxTokens, params } = wholeDocumentRequest(body);
+  let request: ReturnType<typeof wholeDocumentRequest>;
+  try {
+    request = wholeDocumentRequest(body);
+  } catch (err) {
+    if (!(err instanceof TooLongForOnePass)) throw err;
+    log("pipeline").info(
+      { slug, blocks: body.length, answerTokens },
+      "the table of contents will not fit one answer; asking for it in slices",
+    );
+    /* The headings tree first: it is free, the slices are cut along it, and it
+       is what the reader gets if they fail. */
+    const bounded = buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree;
+    const sliced = await runSlices({
+      body,
+      slug,
+      bounded,
+      power: opts.power,
+      checkpoints: opts.checkpoints,
+      deps: SLICE_DEPS,
+      deadline: slicesDeadline(started, opts.stepBudgetMs, opts.deadlineAt),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+    });
+    /* The deepening wave is not run on this path. It is off for every reader. */
+    const spent: StructureSpend = {
+      wholeDocumentResumed: sliced.ok && sliced.spend.calls === 0 && sliced.spend.resumed > 0,
+      wholeDocumentCalls: sliced.spend.calls,
+      wholeDocumentUsage: sliced.spend.usage,
+      deepen: null,
+      deepenFailed: false,
+    };
+    const giveUp = (slicesFailed: SlicesFailure, err?: unknown): StructureRun => {
+      log("pipeline").warn(
+        { slug, blocks: body.length, slicesFailed, slices: sliced.slices, calls: sliced.spend.calls, err },
+        "the slices did not make a table of contents; building it from the document's headings",
+      );
+      return fromHeadings({ by: "headings", reason: "answer-too-long", slicesFailed }, spent, bounded);
+    };
+    if (!sliced.ok) return giveUp(sliced.failure);
+    /* One build over the whole body, as for any answer, then the same checks. */
+    const built = emptyBuildReport();
+    let stitched: Tree;
+    try {
+      const bodyTree = buildTree(sliced.proposal, {}, body, slug, built);
+      if (!seamsHeld(bodyTree, sliced.sections, sliced.seams)) {
+        throw new Error("The final build dropped a slice's section or moved a slice seam.");
+      }
+      stitched = appendSupplement(bodyTree, groups);
+      assertTreeSound(blocks, stitched);
+    } catch (err) {
+      return giveUp("tree-unsound", err);
+    }
+    if (unaskableBatches(stitched, blocks).length > 0) return giveUp("labels-could-not-ask");
+    return finishStructureRun({
+      blocks,
+      slug,
+      power: opts.power,
+      started,
+      split,
+      structure: stitched,
+      built,
+      source: { by: "slices", slices: sliced.slices, refilled: sliced.refilled, reasked: sliced.reasked },
+      ...spent,
+    });
+  }
+  const { maxTokens, params } = request;
 
   /**
    * **Everything between one answer and one tree, in one place** — parse, build,
@@ -2809,7 +2949,7 @@ export async function generateStructure(opts: {
    * A stored answer that will not build is a different case and is not counted
    * here: it is demoted to a miss above, and the call below is its first.
    */
-  let wholeDocumentCalls: 0 | 1 | 2 = 0;
+  let wholeDocumentCalls = 0;
   let wave1 = cached;
   if (wave1 === null) {
     const first = await askForWholeDocument();
@@ -2990,6 +3130,99 @@ export async function generateStructure(opts: {
     }
   }
 
+  const spent: StructureSpend = { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed };
+
+  /* **A sound tree is not yet one the labels step can start on.** It never cuts
+     a section, so a section too long for one labels answer was stored here and
+     refused there. Asked after the deepening, which is the one thing that
+     could have divided it, and of the labels step's own plan and budget rather
+     than a number kept here. Review F2 of
+     docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md. */
+  const unaskable = unaskableBatches(structure, blocks);
+  if (unaskable.length > 0) {
+    log("pipeline").warn(
+      {
+        slug,
+        blocks: body.length,
+        unaskableBatches: unaskable.length,
+        largestBatch: Math.max(...unaskable.map((b) => b.blocks.length)),
+        wholeDocumentResumed,
+      },
+      "the model's table of contents has a section too long for one labels call; building it from the document's headings instead",
+    );
+    return fromHeadings({ by: "headings", reason: "labels-could-not-ask" }, spent);
+  }
+
+  return finishStructureRun({
+    blocks,
+    slug,
+    power: opts.power,
+    started,
+    split,
+    structure,
+    built,
+    source: { by: "model" },
+    ...spent,
+  });
+}
+
+const emptyBuildReport = (): BuildReport => ({
+  repairs: [],
+  droppedChildren: [],
+  rangelessChildren: [],
+  droppedHeadings: [],
+  collapsedRungs: [],
+  droppedQuestions: [],
+});
+
+/** What the slices path borrows from this file (src/structure-slices.ts § `SliceDeps`). */
+const SLICE_DEPS: SliceDeps = {
+  request: (blocks) => {
+    const { params, user, maxTokens } = wholeDocumentRequest(blocks);
+    return { params, user, maxTokens, answerTokens: estimateStructureTokens(blocks) };
+  },
+  headroom: STRUCTURE_HEADROOM,
+  parse: parseWholeDocumentAnswer,
+  build: buildTree,
+  canonical: canonicalWholeDocumentRequest,
+  question: questionFor,
+};
+
+/** What one attempt asked a model for, whichever tree it ended up returning. */
+interface StructureSpend {
+  wholeDocumentResumed: boolean;
+  wholeDocumentCalls: number;
+  wholeDocumentUsage: { input_tokens: number; output_tokens: number };
+  deepen: DeepenStats | null;
+  deepenFailed: boolean;
+}
+
+/**
+ * **From a finished tree to the run the caller stores**: the pending labels
+ * manifest, the three artefacts, the invariants and the hash seam. One
+ * function because both of `generateStructure`'s trees, a model's and the
+ * headings', must leave by the same door.
+ */
+function finishStructureRun(
+  made: StructureSpend & {
+    blocks: Block[];
+    slug: string;
+    power: ModelPower;
+    /** `Date.now()` when the step began. */
+    started: number;
+    split: BlockSplit;
+    /** Body tree with the supplement appended, before any label is merged. */
+    structure: Tree;
+    /** What was mended in `structure`, which is nothing for a tree no model wrote. */
+    built: BuildReport;
+    source: StructureSource;
+  },
+): StructureRun {
+  const { blocks, slug, started, structure, built, source } = made;
+  const { wholeDocumentResumed, wholeDocumentCalls, wholeDocumentUsage, deepen, deepenFailed } = made;
+  const { body, groups, stranded } = made.split;
+  const structural = blocks.filter((b) => isStructural(b)).length;
+
   /**
    * **Pass two used to be here, and it is the `labels` step now** (2026-09-06).
    *
@@ -3012,7 +3245,7 @@ export async function generateStructure(opts: {
    * - **`assertTreeSound` did not move**, and must not: a structure-only tree
    *   is still either sound or not, and this is the only place that asks.
    *
-   * `opts.checkpoints` is still used, by the whole-document call above — see
+   * `generateStructure` still uses checkpoints for its whole-document call — see
    * `wholeDocumentResumed`.
    * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
    */
@@ -3046,17 +3279,9 @@ export async function generateStructure(opts: {
    * **The merge is `mergeLabels(structure, pending.labels)` since 2026-09-06,
    * and the map is empty — so this tree carries NO navigation labels at all.**
    *
-   * That is worth saying flatly, because the obvious guess is wrong and the
-   * stage-2 brief made it. `buildHeadingTree` (src/heading-tree.ts) does mint a
-   * label for every heading for free, and if this function used it a
-   * structure-only tree would arrive with the author's own headings already
-   * labelled. **It does not.** `generateStructure` builds its tree with
-   * `buildTree` in this file, which sets `navLabel` from the map it is handed
-   * and from nothing else (see its leaf loop), and `buildHeadingTree` has no
-   * caller outside `evals/`. Verified by reading both, 2026-09-06.
-   *
-   * So the call is not preserving anything, and it is still the right call: the
-   * invariant both writers of this column keep is
+   * The bounded headings builder supplies authored heading labels, but this
+   * merge deletes them to agree with the pending manifest. Both writers keep
+   * the invariant
    * `tree === mergeLabels(structure, labels.labels)`, and stating it the same
    * way in both places is what stops the tree and the manifest describing
    * different articles. `mergeLabels` *deletes* a leaf's `navLabel` where the
@@ -3081,8 +3306,12 @@ export async function generateStructure(opts: {
     blocks: blocksArtefact(blocks),
     /* `buildTree` stamps the standard name, as it always has for its many
        callers that only want a tree; this is the one that knows which model
-       really cut it (plan 260930f). */
-    tree: { ...mergeLabels(structure, pending.labels), generator: generatorFor(opts.power) },
+       really cut it (plan 260930f). A tree no model cut keeps the name its
+       builder gave it. */
+    tree: {
+      ...mergeLabels(structure, pending.labels),
+      ...(source.by !== "headings" ? { generator: generatorFor(made.power) } : {}),
+    },
   };
 
   /* **The invariants, on the artefacts that are about to be handed back.** They
@@ -3182,6 +3411,7 @@ export async function generateStructure(opts: {
      the store's. GPT Sol, 2026-08-31; the CLI's removal, 2026-09-05. */
 
   return {
+    source,
     parts,
     /* `parts.labels.sourceHash`, not `storedHash`, though the check above has
        just proved them equal. The caller's stamp is compared against the labels
@@ -3190,7 +3420,7 @@ export async function generateStructure(opts: {
        are equal by a convention rather than by construction, which is the
        arrangement this whole stage of the migration exists to remove. */
     inputHash: parts.labels.sourceHash,
-    model: generatorFor(opts.power),
+    model: parts.tree.generator,
     blocks: blocks.length,
     structural,
     supplementNodes: groups.length,

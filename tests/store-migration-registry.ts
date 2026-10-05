@@ -1998,6 +1998,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/quiz-attempts-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with kept quiz answers (plan 261005b, 2026-10-05). It " +
+      "seeds three articles with `scratchArticleInPg`, each with a quiz written into the clone, " +
+      "and drives `POST /api/quiz/:slug/mark` and `GET /api/quiz/:slug` through `handleApi`, " +
+      "reading rows back out of `quiz_attempts` — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step, as for " +
+      "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-added-term.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2629,6 +2641,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
   "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
+  /* The cost cube's query, 261005a: ledger rows in 2033 under two seeded owners. */
+  "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
   /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
@@ -2811,6 +2825,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      is the asymmetry `lateCalls` exists to report and cannot be shown against a
      store nothing selects. It was written against `fsCostStore` for a day and
      the import-graph guard is what said so. */
+  /* The cost analysis's two reads, 261005a stage 3: ledger rows in July 2033
+     under two seeded owners, like tests/admin-costs-store.test.ts. */
+  "tests/cost-detail-store.test.ts": "private-postgres",
   "tests/cost-ledger-shortfall.test.ts": "private-postgres",
   /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
      went away; what it asserts now is *which database* the ledger lands in,
@@ -2877,6 +2894,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
   "tests/glossary-hidden-route.test.ts": "private-postgres",
+  /* Seeds three articles with a quiz each and drives the quiz mark POST and
+     the owner's GET through the route, reading rows back out of
+     `quiz_attempts`. The marker is a script; no model is called. */
+  "tests/quiz-attempts-route.test.ts": "private-postgres",
   /* Seeds three articles, writes a glossary on each, and drives adding a
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */
@@ -3429,6 +3450,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      It seeds `…dd` itself through `seedAuthUser`. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
+  },
+  "tests/admin-costs-store.test.ts": {
+    "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000c0be0a02": { kind: "seeded" },
+  },
+  "tests/cost-detail-store.test.ts": {
+    "00000000-0000-4000-8000-0000de7a0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000de7a0a02": { kind: "seeded" },
   },
   "tests/admin-feedback-store.test.ts": {
     "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },

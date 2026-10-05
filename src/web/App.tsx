@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
+import { SignedInShell } from "./BackLink.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
 import { LazyPage, type PageLoader } from "./LazyPage.js";
@@ -48,6 +49,8 @@ const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.A
 const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadAdminCosts = () =>
+  import("./AdminCostsPage.js").then((m) => ({ default: m.AdminCostsPage }));
 const loadAdminVouchers = () =>
   import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
 /* One loader per admin page, keyed by the union, so a page added to
@@ -58,6 +61,7 @@ const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
   users: loadAdminUsers,
   feedback: loadAdminFeedback,
   vouchers: loadAdminVouchers,
+  costs: loadAdminCosts,
 };
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
@@ -169,11 +173,12 @@ export function App() {
    * § the store listens for it itself.
    *
    * **And nothing here wakes it, either.** The store starts listening on its
-   * first subscriber and asks the server for nobody until then. Since stage 2
-   * the subscribers are the components that mount a `Dock` — `Reader`
-   * below, `Metadata`, `VisitorDock` in PublicPages.tsx (and `Tweets`, until it became a mode on 2026-09-29) — each
-   * calling `useExperimental()` and handing the answer down as a prop, because
-   * the bar is told rather than going and getting it (Dock.tsx § experimental).
+   * first subscriber and asks the server for nobody until then. `ArticlePage`
+   * subscribes through `useLastView`, before its article fetch finishes. The
+   * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
+   * in PublicPages.tsx — also call `useExperimental()` and hand the answer
+   * down as a prop, because the bar is told rather than going and getting it
+   * (Dock.tsx § experimental).
    * A stranger still asks for nothing: the store issues no request for a
    * signed-out reader, who is off because we decided.
    *
@@ -353,7 +358,11 @@ export function App() {
      shelf sideways. */
   return (
     <FeedbackHost>
-      <SignedIn route={route} user={user} />
+      {/* What tells a page's `HomeLink` that the corner logo is beside it, so
+          it draws no second way home — BackLink.tsx § `SignedInShell`. */}
+      <SignedInShell.Provider value={true}>
+        <SignedIn route={route} user={user} />
+      </SignedInShell.Provider>
       {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );

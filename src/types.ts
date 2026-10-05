@@ -190,6 +190,14 @@ export interface TreeNode {
   summary?: string;
   sourceHeading?: string;
   /**
+   * Set when no model wrote `title` and no heading did either: it quotes the
+   * opening words of its first qualifying non-heading block (src/heading-tree.ts
+   * § `buildBoundedHeadingTree`). The author's words, so the client draws them
+   * in the author's face; `sourceHeading` cannot say so, because it must name
+   * a heading.
+   */
+  titleFrom?: "opening-words";
+  /**
    * **Apparatus rather than argument** — the footnotes, the bibliography.
    * Absent means the body, which is every node of every tree written before
    * 2026-08-28.
@@ -1873,6 +1881,41 @@ export interface SkipCounts {
  *   moment will work.
  */
 export type EmbeddingReason = "config" | "provider" | "busy";
+
+/**
+ * Why a fetch failed, as something to switch on.
+ *
+ * These exist because **every network and TLS failure in Node arrives as the
+ * identical `TypeError: fetch failed`** — DNS, refused connection, expired
+ * certificate, self-signed certificate and a missing intermediate are one
+ * string at the top level, and the difference lives only in `err.cause.code`.
+ * Code that matches on the message learns nothing, which is exactly the trap
+ * the previous version fell into (docs/project/original-version/extraction.md).
+ *
+ * **Declared here, not in [fetch.ts](fetch.ts) where every one of them is
+ * raised**, for `EmbeddingReason`'s reason above: [messages.ts](messages.ts)
+ * holds a total map from these to the sentence a reader gets (`fetchFailed`),
+ * and it may not import `fetch.ts`, type-only or not. `fetch.ts` re-exports the
+ * name, so every other importer is unchanged. Moved 2026-10-04.
+ */
+export type FetchFailureCode =
+  | "invalid-url"
+  | "unsupported-scheme"
+  | "blocked-address"
+  | "dns"
+  | "connection"
+  | "certificate"
+  | "timeout"
+  | "too-many-redirects"
+  | "unauthorized"
+  | "forbidden"
+  | "not-found"
+  | "rate-limited"
+  | "server-error"
+  | "http-error"
+  | "too-large"
+  | "unsupported-type"
+  | "empty";
 
 export interface ProjectionResponse {
   model: string;
@@ -4207,8 +4250,19 @@ export interface When {
   phrase: string;
   /** Where in the block `phrase` sits, so the reader can go and check. */
   at: { blockId: BlockId; start: number; end: number };
-  /** True when the parser supplied the year from the publication date. */
+  /** True when the parser supplied the year rather than the article writing it here. */
   yearFilled: boolean;
+  /**
+   * **Where a supplied year came from, when it was not the publication date**:
+   * `"piece"` is the one year the piece itself states (`pieceYear`,
+   * src/timeline-time.ts), used when we have no publication date. It is an
+   * assumption and the panel says so. Absent on a year taken from the
+   * publication date, and on everything written before 2026-10-05.
+   *
+   * On the row rather than the artefact so that it travels wherever the event
+   * does, a shared link's payload included, and cannot disagree with the row.
+   */
+  yearFrom?: "piece";
 }
 
 /**
@@ -5059,10 +5113,40 @@ export interface QuizResponse {
   outdated: boolean;
   /** Written for a profile the reader has since changed. `ThreadResponse`. */
   profileChanged: boolean;
+  /**
+   * **The reader's kept answers to this batch**, the latest per question —
+   * since 2026-10-05 (plan 261005b, report spya-e8ujxn).
+   *
+   * **`null` is "could not be read", and it is not `[]`**, which says the
+   * reader has answered nothing. The route answers `null` when the attempts
+   * read threw, so that the questions still arrive; the client then keeps what
+   * it already had for this batch (GPT Sol's plan review, F5).
+   */
+  attempts: QuizKeptAnswer[] | null;
 }
 
-/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
-export type QuizFound = Omit<QuizResponse, "profileChanged">;
+/**
+ * One finished mark, as the owner's read returns it: the answer, the mark it
+ * was given, and when. A row of `quiz_attempts` (src/db/schema.ts) less the
+ * batch — the read is scoped to one — and the question's words, which the
+ * client already has. **No verdict**: whether the reader got it right is not
+ * stored.
+ */
+export interface QuizKeptAnswer {
+  questionId: QuizQuestionId;
+  /** The reader's words, as they went to the marker. */
+  answer: string;
+  /** The mark, as the reader saw it. */
+  reply: string;
+  /** ISO time the mark finished — the row's `created_at`. */
+  answeredAt: string;
+}
+
+/**
+ * What the store returns; the route adds `profileChanged` (as `IdeasFound`)
+ * and `attempts`, which is a second read from a different table.
+ */
+export type QuizFound = Omit<QuizResponse, "profileChanged" | "attempts">;
 
 /**
  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.
@@ -5425,10 +5509,19 @@ export interface SimpleLevelLimits {
  * smaller fallback shipped, so a longer Fuller later remains a prompt-only
  * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
  * stored before then still reads.
+ *
+ * Fuller's were raised again on 2026-10-05 (Greg, spya-gttwhn; plan 261005b),
+ * from 8 paragraphs and 850 words: the length Fuller is asked for now follows
+ * the length of the piece, and a book's is asked for about 900 words in eight
+ * to eleven paragraphs. Brief is asked for one length whatever the piece, so
+ * its limits did not move. **One cap for every length of
+ * piece**, because a reader of a stored row has no article to measure; the
+ * prompt's own "never more than" is what holds a shorter piece's summary short.
+ * The minimums did not move, so every stored summary still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
-  fuller: { minParagraphs: 3, maxParagraphs: 8, maxWords: 850 },
+  fuller: { minParagraphs: 3, maxParagraphs: 13, maxWords: 1400 },
 };
 
 /** Passages per paragraph, at every level. */
@@ -5496,8 +5589,8 @@ export interface SimpleSummary {
   generator: string;
   slug: string;
   /**
-   * A hash of the body-only article rendering and the **profile-free** user
-   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * A hash of the body-only article rendering, the length band since `/9`, and
+   * the **profile-free** user message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
    * it, so a changed profile never makes the paragraphs stale.
    */
   sourceHash: string;

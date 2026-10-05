@@ -85,6 +85,9 @@ export const ADMIN_FEEDBACK_URL = `${PUBLIC_ORIGIN}${ADMIN_FEEDBACK_PATH}`;
 export const ADMIN_VOUCHERS_PATH = "/admin/vouchers";
 export const ADMIN_VOUCHERS_URL = `${PUBLIC_ORIGIN}${ADMIN_VOUCHERS_PATH}`;
 
+/** **The cost explorer**: the router's `ADMIN_COSTS_HREF`. docs/plans/261005a-…. */
+export const ADMIN_COSTS_PATH = "/admin/costs";
+
 /**
  * **Where this article lives on Spideryarn** — the link back, from anywhere.
  *
