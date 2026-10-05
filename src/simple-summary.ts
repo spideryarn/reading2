@@ -201,8 +201,14 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * `standard` band, 2,500 to 14,999 words: only the Fuller of a short piece, a
  * long one or a book is written differently. As with `/8`,
  * every stored summary becomes *outdated* and none is rewritten for it.
+ *
+ * `simple-prompt/10` (2026-10-05): Brief is asked for about 100 words and
+ * never more than 150, where it was about 80 and 130, for every piece (Greg:
+ * *"maybe Brief could be ever so slightly longer but not much"*; plan 261005b § A slightly longer
+ * Brief). Fuller is `/9` byte for byte in every band. Outdated and not
+ * rewritten, as before.
  */
-export const SIMPLE_PROMPT_VERSION = "simple-prompt/9";
+export const SIMPLE_PROMPT_VERSION = "simple-prompt/10";
 
 /** The prompt a stored summary was written with; a row from before the field is the first. */
 export function simplePromptVersion(simple: SimpleSummary): string {
@@ -367,11 +373,24 @@ type Length = { shape: string; words: number; never: number };
  * 60-word one left out a point the essay turned on in four of four, and the
  * book's longer one read as padded both times. Brief is the one-glance answer,
  * and a glance is the same length for a book. Plan 261005b § Ledger.
+ *
+ * **About 100 words since `simple-prompt/10`, where it was about 80** (Greg,
+ * 2026-10-05: *"maybe Brief could be ever so slightly longer but not much"*).
+ * The ask and the words written are different numbers: asked for 80 it wrote
+ * 97 on average (88 to 113), asked for 100 it wrote 110 (91 to 137). A blind
+ * judge preferred the 100 to the 80 in six pairs of eleven and the 80 in
+ * four, with one tie. This does not establish that 100 is no worse; its
+ * padding flags count against it. An ask of 90 was preferred less often
+ * than the 80, but that small comparison does not establish which increase
+ * is harmless. Still one length for every piece:
+ * for the book the judge preferred the old Brief in all four pairs, so
+ * nothing argued for a longer one there alone.
+ * docs/investigations/261005a § Round three.
  */
 const BRIEF_LENGTH: Length = {
   shape: "Two short paragraphs, each two or three sentences; three only if the piece truly needs it",
-  words: 80,
-  never: 130,
+  words: 100,
+  never: 150,
 };
 
 /**

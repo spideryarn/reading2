@@ -295,11 +295,14 @@ describe("Brief's and Fuller's prompts", () => {
      one `/7` shipped**, which is what "Brief unchanged" means.
      `/9` (plan 261005b) made the length follow the piece's, in four bands;
      `SIMPLE_SYSTEMS` is the standard band's pair, and **neither hash moved**:
-     an article of 2,500 to 14,999 words is asked exactly what `/8` asked. */
-  it("are the bytes `simple-prompt/8` shipped, for a piece of standard length", () => {
+     an article of 2,500 to 14,999 words is asked exactly what `/8` asked.
+     `/10` (plan 261005b § A slightly longer Brief) asks Brief for about 100
+     words where it was about 80: **Brief's hash moved** (it was `d492501b…`
+     from `/7` to `/9`) and Fuller's did not. */
+  it("are the bytes `simple-prompt/10` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/9");
-    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
+    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d31a28ecc8d6977dfc7f4711bf18540059833dc62d9dc6a9ef4de4df87a8b308");
     expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
   });
 });
