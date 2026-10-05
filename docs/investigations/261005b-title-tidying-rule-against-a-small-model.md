@@ -23,6 +23,19 @@ and what does it do that it should not.
   not the site's name the page declared. The judge reported no harm in the model's accepted
   first-run answers that differed from the rule. This does not assess every answer in both runs.
 
+## Why a separate call, when Greg asked for a piggyback first
+
+"ideally piggybacking on an existing call we're already doing as part of the import process" (Greg,
+2026-10-05). The calls considered, and why none carries it: a web page's `extract` makes no model
+call; `pdf-frontmatter` (with the PDF's transcription and authors pass) is PDFs only and answers
+in block ids; `paper-metadata` is batch-added papers only, and its title is scored on being
+"exactly as printed"; `structure` and `reading-difficulty` run after the title is stored, and a
+title that changes after extract marks every generated mode stale. So a web page needs a new call
+whatever is done, and one shared call is smaller than a new one plus two changed contracts. What a
+piggyback would have saved is the figure below: 0.007 cents and about a second an import. **No
+piggyback was measured**, because none was built. The full table is in the
+[plan](../plans/261005j-a-small-model-tidies-an-imported-title.md).
+
 ## What was run
 
 [`evals/title-tidy/run.ts`](../../evals/title-tidy/run.ts) calls production's own

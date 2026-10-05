@@ -141,9 +141,9 @@ function OwnerSimple({
      `profileHash` never reaches a visitor. Its panel's Regenerate is the
      forced run, which replaces the paragraphs (plan 261002b). */
   const badge =
-    owner.simple && owner.profiled ? (
+    owner.simple ? (
       <WrittenForYou
-        written
+        written={owner.profiled}
         changed={owner.profileChanged}
         slug={slug}
         regenerate={{

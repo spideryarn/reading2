@@ -232,15 +232,39 @@ profileHash?: string | null;
 | Value | Means | Stale? |
 |---|---|---|
 | absent | written before this existed | **no** |
-| `null` | written deliberately *without* a profile | **no** |
+| `null` | written without a profile | once they have one |
 | a hash | written from that profile | only if it differs from now |
 
-**`null` is never stale**, and that line is the whole design. A plain artefact was written on
-purpose: until 2026-09-13 by a reader who unticked the *Use your profile* box and paid for it, and
-since then by a reader with no profile, or by a Find more continuing a list that was already plain
-(§ [No control, one label](#no-control-one-label)). Telling them it is out of date would be the app
-complaining about its own result. `undefined` is never stale for a gentler reason: nobody's existing
-artefacts should light up about a profile they never had.
+**A first profile counts as a change.**
+
+> B treat a first profile as a change
+>
+> — Greg, 2026-10-05, answering `[Q-first-profile-offers-a-rewrite]`
+> ([261004f](../plans/261004f-stop-writing-the-simple-summary-level.md))
+
+Until then `null` was never stale. That rule came from when writing without a profile was a choice:
+until 2026-09-13 a reader could untick a *Use your profile* box and pay for a plain artefact, and
+telling them it was out of date would have been the app complaining about its own result
+(§ [No control, one label](#no-control-one-label)). Writing a first profile now offers the same
+rewrite an edit does. It only offers:
+nothing is rewritten by itself.
+
+What that reaches, all through `withProfileChanged` in `src/routes.ts`: Summary, Glossary, Ideas,
+Thread, Quiz, Sketch and Quotes show the changed badge, with *Regenerate* in its panel wherever the
+mode has one (Quotes has none), and Summary also shows *Write it again* under the paragraphs.
+Illustrated says its Sketch was drawn before the profile said what it says now, and its one press
+redraws the Sketch before painting (the paint step refuses such a Sketch, so the picture cannot
+inherit `null` again). Skim already counted none → some. The badge has its own words for this case —
+*Written without your profile* — in
+[`WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx).
+
+The badge describes what was used, rather than claiming the reader had no profile then: older
+opt-outs and plain-list top-ups also carry `null`. A glossary's *Find more* on a plain list still
+continues it plain, so the badge stays until *Regenerate* is pressed.
+
+`undefined` is never stale: nobody's oldest artefacts should light up about a profile they never
+had. It is told from `null` by the stored document: direct writers stamp a hash or `null`, and
+Illustrated preserves its Sketch's stamp, including absence.
 
 **Clearing your profile marks nothing stale — but only if you clear *both* boxes.** `profileIsStale`
 compares against the *rendered* profile, and that is the join of the global half and the article's
@@ -302,8 +326,8 @@ list then stamped with the new hash. A lie about provenance, written by us, into
 
 So `existingFor` takes the incoming profile hash and refuses on any difference, which sends the run
 down the rewrite path where `idsByTerm` keeps the reader's `?term=` links alive. Note it is
-**stricter than `profileIsStale`**: there, `null` never counts, because a reader should not be
-nagged. Here any difference counts, because the question is not "should we warn them" but "may these
+**stricter than `profileIsStale`**: there, a cleared profile does not count. Here any difference
+counts, because the question is not "should we warn them" but "may these
 two lists be merged" — and entries written for a physicist may not be merged with entries written for
 nobody in particular.
 

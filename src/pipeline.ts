@@ -4430,7 +4430,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            every illustration stale the moment they edited their profile box,
            and re-drawing it would then stamp the Sketch's anyway — a stage that
            never reports itself done and pays $0.30 an open to find out. */
-        profileHash: sketch.profileHash ?? null,
+        ...(sketch.profileHash === undefined ? {} : { profileHash: sketch.profileHash }),
       };
     },
     async run(ctx, store) {
@@ -4460,8 +4460,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the panel offers to paint again, and the next paint inherits the same
          hash and reports the same thing — one press of a $0.30 button per
          circuit, for ever. `profileIsStale` is the three-state rule
-         (src/profile.ts): an artefact written deliberately without a profile,
-         and a reader who has since cleared theirs, are both *not* a mismatch. */
+         (src/profile.ts): a reader who has since cleared theirs is *not* a
+         mismatch; a Sketch drawn when they had none, once they have one, is
+         (since 2026-10-05), and the sketch step's own stamp already called
+         that Sketch not current, so the panel's one press redraws it first. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
         refuseToIllustrate("wrong-profile");
       }
@@ -4534,7 +4536,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         figuresFingerprint(assets),
         ctx.illustrationNote ?? "",
       );
-      run.illustrated.profileHash = sketch.profileHash ?? null;
+      /* A legacy Sketch's unknown provenance stays unknown. Turning absence
+         into null would make a permitted painting immediately profile-changed. */
+      if (sketch.profileHash === undefined) delete run.illustrated.profileHash;
+      else run.illustrated.profileHash = sketch.profileHash;
       /* The note this was painted with, from the same `ctx` value the two
          hashes above and in `stamp` use — `isStale` reads it back. */
       if (ctx.illustrationNote) run.illustrated.note = ctx.illustrationNote;
