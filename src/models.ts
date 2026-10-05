@@ -893,7 +893,12 @@ export type NonTaskAiJob =
      takes some: a second, tiny call on `QUICK_MODEL_OPENROUTER`. Its own job,
      so the ledger can say what the two halves cost. Not a `Task`: it is the
      model the eval measured, not a tier, and an override would unpin it. */
-  | "command-pick-words";
+  | "command-pick-words"
+  /* **The bar's short list from why you are reading** — searches, modes and a
+     lens proposed from the reader's profile, on `QUICK_MODEL_OPENROUTER`
+     (src/command-suggest-call.ts, plan 261005k). Not a `Task`, for
+     `command-pick-words`'s reason: it is the model the eval measured. */
+  | "command-suggest";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -1402,6 +1407,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
      small JSON answer on chat/completions for the words. src/command-pick-call.ts. */
   "command-pick": "decisions",
   "command-pick-words": "chat",
+  /* The bar's short list: one small JSON answer. src/command-suggest-call.ts. */
+  "command-suggest": "chat",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1672,6 +1679,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
+  { job: "command-suggest", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
   /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
      by its source because that file imports this one. */
   { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },

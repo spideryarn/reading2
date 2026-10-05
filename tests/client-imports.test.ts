@@ -532,6 +532,14 @@ const SHARED = new Set([
      (src/command-pick-call.ts) and is not reachable from here. See
      src/command-pick.ts and plan 261003k. */
   "command-pick.js",
+  /* The command bar's short list from why you are reading: the request's
+     shape, the caps, the re-reading of the reply, the fingerprint both sides
+     compute, and the row's own words. On the list for `command-pick.js`'s
+     reason, and it imports only that and `types.js`. **The prompt is not in
+     it**: that carries the plain-words section and lives with the call
+     (src/command-suggest-call.ts), which is not reachable from here. See
+     src/command-suggest.ts and plan 261005k. */
+  "command-suggest.js",
   /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
      so stage 3 can read them back. On the list because it imports **nothing at
      all**, deliberately and for this reason: its own header says so, since a

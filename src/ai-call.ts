@@ -754,6 +754,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **The bar's short list from why you are reading** (src/command-suggest-call.ts,
+     plan 261005k). `command-pick-words`'s policy for its reason: the answer
+     is a strict JSON schema with reasoning off, and an upstream that dropped
+     either would answer in prose or think while the reader watches the bar.
+     No `order`: nothing here is cached. */
+  "command-suggest": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
   pdf: {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -1065,6 +1075,10 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      no reasoning token spent on any of 600 answers
      (docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md). */
   "command-pick-words": { effort: "none" },
+  /* A handful of short items from two short lines, with the reader watching
+     the bar. The setting the eval ran at
+     (docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md). */
+  "command-suggest": { effort: "none" },
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +

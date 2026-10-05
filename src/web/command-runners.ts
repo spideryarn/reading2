@@ -225,6 +225,7 @@ export function readingExecutor({
   bookmark,
   findMore,
   openQuickSearch,
+  askThroughLens,
 }: {
   slug: string;
   blocks: Block[];
@@ -235,6 +236,11 @@ export function readingExecutor({
   findMore?: FindMoreOpeners | undefined;
   /** Open Search mode, for the *Quick search “X”* row — Reader.tsx § `openQuickSearch`. */
   openQuickSearch?: (() => void) | undefined;
+  /**
+   * Hand a lens to Chat, unsent, for the bar's suggested lens row —
+   * Reader.tsx § `debateThroughLensInChat` (plan 261005k).
+   */
+  askThroughLens?: ((lens: string) => void) | undefined;
 }): CommandExecutor {
   return {
     runners: {
@@ -245,6 +251,14 @@ export function readingExecutor({
     sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
     ...(openQuickSearch === undefined ? {} : { quickSearch: quickSearchPress(slug, openQuickSearch) }),
+    ...(askThroughLens === undefined
+      ? {}
+      : {
+          askThroughLens: (lens: string): ActionOutcome => {
+            askThroughLens(lens);
+            return CLOSE;
+          },
+        }),
   };
 }
 

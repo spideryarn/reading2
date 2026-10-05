@@ -274,6 +274,31 @@ Opus subagent, tests red first.
   route and constraint tests were red only for the missing column, and the mapping tests never;
   three mutations (the both-shapes guard, `sameOrigin`, the handoff's origin) each went red.
   **Deploy order: this code selects `origin_lens`, so the migration lands with or before it.**
+- 2026-10-05: **stage 2 built** (before its code review). What differs from the design above:
+  the prompt lives in `src/command-suggest-call.ts`, not the pure module (it needs `plainWords()`,
+  which the browser may not import); the hash the server returns is a plain hash of the two stored
+  boxes that the browser can also compute from `GET /api/reader?slug=`, so a profile changed in
+  another tab hides the list too; the list is React state in the bar, lost on leaving the reading
+  view; the bar learns of saves through `src/web/profile-saved.ts`, which the four save functions
+  call, and re-reads the profile on mount, on each open and after each save (one small extra GET);
+  `mode` keys are a schema `enum` of the ids offered, after six answers in the first eval run named
+  a sub-mode wrongly; caps are 80 characters a search, 140 a why, 200 a lens; the suggest row is
+  hidden while a list is kept, so there is no *ask again* until a save.
+  **The eval** ([261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md)):
+  17 made-up readers, 3 answers each, about 3 cents in all. Every answer parsed, every key was one
+  offered, no planted personal detail reached a search or the lens (45 of 45); 3 of 45 *why* lines
+  spoke of what the reader was doing (*"for your pitch"*), which the prompt now allows since a why
+  is shown only to the reader. **Not measured**: whether the searches find more than the bare
+  reason would, since no search was run against an article.
+  **Red first did not happen for this stage**: tests and code were written together, then 21
+  mutations were run and 18 turned a named test red; the three survivors are written in the
+  subagent's report (a save alone not dropping the list, because the hash re-read hides it anyway;
+  the Chat-reachable guard, always true for an owner today; a client special case since removed).
+  Not seen in a browser. Also in this commit: stage 1's box added to the Enter-key table test it
+  had left red, and the held Enter cancelled in two more boxes (the narrow check below).
+- 2026-10-05: **Sol's narrow check of the CR1 fix** ([the answer](261005k-stage-1-cr1-check-sol.md)):
+  *CR1 closed*. It noted that a held Enter now added blank lines in Edit Question and Candidates;
+  both cancel it now.
 - 2026-10-05: **GPT Sol's code review of stage 1** ([the review](261005k-stage-1-code-review-sol.md)
   of `97179213f`): *do not land*, four findings.
   - **CR1, P1, real, fixed by me after the review**: Enter in the lens box moves the caret into

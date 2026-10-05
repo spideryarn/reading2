@@ -2584,6 +2584,9 @@ export function Reader({
             }
           : undefined,
         openQuickSearch: isOwner ? openQuickSearch : undefined,
+        /* The bar's suggested lens row: Debate's own handoff, so the question
+           waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
+        askThroughLens: isOwner ? debateThroughLensInChat : undefined,
       }),
     [
       slug,
@@ -2599,6 +2602,7 @@ export function Reader({
       moreTerms,
       moreQuotes,
       openQuickSearch,
+      debateThroughLensInChat,
     ],
   );
   /**

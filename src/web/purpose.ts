@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
-import { forgetSummaries } from "./link-facts.js";
+import { profileSaved } from "./profile-saved.js";
 
 /**
  * Store the purpose, and answer with **what the server stored** — it trims and
@@ -35,8 +35,10 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
      cached per tab in front of a server that would have noticed
      (src/web/link-facts.ts § `forgetSummaries`), so without this a reader who
      changes their purpose and hovers a link they hovered before reads the
-     answer written for the sentence they just replaced. */
-  forgetSummaries();
+     answer written for the sentence they just replaced. `profileSaved`
+     forgets them, and tells the command bar its list from why you are reading
+     is old (src/web/profile-saved.ts). */
+  profileSaved();
   return body.purpose ?? null;
 }
 
@@ -54,12 +56,12 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
  * useProfile.ts § `leaveProfile` says why it takes both.
  */
 export function leavePurpose(slug: string, text: string): void {
-  forgetSummaries();
+  profileSaved();
   void leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ purpose: text === "" ? null : text }),
-  }).then(forgetSummaries);
+  }).then(profileSaved);
 }
 
 /**

@@ -354,7 +354,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   keyboard: {
     title: "Keyboard shortcuts",
     keywords:
-      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language",
+      "keys hotkeys arrow up down left right command k ctrl enter escape g glossary navigate jump first find look up define find more terms quotes tag untag microphone dictate speak sentence ask did you mean natural language suggest what to do here from why you are reading short list",
     body: (
       <>
         <ul>
@@ -389,6 +389,17 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             of commands, never the article. If it is sure and the command only takes you somewhere,
             you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
             you press the one you want, or <kbd>Enter</kbd>. You need to be signed in.
+          </li>
+          <li>
+            On your own article, once you have said why you are reading it, an empty command bar
+            starts with <strong>Suggest what to do here</strong>. Press it and a fast AI model reads
+            your profile and your reason for reading, never the article, and proposes a short list
+            under <strong>From why you’re reading</strong>: up to three quick searches, a mode or
+            two, and a question for Chat about what the web says. Nothing is done until you press
+            a row, and each row does what it would anywhere else in the bar; the question lands in
+            Chat’s box unsent. The list stays for your visit, hides while you type, and is thrown
+            away when you edit your profile or your reason. The searches and the question are
+            worded from what you wrote, so read one before you press it.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the
@@ -774,6 +785,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             and a warmer colour. <strong>Nothing is rewritten by itself</strong>. The panel offers
             to replace the result where the mode can do that; Quotes is the exception, because its
             control adds to the list instead. Even a one-letter fix counts as an edit.
+          </li>
+          <li>
+            The command bar can turn your reason for reading into a short list of things to try:{" "}
+            <HelpRef to="keyboard">Suggest what to do here</HelpRef>.
           </li>
           <li>The article’s parts and sections are never personalised, so they are the same for everyone.</li>
           <li>To stop the AI using a profile at all, empty both boxes.</li>

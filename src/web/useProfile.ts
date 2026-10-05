@@ -28,7 +28,7 @@
  */
 import { useEffect } from "react";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
-import { forgetSummaries } from "./link-facts.js";
+import { profileSaved } from "./profile-saved.js";
 import { type AutosavedText, useAutosavedText } from "./useAutosavedText.js";
 
 const HEADERS = { "Content-Type": "application/json" };
@@ -49,8 +49,9 @@ export async function saveProfile(text: string): Promise<string> {
      noticed (src/web/link-facts.ts § `forgetSummaries`) — so without this, a
      reader who rewrites their description and goes back to an article gets the
      answers written for the old one, on a card where nothing looks wrong. GPT
-     Sol, 2026-09-05. */
-  forgetSummaries();
+     Sol, 2026-09-05. `profileSaved` forgets them, and tells the command bar
+     its list from why you are reading is old (src/web/profile-saved.ts). */
+  profileSaved();
   return body.profile ?? "";
 }
 
@@ -70,9 +71,9 @@ export async function saveProfile(text: string): Promise<string> {
    throws that away too. `saveProfile` needs only the one because it calls
    after the response. tests/link-summary-forget.test.tsx. */
 export function leaveProfile(text: string): void {
-  forgetSummaries();
+  profileSaved();
   void leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) }).then(
-    forgetSummaries,
+    profileSaved,
   );
 }
 

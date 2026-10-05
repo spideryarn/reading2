@@ -2368,6 +2368,7 @@ function EditQuestion({
             e.preventDefault();
             ask();
           }
+          if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
       {held && !canAsk && (

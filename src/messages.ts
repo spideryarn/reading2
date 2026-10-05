@@ -322,6 +322,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "cite-gone": "blocked",
   "guess-resting": "blocked",
   "ai-not-set-up": "ours",
+  /* The command bar's suggestions — see `REASON_NOT_READ`. */
+  "bar-reason-unread": "retry",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
   "ai-stalled": "retry",
@@ -2648,6 +2650,20 @@ export const SCAN_TIMED_OUT: ReaderFacingFailure = {
     "The check took too long to answer, so this app stopped waiting for it. It did not finish, " +
     "so it says nothing either way about this document. Reload the page to run the check again. " +
     "[rd-scan-timeout]",
+};
+
+/**
+ * **The command bar was asked to suggest from why you are reading, and the
+ * reason could not be read** (src/routes.ts § `suggestFromWhyReading`, plan
+ * 261005k, GPT Sol's F6). A failed read is never "you have not said why": told
+ * that, a reader types over the sentence they already wrote. Nothing was sent
+ * to a model, so trying again costs nothing.
+ */
+export const REASON_NOT_READ: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app could not read why you're reading this article just now, so it had nothing to suggest " +
+    "from. What you wrote is still saved. Trying again in a moment usually works. [bar-reason-unread]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */
