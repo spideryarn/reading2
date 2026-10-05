@@ -5,7 +5,8 @@
  * The path is the tree Structure draws, walked from the root down to the
  * section the reader is in: part › section, or deeper on a deeper tree, and
  * never a paragraph. The tree is `buildSummaryTree` cut at `sectionDepth`, so
- * the walk stops there by running out of children rather than by counting.
+ * the walk stops there by running out of children rather than by counting —
+ * and, where a part has no sections, at the part: see the guard in `crumbPath`.
  *
  * **One walk, the first containing child at each level** — Structure's rule
  * (structure.ts § `makeRow`, "one selection model"). On a tree with
@@ -44,6 +45,16 @@ export function crumbPath(root: SummaryNode | null, row: number): Crumb[] {
   while (at) {
     const next: SummaryNode | undefined = at.children.find((c) => contains(c, row));
     if (!next) break;
+    /* **A block leaf is not a section.** A model's tree is ragged: a chapter
+       with no sections has its paragraphs one level up from everybody else's,
+       and `sectionDepth` is one number for the whole piece, so the cut leaves
+       them in as that chapter's children — each with a navLabel, which read as
+       "Afterword › <a paragraph's label>". Such a chapter shows alone.
+       The *stored* children, not the projected ones: `buildSummaryTree` empties
+       `next.children` at the cut for a real section too. And not the
+       apparatus, which is one crumb whatever is stored beneath it.
+       docs/plans/261005c-long-document-follow-ups-… § (g). */
+    if (next.node.children.length === 0 && !next.supplement) break;
     const label = nodeLabel(next, next.title);
     if (label) {
       path.push({
