@@ -209,6 +209,8 @@ const threaded: (string | null)[] = [];
 /** Every press of *Cited by*'s Try again. */
 const retried: string[] = [];
 const NO_DOI: CitersResult = { kind: "no-doi" };
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
@@ -235,7 +237,7 @@ function paint(
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o, citers: { result, retry: () => retried.push("retry") } },
+        access: { kind: "owner", owner: o, citers: { result, retry: () => retried.push("retry") }, claimChats: NO_CLAIM_CHATS },
         onJump: (id: BlockId) => jumped.push(id),
         view,
         onView: (next: DebateView) => viewed.push(next),

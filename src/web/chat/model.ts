@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -801,6 +801,8 @@ export interface TurnDone {
 export interface Begun {
   threadId: string;
   title: string;
+  /** The server's stored source, so a pending draft never invents one on a loaded row. */
+  origin?: ThreadOrigin;
   /** The assistant row the answer streams into. */
   messageId: string;
   /** The question above it. Absent from older servers; see `withServerIds`. */
@@ -1065,6 +1067,7 @@ export function withServerIds(
       : {
           ...t,
           id: begun.threadId,
+          ...(begun.origin ? { origin: begun.origin } : {}),
           // The title is cut on a word boundary on the server; the optimistic
           // one is a blunt 60-character slice that would otherwise stay on
           // screen until the next reload.
@@ -1175,6 +1178,19 @@ export function isSettled(state: ChatState, threadId: string): boolean {
     if (op.kind !== "load" && op.threadId === threadId) return false;
   }
   return true;
+}
+
+/**
+ * **Does the server have this conversation?** It is in the list and is not one
+ * this tab invented and is still waiting to hear back about (`unnamed`).
+ *
+ * Weaker than `isSettled`: an answer may still be streaming. One reader, the
+ * band's pending origin (plan 261005i): what a thread was started from is set
+ * on the server's insert only, so the band goes on offering it until this is
+ * true, and holds Live back for the same stretch.
+ */
+export function isNamed(state: ChatState, threadId: string): boolean {
+  return !state.unnamed.has(threadId) && state.base.some((t) => t.id === threadId);
 }
 
 /** Answers this tab has lost the stream of and is asking the server about. */

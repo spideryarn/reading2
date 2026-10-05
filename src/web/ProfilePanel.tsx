@@ -223,7 +223,8 @@ function pending(s: SaveState): boolean {
  * this was written for. `className` and `children` keep the trigger's
  * appearance out of the implementation of focus, dismissal and the fetch.
  *
- * It is mounted only for an artefact that was written with a profile. A reader
+ * It is mounted only for an artefact that was written with a profile, or
+ * (since 2026-10-05) one written before the reader had theirs. A reader
  * making their first profile now enters through `/profile` or the Command bar;
  * the pre-generation trigger went with the checkbox on 2026-09-13.
  */

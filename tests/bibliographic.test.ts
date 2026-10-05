@@ -191,6 +191,44 @@ describe("parseCrossref", () => {
     expect(parseCrossref(id("10.1000/x"), "10.1000/x", [])).toBeNull();
     expect(parseCrossref(id("10.1000/x"), "10.1000/x", null)).toBeNull();
   });
+
+  it("keeps the citation count only when it is a whole number Postgres can hold, and keeps the record either way", () => {
+    /* Plan 261005i. `is-referenced-by-count` is Crossref's own count of the
+       works citing this one. A count that is not one is no count: the title
+       and the rest of the record are still an answer (GPT Sol's F3). */
+    const counted = (count: unknown) =>
+      parseCrossref(id("10.1000/x"), "10.1000/x", {
+        message: { title: ["Dreams and memory consolidation"], "is-referenced-by-count": count },
+      });
+    expect(counted(357)).toMatchObject({ title: "Dreams and memory consolidation", citedByCount: 357 });
+    expect(counted(0)).toMatchObject({ citedByCount: 0 });
+    expect(counted(2_147_483_647)).toMatchObject({ citedByCount: 2_147_483_647 });
+    for (const bad of [undefined, null, -1, 3.5, "357", Number.NaN, 2_147_483_648, Number.MAX_SAFE_INTEGER, [357]]) {
+      const record = counted(bad);
+      expect(record, String(bad)).toMatchObject({ title: "Dreams and memory consolidation" });
+      expect(record, String(bad)).not.toHaveProperty("citedByCount");
+    }
+    /* The recorded answer was trimmed before the count mattered: no field, no count. */
+    expect(parseCrossref(id("10.1038/nn.4304"), "10.1038/nn.4304", CROSSREF)).not.toHaveProperty("citedByCount");
+  });
+
+  it("never says when the count was read: that is the store's clock, not the parser's", () => {
+    const record = parseCrossref(id("10.1000/x"), "10.1000/x", {
+      message: { title: ["Dreams and memory consolidation"], "is-referenced-by-count": 4 },
+    });
+    expect(record).toMatchObject({ citedByCount: 4 });
+    expect(record).not.toHaveProperty("citedByCountReadAt");
+  });
+});
+
+describe("parseDatacite and the citation count", () => {
+  it("keeps none, whatever DataCite sends: its counts are too thin to show (plan 261005i § Passed over)", () => {
+    const record = parseDatacite(id("10.5281/zenodo.123"), "10.5281/zenodo.123", {
+      data: { attributes: { titles: [{ title: "A dataset" }], creators: [], citationCount: 12, "is-referenced-by-count": 12 } },
+    });
+    expect(record).toMatchObject({ source: "datacite", title: "A dataset" });
+    expect(record).not.toHaveProperty("citedByCount");
+  });
 });
 
 describe("parseDatacite", () => {
@@ -266,6 +304,14 @@ class MemoryStore implements BibliographicStore {
 
   private fresh(row: { answer: CachedAnswer | null; at: number }, f: Freshness): boolean {
     if (row.answer === null) return false;
+    /* A Crossref record nobody has asked for its count is not an answer yet (plan 261005i). */
+    if (
+      row.answer.kind === "found" &&
+      row.answer.record.source === "crossref" &&
+      row.answer.record.citedByCountReadAt === undefined
+    ) {
+      return false;
+    }
     return Date.now() - row.at < (row.answer.kind === "found" ? f.foundMs : f.notFoundMs);
   }
 
@@ -290,12 +336,18 @@ class MemoryStore implements BibliographicStore {
     if (row.answer === null) this.rows.delete(claim.id);
     else row.claimedUntil = null;
   }
-  async write(claim: IdentifierClaim, answer: CachedAnswer) {
+  async write(claim: IdentifierClaim, answer: CachedAnswer): Promise<Date | null> {
     const row = this.rows.get(claim.id);
-    if (!row || row.claimedUntil !== claim.until.getTime()) return false;
+    if (!row || row.claimedUntil !== claim.until.getTime()) return null;
     this.writes.push(`${claim.id}:${answer.kind}`);
-    this.rows.set(claim.id, { answer, at: Date.now(), claimedUntil: null });
-    return true;
+    const at = Date.now();
+    /* Written out rather than through the production helper, so the two can disagree. */
+    const kept: CachedAnswer =
+      answer.kind === "found" && answer.record.source === "crossref"
+        ? { kind: "found", record: { ...answer.record, citedByCountReadAt: new Date(at).toISOString() } }
+        : answer;
+    this.rows.set(claim.id, { answer: kept, at, claimedUntil: null });
+    return new Date(at);
   }
   async coolingDown(service: Registry) {
     return (this.cooling.get(service) ?? 0) > Date.now();
@@ -453,6 +505,133 @@ describe("lookupWork", () => {
       why: "cooling-down",
     });
     expect(fetchJson).not.toHaveBeenCalled();
+  });
+
+  describe("Crossref's citation count (plan 261005i)", () => {
+    const doi = "10.1000/counted";
+    const counted = (count?: number) => ({
+      message: {
+        DOI: doi,
+        title: ["Dreams and memory consolidation"],
+        ...(count === undefined ? {} : { "is-referenced-by-count": count }),
+      },
+    });
+    const DATASET = { data: { attributes: { titles: [{ title: "A dataset" }], creators: [], doi } } };
+
+    it("says when the count was read, from the store's clock, on the answer just fetched and on the cached one", async () => {
+      vi.useFakeTimers({ now: new Date("2026-10-04T12:00:00.000Z") });
+      try {
+        const store = new MemoryStore();
+        const { asked, fetchJson } = registry({ [crossrefUrl(doi)]: counted(357) });
+        const first = await lookupWork(id(doi), { store, fetchJson, sleep: noSleep });
+        expect(first).toMatchObject({
+          kind: "found",
+          record: { source: "crossref", citedByCount: 357, citedByCountReadAt: "2026-10-04T12:00:00.000Z" },
+        });
+        vi.setSystemTime(new Date("2026-11-01T09:00:00.000Z"));
+        /* A month on it is still the day it was read, not the day it was served. */
+        expect(await lookupWork(id(doi), { store, fetchJson, sleep: noSleep })).toEqual(first);
+        expect(asked).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("says it asked even when Crossref gave no count, so it does not ask again", async () => {
+      const store = new MemoryStore();
+      const { asked, fetchJson } = registry({ [crossrefUrl(doi)]: counted() });
+      const first = await lookupWork(id(doi), { store, fetchJson, sleep: noSleep });
+      expect(first).toMatchObject({ kind: "found", record: { citedByCountReadAt: expect.any(String) as string } });
+      expect((first as { record: object }).record).not.toHaveProperty("citedByCount");
+      expect(await lookupWork(id(doi), { store, fetchJson, sleep: noSleep })).toEqual(first);
+      expect(asked).toHaveLength(1);
+    });
+
+    it("gives a DataCite record and a miss no read moment, and still knows each was stored", async () => {
+      /* GPT Sol's F1: `write` answers "stored" with a moment for every answer,
+         so a DataCite record or a miss is not mistaken for a lost claim. */
+      const store = new MemoryStore();
+      const { fetchJson } = registry({
+        [crossrefUrl(doi)]: failure(404),
+        [dataciteUrl(doi)]: DATASET,
+        [crossrefUrl("10.9999/nowhere")]: failure(404),
+        [dataciteUrl("10.9999/nowhere")]: failure(404),
+      });
+      const dataset = await lookupWork(id(doi), { store, fetchJson, sleep: noSleep });
+      expect(dataset).toMatchObject({ kind: "found", record: { source: "datacite" } });
+      expect((dataset as { record: object }).record).not.toHaveProperty("citedByCountReadAt");
+      expect(await lookupWork(id("10.9999/nowhere"), { store, fetchJson, sleep: noSleep })).toEqual({ kind: "not-found" });
+      expect(store.writes).toEqual([`doi:${doi}:found`, "doi:10.9999/nowhere:not-found"]);
+    });
+
+    it("falls back to the other caller's answer when its own write lost the claim", async () => {
+      const store = new MemoryStore();
+      const { fetchJson } = registry({ [crossrefUrl(doi)]: counted(9) });
+      const write = vi.spyOn(store, "write").mockResolvedValue(null);
+      expect(await lookupWork(id(doi), { store, fetchJson, sleep: noSleep })).toEqual({
+        kind: "unavailable",
+        why: "in-flight",
+      });
+      expect(write).toHaveBeenCalledTimes(1);
+    });
+
+    /** A record cached by the code before this feature: fresh by its age, and nobody asked for its count. */
+    function preFeature(store: MemoryStore) {
+      const old = parseCrossref(id(doi), doi, counted())!;
+      store.rows.set(id(doi), { answer: { kind: "found", record: old }, at: Date.now(), claimedUntil: null });
+    }
+
+    it("asks once more about a record cached before the count was kept, and then not again", async () => {
+      const store = new MemoryStore();
+      preFeature(store);
+      const { asked, fetchJson } = registry({ [crossrefUrl(doi)]: counted(12) });
+      expect(await lookupWork(id(doi), { store, fetchJson, sleep: noSleep })).toMatchObject({
+        kind: "found",
+        record: { citedByCount: 12 },
+      });
+      await lookupWork(id(doi), { store, fetchJson, sleep: noSleep });
+      expect(asked).toHaveLength(1);
+    });
+
+    it("keeps such a record eligible after a failed refresh: once means one refresh that worked (GPT Sol's F4)", async () => {
+      const store = new MemoryStore();
+      preFeature(store);
+      const down = registry({ [crossrefUrl(doi)]: failure(500) });
+      for (let i = 0; i < 2; i++) {
+        expect(await lookupWork(id(doi), { store, fetchJson: down.fetchJson, sleep: noSleep })).toEqual({
+          kind: "unavailable",
+          why: "error",
+        });
+      }
+      expect(down.asked).toHaveLength(2);
+      /* The old answer is still there underneath; only the claim went. */
+      expect(store.rows.get(id(doi))?.answer).toMatchObject({ kind: "found" });
+      const up = registry({ [crossrefUrl(doi)]: counted(3) });
+      expect(await lookupWork(id(doi), { store, fetchJson: up.fetchJson, sleep: noSleep })).toMatchObject({
+        record: { citedByCount: 3 },
+      });
+      await lookupWork(id(doi), { store, fetchJson: up.fetchJson, sleep: noSleep });
+      expect(up.asked).toHaveLength(1);
+    });
+
+    it("lets the refresh replace a Crossref record with DataCite's, or with a miss, and neither is asked again", async () => {
+      for (const [datacite, expected] of [
+        [DATASET, { kind: "found", record: { source: "datacite" } }],
+        [failure(404), { kind: "not-found" }],
+      ] as const) {
+        const store = new MemoryStore();
+        preFeature(store);
+        const { asked, fetchJson } = registry({ [crossrefUrl(doi)]: failure(404), [dataciteUrl(doi)]: datacite });
+        const result = await lookupWork(id(doi), { store, fetchJson, sleep: noSleep });
+        expect(result).toMatchObject(expected);
+        if (result.kind === "found") {
+          expect(result.record).not.toHaveProperty("citedByCount");
+          expect(result.record).not.toHaveProperty("citedByCountReadAt");
+        }
+        expect(await lookupWork(id(doi), { store, fetchJson, sleep: noSleep })).toEqual(result);
+        expect(asked).toHaveLength(2);
+      }
+    });
   });
 
   it("refuses a malformed identifier before any request or any read", async () => {

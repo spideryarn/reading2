@@ -91,7 +91,10 @@ export const HELP_FAQ: Record<FaqId, HelpSection> = {
         come from the model’s general knowledge (a row says <em>influence unknown</em> where no usable
         influence score was saved; new lists ask the model to leave it unknown when unsure; a bar marked{" "}
         <em>from the web</em> is instead an AI estimate from a page Dig deeper found), and a reader profile can shape how some aids are
-        written. Most other reading aids work from the article itself.
+        written. Where the article gives a work’s DOI, Citations also looks the work up in Crossref
+        or DataCite, the registries that issue DOIs, for its authors and year, and a row that
+        says <em>cited 357 times · Crossref</em> is showing Crossref’s own count. Most other reading
+        aids work from the article itself.
       </p>
     ),
   },

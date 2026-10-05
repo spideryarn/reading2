@@ -1,0 +1,312 @@
+{
+  "arm": "high-about-new2b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/10",
+  "sourceSha256": "8d2804f6152f3db03738a05ef35f3a657d44c21acbe393edebeb8f829bee6d5f",
+  "at": "2026-10-05T16:47:49.447Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 35827,
+  "costUsd": 0.1251396,
+  "tokens": {
+    "input": 14899,
+    "output": 4546,
+    "reasoning": 1847
+  },
+  "briefReadyMs": 20776,
+  "fullerReadyMs": 35812,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 550,
+  "briefWords": 104,
+  "fuller": [
+    {
+      "text": "This is a review and theory paper about when cognitive control helps and when it hurts. Cognitive control here means the prefrontal cortex filtering raw input, keeping what serves the current goal and damping the rest. The authors propose a Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs, not when filtering is maximal. The name borrows loosely from signal processing, where a matched filter best pulls a signal out of noise in a given setting.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This is a review and theory paper about when cognitive control helps and when it hurts.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "Cognitive control here means the prefrontal cortex filtering raw input, keeping what serves the current goal and damping the rest.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "The authors propose a Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs, not when filtering is maximal.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        },
+        {
+          "text": "The name borrows loosely from signal processing, where a matched filter best pulls a signal out of noise in a given setting.",
+          "id": "spya-tvhpk0"
+        }
+      ]
+    },
+    {
+      "text": "The prefrontal cortex is usually treated as the seat of our most complex thinking, so more control looks like it should always be better. The authors argue a growing body of research shows otherwise. In one guessing task, one option pays off 75% of the time; adults pick it 75% of the time and win about 62.5%. Children pick it every time and win 75%, and some work links the adult habit to executive function.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The prefrontal cortex is usually treated as the seat of our most complex thinking, so more control looks like it should always be better.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "The authors argue a growing body of research shows otherwise.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "In one guessing task, one option pays off 75% of the time; adults pick it 75% of the time and win about 62.5%.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Children pick it every time and win 75%, and some work links the adult habit to executive function.",
+          "id": "spya-egkn3d",
+          "key": "Children pick it every time and win 75%"
+        }
+      ]
+    },
+    {
+      "text": "The paper calls a state of reduced prefrontal activity \"hypofrontality\"; young children, whose frontal lobes are still maturing, are its natural example. High control should help tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory. Low control should help tasks that are implicit, reward-driven, non-verbal or intuitive, and too complex to hold in working memory. How well the filter matches can depend on age, genes, brain damage, doing a second task at once, or brain stimulation.",
+      "ids": [
+        "spya-kyvz4a",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The paper calls a state of reduced prefrontal activity \"hypofrontality\"; young children, whose frontal lobes are still maturing, are its natural example.",
+          "id": "spya-egkn3d",
+          "key": "hypofrontality"
+        },
+        {
+          "text": "High control should help tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Low control should help tasks that are implicit, reward-driven, non-verbal or intuitive, and too complex to hold in working memory.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "How well the filter matches can depend on age, genes, brain damage, doing a second task at once, or brain stimulation.",
+          "id": "spya-kyvz4a"
+        }
+      ]
+    },
+    {
+      "text": "For learning, the authors gather evidence that less control can help. Adults doing a demanding second task at the same time learn hard-to-verbalize rules and motor sequences better. Disrupting the dorsolateral prefrontal cortex with magnetic pulses has been linked to better implicit motor learning. Children show less \"blocking\", where an already-learned cue stops a new cue from being learned, so they end up learning cue strengths more accurately. Given noisy artificial-language input, children produce only the most frequent form, while adults copy the noise.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-wx0kxu",
+        "spya-pttrqz"
+      ],
+      "sentences": [
+        {
+          "text": "For learning, the authors gather evidence that less control can help.",
+          "id": null
+        },
+        {
+          "text": "Adults doing a demanding second task at the same time learn hard-to-verbalize rules and motor sequences better.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Disrupting the dorsolateral prefrontal cortex with magnetic pulses has been linked to better implicit motor learning.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Children show less \"blocking\", where an already-learned cue stops a new cue from being learned, so they end up learning cue strengths more accurately.",
+          "id": "spya-wx0kxu"
+        },
+        {
+          "text": "Given noisy artificial-language input, children produce only the most frequent form, while adults copy the noise.",
+          "id": "spya-pttrqz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The proposed reason is a tradeoff: control buys fast, accurate short-term performance at a long-term cost to what gets learned. The authors also point to competition between a prefrontal, rule-testing learning system and a striatal, habit-based one. For example, people with lower working memory capacity learn non-verbal category boundaries better.",
+      "ids": [
+        "spya-xkqxjf",
+        "spya-avc4bv"
+      ],
+      "sentences": [
+        {
+          "text": "The proposed reason is a tradeoff: control buys fast, accurate short-term performance at a long-term cost to what gets learned.",
+          "id": "spya-xkqxjf",
+          "key": "short-term performance at a long-term cost"
+        },
+        {
+          "text": "The authors also point to competition between a prefrontal, rule-testing learning system and a striatal, habit-based one.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "For example, people with lower working memory capacity learn non-verbal category boundaries better.",
+          "id": "spya-avc4bv"
+        }
+      ]
+    },
+    {
+      "text": "For creativity, people inventing unusual uses for objects showed lower prefrontal and higher visual-area activity than people listing ordinary uses. A weak current that damps the left prefrontal cortex made people faster and more prolific at inventing new uses, with no such effect on control tasks. Children also resist functional fixedness, the trap of seeing an object only through its usual job. Still, judging whether an idea works likely needs control again, so creativity may cycle between the two states.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq",
+        "spya-xmgzpp"
+      ],
+      "sentences": [
+        {
+          "text": "For creativity, people inventing unusual uses for objects showed lower prefrontal and higher visual-area activity than people listing ordinary uses.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "A weak current that damps the left prefrontal cortex made people faster and more prolific at inventing new uses, with no such effect on control tasks.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Children also resist functional fixedness, the trap of seeing an object only through its usual job.",
+          "id": "spya-gfuefq"
+        },
+        {
+          "text": "Still, judging whether an idea works likely needs control again, so creativity may cycle between the two states.",
+          "id": "spya-xmgzpp"
+        }
+      ]
+    },
+    {
+      "text": "The authors flag real limits. Direct evidence in adults is sparse, and child advantages could come from differences other than an immature prefrontal cortex. Some learning, such as adapting when rewards switch, needs prefrontal function, so less control does not simply mean better learning. Creativity studies are few, and the exact neural mechanisms remain unspecified.",
+      "ids": [
+        "spya-uxhggj",
+        "spya-s0bmee",
+        "spya-t9zbas"
+      ],
+      "sentences": [
+        {
+          "text": "The authors flag real limits.",
+          "id": null
+        },
+        {
+          "text": "Direct evidence in adults is sparse, and child advantages could come from differences other than an immature prefrontal cortex.",
+          "id": "spya-s0bmee"
+        },
+        {
+          "text": "Some learning, such as adapting when rewards switch, needs prefrontal function, so less control does not simply mean better learning.",
+          "id": "spya-uxhggj"
+        },
+        {
+          "text": "Creativity studies are few, and the exact neural mechanisms remain unspecified.",
+          "id": "spya-t9zbas"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway: transforming input always has a cost, and a filter that helps under one set of conditions can harm under another. Cognitive control is best seen as a tool suited to some common problems, not an all-purpose optimizer for every task.",
+      "ids": [
+        "spya-e5g0a5",
+        "spya-xbrswq"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway: transforming input always has a cost, and a filter that helps under one set of conditions can harm under another.",
+          "id": "spya-xbrswq"
+        },
+        {
+          "text": "Cognitive control is best seen as a tool suited to some common problems, not an all-purpose optimizer for every task.",
+          "id": "spya-e5g0a5",
+          "key": "a tool suited to some common problems"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review is about cognitive control: the brain's ability to stay on a goal and filter out distractions. Control is usually seen as always helpful. But the authors point to growing evidence that some kinds of thinking go better with less of it.",
+      "ids": [
+        "spya-ez5mym"
+      ],
+      "sentences": [
+        {
+          "text": "This review is about cognitive control: the brain's ability to stay on a goal and filter out distractions.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "Control is usually seen as always helpful.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "But the authors point to growing evidence that some kinds of thinking go better with less of it.",
+          "id": "spya-ez5mym"
+        }
+      ]
+    },
+    {
+      "text": "They propose the Matched Filter Hypothesis: the best amount of control depends on the task. Strong control suits clear, rule-based tasks that fit in short-term memory. Weaker control may suit gut-feel tasks, like some learning and creative thinking, that are too complex to hold in mind. Their conclusion: control is a tool for some jobs, not a fix for every problem.",
+      "ids": [
+        "spya-tvhpk0",
+        "spya-vxet4b",
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "They propose the Matched Filter Hypothesis: the best amount of control depends on the task.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        },
+        {
+          "text": "Strong control suits clear, rule-based tasks that fit in short-term memory.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "Weaker control may suit gut-feel tasks, like some learning and creative thinking, that are too complex to hold in mind.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "Their conclusion: control is a tool for some jobs, not a fix for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -1030,6 +1030,8 @@ draft about a passage, are left as they were.
 
 The same route has a second sender since 2026-10-04: the button on a Summary paragraph
 ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)).
+And a third since 2026-10-05, the first whose conversation remembers where it was started: the
+button on a Debate claim ([debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat)).
 
 Four things it has to get right, each with a test:
 
