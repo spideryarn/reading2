@@ -22,6 +22,8 @@ trusted input. Greg, 2026-10-04:
   words (owner only, [marginalia.md](../project/marginalia.md)) and a visitor's press starts no job.
 - **A new article has its relation words made on import**, with the other main modes, when the add
   page's *Generate the main modes* box is ticked (the default). See the first decision below.
+  **Reversed the same day**: they are made when the column is first shown
+  ([§ Relation words on opening](#relation-words-on-opening)).
 - **A first-opened article arrives in Summary and Marginalia** for every signed-in reader whose
   window has room for both (from 900 usable px), not only for a reader with the switch on. See the
   second decision.
@@ -152,6 +154,70 @@ Built as planned, in one stage (`623f4793b`, then the review fixes).
   `261005d-shot-2-open-1440.png`, `261005d-shot-4-fresh-1440.png`. Not checked: a real iPad or
   phone, Safari.
 
+## Relation words on opening
+
+Later on 2026-10-05, Greg answered `[Q-relations-on-import]` below:
+
+> generate linking words when Marginalia mode is opened
+
+**This reverses decision 1 above.** The words are no longer queued on import. The owner's column
+asks for them when it is on screen, whatever put it there: a press, the first-open default, a
+pasted `?margin=1`, a reload, a restored view. The owning doc is
+[marginalia.md § Relation words](../project/marginalia.md#relation-words).
+
+- **The hook.** `useRelations` went from `useAutoRun` (a press) to `useAutoRunOnArrival` (the rule
+  Summary's thread already had): one unforced attempt per article per page load.
+- **The press arms nothing.** Marginalia's `MODE_TARGET` row is `delegated` and answers `null`. Left
+  `fixed`, the press would mint a token no hook claims and the derived import list would put
+  `relations` back.
+- **`relations` is off `AUTO_MODE_STEPS`**, and the add page's sentence no longer names Marginalia.
+- **One thing added that Greg did not ask for**: on a window with no room for the notes
+  (`fit.margW` of 0) nothing is asked until it has room. `OwnerMarginFeed` takes `shown`.
+- **No indicator in the column.** The notes are drawn without the words and the words join them
+  when the job ends; the job is in the jobs tray. This is what was there before.
+- **A restored view spends once.** Reopening an old article this browser remembers with the notes
+  on makes its words. That is how articles from before get theirs; there is no backfill.
+
+*The simpler option passed over*: keep the press and also arm a token from the first-open default.
+Two producers for one spend, and a pasted link or a reload would still show a margin without words.
+
+**Tests.** `tests/marginalia-relations-on-open.test.tsx`, watched red against the press-armed hook
+(11 of 13 failing: no job without a press) and green against the change. Four tests followed:
+`auto-modes`, `publication-queues-the-main-modes` (its job count is now derived from its list),
+`marginalia-live-refresh` and `artefact-read-hooks` (both now store relation words so their claims
+stay about the lists the margin only reads).
+
+**GPT Sol's code review**:
+[261005d-relations-on-open-code-review-sol.md](261005d-relations-on-open-code-review-sol.md).
+Verdict: approve, no P0 to P2. It reviewed by reading, because the box was overloaded and no test
+could run at the time.
+
+- **P3, fixed by the reviewer**: three comments that still described the old rule, and it added
+  cases to the new test (a failed read, a refused POST, a failed job, repeated showings, an outdated
+  list). Those ran green afterwards.
+- **P3, fixed by me**: the same wording in `interface-vision.md`, `mode.md`, `useAutoRun.ts` and
+  three test comments.
+- **P3, not changed**: a visitor sees no relation words even when they are stored. That is the
+  owner-only rule from 261003f, not this change.
+
+**Gates.** Typecheck green. Thirteen affected test files run together: 414 of 415, the one red
+being the hard-coded job count, fixed and re-run. **The full suite was not run**: the box was
+overloaded all evening and the Overseer asked sessions not to run it; the deploy and readiness runs
+cover it.
+
+**Browser** (Sonnet, Playwright on the box, local dev). All four passed.
+
+- *Fresh import at 1440*: opened in Summary and Marginalia by itself; the import queued no
+  relations job; one `POST /api/jobs` with `steps: ["relations"]` followed with no press; a reload
+  sent no second one. Shot: `261005d-shot-5-relations-on-open-fresh.png`. The article was short, so
+  one word is drawn.
+- *An older article with none, `?margin=1` typed in*: one POST; the notes were drawn without words
+  for about 28 seconds, then 21 words appeared with no reload. Shot:
+  `261005d-shot-6-relations-on-open-old-article.png`.
+- *390px*: no POST while the notes were not drawn; widened to 1440 without a reload, one POST.
+- *Signed out on a public article*: no POST of any kind and no request to `/api/relations/`.
+- Not checked: Safari, a real phone, a stale list being rewritten, a failed job.
+
 ## Questions for Greg (not blocking)
 
 **[Q-relations-on-import]** Now that Marginalia is a main mode, its *so / but / vs* words are made
@@ -163,7 +229,8 @@ turned off and on. Built: on import. Reversing it is one line and one exception 
 `src/web/auto-modes.ts`.
 
 **Decided: when Marginalia is opened** — Greg, 2026-10-05: "generate linking words when Marginalia
-mode is opened". Dispatched to session `relations-on-open`.
+mode is opened". Built the same day: [§ Relation words on opening](#relation-words-on-opening).
+Decision 1 above is reversed by it.
 
 **[Q-relations-backfill]** Articles added before this have no relation words until their owner
 presses the toggle. Leave it, or make them for existing articles in one paid sweep?

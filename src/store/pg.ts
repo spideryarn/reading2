@@ -149,6 +149,7 @@ import {
 } from "../library-scalars.js";
 import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
+import { ratedDifficultyOf } from "../reading-time.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
@@ -1070,6 +1071,23 @@ const REVISION_READ_POLICY: Record<
   partCount: { library: "value" },
   sectionCount: { library: "value" },
   rootGist: { library: "value" },
+  /* **The difficulty rating a screen shows: two levels and the model's
+     sentence** (plan 261005j). `metaFrom` builds `Meta.readingDifficulty`
+     from them, so they are in `META_COLUMNS` and both reads that build a
+     `Meta` take all three: the article for its masthead, tile and card, the
+     shelf so `describeArticle` multiplies the same minutes off the same
+     `Meta`. The shelf does not print the sentence; it rides along so there is
+     one way to build the rating rather than two.
+
+     No fingerprint reads them and no prompt is sent them. */
+  readingLanguage: { article: "value", library: "value" },
+  readingIdeas: { article: "value", library: "value" },
+  readingDifficultyReason: { article: "value", library: "value" },
+  /* Which model, and when. No owner-facing read selects either: the two
+     exports read the row whole, and a visitor's projection
+     (src/store/public-reader.ts) leaves them out too. */
+  readingDifficultyModel: {},
+  readingDifficultyRatedAt: {},
   createdAt: {},
 };
 
@@ -1096,6 +1114,9 @@ const META_COLUMNS = {
   unverified: articleRevisions.unverified,
   recall: articleRevisions.recall,
   pagesChecked: articleRevisions.pagesChecked,
+  readingLanguage: articleRevisions.readingLanguage,
+  readingIdeas: articleRevisions.readingIdeas,
+  readingDifficultyReason: articleRevisions.readingDifficultyReason,
 } as const;
 
 /**
@@ -1869,6 +1890,13 @@ function metaFrom(
 ): Meta {
   const title = revision.title ?? headingTitle ?? slug;
   const rawSha256 = metaRawSha256(revision);
+  /* Absent unless the three columns make a whole rating: an unrated piece has
+     no key, and reads at the flat rate (src/reading-time.ts). */
+  const readingDifficulty = ratedDifficultyOf({
+    language: revision.readingLanguage,
+    ideas: revision.readingIdeas,
+    reason: revision.readingDifficultyReason,
+  });
 
   return {
     slug,
@@ -1911,6 +1939,7 @@ function metaFrom(
     ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
     ...(revision.recall === null ? {} : { recall: revision.recall }),
     ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),
+    ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }
 
@@ -2874,6 +2903,8 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* The schema pairs this timestamp with the secret. Send only the fact. */
+      privateLinkOn: found.article.shareTokenAt !== null,
       /* Off the same row, for the masthead's Archive button (plan 261002a). */
       archivedAt: found.article.archivedAt?.toISOString() ?? null,
       /* Named, for `assets`' reason: required on `Article`, so a projection
@@ -2967,6 +2998,7 @@ const rawPgArticleReader: ArticleReader = {
              TypeScript cannot see the guarantee for. `describeArticle` keeps
              the key only when it says `public`. */
           visibility: row.article.visibility as Visibility,
+          privateLinkOn: row.article.shareTokenAt !== null,
           /* Exactly the condition under which `stepIsDone(fetch)` can skip on
              the draft copied from this current revision: the raw manifest is
              readable and its completed run row is carried with it. */

@@ -171,9 +171,10 @@ export type { AutoRunTarget };
  *
  *  - **`fixed`** — the press arms one named target, always. The five rows that
  *    were the whole of this table before.
- *  - **`delegated`** — the press arms something, but *which* thing depends on
- *    state this table cannot see, so the row carries a function that **names
- *    the target**, and `armActivationForMode` below does the arming.
+ *  - **`delegated`** — opening the mode may start work, but the press's target
+ *    is not fixed. The row carries a function that **names the target**, or
+ *    answers `null` when the mounted surface starts its own work instead;
+ *    `armActivationForMode` below does any arming.
  *    **Not a name, and not a string.** `{ kind: "delegated"; owner: "…" }` was
  *    the round-one draft and GPT Sol refused it: nothing consumes a string, so a
  *    fifteenth mode could write one, typecheck, and have no arming path anywhere
@@ -288,11 +289,21 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
   /* Everything else the column shows is read and never made; the relation
-     words are its own. New imports queue them, and where none was stored the
-     press that turns the column on asks for them (src/web/useRelations.ts).
-     The press that turns it off arms nothing: Dock.tsx § `useActivateMode`.
-     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
-  marginalia: { kind: "fixed", target: "relations" },
+     words are its own, and **the column asks for them when it is shown**, not
+     when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
+     2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
+     press could not carry it: the first-open default turns the column on with
+     nobody pressing anything. So the press arms nothing, as a Summary press
+     that lands on the thread arms nothing, and the row is `delegated` rather
+     than `none` so the command bar still says the row may start work. Not
+     `fixed`: that would mint a `relations` token no hook is mounted to claim,
+     and put the step back on the import's list (auto-modes.ts).
+     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+  marginalia: {
+    kind: "delegated",
+    target: () => null,
+    why: "the column writes its relation words when it is shown, whatever showed it; a press has nothing left to arm",
+  },
   /* Nothing exists to fill until the reader has typed. */
   search: { kind: "none", reason: "stores nothing until the reader types a query" },
   chat: { kind: "none", reason: "stores nothing until the reader asks something" },
@@ -302,8 +313,8 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
      Referee on Criteria, which has nothing to run until the referee has written
      a criterion; Remember on Recall, which has nothing to run until the reader
      has said what they took from the piece. There is no empty artefact for the
-     press to fill, so a `delegated` row would be one whose function armed
-     nothing, which is the shape this union exists to refuse. Their chips arm
+     press to fill, and their opening surfaces do not generate on arrival
+     either. Their chips arm
      for themselves, one level down: Referee's through
      `armActivationForRefereeView` below, Remember's inline in
      `RememberSubModeToggle` (QuizPanel.tsx), which is the same call

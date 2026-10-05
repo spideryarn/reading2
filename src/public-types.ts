@@ -90,14 +90,16 @@ import type {
   Tweet,
   SourceGuess,
 } from "./types.js";
+import type { RatedDifficulty } from "./reading-time.js";
 
 /**
  * The masthead, for somebody who is not the owner.
  *
- * Ten fields. Every one of them is a fact about the article as the world can
+ * Eleven fields. Every one of them is a fact about the article as the world can
  * see it: the title the page itself carried, who wrote it, where and when it
  * was published, what language it is in, the publication's own one-line
- * excerpt, and its published address.
+ * excerpt, its published address, and how hard a model judged it to read
+ * (the eleventh, 2026-10-05).
  *
  * (This said "six" while there were seven: `url` arrived on 2026-08-30 and the
  * count was not moved. `journal`, `published` and `publishedYear` are the
@@ -158,6 +160,15 @@ export interface PublicMeta {
    * src/web/Masthead.tsx is the one place that does, and says so.
    */
   url?: string;
+  /**
+   * **How hard the piece is to read**: the two levels and the model's one
+   * sentence, so a visitor's minutes and card are the owner's
+   * (`Meta.readingDifficulty`, and the same type, which is what keeps
+   * `PublicArticle` assignable to `Article`). A judgement about the published
+   * text and nothing about its owner. Which model made it, and when, are not
+   * sent. Plan 261005j.
+   */
+  readingDifficulty?: RatedDifficulty;
 }
 
 /**
@@ -205,6 +216,9 @@ export interface PublicBlock {
   context?: BlockContext;
 }
 
+/** How a visitor reached an article. `PublicArticle.sharedBy` says what each means. */
+export type PublicSharedBy = "public" | "link";
+
 /**
  * What `GET /api/public/article/:slug` returns.
  *
@@ -216,6 +230,24 @@ export interface PublicBlock {
  * field's sake.
  */
 export interface PublicArticle extends PublicArtefactSet {
+  /**
+   * **Which way this visitor was let in**: the article is public, or the
+   * request carried the key of its private link
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+   *
+   * It is here so the notice under the masthead can say the right thing. Greg,
+   * 2026-10-05: *"When they open a page with a private link, it should say
+   * that it's a private link, i.e. not visible to anyone without the link"*.
+   *
+   * **`"public"` whenever the article is public, whatever key came with the
+   * request.** Public wins, so a public article opened through an old private
+   * link shows the public notice. `"link"` means the article is private and
+   * the key was right.
+   *
+   * Required, so a projection that forgot it does not compile. It says nothing
+   * about a person, and the key itself is never in this payload.
+   */
+  sharedBy: PublicSharedBy;
   meta: PublicMeta;
   blocks: PublicBlock[];
   tree: Tree;

@@ -31,7 +31,7 @@
  */
 
 import type { Table } from "@tanstack/react-table";
-import { SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
@@ -432,7 +432,7 @@ function TitleCell({
       ) : (
         link
       )}
-      {(sub || archived || entry.visibility === "public" || entry.fixture) && (
+      {(sub || archived || entry.visibility === "public" || entry.privateLinkOn === true || entry.fixture) && (
         <span className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
           {/* **First on the line, unlike on the card.** It went first because
               this line used to truncate, and the byline and the site name could
@@ -459,9 +459,9 @@ function TitleCell({
               <NotProcessedBadge />{" "}
             </>
           )}
-          {entry.visibility === "public" && (
+          {(entry.visibility === "public" || entry.privateLinkOn === true) && (
             <>
-              <SharedBadge titled={false} />{" "}
+              <SharedBadge titled={false} privateLink={entry.visibility !== "public"} />{" "}
             </>
           )}
           {sub}
@@ -607,6 +607,7 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
 
   if (entry.titleOverridden) facts.push({ label: "Title", value: "renamed by you" });
   if (entry.visibility === "public") facts.push({ label: "Shared", value: SHARING_ON });
+  else if (entry.privateLinkOn === true) facts.push({ label: PRIVATE_LINK_HEADING, value: SHARING_OFF_WITH_LINK });
 
   return { gist: entry.gist, gistVoice: gistVoice(entry), facts };
 }

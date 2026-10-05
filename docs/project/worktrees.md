@@ -75,11 +75,75 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 ## Starting one
 
 ```bash
-claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
+claude --worktree my-thing      # creates the worktree (on the box: /var/tmp/spideryarn-worktrees/my-thing), branch worktree-my-thing
 npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
+
+### Where a worktree's bytes live
+
+**On the box a new worktree is at `/var/tmp/spideryarn-worktrees/<name>`, not under
+`.claude/worktrees/`.** `EnterWorktree({name})` and `claude --worktree <name>` both put it there, with
+no question asked. Nothing else about a worktree changes — the branch is still `worktree-<name>`, and
+setup, check and remove are the same commands. On Greg's Mac, where that directory does not exist, a
+worktree is in `.claude/worktrees/<name>` as it always was.
+
+Why: `/home` on the box is a separate 49 GB disk and a worktree is about 1.2 GB, most of it
+`node_modules`. It filled to 100% on 2026-10-05, which broke peers' commits, while `/` had 70 GB free.
+A tree made by hand on `/` works, but `EnterWorktree({path})` then stops to ask about a
+"model-supplied worktree outside .claude/worktrees/", and Claude Code's documentation says no
+permission rule silences that. Greg, 2026-10-05:
+
+> Yes, worktrees are allowed to enter outside .claude/worktrees/ - don't ask me, please allow that
+> path for me.
+
+How: two hooks in [`.claude/settings.json`](../../.claude/settings.json).
+
+- **[`worktree-create.sh`](../../.claude/hooks/worktree-create.sh)**, on `WorktreeCreate`. A path
+  that comes from this hook is not model-supplied, so Claude Code enters it without asking. The hook
+  *replaces* Claude Code's own creation, so it does everything the default did: the branch from the
+  primary's `HEAD`, the `.worktreeinclude` copy, and the `claude session <name> (pid … start …)` lock
+  that `worktree-inuse.ts` reads (on the box; with no `/proc`, as on the Mac, there is no lock). A
+  name that already has a tree — in `.claude/worktrees/` first,
+  then on `/` — is resumed, not recreated, exactly as before.
+- **[`worktree-remove.sh`](../../.claude/hooks/worktree-remove.sh)**, on `WorktreeRemove`. With a
+  create hook in place Claude Code leaves removal to this one, and it hands the tree to
+  `npm run worktree:remove`. So `ExitWorktree({action: "remove"})` now passes through every guard in
+  [Removing one](#removing-one), `discard_changes: true` included; when the guards refuse, the tool
+  says "could not remove it — kept at …" and the tree is intact. Claude Code cannot inspect a tree it
+  did not make, so the first call always answers *"Could not verify worktree state … Re-invoke with
+  discard_changes: true"*; the second call is the one that reaches the guards, and here that flag
+  discards nothing they would keep. (On the Mac, where
+  `worktree:remove` refuses every tree that exists for want of `/proc`, the hook falls back to git's
+  own unforced remove.)
+
+Four things worth knowing before you change any of it, each measured on 2026-10-05 against
+Claude Code 2.1.289:
+
+- **A symlink at `.claude/worktrees/<name>` pointing at the real tree does not work.** It was the
+  first design. Claude Code refuses it by name: *"… is a symlink. A repository-committed symlink
+  below the checkout root could redirect the worktree outside the repository. Remove the symlink (or
+  emit a path outside the repository) and retry."* The bracket in that message is the design here.
+- **`.worktreeinclude` is read by the hook now, not by Claude Code**, and the hook understands only
+  plain root-level names — `.env.local`, `.env`. A pattern with a `/` or a glob makes every
+  `EnterWorktree` fail with a message naming the line, rather than making trees with no environment.
+- **`/var/tmp`, not `/tmp`.** `/tmp` is aged out after 30 days on the box and would delete the
+  unread half of a live tree's `node_modules`; `/var/tmp` has no such rule.
+- **It is the disposable disk.** A rebuilt server has an empty `/var/tmp`, and
+  [`provision.sh`](../../infra/hetzner/provision.sh) makes the directory again. Unpushed work in a
+  worktree does not survive a rebuild — which was already the rule for work that matters.
+
+`EnterWorktree({path})` on a tree outside `.claude/worktrees/` still asks; use the name. The six
+trees made by hand under `/var/tmp/spideryarn-worktrees/` that afternoon are reachable that way.
+`SPIDERYARN_WORKTREE_ROOT` moves the directory, and exists for the hook's own tests.
+
+**Not yet followed by the fleet dashboard.** Its "remove worktree" action refuses any directory that
+is not under `<primary>/.claude/worktrees/` (`planRemoveWorktree` in
+[`tools/fleet/actions.ts`](../../tools/fleet/actions.ts), and the same test in `routes-actions.ts`),
+and the Overseer's recovery view will not reconstruct a path for one
+(`tools/overseer/recovery-view.ts`). Both refuse with a reason rather than doing the wrong thing, so
+a tree on `/` is removed with `npm run worktree:remove` until they are taught the second root.
 
 ### Two things about `EnterWorktree` that have each cost an agent an hour
 
@@ -211,6 +275,11 @@ dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-re
 until `npm run build:fleet` runs, and say so. `worktree:setup` now names both builds rather than a
 count, and the deploy gate runs the ordinary `build` plus the extra `build:fleet` entry in
 `GATE_TOOLING_BUILDS` (`scripts/deploy-checks.ts`).
+The line vitest reports for the fleet ones is `process.exit unexpectedly called with "2"`, with a
+stack into `tools/fleet/server.ts`, which reads as a wiring failure; the sentence naming the build
+is on stderr above it (2026-09-09, in a docs-only diff). A third red in a loaded full run is no
+missing build at all: `tests/fetch.test.ts` holds a wall-clock budget of 400 ms, measured at about
+478 ms under load ~40 on 2026-09-08, and passes alone.
 The suite has grown 477 → 786 files in six days, which is why a bare count ages badly; what did not
 change is that `worktree:setup` is the difference between a suite that runs and one that cannot
 collect.
@@ -555,17 +624,16 @@ knowing because both read as alarming and neither means what it appears to.
   you resumed was locked by the session that made it, so its lock names a pid that is gone: the lock
   reads as stale, and you need what anybody needs — which, since 2026-09-12, involves no waiting.)
 
-And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
+And what `ExitWorktree` would not tell you, until 2026-10-05: it removed gitignored files without a prompt, and it counted
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
 **So `ExitWorktree` is for leaving a worktree, not for removing one** — `action: "keep"` to leave,
 and `npm run worktree:remove` to remove, before or after.
 
-`discard_changes: true` is the one path in this repo that bypasses every guard described here.
-Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
-guard whose failure looks like success. If you find yourself reaching for it, run
-`npm run worktree:remove` instead and read what it says.
+Since 2026-10-05 `discard_changes: true` no longer bypasses the guards: a WorktreeRemove hook hands
+the removal to `npm run worktree:remove`, which refuses as it always did. `npm run worktree:remove`
+is still the one to run, because it prints its reasons where you will read them.
 
 ### Sweeping them up
 
@@ -1074,6 +1142,13 @@ moment that flipped. Either spelling lands on `dev` today.
   over *when*: `refs/remotes/` lives in the common directory, so a **peer's** fetch moves `origin/dev`
   between two of your own commands while you sit still — and since 2026-09-02 every
   `npm run worktree:setup` fetches, so this now happens whenever anyone starts a worktree.
+- **A diff from a remembered fork point stops being yours once you merge the trunk.**
+  `git diff --name-only <fork-point> HEAD` then lists your changes plus everything the merge
+  brought in. On 2026-09-08 a session ran it to show a failing `tools/fleet` test could not be its
+  own and got fifty fleet files back, which reads as the opposite answer. Three dots against
+  `origin/dev` still works after a merge; for one commit,
+  `git show --name-only --format="" <commit>`. Whether a red is yours is whether the failing file,
+  or anything it imports, is in your commits.
 - **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.

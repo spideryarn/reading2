@@ -548,6 +548,12 @@ setting dies with the transaction), or the session pooler on port 5432. To tell 
 poisoned: `select current_setting('default_transaction_read_only')` via 6543 says `on` while the
 same query via 5432 says `off`; `reset default_transaction_read_only` via 6543 clears it.
 
+**There is no `psql` on the box.** The reads made from there on 2026-09-30 were a small node script: `pg`
+imported by absolute path from a tree's `node_modules`, the committed CA passed as `ssl: { ca }`,
+and every query inside `begin read only` … `rollback`. Without `ssl` the pooler answers
+`ESSLREQUIRED`. The auto-mode classifier refuses `rejectUnauthorized: false` as TLS weakening, and
+on 2026-09-30 a session that reached for it lost the lookup.
+
 **SSL is enforced**, so a plain connection is refused — and `pg` does not use SSL by default, so the
 refusal arrives looking like a credentials error. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)
 handles this off the same is-this-local test that guards remote runs: local is a container with no

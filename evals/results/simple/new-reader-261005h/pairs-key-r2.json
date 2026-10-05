@@ -1,0 +1,180 @@
+{
+  "blindId": "aca158e311c2",
+  "items": [
+    {
+      "id": "P01",
+      "kind": "two-bullets",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "about-new2b",
+      "B": "about-new1b"
+    },
+    {
+      "id": "P02",
+      "kind": "two-bullets",
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "A": "about-new1b",
+      "B": "about-new2b"
+    },
+    {
+      "id": "P03",
+      "kind": "control",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "none-new0b",
+      "B": "none-new0a"
+    },
+    {
+      "id": "P04",
+      "kind": "two-bullets",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "A": "about-new2b",
+      "B": "about-new1b"
+    },
+    {
+      "id": "P05",
+      "kind": "two-bullets",
+      "slug": "s41598-023-33209-9-spya-s0qydm",
+      "A": "none-new1b",
+      "B": "none-new2a"
+    },
+    {
+      "id": "P06",
+      "kind": "control",
+      "slug": "s41598-023-33209-9-spya-s0qydm",
+      "A": "none-new0a",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P07",
+      "kind": "two-bullets",
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "A": "none-new2a",
+      "B": "none-new1b"
+    },
+    {
+      "id": "P08",
+      "kind": "old-two-bullets",
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "A": "none-new2a",
+      "B": "none-new0a"
+    },
+    {
+      "id": "P09",
+      "kind": "two-bullets",
+      "slug": "s41598-023-33209-9-spya-s0qydm",
+      "A": "about-new1b",
+      "B": "about-new2b"
+    },
+    {
+      "id": "P10",
+      "kind": "test",
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "A": "none-new1b",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P11",
+      "kind": "control",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "A": "none-new0a",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P12",
+      "kind": "test",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "none-new0b",
+      "B": "none-new1b"
+    },
+    {
+      "id": "P13",
+      "kind": "test",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "none-new1b",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P14",
+      "kind": "control",
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "A": "none-new0a",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P15",
+      "kind": "old-two-bullets",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "none-new2a",
+      "B": "none-new0a"
+    },
+    {
+      "id": "P16",
+      "kind": "control",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "none-new0b",
+      "B": "none-new0a"
+    },
+    {
+      "id": "P17",
+      "kind": "two-bullets",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "A": "none-new2a",
+      "B": "none-new1b"
+    },
+    {
+      "id": "P18",
+      "kind": "old-two-bullets",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "none-new0a",
+      "B": "none-new2a"
+    },
+    {
+      "id": "P19",
+      "kind": "two-bullets",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "about-new1b",
+      "B": "about-new2b"
+    },
+    {
+      "id": "P20",
+      "kind": "old-two-bullets",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "A": "none-new0a",
+      "B": "none-new2a"
+    },
+    {
+      "id": "P21",
+      "kind": "old-two-bullets",
+      "slug": "s41598-023-33209-9-spya-s0qydm",
+      "A": "none-new2a",
+      "B": "none-new0a"
+    },
+    {
+      "id": "P22",
+      "kind": "two-bullets",
+      "slug": "arxiv-2010-spya-tkm7nm",
+      "A": "none-new1b",
+      "B": "none-new2a"
+    },
+    {
+      "id": "P23",
+      "kind": "test",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "A": "none-new0b",
+      "B": "none-new1b"
+    },
+    {
+      "id": "P24",
+      "kind": "test",
+      "slug": "s41598-023-33209-9-spya-s0qydm",
+      "A": "none-new1b",
+      "B": "none-new0b"
+    },
+    {
+      "id": "P25",
+      "kind": "two-bullets",
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "A": "none-new1b",
+      "B": "none-new2a"
+    }
+  ]
+}

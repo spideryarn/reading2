@@ -286,6 +286,31 @@ export const articles = spideryarn.table("articles", {
   publicAt: timestamp("public_at", { withTimezone: true }),
 
   /**
+   * **The private link's key, or null while there is none** —
+   * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+   *
+   * Anybody who sends this value with the slug may read the article as a
+   * visitor reads a public one (src/store/link-shared-slug.ts). It is a second
+   * way in beside `visibility`, not a third value of it: a link-shared article
+   * is a private article with a key on it, so the public shelf, the showcase
+   * and billing, which all read `visibility`, never see one.
+   *
+   * 128 bits from `crypto.randomBytes`, base64url, so 22 characters; the CHECK
+   * below holds the shape, which is what makes an empty key unable to match
+   * anything. **Stored in the clear**, so the owner can copy the link again
+   * later; the plan weighs that against keeping only a hash. Unique, so one key
+   * can never open two articles.
+   *
+   * **A secret, and one route gives it out**: the owner's
+   * `GET /api/article/:slug/share-link` (src/store/pg-share-link.ts). No other
+   * read may select it, and tests/share-link-token-stays-home.test.ts holds
+   * that. It is never logged and never written to the audit table.
+   */
+  shareToken: text("share_token").unique(),
+  /** When the current key was made. Null exactly when `share_token` is. */
+  shareTokenAt: timestamp("share_token_at", { withTimezone: true }),
+
+  /**
    * **High-powered AI: when it was switched on, or null for off** —
    * docs/plans/260930f-high-powered-ai-per-article.md. While set, and while the
    * owner is an administrator (`articlePower` in src/models.ts), this article's
@@ -344,6 +369,15 @@ export const articles = spideryarn.table("articles", {
    * notices. The CHECK is what makes it loud instead.
    */
   check("articles_visibility", sql`${t.visibility} in ('private','public')`),
+  /**
+   * **A key is 22 base64url characters or it is not there.** The lookup is
+   * `share_token = ?`, and this is what makes it fail closed for an empty or a
+   * short key even if a caller forgot to check one: no stored value can equal
+   * it. src/share-key.ts holds the same shape for the request's side.
+   */
+  check("articles_share_token_shape", sql`${t.shareToken} is null or ${t.shareToken} ~ '^[A-Za-z0-9_-]{22}$'`),
+  /** The key and its time are set together and cleared together. */
+  check("articles_share_token_pair", sql`(${t.shareToken} is null) = (${t.shareTokenAt} is null)`),
   /**
    * **The shelf's own index, and what makes `limit 200` a bound on work rather
    * than only on rows.**
@@ -465,6 +499,55 @@ export const articleVisibilityChanges = spideryarn.table(
     check("article_visibility_changes_moved", sql`${t.fromVisibility} <> ${t.toVisibility}`),
     /** The only question anybody asks of it: this article's history, in order. */
     index("article_visibility_changes_article_at").on(t.articleId, t.at),
+  ],
+);
+
+/**
+ * **Who made a private link for this article, who turned it off, and when.**
+ *
+ * Append-only, and the sibling of `article_visibility_changes` above for the
+ * same reason: a private link republishes a third party's text to some people,
+ * so a complaint asks *who turned this on, when, and did they confirm they had
+ * the right*. Its own table because that one's CHECKs require a move between
+ * `private` and `public`, and a link is neither.
+ * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * **The key is not here, and must never be.** A log is read by more people and
+ * kept for longer than the row it describes; what it records is the act.
+ *
+ * `created` is written every time a key is made, including when one replaces
+ * a key that was already on: the old key stops working in the same statement,
+ * so one row says both. `turned-off` is written only when there was a key to
+ * turn off, so the table is a history and not a count of button presses.
+ *
+ * `article_id` is nullable with `on delete set null`, and `slug` is a copy,
+ * for the reasons `article_visibility_changes` gives at length: the row has to
+ * outlive the article it is about.
+ */
+export const articleShareLinkEvents = spideryarn.table(
+  "article_share_link_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    /** The slug as it stood at the moment of the act. */
+    slug: text("slug").notNull(),
+    /** Who pressed it. The owner, because only the owner can. */
+    actorOwnerId: uuid("actor_owner_id").notNull(),
+    event: text("event").$type<"created" | "turned-off">().notNull(),
+    /** True on every `created`, false on every `turned-off`; the CHECK holds it. */
+    rightsConfirmed: boolean("rights_confirmed").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("article_share_link_events_event", sql`${t.event} in ('created','turned-off')`),
+    /**
+     * A link is made only by somebody who ticked the rights box, and nobody is
+     * asked to confirm anything to turn one off. So the column is not free: a
+     * `created` row without it, or a `turned-off` row with it, records a
+     * confirmation that did not happen that way.
+     */
+    check("article_share_link_events_rights", sql`(${t.event} = 'created') = ${t.rightsConfirmed}`),
+    index("article_share_link_events_article_at").on(t.articleId, t.createdAt),
   ],
 );
 
@@ -1235,10 +1318,46 @@ export const articleRevisions = spideryarn.table(
     sectionCount: integer("section_count"),
     rootGist: text("root_gist"),
 
+    /**
+     * **How hard the piece is to read, as a model judged it at import** — the
+     * `readingDifficulty` artefact (`StoredReadingDifficulty`, src/types.ts),
+     * taken apart. Language and ideas are each 1 to 5; the reading-time
+     * estimate is multiplied by what they stand for (src/reading-time.ts).
+     *
+     * **All five null, or all five set** (`…_reading_difficulty_all_or_none`).
+     * Null is "not rated": every revision from before 2026-10-05, and any
+     * whose rating call failed. The minutes are then the flat rate.
+     *
+     * Columns rather than one JSON document because the shelf's query reads
+     * the two levels for every card (docs/project/sql.md). Written by the
+     * `blocks` step and by nothing else, so the rating is always about the
+     * blocks beside it; it is not one of `meta`'s columns, because a `meta`
+     * write clears every column it owns.
+     * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+     */
+    readingLanguage: smallint("reading_language"),
+    readingIdeas: smallint("reading_ideas"),
+    /** The model's one sentence saying why. Shown to readers, in the model's face. */
+    readingDifficultyReason: text("reading_difficulty_reason"),
+    /** Which model rated it. For us and the export; never sent to a screen. */
+    readingDifficultyModel: text("reading_difficulty_model"),
+    /** When the rating was made. A later revision that carries it keeps this time. */
+    readingDifficultyRatedAt: timestamp("reading_difficulty_rated_at", { withTimezone: true }),
+
     createdAt: createdAt(),
   },
   (t) => [
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
+    /* The five levels of `DifficultyLevel` (src/reading-time.ts). A null level
+       is NULL here and passes, which is wanted: most rows are unrated. */
+    check("article_revisions_reading_language", sql`${t.readingLanguage} between 1 and 5`),
+    check("article_revisions_reading_ideas", sql`${t.readingIdeas} between 1 and 5`),
+    /* A rating with a level and no sentence, or a sentence and no model, is a
+       value the stored type cannot express. */
+    check(
+      "article_revisions_reading_difficulty_all_or_none",
+      sql`num_nonnulls(${t.readingLanguage}, ${t.readingIdeas}, ${t.readingDifficultyReason}, ${t.readingDifficultyModel}, ${t.readingDifficultyRatedAt}) in (0, 5)`,
+    ),
     check("article_revisions_authors_array", sql`jsonb_typeof(${t.authors}) = 'array'`),
     /* The bounds `publishedYearOf` (src/types.ts) reads by. A null year is
        NULL here and passes, which is wanted: most rows have none. */
@@ -3684,7 +3803,7 @@ export const chatThreads = spideryarn.table(
      * **This note used to say `generate` cannot see a check expression. It
      * does now.** The installed drizzle-kit wrote the drop and re-add of two
      * changed CHECKs by itself in
-     * drizzle/20261005185425_chat_thread_origin_lens.sql. So a changed CHECK
+     * drizzle/20261005203554_chat_thread_origin_lens.sql. So a changed CHECK
      * is generated and then read, never hand-written beside the generated
      * one. What it still cannot write is the UPDATE between the two.
      *

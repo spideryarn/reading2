@@ -342,6 +342,11 @@ describe("the sweep over the modes", () => {
  * below checks they exist — so a renamed row is caught too.
  */
 const WIRE_ROW = {
+  /* Not content: which way this visitor was let in, public or by a private
+     link's key (plan 261005e). It is here so the notice can say so. The text's
+     row, because what it qualifies is that the text is being shown at all; it
+     says nothing a row of its own could list as going out. */
+  sharedBy: "text",
   meta: "provenance",
   /* A shared upload's found source guess — the same row's *link back to the
      original*, for a file (plan 261002g). */

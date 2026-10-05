@@ -79,6 +79,7 @@ import {
   failureKindOf,
   jobWorthRetrying,
   readerFailureOf,
+  stageFailure,
   undeclaredBlocked,
 } from "./job-failure.js";
 import { slugWithShortId, urlKey } from "./ingest.js";
@@ -98,6 +99,7 @@ import {
   FORCE_ONLY_WHEN_NAMED,
   type PipelineStep,
   cacheArticleForStep,
+  needsRealStructure,
   STEP_ORDER,
   STEPS,
   stepIsDone,
@@ -112,8 +114,17 @@ import {
   type FailureKind,
   type ReaderFacingFailure,
   STEP_STOPPED,
+  STRUCTURE_NOT_BUILT,
 } from "./messages.js";
-import type { Job, JobReset, JobStep, JobUpload, StepName, StepPreview } from "./types.js";
+import {
+  awaitingStructure,
+  type Job,
+  type JobReset,
+  type JobStep,
+  type JobUpload,
+  type StepName,
+  type StepPreview,
+} from "./types.js";
 import { articlePower, type ModelPower } from "./models.js";
 import { highPowerStore } from "./store/index.js";
 
@@ -585,8 +596,14 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      so the paid chunks are banked — but a wasted lease window is still a wasted
      lease window, and `REQUEUE_BUDGET` above allows two of them. */
   extract: 700_000,
-  /* GUESS, generous. Deterministic, no model call. */
-  blocks: 5_000,
+  /* A CEILING for the call, a GUESS for the rest. Splitting is deterministic
+     and was given a generous 5 s. Since 2026-10-05 the step ends with one
+     model call that rates how hard the piece is to read, and that call gives
+     up after `TIMEOUT_MS` in src/reading-difficulty.ts, 15 s. So 5 + 15, and
+     5 more for the write. Admitted with less, a slow rating would meet the
+     claim's deadline before its own, and a cancelled step is the one thing
+     that call lets fail an import. GPT Sol, code review of plan 261005j. */
+  blocks: 25_000,
   /* **A CEILING, and the reasoning is `extract`'s above, for the same reason.**
      ⟨measured 2026-09-04 on Kuhn, *A Landscape of Consciousness*, 142 pages⟩
 
@@ -1126,14 +1143,38 @@ async function runStep(
     ...(job.profile !== undefined && { profile: job.profile }),
     ...(job.illustrationNote !== undefined && { illustrationNote: job.illustrationNote }),
     power: powerRead.ok ? powerRead.power : "standard",
+    /* Off the step, not the job: `enqueue` put it on `structure` alone. */
+    ...(step.headingsFirst === true && { headingsFirst: true as const }),
   };
 
   /* `session.reads`, not the store directly. The preflight and the run phase
      have to ask the same store, or a step decides whether to skip by looking at
      one place and does its work against another — which under Postgres means
      files on disk answering for rows in a draft. */
+  /* **A step that reads the structure does not run on the stand-in tree a
+     first import opened with** — every step after `structure` but `assets`
+     (`needsRealStructure`). Normally such a step never gets here: it queues
+     behind the job that builds the real tree. It does when that job failed, or
+     when it was stamped ahead of it (GPT Sol, F4), and then what it made would
+     be made from an outline of headings and stamped as current.
+
+     Read here, before the freshness check, so an artefact that happens to be
+     present cannot skip past the question; thrown at the top of the `try`
+     below, as a failed power read is, so it is recorded the way every step
+     failure is and the job settles `blocked`. A read that fails is the step's
+     failure too.
+     docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md § Stage 1, the gate. */
+  const structureRead = !needsRealStructure(step.name)
+    ? ({ ok: true as const, awaiting: false })
+    : await session.reads.read(job.slug, "structure", "tree").then(
+        (tree) => ({ ok: true as const, awaiting: awaitingStructure(tree) }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+  const gated = !structureRead.ok || structureRead.awaiting;
+
   if (
     powerRead.ok &&
+    !gated &&
     !stillForced(step) &&
     (await stepIsDone(registry[step.name], ctx, session.reads))
   ) {
@@ -1180,6 +1221,9 @@ async function runStep(
 
   try {
     if (!powerRead.ok) throw powerRead.error;
+    /* Before `beginStep`: a refused step never started, so it leaves no marker. */
+    if (!structureRead.ok) throw structureRead.error;
+    if (structureRead.awaiting) throw stageFailure(STRUCTURE_NOT_BUILT);
     /* Bracketing the run, not decorating it. A step that dies between two of
        its own writes leaves artefacts that all exist and all parse and
        describe two different generations, and nothing about the files can
@@ -3203,6 +3247,21 @@ export interface EnqueueRequest {
    * vouches for. It is the administrator's way through, who reserves nothing.
    */
   readThis?: true;
+  /**
+   * **Open the article before its structure is built** — set by the add-by-URL
+   * route and the upload route (src/routes.ts) and by nothing else: the CLI and
+   * every test that imports through the queue keep the one-job import.
+   *
+   * It is a request and `enqueue` may decline it: the `structure` step is
+   * marked `headingsFirst` only when this job **minted** its slug, so a paste
+   * of an address already on the shelf, or one that joined another live job,
+   * marks nothing. The step then writes a stand-in tree from the headings with
+   * no model call, the import publishes, and that publication queues the job
+   * that builds the real one (`publishRevisionIn`, src/store/pg-revisions.ts).
+   * Not part of the work key: the same import asked for twice is one job.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  openEarly?: true;
 }
 
 /** What `POST /api/article/:slug/reset` asks for, once the route has resolved the profile. */
@@ -3527,7 +3586,24 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       slug,
       ...(url ? { url } : {}),
       ...(request.upload ? { upload: request.upload } : {}),
-      steps: names.map((n) => newStep(n, forced.has(n), request.upload !== undefined)),
+      /* The mark is decided inside the loop, because it depends on the
+         allocation and both repairs below reallocate: a request that began as a
+         mint and then adopted a live job's slug must not carry it.
+         `EnqueueRequest.openEarly`.
+
+         **And never on a job that itself goes on to read the structure.** The
+         add-by-URL route forwards whatever `steps` it was sent, and a job of
+         `[…, "structure", "glossary"]` marked this way would write the stand-in
+         and then be refused at its own next step (`needsRealStructure`). */
+      steps: names.map((n) => ({
+        ...newStep(n, forced.has(n), request.upload !== undefined),
+        ...(n === "structure" &&
+        request.openEarly === true &&
+        allocation.kind === "minted" &&
+        !names.some(needsRealStructure)
+          ? { headingsFirst: true as const }
+          : {}),
+      })),
       status: "queued",
       createdAt: new Date().toISOString(),
       ...(request.profile ? { profile: request.profile } : {}),
@@ -4496,6 +4572,12 @@ export async function retryJob(
        draft copied from the published revision, extras and all, and publishes
        them straight back. docs/plans/260928a-reset-and-regenerate-article.md. */
     ...(old.reset ? { reset: old.reset } : {}),
+    /* **The mark is on a step, and the steps above went through as names.** A
+       first import that failed before it published is still a first import, so
+       its retry opens early too; `enqueue` asks again whether the slug is
+       minted, and the step asks whether anything was ever published.
+       docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+    ...(old.steps.some((s) => s.headingsFirst === true) ? { openEarly: true as const } : {}),
     ...slot,
   });
 }

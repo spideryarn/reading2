@@ -1,0 +1,497 @@
+{
+  "at": "2026-10-05T18:41:09.470Z",
+  "promptVersion": "reading-difficulty/2",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "runId": "6fdb1a07-d477-4387-945b-b7340102182e",
+  "spentNanos": 28050036,
+  "rows": [
+    {
+      "slug": "read",
+      "title": "The Need to Read",
+      "words": 453,
+      "meanWordLength": 4.222958057395143,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The prose is clear and conversational, but the argument builds a chain of claims about writing, thinking and reading that the reader must follow and weigh.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 2,
+        "ideas": 3,
+        "reason": "The prose is short, conversational, and plain, but the argument that writing is how you discover ideas builds in steps the reader must follow.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "name-spya-yegmpb",
+      "title": "Change Your Name",
+      "words": 762,
+      "meanWordLength": 4.293963254593176,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The prose is straightforward, but the reader must follow a two-part argument about founder denial and how to break it.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 2,
+        "reason": "The writing is conversational but abstract at times, asking you to follow an argument about founder psychology and naming, with each idea explained as it comes.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "lies-spya-uq458d",
+      "title": "Lies We Tell Kids",
+      "words": 5254,
+      "meanWordLength": 4.385991625428245,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 4,
+        "reason": "Clear, conversational prose with everyday words, but the essay builds a sustained argument through many abstract ideas about truth, innocence, and authority that make the reader stop and think.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 4,
+        "reason": "The prose is clear and conversational, but the essay asks you to follow a sustained argument through many abstract examples and distinctions.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "test-serialise-unlocked-3ce43fa8",
+      "title": "Writes and Write-Nots",
+      "words": 559,
+      "meanWordLength": 4.452593917710197,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The piece uses clear, conversational prose, but the argument that writing is thinking and its loss to AI requires following a chain of abstract ideas.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 2,
+        "ideas": 3,
+        "reason": "The prose is conversational and short-sentenced, but the reader must follow the argument that writing shapes thinking and that AI will split people into those who can and cannot write.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "fr-spya-z6hsdc",
+      "title": "How to Raise Money",
+      "words": 9311,
+      "meanWordLength": 4.476533132853614,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The advice uses clear everyday wording, but the reader must follow several interlocking fundraising strategies and weigh tradeoffs like expected value and valuation timing.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "Conversational advice with some startup and programming terms, where the reader follows several interlocking rules for fundraising rather than dense theory.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "know-spya-d3xz4h",
+      "title": "How You Know",
+      "words": 653,
+      "meanWordLength": 4.50229709035222,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The writing is conversational but weaves an abstract argument about memory and learning, asking you to follow a chain of ideas about how reading shapes your mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 2,
+        "ideas": 3,
+        "reason": "The writing is conversational with short sentences, but the reader must follow an argument about memory, mental models, and rereading that builds across the piece.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "ds-spya-me0d4g",
+      "title": "Do Things that Don't Scale",
+      "words": 4339,
+      "meanWordLength": 4.568103249596681,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "Conversational startup essay with plain sentences, but it asks you to follow a sustained argument built from several linked business ideas and examples.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The prose is ordinary and conversational, but the reader must follow a sustained argument built from several examples and startup concepts.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "wisdom-spya-vkvttk",
+      "title": "Is It Worth Being Wise?",
+      "words": 3749,
+      "meanWordLength": 4.643638303547613,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 4,
+        "reason": "Everyday words carry an argument built from an invented curve metaphor, forcing the reader to track average versus peaks and what follows for wisdom and intelligence.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 3,
+        "reason": "The prose stays conversational with mostly common words, but the argument builds through several linked distinctions—average versus peaks, wisdom versus intelligence—that a reader must hold and follow.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "source-spya-c9js4z",
+      "title": "A brief history of ball lightning observations by scientists and trained professionals",
+      "words": 9807,
+      "meanWordLength": 4.853777913735088,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 3,
+        "reason": "Scientific vocabulary and detailed measurement reports slow the reader, who must also follow the debate over how to interpret rare, unrepeatable sightings.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 3,
+        "reason": "The reader meets scientific wording, measured units and many short case reports; the ideas are case descriptions plus a discussion of why the phenomenon resists a settled theory.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "greg-file-spya-x6pfm5",
+      "title": "Agent Communication and Orchestration",
+      "words": 9819,
+      "meanWordLength": 4.922904572767084,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The piece uses specialist terms like unix sockets, peer registry, and JSONL transcripts, and asks the reader to follow several layers of architecture that build on one another.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Dense with technical terms like unix sockets, registries, and JSON payloads, and it asks readers to hold a layered architecture of agents, bridges, and quota signals in mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "source",
+      "title": "Forms of Memory in Post-colonial Australia",
+      "words": 3077,
+      "meanWordLength": 4.944426389340267,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 5,
+        "reason": "The essay uses dense academic prose with theoretical terms and long, complex sentences, while the argument builds on abstract concepts from Freud and Derrida that demand close, careful reading.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 5,
+        "reason": "The reader meets long academic sentences, terms like mourning, melancholy and hauntedness, and theorists such as Freud and Derrida; the argument weaves poetry, apology rhetoric and theory, so it must be followed closely.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "dropped-spya-afhdev",
+      "title": "Forms of Memory in Post-colonial Australia",
+      "words": 3073,
+      "meanWordLength": 4.9456557110315655,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Dense academic prose with theoretical terms like melancholia and hauntology; the argument builds on Freud and Derrida, asking readers to hold several abstract concepts at once.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Dense academic prose with long sentences and terms like melancholia and spectrality; the argument builds on Freud, Derrida and Levinas, so the reader must hold several abstract ideas at once.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "antikythera-mechanism-spya-zhxrzm",
+      "title": "Antikythera mechanism",
+      "words": 11541,
+      "meanWordLength": 4.972446061866389,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 5,
+        "reason": "Dense technical prose with specialist terms like synodic, Saros, and ecliptic, plus layered astronomy and gear-train reasoning the reader must hold together.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The piece uses technical terms for ancient calendars, gears and eclipse cycles, and its ideas build on each other, so readers must follow carefully and hold many details in mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "difference-engine-spya-qcb46k",
+      "title": "Difference engine",
+      "words": 3245,
+      "meanWordLength": 5.076117103235747,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Mechanical and mathematical terms fill long sentences, and the working of polynomial tabulation and finite differences must be followed step by step.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Technical terms like polynomial, finite differences, and derivatives fill long sentences, and the operation and maths sections ask the reader to follow a step-by-step method that builds on itself.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "narwhal-spya-je8st0",
+      "title": "Narwhal",
+      "words": 4313,
+      "meanWordLength": 5.148388592626942,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 3,
+        "reason": "Scientific names, measurements and terms like echolocation and phylogenetic tree make the wording dense, while the many facts about the narwhal's body, dives and history require careful holding in mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The text uses scientific names, measurements, and specialist terms like echolocation and phylogenetic, and it packs many detailed facts about anatomy, migration, and conservation into dense sections.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "title": "The Mythology Of Conscious AI",
+      "words": 8233,
+      "meanWordLength": 5.225069840884246,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The essay uses academic words like computational functionalism and interoceptive inference, and it builds several linked arguments about consciousness, computation, and life that demand careful thought.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 5,
+        "reason": "The prose is polished but dense with philosophical terms like computational functionalism and biological naturalism, and the arguments build on each other, so the reader must track abstract distinctions between simulation and…",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "charles-babbage-spya-bezqyd",
+      "title": "Charles Babbage",
+      "words": 7958,
+      "meanWordLength": 5.273309876853481,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 3,
+        "reason": "The prose mixes dense technical vocabulary and long, clause-heavy sentences about calculus and engines with many names and dates; the ideas need some work to connect but are mostly explained along the way.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The prose is dense with 19th-century names, technical terms, and long sentences; the ideas stack—calculus, engines, economics—and each part rests on earlier context.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "levin-self-improvising-memory-spya-gj60pu",
+      "title": "Self-Improvising Memory: A Perspective on Memories as Agential, Dynamically Reinterpreting Cognitive Glue",
+      "words": 7555,
+      "meanWordLength": 5.31939113170086,
+      "a": {
+        "kind": "rated",
+        "language": 5,
+        "ideas": 5,
+        "reason": "The prose is dense with specialist terms like engrams, stigmergic, and polycomputation, and the argument builds abstract concepts about memory and agency that require close, careful thought.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 5,
+        "ideas": 5,
+        "reason": "The piece uses dense academic phrasing and specialist terms like engrams, morphospace, and polycomputation, while building layered abstract arguments about memory, agency, and identity that demand close attention.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "spider-silk-spya-ge30uz",
+      "title": "Spider silk",
+      "words": 5238,
+      "meanWordLength": 5.338106147384498,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The text uses technical terms like spidroin, beta sheets, and pultrusion, and it stacks many abstract concepts about protein structure and fibre spinning that require careful reading.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The text is dense with technical terms like spidroin and beta-sheets, and it builds many scientific concepts on each other, so a reader must slow down and hold details in mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "olah-a4-spya-ujr7p0",
+      "title": "Distributed Representations: Composition & Superposition",
+      "words": 1740,
+      "meanWordLength": 5.418390804597701,
+      "a": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 4,
+        "reason": "It explains superposition and composition in a friendly blog voice, but the reader must hold several abstract concepts and their trade-offs in mind.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 3,
+        "ideas": 4,
+        "reason": "The note uses ordinary prose with some technical terms like superposition and composition, but the ideas about how these two strategies compete require careful thought.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "m1-kuhn-spya-a2zrjb",
+      "title": "A landscape of consciousness: Toward a taxonomy of explanations and implications",
+      "words": 151845,
+      "meanWordLength": 5.46728571898976,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 5,
+        "reason": "Readers meet long sentences and specialist terms like qualia, monism and emergent properties, while theories pile up and build on one another, so following the argument takes steady effort.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 5,
+        "ideas": 5,
+        "reason": "The reader meets dense academic prose packed with specialist terms from philosophy and neuroscience, and must hold many abstract theories and their distinctions in mind at once.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "race-human-categorization-spya-rpwc59",
+      "title": "Race (human categorization)",
+      "words": 16693,
+      "meanWordLength": 5.5469957467201825,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The article uses academic vocabulary like clines, monophyletic, and phenotypical, and builds complex arguments about genetics and social construction that require careful thought.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "The article uses academic and scientific vocabulary and long, citation-heavy sentences, while asking the reader to follow abstract arguments about social construction, genetics, and clines.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+      "title": "A Matched Filter Hypothesis for Cognitive Control",
+      "words": 11024,
+      "meanWordLength": 5.736574746008708,
+      "a": {
+        "kind": "rated",
+        "language": 5,
+        "ideas": 5,
+        "reason": "The text is packed with technical terms like cognitive control, PFC, and hypofrontality, and the argument builds through dense, abstract evidence requiring careful thought.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 5,
+        "ideas": 5,
+        "reason": "The reader meets dense neuroscience prose thick with technical terms and citations, and must follow a layered argument about how brain filtering should shift with the task.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    },
+    {
+      "slug": "2025-berggruen-prize-essay-competition-winners-spya-n68bmx",
+      "title": "Berggruen Institute",
+      "words": 2247,
+      "meanWordLength": 5.869158878504673,
+      "a": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 3,
+        "reason": "The announcement mixes academic titles and jargon like computational functionalism with long sentences, while summarizing essays whose abstract arguments about consciousness and AI the reader must follow.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "b": {
+        "kind": "rated",
+        "language": 4,
+        "ideas": 4,
+        "reason": "Academic abstracts and jury quotes pack in technical terms like computational functionalism and tokenization, while the philosophical arguments about machine consciousness ask the reader to hold several abstract distinctions at once.",
+        "model": "deepseek/deepseek-v4.1-flash"
+      }
+    }
+  ],
+  "summary": [
+    "Articles rated twice: 24 of 24 attempted (24 chosen)",
+    "Language: 20 of 24 agree exactly between run A and run B; 0 differ by more than 1",
+    "Ideas:    17 of 24 agree exactly between run A and run B; 0 differ by more than 1",
+    "Spearman, language (mean of A and B) against mean word length: 0.76",
+    "Spend the collector recorded: $0.0281 over 48 call(s)",
+    "Unrated outcomes: none"
+  ]
+}

@@ -161,6 +161,29 @@ re-reads itself without blanking, and that piece is where the difficulty is. It 
 own (Rebuild says *"Reload the page"*; paragraph labels need a reload), so it is the thing to
 build first if any of this is picked up again, as its own plan.
 
+### Greg's answer, and what happened next
+
+That last paragraph became a question to Greg, [Q-reread-first]: build the re-read first? His
+answer went past it to the goal:
+
+> it would be lovely if Structure mode could load after the page is already visible without
+> requiring a page reload, but if that's complex, I can live with the page auto-reloading when
+> Structure gets generated
+>
+> — Greg, 2026-10-05
+
+So option A was picked up again the same day, as
+[261005j](../plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md),
+and three things in the table above turned out to be avoidable:
+
+- **Only a first import defers.** A Refresh or Rebuild already has an article on screen, and
+  deferring there is where the carried-tree and skipped-successor findings came from.
+- **The `structure` step writes the stand-in itself**, with the headings tree it already falls back
+  to, so the publication gate needs no new arm.
+- **The open page replaces only the tree**, never the blocks or the images, so the whole-article
+  re-read without blanking is not needed for this. It is still unbuilt, and Rebuild still says
+  *"Reload the page"*.
+
 ## What was not looked at
 
 - **`extract` on a PDF, the 198 s, and it is the largest lead here.** Its four chunks do start
@@ -173,3 +196,12 @@ build first if any of this is picked up again, as its own plan.
   the prose on the **add page** while the import finishes, read from the job's draft, and open the
   real reading view when it publishes. Nothing is published without a tree, so nothing has to learn
   *no tree yet*. Not priced. [Q-read-while-importing] for Greg.
+
+  **Answered, 2026-10-05:**
+
+  > yes, this sounds promising, and definitely sounds worth a spike. it's ok to incur some costs
+  >
+  > — Greg, 2026-10-05
+
+  The spike, what it measured and what it recommends:
+  [261005b](261005b-read-while-importing-draft-prose-on-the-add-page-spiked.md).

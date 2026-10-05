@@ -19,8 +19,8 @@
  * **No network and no model call.** Stage 1's network half is the one thing
  * skipped: the test builds the `FetchedDocument` that `fetchDocument` would
  * have returned and hands it to `writeRaw`, which is where the storage decision
- * actually lives. Stage 2's HTML path is Readability, and stage 3 is a parser;
- * neither costs anything.
+ * actually lives. Stage 2's title tidier is handed the rule here; stage 3 is
+ * a parser. Neither makes a paid call in this test.
  *
  * ## The two questions only this file asks
  *
@@ -40,13 +40,21 @@
  * count matches: two equal totals made of entirely different ids is the failure.
  */
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FetchedDocument } from "../src/fetch.js";
 import { writeRaw } from "../src/fetch.js";
 import { splitIntoBlocks } from "../src/blocks.js";
-import { STEPS, type StepContext } from "../src/pipeline.js";
+import { STEPS, titleTidiers, type StepContext } from "../src/pipeline.js";
+import { ruleTitleTidier } from "../src/title-tidy.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
+
+/* Braces, not an expression: vitest calls whatever a `beforeEach` returns as
+   its teardown, and a returned spy is a function. */
+beforeEach(() => {
+  vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
+});
+afterEach(() => vi.restoreAllMocks());
 
 const SLUG = "test-end-to-end-probe";
 
@@ -160,7 +168,10 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
 
   it("stage 3 splits it and puts every id it minted into the HTML it returns", async () => {
     const parts = await runStep("blocks");
-    expect(Object.keys(parts).sort()).toEqual(["blocks", "stampedHtml"]);
+    expect(Object.keys(parts).sort()).toEqual(["blocks", "readingDifficulty", "stampedHtml"]);
+    /* Stage 1 of plan 261005j: the step says "unrated" beside the blocks. The
+       model call that can say otherwise is wired in by stage 3. */
+    expect(parts.readingDifficulty).toEqual({ rated: false });
 
     const stored = await store.read(SLUG,"blocks", "blocks");
     firstIds = (stored?.blocks ?? []).map((b) => b.id);

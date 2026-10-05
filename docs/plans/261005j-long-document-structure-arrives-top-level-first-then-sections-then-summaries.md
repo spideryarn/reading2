@@ -2,10 +2,19 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05: **a plan, reviewed, not built.** Stage 0 (the line in Structure) is
-being built separately and is not on `dev` as this is written. The paid eval in stage 2 is
-blocked: the box's OpenRouter key has no room left this
-month (`limit_remaining` 0), and the Overseer has taken that to Greg.
+Status as of 2026-10-05, late evening: **on `dev`: stage 0 (the line in Structure), the eval
+(stage 2) and its write-up, and the slices half of stage 1a.** Evidence: `src/web/StructureNotice.tsx`
+exists and `StructureBand` mounts it; `evals/results/long-structure-2026-10-05/matrix/` holds the
+cells and judgements; `runSlices` has `readSlice`, `halvingCut` and a `secondPass` count, pinned
+by `tests/structure-slices-second-pass.test.ts`. **Not started:** the rest of 1a (an unaskable
+section cut into windows, and a retry as a successor job; the open-before-structure work they
+waited on reached `dev` the same evening), 1b, 3, 4 and 5. Not deployed by this work, and the
+full test suite was not run by it: the box was overloaded and sessions were asked not to.
+
+**What the next session needs to know first.** Stage 3 is not "build top level first": read
+§ Result: stage 2. One question is with Greg (through the Overseer): whether the staged shape
+should also take long documents under the one-answer line. The next paid step is a measurement
+of the first call alone, about $17, on top of the $32.4 already spent; ask before spending it.
 
 Another plan shares this name's prefix,
 `261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md`, by the
@@ -219,6 +228,79 @@ twice gives the plain tree and says so; the F4 cases. And one piece of arithmeti
 arithmetic: at assumed per-call failure rates of 1%, 3% and 10%, the share of documents left
 wholly plain, today against 1a.
 
+### Result: stage 1a (the slices half)
+
+Built 2026-10-05, in `runSlices` only. Not committed or reviewed as this is written.
+
+**What landed.**
+
+- **A failed refill keeps its section.** A refill is now an optional call: a transport failure, a
+  refusal, a cut-short answer, an answer that does not pass, or its own time cap leaves the
+  original section in place, and the root is still asked. Its spend is counted, and a good
+  answer that arrives late is still saved and still not used.
+- **A refused or cut-short slice is read in two halves** (`halvingCut`): at the heading nearest
+  the middle when one lies within a quarter of the slice of it, else at the middle block, and
+  never one block after a heading. Not under `HALVE_MIN_BLOCKS` (120), or when snapping past
+  consecutive headings leaves no safe cut within that middle band. The halves are asked one
+  after the other inside the slice's own place in the pool, each once, each accepted only if it
+  tiles its own blocks, and the cut is added to the outcome's `seams`. The first half is started
+  only if the second and the root would still fit after it. The decision is saved as a marker
+  under the refused request's own key, in the existing namespace (no migration), and is read
+  before asking.
+- **One second pass.** A slice that fails in the first pass no longer stops the others. What is
+  missing after it is asked for once more, one call each, and a failure there ends the run.
+  `secondPass` counts slices whose second-pass call actually started, excluding retries denied
+  admission; it is on the outcome, on `StructureSource`, in the step's log line and in its
+  `detail` ("read in 3 parts (1 asked for twice)").
+- **The one `stopped` flag is now two.** Out of time (a needed call passed its cap, or would not
+  fit) stops everything in both passes, as before. A final failure stops everything too. A
+  first-pass failure that another ask might mend stops nothing.
+
+**What did not, and why.** Cutting an unaskable section into windows is in `src/structure.ts`,
+and the retry as a successor job is in the job queue. Both are held until the
+open-before-structure work has landed in those files. A failed root call is still a required
+call asked in one pass (with its one re-ask): `source` does not yet say why a first attempt fell
+back, because inside one run there is no first attempt to report, only `secondPass`.
+
+**Decisions made while building, each a judgement.**
+
+- The second pass asks **once**, with no re-ask of an answer that does not pass. So a slice gets
+  at most three calls, or one whole and its two halves twice.
+- A refused or cut-short answer that cannot be halved (too small, or already a half) is **not**
+  asked for again in the second pass: the same request would get the same answer. It ends the
+  run where it happens, as it did.
+- No marker is kept for those, so a later run does ask again. A marker there would make one
+  refusal permanent for that document.
+- A second pass that cannot start for want of time reports `out-of-time`, not `slice-failed`.
+
+**The arithmetic** (`npx tsx evals/long-structure/fallback-arithmetic.ts`). The share of long
+documents left wholly plain, today then after 1a. **It is arithmetic about assumptions, not a
+measurement**: every pass is taken to fail independently with the same probability, the second
+pass included. Real failures cluster, so these figures are neither estimates nor bounds on the
+real rates. Halving, refills and running out of time are not in it.
+
+| assumed per-pass failure | 4 slices | 8 slices | 20 slices | 45 slices |
+|---|---|---|---|---|
+| 1% | 4.9% → 1.0% | 8.6% → 1.1% | 19.0% → 1.2% | 37.0% → 1.4% |
+| 3% | 14.1% → 3.3% | 24.0% → 3.7% | 47.3% → 4.7% | 75.4% → 6.9% |
+| 10% | 41.0% → 13.5% | 61.3% → 17.0% | 89.1% → 26.4% | 99.2% → 42.7% |
+
+Within these assumptions the root failure rate is the floor on the second figure, because the
+root call is still one required question. That is the next thing this arithmetic points at.
+
+**Tests.** `tests/structure-slices-second-pass.test.ts` started with 27 tests: 23 were red before the change;
+the three on `halvingCut` were written after it, and one (a reader's Stop in the first pass) is
+a guard that passed before and after. Sixteen existing expectations changed, because they
+encoded the behaviour this stage reverses: seven gained `secondPass: 0`, and the rest are named
+in the two older test files where they sit.
+
+The code review added two regressions and strengthened the second-pass cap check, each seen red:
+the retry count now excludes denied admission and queued peers stopped by a final failure, and
+halving cannot snap across consecutive headings beyond the allowed middle band.
+
+**Dry scenario.** `evals/long-structure/dry.ts` now expects the refused slice to succeed by
+halving, matching the new behaviour.
+
 ### Stage 1b: a failed part is plain, and the rest is kept (robust, the larger half)
 
 Built only if 1a's numbers, and what the eval sees fail, say the plain tree is still common
@@ -346,6 +428,35 @@ bar, stages 1a and 1b are the fix and stage 3 is not built.
 
 Written up under `docs/investigations/` before anything is built from it.
 
+### Result: stage 2, run 2026-10-05
+
+[The investigation](../investigations/261005c-long-document-structure-top-level-first-against-slices-and-one-call.md).
+$32.31 in the ledgers, about $32.4 in all, of the $40 cap. One run per cell on six documents (the
+joined seventh was cut off by the cap partway through its first cell, and there was no room for
+a second run), so a pilot. GPT Sol checked the write-up against the raw files:
+[stands with corrections](261005j-long-structure-eval-check-sol.md), all made, and they narrowed
+three of the conclusions below from my first draft.
+
+- **B against A, past the line: B, on the one book tried.** Both judges, on both variants of one
+  story collection, top level and summaries. Same time to finish, top level in half the time,
+  about half as much again in cost.
+- **B against one call, under the line: mixed.** Better and nearly twice as fast on the 160-page
+  paper at nearly twice the price; the judges split on Moby-Dick; worse on a short page.
+- **C against B: not shown to pay, and not cleanly tested.** No faster to the finished tree and
+  dearer; it lost two of three direct comparisons, one of them on its outline and not on its
+  summaries. It goes to the back of the queue, not in the bin.
+- **Neither bar in § What would decide it was met cleanly, because of two things the plan did
+  not expect.** The staged arms lost 4 of 14 runs outright to one call's answer failing
+  validation twice. And the first call is not steady: the same request on the same book gave 15
+  parts in one arm and 8 welded ones in the other.
+
+So stage 3 is **not** "build B". It is, in order: stage 1a; B's per-part round without its
+`verdict` and with a strict schema (which addresses seven of sixteen refused answers, not most);
+then a measurement of the first call alone (three draws on four documents, the present prompt
+against one revision: 24 calls, about $17 before re-asks); and only then B, for documents past
+the line. Stage 1b is not shown to be needed by this eval. Whether B should also take long
+documents under the line is a question for Greg, put with these numbers.
+
 ### Stage 3: build the shape the eval picks
 
 Planned in detail after stage 2, and reviewed again. In outline, if B wins: a top-level call with
@@ -426,14 +537,23 @@ honestly and costs about $47 and two hours of an open tab for one article, with 
 
 ## Stages
 
-- [ ] **0.** The line in Structure when the tree is the author's headings, with Try again for the
-  owner.
+- [x] **0.** The line in Structure when the tree is the author's headings, with Try again for the
+  owner. On `dev` as `8000e95dd`; [structure.md § When it is only the headings](../project/structure.md).
+  Browser-checked at 1440, 820 and 390 (`261005j-shot-*.png`) with the page's article response
+  patched to a headings tree; the light theme and a signed-out visitor were not looked at. The
+  full suite was not run (the box was overloaded and the Overseer asked sessions not to).
 - [x] Plan review by GPT Sol (read-only).
 - [ ] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
   Tests red first, gates, Sol code review, the arithmetic.
+  - [x] The slices half, in `src/structure-slices.ts`: a failed refill keeps its section, a
+    refused or cut-short slice is read in halves, one second pass over what failed, the
+    arithmetic. § Result: stage 1a (the slices half). Not yet through the Sol code review.
+  - [ ] A section too long for one labels call cut into windows on its own.
+  - [ ] The retry as a successor job, and a second attempt after a failed root call.
 - [ ] **1b.** The mixed tree, if 1a leaves a need. Its contract (F1, F2, F6) first.
-- [ ] **2.** The eval. Paid, cap $40, blocked on the OpenRouter key's limit.
-- [ ] **3.** The chosen shape, with its own plan section and review.
+- [x] **2.** The eval. About $32.4. § Result: stage 2.
+- [ ] **3.** A strict schema for the per-part round, the first call measured alone, then B past
+  the line, with its own plan section and review.
 - [ ] **4.** Delivery, on the open-before-structure work.
 - [ ] **5.** Labels on a spread of paragraphs past a ceiling of calls. Its own review first.
 

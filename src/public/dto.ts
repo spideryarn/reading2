@@ -104,6 +104,7 @@ import {
 } from "../types.js";
 import type { DebateSynthesis } from "../types.js";
 import { dayFrame } from "../timeline-time.js";
+import { ratedDifficultyOf } from "../reading-time.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
@@ -127,6 +128,7 @@ import type {
   PublicQuotes,
   PublicMeta,
   PublicSearchRun,
+  PublicSharedBy,
   PublicSketch,
   PublicSourceGuess,
   PublicTimeline,
@@ -162,6 +164,10 @@ function publicMeta(row: {
    */
   publishedAt: string | null;
   publishedYear: number | null;
+  /** The three rating columns a screen is shown; `ratedDifficultyOf` makes one value of them or none. */
+  readingLanguage: number | null;
+  readingIdeas: number | null;
+  readingDifficultyReason: string | null;
   headingTitle: string | null;
   /**
    * Stage 1's post-redirect address, **still not the thing that goes out**.
@@ -184,6 +190,14 @@ function publicMeta(row: {
      nothing; a year is sent only when there is no day to send. */
   const published = dayFrame(row.publishedAt);
   const publishedYear = published === null ? publishedYearOf(row.publishedYear) : undefined;
+  /* Rebuilt field by field through the owner's own rule, so a visitor's
+     minutes are the owner's and nothing beside the three fields can ride
+     along. The model's id and the time are not in the row to begin with. */
+  const readingDifficulty = ratedDifficultyOf({
+    language: row.readingLanguage,
+    ideas: row.readingIdeas,
+    reason: row.readingDifficultyReason,
+  });
   return {
     slug: row.slug,
     title: row.title ?? row.headingTitle ?? row.slug,
@@ -207,6 +221,9 @@ function publicMeta(row: {
        differently, and a "we have one but will not show you" would be a fact
        about us rather than about the piece. src/urls.ts § `publicSourceUrl`. */
     ...(url === null ? {} : { url }),
+    /* A model's judgement of the published text: the levels and its sentence
+       (plan 261005j). Computed, so a shorthand key, like `url`. */
+    ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }
 
@@ -1222,6 +1239,13 @@ function publicTweets(thread: TweetThread): PublicTweets {
  */
 export function publicArticle(row: {
   slug: string;
+  /**
+   * Which way the visitor was let in: `PublicArticle.sharedBy`. The reader
+   * works it out from the row the access predicate matched, never from whether
+   * the request carried a key. Required, so a caller that forgot is a type
+   * error rather than a private link wearing the public notice.
+   */
+  sharedBy: PublicSharedBy;
   title: string | null;
   byline: string | null;
   siteName: string | null;
@@ -1231,6 +1255,10 @@ export function publicArticle(row: {
   /** The owner's string — `publicMeta` sends the calendar day of it, or the year, never this. */
   publishedAt: string | null;
   publishedYear: number | null;
+  /** The difficulty rating's three shown columns — `publicMeta` makes one value of them or none. */
+  readingLanguage: number | null;
+  readingIdeas: number | null;
+  readingDifficultyReason: string | null;
   headingTitle: string | null;
   /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
   finalUrl: string | null;
@@ -1278,6 +1306,8 @@ export function publicArticle(row: {
       ? undefined
       : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
   return {
+    /* One of two words, and nothing about the key that was or was not sent. */
+    sharedBy: row.sharedBy,
     meta: publicMeta(row),
     blocks,
     tree: publicTree(row.tree),

@@ -42,7 +42,7 @@ code* names. **A rights-holder cannot check any of it and is relying on us to ha
 | Briefed | What is actually true |
 |---|---|
 | "zero-data-retention AI models that won't train on your work" | **False, and it has got worse.** When this was checked, `zdr: true` was set on dictation and nothing else, which made it false as a *blanket* claim. Since 2026-09-07 it is set on **nothing** (`AI_JOB_ROUTE`, [`src/ai-call.ts`](../../src/ai-call.ts)): dictation moved to `openai/gpt-transcribe` on the transcription endpoint, where OpenRouter does not apply routing preferences or `zdr` — [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md). Live conversation still does not go through the gateway at all ([ai-gateway.md](ai-gateway.md)). The page makes the *no-training* commitment carrying the same hedge `/privacy` gives it — that it rests partly on an account setting, so it is a commitment we hold ourselves to rather than something the page can prove |
-| "the SEO canonical link points to your original page" | **True and inert.** The `<link rel="canonical">` is real ([`src/public/page-head.ts`](../../src/public/page-head.ts) § `tags`) and no search engine ever reads it, because every response is `noindex, nofollow` and `robots.txt` is `Disallow: /`. It is also omitted entirely when the source URL carries a query string (`safePublicCanonical`, [`src/urls.ts`](../../src/urls.ts)). So the page leads with the strong claim — **we are not in search engines at all** — and mentions the canonical after it as belt-and-braces |
+| "the SEO canonical link points to your original page" | **True, and not the protection.** The `<link rel="canonical">` is real ([`src/public/page-head.ts`](../../src/public/page-head.ts) § `tags`), and what keeps a shared article out of search is that every `/read/` response is `noindex, nofollow`. It is also omitted entirely when the source URL carries a query string (`safePublicCanonical`, [`src/urls.ts`](../../src/urls.ts)). So the page leads with the strong claim — **a shared article is not listed** — and mentions the canonical after it as belt-and-braces. *Until 2026-10-05 the strong claim was "we are not in search engines at all"; since then our own pages may be listed and nobody's article may, and `robots.txt` lets a crawler fetch `/read/` so that it can read the `noindex` — [deployment.md](deployment.md), under "Our own pages may be listed". The page's section was rewritten that day and `tests/public-readable-sharing-page.test.tsx` holds each sentence to the file it describes* |
 | "we prominently link to the original" | **True, and stronger than briefed** — the article's `<h1>` *is* a link to the original, and `OriginLine` prints host and path beneath it, both shown to a signed-out visitor ([`src/web/Masthead.tsx`](../../src/web/Masthead.tsx)) |
 | "we check with users before making things public" | **True as a mechanism, and it is not a check.** A dialog, a tick-box, a server that returns 400 without it ([`src/routes.ts`](../../src/routes.ts)), and an audit row in `article_visibility_changes`. The page says all of that **and** says plainly that nobody reviews an article before it appears |
 | "we hope this will increase human readership and appreciation of your work" | True, and the one most likely to read as self-serving. Last on the page, one section, making a claim about *our tool* rather than about the author's benefit, and conceding the point in its final sentence |
@@ -134,6 +134,57 @@ the mailbox and links `/privacy` § If something here is yours for what taking d
 the no-training claim with the same hedge, and links `/privacy` for it.
 `tests/shared-notice-banner.test.tsx` holds the training wording to both pages. The banner does not
 ask for evidence, because `/privacy` promises we won't.
+
+## A private link: the same republishing, to fewer people
+
+Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
+well as making an article public. Anyone who has it reads what a visitor to a public article reads.
+It is listed nowhere and the owner can turn it off. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md); what keeps it
+closed is in
+[security-map.md § The unauthenticated namespace](security-map.md#the-unauthenticated-namespace-and-the-tripwire-under-it).
+
+> When they open a page with a private link, it should say that it's a private link, i.e. not visible to anyone without the link
+>
+> — Greg, 2026-10-05
+
+**The notice.** When the server says `sharedBy: "link"`, `SharedNotice` leads with
+`SHARED_BY_PRIVATE_LINK` in place of `SHARED_WITH_YOU`: *"This is a private link. This article isn't
+listed anywhere, and nobody can see it without the link."* The source, takedown and training lines
+are the banner's own, unchanged. The chip in the bar takes the same sentence for its hover. A public
+article opened with a key is `sharedBy: "public"` and gets the public notice, because public wins.
+The owner never sees either. `tests/shared-notice-banner.test.tsx` and
+`tests/public-network-trace.test.tsx` § a visitor holding a private link hold all three.
+
+**The card.** Access & sharing on the Metadata page is two controls:
+[`PrivateLink.tsx`](../../src/web/PrivateLink.tsx) above, the public switch
+(`AccessSharing.tsx`) below. The private link's control reads its state from
+`GET /api/article/:slug/share-link` each time the card opens, never from a copy. *Create a link*
+opens the same confirmation going public does: the derived inventory, the note about the reader
+profile and the rights tick-box, with the sentences about listing swapped for ones about a link. On,
+it draws the whole link, *Copy*, *Turn off* and *On since*. Two sentences depend on the other
+control:
+
+- when both are on, the link's control says the public address works without the link and turning
+  the link off will not make the article private (`PRIVATE_LINK_ALSO_PUBLIC`);
+- while a link is on, the public switch does not say *"Only you can read this"* of a private
+  article. It says who else can (`SHARING_OFF_WITH_LINK`), and when the link's state could not be
+  read it says only that the article is not public.
+
+A refusal from the server, such as a paper not read through yet, is shown in the server's words
+and leaves the card as it was. A write that did not come back draws no link and no state.
+`tests/private-link-card.test.tsx` and `tests/access-sharing.test.tsx`.
+
+**The owner's marks carry only a boolean.** `Article.privateLinkOn` and
+`LibraryEntry.privateLinkOn` let the masthead and shelf name a private link without carrying its
+key. The card reports changes back to the owner article view, including an unknown result after
+a lost reply. Public wins when both are on. `tests/masthead-sharing-mark.test.tsx`,
+`tests/shelf-shared-badge.test.tsx` and `tests/metadata-sharing-card.test.tsx` hold these paths.
+
+**The pages.** `/features/public-readable-sharing` has a section, *A private link*; `/privacy`
+names it in *Who can see your shelf*, *If you send us a bug report*, *Deleting things* and
+*If something here is yours*; `/help` § Sharing describes both ways. The first two are held to the
+code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.test.ts`.
 
 ## Where the code is
 

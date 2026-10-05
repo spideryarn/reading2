@@ -38,6 +38,7 @@ import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../param
 import { useRenderCount } from "../../perf.js";
 import { StructureNotice } from "../../StructureNotice.js";
 import { StructurePanel } from "../../StructurePanel.js";
+import { StructureArriving, type StructureArrival } from "./StructureArriving.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
@@ -151,6 +152,7 @@ export function StructureBand({
   arcByRow,
   proseBeside,
   rootFontPx,
+  arrival = null,
   onJump,
 }: {
   /** The article's slug and whether it is the reader's own — for `StructureNotice` only. */
@@ -184,6 +186,17 @@ export function StructureBand({
    * the root size changes without changing the band's border-box width.
    */
   rootFontPx: number;
+  /**
+   * **The real structure is still on its way**, and what to say about it above
+   * the rows — or null / absent when the tree is not a stand-in waiting to be
+   * replaced, which is nearly every article. StructureArriving.tsx.
+   *
+   * Handed in rather than worked out here because the two footings get it from
+   * different places: an owner's comes from the job list and carries **Build
+   * it**; a visitor's is read off the payload and carries nothing to press.
+   * This band stays the one component for both and learns nothing about jobs.
+   */
+  arrival?: StructureArrival | null;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("StructureBand");
@@ -289,12 +302,21 @@ export function StructureBand({
      puts it in all three presentations. Both faces measure their room from
      where their rows actually start (OutlinePanel.tsx § `measure`,
      StructurePanel.tsx § `roomBelow`), so the columns, which never scroll,
-     give up rows to it rather than overflowing. */
+     give up rows to it rather than overflowing.
+
+     **Two lines, never both.** A tree that is waiting for the real one says so
+     through `arrival` (StructureArriving.tsx: still being built, or it stalled
+     and the owner may build it); a headings tree that is final says so through
+     `StructureNotice`. `arrival` wins, and is null once the real tree is in. */
   const provisional = article.tree.provisional;
   const head = (
     <>
       <StructureViewToggle view={view} onView={(v) => void setView(v)} />
-      {provisional ? <StructureNotice provisional={provisional} slug={slug} owner={owner} /> : null}
+      {arrival ? (
+        <StructureArriving arrival={arrival} />
+      ) : provisional === "headings" ? (
+        <StructureNotice provisional={provisional} slug={slug} owner={owner} />
+      ) : null}
     </>
   );
 

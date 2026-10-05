@@ -94,6 +94,9 @@ const NONE = {
   journal: null,
   publishedAt: null,
   publishedYear: null,
+  readingLanguage: null,
+  readingIdeas: null,
+  readingDifficultyReason: null,
   headingTitle: null,
   finalUrl: "https://papers.example.org/piece",
   blocks: BLOCKS,
@@ -116,6 +119,7 @@ const NONE = {
   searches: [],
   sketch: null,
   navLabelStatus: "ready" as const,
+  sharedBy: "public" as const,
   sourceGuess: null,
 };
 

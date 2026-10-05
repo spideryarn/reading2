@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 /**
- * **Remember is its own single thread, and Chat does not list it.**
+ * **Remember is its own single thread, and Remember shows nothing else.**
  *
  * Report `spya-peszam` and docs/plans/261001m-remember-is-its-own-single-thread.md
- * § Design 4. Until 2026-10-01 the list of conversations was shared between the
- * two modes; now each mode lists only its own kind, and Remember never shows a
- * list at all — it opens the reader's one Remember conversation directly.
+ * § Design 4: Remember never shows a list. It opens the reader's one
+ * conversation for the sub-mode directly.
+ *
+ * **The other half of that rule changed on 2026-10-05.** From 2026-10-01 Chat
+ * did not list Remember's conversations; report `spya-hyfqkq` reversed it, and
+ * Chat's list now shows them as rows that lead back to Remember
+ * (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+ * D5). What Chat may *open* is still only its own kind, so the Chat-side cases
+ * here ask about both sets: `listed`, and `threads`.
+ * tests/chat-lists-every-conversation.test.tsx has the rest of Chat's side.
  *
  * Asked against the real band and the real `useChat`, with `ChatPanel` stubbed
  * to record every set of props it is handed, so "never a list, not even for a
@@ -17,6 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import { threadParam } from "../src/web/params.js";
 
 /** Every set of props the band handed the panel, in order. */
 const renders: Record<string, unknown>[] = [];
@@ -119,8 +127,8 @@ function thread(
   };
 }
 
-const CHAT = thread("spya-chat01", "chat");
-const REMEMBER = thread("spya-rem001", "remember");
+const CHAT = thread("spya-chat02", "chat");
+const REMEMBER = thread("spya-rem002", "remember");
 const TUTORIAL = thread("spya-tut002", "tutorial");
 const EXPLORE = thread("spya-exp002", "explore");
 
@@ -207,13 +215,32 @@ function prop<T>(name: string): T {
   return value as T;
 }
 
-describe("each mode lists only its own kind", () => {
-  it("never lists a Remember conversation in Chat", async () => {
+const listed = (props = last()): ChatThread[] => (props?.listed as ChatThread[] | undefined) ?? [];
+
+it("uses URL-parseable conversation ids for its navigation cases", () => {
+  for (const t of [CHAT, REMEMBER, TUTORIAL, EXPLORE]) {
+    expect(threadParam.parse(t.id), t.id).toBe(t.id);
+  }
+  expect(threadParam.parse("spya-gqne02")).toBe("spya-gqne02");
+});
+
+describe("Chat lists Remember's conversations, and opens only its own kind", () => {
+  it("lists a Remember conversation in Chat, and never hands it over as one Chat may open", async () => {
     stored = [CHAT, REMEMBER];
     await mount("chat", "?mode=chat");
+    expect(listed().map((t) => t.id).sort()).toEqual([CHAT.id, REMEMBER.id].sort());
     expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
     for (const props of renders) {
-      expect(shown(props).some((t) => t.kind === "remember")).toBe(false);
+      expect(shown(props).some((t) => t.kind !== "chat")).toBe(false);
+    }
+  });
+
+  it("hands Remember no list of other conversations", async () => {
+    stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
+    await mount("remember", "?mode=remember");
+    for (const props of renders) {
+      expect(props.listed).toBeUndefined();
+      expect(shown(props).every((t) => t.kind === "remember")).toBe(true);
     }
   });
 });
@@ -244,7 +271,7 @@ describe("Remember opens its one conversation and never a list", () => {
 
   it("overrides a stale `?thread=` too", async () => {
     stored = [REMEMBER];
-    await mount("remember", "?mode=remember&thread=spya-gone01");
+    await mount("remember", "?mode=remember&thread=spya-gqne02");
     for (const props of renders) expect(drawsList(props)).toBe(false);
     expect(last()?.threadId).toBe(REMEMBER.id);
   });
@@ -505,7 +532,7 @@ describe("Explore opens its own one conversation", () => {
     for (const props of renders) expect(drawsList(props)).toBe(false);
   });
 
-  it("is not listed in Recall, in Tutorial or in Chat", async () => {
+  it("is not listed in Recall or in Tutorial; Chat lists it and cannot open it", async () => {
     stored = [CHAT, REMEMBER, TUTORIAL, EXPLORE];
     await mount("remember", "?mode=remember");
     expect(shown().map((t) => t.id)).toEqual([REMEMBER.id]);
@@ -513,6 +540,7 @@ describe("Explore opens its own one conversation", () => {
     expect(shown().map((t) => t.id)).toEqual([TUTORIAL.id]);
     await mount("chat", "?mode=chat");
     expect(shown().map((t) => t.id)).toEqual([CHAT.id]);
+    expect(listed().map((t) => t.id)).toContain(EXPLORE.id);
   });
 
   it("begins its own conversation when there is none, of its own kind", async () => {

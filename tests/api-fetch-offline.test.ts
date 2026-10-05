@@ -246,6 +246,43 @@ describe("what gets written", () => {
   });
 
   /**
+   * **A private link's state is never kept, and never served from a copy.**
+   *
+   * `GET /api/article/<slug>/share-link` answers with the link's key, and its
+   * path begins `/api/article/`, which is on the whitelist. Kept, the key
+   * would sit in this browser's IndexedDB, and with no connection the card
+   * would draw a link that may have been turned off since. The owner's card
+   * must say it could not check instead. Plan 261005e.
+   */
+  it("does not save a private link's state, though its path looks like an article's", async () => {
+    const state = () =>
+      new Response('{"on":true,"key":"AbCdEfGhIjKlMnOpQrStUv","since":"2026-10-05T10:00:00.000Z"}', {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    vi.stubGlobal("fetch", () => Promise.resolve(state()));
+    const res = await apiFetch("/api/article/x/share-link");
+    expect((await res.json()).on).toBe(true);
+    /* The control, through the same harness: an ordinary article read is saved,
+       so the silence above is about this path. */
+    vi.stubGlobal("fetch", () => Promise.resolve(jsonOk()));
+    await apiFetch("/api/article/x");
+    await vi.waitFor(() => expect(writeCache).toHaveBeenCalled());
+    await settle();
+    expect(writeCache.mock.calls.map((call) => call[0])).toEqual(["/api/article/x"]);
+    expect(JSON.stringify(writeCache.mock.calls)).not.toContain("AbCdEfGhIjKlMnOpQrStUv");
+  });
+
+  it("and offline it fails, where an article would be read from its copy", async () => {
+    readCache.mockResolvedValue({ body: { on: true, key: "AbCdEfGhIjKlMnOpQrStUv" } });
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(apiFetch("/api/article/x/share-link")).rejects.toThrow();
+    /* The control: the article itself does come back from its copy. */
+    const copy = await apiFetch("/api/article/x");
+    expect(copy.headers.get("x-spideryarn-offline")).toBe("copy");
+  });
+
+  /**
    * **Whose cache a response goes into is decided when the request goes out.**
    *
    * A direct A→B sign-in calls `rememberUser(B)` and never `forgetUser(A)` —

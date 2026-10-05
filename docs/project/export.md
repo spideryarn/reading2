@@ -214,6 +214,15 @@ machinery rather than reader data. Plus `raw_sources` and `uploads`, which descr
 document arrived* rather than the article: the bucket object the fetch stored, and the upload
 attempt that produced it.
 
+**The key of a private link is dropped, since 2026-10-05.** `articles.share_token` is a credential:
+with the slug, which is in the same file, it opens the article until the owner turns the link off,
+and a zip gets forwarded. `articleJson` in
+[`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) names the column among the ones it
+leaves out, and `tests/store-export-bundle.test.ts` looks for the key across the whole zip.
+`shareTokenAt` stays, because that a link was made, and when, is sharing state like `publicAt`. The
+audit table `article_share_link_events` is not exported, like the visibility log. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+
 `manifest.json` states all of this machine-readably under `omitted`, and that list is **derived from
 `ARTICLE_TABLE_COVERAGE`** rather than written out beside it, so the manifest cannot drift from the
 guard. The per-table reasons live in that record, one for each projection —

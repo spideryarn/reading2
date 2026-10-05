@@ -53,7 +53,19 @@ const SLUGS = [
   "race-human-categorization-spya-rpwc59",
   "s3-gdl-45mb-spya-cc9kr8",
 ] as const;
-const ARMS = ["len0a", "len0b", "len1a", "len1b", "len1whole", "len2a", "len2b"] as const;
+const ARMS = [
+  "len0a",
+  "len0b",
+  "len1a",
+  "len1b",
+  "len1whole",
+  "len2a",
+  "len2b",
+  "brief90a",
+  "brief90b",
+  "brief100a",
+  "brief100b",
+] as const;
 type Arm = (typeof ARMS)[number];
 type Level = "brief" | "fuller";
 type Para = { text: string; ids: string[] };
@@ -111,7 +123,13 @@ interface Pair {
   right: Arm;
 }
 
-async function pairs(round: "" | "-sentence"): Promise<void> {
+type Round = "" | "-sentence" | "-brief";
+const BRIEF_SEED = 261008;
+
+/** Round three's new arms: Brief asked for about 90 or about 100 words, where it was 80. */
+const isBriefArm = (arm: Arm): boolean => arm.startsWith("brief");
+
+async function pairs(round: Round): Promise<void> {
   loadEnvLocal();
   const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
   const { loadArticle } = await import("../../src/store/index.js");
@@ -135,11 +153,29 @@ async function pairs(round: "" | "-sentence"): Promise<void> {
       wanted.push({ kind: "control", slug, level, left: "len0a", right: "len0b" });
     }
   }
+  /* Round three (Greg, 2026-10-05: "ever so slightly longer but not much"):
+     Brief alone, every piece, the old ask of 80 against 90 and against 100,
+     and old against old as the control. */
+  for (const slug of round === "-brief" ? SLUGS : []) {
+    for (const ask of ["brief90", "brief100"] as const) {
+      wanted.push({ kind: "test", slug, level: "brief", left: "len0a", right: `${ask}a` });
+      wanted.push({ kind: "test", slug, level: "brief", left: "len0b", right: `${ask}b` });
+    }
+    wanted.push({ kind: "control", slug, level: "brief", left: "len0a", right: "len0b" });
+  }
   /* The one question the dropped sentence leaves: with it or without. */
   if (round === "") wanted.push({ kind: "whole", slug: "s3-gdl-45mb-spya-cc9kr8", level: "fuller", left: "len1whole", right: "len1b" });
 
   /* Shuffle the order with the same tested generator, then flip sides. */
-  const coin = blindCoin(round === "" ? 261005 : 261006);
+  /* Round three's seed is not the next date-number: 261007 put the new prompt
+     on side B in 16 test pairs of 22, and a judge with a side preference
+     would then read as a prompt effect (prompting-guide.md § Measuring, 4).
+     `BRIEF_SEED` is the first seed after it whose key is balanced, chosen
+     from the side counts alone, before any pair was judged. */
+  const seedOverride = Number(process.env.LENGTH_BANDS_SEED);
+  const coin = blindCoin(
+    Number.isInteger(seedOverride) && seedOverride > 0 ? seedOverride : round === "" ? 261005 : round === "-sentence" ? 261006 : BRIEF_SEED,
+  );
   const order = wanted.map((w) => ({ w, k: [coin(), coin(), coin(), coin(), coin(), coin(), coin(), coin()].join("") }));
   order.sort((x, y) => (x.k < y.k ? -1 : x.k > y.k ? 1 : 0));
 
@@ -201,7 +237,7 @@ async function pairs(round: "" | "-sentence"): Promise<void> {
  * (`A`, `B`, `both`, `neither`, `same`, `no`); the side is turned back into
  * the arm that wrote it. Prints one row a pair and the tallies.
  */
-function score(round: "" | "-sentence"): void {
+function score(round: Round): void {
   const key = JSON.parse(fs.readFileSync(path.join(OUT, `key${round}.json`), "utf8")) as {
     id: string;
     kind: string;
@@ -213,7 +249,17 @@ function score(round: "" | "-sentence"): void {
   const judged = fs.readFileSync(path.join(OUT, `judge${round}.md`), "utf8");
   const QUESTIONS = ["pad", "bent", "omit", "coverage", "prefer"] as const;
   /* Round one: the banded prompt against the old. Round two: with the sentence against without. */
-  const isNew = (arm: Arm) => (round === "" ? arm === "len1a" || arm === "len1b" : arm === "len2a" || arm === "len2b");
+  const isNew = (arm: Arm) =>
+    round === "-brief" ? isBriefArm(arm) : round === "" ? arm === "len1a" || arm === "len1b" : arm === "len2a" || arm === "len2b";
+  /* Round three tallies each ask apart, and the two long pieces apart from the
+     rest: "for every piece, or only the long ones" is the question it answers. */
+  const LONG = new Set(["race-human-categorization-spya-rpwc59", "s3-gdl-45mb-spya-cc9kr8"]);
+  const groupsFor = (k: (typeof key)[number], q: string): string[] => {
+    if (round !== "-brief") return [`${k.kind} ${k.level} ${q}`];
+    if (k.kind !== "test") return [`control ${q}`];
+    const ask = [k.A, k.B].find(isBriefArm)!.replace(/[ab]$/, "");
+    return [`test ${ask} all ${q}`, `test ${ask} ${LONG.has(k.slug) ? "long+book" : "short+standard"} ${q}`];
+  };
   /** A verdict as the arm(s) it names: `old`, `new`, `both`, `neither`, or the arm's name outside a test pair. */
   const named = (verdict: string, k: (typeof key)[number]): string => {
     if (verdict !== "A" && verdict !== "B") return verdict;
@@ -232,9 +278,10 @@ function score(round: "" | "-sentence"): void {
       const m = new RegExp(`^${q}: *(A|B|[Bb]oth|[Nn]either|[Ss]ame|[Nn]o)\\b`, "m").exec(section);
       if (!m) return "-";
       const verdict = named(m[1]!.length === 1 ? m[1]! : m[1]!.toLowerCase(), k);
-      const group = `${k.kind} ${k.level} ${q}`;
-      tallies[group] ??= {};
-      tallies[group][verdict] = (tallies[group][verdict] ?? 0) + 1;
+      for (const group of groupsFor(k, q)) {
+        tallies[group] ??= {};
+        tallies[group][verdict] = (tallies[group][verdict] ?? 0) + 1;
+      }
       return verdict;
     });
     if (cells.filter((c) => c === "-").length !== 1) {
@@ -250,9 +297,9 @@ function score(round: "" | "-sentence"): void {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cmd = process.argv[2];
-  const round = process.argv[3] === "sentence" ? "-sentence" : "";
+  const round: Round = process.argv[3] === "sentence" ? "-sentence" : process.argv[3] === "brief" ? "-brief" : "";
   if (cmd === "table") table();
   else if (cmd === "pairs") await pairs(round);
   else if (cmd === "score") score(round);
-  else throw new Error("usage: table | pairs [sentence] | score [sentence]");
+  else throw new Error("usage: table | pairs [sentence|brief] | score [sentence|brief]");
 }

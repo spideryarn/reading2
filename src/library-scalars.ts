@@ -233,6 +233,7 @@ export function describeArticle(input: {
    * reads the column the query already selected.
    */
   visibility?: Visibility;
+  privateLinkOn?: boolean;
   /**
    * Whether a no-address rebuild can skip `fetch` and reuse the source.
    * Required at this construction seam so a new caller cannot silently turn
@@ -276,7 +277,10 @@ export function describeArticle(input: {
     ...(meta.publishedAt ? { publishedAt: meta.publishedAt } : {}),
     ...(meta.publishedYear !== undefined ? { publishedYear: meta.publishedYear } : {}),
     words: scalars.wordCount,
-    minutes: readingMinutes(scalars.wordCount),
+    /* With the article's difficulty rating when it has one, which is what the
+       masthead does with the same `Meta` (src/web/stats.ts): the two cannot
+       show different minutes for one piece. Plan 261005j. */
+    minutes: readingMinutes(scalars.wordCount, meta.readingDifficulty),
     blocks: scalars.blockCount,
     parts: scalars.partCount,
     sections: scalars.sectionCount,
@@ -290,6 +294,7 @@ export function describeArticle(input: {
        `=== "public"`, so an absence and a private article are the same
        question answered the same way. */
     ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
+    ...(input.privateLinkOn === undefined ? {} : { privateLinkOn: input.privateLinkOn }),
     sourceReusable: input.sourceReusable,
     ...(input.fixture ? { fixture: true as const } : {}),
     /* Always sent, so a card never has to guess; the two only a minimal paper

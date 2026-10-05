@@ -9,6 +9,9 @@
  *   npx tsx evals/simple/new-reader.ts grounded # free: each piece beside its Fullers, and the key
  *   npx tsx evals/simple/new-reader.ts score    # free: the three judges' answers, unblinded
  *
+ * `audit`, `pairs`, `grounded` and `score` take `2` for the second round
+ * (`ROUND`, below).
+ *
  * Reads the arms `evals/simple/probe.ts` wrote under evals/results/simple/, as
  * `high-<reader>-<tag>`. Calls no model.
  *
@@ -61,7 +64,7 @@ const SLUGS = [
   "s41598-023-33209-9-spya-s0qydm",
   "levin-self-improvising-memory-spya-gj60pu",
 ] as const;
-const ARMS = [
+const ALL_ARMS = [
   "about-new0a",
   "about-new0b",
   "about-new1a",
@@ -69,8 +72,38 @@ const ARMS = [
   "about-new2a",
   "none-new0a",
   "none-new1a",
+  /* Round two, below. */
+  "about-new2b",
+  "none-new0b",
+  "none-new1b",
+  "none-new2a",
 ] as const;
-type Arm = (typeof ARMS)[number];
+type Arm = (typeof ALL_ARMS)[number];
+
+/**
+ * **Two rounds.** Round one is the plan's: the profiled reader, old against
+ * new twice over, with one no-profile draw of each and one draw of the
+ * two-bullet arm. It left two things open, so round two was written after it
+ * was scored: with no profile the pairs judge preferred the *old* prompt in
+ * four pairs of five, on one draw a side, and the two-bullet arm did as well
+ * as the section for the profiled reader. Round two is the reader with no
+ * profile: a second old draw (the control round one lacked), a second draw of
+ * the section, and the two-bullet arm; and a second profiled two-bullet draw.
+ * Its files carry `-r2`, and round one's are never rewritten.
+ *
+ * **Round three is pairs only, and no new writes**: the two-bullet arm against
+ * the old prompt for the profiled reader, both draws. Rounds one and two only
+ * ever set the two-bullet arm against the section for that reader, so "as
+ * good as the section, which beat the old prompt" was an inference; this is
+ * the pair itself.
+ */
+const ROUND: 1 | 2 | 3 = process.argv[3] === "3" ? 3 : process.argv[3] === "2" ? 2 : 1;
+const ARMS: readonly Arm[] =
+  ROUND === 1
+    ? ["about-new0a", "about-new0b", "about-new1a", "about-new1b", "about-new2a", "none-new0a", "none-new1a"]
+    : ["none-new0a", "none-new0b", "none-new1a", "none-new1b", "none-new2a", "about-new2b"];
+/** A judge file's name in this round: `audit.md`, or `audit-r2.md`. */
+const named = (file: string): string => (ROUND === 1 ? file : file.replace(/(\.[a-z]+)$/, `-r${ROUND}$1`));
 type Para = { text: string; ids: string[]; list?: boolean };
 interface Run {
   ok: boolean;
@@ -138,7 +171,7 @@ function table(): void {
   console.log("|---|---|---|---|---:|---|---:|---:|---|---:|---|");
   const sent: Record<string, Set<string>> = {};
   for (const slug of SLUGS) {
-    for (const arm of ARMS) {
+    for (const arm of ALL_ARMS) {
       const r = load(arm, slug);
       if (!r) continue;
       if (!r.ok) {
@@ -175,7 +208,7 @@ function shuffled<T>(items: T[], coin: () => boolean): T[] {
 }
 
 function audit(): void {
-  const coin = blindCoin(26100508);
+  const coin = blindCoin(ROUND === 1 ? 26100508 : 26100511);
   const items: { arm: Arm; slug: string; run: Run }[] = [];
   for (const slug of SLUGS) {
     for (const arm of ARMS) {
@@ -196,13 +229,15 @@ function audit(): void {
   });
   fs.mkdirSync(OUT, { recursive: true });
   const { text, blindId } = blind(lines);
-  fs.writeFileSync(path.join(OUT, "audit.md"), text);
-  fs.writeFileSync(path.join(OUT, "audit-key.json"), `${JSON.stringify({ blindId, items: key }, null, 2)}\n`);
+  fs.writeFileSync(path.join(OUT, named("audit.md")), text);
+  fs.writeFileSync(path.join(OUT, named("audit-key.json")), `${JSON.stringify({ blindId, items: key }, null, 2)}\n`);
   console.log(`${key.length} summaries.`);
 }
 
 interface Pair {
-  kind: "test" | "control" | "two-bullets";
+  /* `test`: old against the section. `two-bullets`: the two-bullet arm against
+     the section. `old-two-bullets`: old against the two-bullet arm. */
+  kind: "test" | "control" | "two-bullets" | "old-two-bullets";
   slug: string;
   left: Arm;
   right: Arm;
@@ -210,14 +245,28 @@ interface Pair {
 
 function pairs(): void {
   const wanted: Pair[] = [];
-  for (const slug of SLUGS) {
+  for (const slug of ROUND === 3 ? SLUGS : []) {
+    wanted.push({ kind: "old-two-bullets", slug, left: "about-new0a", right: "about-new2a" });
+    wanted.push({ kind: "old-two-bullets", slug, left: "about-new0b", right: "about-new2b" });
+  }
+  for (const slug of ROUND === 2 ? SLUGS : []) {
+    wanted.push({ kind: "control", slug, left: "none-new0a", right: "none-new0b" });
+    wanted.push({ kind: "test", slug, left: "none-new0b", right: "none-new1b" });
+    wanted.push({ kind: "old-two-bullets", slug, left: "none-new0a", right: "none-new2a" });
+    wanted.push({ kind: "two-bullets", slug, left: "none-new2a", right: "none-new1b" });
+    wanted.push({ kind: "two-bullets", slug, left: "about-new2b", right: "about-new1b" });
+  }
+  for (const slug of ROUND === 1 ? SLUGS : []) {
     wanted.push({ kind: "test", slug, left: "about-new0a", right: "about-new1a" });
     wanted.push({ kind: "test", slug, left: "about-new0b", right: "about-new1b" });
     wanted.push({ kind: "test", slug, left: "none-new0a", right: "none-new1a" });
     wanted.push({ kind: "control", slug, left: "about-new0a", right: "about-new0b" });
     wanted.push({ kind: "two-bullets", slug, left: "about-new2a", right: "about-new1a" });
   }
-  const coin = blindCoin(26100509);
+  /* Round two's seed is the first from 26100512 whose sides came out no
+     worse than three to two in every kind; 26100512 itself put two kinds on
+     one side four times in five. Chosen before any judge read a pair. */
+  const coin = blindCoin(ROUND === 1 ? 26100509 : ROUND === 2 ? 26100520 : 26100530);
   const lines = [
     "# Pairs of summaries of the same piece",
     "",
@@ -245,8 +294,8 @@ function pairs(): void {
   }
   fs.mkdirSync(OUT, { recursive: true });
   const { text, blindId } = blind(lines);
-  fs.writeFileSync(path.join(OUT, "pairs.md"), text);
-  fs.writeFileSync(path.join(OUT, "pairs-key.json"), `${JSON.stringify({ blindId, items: key }, null, 2)}\n`);
+  fs.writeFileSync(path.join(OUT, named("pairs.md")), text);
+  fs.writeFileSync(path.join(OUT, named("pairs-key.json")), `${JSON.stringify({ blindId, items: key }, null, 2)}\n`);
   console.log(`${n} pairs. The right-hand arm of each kind is on side:`);
   for (const [kind, s] of Object.entries(sides)) console.log(`  ${kind}: A ${s.A}, B ${s.B}`);
 }
@@ -261,7 +310,7 @@ async function grounded(): Promise<void> {
   const { loadArticle } = await import("../../src/store/index.js");
   const { isBodyEvidence } = await import("../../src/block-policy.js");
   const { closeDb } = await import("../../src/db/client.js");
-  const coin = blindCoin(26100510);
+  const coin = blindCoin(ROUND === 1 ? 26100510 : 26100513);
   const key: Record<string, string>[] = [];
   const blindIds: Record<string, string> = {};
   fs.mkdirSync(OUT, { recursive: true });
@@ -297,11 +346,11 @@ async function grounded(): Promise<void> {
       }
       const { text, blindId } = blind(lines);
       blindIds[slug] = blindId;
-      fs.writeFileSync(path.join(OUT, `grounded-${slug}.md`), text);
+      fs.writeFileSync(path.join(OUT, named(`grounded-${slug}.md`)), text);
     }
   });
   await closeDb();
-  fs.writeFileSync(path.join(OUT, "grounded-key.json"), `${JSON.stringify({ blindIds, items: key }, null, 2)}\n`);
+  fs.writeFileSync(path.join(OUT, named("grounded-key.json")), `${JSON.stringify({ blindIds, items: key }, null, 2)}\n`);
   console.log(`${n} summaries across ${SLUGS.length} pieces.`);
 }
 
@@ -312,7 +361,7 @@ async function grounded(): Promise<void> {
  * refused, never read as a zero or silently passed over.
  */
 function sections(file: string, prefix: "S" | "P" | "G", ids: string[], blindId: string): Map<string, string> {
-  const judged = fs.readFileSync(path.join(OUT, file), "utf8");
+  const judged = fs.readFileSync(path.join(OUT, named(file)), "utf8");
   const first = judged.split("\n").find((line) => line.trim() !== "");
   if (first?.trim() !== `blind-id: ${blindId}`) {
     throw new Error(`${file}: does not open with "blind-id: ${blindId}", so it answers a different shuffle or none`);
@@ -349,9 +398,16 @@ function once(section: string, word: string, where: string): string {
  * `faults: N`, which must equal the lines.
  */
 function score(): void {
+  if (ROUND === 3) return scorePairs();
+  const wantedRuns = scoreAudit();
+  scorePairs();
+  scoreGrounded(wantedRuns);
+}
+
+function scoreAudit(): string[] {
   const mean = (xs: number[]) => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(1) : "-");
 
-  const auditKey = JSON.parse(fs.readFileSync(path.join(OUT, "audit-key.json"), "utf8")) as {
+  const auditKey = JSON.parse(fs.readFileSync(path.join(OUT, named("audit-key.json")), "utf8")) as {
     blindId: string;
     items: { id: string; arm: Arm; slug: string }[];
   };
@@ -382,18 +438,24 @@ function score(): void {
     });
   console.log(`| **mean** | ${ARMS.map((arm) => mean(armCounts(arm))).join(" | ")} |`);
 
-  /* The plan's first criterion, as a number: the old-to-new drop in the mean
-     count against how far two writes of the old prompt differ. */
-  const oldA = armCounts("about-new0a");
-  const oldB = armCounts("about-new0b");
-  const newBoth = [...armCounts("about-new1a"), ...armCounts("about-new1b")];
-  const m = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const oldMean = m([...oldA, ...oldB]);
-  const drop = oldMean - m(newBoth);
-  const noise = Math.abs(m(oldA) - m(oldB));
-  console.log(`\nProfiled reader: old mean ${oldMean.toFixed(1)}, new mean ${m(newBoth).toFixed(1)}, drop ${drop.toFixed(1)}; two old writes differ by ${noise.toFixed(1)}. ${drop > noise ? "PASSES" : "FAILS"} the audit criterion.`);
+  if (ROUND === 1) {
+    /* The plan's first criterion, as a number: the old-to-new drop in the mean
+       count against how far two writes of the old prompt differ. */
+    const oldA = armCounts("about-new0a");
+    const oldB = armCounts("about-new0b");
+    const newBoth = [...armCounts("about-new1a"), ...armCounts("about-new1b")];
+    const m = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const oldMean = m([...oldA, ...oldB]);
+    const drop = oldMean - m(newBoth);
+    const noise = Math.abs(m(oldA) - m(oldB));
+    console.log(`\nProfiled reader: old mean ${oldMean.toFixed(1)}, new mean ${m(newBoth).toFixed(1)}, drop ${drop.toFixed(1)}; two old writes differ by ${noise.toFixed(1)}. ${drop > noise ? "PASSES" : "FAILS"} the audit criterion.`);
+  }
 
-  const pairsFile = JSON.parse(fs.readFileSync(path.join(OUT, "pairs-key.json"), "utf8")) as {
+  return wantedRuns;
+}
+
+function scorePairs(): void {
+  const pairsFile = JSON.parse(fs.readFileSync(path.join(OUT, named("pairs-key.json")), "utf8")) as {
     blindId: string;
     items: { id: string; kind: Pair["kind"]; slug: string; A: Arm; B: Arm }[];
   };
@@ -419,7 +481,7 @@ function score(): void {
       const raw = answer(k.id, q);
       /* A side becomes the prompt that wrote it; in a control, the arm. */
       const verdict = raw === "A" || raw === "B" ? (k.kind === "control" ? k[raw] : promptOf(k[raw])) : raw;
-      const group = `${k.kind} ${q}`;
+      const group = `${k.kind}/${readerOf(k.A)} ${q}`;
       (tallies[group] ??= {})[verdict] = (tallies[group][verdict] ?? 0) + 1;
       return verdict;
     });
@@ -429,16 +491,21 @@ function score(): void {
   for (const group of Object.keys(tallies).sort()) {
     console.log(`${group}: ${Object.entries(tallies[group]!).map(([v, n]) => `${v} ${n}`).join(", ")}`);
   }
-  /* The second criterion: at least 7 of the 10 profiled old/new pairs. */
-  const profiled = pairsKey.filter((k) => k.kind === "test" && readerOf(k.A) === "about");
-  if (profiled.length !== 10) throw new Error(`${profiled.length} profiled old/new pairs in the key, and the criterion is over 10`);
-  const forNew = profiled.filter((k) => {
-    const raw = answer(k.id, "prefer");
-    return (raw === "A" || raw === "B") && promptOf(k[raw]) === "new";
-  }).length;
-  console.log(`\nProfiled old/new pairs preferring the new prompt: ${forNew} of 10. ${forNew >= 7 ? "PASSES" : "FAILS"} the pairs criterion (7 of 10).`);
+  if (ROUND === 1) {
+    /* The second criterion: at least 7 of the 10 profiled old/new pairs. */
+    const profiled = pairsKey.filter((k) => k.kind === "test" && readerOf(k.A) === "about");
+    if (profiled.length !== 10) throw new Error(`${profiled.length} profiled old/new pairs in the key, and the criterion is over 10`);
+    const forNew = profiled.filter((k) => {
+      const raw = answer(k.id, "prefer");
+      return (raw === "A" || raw === "B") && promptOf(k[raw]) === "new";
+    }).length;
+    console.log(`\nProfiled old/new pairs preferring the new prompt: ${forNew} of 10. ${forNew >= 7 ? "PASSES" : "FAILS"} the pairs criterion (7 of 10).`);
+  }
 
-  const groundedFile = JSON.parse(fs.readFileSync(path.join(OUT, "grounded-key.json"), "utf8")) as {
+}
+
+function scoreGrounded(wantedRuns: string[]): void {
+  const groundedFile = JSON.parse(fs.readFileSync(path.join(OUT, named("grounded-key.json")), "utf8")) as {
     blindIds: Record<string, string>;
     items: { id: string; arm: Arm; slug: string }[];
   };
@@ -480,10 +547,12 @@ function score(): void {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const cmd = process.argv[2];
+  if (process.argv[3] !== undefined && process.argv[3] !== "2" && process.argv[3] !== "3") throw new Error("the round is 2 or 3, or left out for round one");
+  if (ROUND === 3 && cmd !== "pairs" && cmd !== "score") throw new Error("round three is pairs and score only");
   if (cmd === "table") table();
   else if (cmd === "audit") audit();
   else if (cmd === "pairs") pairs();
   else if (cmd === "grounded") await grounded();
   else if (cmd === "score") score();
-  else throw new Error("usage: table | audit | pairs | grounded | score");
+  else throw new Error("usage: table | audit [2] | pairs [2] | grounded [2] | score [2]");
 }

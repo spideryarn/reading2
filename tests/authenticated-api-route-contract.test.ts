@@ -505,6 +505,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["PUT"],
     witnesses: ["/api/article/w1/visibility"],
   },
+  /* The private link, plan 261005e: read it, make one, turn it off. One
+     matcher, three verbs. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/share-link$", flags: "" },
+    methods: ["GET", "POST", "DELETE"],
+    witnesses: ["/api/article/w1/share-link"],
+  },
   /* High-powered AI's switch, plan 260930k — out of the admin namespace once
      readers could switch it on (and be charged for it); beside visibility. */
   {
@@ -929,8 +936,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 93;
-const EXPECTED_GUARD_COUNT = 113;
+/* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
+   the command bar's suggestions (plan 261005k). */
+const EXPECTED_MATCHER_COUNT = 94;
+/* 115 since its three verbs, each a guard; 116 with the suggestions' one. */
+const EXPECTED_GUARD_COUNT = 116;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2120,6 +2130,10 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/link-preview",
         "GET literal /api/link-summary",
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        // the private link, 261005e — beside visibility, the other way an article is shared
+        "GET regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
+        "POST regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
+        "DELETE regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
         // High-powered AI's switch, 260930k — moved here from the admin namespace, beside visibility
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/high-power$/",
         // reset and regenerate, 260928a — beside visibility, the other article sub-resource

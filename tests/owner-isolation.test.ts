@@ -196,13 +196,14 @@ describe("whose id the store is handed", () => {
 describe("every article lookup names an owner", () => {
   /**
    * `eq(articles.slug, …)` finds anybody's article, because the slug column is
-   * globally unique. There are exactly **three** sanctioned lookups in the repo,
+   * globally unique. There are exactly **four** sanctioned lookups in the repo,
    * each in its own one-function leaf:
    *
    * | file | what it is for |
    * |---|---|
    * | `owned-slug.ts` | `ownedSlug` — slug **and owner**, the reader's own article |
    * | `public-slug.ts` | `publicSlug` — slug **and `visibility = 'public'`**, ownerless on purpose |
+   * | `link-shared-slug.ts` | `linkSharedSlug` — slug **and `share_token = ?`**, ownerless, for a private link's holder (plan 261005e) |
    * | `slug-is-taken.ts` | `slugIsTaken` — the one deliberately unfiltered one, and it returns a boolean |
    *
    * **Exempting a file is not trusting it.** GPT Sol, 2026-08-28: *"Extend the
@@ -230,10 +231,11 @@ describe("every article lookup names an owner", () => {
   const codeOf = (source: string) =>
     source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-  /** The three, and what each is allowed to contain. */
+  /** The four, and what each is allowed to contain. */
   const SANCTIONED = [
     { file: "owned-slug.ts", fn: "ownedSlug" },
     { file: "public-slug.ts", fn: "publicSlug" },
+    { file: "link-shared-slug.ts", fn: "linkSharedSlug" },
     { file: "slug-is-taken.ts", fn: "slugIsTaken" },
   ];
   const EXEMPT = SANCTIONED.map((one) => one.file);
@@ -304,6 +306,86 @@ describe("every article lookup names an owner", () => {
     const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code).not.toContain("owner.js");
     expect(code).not.toContain("currentOwnerId");
+  });
+
+  /**
+   * **The fourth exemption, inspected for what makes it safe.** Plan 261005e.
+   *
+   * `linkSharedSlug` may resolve a slug without an owner because it resolves
+   * it by the private link's key instead. Three things make that true, and
+   * each is a line somebody could delete:
+   *
+   *  - the token clause. Without it the file is exempt from the grep above and
+   *    is a bare unfiltered lookup of anybody's article;
+   *  - the token compared with the **parameter**. Compared with itself, or with
+   *    a constant, it is true for every article that has a link;
+   *  - the guard for a key that is not one. The schema's CHECK and SQL's own
+   *    rule that null equals nothing stand behind it, and it is still asserted.
+   *
+   * And no owner in the file, for `publicSlug`'s reason.
+   */
+  it("and the link predicate filters on the token it was handed, with no owner in the file", async () => {
+    const source = await readFile(
+      fileURLToPath(new URL("../src/store/link-shared-slug.ts", import.meta.url)),
+      "utf8",
+    );
+    const code = codeOf(source);
+    const body = /export function linkSharedSlug[\s\S]*?\n}/.exec(code)?.[0] ?? "";
+    expect(body).toMatch(/^export function linkSharedSlug\(slug: string, key: ShareKey\)/);
+    expect(body).toMatch(/eq\(\s*articles\.slug\s*,\s*slug\s*\)/);
+    expect(body).toMatch(/eq\(\s*articles\.shareToken\s*,\s*key\s*\)/);
+    /* One conjunction of the two, and no `or` anywhere for a third clause to hide in. */
+    expect(body).toMatch(/return and\(eq\(articles\.slug, slug\), eq\(articles\.shareToken, key\)\);/);
+    expect(code).not.toMatch(/\bor\(/);
+    /* The refusal of an empty key comes before the comparison. */
+    expect(body).toMatch(/key === ""\) return sql`false`;[\s\S]*eq\(articles\.shareToken/);
+    expect(code).not.toContain("owner.js");
+    expect(code).not.toContain("currentOwnerId");
+    expect(code).not.toContain("ownerId");
+  });
+
+  /**
+   * **The two ownerless leaves meet in one place, and only there.**
+   *
+   * `publicSlug` is what "public" means to the listing and the showcase, so a
+   * key clause must never be folded into it: that is the edit that puts a
+   * link-shared article on the public shelf. `public-access.ts` is the one
+   * module allowed to combine them, and it is used by reads that already name
+   * a slug. The listing imports neither it nor the link leaf.
+   */
+  it("and the link predicate is combined with the public one in public-access.ts alone", async () => {
+    const dir = fileURLToPath(new URL("../src/", import.meta.url));
+    const importers: string[] = [];
+    const walk = async (at: string): Promise<void> => {
+      for (const entry of await readdir(at, { withFileTypes: true })) {
+        const full = `${at}${entry.name}`;
+        if (entry.isDirectory()) await walk(`${full}/`);
+        else if (/\.tsx?$/.test(entry.name)) {
+          if (/link-shared-slug\.js"/.test(codeOf(await readFile(full, "utf8")))) {
+            importers.push(full.slice(dir.length));
+          }
+        }
+      }
+    };
+    await walk(dir);
+    expect(importers).toEqual(["store/public-access.ts"]);
+
+    const publicLeaf = codeOf(await readFile(`${dir}store/public-slug.ts`, "utf8"));
+    expect(publicLeaf).not.toContain("shareToken");
+    expect(publicLeaf).not.toContain("link-shared");
+    expect(publicLeaf).not.toMatch(/\bor\(/);
+
+    const listing = codeOf(await readFile(`${dir}store/public-library.ts`, "utf8"));
+    expect(listing).not.toContain("shareToken");
+    expect(listing).not.toContain("share_token");
+    expect(listing).not.toContain("public-access");
+    expect(listing).not.toContain("link-shared");
+
+    /* And the combining function is an OR of exactly those two, by slug. */
+    const access = codeOf(await readFile(`${dir}store/public-access.ts`, "utf8"));
+    expect(access).toMatch(/return or\(publicSlug\(slug\), linkSharedSlug\(slug, access\.key\)\);/);
+    expect(access).toMatch(/case "public":\s*return publicSlug\(slug\);/);
+    expect(access).not.toContain("owner");
   });
 
   /**
@@ -608,6 +690,10 @@ describe("the one query that lists articles for nobody in particular", () => {
         "./monitoring.js",
         "./public/routes.js",
         "./reader-sentence.js",
+        /* The name of the one query parameter the public dispatch is handed: a
+           private link's `key` (plan 261005e). A leaf with no imports; nothing
+           in it reads a store. */
+        "./share-key.js",
       ],
     },
     {
@@ -1973,8 +2059,8 @@ describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 
     const card = (await shelfNow()).find((e) => e.slug === listSlug("headed"));
     expect(card?.title).toBe("The heading that names it");
 
-    const { pgPublicReader } = await import("../src/store/public-reader.js");
-    const head = await runInRequest(() => pgPublicReader.loadHead(listSlug("headed")));
+    const { publicHeadOf } = await import("./helpers/public-head.js");
+    const head = await runInRequest(() => publicHeadOf(listSlug("headed")));
     expect(head.title, "the shelf and the tab disagree about the same article").toBe(card?.title);
   });
 
@@ -2009,7 +2095,7 @@ describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 
          request really looks like — and any owner reached for in here throws
          rather than quietly answering as somebody. */
       expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
-      await servePublicApi({ res, path: "/api/public/library", method: "GET" });
+      await servePublicApi({ res, path: "/api/public/library", method: "GET", key: null });
     });
 
     expect(status).toBe(200);
@@ -2135,7 +2221,7 @@ describe("two hundred cards, and the two hundred and first", { timeout: 60_000 }
         text = chunk ?? "";
       },
     } as unknown as ServerResponse;
-    await runInRequest(() => servePublicApi({ res, path: "/api/public/library", method: "GET" }));
+    await runInRequest(() => servePublicApi({ res, path: "/api/public/library", method: "GET", key: null }));
     expect(status).toBe(200);
     return JSON.parse(text) as { entries: { slug: string }[]; truncated: boolean };
   }

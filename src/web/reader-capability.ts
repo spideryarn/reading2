@@ -33,7 +33,7 @@
  */
 import type { CitedWork, Comment, Crossref, Glossary, ThreadSummary } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { CitationsRead } from "./useCitations.js";
@@ -42,6 +42,7 @@ import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
 import type { UseArc } from "./useArc.js";
 import type { ReadingTime } from "./useReadingTime.js";
+import type { StructureArrival } from "./modes/structure/StructureArriving.js";
 
 export type ReaderCapability =
   | {
@@ -110,6 +111,19 @@ export type ReaderCapability =
        * the payload alone.
        */
       arc: UseArc;
+      /**
+       * **What the Structure band says while the real structure is on its
+       * way**, or null when the tree is not a stand-in waiting to be replaced —
+       * `useLateStructure`, with the owner's **Build it** inside it.
+       * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+       *
+       * **Here because the button starts a job**, the arc's reason one entry
+       * up: the band is shared with visitors, so the press has to arrive as
+       * something only an owner is handed. A visitor's line is worked out from
+       * the payload instead and has no button in it
+       * (modes/structure/StructureArriving.tsx § `visitorArrival`).
+       */
+      structureArrival: StructureArrival | null;
       /**
        * **Where this reader has spent time in the piece** — `useReadingTime`,
        * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
@@ -237,6 +251,13 @@ export type ReaderCapability =
        * wording depends on — rather than beside `artefacts`.
        */
       sessionUnconfirmed: boolean;
+      /**
+       * **Which way in**: the article is public, or the address carried the
+       * key of its private link (plan 261005e). Beside the two above because
+       * only the wording depends on it: the notice under the masthead and the
+       * chip's hover. It grants and withholds nothing.
+       */
+      sharedBy: PublicSharedBy;
     };
 
 /**

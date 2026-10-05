@@ -143,11 +143,11 @@ const spy = (busy = false): Spy => ({
 
 /** The real badge, on text written for a profile — never the panel on its own,
  *  so every assertion below is about something a reader can get to. */
-function render(opts: { changed?: boolean; regenerate?: Spy } = {}) {
+function render(opts: { changed?: boolean; regenerate?: Spy; written?: boolean } = {}) {
   act(() => {
     root.render(
       createElement(WrittenForYou, {
-        written: true,
+        written: opts.written ?? true,
         changed: opts.changed ?? false,
         slug: "some-article",
         regenerate: opts.regenerate,
@@ -608,6 +608,32 @@ describe("Regenerate", () => {
     expect(r.refresh).toHaveBeenCalledTimes(1);
     expect(button(/regenerate/i)).toBeUndefined();
     expect(r.run).not.toHaveBeenCalled();
+  });
+});
+
+/* Greg, 2026-10-05: "B treat a first profile as a change". The server now
+   answers `profileChanged` for text written when the reader had no profile;
+   the badge used to draw nothing for such text, so the press had nowhere to
+   be. src/profile.ts § profileIsStale. */
+describe("text written before the reader had a profile", () => {
+  it("draws nothing while they still have none", () => {
+    render({ written: false, changed: false });
+    expect(host.querySelector("button.prof-badge")).toBeNull();
+  });
+
+  it("draws the badge once they have one, says which case this is, and offers Regenerate", async () => {
+    const regenerate = spy();
+    render({ written: false, changed: true, regenerate });
+    const trigger = host.querySelector<HTMLButtonElement>("button.prof-badge");
+    expect(trigger?.getAttribute("aria-label")).toMatch(/without your profile/i);
+    const opened = await open();
+    expect(opened.textContent).toMatch(/without your profile/i);
+    expect(opened.textContent).not.toMatch(/before you had a profile/i);
+    expect(opened.textContent).not.toMatch(/before you last changed it/i);
+    const b = button(/Regenerate/);
+    if (!b) throw new Error("no Regenerate for a first profile");
+    act(() => b.click());
+    expect(regenerate.run).toHaveBeenCalledTimes(1);
   });
 });
 

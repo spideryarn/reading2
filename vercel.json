@@ -22,9 +22,14 @@
 
   "headers": [
     {
+      "source": "/((?!(?:features|features/public-readable-sharing|pricing|changelog|help|privacy|contact|opensource)?$).*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
         { "key": "Referrer-Policy", "value": "no-referrer" }
       ]
     }
@@ -39,9 +44,17 @@
       "source": "/api/(.*)",
       "destination": "/api/index?__spy_path=$1"
     },
+    { "source": "/features", "destination": "/_pages/features.html" },
+    { "source": "/features/public-readable-sharing", "destination": "/_pages/public-readable-sharing.html" },
+    { "source": "/pricing", "destination": "/_pages/pricing.html" },
+    { "source": "/changelog", "destination": "/_pages/changelog.html" },
+    { "source": "/help", "destination": "/_pages/help.html" },
+    { "source": "/privacy", "destination": "/_pages/privacy.html" },
+    { "source": "/contact", "destination": "/_pages/contact.html" },
+    { "source": "/opensource", "destination": "/_pages/opensource.html" },
     {
       "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "destination": "/shell.html"
     }
   ]
 }

@@ -160,6 +160,7 @@ import {
   feedbackStore,
   highPowerStore,
   realtimeSessionStore,
+  shareLinkStore,
   sourceStore,
   visibilityStore,
 } from "./store/index.js";
@@ -327,6 +328,7 @@ import {
   type IngestSlot,
 } from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
+import { SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
   collectSpend,
@@ -5835,6 +5837,29 @@ export function parseHighPowerRequest(body: unknown): { on: boolean } {
   return { on };
 }
 
+/**
+ * The body of `POST /api/article/:slug/share-link`, or a 400:
+ *
+ *     { "rightsConfirmed": true }
+ *
+ * and nothing else. A private link republishes somebody's text to the people
+ * it is sent to, so making one takes the same confirmation going public does,
+ * read the same way: `=== true`, not truthiness, and an unknown key is refused
+ * rather than ignored. `parseVisibilityRequest` below gives both reasons.
+ *
+ * It returns nothing. There is one acceptable body, so getting past this is
+ * the whole of what the caller needs to know.
+ */
+export function parseShareLinkRequest(body: unknown): void {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with rightsConfirmed");
+  }
+  const { rightsConfirmed, ...rest } = body as Record<string, unknown>;
+  /* Not interpolated, for `parseVisibilityRequest`'s reason. */
+  if (Object.keys(rest).length) throw httpError(400, "That request had fields this endpoint does not accept");
+  if (rightsConfirmed !== true) throw httpError(400, "A private link needs rightsConfirmed: true");
+}
+
 export function parseVisibilityRequest(body: unknown): {
   visibility: Visibility;
   rightsConfirmed: boolean;
@@ -6371,6 +6396,10 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
   const job = await enqueue({
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
+    /* Open on a stand-in outline; a second job builds the structure. The other
+       sender is `POST /api/jobs` with a URL, which has the note.
+       docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+    openEarly: true,
     /* The quota slot, spread onto the request so it rides the job's own INSERT.
        Empty when nothing was reserved — src/billing/admission.ts. Every earlier
        exit from this function leaves without a job, and none of them has to do
@@ -7396,7 +7425,14 @@ function feedbackWhere(sent: Record<string, unknown>): {
     throw httpError(400, "buildCommit is not a build stamp [fb-build]");
   }
   return {
-    url: absent ? null : (url as string),
+    /* **Without a private link's key.** A report filed from
+       `/read/<slug>?key=…` would otherwise put that article's credential in
+       our table, a Sentry tag, the admin email and the log line below — the
+       reader told us where they were, not how to get in. The browser removes
+       it too; this is for a bundle that does not. Checked *before* this, so a
+       long address is still refused on what was sent.
+       src/share-key.ts § `withoutShareKey`, and Sol's F1 on plan 261005e. */
+    url: absent ? null : withoutShareKey(url as string),
     slug: typeof slug === "string" ? slug : null,
     buildCommit: typeof buildCommit === "string" ? buildCommit : null,
   };
@@ -7884,7 +7920,11 @@ async function serveApi(
       /* No `req`. See src/public/routes.ts — the public dispatcher is not handed
          the request object, so "the public routes ignore `Authorization`" is not a
          rule anybody has to keep. */
-      await servePublicApi({ res, path, method });
+      /* **And one value out of the query string: a private link's key.** It is
+         named here and handed over as itself, so the dispatcher still has no
+         query to read. It is a secret. `path` is what this function logs, in
+         the `catch` and the `finally` below, and `path` does not carry it. */
+      await servePublicApi({ res, path, method, key: query.get(SHARE_KEY_PARAM) });
       return true;
     }
 
@@ -8187,6 +8227,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * patterns are.
  */
 const JOBS_PATH = "/api/jobs";
+/* An article's private link: GET reads it, POST makes one, DELETE turns it off. */
+const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* One report, by its pair: read with GET, marked ignored with PATCH. */
@@ -9163,6 +9205,56 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /**
+   * **The private link: read it, make one, turn it off.** Three rows on one
+   * path, owner-scoped like `visibility` above: another reader's slug is a 404
+   * from `ownedSlug`, the same as a slug nobody has.
+   * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+   *
+   * **`POST` and `DELETE`, not the `PUT` its sibling uses.** Making a link is
+   * not idempotent on purpose: every `POST` makes a new key and the old one
+   * stops working, which is how an owner cuts off the people holding it. A
+   * `PUT` would promise that sending it twice changes nothing.
+   *
+   * **`private, no-store` on all three.** The answer carries the key, which is
+   * a credential, and this is the only response in the app that does.
+   *
+   * All three answer a `ShareLinkState` (src/types.ts). None calls a model.
+   */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, await shareLinkStore.read(slugPart(captures, 1)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      /* The body before the store, so a request without the tick-box changes
+         nothing and records nothing. */
+      parseShareLinkRequest(await readBody(req));
+      send(res, 200, await shareLinkStore.create(slugPart(captures, 1)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, await shareLinkStore.turnOff(slugPart(captures, 1)));
+    },
+  },
+
+  /**
    * **High-powered AI, switched on or off for one article** — the owner's own
    * article, anybody's account. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
    *
@@ -9633,9 +9725,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      /* **Not `withProfileChanged`**, whose rule calls an artefact written
-         without a profile never stale. A route is exactly what a profile should
-         change, so none → some counts here — `routeProfileIsStale`, the same
+      /* **Not `withProfileChanged`**, whose rule does not count a cleared
+         profile. A route is exactly what a profile should change, so any
+         difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited. */
       const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);
@@ -10905,8 +10997,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
+      /* `openEarly` on a pasted address only: the article opens on a stand-in
+         outline and a second job builds the structure. `enqueue` honours it
+         only for a new article. **Deleting it here and in `queueAnUpload` is the
+         whole way back** if this misbehaves; everything else is inert without it.
+         docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
       const queue = (slot: IngestSlot) =>
-        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+        enqueue({
+          ...work,
+          ...(profile ? { profile } : {}),
+          ...(request.url !== undefined ? { openEarly: true as const } : {}),
+          ...slot,
+        });
       /**
        * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
        * is free.** The two shapes arrive at the same endpoint and are told apart

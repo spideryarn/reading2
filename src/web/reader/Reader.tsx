@@ -26,7 +26,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, ClaimOrigin, GlossaryEntry, ThreadOrigin } from "../../types.js";
+import {
+  awaitingStructure,
+  type Article,
+  type BlockId,
+  type CitedWork,
+  type ClaimOrigin,
+  type GlossaryEntry,
+  type ThreadOrigin,
+} from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
@@ -66,6 +74,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { visitorArrival } from "../modes/structure/StructureArriving.js";
 import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { isCrumbSection } from "../crumbs.js";
@@ -311,6 +320,8 @@ export function Reader({
      the chip in the bar below it, neither of which is drawn for an owner.
      PublicChrome.tsx § SharedNotice for why it is two things and not one. */
   const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
+  /* The same two read this. `"public"` for the owner is never consulted. */
+  const sharedBy = capability.kind === "visitor" ? capability.sharedBy : "public";
   /**
    * **Whether this reader sees the modes that are still being built**, handed
    * down to the bar rather than fetched by it.
@@ -3104,6 +3115,13 @@ export function Reader({
                guessed here is why that move cost this line nothing but its
                example. */
             proseBeside={fit.modeW > 0}
+            /* **The one thing here that does differ by footing**, and it is
+               data, not a second band: while the real structure is on its way
+               an owner's line comes from the job list and carries *Build it*
+               (ArticlePage.tsx § `OwnedReader`); a visitor's is read off the
+               payload and has nothing to press, so this branch starts no job
+               subscription for them. Plan 261005j, GPT Sol's F10. */
+            arrival={owner ? owner.structureArrival : visitorArrival(article.tree)}
             onJump={bandJump}
           />
         );
@@ -3488,7 +3506,14 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
+        {owner && (
+          <OwnerMarginFeed
+            slug={slug}
+            shown={marginRoom}
+            awaitingStructure={awaitingStructure(article.tree)}
+            onFeed={setOwnerFeed}
+          />
+        )}
         {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}
@@ -3602,6 +3627,7 @@ export function Reader({
         <SharedNotice
           signedIn={signedIn}
           sessionUnconfirmed={sessionUnconfirmed}
+          sharedBy={sharedBy}
           source={{ url: webSource(article.meta), guess: article.sourceGuess }}
         />
       )}
@@ -3667,7 +3693,7 @@ export function Reader({
         <div className="controls">
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
-          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />}
           {/* Where in the structure the reader is — `showCrumbs` above. */}
           {showCrumbs && (
             <HeadingsCrumbs

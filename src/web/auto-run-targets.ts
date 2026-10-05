@@ -74,9 +74,10 @@ type StepAutoRunTarget = StepTarget<
   /* Summary's plain-words work, armed by its bar button and by its Brief and
      Fuller segments and command rows — docs/plans/261002a-summary-generates-on-open.md. */
   | "simple"
-  /* Marginalia's relation words (so, but, vs): its own artefact. Imports queue
-     it; this automatic-run target is the fallback armed by the press that
-     turns the column on — plans 261003f and 261005d. */
+  /* Marginalia's relation words (so, but, vs): its own artefact, made the
+     first time the owner's column is shown. No press arms this target; it is
+     here for the once-per-page-load attempt (useAutoRun.ts §
+     `useAutoRunOnArrival`) — plans 261003f and 261005d. */
   | "relations"
 >;
 

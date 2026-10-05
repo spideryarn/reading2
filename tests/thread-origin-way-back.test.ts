@@ -82,26 +82,27 @@ describe("a conversation started from a claim is not its block's chat", () => {
 
 describe("threadSource", () => {
   it("says a conversation with a stored origin was started from a claim in Debate, with the claim's words", () => {
-    expect(threadSource({ origin: CLAIM })).toEqual({
+    expect(threadSource({ kind: "chat", origin: CLAIM })).toEqual({
+      from: "debate",
       mode: "debate",
       label: "Started from a claim in Debate",
       quote: "RNA can transfer a memory",
-      voice: "author",
     });
   });
 
-  it("says nothing for a conversation with no stored origin", () => {
-    expect(threadSource({})).toBeNull();
+  it("says nothing for a plain chat (the other rules are tests/thread-source.test.ts)", () => {
+    expect(threadSource({ kind: "chat" })).toBeNull();
   });
 
   it("says a lens conversation was started from an angle in Debate, with the reader's words", () => {
-    expect(threadSource({ origin: LENS })).toEqual({
+    expect(threadSource({ kind: "chat", origin: LENS })).toEqual({
+      from: "debate",
       mode: "debate",
       label: "Started from an angle in Debate",
       quote: "how it relates to Smith 2019",
       voice: "reader",
     });
-    expect(threadSource({ origin: CLAIM })?.voice, "a claim is the article's words").toBe("author");
+    expect(threadSource({ kind: "chat", origin: CLAIM })?.voice, "a claim is the article's words").toBeUndefined();
   });
 });
 

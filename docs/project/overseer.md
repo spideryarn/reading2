@@ -497,7 +497,12 @@ consequences do not depend on context; *keep going* and *approve the prompt* are
 anything is in it, holds included — Greg approved the restart 2026-09-08, and the classifier accepted
 that command unattended on 2026-09-09. `check` is the same thing without the restart. A hand-typed
 `sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
-refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
+refused too, it is Greg's. A refusal is weak evidence about the command on its own: on 2026-09-09
+both sessions that had done a real restart were refused commands afterwards, a bare read-only
+`systemctl is-active` among them, and the refused `npm run` form had also been piped through grep,
+so the wrapper, the pipeline and the session's history cannot be told apart. Unproven, but the
+classifier does not seem to judge the text alone. The daemon is separate: its relaunch is still the
+`tmux-job` pair under
 *Prove the relaunch before you stop a process*. It runs in tmux, not under `overseer.service`, and
 why, and what a `systemctl restart overseer` does while it runs, are in
 [hetzner-remote-server-box.md § The box's own services](hetzner-remote-server-box.md#the-boxs-own-services).
@@ -641,6 +646,11 @@ Each of these has cost somebody real time on this box.
   Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
   backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
   `/rename`, and it is not the tmux session name.
+- **An empty `ListAgents` is not a dead peer.** `ListAgents` and `SendMessage` find peers per Claude
+  config directory. A session started under another one sees only the sessions registered there,
+  and its `SendMessage` to you answers *"No agent named 'Overseer' is reachable."* Seen 2026-09-10,
+  from the first session on a pool account, which reported it as a fault. Every session has run
+  under the default directory since 2026-09-30, so this comes back only if a second login does.
 - **To read what another session has been saying, ask the dashboard, not the transcript store.**
   `GET /api/messages?id=<tmux session id>` returns that session's recent turns with timestamps — the
   id's `$` must be percent-encoded as `%24`, or the reply is an empty error rather than turns — and

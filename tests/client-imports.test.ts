@@ -569,6 +569,14 @@ const SHARED = new Set([
      nothing to find.
      See src/changelog.ts and docs/project/changelog.md. */
   "changelog.js",
+  /* What a private link's key looks like and the one parameter it travels
+     under (plan 261005e). The server bounds a caller's `?key=` with
+     `parseShareKey` and the browser forwards only what the same function
+     passes; feedback takes the key off an address at both ends with one
+     `withoutShareKey`. Two copies would be two ideas of what a key is. It
+     imports nothing, and its own header says it must stay that way: minting,
+     which needs `node:crypto`, is in src/store/pg-share-link.ts. */
+  "share-key.js",
 ]);
 
 /**

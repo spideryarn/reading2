@@ -954,9 +954,22 @@ const CACHEABLE = [
   "/api/reader",
 ];
 
+/**
+ * **One path under a kept prefix that is never kept: a private link's state.**
+ *
+ * `GET /api/article/<slug>/share-link` begins `/api/article/` and answers with
+ * the link's key (plan 261005e). Kept, the key would sit in this browser's
+ * IndexedDB, and with no connection the owner's card would draw a link from a
+ * copy when the link may have been turned off since. So it is neither written
+ * nor read back: offline, the request fails and the card says it could not
+ * check. The server marks the answer `no-store` for the same reason.
+ */
+const NEVER_KEPT = /^\/api\/article\/[^/]+\/share-link$/;
+
 function cacheable(input: string): boolean {
   const path = input.split("?")[0] ?? input;
   if (path === "/api/library") return true;
+  if (NEVER_KEPT.test(path)) return false;
   return CACHEABLE.some((prefix) => path.startsWith(prefix));
 }
 

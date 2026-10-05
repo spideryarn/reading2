@@ -5,10 +5,13 @@
  * contents will not fit one model answer. The body is cut into consecutive
  * slices, each goes through the ordinary structure call with a short note
  * ahead of its blocks, and every slice's top-level sections are put under one
- * root whose gist and question come from one small call. Any failure, and the
+ * root whose gist and question come from one small call. A slice that fails is
+ * asked for once more, and one whose answer was refused or cut short is asked
+ * for in two halves; a slice that still fails, or a failed root call, and the
  * caller returns the tree built from the document's headings instead
  * (src/heading-tree.ts § `buildBoundedHeadingTree`).
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md
+ * docs/plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md § Stage 1a
  *
  * **No value is imported from `structure.ts`**, which imports this file: the
  * request, the parser, the builder and the question rule arrive as `SliceDeps`.
@@ -36,6 +39,12 @@ export const SLICE_TARGET_BLOCKS = 1000;
 export const SLICE_CONCURRENCY = 8;
 /** Longest one slice or refill call may run: two and a half times the slowest slice measured (96 s). */
 export const SLICE_CALL_CAP_MS = 240_000;
+/**
+ * A slice of fewer blocks than this is not cut in two when its answer is
+ * refused or cut short: splitting is reserved for slices of at least two
+ * labels batches.
+ */
+export const HALVE_MIN_BLOCKS = 2 * MAX_BATCH;
 /** Longest the root call may run. Measured at a few seconds. */
 export const ROOT_CALL_CAP_MS = 60_000;
 /**
@@ -60,7 +69,8 @@ const NAMESPACE = "structure-whole-document" as const;
 /** Why the slices path gave up and the headings tree was returned. */
 export type SlicesFailure =
   | "could-not-plan"
-  /* A slice's call failed, was refused or cut short, or its answer failed twice. */
+  /* A slice failed in both passes, or was refused or cut short and could not
+     be read in halves either. */
   | "slice-failed"
   | "root-call-failed"
   | "tree-unsound"
@@ -155,6 +165,36 @@ export function planSlices(
     if (slices.every((s) => fits(body.slice(s.lo, s.hi + 1)))) return slices;
   }
   return null;
+}
+
+/**
+ * **Where a slice whose answer was refused or cut short is cut in two**, as an
+ * index into the body, or null when it is under `HALVE_MIN_BLOCKS` or has no
+ * safe cut near its middle.
+ *
+ * The heading nearest the slice's middle when one lies within a quarter of the
+ * slice of it, else the middle block: a cut far from the middle leaves one
+ * half nearly the request that was just refused. Never one block after a
+ * heading, for the reason `planSlices` gives. Pure.
+ */
+export function halvingCut(body: readonly Block[], slice: Pick<Slice, "lo" | "hi">): number | null {
+  const size = slice.hi - slice.lo + 1;
+  if (size < HALVE_MIN_BLOCKS) return null;
+  const middle = slice.lo + Math.floor(size / 2);
+  const snap = (at: number): number => {
+    while (at > slice.lo && body[at - 1]!.kind === "heading") at -= 1;
+    return at;
+  };
+  const near = (at: number): boolean => Math.abs(at - middle) <= size / 4;
+  for (let away = 0; away <= size / 4; away++) {
+    for (const at of [middle - away, middle + away]) {
+      if (body[at]!.kind !== "heading") continue;
+      const cut = snap(at);
+      if (near(cut)) return cut;
+    }
+  }
+  const cut = snap(middle);
+  return near(cut) ? cut : null;
 }
 
 /**
@@ -352,24 +392,65 @@ export interface SlicesSpend {
   usage: { input_tokens: number; output_tokens: number };
 }
 
-export type SlicesOutcome = { spend: SlicesSpend; slices: number; reasked: number } & (
+/**
+ * `reasked` answers did not pass and were asked for again at once. `secondPass`
+ * slices failed when first asked and were asked for once more after the rest:
+ * above zero on a finished tree, it is a tree the first pass alone would not
+ * have made.
+ */
+export type SlicesOutcome = { spend: SlicesSpend; slices: number; reasked: number; secondPass: number } & (
   | { ok: true; proposal: ModelNode; sections: number; seams: string[]; refilled: number }
   | { ok: false; failure: SlicesFailure }
 );
 
-
+/** A stored answer. */
 interface Entry {
   fingerprint: string;
   answer: string;
 }
 
+/**
+ * Stored in an answer's place, under the same key: this request's answer was
+ * refused or cut short, so its halves are asked for and it is not asked again.
+ * It has no `answer`, so nothing reading an `Entry` takes it for one.
+ */
+interface HalveMarker {
+  fingerprint: string;
+  halve: true;
+}
+
+/**
+ * How much the tree depends on one question.
+ *
+ * - `required`: without it there is no tree. Any failure ends the run.
+ * - `second-chance`: a slice or a half in the first pass. A failure another ask
+ *   might mend leaves the run going, and the slice is asked for again after
+ *   the rest.
+ * - `optional`: a refill. Nothing it does ends the run, its own time cap
+ *   included; the section it was to divide is kept.
+ */
+type Need = "required" | "second-chance" | "optional";
+
 interface NotAsked {
   ok: false;
-  /** `stopped`: a peer had already failed, so this was never started. */
-  why: "failed" | "out-of-time" | "stopped";
+  /**
+   * - `failed`: the call did not come back or its answer did not pass. Asked
+   *   again, it might.
+   * - `refused`: the answer was refused or cut short. The same request would
+   *   be again; half of it is a different request.
+   * - `out-of-time`: its cap passed, or it was not started because it would
+   *   not have fitted.
+   * - `stopped`: never started, because the run had already ended.
+   */
+  why: "failed" | "refused" | "out-of-time" | "stopped";
 }
 type Asked<T> = { ok: true; value: T } | NotAsked;
 type Stitched = { ok: true; proposal: ModelNode; sections: number; seams: string[]; refilled: number };
+/** One slice's top-level sections, and where it was cut in two if it was. */
+interface Read {
+  sections: ModelNode[];
+  halvedAt: string | null;
+}
 
 /** `jobs`, at most `width` at once, each started only when a worker reaches it. None may reject. */
 async function inPool<T>(width: number, jobs: (() => Promise<T>)[]): Promise<T[]> {
@@ -388,6 +469,16 @@ async function inPool<T>(width: number, jobs: (() => Promise<T>)[]): Promise<T[]
 /**
  * Ask for the slices, the refills and the root, and hand back one proposal for
  * the caller to build, or the reason there is none.
+ *
+ * **The slices are asked for in two passes.** The first asks for every slice,
+ * and one that fails does not stop the others. The second asks once more for
+ * those that failed, and a failure there ends the run. A slice whose answer is
+ * refused or cut short is asked for in two halves, in whichever pass that
+ * happens. Refills cannot end the run at all.
+ *
+ * **Time is a different matter from failure, and ends everything**: once a
+ * call the tree needs has passed its cap, or would not fit before the
+ * deadline, nothing is started in either pass.
  *
  * **It returns only when every call it started has settled**, on the failure
  * path as well: a call still running when the step returns is outside the
@@ -414,15 +505,35 @@ export async function runSlices(opts: {
   const plog = log("pipeline");
   const spend: SlicesSpend = { calls: 0, resumed: 0, usage: { input_tokens: 0, output_tokens: 0 } };
   let reasked = 0;
-  /** Set on the first failure: nothing new is started after it. */
-  let stopped = false;
+  let secondPass = 0;
+  /** A call the tree needs passed its cap, or would not have fitted. Nothing is started after it. */
+  let outOfTime = false;
+  /** A question the tree needs has failed for good. Nothing is started after it. */
+  let gaveUp = false;
+  const ended = (): boolean => outOfTime || gaveUp;
   let callError: unknown;
   let failure: SlicesFailure | null = null;
   /** When each call still out must have ended. A cap can pass before its timer is dispatched. */
   const active = new Map<AbortController, number>();
-  const fail = (not: NotAsked, as: SlicesFailure): void => {
-    stopped = true;
-    if (not.why !== "stopped") failure ??= not.why === "out-of-time" ? "out-of-time" : as;
+
+  /**
+   * One question did not get its answer. What that does to the run is decided
+   * here, at the failure site and before any other worker resumes.
+   */
+  const not = (
+    q: { need: Need; failure: "slice-failed" | "root-call-failed"; halvable?: boolean },
+    why: Exclude<NotAsked["why"], "stopped">,
+  ): NotAsked => {
+    if (q.need !== "optional") {
+      if (why === "out-of-time") {
+        outOfTime = true;
+        failure ??= "out-of-time";
+      } else if (why === "refused" ? !q.halvable : q.need === "required") {
+        gaveUp = true;
+        failure ??= q.failure;
+      }
+    }
+    return { ok: false, why };
   };
 
   /**
@@ -437,22 +548,22 @@ export async function runSlices(opts: {
     capMs: number;
     thenMs: number;
     attempts: 1 | 2;
-    /** A required request stops admission at the failure site, before workers resume. */
+    need: Need;
+    /** Called only for a question that actually made a transport attempt. */
+    onAsked?: () => void;
     failure: "slice-failed" | "root-call-failed";
-    /** A refill may be omitted before it starts when the cap cannot fit. */
-    skipIfShort?: boolean;
+    /**
+     * The caller will ask for this in two halves if the answer is refused or
+     * cut short. That is stored, and read back here without asking again.
+     */
+    halvable?: boolean;
     text: (message: Anthropic.Message) => string;
     accept: (answer: string) => T;
   }): Promise<Asked<T>> => {
-    const refused = (why: NotAsked["why"]): NotAsked => {
-      const not: NotAsked = { ok: false, why };
-      fail(not, q.failure);
-      return not;
-    };
     if (signal?.aborted) return { ok: false, why: "stopped" };
     const key = checkpointKey(q.canonical);
     try {
-      const entry = (await checkpoints.read<Partial<Entry>>(slug, NAMESPACE, [key])).get(key);
+      const entry = (await checkpoints.read<Partial<Entry & HalveMarker>>(slug, NAMESPACE, [key])).get(key);
       if (entry?.fingerprint === key && typeof entry.answer === "string") {
         try {
           const value = q.accept(entry.answer);
@@ -462,16 +573,16 @@ export async function runSlices(opts: {
           /* A stored answer that no longer passes is a miss; the write below replaces it. */
           plog.warn({ slug, key, err }, "a stored slice answer no longer passes; asking again");
         }
+      } else if (q.halvable && entry?.fingerprint === key && entry.halve === true) {
+        return not(q, "refused");
       }
     } catch (err) {
       plog.warn({ slug, key, err }, "could not read a slice checkpoint; asking again");
     }
     for (let attempt = 1; ; attempt++) {
-      if (stopped || signal?.aborted) return { ok: false, why: "stopped" };
-      if ([...active.values()].some((expiry) => Date.now() >= expiry)) return refused("out-of-time");
-      if (Date.now() + q.capMs + q.thenMs > deadline) {
-        return q.skipIfShort ? { ok: false, why: "out-of-time" } : refused("out-of-time");
-      }
+      if (ended() || signal?.aborted) return { ok: false, why: "stopped" };
+      if ([...active.values()].some((expiry) => Date.now() >= expiry)) return not(q, "out-of-time");
+      if (Date.now() + q.capMs + q.thenMs > deadline) return not(q, "out-of-time");
       const expiresAt = Date.now() + q.capMs;
       const own = new AbortController();
       active.set(own, expiresAt);
@@ -481,8 +592,7 @@ export async function runSlices(opts: {
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
-        stopped = true;
-        failure ??= "out-of-time";
+        not(q, "out-of-time");
         own.abort();
       }, q.capMs);
       let message: Anthropic.Message;
@@ -493,9 +603,13 @@ export async function runSlices(opts: {
       } catch (err) {
         callError ??= err;
         plog.warn({ slug, key, err: anthropicCallFailed(err), timedOut }, "a slice call did not come back");
-        return refused(timedOut ? "out-of-time" : "failed");
+        return not(q, timedOut ? "out-of-time" : "failed");
       } finally {
-        if (call !== undefined) spend.calls += call.attempts();
+        if (call !== undefined) {
+          const attempts = call.attempts();
+          spend.calls += attempts;
+          if (attempts > 0) q.onAsked?.();
+        }
         clearTimeout(timer);
         active.delete(own);
         signal?.removeEventListener("abort", onStop);
@@ -504,24 +618,28 @@ export async function runSlices(opts: {
       spend.usage.input_tokens += message.usage.input_tokens;
       spend.usage.output_tokens += message.usage.output_tokens;
       const late = timedOut || Date.now() > expiresAt;
-      if (late) {
-        stopped = true;
-        failure ??= "out-of-time";
-      }
+      if (late) not(q, "out-of-time");
       let answer: string;
       try {
         answer = q.text(message);
       } catch (err) {
         /* Refused or cut short. Asked again it would be again, as for the whole-document call. */
-        plog.warn({ slug, key, err }, "a slice answer was refused or cut short");
-        return refused(late ? "out-of-time" : "failed");
+        plog.warn({ slug, key, err, halvable: q.halvable === true }, "a slice answer was refused or cut short");
+        if (q.halvable) {
+          try {
+            await checkpoints.write(slug, NAMESPACE, key, { fingerprint: key, halve: true } satisfies HalveMarker);
+          } catch (err) {
+            plog.warn({ slug, key, err }, "could not save that a slice is to be halved; a later attempt will ask for it whole first");
+          }
+        }
+        return not(q, late ? "out-of-time" : "refused");
       }
       let value: T;
       try {
         value = q.accept(answer);
       } catch (err) {
         plog.warn({ slug, key, err, attempt }, "a slice answer did not pass");
-        if (late || attempt >= q.attempts) return refused(late ? "out-of-time" : "failed");
+        if (late || attempt >= q.attempts) return not(q, late ? "out-of-time" : "failed");
         reasked += 1;
         continue;
       }
@@ -530,27 +648,30 @@ export async function runSlices(opts: {
       } catch (err) {
         plog.warn({ slug, key, err }, "could not save a slice checkpoint; a later attempt will ask again");
       }
-      return late ? refused("out-of-time") : { ok: true, value };
+      return late ? not(q, "out-of-time") : { ok: true, value };
     }
   };
 
   /** The ordinary structure call on `blocks`, with the note, accepted only if its sections tile them. */
-  const askSlice = async (blocks: Block[], attempts: 1 | 2): Promise<Asked<ModelNode[]>> => {
+  const askSlice = async (
+    blocks: Block[],
+    q: { attempts: 1 | 2; need: Need; halvable?: boolean; thenMs?: number; onAsked?: () => void },
+  ): Promise<Asked<ModelNode[]>> => {
+    const on = { failure: "slice-failed" as const, ...q };
     let request: ReturnType<SliceDeps["request"]>;
     try {
       request = deps.request(blocks);
     } catch {
-      return { ok: false, why: "failed" };
+      /* It cannot be asked at all, which no second ask and no halving here mends. */
+      return not({ ...on, halvable: false }, "refused");
     }
     const params = withSliceNote(request.params, request.user);
     return ask({
+      ...on,
       params,
       canonical: deps.canonical(params, power),
       capMs: SLICE_CALL_CAP_MS,
-      thenMs: ROOT_CALL_CAP_MS,
-      attempts,
-      failure: "slice-failed",
-      skipIfShort: attempts === 1,
+      thenMs: q.thenMs ?? ROOT_CALL_CAP_MS,
       text: (message) => finishedText(message, "table of contents", request.maxTokens, request.answerTokens, deps.headroom),
       accept: (answer) => {
         const { root } = deps.parse(answer, blocks);
@@ -560,10 +681,46 @@ export async function runSlices(opts: {
     });
   };
 
+  /**
+   * One slice, whole, or in two halves if its answer is refused or cut short
+   * (now, or on an earlier run that left the marker saying so).
+   *
+   * The halves are asked for one after the other, inside the slice's own place
+   * in the pool, so no more calls are out at once than before. Each is asked
+   * once, must tile its own blocks as any slice must, and is not halved again.
+   * `last` is the second pass, where there is no further ask to fall back on.
+   */
+  const readSlice = async (slice: Slice, last: boolean): Promise<Asked<Read>> => {
+    const need: Need = last ? "required" : "second-chance";
+    let counted = false;
+    const onAsked = (): void => {
+      if (last && !counted) {
+        counted = true;
+        secondPass += 1;
+      }
+    };
+    const cut = halvingCut(body, slice);
+    const whole = await askSlice(body.slice(slice.lo, slice.hi + 1), { attempts: last ? 1 : 2, need, halvable: cut !== null, onAsked });
+    if (whole.ok) return { ok: true, value: { sections: whole.value, halvedAt: null } };
+    if (whole.why !== "refused" || cut === null) return whole;
+    const sections: ModelNode[] = [];
+    let failed: NotAsked | null = null;
+    for (const [lo, hi, thenMs] of [
+      /* The first half is started only if the second would still fit after it. */
+      [slice.lo, cut - 1, SLICE_CALL_CAP_MS + ROOT_CALL_CAP_MS],
+      [cut, slice.hi, ROOT_CALL_CAP_MS],
+    ] as const) {
+      const half = await askSlice(body.slice(lo, hi + 1), { attempts: 1, need, thenMs, onAsked });
+      if (half.ok) sections.push(...half.value);
+      else failed ??= half;
+    }
+    return failed ?? { ok: true, value: { sections, halvedAt: body[cut]!.id } };
+  };
+
   /** Every way out. A reader's Stop wins over whatever else happened. */
   const done = (out: Stitched | null, slices: number): SlicesOutcome => {
     if (signal?.aborted) throw anthropicCallFailed(callError ?? signal.reason);
-    const base = { spend, slices, reasked };
+    const base = { spend, slices, reasked, secondPass };
     return out !== null ? { ...base, ...out } : { ...base, ok: false, failure: failure ?? "slice-failed" };
   };
 
@@ -580,42 +737,53 @@ export async function runSlices(opts: {
     return done(null, 0);
   }
 
+  const read: (Read | null)[] = plan.map(() => null);
   let finished = 0;
-  const perSlice = await inPool(
-    SLICE_CONCURRENCY,
-    plan.map((s) => async (): Promise<ModelNode[] | null> => {
-      const got = await askSlice(body.slice(s.lo, s.hi + 1), 2);
-      if (!got.ok) {
-        fail(got, "slice-failed");
-        return null;
-      }
-      try {
-        opts.onProgress?.(`${++finished} of ${plan.length} parts of the table of contents`);
-      } catch (err) {
-        /* Progress is an observer. It cannot end a paid pool before its peers settle. */
-        plog.warn({ slug, err }, "could not report slice progress");
-      }
-      return got.value;
-    }),
-  );
-  if (stopped || perSlice.some((s) => s === null)) return done(null, plan.length);
-  const promoted = perSlice.flatMap((s) => s ?? []);
+  const pass = (which: number[], last: boolean): Promise<unknown> =>
+    inPool(
+      SLICE_CONCURRENCY,
+      which.map((i) => async (): Promise<void> => {
+        const got = await readSlice(plan[i]!, last);
+        if (!got.ok) return;
+        read[i] = got.value;
+        try {
+          opts.onProgress?.(`${++finished} of ${plan.length} parts of the table of contents`);
+        } catch (err) {
+          /* Progress is an observer. It cannot end a paid pool before its peers settle. */
+          plog.warn({ slug, err }, "could not report slice progress");
+        }
+      }),
+    );
+  await pass(plan.map((_, i) => i), false);
+  if (ended() || signal?.aborted) return done(null, plan.length);
+  /* The second pass: only what is not in hand, each asked once. Its calls go
+     through the same admission as any, so with no time left none is started. */
+  const again = plan.flatMap((_, i) => (read[i] === null ? [i] : []));
+  if (again.length > 0) {
+    await pass(again, true);
+    plog.info({ slug, slices: plan.length, secondPass }, "finished the second pass over the slices that failed");
+  }
+  if (ended() || signal?.aborted || read.some((r) => r === null)) return done(null, plan.length);
+  const promoted = read.flatMap((r) => r?.sections ?? []);
 
-  /* Refills: once each, no re-ask, and skipped before admission when time is
-     short. A valid single section keeps the original. A failed started refill
-     stops admission and gives D, just like a failed slice. */
+  /* Refills: once each, no re-ask, and never the end of the run. One that is
+     not started for want of time, fails, runs past its cap, or returns a
+     single section leaves the original section where it was. */
   const index = new Map(body.map((b, i) => [b.id, i]));
   const refills = await inPool(
     SLICE_CONCURRENCY,
     promoted.map((section) => async (): Promise<ModelNode[]> => {
       if (!needsRefill(section, index)) return [section];
-      const got = await askSlice(body.slice(index.get(section.range[0])!, index.get(section.range[1])! + 1), 1);
+      const got = await askSlice(body.slice(index.get(section.range[0])!, index.get(section.range[1])! + 1), {
+        attempts: 1,
+        need: "optional",
+      });
       return got.ok && got.value.length >= 2 ? got.value : [section];
     }),
   );
   const refilled = refills.filter((r) => r.length > 1).length;
   const sections = refills.flat();
-  if (stopped || signal?.aborted) return done(null, plan.length);
+  if (ended() || signal?.aborted) return done(null, plan.length);
 
   const title = opts.bounded.nodes[opts.bounded.rootId]!.title;
   const rootParams = rootRequest(title, sections);
@@ -625,20 +793,22 @@ export async function runSlices(opts: {
     capMs: ROOT_CALL_CAP_MS,
     thenMs: 0,
     attempts: 2,
+    need: "required",
     failure: "root-call-failed",
     text: (message) => finishedText(message, "table of contents root", ROOT_MAX_TOKENS, ROOT_ANSWER_TOKENS),
     accept: (answer) => acceptRoot(answer, deps.question),
   });
-  if (!root.ok) {
-    fail(root, "root-call-failed");
-    return done(null, plan.length);
-  }
+  if (!root.ok) return done(null, plan.length);
   return done(
     {
       ok: true,
       proposal: stitchSlices(body, title, root.value, sections),
       sections: sections.length,
-      seams: plan.slice(1).map((s) => body[s.lo]!.id),
+      /* Every place two answers meet: each slice's start, and each halved slice's cut. */
+      seams: plan.flatMap((s, i) => {
+        const cut = read[i]?.halvedAt ?? null;
+        return [...(i > 0 ? [body[s.lo]!.id] : []), ...(cut !== null ? [cut] : [])];
+      }),
       refilled,
     },
     plan.length,

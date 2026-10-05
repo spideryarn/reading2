@@ -69,6 +69,7 @@ import {
   type LucideIcon,
   MessageSquarePlus,
   Pencil,
+  Pilcrow,
   RotateCcw,
   Search,
   SendHorizontal,
@@ -109,7 +110,18 @@ import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
-import { type ThreadSource, threadSource } from "./thread-source.js";
+import {
+  CHAT_FROM_LABEL,
+  type RememberConversationView,
+  narrowed,
+  sourcesIn,
+  type ThreadSource,
+  threadSource,
+} from "./thread-source.js";
+import { MODE_ICON } from "./mode-icons.js";
+import type { ChatFrom } from "./params.js";
+import { REMEMBER_SUB_MODES } from "./sub-modes.js";
+import { usePressToggle } from "./usePressToggle.js";
 import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
@@ -122,7 +134,35 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 
 interface Props {
+  /**
+   * **The conversations this panel may open.** `threadId` is resolved among
+   * these and nowhere else. In Remember it is the one conversation; in Chat
+   * it is the `chat`-kind ones, which since 2026-10-05 is fewer than the list
+   * draws (`listed` below).
+   */
   threads: ChatThread[];
+  /**
+   * **What Chat's list draws**: every conversation about the article but
+   * Referee's Candidates, since 2026-10-05 (report `spya-hyfqkq`; plan
+   * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+   * D5). Absent in Remember, which draws no list, and then the list is
+   * `threads`.
+   *
+   * **A second set, and never merged into `threads`** (the plan review's F3).
+   * A Recall conversation in `threads` would be opened here by a `?thread=`
+   * carried over from Remember, under a composer that sends the blocks on
+   * screen, which the server refuses on any kind but `chat`.
+   */
+  listed?: ChatThread[] | undefined;
+  /** Which source the list is narrowed to (`?chatfrom=`); null or absent is All. */
+  from?: ChatFrom | null | undefined;
+  onFrom?: ((next: ChatFrom | null) => void) | undefined;
+  /**
+   * A press on a Remember row: go to that part of Remember, with its
+   * conversation named. The band does it in one navigation. Without it a
+   * Remember row is drawn and cannot be pressed.
+   */
+  onOpenRemember?: ((view: RememberConversationView, id: string) => void) | undefined;
   /**
    * The live conversation, owned above this component.
    *
@@ -249,8 +289,9 @@ interface Props {
    * order to vary the second — which is the duplication GPT Sol's review of
    * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
-   * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
-   * modes show every thread for this article, and a Remember thread carries a tag.
+   * Only chat draws a list of conversations. It shows every one about the
+   * article, Remember's included (`listed` above); Remember shows its own
+   * one and no list.
    */
   kind: ThreadKind;
   /**
@@ -345,6 +386,10 @@ export function ChatPanel({
   loaded,
   loadFailed,
   threads,
+  listed,
+  from,
+  onFrom,
+  onOpenRemember,
   threadId,
   onThread,
   onSend,
@@ -374,7 +419,11 @@ export function ChatPanel({
      box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
   const remember = isSingleThreadKind(kind);
+  /* Among `threads`, never among `listed`: what the list draws and what may
+     be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
+  /** What the list draws. */
+  const rows = listed ?? threads;
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
     ? live
@@ -618,9 +667,10 @@ export function ChatPanel({
           focused={focused}
           draft={draftFor(open.id)}
           onDraft={(text) => setDraftFor(open.id, text)}
-          /* The OPEN conversation's kind, not the mode's. Each mode now lists only
-             its own kind (plan 261001m), so the two agree on every path the band
-             takes; reading the thread is still the honest source. */
+          /* The OPEN conversation's kind, not the mode's. Each mode opens only
+             its own kind (plan 261001m; Chat lists the others since 2026-10-05
+             and still does not open them), so the two agree on every path the
+             band takes; reading the thread is still the honest source. */
           kind={open.kind}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
@@ -633,7 +683,7 @@ export function ChatPanel({
            is out — and in none of them is there anywhere for a question to go.
            Plan 261001m, F1 and F6. */
         <ChatListLoading what="your Remember conversation" />
-      ) : threads.length === 0 && !loaded ? (
+      ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
            the panel used to say "Nothing asked yet." to a reader who knew
@@ -654,7 +704,7 @@ export function ChatPanel({
            useSlow.ts, and docs/project/web-client.md § Empty is not the same as
            not asked yet. */
         <ChatListLoading />
-      ) : threads.length === 0 && loadFailed ? (
+      ) : rows.length === 0 && loadFailed ? (
         /* And the state one beat later. `loaded` means "we have asked", so a
            request that gave up used to drop out of the spinner and into
            "Nothing asked yet." — the identical false claim, arrived at from the
@@ -674,8 +724,11 @@ export function ChatPanel({
       ) : (
         <>
           <ThreadList
-            threads={threads}
+            threads={rows}
+            from={from ?? null}
+            onFrom={onFrom}
             onOpen={onThread}
+            onOpenRemember={onOpenRemember}
             onNew={onNew}
             onRename={onRename}
             onDelete={onDelete}
@@ -844,6 +897,14 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
 /**
  * Every conversation about this article, most recently used first.
  *
+ * **Every one, since 2026-10-05**: Recall's, Tutorial's and Explore's as well
+ * as the chats, each with an icon at its head for where it came from, and a
+ * filter above them when they came from more than one place. It showed only
+ * chats from 2026-10-01 (plan 261001m) until report `spya-hyfqkq` asked for
+ * all of them; plan
+ * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+ * D5. Referee's Candidates thread is never here.
+ *
  * By `updatedAt`, not `createdAt`: coming back to an article you were arguing
  * with yesterday, the thread you want is the one you were last in, and it may
  * well be the oldest one you started.
@@ -864,13 +925,19 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
  */
 function ThreadList({
   threads,
+  from,
+  onFrom,
   onOpen,
+  onOpenRemember,
   onNew,
   onRename,
   onDelete,
 }: {
   threads: ChatThread[];
+  from: ChatFrom | null;
+  onFrom?: ((next: ChatFrom | null) => void) | undefined;
   onOpen(id: string): void;
+  onOpenRemember?: ((view: RememberConversationView, id: string) => void) | undefined;
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
@@ -879,9 +946,8 @@ function ThreadList({
   /* Read once here and passed to every row, so two rows a minute apart in the
      same paint cannot disagree about what "now" is. useNow.ts § why. */
   const now = useNow();
-  const sorted = [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  if (sorted.length === 0) {
+  if (threads.length === 0) {
     return (
       <div className="chat-empty">
         <p>Nothing asked yet.</p>
@@ -895,128 +961,188 @@ function ThreadList({
     );
   }
 
+  /* **The filter**, drawn only when there is something to choose between. A
+     choice this list has no conversation from reads as All, so a stale
+     `?chatfrom=` can never leave an empty list with no control on screen to
+     explain it; the band replaces the parameter too (`ConversationBand`). */
+  const sources = sourcesIn(threads);
+  const chosen = from !== null && sources.includes(from) ? from : null;
+  const sorted = narrowed(threads, chosen).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  /* One slot at the head of every row when any row has an icon, so the titles
+     of the rows without one still start on the same line down the list. */
+  const anySource = threads.some((t) => threadSource(t) !== null);
+
   return (
-    <ol className="chat-threads">
-      {sorted.map((t) => {
-        const last = lastSaid(t);
-        return (
-          <li key={t.id}>
-            {renaming === t.id ? (
-              <RenameRow
-                initial={t.title}
-                onDone={(title) => {
-                  if (title.trim() !== "") onRename(t.id, title.trim());
-                  setRenaming(null);
-                }}
-                onCancel={() => setRenaming(null)}
-              />
-            ) : (
-              <div className="chat-thread">
-                <button
-                  type="button"
-                  className="chat-thread-open"
-                  /* The title in full and the timestamps exactly — not the
-                     preview line, which is a hint rather than something to read
-                     here, and which the row has already cut. A `title` attribute
-                     rather than the Tooltip component, because this one is plain
-                     text over several lines and wants the browser's own delay:
-                     a tooltip that appears the instant the pointer crosses a
-                     list is a list you cannot read. */
-                  title={describe(t)}
-                  onClick={() => onOpen(t.id)}
-                >
-                  {/* The first question in full where the stored title is only its
-                      first sixty characters — chat-list-row.ts. */}
-                  <span className="chat-thread-title">{rowTitle(t)}</span>
-                  {/* Usually the model's reply, but the reader's question when
-                      that was the last thing said — so the row says whose. */}
-                  {last && (
-                    <span
-                      className={
-                        last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"
-                      }
-                    >
-                      {last.text}
+    <>
+      {sources.length > 1 && onFrom && (
+        /* No `role="group"`, as Remember's chips have none (QuizPanel.tsx §
+           `RememberSubModeToggle`): each button says what it is and whether
+           it is pressed. Words, so no card. */
+        <div className="chat-from">
+          {([null, ...sources] as const).map((word) => (
+            <button
+              key={word ?? "all"}
+              type="button"
+              className={`chat-from-btn${chosen === word ? " on" : ""}`}
+              aria-pressed={chosen === word}
+              onClick={() => onFrom(word)}
+            >
+              {word === null ? "All" : CHAT_FROM_LABEL[word]}
+            </button>
+          ))}
+        </div>
+      )}
+      <ol className="chat-threads">
+        {sorted.map((t) => {
+          const last = lastSaid(t);
+          const source = threadSource(t);
+          /* **A Remember row is a way back to Remember, not a conversation of
+             this band's.** It is named for its part of Remember (its stored
+             title is the first sixty characters said, often "Um, so…"), a
+             press goes there, and it has no rename and no delete: Remember
+             has one conversation per part and its delete is *Start over*,
+             which lives there. Plan 261005i, D5. */
+          const view = source?.remember;
+          return (
+            <li key={t.id}>
+              {renaming === t.id ? (
+                <RenameRow
+                  initial={t.title}
+                  onDone={(title) => {
+                    if (title.trim() !== "") onRename(t.id, title.trim());
+                    setRenaming(null);
+                  }}
+                  onCancel={() => setRenaming(null)}
+                />
+              ) : (
+                <div className="chat-thread" data-thread={t.id}>
+                  {anySource && (
+                    <span className="chat-thread-lead">
+                      {source && <ThreadSourceMark source={source} />}
                     </span>
                   )}
-                  <span className="chat-thread-meta">
-                    {/* No kind tag: until 2026-10-01 the list was shared with
-                        Remember and tagged its rows; now only chat lists, and
-                        only its own kind (plan 261001m). */}
-                    <span className="chat-thread-count">{turns(t)}</span>
-                    {/* Recency, because the question a list of conversations
-                        answers is "which was I in?". The exact time is in the
-                        tooltip above. */}
-                    <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
-                  </span>
-                </button>
-                <ThreadSourceMark thread={t} />
-                <div className="chat-thread-actions">
                   <button
                     type="button"
-                    className="chat-icon"
-                    title="Rename this conversation"
-                    onClick={() => setRenaming(t.id)}
+                    className="chat-thread-open"
+                    /* The title in full and the timestamps exactly — not the
+                       preview line, which is a hint rather than something to read
+                       here, and which the row has already cut. A `title` attribute
+                       rather than the Tooltip component, because this one is plain
+                       text over several lines and wants the browser's own delay:
+                       a tooltip that appears the instant the pointer crosses a
+                       list is a list you cannot read. A Remember row says first
+                       where the press goes, since it leaves Chat. */
+                    title={
+                      view
+                        ? `Open in Remember › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
+                        : describe(t)
+                    }
+                    onClick={() => (view ? onOpenRemember?.(view, t.id) : onOpen(t.id))}
                   >
-                    <Pencil size={12} />
+                    {/* The first question in full where the stored title is only its
+                        first sixty characters — chat-list-row.ts. */}
+                    <span className="chat-thread-title">
+                      {view ? REMEMBER_SUB_MODES[view].label : rowTitle(t)}
+                    </span>
+                    {/* Usually the model's reply, but the reader's question when
+                        that was the last thing said — so the row says whose. */}
+                    {last && (
+                      <span
+                        className={
+                          last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"
+                        }
+                      >
+                        {last.text}
+                      </span>
+                    )}
+                    <span className="chat-thread-meta">
+                      {/* No kind tag in words: where a row came from is the icon
+                          at its head (`ThreadSourceMark`). The list showed only
+                          chats from 2026-10-01 (plan 261001m) until 2026-10-05,
+                          when report spya-hyfqkq asked for every conversation
+                          here, marked (plan 261005i, D5). */}
+                      <span className="chat-thread-count">{turns(t)}</span>
+                      {/* Recency, because the question a list of conversations
+                          answers is "which was I in?". The exact time is in the
+                          tooltip above. */}
+                      <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    className="chat-icon danger"
-                    title="Delete this conversation"
-                    onClick={() => onDelete(t.id)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  {!view && (
+                    <div className="chat-thread-actions">
+                      <button
+                        type="button"
+                        className="chat-icon"
+                        title="Rename this conversation"
+                        onClick={() => setRenaming(t.id)}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-icon danger"
+                        title="Delete this conversation"
+                        onClick={() => onDelete(t.id)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ol>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </>
   );
 }
 
 /**
- * The icon for each place a conversation can have been started from: the
- * mode's own from the bar (`MODES_UI` in Dock.tsx; docs/project/icons.md).
- * Written out here because importing the Dock into the panel would be the
- * wrong way round; the plan's next stage moves the bar's icons somewhere both
- * can read. A `Record`, so a new source has to say which icon it wears.
- */
-const SOURCE_ICON: Readonly<Record<ThreadSource["mode"], LucideIcon>> = {
-  debate: Globe,
-};
-
-/**
- * **Where a row's conversation was started from, when that is recorded**: the
- * source mode's icon, with a card saying so and quoting the item's words as
- * they were (`threadSource`, src/web/thread-source.ts). Nothing for a row with
- * no stored origin. Plan 261005i, D5; the rest of D5 is the next stage.
+ * **Where a row's conversation came from**: the source mode's own icon from
+ * the bar (mode-icons.ts; docs/project/icons.md), with a card saying so and,
+ * where the source has words, quoting them (`threadSource`,
+ * src/web/thread-source.ts). Not drawn for a plain chat. Plan 261005i, D5.
  *
- * A sibling of the row's button and not inside it, so its card and the
- * button's own `title` are never both on screen. The quote takes the face of
- * whoever wrote it: the author's for a claim, the reader's for an angle they
- * typed (`ThreadSource.voice`).
+ * **It leads the row**, in a slot every row has when any row has an icon
+ * (`chat-thread-lead`), so titles line up. Stage one drew it after the title,
+ * when one row in many had one.
+ *
+ * A button, and the card is controlled (`usePressToggle`, as every band's (i)
+ * is), so a finger's tap opens it and the keyboard can reach it; hover and
+ * focus open it too. A sibling of the row's own button and not inside it, so
+ * pressing the icon never opens the row, and the card and the row's `title`
+ * are never both on screen. The quote takes the face of whoever wrote it:
+ * the author's for the article's words, the reader's for an angle they typed
+ * (`ThreadSource.voice`).
  */
-function ThreadSourceMark({ thread }: { thread: ChatThread }) {
-  const source = threadSource(thread);
-  if (!source) return null;
-  const Icon = SOURCE_ICON[source.mode];
+function ThreadSourceMark({ source }: { source: ThreadSource }) {
+  const { open, onOpenChange, trigger } = usePressToggle();
+  /* A passage is not a mode and has no icon on the bar. */
+  const Icon: LucideIcon = source.mode === null ? Pilcrow : MODE_ICON[source.mode];
   return (
     <Tooltip
       placement="top"
+      open={open}
+      onOpenChange={onOpenChange}
       content={
         <TipNote>
           {source.label}
-          <span className={withVoice("chat-thread-source-quote", source.voice)}>“{source.quote}”</span>
+          {source.quote !== undefined && (
+            <span className={withVoice("chat-thread-source-quote", source.voice ?? "author")}>“{source.quote}”</span>
+          )}
         </TipNote>
       }
     >
-      <span className="chat-thread-source" role="img" aria-label={source.label}>
+      <button
+        type="button"
+        className="chat-thread-source"
+        aria-label={source.label}
+        aria-expanded={open}
+        {...trigger}
+      >
         <Icon size={12} aria-hidden="true" />
-      </span>
+      </button>
     </Tooltip>
   );
 }

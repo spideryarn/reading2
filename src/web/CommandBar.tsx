@@ -1979,6 +1979,8 @@ export function CommandBar({
    * the life of the page, so a keeper while shut could hold a recording where
    * nobody can see it.
    */
+  /** `enter`, as of the latest render: it is made below the hook that calls it. */
+  const enterNow = useRef<() => void>(() => {});
   const dictate = useDictationField<DictationContext>({
     value: draft,
     onChange: changeDraft,
@@ -1986,6 +1988,21 @@ export function CommandBar({
     context: article === undefined ? { kind: "profile" } : { kind: "article", slug: article.slug },
     transcribe: sendForTranscription,
     ...(open ? { keep: keepDictation("commands") } : {}),
+    /* **A double press on Stop presses Enter when the words arrive** — Greg,
+       2026-10-05: *"yes for the command bar"* (plan 261005a; dictation.md § A
+       double press on Stop also sends). `enter` below, the key's own function,
+       so it runs the row the phrase names or asks what it meant, and nothing
+       Enter would not. Not when shut: the bar stays mounted, and the key makes
+       shutting it withdraw the wish even if it is opened again. Not offered
+       while a run is starting either, when Enter is refused. */
+    ...(said?.kind === "pending"
+      ? {}
+      : {
+          onDone: () => {
+            if (open) enterNow.current();
+          },
+        }),
+    doneKey: open ? "open" : "shut",
   });
   /**
    * **Nothing is pressed while the microphone is involved** — `armed` (still
@@ -2259,6 +2276,17 @@ export function CommandBar({
     else activate(row.command);
   };
 
+  /**
+   * **What Enter does**: take the selected row, or with none, ask. One
+   * function for the key and for a double press on Stop (`onDone` above), so
+   * the two cannot come to run different things.
+   */
+  const enter = () => {
+    if (active !== undefined) pressRow(active);
+    else ask();
+  };
+  enterNow.current = enter;
+
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: the click handled here is the backdrop, whose keyboard equivalent is Escape — which <dialog> implements itself. Lightbox.tsx carries the same ignore for the same handler; FeedbackDialog.tsx does not only because its ⌘/Ctrl+Enter listener happens to satisfy the rule
     <dialog
@@ -2354,15 +2382,20 @@ export function CommandBar({
                  must not confirm it. Nor an Enter that is finishing a word in
                  an input method, which was never a press of this bar. */
               if (e.repeat || e.nativeEvent.isComposing) return;
-              if (active !== undefined) pressRow(active);
-              else ask();
+              enter();
             }
           }}
         />
         {/* Hidden where the browser cannot open a microphone, as in every
             other box. */}
         {dictate.dictation.supported && (
-          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+          <DictationButton
+            dictation={dictate.dictation}
+            toggle={dictate.toggle}
+            again={dictate.again}
+            sendingAfter={dictate.sendingAfter}
+            done="enter"
+          />
         )}
         </div>
 
@@ -2397,7 +2430,7 @@ export function CommandBar({
             refusal. **After the bar's status line, not before it**: the strip
             carries a live region of its own (DictationStrip.tsx), and the
             bar's is the one a reader and every test here looks for first. */}
-        <DictationStrip dictation={dictate.dictation} />
+        <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="enter" />
 
         {shown.length === 0 ? (
           /* Greg's answer 3: no search fallback, no list of everything, and

@@ -403,6 +403,24 @@ export async function exportArticle(
     unverified: revision.unverified,
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,
+    /* The difficulty rating with all five of its facts, the model and the
+       time included: this file is the reader's own copy, and nothing else in
+       it says where the minutes on their shelf came from. Absent when the
+       piece is not rated. Plan 261005j. */
+    readingDifficulty:
+      revision.readingLanguage !== null &&
+      revision.readingIdeas !== null &&
+      revision.readingDifficultyReason !== null &&
+      revision.readingDifficultyModel !== null &&
+      revision.readingDifficultyRatedAt !== null
+        ? {
+            language: revision.readingLanguage,
+            ideas: revision.readingIdeas,
+            reason: revision.readingDifficultyReason,
+            model: revision.readingDifficultyModel,
+            ratedAt: revision.readingDifficultyRatedAt.toISOString(),
+          }
+        : null,
   });
   if (revision.title) await put("article_revisions", "meta.json", meta);
 

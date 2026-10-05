@@ -56,6 +56,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10 (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
+| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `remember` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=remember` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
@@ -89,6 +90,15 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
 | `remember` | which part of Remember is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+
+**`key` is not in this table, because it is not view state.** `/read/<slug>?key=<key>` is a private
+link, and the key is a credential
+([public-readable-sharing.md § A private link](public-readable-sharing.md#a-private-link-the-same-republishing-to-fewer-people)).
+No parser owns it and nothing in the app writes it. It stays on the address because nuqs and
+`carriedSearch` both keep parameters they do not own, so a mode change, a passage link and the trip
+to the Metadata page and back all carry it. It is read in one place
+([`src/web/useShareKey.ts`](../../src/web/useShareKey.ts)), never remembered (`last-view.ts` writes
+an allowlist it is not on), and taken off the address a bug report records.
 
 **`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
@@ -253,6 +263,12 @@ opposite of "the reader turned every column off".
 
 So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
 already right — and leaving chat mode puts the panel back where the reader left it, for free.
+
+**In `mode=chat` the id has to name a chat.** Remember writes its own conversation's id into
+`?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
+`chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
+and shows the list. Going the other way is one navigation: a press on a Remember row in Chat's list
+sets `mode=remember`, `remember=<sub-mode>` and `thread=<id>` together, pushed.
 
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
 nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
@@ -750,9 +766,11 @@ it.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
-- **It starts nothing.** Arriving in Summary or with the notes on spends nothing
-  ([summaries.md](summaries.md), [marginalia.md](marginalia.md)); with no summary stored the owner
-  sees the empty state and **Write it**.
+- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in Summary spends
+  nothing ([summaries.md](summaries.md)); with no summary stored the owner sees the empty state and
+  **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
+  none, once, which is what Greg asked for
+  ([marginalia.md § Relation words](marginalia.md#relation-words)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

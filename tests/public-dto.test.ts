@@ -89,6 +89,10 @@ const NO_ARTEFACTS = {
      revision says today. */
   navLabelStatus: "ready",
   sourceGuess: null,
+  /* Which way the visitor got in (plan 261005e). Required, like the two above,
+     so a call site cannot forget it; `"public"` is what every fixture here is
+     unless it says otherwise. */
+  sharedBy: "public",
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -336,6 +340,11 @@ describe("the public article payload", () => {
     journal: "Noema Journal",
     publishedAt: "2026-01-14T09:00:00+00:00",
     publishedYear: null,
+    /* A whole rating, so the key-set assertion sees the three fields a
+       visitor is sent and would see a fourth (plan 261005j). */
+    readingLanguage: 3,
+    readingIdeas: 4,
+    readingDifficultyReason: "Ordinary prose about an unfamiliar argument.",
     headingTitle: "The mythology of conscious AI",
     /* **A real address, not `null`**, for the same reason `assets` below is a
        real manifest: with `null` in, the whole-key-set assertion never sees
@@ -422,6 +431,12 @@ describe("the public article payload", () => {
         "meta.journal",
         "meta.lang",
         "meta.published",
+        /* The difficulty rating, since 2026-10-05: the two levels and the
+           model's sentence, and not which model or when (plan 261005j). */
+        "meta.readingDifficulty",
+        "meta.readingDifficulty.ideas",
+        "meta.readingDifficulty.language",
+        "meta.readingDifficulty.reason",
         "meta.siteName",
         "meta.slug",
         "meta.title",
@@ -442,6 +457,11 @@ describe("the public article payload", () => {
            above, and for the same reason: `PublicArticle.searches` is required.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
         "searches",
+        /* **Which way this visitor was let in**, `"public"` or `"link"`, so the
+           notice under the masthead can say *private link* (Greg, 2026-10-05).
+           One of two words. The key itself has no line in this list, and
+           § the private link, below, looks for it in the bytes. */
+        "sharedBy",
         "tree",
         "tree.generator",
         "tree.nodes",
@@ -560,6 +580,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [HEADING, BLOCK],
@@ -656,6 +679,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
@@ -706,6 +732,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [
@@ -757,6 +786,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -792,6 +824,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -818,6 +853,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: "From the article's own h1",
       finalUrl: null,
       blocks: [BLOCK],
@@ -843,6 +881,9 @@ describe("the public article payload", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -852,6 +893,66 @@ describe("the public article payload", () => {
       ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
+  });
+
+  /**
+   * **How hard the piece is to read**, for a visitor: the owner's two levels
+   * and the model's sentence, or nothing. Plan 261005j. That the real reader
+   * selects the columns is tests/reading-difficulty-pg.test.ts.
+   */
+  describe("the difficulty rating", () => {
+    const rated = (over: {
+      readingLanguage: number | null;
+      readingIdeas: number | null;
+      readingDifficultyReason: string | null;
+    }) =>
+      publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: null,
+        publishedAt: null,
+        publishedYear: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...over,
+      }).meta;
+
+    it("sends the two levels and the sentence, and nothing else", () => {
+      expect(
+        rated({ readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "Plain words, hard ideas." }),
+      ).toEqual({
+        slug: "noema",
+        title: "T",
+        readingDifficulty: { language: 2, ideas: 5, reason: "Plain words, hard ideas." },
+      });
+    });
+
+    it("has no key for an unrated piece", () => {
+      const out = rated({ readingLanguage: null, readingIdeas: null, readingDifficultyReason: null });
+      expect(Object.keys(out)).toEqual(["slug", "title"]);
+    });
+
+    it("sends nothing rather than part of a rating, or a level that is not one", () => {
+      for (const bad of [
+        { readingLanguage: 2, readingIdeas: null, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: null },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "   " },
+        { readingLanguage: 0, readingIdeas: 5, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 6, readingDifficultyReason: "Why." },
+        { readingLanguage: 2.5, readingIdeas: 3, readingDifficultyReason: "Why." },
+      ]) {
+        expect(Object.keys(rated(bad)), JSON.stringify(bad)).toEqual(["slug", "title"]);
+      }
+    });
   });
 
   /**
@@ -874,6 +975,9 @@ describe("the public article payload", () => {
         journal: null,
         publishedAt: null,
         publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
         headingTitle: null,
         finalUrl: null,
         blocks: [BLOCK],
@@ -939,6 +1043,9 @@ describe("the public article payload", () => {
         journal: "Entropy",
         publishedAt: "2024-05-31T09:00:00+02:00",
         publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
         headingTitle: null,
         finalUrl: null,
         blocks: [BLOCK],
@@ -1495,6 +1602,9 @@ describe("the artefacts a shared link carries", () => {
     journal: null,
     publishedAt: null,
     publishedYear: null,
+    readingLanguage: null,
+    readingIdeas: null,
+    readingDifficultyReason: null,
     headingTitle: null,
     finalUrl: null,
     blocks: [BLOCK],
@@ -1503,6 +1613,7 @@ describe("the artefacts a shared link carries", () => {
     assets: null,
     navLabelStatus: "ready" as const,
     sourceGuess: null,
+    sharedBy: "public" as const,
     crossrefs: null,
     crossrefsFresh: false,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
@@ -2371,6 +2482,9 @@ describe("the artefacts a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2394,6 +2508,7 @@ describe("the artefacts a shared link carries", () => {
       sketch: null,
       navLabelStatus: "ready",
       sourceGuess: null,
+      sharedBy: "public",
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);
@@ -2413,6 +2528,9 @@ describe("the artefacts a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2443,6 +2561,72 @@ describe("the artefacts a shared link carries", () => {
  * Same reason `tests/public-reads.test.ts` reads the generated SQL rather than
  * the projection object beside it.
  */
+/**
+ * **Which way the visitor got in, and nothing about the key.** Plan 261005e.
+ *
+ * The payload gains one fact for a private link: `sharedBy`. The reader works
+ * it out from the row its predicate matched (tests/public-visibility-pg.test.ts
+ * proves that against real rows, including that a public article opened with a
+ * key says `"public"`); this proves the projection carries the word it was
+ * handed, changes nothing else, and has nowhere to put a key.
+ */
+describe("the private link, in the payload", () => {
+  const ROW = {
+    slug: "noema",
+    title: "t",
+    byline: null,
+    siteName: null,
+    lang: null,
+    excerpt: null,
+    journal: null,
+    readingLanguage: null,
+    readingIdeas: null,
+    readingDifficultyReason: null,
+    publishedAt: null,
+    publishedYear: null,
+    headingTitle: null,
+    finalUrl: null,
+    blocks: [BLOCK],
+    tree: TREE,
+    arc: null,
+    assets: null,
+    ...NO_ARTEFACTS,
+  };
+
+  it("says public for a public article and link for a private one opened by its key", () => {
+    expect(publicArticle({ ...ROW, sharedBy: "public" }).sharedBy).toBe("public");
+    expect(publicArticle({ ...ROW, sharedBy: "link" }).sharedBy).toBe("link");
+  });
+
+  /* The two payloads differ in that one word. A private link shows a visitor
+     exactly what a public article would. */
+  it("and that word is the only difference between the two payloads", () => {
+    const asPublic = publicArticle({ ...ROW, sharedBy: "public" });
+    const asLink = publicArticle({ ...ROW, sharedBy: "link" });
+    expect({ ...asLink, sharedBy: "public" }).toEqual(asPublic);
+    expect(keyPaths(asLink)).toEqual(keyPaths(asPublic));
+  });
+
+  /**
+   * **A key handed to the projection by mistake does not cross.** The function
+   * takes no key, so the mistake has to be a wider object spread into its
+   * argument, which is how a row from a careless `select` would arrive.
+   * Default-absent is the allowlist's whole point, and this is that point
+   * asserted for the one value that is a credential.
+   */
+  it("and a key or a token on the row it is handed never reaches the payload", () => {
+    const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+    const out = publicArticle({
+      ...ROW,
+      sharedBy: "link",
+      ...({ key: KEY, shareToken: KEY, share_token: KEY, shareTokenAt: "2026-10-05T00:00:00Z" } as object),
+    });
+    expect(JSON.stringify(out)).not.toContain(KEY);
+    expect(JSON.stringify(out)).not.toMatch(/share_?token/i);
+    expect(keyPaths(out).filter((p) => /key|token/i.test(p))).toEqual([]);
+  });
+});
+
 describe("the source URL a stranger receives", () => {
   /** One article, one `finalUrl`, and only the published `meta.url` back. */
   const published = (finalUrl: string | null): string | undefined =>
@@ -2456,6 +2640,9 @@ describe("the source URL a stranger receives", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [HEADING, BLOCK],
@@ -2666,6 +2853,9 @@ describe("the debate a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [BLOCK],
@@ -2915,6 +3105,9 @@ describe("the debate a shared link carries", () => {
       journal: null,
       publishedAt: null,
       publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],

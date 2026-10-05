@@ -322,9 +322,9 @@ then it should also click send afterwards for me. And if I'm in chat or whatever
 the stop button, then it should automatically send that message after it's finished transcribing"*.
 
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
-and `sendingAfter` on to `DictationButton` and `DictationStrip`. Five boxes do: Feedback (Send),
+and `sendingAfter` on to `DictationButton` and `DictationStrip`. Five boxes send: Feedback (Send),
 chat (Send), the comment follow-up (Ask in chat), the quiz answer (Answer) and the annotate box
-(Save, never Ask AI). The plan, with what was deferred and why, is
+(Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
 - **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
@@ -350,8 +350,25 @@ chat (Send), the comment follow-up (Ask in chat), the quiz answer (Answer) and t
 - **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
   once its comments have loaded, so a press is never taken and then dropped.
 
+**The command bar takes it too, and there it presses Enter** — Greg, 2026-10-05, on the question
+the plan left open:
+
+> Q-double-stop-elsewhere yes for the command bar
+
+Its `onDone` is `enter` in [`CommandBar.tsx`](../../src/web/CommandBar.tsx), the function the Enter
+key itself calls, so the double press cannot run anything Enter would not: a phrase that names a
+row runs that row (a row that writes or generates included, as Enter on it does), and a phrase that
+names nothing is asked about, with the answer drawn under **Did you mean** unless it is a sure pick
+that only moves the reader. The bar does not "send", so the button and the strip take
+`done="enter"` and say *"Press Enter when the words arrive"* and *"Turning that into text, then
+pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
+`onDone` checks `open`, and its `doneKey` is whether it is open. It is not offered while a run is
+`Starting…`, when Enter is refused. **The Illustrated note still has none**: it starts a paid
+repaint.
+
 Tests: `tests/dictation-double-stop-sends.test.tsx` for the field policy and button;
-`tests/dictation-double-stop-sends-real-hook.test.tsx` for the real hook ordering.
+`tests/dictation-double-stop-sends-real-hook.test.tsx` for the real hook ordering;
+`tests/command-bar-double-stop.test.tsx` for the command bar.
 
 ## When it hears nothing, and after
 

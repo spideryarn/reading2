@@ -185,6 +185,9 @@ const ROUTELESS_KINDS = [
   "labels",
   "meta",
   "raw",
+  /* The difficulty rating reaches a reader inside the article's `meta`, never
+     at a URL of its own (plan 261005j). */
+  "readingDifficulty",
   "stampedHtml",
   "tree",
 ];

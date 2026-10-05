@@ -43,14 +43,15 @@ export type WholeColumn =
 /**
  * Where one `(step, kind)` lives in Postgres.
  *
- * Three shapes rather than one, because two artefacts are not a column:
- * `blocks` is a table, and `meta` and `raw` are each several columns that have
- * to be reassembled into the object the pipeline knows.
+ * Three shapes rather than one, because some artefacts are not a column:
+ * `blocks` is a table, and `meta`, `raw` and `readingDifficulty` are each
+ * several columns that have to be reassembled into the object the pipeline
+ * knows.
  */
 export type Site =
   | { readonly at: "column"; readonly column: WholeColumn }
   | { readonly at: "blocks" }
-  | { readonly at: "assembled"; readonly of: "meta" | "raw" };
+  | { readonly at: "assembled"; readonly of: "meta" | "raw" | "readingDifficulty" };
 
 /**
  * Every place this project puts a pipeline artefact in Postgres. **The one
@@ -92,6 +93,8 @@ export const STORAGE: {
   blocks: {
     blocks: { at: "blocks" },
     stampedHtml: { at: "column", column: "stampedHtml" },
+    /** Five columns, all set or all null — see `readReadingDifficulty`. */
+    readingDifficulty: { at: "assembled", of: "readingDifficulty" },
   },
   structure: {
     tree: { at: "column", column: "tree" },

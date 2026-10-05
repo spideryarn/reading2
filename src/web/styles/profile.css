@@ -81,10 +81,10 @@
 .prof-count.over { color: var(--highlight-text); }
 
 /* Where the save stands — `SaveStatus` in ProfileBox.tsx. A fixed height, so
-   the line changing from "Saving…" to "Saved" does not move anything below it.
+   the tick coming and going, or a refusal taking the line, moves nothing below.
    The tick is the palette's bluish green (`--cat-2`), the one green here that
    is told apart from the orange by readers who cannot tell red from green —
-   docs/project/colour-scales.md. Spinner: `.cmt-spinner`, the house one. */
+   docs/project/colour-scales.md. */
 .prof-save {
   display: flex;
   align-items: center;
@@ -96,8 +96,28 @@
   font-size: 0.79rem;
 }
 .prof-save svg { flex: none; }
-.prof-save.is-saved { color: rgb(var(--cat-2-rgb)); }
 .prof-save.is-error { color: var(--highlight-text); }
+/* The tick a save that landed leaves: faint, held for two seconds, then faded
+   and hidden — `visibility` too, so nothing invisible is left to hover or to
+   be read out. Greg, 2026-10-05.
+
+   **The hold is the delay, not part of the duration, and that is the
+   reduced-motion rule.** tailwind.css's global guard flattens every
+   `animation-duration` to 0.01ms with `!important` from a layer, which nothing
+   here can outrank. A 2.6s animation holding for its first three quarters
+   would therefore be over before the tick was ever drawn, and a reader who
+   asked for less motion would get no sign of a save at all. A delay is not
+   flattened: under the guard the tick stands for the same two seconds and then
+   goes at once, with no fade. */
+.prof-save-tick {
+  display: inline-flex;
+  color: rgb(var(--cat-2-rgb));
+  opacity: 0.75;
+  animation: prof-save-tick-out 0.6s ease-out 2s forwards;
+}
+@keyframes prof-save-tick-out {
+  to { opacity: 0; visibility: hidden; }
+}
 
 .prof-box-error {
   display: flex;

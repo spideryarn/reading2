@@ -26,10 +26,14 @@
  * src/ids.ts — `decodeFeedbackCursor` below needs them, and src/ids.ts imports
  * nothing at all, so it costs the browser bundle nothing and keeps this file
  * from becoming the sixth copy of the uuid regex.
+ *
+ * A fourth, of types again: the difficulty rating's shapes belong to
+ * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
 import type { FailureKind, PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -251,8 +255,26 @@ export interface Tree {
    * (src/public/dto.ts), because a client that cannot tell a provisional tree
    * from a finished one draws empty cells where it should say the structure is
    * still arriving.
+   *
+   * **Two values, because "headings" is not always temporary.** `"headings"` is
+   * what `structure` falls back to when the model's answer cannot be used, and
+   * it is final: nothing is coming to replace it. `"awaiting-structure"` is the
+   * same kind of tree published on purpose by a first import from the browser,
+   * so the article opens before the model call, with a `["structure"]` job
+   * queued by that publication to replace it (`awaitingStructure` below).
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
-  provisional?: "headings";
+  provisional?: "headings" | "awaiting-structure";
+}
+
+/**
+ * Is this the stand-in a first import publishes, with the real tree still to
+ * come? The one question every reader of that state asks: the publication's
+ * successors, `structure`'s freshness, the gate on the steps that read the
+ * tree, and the open page.
+ */
+export function awaitingStructure(tree: Pick<Tree, "provisional"> | null | undefined): boolean {
+  return tree?.provisional === "awaiting-structure";
 }
 
 /**
@@ -389,15 +411,9 @@ export interface TweetThread {
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -434,9 +450,10 @@ export interface ThreadResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
 }
@@ -740,15 +757,9 @@ export interface Glossary {
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -822,9 +833,10 @@ export interface GlossaryResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
   /**
@@ -1482,7 +1494,8 @@ export interface SkimResponse {
   outdated: boolean;
   /**
    * The profile is not the one the route was written for — **including none →
-   * some**, which the shared `profileIsStale` does not count.
+   * some** (the shared `profileIsStale` counts that too since 2026-10-05) and
+   * some → none, which it does not.
    */
   profileChanged: boolean;
   /**
@@ -1595,9 +1608,50 @@ export interface Author {
   affiliations: string[];
 }
 
+/**
+ * **The `readingDifficulty` artefact, as it is stored**: the rating a screen
+ * shows (`RatedDifficulty`, src/reading-time.ts) plus which model made it and
+ * when, or the plain statement that the piece is not rated.
+ *
+ * Two members rather than a bag of optionals, because a rating with a level
+ * and no sentence is not a thing: the table refuses one too
+ * (`article_revisions_reading_difficulty_all_or_none`, src/db/schema.ts).
+ * `{ rated: false }` is a real value the `blocks` step writes, and it clears
+ * all five columns, so a piece whose text changed never keeps a rating of the
+ * old text.
+ * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+ */
+export type StoredReadingDifficulty =
+  | {
+      rated: true;
+      language: DifficultyLevel;
+      ideas: DifficultyLevel;
+      /** The model's one sentence. Never blank. */
+      reason: string;
+      /** The model's id as the gateway named it. Never sent to a screen. */
+      model: string;
+      /** When the rating was made, ISO 8601. */
+      ratedAt: string;
+    }
+  | { rated: false };
+
 export interface Meta {
   slug: string;
   title: string;
+  /**
+   * **How hard the piece is to read, when a model has rated it**: language and
+   * ideas, 1 to 5 each, and one sentence saying why. The reading-time estimate
+   * is multiplied by it (src/reading-time.ts) and the card under the minutes
+   * shows it. Absent on every piece not rated, which then reads at the flat
+   * rate.
+   *
+   * **Put here by the reads a screen is drawn from** (`metaFrom`,
+   * src/store/pg.ts), from columns the `blocks` step writes as an artefact of
+   * its own. It is not part of the `meta` artefact: the pipeline's own `Meta`
+   * never carries it and a `meta` write ignores it, so re-running `metadata`
+   * or `extract` cannot clear a rating of text that has not changed.
+   */
+  readingDifficulty?: RatedDifficulty;
   /**
    * **The title as it arrived, when import tidied it** — all capitals made
    * title case, a trailing footnote marker taken off (`tidyTitle`,
@@ -2036,6 +2090,8 @@ export interface Article {
    * insist on.
    */
   visibility?: Visibility;
+  /** Owner-only sharing state. Absent means unknown; never contains the key. */
+  privateLinkOn?: boolean;
 
   /**
    * **When the owner archived this article — `null` while it is on the shelf.**
@@ -2214,6 +2270,8 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /** Owner-only fact that a private link is on, independently of public visibility. */
+  privateLinkOn?: boolean;
   /**
    * Whether the pipeline can safely reuse the stored source document. A
    * rebuild with no web address leaves `fetch` unforced, so this is exactly
@@ -2642,6 +2700,29 @@ export interface VisibilityState {
    */
   publicAt: string | null;
 }
+
+/**
+ * **An article's private link, as its owner is told about it** — what
+ * `GET`, `POST` and `DELETE /api/article/:slug/share-link` all answer.
+ * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * A union, so "on with no key" and "off with a key" cannot be written. The
+ * link itself is `/read/<slug>?key=<key>`; the client builds it, from
+ * `SHARE_KEY_PARAM` in src/share-key.ts.
+ *
+ * **`key` is a credential, and this is the only response that carries it.**
+ * It is not on the article, the shelf, the export or anything a visitor is
+ * sent. Do not log this value or put it in an error.
+ */
+export type ShareLinkState =
+  | { on: false }
+  | {
+      on: true;
+      /** The 22-character key. Anybody who has it and the slug can read the article. */
+      key: string;
+      /** ISO time this key was made. Making a link again makes a new key and moves this. */
+      since: string;
+    };
 
 /**
  * Everything the owner's Access & Sharing card needs, in one block.
@@ -3429,6 +3510,14 @@ export interface JobStep {
   finishedAt?: string;
   /** Run even if the artefact is already there — this is what a refresh is. */
   force?: boolean;
+  /**
+   * On a `structure` step only: write the headings tree and return, so the
+   * import publishes before the model call. Set by `enqueue` for a first import
+   * the browser asked to open early, and honoured only while the article has
+   * never been published (src/pipeline.ts § `STEPS.structure`). In the job's
+   * own `steps` JSON, so it needs no column.
+   */
+  headingsFirst?: true;
   /**
    * **Part of what the step is making, shown before the step is over.** On the
    * job row only while the step is `running`: the runner deletes it when the

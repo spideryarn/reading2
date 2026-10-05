@@ -130,11 +130,15 @@ import {
   previousCitationsFrom,
 } from "./citations.js";
 import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
+import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
-import { extractHtmlMetadata, extractPaperMetadata, paperMeta } from "./paper-metadata.js";
+import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
+import { modelTitleTidier } from "./title-tidy-model.js";
+import { plainTitle } from "./html.js";
+import type { TitleTidier } from "./title-tidy.js";
 import {
   generateSkim,
   PROMPT_VERSION as SKIM_PROMPT_VERSION,
@@ -214,7 +218,7 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { checkCoverage, generateStructure } from "./structure.js";
+import { checkCoverage, generateStructure, type StructureSource } from "./structure.js";
 import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
@@ -223,7 +227,15 @@ import {
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
   TWEETS_OUTPUT_SCHEMA,
 } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName, StepPreview } from "./types.js";
+import {
+  awaitingStructure,
+  type Block,
+  type JobUpload,
+  type Meta,
+  type StepName,
+  type StepPreview,
+  type StoredReadingDifficulty,
+} from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
@@ -740,6 +752,15 @@ export interface StepContext {
    * *remaining* steps. Plan 260930f decisions 3–5.
    */
   power: ModelPower;
+  /**
+   * **This job asked to open the article before its structure is built** —
+   * `JobStep.headingsFirst` (src/types.ts), handed on by `runStep` and present
+   * on the `structure` step of a first import alone. Only `STEPS.structure`
+   * reads it, and it does not take it on trust: it also asks the store whether
+   * the article has ever been published.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  headingsFirst?: true;
 }
 
 /**
@@ -977,6 +998,71 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
      precisely the state this exists to refuse to call finished. */
   const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
   return blocksAreWhatTheirHtmlProduces(extracted, stamped, file?.blocks);
+}
+
+/**
+ * The `structure` step's `isDone`: **a published stand-in tree still needs
+ * replacing.** A first import that opened early published a tree cut from the
+ * headings, with a finished run row and the right blocks hash — both real, and
+ * both copied into the draft of the job that is meant to replace it. Without
+ * this that job finds its artefacts present and current, skips, and the real
+ * tree never arrives, under a green tick (docs/reusable/silent-success.md).
+ * A marked import that has not published yet has finished its structure work:
+ * retaining that stand-in lets a handed-back claim resume at assets instead
+ * of rebuilding the same tree and consuming its next step's window again.
+ *
+ * It narrows presence and never widens it (`stepIsDone` asks `has` first). The
+ * Metadata page does not ask this function and goes on calling the stand-in
+ * current for those seconds, which the plan accepts.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+async function structureIsNotAStandIn(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
+  if (!awaitingStructure(await store.read(ctx.slug, "structure", "tree"))) return true;
+  return ctx.headingsFirst === true && !(await store.hasEarlierBlocks(ctx.slug));
+}
+
+/**
+ * **Does this step read the article's structure**, so that it must not run on
+ * a stand-in tree? By position: every step after `structure` in `STEP_ORDER`,
+ * other than `assets`, which reads the blocks alone. A rule rather than a
+ * list, so a step added after `structure` is covered without anyone
+ * remembering to add it. `runStep` (src/jobs.ts) is what refuses.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+export function needsRealStructure(step: StepName): boolean {
+  return step !== "assets" && STEP_ORDER.indexOf(step) > STEP_ORDER.indexOf("structure");
+}
+
+/**
+ * The clause the `structure` step's `detail` carries about where its tree came
+ * from, shown on the reader's progress card. Empty for one model answer.
+ *
+ * Exhaustive over `StructureSource`, and that is the point of it being a
+ * function: until 2026-10-05 it was a ternary whose last arm was *every other
+ * headings reason*, so a new reason would have told the reader that a section
+ * was too long to label when nothing of the kind had happened (GPT Sol, F7 of
+ * docs/plans/261005j-open-before-structure-plan-review-sol.md).
+ */
+export function structureSourceDetail(source: StructureSource): string {
+  if (source.by === "model") return "";
+  if (source.by === "slices") {
+    /* A run that only finished on its second pass says so: one that became
+       common would otherwise read as an ordinary success (plan 261005j, 1a). */
+    const twice = source.secondPass > 0 ? ` (${source.secondPass} asked for twice)` : "";
+    return `, read in ${source.slices} parts${twice}`;
+  }
+  switch (source.reason) {
+    case "answer-too-long":
+      return `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[source.slicesFailed]})`;
+    case "labels-could-not-ask":
+      return ", from its headings (a section was too long to label)";
+    case "before-structure":
+      return ", a first outline (the full structure follows)";
+    default: {
+      const unreachable: never = source;
+      throw new Error(`unhandled structure source: ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
 
 /*
@@ -1921,6 +2007,47 @@ export const metadataReaders = {
 };
 
 /**
+ * **What tidies an imported title** in `extract` and `metadata`: a small model,
+ * with the rule behind it (src/title-tidy-model.ts, plan 261005j). In an
+ * object for `metadataReaders`' reason, so a test can `vi.spyOn` it and run
+ * the real step with no network.
+ */
+export const titleTidiers = {
+  import: modelTitleTidier(),
+};
+
+/**
+ * **The tidier one run of `extract` or `metadata` hands its seam**: import's,
+ * bound to the step's own cancellation, and **holding a title steady across a
+ * re-extraction**.
+ *
+ * `title` is in the fingerprint of every generated mode
+ * (`articleFingerprint`, src/source-hash.ts), and a model does not give the
+ * same answer every time: asked twice, it differed on a few titles in a
+ * hundred (docs/investigations/261005b-title-tidying-rule-against-a-small-model.md).
+ * So when the title arriving is the one the last revision tidied, that
+ * revision's pair is kept and no call is made.
+ *
+ * Only a title that **was** changed is held. One stored as it came is asked
+ * about again, because "the model looked and left it" and "imported before
+ * there was any tidying" are the same row, and the second should still be
+ * tidied when it is next extracted.
+ */
+function stepTitleTidier(ctx: StepContext, store: ArtifactReads): TitleTidier {
+  return async (title, context = {}) => {
+    ctx.signal.throwIfAborted();
+    const previous = await store.read(ctx.slug, "extract", "meta");
+    ctx.signal.throwIfAborted();
+    /* `metaColumns` makes the original plain on write too. In particular,
+       paper metadata can still contain inline markup before that boundary. */
+    if (previous?.titleOriginal !== undefined && previous.titleOriginal === plainTitle(title)) {
+      return { title: previous.title, titleOriginal: previous.titleOriginal };
+    }
+    return await titleTidiers.import(title, { ...context, signal: ctx.signal });
+  };
+}
+
+/**
  * **`extract`'s `meta`, keeping a minimal paper's abstract and DOI** when it
  * found none of its own. *Read this* re-reads the paper over a draft copied
  * from the minimal revision, and `metaColumns` writes every meta column `??
@@ -1961,6 +2088,44 @@ async function keptPaperMetadata(ctx: StepContext, store: ArtifactReads, next: M
 
 /** The real registry. An object, so a test of a step can hand it a lookup that never leaves the process. */
 export const articleRegistryDeps: { lookup: (id: WorkId) => Promise<LookupResult> } = { lookup: lookupWork };
+
+/** The real rating call. An object, like `articleRegistryDeps`, so a test of the step never reaches a model. */
+export const readingDifficultyDeps: { rate: typeof rateReadingDifficulty } = { rate: rateReadingDifficulty };
+
+/**
+ * **How hard the piece is to read, rated from the blocks stage 3 has just
+ * made** (src/reading-difficulty.ts), as the artefact `blocks` writes beside
+ * them. Here and not in `extract`, so the rating is always about the text the
+ * reader is served: an extract-only revision carries its old blocks forward.
+ * Plan 261005j.
+ *
+ * **It never fails the step.** The call already answers "unrated" for a
+ * refusal, its own 15-second deadline and a bad answer. What it throws beyond
+ * that (a transport error, a missing key) is caught here too and logged as an
+ * error, by class and never by message: an article with flat minutes is a
+ * state the reader's card names, and an import that died for want of a
+ * reading-time estimate is not. Only the step's own cancellation gets out.
+ */
+async function ratedReadingDifficulty(ctx: StepContext, blocks: readonly Block[]): Promise<StoredReadingDifficulty> {
+  const started = Date.now();
+  try {
+    const outcome = await readingDifficultyDeps.rate(ratingParagraphs(blocks), { signal: ctx.signal });
+    plog.info(
+      { slug: ctx.slug, step: "blocks", readingDifficulty: outcome.kind === "rated" ? "rated" : outcome.why, ratingMs: Date.now() - started },
+      `blocks ${ctx.slug}: reading difficulty ${outcome.kind === "rated" ? "rated" : `not rated (${outcome.why})`}`,
+    );
+    if (outcome.kind !== "rated") return { rated: false };
+    const { language, ideas, reason, model } = outcome;
+    return { rated: true, language, ideas, reason, model, ratedAt: new Date().toISOString() };
+  } catch (err) {
+    if (ctx.signal.aborted) throw err;
+    plog.error(
+      { slug: ctx.slug, step: "blocks", errorClass: err instanceof Error ? err.name : typeof err, ratingMs: Date.now() - started },
+      `blocks ${ctx.slug}: the reading-difficulty call threw; left unrated`,
+    );
+    return { rated: false };
+  }
+}
 
 /**
  * **`meta` with what a registry says about the article itself** — its journal,
@@ -2134,14 +2299,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         manifest.kind === "pdf"
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
+      const paper = { slug: ctx.slug, ...(manifest.filename ? { filename: manifest.filename } : {}), found };
       const meta = await withArticleRegistry(
         ctx,
         "metadata",
         paperMeta({
-          slug: ctx.slug,
+          ...paper,
           kind: manifest.kind,
-          ...(manifest.filename ? { filename: manifest.filename } : {}),
-          found,
+          /* The abstract is the only prose a minimal paper has, so it is the
+             rule's evidence of which title words are acronyms. */
+          tidied: await stepTitleTidier(ctx, store)(paperTitle(paper), { body: found.abstract }),
         }),
         [],
       );
@@ -2277,7 +2444,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug });
+          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
           /* **The audit line for the one step that deletes by policy.**
              `removePlatformFurniture` (src/furniture.ts) is the only place in
              this pipeline that removes an element *because of what the
@@ -2371,6 +2538,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const result = await runPdfExtract({
         frontMatter: openRouterFrontMatterReader(modelFor("pdf-frontmatter", ctx.power)),
         authors: openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)),
+        titleTidier: stepTitleTidier(ctx, store),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -2465,7 +2633,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * would redo stage 3 every time, and `{ steps: ["blocks"] }` could never
      * skip itself.
      */
-    produces: ["blocks", "stampedHtml"],
+    /* And the difficulty rating, since 2026-10-05: an artefact of its own
+       beside the blocks it is about, so re-splitting the piece always replaces
+       it and nothing else can (plan 261005j). */
+    produces: ["blocks", "stampedHtml", "readingDifficulty"],
     /* Presence is not enough here, and this is the only step where that is
        true for a reason other than cost — see `blocksMatchTheirHtml`. */
     isDone: (ctx, store) => blocksMatchTheirHtml(ctx, store),
@@ -2634,7 +2805,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
          every article read back as *predates the sanitiser* for ever. */
       return {
-        parts: { blocks: blocksArtefact(run.blocks), stampedHtml: run.html },
+        parts: {
+          blocks: blocksArtefact(run.blocks),
+          stampedHtml: run.html,
+          /* Always written, rated or not: the step returns every kind it
+             declares (`checkProduct`, src/store/session.ts), and "unrated"
+             clears a rating that was about the blocks this run replaced. */
+          readingDifficulty: await ratedReadingDifficulty(ctx, run.blocks),
+        },
         detail: `${total} blocks, ${minted} new ids (${kept} kept)`,
       };
     },
@@ -2694,7 +2872,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * `reasonsNotToPublish` compares `structure.input_hash` against the stored blocks
      * and refuses the publication when they differ — so a `structure` left carrying
      * `NO_INPUT_HASH` would make every article unpublishable.
+     *
+     * **The `isDone` below is not that stamp.** It asks nothing about the
+     * blocks: only whether the stored tree is the stand-in a first import
+     * opened with, which this step has still to replace.
      */
+    isDone: (ctx, store) => structureIsNotAStandIn(ctx, store),
     async run(ctx, store, checkpoints) {
       /* **Stage 3's copy, through the store**, which is the same artefact
          `blocksPathFor` used to open by path — `output/<slug>.blocks.json`, not
@@ -2710,9 +2893,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* Read the title for a possible headings fallback: its root needs a name
          and no model is there to write one. The model path ignores it. */
       const meta = await store.read(ctx.slug, "extract", "meta");
+      /* **The mark is a request; this is what honours it.** Only an article
+         that has never been published opens early: on anything else a reader is
+         already looking at a real tree, and replacing it with a stand-in is how
+         the earlier attempts lost it. Asked of the store here as well as being
+         decided at `enqueue`, so the job that builds the real tree — which runs
+         after the first publication, whatever mark it carries — always reaches
+         the model.
+         docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+      const headingsOnly = ctx.headingsFirst === true && !(await store.hasEarlierBlocks(ctx.slug));
       const run = await generateStructure({
         blocks: file.blocks,
         slug: ctx.slug,
+        ...(headingsOnly ? { headingsOnly: true as const } : {}),
         ...(meta?.title ? { articleTitle: meta.title } : {}),
         /* Where the **label batches** are kept as they land, one row each, so a
            run that dies eight batches into a book costs one batch rather than
@@ -2743,8 +2936,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/structure.ts § `StructureSource`. */
           source: run.source.by,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
-          /* The slices path: how many, how many re-asked and refilled, or why
-             it gave way to the headings. src/structure-slices.ts. */
+          /* The slices path: how many, how many re-asked, refilled and asked
+             for in a second pass, or why it gave way to the headings.
+             src/structure-slices.ts. */
           slices: run.source.by === "slices" ? run.source : null,
           slicesFailed:
             run.source.by === "headings" && run.source.reason === "answer-too-long" ? run.source.slicesFailed : null,
@@ -2910,14 +3104,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          be a sentence about a pass this step did not make, and at this point in
          an ingest **every** paragraph is unlabelled, which is not news. */
       /* The job record is where somebody asks why this article has no gists. */
-      const fromHeadings =
-        run.source.by === "model"
-          ? ""
-          : run.source.by === "slices"
-            ? `, read in ${run.source.slices} parts`
-            : run.source.reason === "answer-too-long"
-              ? `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[run.source.slicesFailed]})`
-              : ", from its headings (a section was too long to label)";
+      const fromHeadings = structureSourceDetail(run.source);
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -4383,7 +4570,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            every illustration stale the moment they edited their profile box,
            and re-drawing it would then stamp the Sketch's anyway — a stage that
            never reports itself done and pays $0.30 an open to find out. */
-        profileHash: sketch.profileHash ?? null,
+        ...(sketch.profileHash === undefined ? {} : { profileHash: sketch.profileHash }),
       };
     },
     async run(ctx, store) {
@@ -4413,8 +4600,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the panel offers to paint again, and the next paint inherits the same
          hash and reports the same thing — one press of a $0.30 button per
          circuit, for ever. `profileIsStale` is the three-state rule
-         (src/profile.ts): an artefact written deliberately without a profile,
-         and a reader who has since cleared theirs, are both *not* a mismatch. */
+         (src/profile.ts): a reader who has since cleared theirs is *not* a
+         mismatch; a Sketch drawn when they had none, once they have one, is
+         (since 2026-10-05), and the sketch step's own stamp already called
+         that Sketch not current, so the panel's one press redraws it first. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
         refuseToIllustrate("wrong-profile");
       }
@@ -4487,7 +4676,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         figuresFingerprint(assets),
         ctx.illustrationNote ?? "",
       );
-      run.illustrated.profileHash = sketch.profileHash ?? null;
+      /* A legacy Sketch's unknown provenance stays unknown. Turning absence
+         into null would make a permitted painting immediately profile-changed. */
+      if (sketch.profileHash === undefined) delete run.illustrated.profileHash;
+      else run.illustrated.profileHash = sketch.profileHash;
       /* The note this was painted with, from the same `ctx` value the two
          hashes above and in `stamp` use — `isStale` reads it back. */
       if (ctx.illustrationNote) run.illustrated.note = ctx.illustrationNote;

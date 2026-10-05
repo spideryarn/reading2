@@ -56,12 +56,14 @@ import type {
   Meta,
   Quotes,
   StepName,
+  StoredReadingDifficulty,
   Quiz,
   Timeline,
   Tree,
   TweetThread,
 } from "../types.js";
 import { isDebateDocument, isUsableSimpleSummary } from "../types.js";
+import { isDifficultyLevel } from "../reading-time.js";
 import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
@@ -89,6 +91,7 @@ export type ArtifactKind =
   | "extractedHtml"
   | "blocks"
   | "stampedHtml"
+  | "readingDifficulty"
   | "tree"
   | "labels"
   | "assets"
@@ -142,6 +145,19 @@ export interface ArtifactMap {
   extractedHtml: string;
   blocks: { blocks: Block[] };
   stampedHtml: string;
+  /**
+   * How hard a model judged the piece to read, or the statement that it is
+   * not rated — `StoredReadingDifficulty`, src/types.ts, written by the
+   * `blocks` step beside the blocks it is about.
+   *
+   * **Its own kind rather than three more fields of `meta`**, because every
+   * `meta` write clears every column `meta` owns: a `metadata` step run alone
+   * over an unchanged body would have wiped a good rating. And written by
+   * `blocks` rather than `extract`, because an extract-only revision carries
+   * the old blocks forward and would show a new rating beside old prose.
+   * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+   */
+  readingDifficulty: StoredReadingDifficulty;
   tree: Tree;
   labels: LabelsFile;
   /**
@@ -327,12 +343,43 @@ const isString = (v: unknown): boolean => typeof v === "string" && v.length > 0;
 /** Non-empty text. All we can honestly ask of HTML. */
 const isText = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
 
+/**
+ * Is this a whole `StoredReadingDifficulty`: unrated, or a rating with both
+ * levels in range, a sentence, a model and a real time?
+ *
+ * Deep rather than shallow, unlike most of `SHAPE`, because the value is six
+ * small fields and the write takes it apart into five columns with a CHECK
+ * that all are set together. Refusing a part-made rating here names the
+ * artefact; left to the table it would be a constraint violation half way
+ * through a step's write.
+ */
+export function isStoredReadingDifficulty(value: unknown): value is StoredReadingDifficulty {
+  if (!isObject(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (v.rated === false) return true;
+  return (
+    v.rated === true &&
+    isDifficultyLevel(v.language) &&
+    isDifficultyLevel(v.ideas) &&
+    typeof v.reason === "string" &&
+    v.reason.trim() !== "" &&
+    isString(v.model) &&
+    typeof v.ratedAt === "string" &&
+    !Number.isNaN(Date.parse(v.ratedAt))
+  );
+}
+
 export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   /** The **manifest**, whose `file` names the bytes beside it — see `ArtifactMap`. */
   raw: { field: "file", ok: isString },
   meta: { field: "slug", ok: isString },
   extractedHtml: { field: null, ok: isText },
   stampedHtml: { field: null, ok: isText },
+  /* `{ rated: false }` is usable: it is what `blocks` writes when the rating
+     call gave nothing, and what a revision with blocks and no rating reads
+     as. Whole-document, because a rating is all of its fields or it is not
+     one. */
+  readingDifficulty: { field: "rated", ok: isStoredReadingDifficulty, whole: true },
   blocks: { field: "blocks", ok: isArray },
   tree: { field: "nodes", ok: isObject },
   labels: { field: "labels", ok: isObject },

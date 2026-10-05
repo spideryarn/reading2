@@ -12,8 +12,29 @@ citation, a search hit, a rotation — can find the place they had got to by eye
 >
 > — Greg, 2026-09-12 (SPIDERYARN-READING2-41)
 
-**Owner only, and behind [the experimental switch](experimental-features.md)**, both the recording
-and the drawing.
+## Who gets it
+
+**Every signed-in owner, on their own articles, whatever
+[the experimental switch](experimental-features.md) says** — both the recording and the drawing,
+since 2026-10-05. A visitor, signed in or not, records nothing and sees nothing.
+
+From 2026-09-16 until then both halves were behind the switch, and nothing was sampled while it was
+off, so a stretch read with it off looked unread for ever. Greg reported the line missing after a
+load ([261005g](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md),
+which has the trace and the four options) and was asked whether it should come out:
+
+**Decided: A** — Greg, 2026-10-05. His whole answer was "A", and A was: all of it, for everyone,
+always recorded and always drawn.
+
+**What that gives up, named when he chose: a reader cannot yet switch it off or erase it.** It goes
+when the article is deleted, or on request by email, and `/privacy` promises nothing more. An off
+switch and an erase are the obvious next step, under *Not built* below.
+
+The gate was one argument: `OwnedReader` in
+[`ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) passes `true` where it passed the switch.
+`useReadingTime` keeps its `enabled` parameter and its `off` status, because that is where an off
+switch would plug in. `tests/public-network-trace.test.tsx` § "reads the owner's reading time with
+experimental features off" pins it through the real `App`.
 
 ## What is true of it, and where each rule lives
 
@@ -137,6 +158,10 @@ and the drawing.
 
 ## Not built
 
-The plan's § Deferred has the list and why each waits: a "furthest I read" button, weighting towards
-the reading line, recording for readers with the switch off, signed-in visitors' own time, and a
-control to forget it.
+- **A way to switch it off, and a way to erase it** — the obvious next step now that every owner
+  has it (above), and not built. Two separate things: a setting that stops the recording and the
+  drawing, and a button that deletes the stored totals for one article or for all of them. The
+  hook's `enabled` parameter is the seam for the first; the second needs a `DELETE` beside the two
+  routes. When either lands, `/privacy`'s bullet gains a sentence.
+- The plan's § Deferred has the rest and why each waits: a "furthest I read" button, weighting
+  towards the reading line, and signed-in visitors' own time.

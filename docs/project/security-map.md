@@ -108,6 +108,9 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
+| [`src/store/link-shared-slug.ts`](../../src/store/link-shared-slug.ts) | `linkSharedSlug()` — slug **and** `share_token = ?`, the lookup for somebody holding a private link's key. Its own leaf, never OR-ed into `publicSlug`. See below |
+| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it |
+| [`src/share-key.ts`](../../src/share-key.ts) | `parseShareKey()` — what counts as a key (22 base64url characters), so nothing else reaches a query or a request; `withoutShareKey()` — the key taken off an address before it is stored or sent |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
@@ -214,6 +217,50 @@ weight:
   answers are the same bytes under different rules about who may keep them.
   `tests/asset-route.test.ts` fetches one slug, un-shares it and fetches again, which is the shape a
   memoised public projection would have quietly broken.
+
+#### And since 2026-10-05 there is a second way in, which is a key
+
+A **private link** is `/read/<slug>?key=<key>`: an article that is not public, readable by anybody
+who holds the key its owner made. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md). It is the
+same three public routes and the same reads, with one more predicate, and no new path. A
+link-shared article is a private article with a token on it: `visibility` keeps its two values.
+
+Four things keep it closed:
+
+- **Its own leaf, never OR-ed into `publicSlug`.** `linkSharedSlug` is the fourth sanctioned
+  `eq(articles.slug, …)` in `tests/owner-isolation.test.ts`. The two leaves meet only in
+  `publicAccessWhere`, which the listing does not import, so the shelf, and the examples the
+  marketing pages draw from the same listing, cannot see a link-shared article.
+  `tests/public-imports.test.ts` holds that.
+- **Only a parsed key reaches a query.** The dispatcher hands a handler one named field, `key`,
+  and bounds it with `parseShareKey` before any route is matched. A malformed key is no key. A
+  wrong key, a revoked one, an absent article and a private one are the same 404.
+- **Compared in the `where`, never fetched and compared.** One statement in `src/` selects
+  `share_token`: the owner's read in [`pg-share-link.ts`](../../src/store/pg-share-link.ts), scoped
+  by `ownedSlug`. `tests/share-link-token-stays-home.test.ts` greps for a second.
+- **Public wins.** The link arm is *public or this key*, so a public article reads the same with
+  any key or none, and `PublicArticle.sharedBy` says `"public"` of it. Turning a link off takes
+  effect on the next request, as un-sharing does.
+
+**Where the key may travel, and where it may not.** It is in the page's address and in the query
+string of the two public requests a visitor's page makes for that article, the payload and its
+pictures ([`public-api.ts`](../../src/web/public-api.ts), [`rehost.ts`](../../src/web/rehost.ts)),
+both still without a token or cookies. The owner's requests never carry it
+(`tests/private-link-access.test.tsx`). It is in the owner's card, read from
+`GET /api/article/:slug/share-link`, which answers `no-store` and is the one path under
+`/api/article/` the browser's offline store never keeps (`lib/api.ts` § `NEVER_KEPT`).
+
+It is not in our request log, which drops the query string, nor in a Sentry event. It is not in a
+feedback report: the browser takes it off the address and the server takes it off again
+(`withoutShareKey`). It is not in the remembered-view store, which writes an allowlist of
+parameters (`last-view.ts`). It is not in the article payload, the shelf, or the page's `og:` tags:
+the HTML page for a link share is the plain shell. **The reader's export drops the token**
+([export.md](export.md)), because a zip gets forwarded. The audit table,
+`article_share_link_events`, records who made or turned off a link and when, without the key.
+
+What stage 1 accepts is in the plan: the key is in a URL, so it is in the browser history of
+whoever opens it and in Vercel's own access log, and anyone who has the link can pass it on.
 
 #### And since 2026-09-04 there is a page over it, which holds one defence
 

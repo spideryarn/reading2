@@ -92,7 +92,7 @@ import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
+import { awaitingStructure, type Block, type JobReset, type OwnerId, type StepName, type Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { extraColumns, extraSteps } from "../reset.js";
 import {
@@ -270,6 +270,18 @@ export const REVISION_CARRY_POLICY: Record<
 
   extractedHtml: "carry",
   stampedHtml: "carry",
+
+  /* The difficulty rating, all five together (the table refuses a copy that
+     takes only some). It is a judgement of the blocks, and the blocks carry:
+     a revision that does not run `blocks` keeps the same text, so it keeps
+     the rating of that text. **The time carries too**, because making a
+     revision is not rating the piece again. A revision that does run `blocks`
+     overwrites all five, with a new rating or with nulls (plan 261005j). */
+  readingLanguage: "carry",
+  readingIdeas: "carry",
+  readingDifficultyReason: "carry",
+  readingDifficultyModel: "carry",
+  readingDifficultyRatedAt: "carry",
 
   /* `tree`, `labels` and `arc` carry too, and they are the uncomfortable case:
      a `{ steps: ["blocks"] }` job would publish new paragraphs under the
@@ -1235,8 +1247,8 @@ export interface OpenDraftResult extends BeginRevisionResult {
 export async function openOrBeginJobDraft(opts: {
   readonly slug: string;
   readonly job: { readonly id: string; readonly attemptId: string };
-  /** Tests only: the mode defaults to `STEP_START_DRAFT_SWEEP`. */
-  readonly sweep?: Partial<DraftSweepOptions>;
+  /** Tests only: threshold, batch size or race barrier. Production passes nothing. */
+  readonly sweep?: DraftSweepOptions;
   /** What the article is born as if this claim creates it — `lockOrCreateArticle`'s `birth`. */
   readonly processing?: "minimal";
 }): Promise<OpenDraftResult> {
@@ -1396,10 +1408,7 @@ export async function openOrBeginJobDraft(opts: {
      * `current_revision_id` while the sweep decides. In a savepoint, so a sweep
      * that fails costs the reader nothing — see `sweepOnStepStart`.
      */
-    const sweep = await sweepOnStepStart(tx, article.id, {
-      mode: STEP_START_DRAFT_SWEEP,
-      ...opts.sweep,
-    });
+    const sweep = await sweepOnStepStart(tx, article.id, opts.sweep ?? {});
     const begun = await beginDraftIn(tx, { slug, job });
     /* **A reset's draft starts without the extras**, in the transaction that
        copied them, so there is no moment at which the draft has them. Read off
@@ -2060,6 +2069,18 @@ export interface PublishRevisionResult {
    */
   readonly successor: SuccessorOutcome | null;
   /**
+   * **What became of the `structure` job a stand-in tree needs** — `null` on
+   * every publication whose tree is not awaiting its structure, which is
+   * nearly all of them. `queued` is an import that opened early;
+   * `alreadyQueued` is a later publication still carrying the stand-in;
+   * `boundToOlderBase` is that publication finding a holder that can never
+   * publish over it, which `logPublication` warns about. Its own field rather
+   * than a second meaning of `successor`: a publication has one or the other,
+   * and a reader of either should not have to ask which job it is.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  readonly structureSuccessor: SuccessorOutcome | null;
+  /**
    * **What a reset's publication queued to make its extras again**, one
    * outcome per step of `jobs.reset.regenerate`, in that order. Empty for every
    * publication that is not a reset's, and for a reset that asked for none.
@@ -2391,8 +2412,44 @@ export async function publishRevisionIn(
    * runs the successor* in the plan: the browser's `jobEngine` drives every
    * queued job the signed-in owner has, from any page.
    */
+  /**
+   * **A revision that publishes a stand-in tree buys the job that builds the
+   * real one, and nothing that reads the tree** — here, for the reason the
+   * labels successor below is here: the pointer and the job become true
+   * together, and an article that committed awaiting with nothing queued would
+   * show an outline of headings for ever.
+   *
+   * A first import that asked to open early publishes this
+   * (`awaitingStructure`, src/types.ts). While it is awaiting:
+   *
+   * - **no `labels` job**: it would label the leaves of a tree about to be
+   *   replaced, and the real tree's publication is `pending` and buys its own;
+   * - **no main-mode jobs**: they read the tree. They are queued further down,
+   *   by the publication that replaces this one.
+   *
+   * **Every awaiting publication asks, not only the first.** A later one that
+   * still carries the stand-in (an `assets` re-run, a standalone `fetch`)
+   * collapses onto the queued job by its work key, and queues a fresh one when
+   * the first has failed and gone. It is not a guaranteed way back: a holder
+   * bound to an older draft answers `boundToOlderBase` and cannot publish over
+   * this revision (GPT Sol, F3) — `logPublication` says so, and the reader's
+   * way out is the Structure band.
+   *
+   * `structure` is exclusive and this job is older than anything queued after
+   * this commit, so a mode a reader asks for meanwhile normally waits behind it.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  const awaiting = awaitingStructure(tree);
+  const structureSuccessor = awaiting
+    ? await enqueueSuccessorIn(tx, {
+        ownerId: article.ownerId as OwnerId,
+        slug,
+        steps: ["structure"],
+      })
+    : null;
+
   const successor =
-    draft.navLabelStatus === "pending"
+    !awaiting && draft.navLabelStatus === "pending"
       ? await enqueueSuccessorIn(tx, {
           ownerId: article.ownerId as OwnerId,
           slug,
@@ -2472,15 +2529,33 @@ export async function publishRevisionIn(
    * A successor insert that throws rolls the whole publication back, as the
    * labels successor's does. Nothing is driven from here: the owner's browser
    * drives every queued job they have, from any page.
+   *
+   * **An import that opened early has two first publications, and the modes
+   * belong to the second** (plan 261005j). The first carries the stand-in tree,
+   * which the modes must not read, so `!awaiting` keeps them out of it. The
+   * second is whichever publication replaces a stand-in with a real tree: the
+   * structure job's, a reader's *Build it*, a Rebuild. That job reserved no
+   * name and the article already serves something, so neither clause above
+   * lets it in — `replacesAStandIn` does, read off the revision this one
+   * replaces, under the article lock. One predicate and one call, so no
+   * publication can queue them twice; the reader's switch is read at whichever
+   * publication it is.
    */
+  const jobThatMayQueueModes = fenced !== null && reset === null && !awaiting;
   const firstFullPublicationOfAnImport =
-    fenced !== null &&
-    reset === null &&
+    jobThatMayQueueModes &&
     ((fenced.reservesName && article.currentRevisionId === null && processing !== "minimal") ||
       upgradedFromMinimal);
-  const autoModes = firstFullPublicationOfAnImport
-    ? await queueMainModesIn(tx, article, successor)
-    : [];
+  /* The one extra read, and only where the answer can matter. */
+  const replacesAStandIn =
+    jobThatMayQueueModes &&
+    !firstFullPublicationOfAnImport &&
+    article.currentRevisionId !== null &&
+    (await revisionAwaitsStructure(tx, article.currentRevisionId));
+  const autoModes =
+    firstFullPublicationOfAnImport || replacesAStandIn
+      ? await queueMainModesIn(tx, article, successor)
+      : [];
 
   return {
     revisionId,
@@ -2490,10 +2565,29 @@ export async function publishRevisionIn(
     /* Carried out of the transaction whole, so `logPublication` can say the
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
+    structureSuccessor,
     regenerated,
     autoModes,
     upgradedFromMinimal,
   };
+}
+
+/**
+ * Is `revisionId`'s tree the stand-in a first import opened with? One column
+ * of one row by primary key, and only the flag: the tree itself stays where it
+ * is. `awaitingStructure` (src/types.ts) is the same question of a tree in hand.
+ */
+async function revisionAwaitsStructure(tx: Tx, revisionId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ provisional: sql<string | null>`${articleRevisions.tree}->>'provisional'` })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  /* Compared here rather than cast into a `Tree`: the column is whatever JSON
+     was stored, and the one value that matters is the one `awaitingStructure`
+     names. */
+  const standIn: NonNullable<Tree["provisional"]> = "awaiting-structure";
+  return row?.provisional === standIn;
 }
 
 /**
@@ -2945,6 +3039,15 @@ export function logPublication(
       ...(published.successor?.kind === "queued"
         ? { successorJobId: published.successor.jobId }
         : {}),
+      /* Present only when this revision reached the shelf on a stand-in tree
+         (an import that opened early, plan 261005j): the job that builds the
+         real one, and whether this publication queued it or joined it. */
+      ...(published.structureSuccessor
+        ? {
+            structureJobId: published.structureSuccessor.jobId,
+            structureJob: published.structureSuccessor.kind,
+          }
+        : {}),
       /* Present only on a reset's publication that asked for its extras to be
          made again: which jobs it queued, by id and outcome. Ids only. */
       ...(published.regenerated.length
@@ -2987,6 +3090,7 @@ export function logPublication(
    * article prose.
    */
   sayWhatBecameOfTheSuccessor(opts.slug, published);
+  sayWhatBecameOfTheStructureJob(opts.slug, published);
   /* After the commit, and only here. The article is now serving a tree that
      `checkTree` rejects — carried forward, not caused by this publication, and
      already in front of readers before it. Re-running `structure` repairs it.
@@ -3053,6 +3157,40 @@ function sayWhatBecameOfTheSuccessor(slug: string, published: PublishRevisionRes
     default: {
       const unreachable: never = successor;
       throw new Error(`unhandled successor outcome: ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
+/**
+ * The same question of the `structure` job a stand-in tree needs, and the same
+ * exhaustive shape. `logPublication`'s own line carries the id and the kind;
+ * this adds the sentence for the arm that is not a success.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+function sayWhatBecameOfTheStructureJob(slug: string, published: PublishRevisionResult): void {
+  const job = published.structureSuccessor;
+  if (!job) return;
+  switch (job.kind) {
+    /* Already in the line above (`structureJob`), and neither is news: one
+       bought the job, the other joined a job that will pick this revision up. */
+    case "queued":
+    case "alreadyQueued":
+      return;
+    case "boundToOlderBase":
+      /* The queued structure job is working from an earlier base, so its own
+         publication will be refused and this revision keeps its stand-in.
+         Nothing queued a second one. The reader sees the outline of headings
+         and, once that job has ended, the Structure band's offer to build it
+         (GPT Sol, F3 of the plan review). Ids only. */
+      logger.warn(
+        { slug, revisionId: published.revisionId, holderJobId: job.jobId },
+        "published on a stand-in tree without a structure job that can replace it: the queued one " +
+          "is bound to an earlier revision — once that job ends, run structure for this article",
+      );
+      return;
+    default: {
+      const unreachable: never = job;
+      throw new Error(`unhandled structure successor outcome: ${JSON.stringify(unreachable)}`);
     }
   }
 }
@@ -3284,26 +3422,6 @@ export const ABANDONED_DRAFT_MS = 6 * 60 * 60 * 1000;
 export const DRAFT_SWEEP_BATCH = 10;
 
 /**
- * `count` enumerates with the real predicate and deletes nothing; `delete`
- * deletes. There is no third mode — in particular, no whole-library one.
- */
-export type DraftSweepMode = "count" | "delete";
-
-/**
- * **What a job's first step does about its article's abandoned drafts.**
- *
- * `count`, until Greg approves the first deletion against production. The
- * on-demand design is decided (docs/project/cron-scheduler.md); what is not yet
- * approved is the first destructive run over real readers' data, and deploying
- * this with `delete` would *be* that run, unreviewed, on the next step anybody
- * started. In `count` mode every step start still runs the exact selection and
- * logs what it would have taken, so production measures itself. Flipping this
- * to `delete` is the approval, and it is a one-line commit.
- * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § O.
- */
-export const STEP_START_DRAFT_SWEEP: DraftSweepMode = "count";
-
-/**
  * **The one definition of an abandoned draft**, shared by the sweep and by
  * `scripts/draft-sweep-inventory.ts` so that a count and a deletion can never be
  * of two different sets.
@@ -3340,9 +3458,10 @@ export function abandonedDraftCondition(olderThanMs: number): SQL {
 }
 
 export interface DraftSweepOptions {
-  readonly mode: DraftSweepMode;
   readonly olderThanMs?: number;
   readonly limit?: number;
+  /** One-off backlog only: restrict deletion to the exact ids independently surveyed. */
+  readonly revisionIds?: readonly string[];
   /**
    * **A test's barrier between enumerating and deleting**, and nothing else.
    * The race cases in tests/draft-sweep-on-step-start.test.ts commit a
@@ -3353,7 +3472,6 @@ export interface DraftSweepOptions {
 
 /** What one sweep did. `deleted` is the `DELETE`'s own row count, never the candidate count. */
 export interface SweptDrafts {
-  readonly mode: DraftSweepMode;
   /** How many the predicate named, up to the batch limit. */
   readonly candidates: number;
   /** True when the predicate named more than the batch — the rest wait for the next job. */
@@ -3363,7 +3481,13 @@ export interface SweptDrafts {
 
 /**
  * Delete **one article's** drafts that nobody owns and nobody is going to
- * publish — or, in `count` mode, say how many there are.
+ * publish.
+ *
+ * **It deletes; there is no mode that only counts.** There was one from
+ * 2026-09-11 until 2026-10-05, so that production could measure itself before
+ * the first destructive run. Greg approved that run on 2026-10-04
+ * (*"Q-draft-sweep yes"*) and the mode went with the question.
+ * docs/plans/261005j-draft-sweep-deletes-and-the-count-mode-goes.md.
  *
  * **Begin-time copying has a retention cost, and a review was right that nobody
  * had costed it.** A 360-block article is roughly 1.31 MiB of copied payload
@@ -3377,7 +3501,7 @@ export interface SweptDrafts {
  * **Scoped to the article the caller has already resolved**, by id rather than
  * by slug, and never the whole library: until 2026-09-11 this was a global
  * delete with no caller, and a global delete run because one reader started a
- * step would charge that reader for everybody's backlog. Its one caller is
+ * step would charge that reader for everybody's backlog. Its application caller is
  * `openOrBeginJobDraft`, on the branch that mints — the first step of every
  * job — and docs/project/cron-scheduler.md is the decision it implements.
  *
@@ -3403,8 +3527,8 @@ export interface SweptDrafts {
  * That argument needs read committed, and the function checks rather than
  * trusts it: under repeatable read step 3 would see step 1's snapshot again.
  *
- * `revision_blocks` and `revision_step_runs` cascade from the delete, and
- * `block_identities` deliberately does not: an id, once minted, is never
+ * `revision_blocks`, `revision_phrase_runs` and `revision_step_runs` cascade
+ * from the delete, and `block_identities` deliberately does not: an id, once minted, is never
  * deleted. docs/project/block-ids.md.
  *
  * It does not log: a line written inside a transaction announces something a
@@ -3417,19 +3541,21 @@ export async function sweepAbandonedDrafts(
 ): Promise<SweptDrafts> {
   const olderThanMs = opts.olderThanMs ?? ABANDONED_DRAFT_MS;
   const limit = opts.limit ?? DRAFT_SWEEP_BATCH;
+  if (opts.revisionIds?.length === 0) return { candidates: 0, more: false, deleted: 0 };
   const inThisArticle = eq(articleRevisions.articleId, articleId);
+  const inSurvey = opts.revisionIds ? inArray(articleRevisions.id, [...opts.revisionIds]) : undefined;
   const abandoned = abandonedDraftCondition(olderThanMs);
 
   /* One more than the batch, so "there is more" is a fact rather than a guess. */
   const found = await tx
     .select({ id: articleRevisions.id })
     .from(articleRevisions)
-    .where(and(inThisArticle, abandoned))
+    .where(and(inThisArticle, inSurvey, abandoned))
     .orderBy(asc(articleRevisions.createdAt), asc(articleRevisions.id))
     .limit(limit + 1);
   const ids = found.slice(0, limit).map((row) => row.id);
-  const enumerated = { mode: opts.mode, candidates: ids.length, more: found.length > limit };
-  if (opts.mode === "count" || ids.length === 0) return { ...enumerated, deleted: 0 };
+  const enumerated = { candidates: ids.length, more: found.length > limit };
+  if (ids.length === 0) return { ...enumerated, deleted: 0 };
 
   const [isolation] = (
     await tx.execute(sql`select current_setting('transaction_isolation') as level`)
@@ -3472,7 +3598,7 @@ export async function sweepAbandonedDrafts(
  */
 export type DraftSweepOutcome =
   | ({ readonly kind: "swept"; readonly ms: number } & SweptDrafts)
-  | { readonly kind: "failed"; readonly mode: DraftSweepMode; readonly ms: number; readonly error: string };
+  | { readonly kind: "failed"; readonly ms: number; readonly error: string };
 
 /**
  * Run the sweep inside a savepoint of the step-start transaction, and turn any
@@ -3508,7 +3634,6 @@ async function sweepOnStepStart(
     await tx.execute(sql`rollback to savepoint draft_sweep`);
     return {
       kind: "failed",
-      mode: opts.mode,
       ms: ms(),
       error: err instanceof Error ? err.name : typeof err,
     };
@@ -3519,7 +3644,7 @@ async function sweepOnStepStart(
 function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutcome): void {
   if (outcome.kind === "failed") {
     logger.warn(
-      { slug, articleId, mode: outcome.mode, ms: outcome.ms, error: outcome.error },
+      { slug, articleId, ms: outcome.ms, error: outcome.error },
       "abandoned-draft sweep failed; the step went ahead without it",
     );
     return;
@@ -3529,14 +3654,11 @@ function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutco
     {
       slug,
       articleId,
-      mode: outcome.mode,
       candidates: outcome.candidates,
       more: outcome.more,
       deleted: outcome.deleted,
       ms: outcome.ms,
     },
-    outcome.mode === "count"
-      ? "abandoned draft revisions counted (count mode: nothing deleted)"
-      : "abandoned draft revisions swept",
+    "abandoned draft revisions swept",
   );
 }

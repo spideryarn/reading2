@@ -617,8 +617,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
-relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
 cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.
@@ -870,6 +869,55 @@ same machinery given a different sub-list, and none of them needed a special cas
 - **Buy the paragraph labels** — `{ slug, steps: ["labels"] }`, and nothing else. That is the whole
   shape of the successor job an ingest leaves behind, and `unrunnableStepPlan` is checked against it
   by name in `tests/jobs.test.ts`.
+- **Build the structure an import opened without** — `{ slug, steps: ["structure"] }`, the other
+  successor a publication can leave behind. Next section.
+
+### A first import opens before its structure
+
+Since 2026-10-05 ([261005j](../plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md)).
+On a pasted web page the structure call was 25 of the 31 seconds before the article opened, and the
+reader needs none of it to start reading. Greg, 2026-10-05:
+
+> it would be lovely if Structure mode could load after the page is already visible without
+> requiring a page reload, but if that's complex, I can live with the page auto-reloading when
+> Structure gets generated
+
+The step list does not change. What changes is what one step does, once:
+
+- **Asked for by two routes only**: the add-by-URL route and the upload route send `openEarly`.
+  The CLI, *Read this*, Refresh, Rebuild and Start again do not, and behave as before. Those last
+  four already have an article on screen while they run, and deferring there is where the earlier
+  attempts at this went wrong (a carried tree, a second job that skips).
+- **`enqueue` marks the `structure` step `headingsFirst`** when the request asked and the slug was
+  minted for it. The mark lives in the job's `steps` JSON, and a retry keeps it.
+- **The step then writes the bounded headings tree and returns**, with no model call, marked
+  `provisional: "awaiting-structure"`, and only while the article has never been published
+  (`hasEarlierBlocks`). It is the step's own fallback tree
+  ([structure-step.md § The fallback](structure-step.md#the-fallback-a-tree-from-the-documents-own-headings)),
+  so the run row and its hash are real and the publication gate needed no new arm. Under four body
+  blocks there is no such tree, and the step calls the model as it always did.
+- **That publication queues `["structure"]`** and holds back the `labels` job and the main-mode
+  jobs. **The publication that replaces the stand-in queues those**, read off the previous
+  revision's tree.
+- **`structure` is not done while a published tree is awaiting** (`STEPS.structure.isDone`).
+  Without that the successor finds a finished run row, skips, reports success, and the real tree
+  never arrives. The one exception is the marked import itself before it has published: there the
+  stand-in *is* the step's work, so a claim handed back resumes at `assets` and does not cut the
+  same tree again
+  ([postmortem 261005p](../postmortems/261005p-a-successor-completion-rule-must-not-undo-the-producer-on-resume.md)).
+- **A step that reads the structure ends `blocked` on a stand-in**: every step after `structure` in
+  `STEP_ORDER` except `assets`. Normally none gets that far, because the structure job is exclusive
+  and older, so later jobs wait behind it. The gate is for when it failed.
+- **The import is charged at the first publication**, when the article is readable. The structure
+  job reserves nothing.
+- **The way back**: stop the two routes sending `openEarly`. Everything else is inert without it.
+
+What it does not cover: `assets` still runs before the article opens, which on a PDF is the 49
+seconds of figure recovery
+([261004e](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md)).
+With every tab closed the structure job waits for the owner's next page, as `labels` does. A
+visitor to a shared article sees the outline until their next load. What the open page does when
+the tree lands is [structure.md § While the structure is still being built](structure.md#while-the-structure-is-still-being-built).
 
 ### `STEP_ORDER` is not the default list
 
@@ -2156,7 +2204,7 @@ running branch's** — `draftRevisionId` included, because the running branch de
 pointer for the claimant to dispose of, and a terminal row still holding one is a draft
 `sweepAbandonedDrafts` spares for ever — a sweep which, checked 2026-09-04, **nothing called**, so
 failed drafts accumulated without bound. (Since 2026-09-11 it runs on each job's first step, scoped
-to that article, and only counts until the first deletion is approved —
+to that article; it deletes abandoned drafts —
 [cron-scheduler.md](cron-scheduler.md#what-we-do-instead-for-now).) Ranked and deliberately not built in
 [260904a](../postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). And the condition is written **once**, as `over`, and reused
 across every `case`: seven branches that have to agree is the shape of the bug this section is about.

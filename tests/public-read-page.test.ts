@@ -51,6 +51,10 @@ vi.mock("../src/monitoring.js", async (importOriginal) => {
 const { builtShell, decidePublicPage, servePublicReadPage } = await import("../src/public/page.js");
 const { composeShell } = await import("../src/public/page-head.js");
 type PublicHead = import("../src/store/public-reader.js").PublicHead;
+type PublicHeadFound = import("../src/store/public-reader.js").PublicHeadFound;
+type PublicAccess = import("../src/store/public-access.js").PublicAccess;
+/** What the page hands its reader: a slug, and the access the request's key gives. */
+type Read = (slug: string, access: PublicAccess) => Promise<PublicHeadFound>;
 
 /**
  * A stand-in for the built client — the managed-head block between its
@@ -93,15 +97,16 @@ const HEAD: PublicHead = {
   gist: "A short description with an em dash — and a curly quote's apostrophe.",
   canonical: "https://example.com/a-public-article",
   authors: [],
+  image: null,
 };
 
 /** The title of an article that is **not** shared. It must appear nowhere. */
 const PRIVATE_TITLE = "Zylquarn Redacted Draft, Do Not Share";
 
 /** A reader that answers for exactly one slug and 404s everything else. */
-function reader(head: PublicHead): (slug: string) => Promise<PublicHead> {
+function reader(head: PublicHead): Read {
   return async (slug: string) => {
-    if (slug === head.slug) return head;
+    if (slug === head.slug) return { sharedBy: "public", head };
     throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
   };
 }
@@ -123,18 +128,47 @@ function reader(head: PublicHead): (slug: string) => Promise<PublicHead> {
  * the first place; that is a query, and tests/public-visibility-pg.test.ts
  * proves it against a real Postgres. This file proves the transport.
  */
-function privateReader(): (slug: string) => Promise<PublicHead> {
+function privateReader(): Read {
   const head: PublicHead = { ...HEAD, slug: "a-public-article", title: PRIVATE_TITLE };
   return async (slug: string) => {
-    if (slug === head.slug) return head;
+    if (slug === head.slug) return { sharedBy: "public", head };
     throw Object.assign(new Error(`No article artefacts for "${PRIVATE_TITLE}".`), { status: 404 });
   };
 }
 
 /** A reader that fails the way a database does: unexpectedly, and not with a 404. */
-const brokenReader = async (): Promise<PublicHead> => {
+const brokenReader = async (): Promise<PublicHeadFound> => {
   throw Object.assign(new Error("Storage is unavailable"), { status: 500 });
 };
+
+/** A private link's key, and one that is the right shape and opens nothing. */
+const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+const WRONG_KEY = "zzzzzzzzzzzzzzzzzzzzzz";
+const LINKED_SLUG = "a-link-shared-article";
+
+/**
+ * **A reader that behaves as the store does for a private article with a link
+ * on it**, and records what it was asked.
+ *
+ * `a-link-shared-article` is private: it answers `{ sharedBy: "link" }` to its
+ * own key and is the ordinary 404 to anything else. `HEAD.slug` is public and
+ * answers whatever key comes. The refusal carries `PRIVATE_TITLE`, for the
+ * reason `privateReader` gives: a canary the subject never held proves nothing.
+ *
+ * The store's own half, that a wrong key matches no row, is
+ * tests/public-visibility-pg.test.ts. This proves what the page does with each
+ * answer, and that the key it passes on is the one in the address.
+ */
+function linkReader(asked: PublicAccess[] = []): Read {
+  return async (slug, access) => {
+    asked.push(access);
+    if (slug === HEAD.slug) return { sharedBy: "public", head: HEAD };
+    if (slug === LINKED_SLUG && access.kind === "link" && access.key === KEY) {
+      return { sharedBy: "link" };
+    }
+    throw Object.assign(new Error(`No article artefacts for "${PRIVATE_TITLE}".`), { status: 404 });
+  };
+}
 
 interface Answer {
   status: number;
@@ -147,7 +181,7 @@ interface Answer {
 async function serve(
   method: string,
   slug: string,
-  read: (slug: string) => Promise<PublicHead>,
+  read: Read,
   /**
    * The address, which the page module reads the mode and the view out of.
    * Defaults to the plain reading URL for this slug, because that is what every
@@ -389,7 +423,7 @@ describe("servePublicReadPage — what actually goes on the wire", () => {
     let asked = 0;
     const answer = await serve("GET", "Upper", async (slug) => {
       asked += 1;
-      return { ...HEAD, slug };
+      return { sharedBy: "public", head: { ...HEAD, slug } };
     });
     expect(answer.status).toBe(400);
     expect(answer.body).toBe(SHELL);
@@ -400,7 +434,7 @@ describe("servePublicReadPage — what actually goes on the wire", () => {
     let asked = 0;
     const answer = await serve("POST", HEAD.slug, async (slug) => {
       asked += 1;
-      return { ...HEAD, slug };
+      return { sharedBy: "public", head: { ...HEAD, slug } };
     });
     expect(answer.status).toBe(405);
     expect(answer.headers.Allow).toBe("GET, HEAD");
@@ -487,6 +521,129 @@ describe("servePublicReadPage — what actually goes on the wire", () => {
       expect(answer.headers["Cache-Control"]).toBe("no-store");
       expect(answer.headers["Content-Type"]).toBe("text/html; charset=utf-8");
       expect(Object.keys(answer.headers).map((k) => k.toLowerCase())).not.toContain("x-robots-tag");
+    }
+  });
+
+  /* ------------------------------------------------------ a private link -- */
+
+  /**
+   * **A private article opened with its own key is a 200, and the page says
+   * nothing about it.** Plan 261005e, and Sol's F4 on it: without this the
+   * person a link was sent to gets a 404 status on a page that then works.
+   *
+   * `toBe(SHELL)` is the whole claim about the head: byte for byte the built
+   * client, so no title, no description and no `og:` tag of the article's. A
+   * chat app unfurling the link is the first thing to fetch it.
+   */
+  it("serves a 200 and the untouched shell for a private article opened with its key", async () => {
+    const asked: PublicAccess[] = [];
+    const answer = await serve("GET", LINKED_SLUG, linkReader(asked), `/read/${LINKED_SLUG}?key=${KEY}`);
+    expect(answer.body).not.toContain("og:title");
+    expect(answer.body).not.toContain(LINKED_SLUG);
+    expect(answer.body).not.toContain(KEY);
+    expect(JSON.stringify(answer.headers)).not.toContain(KEY);
+    expect(answer.status).toBe(200);
+    expect(answer.body).toBe(SHELL);
+    expect(answer.headers["Cache-Control"]).toBe("no-store");
+    /* The key in the address is the key the reader was asked with. */
+    expect(asked).toEqual([{ kind: "link", key: KEY }]);
+  });
+
+  it("and the decision for it carries no head at all", () => {
+    const d = decidePublicPage("GET", LINKED_SLUG, { kind: "link" }, SHA256);
+    expect(d.status).toBe(200);
+    expect(d.head).toBeNull();
+    expect(d.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /** The key beside other reading state, and through HEAD. */
+  it("finds the key among other parameters, and answers HEAD the same way", async () => {
+    const url = `/read/${LINKED_SLUG}?mode=glossary&key=${KEY}&at=spya-k3m9qt`;
+    const get = await serve("GET", LINKED_SLUG, linkReader(), url);
+    const head = await serve("HEAD", LINKED_SLUG, linkReader(), url);
+    expect(get.status).toBe(200);
+    expect(get.body).toBe(SHELL);
+    expect(head.status).toBe(200);
+    expect(head.headers).toEqual(get.headers);
+    expect(head.wroteBody).toBe(false);
+  });
+
+  /**
+   * **Every way of not having the key is one answer, and it is the absent
+   * article's.** Wrong key, no key, an empty one, a malformed one, another
+   * parameter with a similar name: status, headers and body are compared whole
+   * with a slug nobody has.
+   */
+  it("answers a wrong, missing, empty or malformed key exactly as an absent article", async () => {
+    const absent = await serve("GET", "no-such-article-anywhere", linkReader());
+    expect(absent.status).toBe(404);
+    for (const query of [
+      "",
+      `?key=${WRONG_KEY}`,
+      "?key=",
+      "?key=short",
+      `?key=${KEY}A`,
+      `?keys=${KEY}`,
+      `?Key=${KEY}`,
+      `?at=${KEY}`,
+    ]) {
+      const asked: PublicAccess[] = [];
+      const answer = await serve("GET", LINKED_SLUG, linkReader(asked), `/read/${LINKED_SLUG}${query}`);
+      expect(answer.body, query).not.toContain("Zylquarn");
+      expect({ query, status: answer.status, headers: answer.headers, body: answer.body }).toEqual({
+        query,
+        status: absent.status,
+        headers: absent.headers,
+        body: absent.body,
+      });
+      /* And only a key-shaped value is ever passed on as one. */
+      expect(asked, query).toEqual([
+        query === `?key=${WRONG_KEY}` ? { kind: "link", key: WRONG_KEY } : { kind: "public" },
+      ]);
+    }
+  });
+
+  /**
+   * **Public wins.** A public article keeps its full head whatever key comes
+   * with the request, including a stale one from a link that was turned off.
+   */
+  it("serves a public article its own head whatever the key", async () => {
+    const bare = await serve("GET", HEAD.slug, linkReader());
+    expect(bare.status).toBe(200);
+    expect(bare.body).toContain("Café Society");
+    for (const query of [`?key=${KEY}`, `?key=${WRONG_KEY}`, "?key=", "?key=nonsense"]) {
+      const answer = await serve("GET", HEAD.slug, linkReader(), `/read/${HEAD.slug}${query}`);
+      expect({ query, status: answer.status, body: answer.body }).toEqual({
+        query,
+        status: 200,
+        body: bare.body,
+      });
+      expect(answer.body, query).not.toContain(KEY);
+    }
+  });
+
+  /** A database failure is what it was, key or no key, and the key is not in what we capture. */
+  it("is still a 503 when the reader fails, and the capture carries no key", async () => {
+    monitoring.captured.length = 0;
+    const answer = await serve("GET", LINKED_SLUG, brokenReader, `/read/${LINKED_SLUG}?key=${KEY}`);
+    expect(answer.status).toBe(503);
+    expect(answer.body).toBe(SHELL);
+    expect(monitoring.captured).toHaveLength(1);
+    expect(JSON.stringify(monitoring.captured[0], Object.getOwnPropertyNames(monitoring.captured[0] as object))).not.toContain(KEY);
+  });
+
+  /** Nothing is read for a key on the shelf's own address, a bad slug or a write. */
+  it("asks the reader nothing for the reserved address, a bad slug or a write, key or not", async () => {
+    for (const [method, slug] of [
+      ["GET", "public"],
+      ["GET", "Upper"],
+      ["POST", LINKED_SLUG],
+    ] as const) {
+      const asked: PublicAccess[] = [];
+      const bare = await serve(method, slug, linkReader());
+      const keyed = await serve(method, slug, linkReader(asked), `/read/${slug}?key=${KEY}`);
+      expect(asked, slug).toEqual([]);
+      expect({ slug, status: keyed.status, body: keyed.body }).toEqual({ slug, status: bare.status, body: bare.body });
     }
   });
 

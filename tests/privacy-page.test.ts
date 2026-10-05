@@ -249,4 +249,62 @@ describe("the privacy page", () => {
     expect(PAGE).toContain("CONTACT_EMAIL");
     expect(PAGE).not.toMatch(/@spideryarn\.com/);
   });
+
+  /**
+   * **A private link is a third way somebody else reads your article**
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md),
+   * so "Who can see your shelf" has to name it. Held to the code as the
+   * claims above are: if the link goes, or starts listing, these should fail.
+   */
+  describe("what it says about a private link", () => {
+    const prose = PAGE.replace(/\s+/g, " ");
+    const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+    it("names it as an exception beside public, and no longer counts two", () => {
+      expect(prose).toContain("private link");
+      expect(prose).not.toContain("Two exceptions");
+      expect(prose).toContain("Three exceptions");
+    });
+
+    it("says anyone who has the link can read without signing in, and can pass it on", () => {
+      expect(prose).toMatch(/anyone who has (it|the link) can read (it|the article) without signing in/);
+      expect(prose).toMatch(/pass (it|the link) on/);
+      expect(read("src/store/link-shared-slug.ts")).toMatch(/eq\(articles\.shareToken, key\)/);
+    });
+
+    it("says it is not listed, and that we cannot tell who read it", () => {
+      expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
+      expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
+      expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
+      /* Nothing records a visit: the public routes write nothing. */
+      expect(read("src/db/schema.ts")).not.toMatch(/share_link_(reads|visits|opens)/);
+    });
+
+    it("says they get what a public reader gets", () => {
+      expect(prose).toMatch(/same things? a public (article'?s )?reader gets/);
+    });
+
+    it("says it can be turned off, and what that cannot take back", () => {
+      expect(prose).toMatch(/[Tt]urn(ing)? (it|the link) off/);
+      expect(read("src/web/PrivateLink.tsx")).toMatch(/Turn off/);
+    });
+
+    it("says the key is in the address, so it is in a browser's history", () => {
+      expect(prose).toMatch(/browser(’s|'s)? history/);
+    });
+
+    it("says a bug report from such a page leaves the key out, and the button does", () => {
+      expect(prose).toMatch(/without the (link’s|link's) key/);
+      expect(read("src/web/FeedbackButton.tsx")).toMatch(/url: withoutShareKey\(location\.href\)/);
+    });
+
+    it("counts making and turning off a link in the audit trail, and the table exists", () => {
+      expect(prose).toMatch(/when a private link (to it )?was made or turned off/);
+      expect(read("src/db/schema.ts")).toContain('"article_share_link_events"');
+    });
+
+    it("covers a private link in what taken down means", () => {
+      expect(prose).toMatch(/turn off any private link/);
+    });
+  });
 });

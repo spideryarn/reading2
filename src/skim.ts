@@ -462,12 +462,14 @@ export function skimInputHash(input: SkimInput): string {
 /**
  * **Is the route written for a different profile — including none → some?**
  *
- * Deliberately stricter than `profileIsStale` in src/profile.ts, which calls an
- * artefact written without a profile never stale: a plain glossary must not
- * nag the reader for ever. A route is different. It is exactly the thing a
- * profile is meant to change — *why you are reading this one* decides where the
- * route starts — and rebuilding it costs one small call over the quotes. So
- * any difference counts, in either direction (Sol F7, and the plan § Freshness).
+ * Deliberately stricter than `profileIsStale` in src/profile.ts. Until
+ * 2026-10-05 that rule called an artefact written without a profile never
+ * stale; it now counts none → some too (Greg: "B treat a first profile as a
+ * change"), so what is still stricter here is some → none, and an absent field.
+ * A route is exactly the thing a profile is meant to change — *why you are
+ * reading this one* decides where the route starts — and rebuilding it costs
+ * one small call over the quotes. So any difference counts, in either
+ * direction (Sol F7, and the plan § Freshness).
  *
  * `undefined` (an artefact with no field) is treated as `null`.
  */

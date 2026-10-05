@@ -112,6 +112,10 @@ writes `4` on the box. A laptop has no file and is never refused: `MemAvailable`
 and macOS has no honest equivalent, so it is stated rather than approximated. If a run is refused
 and you are certain, delete the file or set a smaller reserve.
 
+The message begins `REFUSING TO START`. Inside `npm run check` it arrives as `✗ test FAILED` and
+`EXIT=1` after about three minutes rather than twenty-five (measured 2026-09-08), so a check that
+went red that fast is usually this and not the change. The string is in the log.
+
 A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
 `env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the
 `CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. `vitest --maxWorkers=N` still
@@ -734,8 +738,13 @@ Every result row already carries `blocksSha256.matchesManifest`, and in a worktr
 Before quoting any eval number, check that field and the block count of what actually ran.
 
 Do not fix it by copying the primary's corpus in. `cp -rn` skips existing files, so it appears to
-work and changes nothing; copying the whole corpus brings articles the manifest does not describe.
-Run evals in the primary, or make the cut deliberate and say so in the write-up.
+work and changes nothing; copying the whole corpus brings articles the manifest does not describe,
+some with incomplete artefact sets, and that reddens `store-roundtrip`, `store-parity`,
+`store-shelf-reads` and `admin-store` — which is why `worktree:check` compares `data/` with the
+fixtures. Run evals in the primary, or make the cut deliberate and say so in the write-up.
+(`entryForDir` in `evals/structure-whole-document/corpus.ts` matches on the slug as well as the
+path, so a run pointed at the primary's directories by absolute path still gets the manifest hash
+check.)
 
 ## A known limit, pinned by a test
 
@@ -784,6 +793,12 @@ pass in isolation; the seventh was a real regression that a guard had caught. Te
 a second full pass, and the expensive half was not the re-run — it was that the noise and the signal
 were indistinguishable until it finished.
 [260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
+
+**And one timeout can fail the rest of its file.** A vitest timeout inside React's `act()` leaves
+the root mid-render, and every later test in that file renders an empty host. On 2026-09-02 three
+sweeps measuring 3.6–3.8s against the 5-second default met a load spike: one timed out, and twenty
+further tests failed with nothing wrong. So in a file like that the first failure is the real one —
+[260902j](../plans/260902j-public-read-only-access-audit-and-improvements.md), progress log.
 
 **A process timeout is not a bound on how long you wait.** Node's `timeout` on `execFileSync` and
 `spawnSync` sends a signal and then waits for the child to exit, however long: a child that ignores
@@ -834,6 +849,9 @@ npx tsx scripts/tmux-job.ts npm test -- --reporter=dot
 It prints the log; `tail -f` it, and the last line is `EXIT=<n>`. Same for anything else that takes
 minutes — `npm run typecheck`, an eval, a codex review.
 
+The logs are in `logs/tmux-jobs/`, which is gitignored. Deleting that directory while a job is still
+writing to it orphans the run, and nothing says so (2026-09-05).
+
 **`--name` is its only flag, and there is no `--` separator.** A bare `--` or an invented `--log`
 in front of the command becomes the command: `sh: 1: --: not found`, `EXIT=127` in under a second,
 behind the same `✓` and log path a healthy launch prints — hit twice on 2026-09-09. A log with
@@ -844,6 +862,18 @@ kills every running vitest when load spikes (2026-09-08: load 391, swap full, 18
 The kill lands as `EXIT=143` under a screen of green ticks, which reads like a suite that was passing
 when it stopped. Several agents retrying together is what caused it, so a re-run straight away
 tends to meet the same fate.
+
+**Whatever is watching the job gets killed too, and that says nothing about the job.** The harness
+stops background Bash tasks with *"stopped because the system is running low on memory"*. That is
+its own guard, not the kernel's (`dmesg` showed no kills on 2026-09-05), and it picks by system
+pressure rather than by size: six `until grep -q EXIT= …; do sleep 60; done` loops of a few KB each
+were stopped in a row that day while the tmux job they watched carried on. The job's log, and
+whether its tmux session still exists, are the only evidence about the job.
+
+**A `timeout` in front of the command is one more way to be told it passed.** On 2026-09-06 a
+`timeout 400 npm run check … | tail` was killed at its deadline — the output held `Terminated` and
+`EXIT=124` — and the harness announced *"completed (exit code 0)"*, which is the pipeline's status.
+A deadline that feels generous is still far shorter than `check`.
 
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
@@ -868,6 +898,39 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
   `tests/fleet-quarantine.test.ts`, which posts to the same route and was in nobody's diff, lost
   three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
   drive a route.
+
+### A raw NUL in a file makes every grep of it come back empty
+
+An escape sequence typed as *content* — a backslash-u NUL, a backslash-x zero — through the Write
+tool, the Edit tool or a heredoc can land in the file as the control byte itself. The code still
+compiles and its tests still pass. What broke, eight times between 2026-09-05 and 2026-09-08 in
+two sessions, was every later `grep` of that file: the `grep` those sessions had treated it as
+binary and printed nothing, exit 1, the same as no match. Which `grep` answers decides this. GNU
+grep 3.11, read on the box on 2026-10-05, prints a binary-match notice and exits 0 instead, and the
+header of the test below tells the two apart.
+
+The signature then was greps against one file all returning nothing while `sed` showed the text,
+and `file <path>` reporting `data` for a source file.
+
+[`tests/no-raw-nul-bytes.test.ts`](../../tests/no-raw-nul-bytes.test.ts) catches it at the gate. It
+checks every file git tracks, and every untracked file that is not ignored, against a denylist of
+binary extensions, so a new directory is covered the day it arrives; its header says why an
+allowlist would be the same bug. A commit message is outside it: git refuses one outright with *"a
+NUL byte in commit log message not allowed"* and writes nothing.
+
+Retyping the escape to repair it puts the byte back. An `Edit` could not find its `old_string`,
+because the file held bytes; a Python repair script written with Write arrived with a NUL in its
+own docstring.
+
+### A script outside the repo cannot import the repo's packages
+
+Reproducing a test's behaviour outside vitest is how a real failure is told from a loaded box, and
+the script for it usually sits in a session scratchpad under `/tmp`. Run with `npx tsx` from the
+repo root, it still fails with `ERR_MODULE_NOT_FOUND: Cannot find package …`, because Node resolves
+a bare import by walking up from the **script's own directory**, not from the working directory.
+Two things do resolve from there: an absolute path into the repo's `node_modules`, and a
+`createRequire` rooted at the repo's `package.json`. A script moved into the tree resolves too, and
+is then in every agent's `git status`.
 
 ### `.env.local` is loaded into tests
 

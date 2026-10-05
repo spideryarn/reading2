@@ -16,21 +16,29 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { BANNER_TRAINING } from "../src/messages.js";
+import { BANNER_TRAINING, SHARED_BY_PRIVATE_LINK, SHARED_WITH_YOU } from "../src/messages.js";
+import type { PublicSharedBy } from "../src/public-types.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import type { SourceGuess } from "../src/types.js";
-import { SharedNotice } from "../src/web/PublicChrome.js";
+import { SharedNotice, ViewOnlyChip } from "../src/web/PublicChrome.js";
 import { PRIVACY_HREF, TAKEDOWN_HREF } from "../src/web/router.js";
 
-function render(source?: { url: string | null; guess: SourceGuess | undefined }): string {
+function render(
+  source?: { url: string | null; guess: SourceGuess | undefined },
+  sharedBy: PublicSharedBy = "public",
+): string {
   return renderToStaticMarkup(
     createElement(SharedNotice, {
       signedIn: true,
       sessionUnconfirmed: false,
+      sharedBy,
       ...(source ? { source } : {}),
     }),
   );
 }
+
+/** A sentence as React writes it into markup, apostrophes escaped. */
+const asMarkup = (text: string) => renderToStaticMarkup(createElement("i", null, text)).slice(3, -4);
 
 const hrefs = (html: string) => [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
 
@@ -113,5 +121,62 @@ describe("the takedown offer and the training promise", () => {
       expect(privacy).toMatch(phrase);
       expect(sharing).toMatch(phrase);
     }
+  });
+});
+
+/**
+ * **A private link says it is one** — Greg, 2026-10-05, in plan 261005e
+ * § What Greg decided. The notice leads with that line in place of the public
+ * one, and keeps the three banner lines. Which of the two it is comes from the
+ * server's `sharedBy`, which is `"public"` for a public article whatever key
+ * the address carries; the owner's own page draws no notice at all
+ * (tests/public-network-trace.test.tsx).
+ */
+describe("the notice on a private link", () => {
+  const SOURCE = { url: "https://www.example.com/2026/the-piece", guess: undefined };
+
+  it("is the test's own control: the two sentences differ", () => {
+    expect(SHARED_BY_PRIVATE_LINK).not.toBe(SHARED_WITH_YOU);
+    expect(render(SOURCE, "public")).toContain(asMarkup(SHARED_WITH_YOU));
+  });
+
+  it("leads with the private-link line, and not the public one", () => {
+    const html = render(SOURCE, "link");
+    expect(html).toContain(asMarkup(SHARED_BY_PRIVATE_LINK));
+    expect(html).not.toContain(asMarkup(SHARED_WITH_YOU));
+    expect(html.toLowerCase()).not.toContain("publicly");
+    /* First: nothing in the box is said before it. */
+    expect(html.indexOf(asMarkup(SHARED_BY_PRIVATE_LINK))).toBeLessThan(html.indexOf("Source:"));
+  });
+
+  it("says the three things Greg asked for: private link, not listed, not visible without it", () => {
+    expect(SHARED_BY_PRIVATE_LINK).toMatch(/private link/i);
+    expect(SHARED_BY_PRIVATE_LINK).toMatch(/listed/i);
+    expect(SHARED_BY_PRIVATE_LINK).toMatch(/without the link/i);
+  });
+
+  it("keeps the source, the takedown offer and the training promise", () => {
+    const html = render(SOURCE, "link");
+    expect(hrefs(html)).toContain(SOURCE.url);
+    expect(hrefs(html)).toContain(`mailto:${CONTACT_EMAIL}`);
+    expect(hrefs(html)).toContain(TAKEDOWN_HREF);
+    expect(hrefs(html)).toContain(PRIVACY_HREF);
+    expect(html).toContain(asMarkup(BANNER_TRAINING));
+  });
+
+  it("draws the public notice for a public article, which is what the server says of one opened with a key", () => {
+    const html = render(SOURCE, "public");
+    expect(html).toContain(asMarkup(SHARED_WITH_YOU));
+    expect(html).not.toContain(asMarkup(SHARED_BY_PRIVATE_LINK));
+  });
+
+  /* The chip's hover is the same statement in the bar, so it must not say
+     "shared publicly" over a private link either. */
+  it("gives the bar's chip the matching sentence", () => {
+    const chip = (sharedBy: PublicSharedBy) =>
+      renderToStaticMarkup(createElement(ViewOnlyChip, { sessionUnconfirmed: false, sharedBy }));
+    expect(chip("link")).toContain(asMarkup(SHARED_BY_PRIVATE_LINK));
+    expect(chip("link")).not.toContain(asMarkup(SHARED_WITH_YOU));
+    expect(chip("public")).toContain(asMarkup(SHARED_WITH_YOU));
   });
 });

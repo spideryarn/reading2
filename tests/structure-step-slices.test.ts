@@ -232,7 +232,7 @@ describe("what a slice may contribute (review F15)", () => {
 describe("the slices path, when the model answers", () => {
   it("returns a finished tree under the model's name, and says how it was made", async () => {
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
     expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
     expect(out.parts.tree.provisional).toBeUndefined();
     expect(out.parts.tree.generator).toBe(generatorFor("standard"));
@@ -291,20 +291,28 @@ describe("a slice whose answer is a root and nothing else (review F15)", () => {
   it("is asked for once more, and the second answer is used", async () => {
     middleOnly(1);
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 0 });
     expect(out.wholeDocumentCalls).toBe(5);
     expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
   });
 
-  it("twice, gives the headings tree, with no neighbour stretched over it", async () => {
+  it("twice, is asked for once more after the other slices, and that answer is used", async () => {
     middleOnly(2);
+    const out = await run();
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 1, secondPass: 1 });
+    expect(out.wholeDocumentCalls).toBe(6);
+    expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
+  });
+
+  it("three times, gives the headings tree, with no neighbour stretched over it", async () => {
+    middleOnly(3);
     const out = await run();
     expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "slice-failed" });
     expectBoundedTree(BLOCKS, out.parts.tree);
-    /* Two good slices and the middle one twice were paid for; the root was never asked. */
+    /* Two good slices and the middle one three times were paid for; the root was never asked. */
     expect(calls.filter((c) => c.root)).toHaveLength(0);
-    expect(out.wholeDocumentCalls).toBe(4);
-    expect([out.inputTokens, out.outputTokens]).toEqual([4 * USAGE.input_tokens, 4 * USAGE.output_tokens]);
+    expect(out.wholeDocumentCalls).toBe(5);
+    expect([out.inputTokens, out.outputTokens]).toEqual([5 * USAGE.input_tokens, 5 * USAGE.output_tokens]);
   });
 });
 
@@ -325,7 +333,7 @@ describe("a top-level section that came back undivided", () => {
   it("over sixty blocks is asked for once as a slice of its own, and its sections replace it", async () => {
     undivided(130, (call) => sectionsAnswer(call.ids, 50));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0 });
     expect(refills(130)).toHaveLength(1);
     expect(out.wholeDocumentCalls).toBe(5);
     const top = topLevel(out.parts.tree);
@@ -339,11 +347,13 @@ describe("a top-level section that came back undivided", () => {
       throw new Error("a small section was refilled");
     });
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
     expect(out.wholeDocumentCalls).toBe(4);
   });
 
-  it("gives D when a started refill fails or contributes no section", async () => {
+  /* Until 261005j stage 1a a started refill that failed gave the headings tree
+     (261005a's review finding F28). It is an optional call, and now cannot. */
+  it("is kept when a started refill fails or contributes no section", async () => {
     for (const refill of [
       () => {
         throw new Error("the refill call failed");
@@ -353,17 +363,19 @@ describe("a top-level section that came back undivided", () => {
       calls = [];
       undivided(130, refill);
       const out = await run();
-      expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "slice-failed" });
+      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
       expect(refills(130), "a refill is asked for once, never re-asked").toHaveLength(1);
-      expectBoundedTree(BLOCKS, out.parts.tree);
-      expect(calls.some((c) => c.root)).toBe(false);
+      expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
+      expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
+      expect(calls.filter((c) => c.root)).toHaveLength(1);
+      expect(out.wholeDocumentCalls).toBe(5);
     }
   });
 
   it("is kept when the refill returns one valid section, including the same giant section", async () => {
     undivided(130, (call) => sectionsAnswer(call.ids, 500, true));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
     expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
     expect(refills(130)).toHaveLength(1);
   });
@@ -371,7 +383,7 @@ describe("a top-level section that came back undivided", () => {
   it("is not refilled a second time when the refill is itself undivided", async () => {
     undivided(200, (call) => sectionsAnswer(call.ids, 100, true));
     const out = await run();
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 1, reasked: 0, secondPass: 0 });
     expect(calls.filter((c) => !c.root && c.ids.length <= 200)).toHaveLength(1);
   });
 });
@@ -391,7 +403,8 @@ describe("a failure gives the headings tree, and says what was spent", () => {
       returned = true;
       return out;
     });
-    /* The first slice has failed twice by now; its two peers are still out. */
+    /* The first slice has failed twice by now; its two peers are still out, and
+       its one further ask waits for them. */
     await new Promise((r) => setTimeout(r, 50));
     expect(calls).toHaveLength(4);
     expect(returned, "returned while two paid calls were still running").toBe(false);
@@ -401,11 +414,11 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "slice-failed" });
     expectBoundedTree(BLOCKS, out.parts.tree);
     expect(checkpoints.entries.size, "the two good answers were not kept").toBe(2);
-    expect(out.wholeDocumentCalls).toBe(4);
-    expect([out.inputTokens, out.outputTokens]).toEqual([4 * USAGE.input_tokens, 4 * USAGE.output_tokens]);
+    expect(out.wholeDocumentCalls).toBe(5);
+    expect([out.inputTokens, out.outputTokens]).toEqual([5 * USAGE.input_tokens, 5 * USAGE.output_tokens]);
   });
 
-  it("starts nothing new after a failure", async () => {
+  it("a slice that fails does not stop the others, and is asked for once more", async () => {
     const long = paragraphs(11_000);
     respond = async (call) => {
       if (call.n === 0) throw new Error("the first slice's call failed");
@@ -413,21 +426,39 @@ describe("a failure gives the headings tree, and says what was spent", () => {
       return answers(call);
     };
     const out = await run({ blocks: long });
-    expect(out.source).toMatchObject({ by: "headings", slicesFailed: "slice-failed" });
-    expect(calls).toHaveLength(SLICE_CONCURRENCY);
-    /* All eight calls count; only seven returned usage. */
-    expect(out.wholeDocumentCalls).toBe(SLICE_CONCURRENCY);
+    expect(out.source).toEqual({ by: "slices", slices: 11, refilled: 0, reasked: 0, secondPass: 1 });
+    /* Eleven slices, the first one again, and the root. */
+    expect(calls).toHaveLength(13);
+    expect(out.wholeDocumentCalls).toBe(13);
   }, 60_000);
 
-  it("when a slice is refused or cut short, which is paid for and not asked again", async () => {
+  it("starts nothing new after a slice has failed in both passes", async () => {
+    const long = paragraphs(11_000);
+    respond = async (call) => {
+      await new Promise((r) => setTimeout(r, 5));
+      throw new Error(`call ${call.n} failed`);
+    };
+    const out = await run({ blocks: long });
+    expect(out.source).toMatchObject({ by: "headings", slicesFailed: "slice-failed" });
+    /* All eleven in the first pass; in the second, the eight in flight when the first of them failed. */
+    expect(calls).toHaveLength(11 + SLICE_CONCURRENCY);
+    expect(out.wholeDocumentCalls).toBe(11 + SLICE_CONCURRENCY);
+    expect(out.inputTokens).toBe(0);
+  }, 60_000);
+
+  it("a slice that is refused or cut short is paid for, and read in two halves", async () => {
     for (const stop of ["refusal", "max_tokens"]) {
       calls = [];
       respond = (call) => (call.n === 1 ? messageOf(sectionsAnswer(call.ids), stop) : answers(call));
       const out = await run();
-      expect(out.source).toMatchObject({ by: "headings", slicesFailed: "slice-failed" });
-      expect(calls).toHaveLength(3);
-      expect(out.wholeDocumentCalls).toBe(3);
-      expect(out.inputTokens).toBe(3 * USAGE.input_tokens);
+      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
+      /* Three slices, the refused one's two halves, and the root. */
+      expect(calls.map((c) => c.root)).toEqual([false, false, false, false, false, true]);
+      expect(calls[3]!.ids.concat(calls[4]!.ids)).toEqual(calls[1]!.ids);
+      expect(out.wholeDocumentCalls).toBe(6);
+      expect(out.inputTokens).toBe(6 * USAGE.input_tokens);
+      expect(checkTree(BLOCKS, out.parts.tree).problems).toEqual([]);
+      expect(topLevel(out.parts.tree).some((n) => n.range[0] === calls[4]!.ids[0])).toBe(true);
     }
   });
 
@@ -596,7 +627,7 @@ describe("the deadline (review F16)", () => {
     const going = run({ stepBudgetMs: JUST_ENOUGH });
     await vi.advanceTimersByTimeAsync(1000);
     const out = await going;
-    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0, secondPass: 0 });
     expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
   });
 
