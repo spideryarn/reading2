@@ -699,6 +699,15 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           loosely or partly.
         </li>
         <li>
+          To look into one claim yourself, press the chat icon on its heading. It opens a new
+          conversation in <HelpRef to="mode-chat">Chat</HelpRef> with the claim quoted and a question
+          ready, and sends nothing until you press <strong>Send</strong>. Once you have asked, a line
+          under the claim shows how the chat’s latest answer begins; press it to open that
+          conversation again beside Debate. If a later search words the claim differently the line
+          goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever
+          added the article has this.
+        </li>
+        <li>
           Anything tagged <strong>AI</strong> is the AI’s reading, checked against nothing: the threads
           across sources, the key-source picks (starred), each page’s lean (Supportive, Critical,
           Neither for nor against, Could not tell) and its relevance. Quoted excerpts, by contrast, are

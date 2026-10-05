@@ -1177,6 +1177,19 @@ export function isSettled(state: ChatState, threadId: string): boolean {
   return true;
 }
 
+/**
+ * **Does the server have this conversation?** It is in the list and is not one
+ * this tab invented and is still waiting to hear back about (`unnamed`).
+ *
+ * Weaker than `isSettled`: an answer may still be streaming. One reader, the
+ * band's pending origin (plan 261005i): what a thread was started from is set
+ * on the server's insert only, so the band goes on offering it until this is
+ * true, and holds Live back for the same stretch.
+ */
+export function isNamed(state: ChatState, threadId: string): boolean {
+  return !state.unnamed.has(threadId) && state.base.some((t) => t.id === threadId);
+}
+
 /** Answers this tab has lost the stream of and is asking the server about. */
 export function recoveringIds(state: ChatState): Set<string> {
   const ids = new Set<string>();

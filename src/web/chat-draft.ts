@@ -14,7 +14,7 @@
  * **In memory, and only that.** It does not survive a reload or a closed tab,
  * and it is not sent anywhere. Sign-out replaces the page, which empties it.
  *
- * ## The four things it holds
+ * ## The four things it holds (and, since 2026-10-05, a pending origin: see `ChatDrafts.origin`)
  *
  * - **A Chat conversation's unsent words**, by conversation id. Written by the
  *   panel's composer and by the floating dialog's (its conversation arm, not
@@ -39,9 +39,27 @@
  * revokes on the first typed or spoken submission, not something worked out
  * from the words or from a missing row, and once revoked it stays revoked.
  */
-import type { SingleThreadKind } from "../types.js";
+import type { SingleThreadKind, ThreadOrigin } from "../types.js";
 
 export interface ChatDrafts {
+  /**
+   * **Where a handed-over conversation was started from** (`ThreadOrigin`;
+   * plan 261005i, F5). Kept here, by conversation id, because it has to
+   * outlive the band, which unmounts on every mode change and takes an unsent
+   * conversation with it, and because one origin for the whole article would
+   * attach itself to the wrong conversation.
+   *
+   * It is not part of the words. Typing, clearing the box and submitting leave
+   * it alone; `moveThread` carries it and `dropThread` forgets it. The band
+   * sends it with the conversation's questions until the server has the
+   * thread, and goes on reading it after that to show the list where the
+   * conversation came from (`ConversationBand` § `pendingOrigin`).
+   * `clearOrigin` is for an id the server replaced.
+   */
+  origin(id: string): ThreadOrigin | undefined;
+  setOrigin(id: string, origin: ThreadOrigin): void;
+  clearOrigin(id: string): void;
+
   /** A conversation's unsent words. `undefined` is "never written", `""` is "cleared". */
   thread(id: string): string | undefined;
   setThread(id: string, text: string): void;
@@ -77,6 +95,7 @@ export interface ChatDrafts {
 
 export function createChatDrafts(): ChatDrafts {
   const threads = new Map<string, string>();
+  const origins = new Map<string, ThreadOrigin>();
   const fresh = new Set<string>();
   /* Kept so that `markFresh` after `submitted` is refused rather than trusted
      to never happen: the revocation is the safety, and a caller getting the
@@ -93,12 +112,23 @@ export function createChatDrafts(): ChatDrafts {
     dropThread(id) {
       threads.delete(id);
       fresh.delete(id);
+      origins.delete(id);
     },
     moveThread(from, to) {
       const text = threads.get(from);
       if (text !== undefined) threads.set(to, text);
       threads.delete(from);
       fresh.delete(from);
+      const origin = origins.get(from);
+      if (origin !== undefined) origins.set(to, origin);
+      origins.delete(from);
+    },
+    origin: (id) => origins.get(id),
+    setOrigin(id, origin) {
+      origins.set(id, origin);
+    },
+    clearOrigin(id) {
+      origins.delete(id);
     },
     markFresh(id) {
       if (!spent.has(id)) fresh.add(id);

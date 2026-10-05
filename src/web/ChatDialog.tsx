@@ -166,6 +166,13 @@ interface Props {
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
   /**
+   * An answer in this panel has just stopped arriving: finished, failed or
+   * stopped. Whoever holds the thread summaries asks for them again, so a mark
+   * that shows a conversation's latest line (a Debate claim's) follows a
+   * follow-up asked here. Once per answer, never per token. Plan 261005i, F1.
+   */
+  onSettled?(): void;
+  /**
    * **The room the panel has over the marginalia column, in px — or `null` to
    * float in the corner as it always has.** layout.ts § `chatDock` decides;
    * `Reader` passes it.
@@ -278,6 +285,7 @@ export function ChatDialog({
   onNewConversation,
   onCreated,
   onDropped,
+  onSettled,
   dockRoom = null,
   card = null,
   reopen = 0,
@@ -814,6 +822,19 @@ export function ChatDialog({
    */
   const tail = thread?.messages[thread.messages.length - 1];
   const streaming = tail?.role === "assistant" && tail.status === "pending";
+
+  /* Tell the owner when an answer stops arriving (`onSettled`). Keyed on the
+     conversation as well, so switching from one that is streaming to one that
+     is not is not mistaken for an answer finishing. */
+  const wasStreaming = useRef<{ thread: string | undefined; streaming: boolean }>({
+    thread: thread?.id,
+    streaming,
+  });
+  useEffect(() => {
+    const was = wasStreaming.current;
+    wasStreaming.current = { thread: thread?.id, streaming };
+    if (was.thread === thread?.id && was.streaming && !streaming) onSettled?.();
+  }, [thread?.id, streaming, onSettled]);
 
   /**
    * Is this the very first answer of a conversation the reader just started?

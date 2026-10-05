@@ -50,11 +50,78 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
 - **Claims**: what has been written about the claims the piece makes. One open disclosure per
   claim, in article order, headed by the article's own words; the relevance bar belongs here.
 
-Threads and key sources narrow whichever sub-mode is on screen. The reader cannot yet choose which
-claim is checked or steer the search; that is an open question for Greg in 261003o.
+Threads and key sources narrow whichever sub-mode is on screen. The reader cannot steer the search
+itself. Since 2026-10-05 the owner can look into any one claim in a chat
+([§ Check a claim in chat](#check-a-claim-in-chat)).
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## Check a claim in chat
+
+Since 2026-10-05, for the owner. Asked whether Debate should let him choose which claim is checked,
+Greg answered that this kind of digging should be a chat:
+
+> I'm wondering whether a lot of this more custom behaviour (check a particular claim, dig deeper
+> into glossary or citations entry, etc etc) should just kick off a Chat (perhaps with some metadata
+> so that the chat thread & mode know that these are particular/special kinds of chats), with a
+> link/tooltip in the relevant mode to pull up the whole Chat thread … Actually, this is definitely
+> what we want to do.
+>
+> — Greg, 2026-10-04, in [261005i](../plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md)
+
+What the reader gets:
+
+- **A button on each claim's heading**, *Check this claim in chat*. It goes to Chat and opens a
+  fresh conversation with the claim quoted and a question after it. Nothing is sent until Send, so
+  a press spends nothing, and Back returns to Debate. It is the glossary's *Ask in chat* route
+  ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
+  started from.
+- **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
+  latest answer begins. No model writes that line; it is the answer's own first line. Pressing the
+  mark opens the conversation beside Debate (`?thread=`, the mode unchanged), in the floating chat
+  panel, which docks in the right-hand column only when Marginalia is open and the window is wide.
+- **In Chat's list** the conversation has Debate's icon, with a card that quotes the claim.
+- **A visitor has neither** the button nor the mark. Chat is the owner's.
+
+How it works, and what to know before changing it:
+
+- **The conversation remembers the claim; the claim stores nothing.** A thread has an *origin*:
+  four nullable columns on `chat_threads` (`origin_mode`, `origin_item_id`, `origin_block_id`,
+  `origin_quote`), set on insert and never again, like the anchor. `ThreadOrigin` in
+  [`src/types.ts`](../../src/types.ts) is the shape, and
+  [`src/thread-origin.ts`](../../src/thread-origin.ts) is the one mapping to and from the columns.
+  It is not a new kind of thread (a claim check is an ordinary chat, with chat's prompt and web
+  search) and it is not the anchor (the thread is not the claim's paragraph's own chat, and the
+  gutter chip must not reopen it).
+- **The mark is found by matching**, `threadForOrigin` in
+  [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts): same block, same words, newest wins. A
+  claim has no id, so its words are its name. **When a new search words the claim differently the
+  mark goes and the conversation stays**, in Chat's list.
+- **The route treats an origin as it treats an anchor**: only on the turn that creates the thread,
+  only for a chat, never on a retry or an edit; a different origin for an existing thread is a 409
+  and the same one resent is fine. The quote never reaches an error message, because those are
+  logged.
+- **The reading view's thread summaries are asked for again** when the reader leaves Chat, when a
+  mark is pressed, and when an answer finishes in the floating panel. Chat's band never told that
+  list anything, so without this the mark would not appear until a reload.
+- **Until the first typed Send lands, the origin waits beside the conversation's unsent words**
+  ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a look at another mode and a
+  first Send that fails. **Live is not offered on that conversation until then**: a spoken first
+  turn creates the thread by another route, which would leave it with no origin for good.
+
+Not built yet, and in the plan: the same from a Summary paragraph, a glossary entry and a cited
+work; a claim typed in your own words; and Chat's list showing Remember's conversations, with a
+filter.
+
+Tests: [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts) (the route, the
+columns, the export), [`debate-claim-chat.test.tsx`](../../tests/debate-claim-chat.test.tsx) (the
+button and the mark, and a visitor's lack of both),
+[`conversation-band-origin.test.tsx`](../../tests/conversation-band-origin.test.tsx) (the origin's
+lifetime, and Live), [`chat-anchors-refresh.test.tsx`](../../tests/chat-anchors-refresh.test.tsx)
+(asking for the summaries again), and
+[`debate-check-claim-in-chat.test.tsx`](../../tests/debate-check-claim-in-chat.test.tsx) (the whole
+journey, through the app).
 
 ## Cited by: the papers that cite the piece
 

@@ -66,6 +66,7 @@ import {
   Library,
   Link2,
   LoaderCircle,
+  type LucideIcon,
   MessageSquarePlus,
   Pencil,
   RotateCcw,
@@ -107,7 +108,8 @@ import { sendForTranscription } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { isSendEnter } from "./key-chord.js";
-import { ControlTip, Tooltip } from "./Tooltip.js";
+import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
+import { type ThreadSource, threadSource } from "./thread-source.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -944,6 +946,7 @@ function ThreadList({
                     <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
                   </span>
                 </button>
+                <ThreadSourceMark thread={t} />
                 <div className="chat-thread-actions">
                   <button
                     type="button"
@@ -968,6 +971,48 @@ function ThreadList({
         );
       })}
     </ol>
+  );
+}
+
+/**
+ * The icon for each place a conversation can have been started from: the
+ * mode's own from the bar (`MODES_UI` in Dock.tsx; docs/project/icons.md).
+ * Written out here because importing the Dock into the panel would be the
+ * wrong way round; the plan's next stage moves the bar's icons somewhere both
+ * can read. A `Record`, so a new source has to say which icon it wears.
+ */
+const SOURCE_ICON: Readonly<Record<ThreadSource["mode"], LucideIcon>> = {
+  debate: Globe,
+};
+
+/**
+ * **Where a row's conversation was started from, when that is recorded**: the
+ * source mode's icon, with a card saying so and quoting the item's words as
+ * they were (`threadSource`, src/web/thread-source.ts). Nothing for a row with
+ * no stored origin. Plan 261005i, D5; the rest of D5 is the next stage.
+ *
+ * A sibling of the row's button and not inside it, so its card and the
+ * button's own `title` are never both on screen. The quote is the article's
+ * words, so it takes the author's face.
+ */
+function ThreadSourceMark({ thread }: { thread: ChatThread }) {
+  const source = threadSource(thread);
+  if (!source) return null;
+  const Icon = SOURCE_ICON[source.mode];
+  return (
+    <Tooltip
+      placement="top"
+      content={
+        <TipNote>
+          {source.label}
+          <span className="chat-thread-source-quote voice-author">“{source.quote}”</span>
+        </TipNote>
+      }
+    >
+      <span className="chat-thread-source" role="img" aria-label={source.label}>
+        <Icon size={12} aria-hidden="true" />
+      </span>
+    </Tooltip>
   );
 }
 

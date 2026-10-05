@@ -38,6 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "r
 import type {
   BlockId,
   ChatAnchor,
+  ThreadOrigin,
   ChatMessage,
   ChatThread,
   LiveEngine,
@@ -63,7 +64,7 @@ import {
   settledAnswer,
   stopAnswer,
 } from "./chat/effects.js";
-import { asOpId, isSettled, writerOf } from "./chat/model.js";
+import { asOpId, isNamed, isSettled, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
    where `reduce` can use them: a module that imports the module importing it is
@@ -139,6 +140,14 @@ export interface SendOptions {
    * different one, rather than quietly ignoring it.
    */
   anchor?: ChatAnchor;
+  /**
+   * The item in another mode this conversation was started from — **only on a
+   * send that may create the thread**. The server stores it on insert, lets
+   * the identical one through for a thread that has it, and 409s a different
+   * one. The band sends it until the server has named the thread
+   * (`ChatApi.named`); see `ChatDrafts.origin` in chat-draft.ts.
+   */
+  origin?: ThreadOrigin;
   /**
    * Chat or Remember — **only on the send that creates the thread**, and the
    * server 409s one that contradicts a thread that already exists.
@@ -353,6 +362,13 @@ export interface ChatApi {
    * true, so its DELETE always targets a conversation the server has named.
    */
   settled(threadId: string): boolean;
+  /**
+   * **Does the server have this conversation?** — `isNamed` in chat/model.ts.
+   * True for one that came in a load, and for one this tab began once its
+   * first turn's `begin` frame has arrived. One reader: the band's pending
+   * origin.
+   */
+  named(threadId: string): boolean;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
 }
@@ -663,7 +679,7 @@ export function useChat(slug: string): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, kind, help, sourceCommentId, visible } = opts;
+      const { onThreadId, anchor, origin, kind, help, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -745,6 +761,9 @@ export function useChat(slug: string): ChatApi {
             ...(visible && visible.length > 0 ? { visible } : {}),
             ...(useProfile ? {} : { useProfile: false }),
             ...(anchor ? { anchor } : {}),
+            /* On the request only, like the anchor: the optimistic row is a
+               guess, and the server's copy of the thread is what carries it. */
+            ...(origin ? { origin } : {}),
             /* Sent for every kind but the default. A body with no `kind` means
                chat, which is what every caller written before this feature meant,
                and what keeps an old tab working.
@@ -955,6 +974,9 @@ export function useChat(slug: string): ChatApi {
      showing the previous snapshot while the controller coalesces notifications
      from a turn or spoken append registered in the same task. */
   const settled = useCallback((threadId: string) => isSettled(controller.state, threadId), [controller]);
+  /* From the controller as it is now, for the same reason: it is asked on the
+     line of a Send. */
+  const named = useCallback((threadId: string) => isNamed(controller.state, threadId), [controller]);
 
   return {
     /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
@@ -980,6 +1002,7 @@ export function useChat(slug: string): ChatApi {
     remove,
     deleting,
     settled,
+    named,
     error: state.error,
   };
 }
