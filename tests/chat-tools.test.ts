@@ -54,7 +54,42 @@ import {
 import { sameTarget } from "../src/urls.js";
 import type { Block, Meta } from "../src/types.js";
 
-const block = (id: string, text: string, over: Partial<Block> = {}): Block =>
+/**
+ * **No test in this file may ask real DNS.** `read_web_page` goes through
+ * `fetchDocument`, whose address guard resolves the hostname before it fetches
+ * (`defaultResolve` in src/fetch.ts), so stubbing `fetch` alone left a real
+ * lookup in front of the stub, and four tests here that stubbed nothing made a
+ * real request as well. This lookup refuses unless a test gives it an answer,
+ * which fails the address guard before any socket. GPT Sol's F9 on plan
+ * 261005i; docs/plans/261005m-a-docs-size-cap-and-a-chat-tools-test-that-stops-doing-dns.md.
+ *
+ * The lookup is not the only door: a literal IP address skips it, and `converse`
+ * calls `fetch` itself. So `fetch` refuses by default as well, and because
+ * `read_web_page` catches what a fetch throws, the refusal is also counted and
+ * a test that reached it fails afterwards. A test that wants a response stubs
+ * its own over this one, as they all did already.
+ */
+const dns = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock("node:dns/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:dns/promises")>()),
+  lookup: dns.lookup,
+}));
+const unstubbedFetches: string[] = [];
+beforeEach(() => {
+  dns.lookup.mockReset();
+  dns.lookup.mockRejectedValue(new Error("a test in chat-tools.test.ts reached DNS"));
+  unstubbedFetches.length = 0;
+  vi.stubGlobal("fetch", (input: unknown) => {
+    unstubbedFetches.push(String(input instanceof Request ? input.url : input));
+    return Promise.reject(new Error("a test in chat-tools.test.ts reached fetch without a stub"));
+  });
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  expect(unstubbedFetches).toEqual([]);
+});
+
+const block =(id: string, text: string, over: Partial<Block> = {}): Block =>
   ({
     id,
     tag: "p",
@@ -351,8 +386,10 @@ describe("runTool — what goes back to the model", () => {
     // The cap must not break the common case — a tracked link is not an attack.
     const normal = "https://example.com/essays/x?utm_source=newsletter&utm_medium=email&page=2";
     const out = await runTool("read_web_page", { url: normal }, ctx);
-    // It will fail to fetch in a test, but it must not be REFUSED before trying.
+    /* It fails in a test, at the lookup this file refuses, but it must not be
+       REFUSED before trying, and reaching the lookup is what trying means. */
     expect(out.detail).not.toBe("refused");
+    expect(dns.lookup).toHaveBeenCalledWith("example.com", { all: true });
   });
 
   it("refuses a slug that is not one before it reaches the store", async () => {
@@ -759,17 +796,23 @@ describe("read_web_page will not fetch the article the reader has open", () => {
     for (const url of ["https://www.example.com/essays/x", "http://example.com/essays/x"]) {
       const out = await runTool("read_web_page", { url }, ctx);
       expect(out.detail).not.toBe("already open");
+      // Not refused means it went on to look the host up, which is as far as a test goes.
+      expect(dns.lookup).toHaveBeenLastCalledWith(new URL(url).hostname, { all: true });
     }
   });
 
   it("still fetches a different page on the same host", async () => {
     /* Asserting "not refused" would pass on any failure at all, including one
        that never reached the network. So the check is that a fetch happened.
-       GPT Sol code review, 2026-08-27. */
+       GPT Sol code review, 2026-08-27. The address guard looks the host up
+       before it fetches, so the lookup is answered here too, with a public
+       address the guard will let through. */
+    dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network here"));
     try {
       const out = await runTool("read_web_page", { url: "https://example.com/essays/y" }, ctx);
       expect(out.detail).not.toBe("already open");
+      expect(dns.lookup).toHaveBeenCalledWith("example.com", { all: true });
       expect(fetchSpy).toHaveBeenCalled();
       expect(new URL(String(fetchSpy.mock.calls[0]?.[0])).pathname).toBe("/essays/y");
     } finally {
