@@ -572,6 +572,13 @@ password box** — the first version moved only when it was empty, which meant t
 with a manager's fill, the ordinary case, the key labelled *next* signed in
 instead (GPT Sol, 2026-09-04).
 
+**The key is not always there, so nothing may be reachable only by it.** A reader who dictates
+into a box never raises the keyboard, and then there is no Enter at all. The command bar told an
+iPhone to *press Enter* for two days before Greg found it
+([261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)); its
+offer is now a button. Words on screen that say *press Enter* are listed, each with what a finger
+presses instead, in `tests/words-that-name-a-key-have-something-to-press.test.ts`.
+
 **Once the key has done its thing, the keyboard goes away.** Greg, from an iPad in Remember's
 tutorial, 2026-10-03 (spya-gmtt4b):
 

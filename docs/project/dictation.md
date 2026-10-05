@@ -446,9 +446,12 @@ has to stay the first one. With no article around it the context is `{ kind: "pr
 production mount reaches today. Tests: `tests/command-bar-arguments.test.tsx`.
 
 A dictated sentence is in the box like a typed one, so when it matches no row it takes the typed
-one's path: Enter asks what it meant
+one's path: the **Ask what you meant** button, or Enter, asks what it meant
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The same
-guard refuses that Enter while the microphone is busy.
+guard refuses both while the microphone is busy. **The button is there because of dictation**: a
+sentence that was said never raised the phone's keyboard, so there was no Enter to press
+([261005c](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)). Anything
+a dictated box offers next has to be something a finger can press.
 
 ## The hook does not know which server it is talking to
 
