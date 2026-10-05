@@ -514,9 +514,10 @@ export function PrivacyPage() {
             The searches and the question the command bar suggests are worded from what you wrote
           </strong>{" "}
           in your profile and your reason for reading. Nothing is done with a suggestion until you
-          press it. One you press is sent and kept like any search or chat question you typed
-          yourself, so a search is seen by visitors if you share the article, and a chat question can
-          be searched for on the web. We ask the model to leave out anything about you as a person,
+          press it. A search you press is sent and kept like one you typed, so a search is seen by
+          visitors if you share the article. The chat question waits in Chat’s box until you press Send.
+          Once sent, it is kept like a question you typed and can be searched for on the web.
+          We ask the model to leave out anything about you as a person,
           and we cannot promise that it always does, so read a suggestion before you press it.
         </p>
       </Section>

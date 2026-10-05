@@ -235,7 +235,7 @@ export function readSuggestAnswer(json: unknown, sent: SuggestRequest): SuggestA
  * Both sides must hash the **stored** strings: the server normalises on the
  * way in and the route hands back what is stored, so neither trims here.
  *
- * Not a secret and not a security boundary: 53 bits of cyrb53, enough to tell
+ * Not a secret and not a security boundary: two 32-bit words from cyrb53, enough to tell
  * two profiles apart. A plain function rather than SHA-256 because the browser
  * has no synchronous one, and this must be the same arithmetic on both sides.
  */

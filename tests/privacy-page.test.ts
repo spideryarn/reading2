@@ -233,7 +233,8 @@ describe("the privacy page", () => {
     expect(prose).toContain("The searches and the question the command bar suggests are worded from what you wrote");
     expect(prose).toContain("Nothing is done with a suggestion until you press it");
     expect(prose).toContain("a search is seen by visitors if you share the article");
-    expect(prose).toContain("a chat question can be searched for on the web");
+    expect(prose).toContain("The chat question waits in Chat’s box until you press Send");
+    expect(prose).toContain("Once sent, it is kept like a question you typed and can be searched for on the web");
     /* It must not promise what a prompt cannot guarantee. */
     expect(prose).toContain("we cannot promise that it always does");
     expect(prose).not.toMatch(/never (contain|include)s? anything about you/);

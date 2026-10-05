@@ -274,6 +274,18 @@ Opus subagent, tests red first.
   route and constraint tests were red only for the missing column, and the mapping tests never;
   three mutations (the both-shapes guard, `sameOrigin`, the handoff's origin) each went red.
   **Deploy order: this code selects `origin_lens`, so the migration lands with or before it.**
+- 2026-10-05: **GPT Sol's code review of stage 2** ([the review](261005k-stage-2-code-review-sol.md)
+  of `cac2fbf9f`): *land with my fixes*, six findings, all fixed by Sol, each behaviour fix red
+  first. CR5 (P1): a slow suggestion answer could overwrite a newer profile read and bring back a
+  stale list. CR6 (P1): a failed read of the reason silently removed the row; it now says so and
+  offers a retry (the F6 half the implementer had dropped). CR7 (P1): an answer of *no reason* left
+  the row on offer. CR8 (P1): the row arriving late, or the list leaving after a save, moved which
+  row Enter would run. CR9 (P3): the privacy page said a pressed chat question was sent; it waits
+  until Send. CR10 (P3): a comment miscounted the hash's bits. Sol wrote postmortem
+  [261005p](../postmortems/261005p-a-response-completion-stamp-cannot-prove-its-snapshot-is-newer.md).
+  The prompt and its version are unchanged, so the eval's numbers still describe what ships.
+  Run by me afterwards: `command-suggest-route` (the database suite Sol could not run) and five
+  neighbours, 151 green; typecheck green. One round, no P0 or P1 left open, so no second round.
 - 2026-10-05: **stage 2 built** (before its code review). What differs from the design above:
   the prompt lives in `src/command-suggest-call.ts`, not the pure module (it needs `plainWords()`,
   which the browser may not import); the hash the server returns is a plain hash of the two stored

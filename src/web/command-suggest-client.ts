@@ -53,15 +53,16 @@ export async function askForSuggestions(slug: string, request: SuggestRequest, s
  * **Whether this article has a reason for reading, as last read**, and the
  * fingerprint of what a suggestion would be written from.
  *
- *  - `unknown`: not read yet, or the read failed. The bar offers nothing: a
- *    row that may only be able to fail is worse than no row.
+ *  - `unknown`: not read yet. Nothing is offered until the read answers.
  *  - `none`: read, and there is no reason.
+ *  - `failed`: the shelf could not be read; show the retry explanation.
  *  - `has`: there is one; `readFrom` is `readFromHash` of both boxes as
  *    stored, the value the server sends with a list.
  */
 export type ReasonRead =
   | { readonly state: "unknown" }
   | { readonly state: "none" }
+  | { readonly state: "failed" }
   | { readonly state: "has"; readonly readFrom: string };
 
 const UNKNOWN: ReasonRead = { state: "unknown" };
@@ -81,15 +82,16 @@ const UNKNOWN: ReasonRead = { state: "unknown" };
  * `saves` is this tab's save count, handed back so the bar can tell that a
  * save happened while its own request was out.
  *
- * `heard(readFrom)` is the bar saying the server has just read the profile
- * itself and this is its fingerprint: a list arrives with one, and it is newer
- * than anything read here. Without it, a profile changed in another tab would
- * leave the bar holding an old fingerprint that no new list could ever match.
+ * `version()` captures the profile-read ordering when a suggestion starts.
+ * `heard(readFrom, version)` adopts its snapshot only if no later read began.
+ * The server reads the profile before waiting for the model: a late response
+ * cannot overwrite a reopening read made after a save in another tab.
+ * `null` says the server successfully read an empty reason.
  */
 export function useReasonForReading(
   slug: string | undefined,
   open: boolean,
-): { reason: ReasonRead; saves: number; heard(readFrom: string): void } {
+): { reason: ReasonRead; saves: number; version(): number; heard(readFrom: string | null, version: number): void } {
   const saves = useSyncExternalStore(onProfileSaved, profileGeneration, profileGeneration);
   const [read, setRead] = useState<{ key: string; reason: ReasonRead } | null>(null);
   const asked = useRef<string | null>(null);
@@ -102,16 +104,16 @@ export function useReasonForReading(
     asked.current = key;
     const mine = ++latest.current;
     void apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
-      .then((r) => readJson<{ profile?: string | null; purpose?: string | null }>(r))
+      .then((r) => readJson<{ profile?: string | null; purpose?: string | null; purposeFailed?: boolean }>(r))
       .then((body): ReasonRead => {
-        /* A shelf read that failed answers `purpose: null` beside
-           `purposeFailed`, and lands here as no reason: either way there is
-           nothing to offer, and the next opening reads again. */
+        /* Failed is not empty: the reader must see why suggestions could
+           not be offered, and have a press that retries the server read. */
+        if (body.purposeFailed) return { state: "failed" };
         const purpose = typeof body.purpose === "string" && body.purpose !== "" ? body.purpose : null;
         const profile = typeof body.profile === "string" && body.profile !== "" ? body.profile : null;
         return purpose === null ? { state: "none" } : { state: "has", readFrom: readFromHash({ profile, purpose }) };
       })
-      .catch((): ReasonRead => UNKNOWN)
+      .catch((): ReasonRead => ({ state: "failed" }))
       .then((reason) => {
         /* Only the newest read speaks: an older one landing late would put
            back a reason the reader has since cleared. */
@@ -121,13 +123,14 @@ export function useReasonForReading(
   /* A read for another article, or from before a save, says nothing about now. */
   const current = slug !== undefined && read !== null && read.key === `${slug}\n${saves}` ? read.reason : UNKNOWN;
   const heard = useCallback(
-    (readFrom: string) => {
-      if (slug === undefined) return;
-      /* A read still out was started before the server's; it must not land on top of this. */
+    (readFrom: string | null, version: number) => {
+      if (slug === undefined || version !== latest.current) return;
+      /* Only reads begun before this suggestion may be superseded. */
       latest.current += 1;
-      setRead({ key: `${slug}\n${profileGeneration()}`, reason: { state: "has", readFrom } });
+      setRead({ key: `${slug}\n${profileGeneration()}`, reason: readFrom === null ? { state: "none" } : { state: "has", readFrom } });
     },
     [slug],
   );
-  return { reason: current, saves, heard };
+  const version = useCallback(() => latest.current, []);
+  return { reason: current, saves, version, heard };
 }

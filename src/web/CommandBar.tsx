@@ -148,6 +148,7 @@ import {
   type Command,
 } from "./command-match.js";
 import { askForPick } from "./command-pick-client.js";
+import { REASON_NOT_READ } from "../messages.js";
 import { askForSuggestions, useReasonForReading } from "./command-suggest-client.js";
 import {
   type CommandExecutor,
@@ -1595,7 +1596,7 @@ export function CommandBar({
       ? article.slug
       : undefined;
   /** Whether there is a reason for reading, and the fingerprint of what a list would be written from. */
-  const { reason, saves, heard: reasonHeard } = useReasonForReading(suggestSlug, open);
+  const { reason, saves, version: reasonVersion, heard: reasonHeard } = useReasonForReading(suggestSlug, open);
   /**
    * **The list, kept for the visit** — state of its own and not the pick's
    * `suggested` (GPT Sol's F2): that one is dropped by every opening, closing
@@ -1833,7 +1834,12 @@ export function CommandBar({
         : [],
     [emptyBox, keptList, commands, article, chatReachable],
   );
-  const offerSuggest = emptyBox && suggestSlug !== undefined && reason.state === "has" && suggestedNow.length === 0;
+  const offerSuggest =
+    emptyBox &&
+    suggestSlug !== undefined &&
+    (reason.state === "has" || reason.state === "failed") &&
+    suggestedNow.length === 0;
+  const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
   const shown = useMemo<readonly ShownRow[]>(
     () => [
       ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
@@ -1846,6 +1852,26 @@ export function CommandBar({
   const firstOrdinary = shown.length - results.length;
   const index = Math.min(selected, Math.max(0, shown.length - 1));
   const active = shown[index];
+  /* A profile read may insert or remove rows while the reader is choosing.
+     Keep their highlighted command, rather than applying its index to a new
+     list. A new suggestion answer, save and fresh opening still select row zero.
+     An unknown reason keeps the last save generation until its read lands. */
+  const previousReasonRows = useRef({ open, reason, list, saves, rowId: active?.rowId });
+  useLayoutEffect(() => {
+    const previous = previousReasonRows.current;
+    previousReasonRows.current = {
+      open, reason, list,
+      saves: reason.state === "unknown" ? previous.saves : saves,
+      rowId: active?.rowId,
+    };
+    if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
+    /* A new answer deliberately selects its first suggestion. */
+    if (list !== null && previous.list !== list) return;
+    /* A save restarts the choice; a removed row has no neighbour to confirm. */
+    const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
+    const next = at >= 0 ? at : 0;
+    if (next !== index) setSelected(next);
+  }, [open, reason, list, saves, shown, index, active?.rowId]);
 
   /* Lightbox.tsx § closingOurselves, and the same trap: `close()` fires the
      same `close` event a reader's Escape does, so without this the shutting we
@@ -2191,6 +2217,7 @@ export function CommandBar({
     const request: SuggestRequest = {
       rows: commands.filter((c) => c.kind === "mode" || c.kind === "submode").map((c) => pickKey(c, slug)),
     };
+    const readVersion = reasonVersion();
     const controller = new AbortController();
     const mine = ++suggestTurn.current;
     inFlight.current = true;
@@ -2209,6 +2236,11 @@ export function CommandBar({
         return;
       }
       if (reply.answer.kind === "nothing") {
+        if (reply.answer.why === "no-reason") {
+          /* A later read may already have found a reason. Do not contradict it. */
+          if (reasonVersion() !== readVersion) return;
+          reasonHeard(null, readVersion);
+        }
         if (barOpen) {
           setSaid({ kind: "message", text: reply.answer.why === "no-reason" ? SUGGEST_NO_REASON : SUGGEST_NOTHING });
         }
@@ -2216,10 +2248,10 @@ export function CommandBar({
       }
       const { kind: _kind, readFrom, ...suggestions } = reply.answer;
       setSelected(0);
-      reasonHeard(readFrom);
+      reasonHeard(readFrom, readVersion);
       setList({ slug, readFrom, suggestions });
     });
-  }, [suggestSlug, dictationBusy, commands, reasonHeard]);
+  }, [suggestSlug, dictationBusy, commands, reasonHeard, reasonVersion]);
 
   /** A row's press, by Enter or by a finger: the bar's own request for the one row that is one, `activate` for the rest. */
   const pressRow = (row: ShownRow): void => {
@@ -2344,10 +2376,10 @@ export function CommandBar({
         <p
           role="status"
           className={`cmdbar-status tw:m-0 tw:text-sm ${
-            said === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
+            said === null && reasonFailure === null ? "" : "tw:border-b tw:border-rule tw:px-4 tw:py-2"
           } ${said?.kind === "message" ? "tw:text-ink" : "tw:text-muted-foreground"}`}
         >
-          {said === null ? "" : said.kind === "pending" ? "Starting…" : said.kind === "asking" ? ASKING : said.text}
+          {said === null ? reasonFailure ?? "" : said.kind === "pending" ? "Starting…" : said.kind === "asking" ? ASKING : said.text}
         </p>
         {/* **The wait for a short list from why you are reading**, a line of
             its own: `said` above is cleared by every opening and keystroke,

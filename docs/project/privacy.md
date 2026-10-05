@@ -481,11 +481,11 @@ not shown the article. **A new flow of the profile to a model already on the pag
 
 **The page also says what follows, because that is the part a reader could not guess.** The model
 writes up to three searches and one question for chat, and words them from what it was shown. One
-the reader presses then goes where any search or chat question they typed goes: a quick search is
-sent to `jev-1.13` with the article's passages and is stored, and a stored search is shown to
-visitors when the article is shared; a question put to chat can become a web search once it is
-sent. So words that began in the profile can end up outside the conversation, on the reader's own
-press. This is the one exception to the profile's rule, and
+the reader presses follows the same path as words they typed: a quick search is sent to
+`jev-1.13` with the article's passages and is stored, and a stored search is shown to visitors
+when the article is shared. A pressed question waits in Chat's box; it is sent and stored only
+when the reader presses Send, and can then become a web search. So words that began in the
+profile can end up outside the conversation, on the reader's own press. This is the one exception to the profile's rule, and
 [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
 owns the reasoning.
 

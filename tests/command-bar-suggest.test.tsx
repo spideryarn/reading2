@@ -40,6 +40,7 @@ import {
   lensLabel,
   readFromHash,
 } from "../src/command-suggest.js";
+import { REASON_NOT_READ } from "../src/messages.js";
 import type { ActionOutcome } from "../src/web/command-match.js";
 import type { CommandExecutor } from "../src/web/command-proposal.js";
 import type { DockExperimental } from "../src/web/Dock.js";
@@ -94,6 +95,9 @@ let lensed: string[];
 /** What `GET /api/reader?slug=` says now. */
 let profile: { profile: string | null; purpose: string | null; purposeFailed?: boolean };
 let readerReads: number;
+let deferReader: boolean;
+let readerStatus: number;
+let readerAnswers: (() => void)[];
 /** Every post to the suggest route, each with the way to answer it. */
 let asked: {
   body: SuggestRequest;
@@ -139,6 +143,9 @@ beforeEach(() => {
   asked = [];
   written = [];
   readerReads = 0;
+  deferReader = false;
+  readerStatus = 200;
+  readerAnswers = [];
   profile = { profile: "A statistician.", purpose: "how they handled missing data" };
   jobEngine.reset();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -147,7 +154,9 @@ beforeEach(() => {
     if (url === "/api/jobs") return Promise.resolve(new Response(JSON.stringify({ jobs: [] })));
     if (url === READER_PATH && method === "GET") {
       readerReads += 1;
-      return Promise.resolve(new Response(JSON.stringify({ purposeFailed: false, ...profile })));
+      const body = JSON.stringify(readerStatus === 200 ? { purposeFailed: false, ...profile } : { error: "Temporary read failure. [bar-reason-unread]" });
+      if (deferReader) return new Promise<Response>((resolve) => readerAnswers.push(() => resolve(new Response(body, { status: readerStatus }))));
+      return Promise.resolve(new Response(body, { status: readerStatus }));
     }
     if (url === SUGGEST_PATH && method === "POST") {
       return new Promise<Response>((resolve) => {
@@ -332,11 +341,28 @@ describe("who is offered the row", () => {
     expect(asked).toEqual([]);
   });
 
-  it("is nobody when the reason could not be read", async () => {
+  it("shows a retryable failure when the reason could not be read (F6)", async () => {
     profile = { profile: "A statistician.", purpose: null, purposeFailed: true };
     await reading();
     await openBar();
-    expect(listed()).not.toContain(SUGGEST_LABEL);
+    expect(status()).toBe(REASON_NOT_READ.message);
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    expect(asked).toEqual([]);
+    profile = { ...profile, purpose: "the evidence", purposeFailed: false };
+    press("Enter");
+    await settle();
+    await answer(list());
+    expect(suggested()).toHaveLength(4);
+    expect(status()).toBe("");
+  });
+
+  it("shows a retryable failure when the profile GET itself fails", async () => {
+    readerStatus = 503;
+    await reading();
+    await openBar();
+    expect(status()).toBe(REASON_NOT_READ.message);
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    expect(asked).toEqual([]);
   });
 
   it("is not a visitor, somebody signed out, or the Metadata page — and none of them reads the profile", async () => {
@@ -358,6 +384,21 @@ describe("who is offered the row", () => {
 });
 
 describe("asking", () => {
+  it("keeps the selected command when a slow profile read inserts the suggestion row", async () => {
+    deferReader = true;
+    await reading();
+    await openBar();
+    press("ArrowDown");
+    expect(selectedName()).toBe("Structure");
+    act(() => readerAnswers.at(-1)?.());
+    await settle();
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    expect(selectedName()).toBe("Structure");
+    press("Enter");
+    await settle();
+    expect(openedModes).toEqual(["structure"]);
+    expect(asked).toEqual([]);
+  });
   it("posts the keys of the mode rows and nothing else, once, and waits with the bar open", async () => {
     await reading();
     await openBar();
@@ -542,6 +583,49 @@ describe("the list", () => {
 });
 
 describe("a save drops the list (F3)", () => {
+  for (const laterReadFirst of [true, false]) {
+    it(`does not let an old suggestion overwrite a newer opening read (${laterReadFirst ? "GET first" : "suggestion first"})`, async () => {
+      await reading();
+      await openBar();
+      const stale = list();
+      press("Enter");
+      await settle();
+      await shutBar();
+      profile = { ...profile, profile: "A clinician." };
+      deferReader = !laterReadFirst;
+      await openBar();
+      await answer(stale);
+      if (!laterReadFirst) {
+        expect(readerAnswers).toHaveLength(1);
+        act(() => readerAnswers[0]?.());
+        await settle();
+      }
+      expect(suggested()).toEqual([]);
+      expect(listed()[0]).toBe(SUGGEST_LABEL);
+    });
+  }
+
+  it("does not display an old no-reason reply over a newer opening read", async () => {
+    await reading();
+    await openBar();
+    press("Enter");
+    await settle();
+    await shutBar();
+    profile = { ...profile, purpose: "the control group" };
+    await openBar();
+    await answer({ kind: "nothing", why: "no-reason" });
+    expect(status()).toBe("");
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+  });
+
+  it("drops the list even when a save leaves the stored words identical", async () => {
+    await reading();
+    await suggestAndLand();
+    await act(async () => { await saveProfile(profile.profile ?? ""); });
+    await settle();
+    expect(suggested()).toEqual([]);
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+  });
   it("About you, edited — the row that asks is back, for the profile as it is now", async () => {
     await reading();
     await suggestAndLand();
@@ -555,6 +639,20 @@ describe("a save drops the list (F3)", () => {
     press("Enter");
     await settle();
     expect(asked).toHaveLength(2);
+  });
+
+  it("resets selection when a save removes the selected suggestion", async () => {
+    await reading();
+    await suggestAndLand();
+    press("ArrowDown");
+    expect(selectedName()).toBe(QUICK_2);
+    await act(async () => { await saveProfile("A clinician."); });
+    await settle();
+    expect(selectedName()).toBe(SUGGEST_LABEL);
+    press("Enter");
+    await settle();
+    expect(asked).toHaveLength(2);
+    expect(openedModes).toEqual([]);
   });
 
   it("the reason, edited", async () => {
@@ -603,6 +701,26 @@ describe("a save drops the list (F3)", () => {
     await settle();
     expect(asked).toHaveLength(2);
   });
+
+  for (const pending of [false, true]) {
+    it(`forgets the previous reader's ${pending ? "outstanding request" : "kept list"} on sign-out`, async () => {
+      await reading();
+      await openBar();
+      const old = list();
+      press("Enter");
+      await settle();
+      if (!pending) await answer(old);
+      await reading({ setting: EXPERIMENTAL_SIGNED_OUT });
+      expect(suggested()).toEqual([]);
+      if (pending) {
+        expect(asked[0]?.signal?.aborted).toBe(true);
+        await answer(old);
+      }
+      await reading();
+      expect(suggested()).toEqual([]);
+      expect(listed()[0]).toBe(SUGGEST_LABEL);
+    });
+  }
 
   it("a profile changed somewhere else is noticed at the next opening", async () => {
     await reading();
@@ -657,6 +775,7 @@ describe("when there is no list", () => {
     await reading();
     await suggestAndLand({ kind: "nothing", why: "no-reason" });
     expect(status()).toBe(SUGGEST_NO_REASON);
+    expect(listed()).not.toContain(SUGGEST_LABEL);
   });
 
   it("treats a reply it cannot read as a failure, not a list", async () => {
