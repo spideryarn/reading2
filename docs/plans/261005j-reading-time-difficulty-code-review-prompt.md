@@ -15,6 +15,18 @@ Read, in this order:
    and `evals/results/reading-time-difficulty-2026-10-05.json` — the evidence and the paid run.
 4. `CLAUDE.md` for the house rules.
 
+## This is the second start of this review
+
+The first was killed by the box's memory guard about fifty minutes in, before it wrote a verdict.
+What it had changed is kept and is in the diff: `sampleForRating` now reserves the final run and
+samples inside an oversized paragraph, with two new tests, and the prompt version went to
+`reading-difficulty/2`. Those tests pass, and the paid check was run again on that sampler
+(`evals/results/reading-time-difficulty-2026-10-05.json`; the first run is
+`…-prompt-1.json`). Check that change like the rest; you need not redo it. Since then the tree has
+merged `dev` twice and the migration was regenerated as
+`drizzle/20261005184207_reading_difficulty.sql`. `tests/reading-difficulty-pg.test.ts` has now
+run, in its private database, and passes.
+
 ## What has and has not been checked
 
 - `npm run typecheck`: clean.
