@@ -23,7 +23,7 @@
  *
  * See docs/project/chat-tools.md.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHAT_TOOLS,
   LINKS_CHARS,
@@ -58,7 +58,7 @@ import type { Block, Meta } from "../src/types.js";
  * **No test in this file may ask real DNS.** `read_web_page` goes through
  * `fetchDocument`, whose address guard resolves the hostname before it fetches
  * (`defaultResolve` in src/fetch.ts), so stubbing `fetch` alone left a real
- * lookup in front of the stub, and four tests here that stubbed nothing made a
+ * lookup in front of the stub, and three unstubbed calls here could make a
  * real request as well. This lookup refuses unless a test gives it an answer,
  * which fails the address guard before any socket. GPT Sol's F9 on plan
  * 261005i; docs/plans/261005m-a-docs-size-cap-and-a-chat-tools-test-that-stops-doing-dns.md.
@@ -67,7 +67,9 @@ import type { Block, Meta } from "../src/types.js";
  * calls `fetch` itself. So `fetch` refuses by default as well, and because
  * `read_web_page` catches what a fetch throws, the refusal is also counted and
  * a test that reached it fails afterwards. A test that wants a response stubs
- * its own over this one, as they all did already.
+ * its own over this one, as they all did already. Install the default directly:
+ * `vi.unstubAllGlobals()` must restore it, rather than the real transport that
+ * was here before the test. The suite's setup restores that transport afterwards.
  */
 const dns = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock("node:dns/promises", async (importOriginal) => ({
@@ -79,17 +81,53 @@ beforeEach(() => {
   dns.lookup.mockReset();
   dns.lookup.mockRejectedValue(new Error("a test in chat-tools.test.ts reached DNS"));
   unstubbedFetches.length = 0;
-  vi.stubGlobal("fetch", (input: unknown) => {
+  globalThis.fetch = (input) => {
     unstubbedFetches.push(String(input instanceof Request ? input.url : input));
     return Promise.reject(new Error("a test in chat-tools.test.ts reached fetch without a stub"));
-  });
+  };
 });
 afterEach(() => {
   vi.unstubAllGlobals();
   expect(unstubbedFetches).toEqual([]);
 });
 
-const block =(id: string, text: string, over: Partial<Block> = {}): Block =>
+describe("fetch isolation survives global cleanup", () => {
+  // A safe canary in place of the real transport: a bypass must never dial.
+  const transport = vi.fn<typeof fetch>().mockRejectedValue(new Error("transport canary"));
+  const url = "https://93.184.216.34/a-page";
+  const ctx = { slug: "example", meta: { title: "A piece" } as Meta, blocks: [], power: "standard" as const };
+  let originalFetch: typeof fetch;
+
+  beforeAll(() => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = transport;
+  });
+  afterAll(() => {
+    globalThis.fetch = originalFetch;
+  });
+  beforeEach(() => {
+    transport.mockClear();
+  });
+
+  it.each([false, true])("counts unstubbed fetch after cleanup (response stub: %s)", async (stub) => {
+    if (stub) vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("response stub")));
+    vi.unstubAllGlobals();
+    await runTool("read_web_page", { url }, ctx);
+    // Consume this deliberately unexpected call before the outer hook checks.
+    expect(unstubbedFetches.splice(0)).toEqual([url]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  afterEach(async () => {
+    // Nested cleanup runs before the file-level hook, just like the loop tests.
+    vi.unstubAllGlobals();
+    await runTool("read_web_page", { url }, ctx);
+    expect(unstubbedFetches.splice(0)).toEqual([url]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+});
+
+const block = (id: string, text: string, over: Partial<Block> = {}): Block =>
   ({
     id,
     tag: "p",
