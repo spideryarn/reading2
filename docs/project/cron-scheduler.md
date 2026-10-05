@@ -51,7 +51,8 @@ scheduler, it is self-limiting, and it has the property that an article nobody t
 drafts — which is also the article that is not growing. This records the decision so that nobody
 re-opens the choice.
 
-**Implementation status, 2026-09-11: wired, counting, not yet deleting.**
+**Implementation status: wired on 2026-09-11; deletion enabled in the 2026-10-05 change,
+which reaches production at the next deploy.**
 
 - `openOrBeginJobDraft` ([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) calls
   `sweepAbandonedDrafts` on the branch that mints a draft — the first step of every job — for the
@@ -64,14 +65,25 @@ re-opens the choice.
 - Protection is rechecked under a row lock, so a job pointer that appears between counting and
   deleting spares its row. A sweep that fails is rolled back to a savepoint and the step goes ahead;
   it is logged after the commit, as is every non-empty sweep.
-- **`STEP_START_DRAFT_SWEEP` is `"count"`**: every job start runs the real selection and logs what
-  it would have taken, and deletes nothing. Deploying with `"delete"` would be the first destructive
-  run against readers' data, so flipping it is Greg's approval, made after reading
-  `npx tsx scripts/draft-sweep-inventory.ts` (read-only) against production. Until then this is
-  measured retention, not operated retention.
+- **It deletes, and there is no mode that only counts.** From 2026-09-11 it counted, because the
+  first destructive run against readers' data was Greg's to approve. He approved it on 2026-10-04,
+  with production's number in front of him (75 rows across 29 articles, about 19 MB, read on
+  2026-10-03):
+
+  > Q-draft-sweep yes
+
+  The count mode was removed with the question, so there is one behaviour to keep working.
+  `npx tsx scripts/draft-sweep-inventory.ts` (read-only) still says what is waiting.
+- **An article nobody runs a job on keeps its drafts**, which is what on demand means. The backlog
+  that had built up by the time of the approval can be cleared once, across the library, by
+  `npx tsx scripts/draft-sweep-backlog.ts` — a dry run unless given `--delete`; the deletion has
+  not yet been run. It is the only whole-library form of this and it is a command a person runs,
+  not a path a reader's request takes.
 
 The reasoning, the race tests and the local measurements are in
-[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § O.
+[260908f](../plans/260908f-prioritised-spideryarn-codebase-improvements.md) § O; the switch to
+deleting, what goes with a deleted revision, and the backlog run are in
+[261005j](../plans/261005j-draft-sweep-deletes-and-the-count-mode-goes.md).
 
 The general form of that answer is the one to reach for first: **attach the periodic work to a
 request that is already happening on the same object**. It costs nothing to run, it cannot drift out
