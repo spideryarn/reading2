@@ -22,7 +22,7 @@
  * whole of the posed server: which batch is current, which answers it holds,
  * and what the next mark does.
  */
-import { act, createElement, StrictMode } from "react";
+import { act, createElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BlockId, Quiz, QuizKeptAnswer, QuizQuestion, QuizResponse } from "../src/types.js";
@@ -217,6 +217,7 @@ function Probe() {
 }
 function Band({ read }: { read: QuizRead }) {
   owner = useQuiz(SLUG, read);
+  const [, arrivalTaken] = useState(0);
   return createElement(QuizPanel, {
     owner,
     blocks: BLOCKS,
@@ -224,6 +225,9 @@ function Band({ read }: { read: QuizRead }) {
     arrival,
     onArrivalTaken: () => {
       arrival = null;
+      /* Reader clears the arrival through state, so the next panel render
+         must receive null even when only the panel's own effects wrote state. */
+      arrivalTaken((n) => n + 1);
     },
     readSoFar,
   });
@@ -857,6 +861,57 @@ describe("coming back opens at the first question not yet answered", () => {
     expect(asked()).toBe("Question number 2?");
   });
 
+  it.each([false, true])("honours an arrival received after it started waiting for reading levels (StrictMode %s)", async (doubleEffects) => {
+    strict = doubleEffects;
+    server.attempts = [kept(Q1, "What I said to one.")];
+    readSoFar = reading("loading");
+    await paint();
+    expect(asked()).toBeNull();
+
+    arrival = { batchId: server.batchId, questionId: Q3 };
+    await paint();
+    expect(arrival).toBeNull();
+    expect(asked()).toBe("Question number 3?");
+    expect(box()?.value).toBe("");
+    expect(owner.attempt).toBeNull();
+    readSoFar = reading();
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+  });
+
+  it("opens afresh when a 404 is followed by the same batch returning", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+    type("A draft before the quiz went away.");
+
+    server.nextRead = Promise.resolve(new Response(null, { status: 404 }));
+    await act(async () => owner.refresh());
+    await settle();
+    expect(owner.quiz).toBeNull();
+    expect(box()).toBeNull();
+    await act(async () => owner.refresh());
+    await settle();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+    expect(owner.attempt).toBeNull();
+    await press("Previous question");
+    expect(box()?.value).toBe("What I said to one.");
+  });
+
+  it("preserves a same-question arrival's draft when reading levels hide that question in the same commit", async () => {
+    readSoFar = reading("failed");
+    await paint();
+    expect(asked()).toBe("Question number 1?");
+    type("My draft on one.");
+    arrival = { batchId: server.batchId, questionId: Q1 };
+    readSoFar = reading();
+    await paint();
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("My draft on one.");
+    expect(host.querySelector<HTMLInputElement>(".quiz-only-read input")?.checked).toBe(false);
+  });
+
   it("counts only questions the reading filter lets the reader land on", async () => {
     /* One is unread and unanswered, two is answered: three is where to go on. */
     server.attempts = [kept(Q2, "What I said to two.")];
@@ -875,6 +930,42 @@ describe("coming back opens at the first question not yet answered", () => {
     readSoFar = reading();
     await paint();
     expect(asked()).toBe("Question number 3?");
+  });
+
+  it("stays usable with no landable questions, then follows the reader's filter press", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    readSoFar = { ...reading(), levels: new Map() };
+    await paint();
+    expect(asked()).toBeNull();
+    expect(box()).toBeNull();
+    expect(host.textContent).toContain("None of these questions is about a passage you have read yet.");
+    await act(async () => host.querySelector<HTMLInputElement>(".quiz-only-read input")?.click());
+    await settle();
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("What I said to one.");
+    await press("Next question");
+    type("My draft on two.");
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "An answer from another tab.")];
+    await act(async () => owner.refresh());
+    await settle();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("My draft on two.");
+    expect(owner.attempt).toBeNull();
+  });
+
+  it("opens a replacement batch at its first landable question without carrying the old draft", async () => {
+    readSoFar = reading();
+    server.attempts = [kept(Q2, "What I said to two.")];
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+    type("My draft on the old batch.");
+    server.batchId = "spya-batch3";
+    server.attempts = [];
+    await act(async () => owner.refresh());
+    await settle();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+    expect(owner.attempt).toBeNull();
   });
 
   it("the same in StrictMode", async () => {

@@ -524,6 +524,15 @@ export function QuizPanel({
    * from the front itself rather than from the old batch's index.
    */
   const filterBatch = useRef(quiz?.batchId);
+  /* Whether the arrival effect will run in this commit. A handled arrival
+     cannot keep overruling later filter presses if its owner leaves it in
+     the props. */
+  const arrivalSeen = useRef<{
+    batchId: string | undefined;
+    arrival: QuizArrival | null | undefined;
+  }>({ batchId: quiz?.batchId, arrival: undefined });
+  const takingArrival =
+    arrivalSeen.current.batchId !== quiz?.batchId || arrivalSeen.current.arrival !== arrival;
   /* A replacement batch reaches render before either reset effect reaches the
      state it owns. Do not paint the new batch at the old batch's index in that
      gap: even when that index happens to be included, its question would sit
@@ -535,6 +544,14 @@ export function QuizPanel({
   useEffect(() => {
     const from = filterBatch.current === quiz?.batchId ? at : 0;
     filterBatch.current = quiz?.batchId;
+    /* An explicit destination owns this navigation, including its cleanup.
+       Letting the filter clear first would lose a same-question draft or
+       abort its mark even though the arrival writes the right index last. */
+    if (
+      takingArrival &&
+      arrival?.batchId === quiz?.batchId &&
+      questions.some((q) => q.id === arrival?.questionId)
+    ) return;
     if (!filterActive || included[from] !== false) return;
     const target = includedAt.find((i) => i >= from) ?? lastBefore(includedAt, from);
     if (target !== undefined) {
@@ -546,7 +563,7 @@ export function QuizPanel({
       setTyped("");
       setShowAnswer(false);
     }
-  }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
+  }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId, takingArrival, arrival, questions]);
 
   /**
    * **Open at the first question not yet answered.** Greg, 2026-10-05, on the
@@ -581,7 +598,13 @@ export function QuizPanel({
   const resuming = quiz != null && resumedBatch !== quiz.batchId;
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per batch, when the walk can say where the reader may land; the kept answers and the filter are read as they stand
   useEffect(() => {
-    if (!quiz || !resuming) return;
+    /* A 404 resets the walk, so the same batch returning needs a fresh choice
+       too. Its previous completion must not outlive the questions. */
+    if (!quiz) {
+      setResumedBatch(undefined);
+      return;
+    }
+    if (!resuming) return;
     const named =
       arrival?.batchId === quiz.batchId && questions.some((q) => q.id === arrival.questionId);
     if (!named && waitingForReading) return;
@@ -597,7 +620,7 @@ export function QuizPanel({
        just cleared them, and nothing has been drawn since. */
     setAt(to);
     setArrivedByNext(false);
-  }, [quiz?.batchId, resuming, waitingForReading]);
+  }, [quiz?.batchId, resuming, waitingForReading, arrival]);
 
   /**
    * **Land on a question pressed in the prose** — `QuizArrival`.
@@ -612,20 +635,18 @@ export function QuizPanel({
    * - **Another batch's arrival is taken and ignored** — finding 1.
    * - **The question already open is not moved to**, `pick`'s rule: `move`
    *   aborts a mark in flight and drops the draft (finding 3). Its index is
-   *   still written last, though: the filter effect just above can be trying to
-   *   move off this unread question in the same commit. Writing the requested
-   *   index again lets the arrival win without clearing the attempt.
+   *   still written last, and the filter yields to a new valid arrival before
+   *   it can clear any answer state.
    * - **The tick-box gives way.** The reader asked for this question by name, so
    *   if *Only what I've read* would hide it — or the reading levels are still
    *   loading, while the walk waits — it is turned off, visibly, rather than
    *   the walk landing somewhere else.
    * - A jump is not an arrival by Next, so the step shows its premise.
    */
-  const arrivalBatch = useRef(quiz?.batchId);
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs for a new arrival or a new batch; `move` is recreated every render and the rest is read as it stands
   useEffect(() => {
-    const sameBatch = arrivalBatch.current === quiz?.batchId;
-    arrivalBatch.current = quiz?.batchId;
+    const sameBatch = arrivalSeen.current.batchId === quiz?.batchId;
+    arrivalSeen.current = { batchId: quiz?.batchId, arrival };
     if (!arrival || !quiz) return;
     if (arrival.batchId === quiz.batchId) {
       const to = questions.findIndex((q) => q.id === arrival.questionId);

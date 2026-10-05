@@ -289,3 +289,18 @@ Previous walks back through the answered ones with their answers and marks showi
 Tests: `tests/quiz-kept-answers.test.tsx` § *coming back opens at the first question not yet
 answered*, red before the change; the older cases in that file that assumed question 1 now step
 back with Previous.
+
+### Review of the opening change
+
+Review of `5d5ae9cfc` found two opening bugs and an older filter/arrival race, reproduced before
+fixing them. An arrival received after waiting for reading levels began was overwritten when its
+owner cleared it; a 404 followed by the same batch skipped the fresh opening choice; and a filter
+activating beside a same-question arrival cleared the draft before the arrival restored the index.
+The opening effect now observes arrivals while pending and forgets completion when the quiz goes
+absent. A new valid arrival takes priority over filter navigation before either changes answer
+state; an already handled arrival cannot override a later filter press.
+
+The regression fixture clears arrivals through a React render, as `Reader` does, rather than just
+changing a module variable. Tests also cover a live mark during filter/arrival competition, a
+replacement batch under the reading filter, and an empty filtered walk becoming usable again.
+Root causes and provenance: [the postmortem](../postmortems/261005i-navigation-priority-must-be-settled-before-answer-state-changes.md).
