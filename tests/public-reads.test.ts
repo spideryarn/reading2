@@ -375,17 +375,17 @@ describe("the public blocks read", () => {
 /**
  * **The switch's own read, which is the one query in this feature that writes.**
  *
- * Its `for update` is the whole of the concurrency argument: without it two
- * toggles both read the old value, both write, and both append an event. GPT
- * Sol's finding 6 was that deleting it left the entire suite green.
+ * Its `for update` makes the read of `processing` wait for a publication that
+ * is flipping a minimal paper to full — the one writer of this row that holds
+ * the article lock without the owner's billing lock. Two toggles at once are
+ * queued by that billing lock, not by this clause. GPT Sol's finding 6 was
+ * that deleting it left the entire suite green.
  *
- * There is a behavioural test for it too (tests/public-visibility-pg.test.ts,
- * "writes one event when two publishes race"), and this one exists because that
- * one can only catch the bug while the window is open — measured on this laptop,
- * two `PUT`s fired together usually do not overlap at all, and the race test
- * passed against the unlocked code until it was rewritten to hold the row from
- * outside. A timing test that has to be lucky is not the only evidence this
- * should rest on.
+ * The behavioural test is tests/public-visibility-pg.test.ts, "waits for a
+ * Read this that is landing". Its neighbour, "writes one event when two
+ * publishes race", passes with the clause deleted, and was credited with
+ * catching it until 2026-10-05. This assertion needs no database and fires on
+ * the mutation every time.
  */
 /**
  * **The two reads of the owner's own work**, added on 2026-09-04 when a shared

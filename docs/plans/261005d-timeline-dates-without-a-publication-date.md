@@ -159,6 +159,8 @@ those dates were assumed under the rule as it stood, and they say so.
 
 - **[Q-timeline-assumed-year]** Keep the guarded assumption, or take it out and show only the
   article's words? The debrief to the Overseer has it in full.
+  **Decided: A, keep the guarded assumption, as built** — Greg, 2026-10-05: "I don't fully
+  follow. A sounds ok".
 - **A year-less date has no margin note** (above). Queued separately.
 - 32 of 47 production articles have no publication date. That is the root of this report and of
   every future one like it, and it is stage 2's (extraction) to improve, not this mode's.
