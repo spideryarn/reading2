@@ -9,9 +9,9 @@ plan: [261005k](../plans/261005k-port-overseer-auto-memory-into-docs.md) · queu
 if we were to start a new box, it would not have lost valuable insights."* This file says, for each
 of the 85 memory files, where its lessons now are, and whether the file can be deleted.
 
-**Where it stands (2026-10-05).** 35 files are *eligible*: every lesson in them is in a
-doc, or was dropped for a stated reason. 50 are *retain*: at least one lesson is a rule, so
-it is one of the 43 proposals below, and proposals need Greg's yes before they land.
+**Where it stands (2026-10-05).** 27 files are *eligible*: every lesson in them is in a
+doc, or was dropped for a stated reason. 58 are *retain*: at least one lesson is a rule, so
+it is one of the 49 proposals below, and proposals need Greg's yes before they land.
 **Nothing was deleted.** The 25 direct edits are on `dev` in the same commit as this file.
 
 ## How to use this before deleting anything
@@ -30,7 +30,11 @@ it is one of the 43 proposals below, and proposals need Greg's yes before they l
 
 Four Opus subagents each read about twenty files in full, split each into its lessons, and for
 every lesson grepped the docs and read the passage before calling it *already*. One writer then
-applied the edits in sequence. GPT Sol reviewed the plan before any of it and the result after.
+applied the edits in sequence. GPT Sol reviewed the plan before any of it and the result after
+([its answer](../plans/261005k-port-overseer-auto-memory-result-review-sol.md)): it read all 35
+files then marked eligible, found seven that would have lost a lesson and one dropped on too thin a
+check, and those eight are now *retain*, each row saying why. It also found six sentences among
+the edits that were instructions or were no longer true, and they were rewritten.
 The batch reports, with each agent's doubts, are kept:
 [A](../plans/261005k-probes/report-A.md), [B](../plans/261005k-probes/report-B.md),
 [C](../plans/261005k-probes/report-C.md), [D](../plans/261005k-probes/report-D.md).
@@ -47,12 +51,36 @@ The batch reports, with each agent's doubts, are kept:
 The dates and numbers inside the ported text are the memories' own. Where an agent could check one
 against the tree it did, and the reports' Doubts sections say which it could not.
 
+**What the check script cannot tell you.** `check-mapping.py` checks the inventory and the hashes.
+It does not know whether a lesson is covered: change every *retain* to *eligible* and it still
+passes. The verdicts are a reviewed judgement, not a computed one.
+
+## Lessons in retained files that no proposal carries yet
+
+Sol sampled thirteen retained rows and found these. Each file is retained, so nothing is at risk
+today, but **landing that file's proposals does not make it eligible until these are settled too.**
+
+| memory file | the lesson still unplaced | nearest proposal |
+|---|---|---|
+| `a-named-worktree-may-hold-a-dead-sessions-work` | Look for an existing worktree on the topic *before* assuming a fresh start, not only after entering one. | CP5 |
+| `a-comment-is-not-a-traced-equality` | A fingerprint built for caching can leave out fields that a safety comparison needs. | DP6 |
+| `two-joins-that-disagree-are-a-measurement` | Report the disagreement row by row, and send the unfavourable reading to whoever decides, at the time. | DP2 |
+| `a-codex-self-review-looks-like-an-independent-one` | Brief the independent reviewer to treat the first artefact as a claim and test its named statements. | DP7 |
+| `full-suite-needs-tmux-on-this-box` | Whether a long command should ever be given a deadline: the `timeout` incident is in `testing.md`, the instruction is nowhere. | none |
+| `tmux-outlives-closed-tabs` | Where the source of `sessions.mjs` lives. The memory says Greg's laptop; nobody could check that from the box. | none |
+
+Two edits sit in a home the reviewer thought weak (RR-19): the `Write`-tool and `npm run` bullets
+are in the box's trap list, and describe the harness and npm, not the box. Left there, since no
+project doc owns either; a better home would be a proposal.
+
 ## Four of Greg's quotes could not be found in anything he typed
 
 A model wrote the memory files, so each quotation attributed to Greg was searched for in the
 session transcripts (`docs/plans/261005k-probes/check-quotes.py`, which looks for the string in a
-turn a person typed, and skips model output, peer messages and compaction summaries). Eight were
-found in his own turns. **Four were not**, and appear only in the Overseer's own summaries of what
+turn a person typed, and skips model output, peer messages and compaction summaries). The script
+finds candidates; it does not prove authorship, and its first version counted a compaction summary
+as typed. So each hit was then read in its turn, and GPT Sol read the source turns again
+independently. Eight were found in his own turns. **Four were not**, and appear only in the Overseer's own summaries of what
 he said and in its messages to other sessions:
 
 | in proposal | the string as the memory has it | memory's date |
@@ -107,10 +135,10 @@ Sorted by file name. The hash is the first twelve characters of the file's sha25
 | `a-survey-cannot-see-an-absent-state` | `9794d6939cd2` | L1 (a rule derived from a census of live instances misses the beginning-of-life state; make one specimen first) propose DP2. | retain |
 | `a-truncated-grep-becomes-an-exhaustive-list` | `44da9ebeaf01` | L1 (`grep … \| head -20` cut seven callers to three and the three became "the set" in a source comment; count first or re-run unbounded) propose DP3. `written-down-is-not-checked.md` § 4. An inventory names the cause ("the grep was truncated") but not what to do about `head`. | retain |
 | `an-unchecked-brief-claim-becomes-a-source-comment` | `16fb40772dcd` | L1 (a claim in a brief comes back verbatim in comments, docs and tests; grep each load-bearing one first) propose DP4. L2 (a review finding is the same hazard; enumerate the input space rather than test one instance) propose DP6. L3a (a peer session's confident claim is the same hazard) already: `silent-success.md` § Spotting the family — "the agreeing is what stopped the checking". L3b (a grep answers one direction; say which in the sentence that reports it) propose DP3. L4 ("nothing does X" is the riskiest shape) already: `docs/reusable/written-down-is-not-checked.md` § 2. A statement that asserts an absence — "An absence is only as good as the enumeration behind it". L5 (end every brief with "say which claims in this brief turned out to be false") propose DP4. L6 (a wrong claim has copies; hunt them all) propose DP4. L7 (re-check the claims a decision rests on) already: `codex-cli-as-subagent.md` § Four ways the second opinion gets wasted — "Test the load-bearing fact first." | retain |
-| `announce-before-taking-a-queued-slice` | `4a9efee524bb` | L1 (check who is on a queued slice before starting it, and make the claim visible) already: `overseer.md` § Dispatching agents — "Read `gjd-remote ls` before you dispatch anything … two agents building the same slice from the same queue, which this box has already paid for once", and "Name a session after what claims it". L2 dropped: duplicate — the clean merge that kept both sets of rows is `merge-can-duplicate-what-it-does-not-conflict-on` (another batch). L3 dropped: superseded — "answer a peer on timing, not ownership" was for agents claiming slices among themselves; slices are now dispatched and named by the Overseer (`overseer.md` § Dispatching agents). L4 dropped: stale — "no machinery for this" (2026-09-07, a paraphrase of Greg) predates the claim register the same section now describes. | eligible |
+| `announce-before-taking-a-queued-slice` | `4a9efee524bb` | L1 (check who is on a queued slice before starting it, and make the claim visible) already: `overseer.md` § Dispatching agents — "Read `gjd-remote ls` before you dispatch anything … two agents building the same slice from the same queue, which this box has already paid for once", and "Name a session after what claims it". L2 dropped: duplicate — the clean merge that kept both sets of rows is `merge-can-duplicate-what-it-does-not-conflict-on` (another batch). L3 dropped: superseded — "answer a peer on timing, not ownership" was for agents claiming slices among themselves; slices are now dispatched and named by the Overseer (`overseer.md` § Dispatching agents). L4 dropped: stale — "no machinery for this" (2026-09-07, a paraphrase of Greg) predates the claim register the same section now describes. **After review (RR-7):** the Overseer's dispatch rules do not cover an agent starting on its own: message peers before taking a slice a plan doc queues, write the claim into the plan, and answer a peer on timing, not ownership — propose RP6. The other drops stand. | retain |
 | `api-build-refuses-stale-client-shell` | `abaa13f68eb4` | L1 (`build:api` alone refuses after a commit; run `npm run build`) already: `deployment.md`, the paragraph before § Everything that bundle imports at module scope — "Which is why `npm run build:api` alone refuses after a commit". L2 (hit while re-measuring `bench-cold-start.ts`) dropped: one finished job. | eligible |
 | `ask-the-reviewer-to-check-the-conclusion` | `e7a758fada3b` | L1 (put the result in the candidate and ask for a judgement of the conclusions; name the finding you least want to be wrong about) propose DP5. L2 (a finding that changes a conclusion outranks one that changes a line) already: `docs/reusable/review-prompt-template.md` § The five rules, rule 4 — "Grade by the consequence, not the file". L3 (keep both the wrong conclusion and its correction in the plan doc) propose DP5. | retain |
-| `biome-formatter-is-off-on-purpose` | `c9d4779f1a60` | L1 (formatter off on purpose; never `--formatter-enabled=true`; 205 lines, 8 the author's) already: `linting.md` § The trap if anyone turns it on — "never pass `--formatter-enabled=true` on the command line". L2 (recovery by `git show HEAD:<file> >` and re-applying by hand) already: same paragraph — "There is no undo: the recovery is `git show HEAD:<file> >` the file". L3 (lint only the files you touched) already: `AGENTS.md` § Before you call it finished — "`npm run lint` on the files you touched". | eligible |
+| `biome-formatter-is-off-on-purpose` | `c9d4779f1a60` | L1 (formatter off on purpose; never `--formatter-enabled=true`; 205 lines, 8 the author's) already: `linting.md` § The trap if anyone turns it on — "never pass `--formatter-enabled=true` on the command line". L2 (recovery by `git show HEAD:<file> >` and re-applying by hand) already: same paragraph — "There is no undo: the recovery is `git show HEAD:<file> >` the file". L3 (lint only the files you touched) already: `AGENTS.md` § Before you call it finished — "`npm run lint` on the files you touched". **After review (RR-2):** the recovery's precondition — confirm with `git diff --word-diff` that the only content changes are yours before overwriting from `HEAD` — is not in `linting.md`. propose RP1. | retain |
 | `box-traps-moved-to-docs` | `2be458902b0f` | L1 dropped: about the memory system itself — a pointer to the 2026-10-01 sweep, whose mapping is `docs/plans/261001i-probes/report-W3.md` and `report-W4.md`. | eligible |
 | `browser-agents-measure-a-moving-tree` | `e7f6081a16c4` | L1 (HMR feeds a long browser check a moving tree) already: `browser-testing.md` § A long check measures a moving tree — "reports on whatever the tree held at each moment, not on a commit". L2 (queue edits, or brief the agent to re-verify at the end) propose CP9. L3 (record the sha a long gate started from; check before acting or telling anyone) propose CP10 — W3's P5 of 2026-10-01, never landed. L4 (a written survey expires the same way; sha in its heading) propose CP11. | retain |
 | `browser-subagents-kill-shared-dev-servers` | `7ddf1b9c5ef9` | L1 (never `pkill -f vite`; put the constraint in the brief) already: `browser-testing.md` § And check the port — "**Never `pkill -f vite`**" and "Put the constraint in the prompt when you dispatch browser work". L2 (a pattern cannot tell worktrees apart; an env-var prefix is not in the cmdline) moved (BE9). L3 (`$!` is the npx wrapper; kill the listener, then check the port) already: same section — "which stops the npx wrapper and leaves the node child holding the port" and "kill the **listening** PID". | eligible |
@@ -141,11 +169,11 @@ Sorted by file name. The hash is the first twelve characters of the file's sha25
 | `long-waits-need-a-persistent-monitor` | `a85e129c1498` | L1 (the limits table) already: `docs/reusable/long-waits.md` § What each mechanism actually gives you — "**600 s, hard**". L2 (the ten-minute story was wrong) already: same doc § A note on the ten-minute story — "It is wrong. Four variants". L3 (CronCreate one-shot resumes this session; `at` if the machine may not last; never a foreground `sleep`) already: same doc § Choosing — "It is the only mechanism that does this". L4 (background Bash is killed under load; `killed` is no information) propose BP2. L5 (never pipe a test run through `tail`) already: `static-analysis.md` § The gate/advisory split — "Redirect rather than pipe", and `typechecking.md` § Four ways to report it clean while it is red. L6 (tell load noise from a real failure: re-run alone, then a detached worktree at the commit before yours) dropped as duplicate of `postgres-suites-fail-from-contention` L1 (BP5); the worktree half already: `testing.md` § A green run here proves less than it looks like — "reproduce in a worktree with `node_modules` symlinked". L7 (`nohup … &` survives the kill sweep) dropped: superseded, `scripts/tmux-job.ts` exists and `overseer.md` § Things that will catch you says "Long jobs need `scripts/tmux-job.ts`"; `nohup` is named in no doc. L8 (a background `sleep` does not make time pass; read `ps -o etime=`) propose BP3. L9 (the trigger is memory, not only load; arm two `CronCreate` one-shots) propose BP2. L10 (a `Monitor` survived where two Bash waiters died; a dead waiter says nothing about the job) propose BP2. | retain |
 | `merge-can-duplicate-what-it-does-not-conflict-on` | `e9e99adc93e2` | L1 (a merge keeps both sides' list entries with no markers, in a file whose marked hunks were elsewhere; run the list's own test straight after) propose CP1. The doc has the general sentence ("says nothing about the files it merged silently") but its example is two *files*; duplication inside one file is the missing case. | retain |
 | `name-the-fallback-before-the-reviewer-does` | `ecf8627dd075` | L1 (a brief that adds a throw, a 4xx or a refusal on a reader's path carries the fallback and an instruction to test the licence) propose DP4. L2 (list the refusal in the review prompt as the conclusion you least want wrong) propose DP5. L3 (when the fallback fires, the plan says documented, not closed) propose DP4. | retain |
-| `no-github-cli-credential-on-this-box` | `6d1ba5afe9c1` | L1 (`gh` is installed and logged out; `git` works; the API steps are Greg's) moved (BE6) — the fact is in `worktrees.md` only inside the trunk-flip history ("which has no authenticated `gh`"), not where a reader with the problem would look. Re-checked 2026-10-05: still logged out. L2 (`git remote set-head origin -a` is not a substitute) already: `version-control.md` — "the explicit form, because the `-a` spelling asks", and `worktrees.md` — "`git remote set-head origin -a` was wrong, and wrong in the direction that hides". | eligible |
-| `no-production-db-access-from-this-laptop` | `04f6e8b9b052` | L1 (`.env.prod` is on the box) already: `overseer.md` § Deploying — "The credentials are on the box", and `feedback-reports.md` — "on a machine with `.env.prod` (the box has it)". L2 (`.env.local` and the Supabase MCP point at the local stack) already: `infra/hetzner/README.md` § Why Supabase needs no credential, and what that buys — "so it cannot reach production". L3 (read inside `begin read only`, never a bare `SET`) already: `database.md` § remote connection — "**Never `SET` anything on the transaction pooler**". L4 (no `psql` on the box; a `pg` script with the committed CA; `ESSLREQUIRED`; the classifier refuses `rejectUnauthorized: false`) moved (BE10). L5 (the bucket's `object/info` read, and its 400 control) moved (BE10). L6 (writing is still Greg's call; a credential is not an approval) already: `AGENTS.md` § Working agreements — "Real data belongs to the reader, not to us". | eligible |
-| `no-vercel-credential-on-this-machine` | `cbb9b926ad4b` | L1 (the CLI is logged out, so no deploy from here) dropped: stale — `overseer.md` § Deploying says "the Vercel CLI login in `~/.local/share/com.vercel.cli/auth.json`", and that file exists on the box, dated 2026-09-29. L2 (never `git push origin main` instead) already: `AGENTS.md` — "Pushing to `main` yourself is an unreviewed deploy to real readers". L3 (`npm run deploy -- --dry-run` runs every local gate) already: `deployment.md` flags table — "every local gate, nothing external". L4 (the Vercel MCP reads production logs, including the message Sentry withholds) already: `vercel-hosting-deployment.md` § Searching the logs — "Sentry withholds that sentence on purpose". L5 (the result overflows into a file) moved (BE11). L6 (in an unattended session some MCP tools are refused; a refusal is not a lost credential; same for the Supabase MCP) moved (BE11). | eligible |
+| `no-github-cli-credential-on-this-box` | `6d1ba5afe9c1` | L1 (`gh` is installed and logged out; `git` works; the API steps are Greg's) moved (BE6) — the fact is in `worktrees.md` only inside the trunk-flip history ("which has no authenticated `gh`"), not where a reader with the problem would look. Re-checked 2026-10-05: still logged out. L2 (`git remote set-head origin -a` is not a substitute) already: `version-control.md` — "the explicit form, because the `-a` spelling asks", and `worktrees.md` — "`git remote set-head origin -a` was wrong, and wrong in the direction that hides". **After review (RR-3):** check `gh auth status` before promising a GitHub-API step, do every part that does not need it, and name the one piece that is Greg's (he can log in from the session) — propose RP2. | retain |
+| `no-production-db-access-from-this-laptop` | `04f6e8b9b052` | L1 (`.env.prod` is on the box) already: `overseer.md` § Deploying — "The credentials are on the box", and `feedback-reports.md` — "on a machine with `.env.prod` (the box has it)". L2 (`.env.local` and the Supabase MCP point at the local stack) already: `infra/hetzner/README.md` § Why Supabase needs no credential, and what that buys — "so it cannot reach production". L3 (read inside `begin read only`, never a bare `SET`) already: `database.md` § remote connection — "**Never `SET` anything on the transaction pooler**". L4 (no `psql` on the box; a `pg` script with the committed CA; `ESSLREQUIRED`; the classifier refuses `rejectUnauthorized: false`) moved (BE10). L5 (the bucket's `object/info` read, and its 400 control) moved (BE10). L6 (writing is still Greg's call; a credential is not an approval) already: `AGENTS.md` § Working agreements — "Real data belongs to the reader, not to us". **After review (RR-1):** L5's bucket read (`object/info`, and its 400 control) was cut from BE10 as unverified and is in no doc. Unresolved: verify it and port it, or drop it. | retain |
+| `no-vercel-credential-on-this-machine` | `cbb9b926ad4b` | L1 (the CLI is logged out, so no deploy from here) dropped: stale — `overseer.md` § Deploying says "the Vercel CLI login in `~/.local/share/com.vercel.cli/auth.json`", and that file exists on the box, dated 2026-09-29. L2 (never `git push origin main` instead) already: `AGENTS.md` — "Pushing to `main` yourself is an unreviewed deploy to real readers". L3 (`npm run deploy -- --dry-run` runs every local gate) already: `deployment.md` flags table — "every local gate, nothing external". L4 (the Vercel MCP reads production logs, including the message Sentry withholds) already: `vercel-hosting-deployment.md` § Searching the logs — "Sentry withholds that sentence on purpose". L5 (the result overflows into a file) moved (BE11). L6 (in an unattended session some MCP tools are refused; a refusal is not a lost credential; same for the Supabase MCP) moved (BE11). **After review (RR-5):** check that an unattended session is allowed the runtime-log tools before planning a job around them, and the remedy the memory names (an allow-list entry for the two read-only tools, part of queue item `qi-hpyc3az9`) — propose RP4. | retain |
 | `npm-run-check-runs-the-full-suite` | `4da852e0e6dd` | L1 (`check` is the whole suite and a production build, 26 minutes) already: `static-analysis.md` top — "**`npm run check` runs the whole test suite, and this line used to say `~20s`.**". L2 (the last four rows are advisory) already: same doc § What we run and § The gate/advisory split — "runs everything and fails on **gates** only". The "seven gates" count is stale: `scripts/check.ts` has nine `gate: true` entries today. L3 (commit on the fast gates and read `check`'s verdict when it lands) propose BP12. L4 ("prints nothing until it finishes") dropped: `scripts/check.ts` prints a `── <name> (gate)` header as each step starts. | retain |
-| `npm-run-forwards-a-bare-argument` | `64df6b07e1a5` | L1 (`npm run <script> <word>` forwards the word; `go` restarted the live dashboard) moved (BE8) — the story is in Git only as the header comment of `scripts/fleet-restart.ts`, in no doc. L2 (mode words: no default mode, `restart` not `go`) already in the code it describes: `scripts/fleet-restart.ts` header — "There is no default mode"; pointed at by BE8. | eligible |
+| `npm-run-forwards-a-bare-argument` | `64df6b07e1a5` | L1 (`npm run <script> <word>` forwards the word; `go` restarted the live dashboard) moved (BE8) — the story is in Git only as the header comment of `scripts/fleet-restart.ts`, in no doc. L2 (mode words: no default mode, `restart` not `go`) already in the code it describes: `scripts/fleet-restart.ts` header — "There is no default mode"; pointed at by BE8. **After review (RR-4):** never probe argument handling with a word that has an effect; use `--help`, a nonsense argument, or read the script — propose RP3. | retain |
 | `parallel-subagents-share-one-scratchpad` | `034f4ce417c7` | L1 (the scratchpad is per session; give each subagent a prefix; "small targeted edits" for a shared file) already: `docs/reusable/engineering-manager.md` § Delegate — "Parallel subagents share one scratchpad." | eligible |
 | `peer-discovery-is-per-config-directory` | `c0391078ad96` | L1 (`ListAgents` and `SendMessage` find peers per Claude config directory; an empty list is not a dead peer) moved (AE3). L2 dropped: superseded — the `DEBRIEF` marker in assistant turns as the fallback channel: every session has run under the default directory since 2026-09-30 (`overseer.md`), and reporting to the Overseer is now `work-reports.md`. | eligible |
 | `plan-name-collides-between-agents` | `02ebccbcec5c` | L1 (a shared letter is deliberate; no check-first ritual, no rename) already: `docs/reusable/write-planning-doc.md` § File naming conventions — "Don't worry if this happens", and the header of `scripts/plan-name.ts`. L2 (each directory has its own letter sequence) already: `postmortems.md` — "Its own letter sequence". L3 (the earlier wrong version of this memory) dropped: about the memory itself. | eligible |
@@ -153,13 +181,13 @@ Sorted by file name. The hash is the first twelve characters of the file's sha25
 | `pool-account-sessions-have-no-sentry` | `1398fda36ade` | L1 dropped: stale — pool accounts are gone: `overseer.md` § The standing jobs, "Since 2026-09-30 there are none … every session runs on the default login". L2 (a report session tries the Sentry tool before assuming it is absent) already: `feedback-reports.md` § Into the Overseer's queue — "still holds for a session that can". L3 (the sweep does the Sentry write at the start of its run from the note) already: same passage — "the next sweep marks the issue in Sentry from that note at the start of its run". L4 dropped: queue entry `qi-a38gypaj` is marked done (2026-09-12) in the Overseer's queue store. | eligible |
 | `postgres-suites-fail-from-contention` | `916d05c26f68` | L1 (re-run each red file alone before calling it a regression) propose BP5. L2 (the signatures) already: `testing.md` § One database, many suites — "The failures do not say \"contention\". They arrive as `expected 'busy' to be 'claimed'`", and § `TEST DATABASE CONTENDED`. L3 (plan 260903e exists to remove this) dropped: built — `testing.md` § `TEST DATABASE CONTENDED` says "It should be rare now — that is what the private lane is for". L4 (re-gating after a merge is a treadmill; pick the re-run from what the merge brought in) propose BP6. | retain |
 | `prose-through-a-shell-loses-its-markup` | `2ae9b9505022` | L1 (backticks in a double-quoted shell string run as commands; the write succeeds and reads as clumsy prose) propose CP7. L2 (never pass prose through a shell string; Write it, or a quoted heredoc) propose CP7. | retain |
-| `prove-an-empty-queue-with-a-control-query` | `731a87e04b7d` | L1 (a finding that is an absence needs a control that would come back non-empty) already: `silent-success.md` § The habit — "A number that can honestly be zero needs its positive control asserted by the same run." L2 (re-run the Sentry search without `is:unresolved`) dropped: stale — since 2026-10-02 the sweep starts from `scripts/feedback-unswept.ts` (exists), and `feedback-reports.md` § Where the queue lives says "exit 2 = could not read, not "none"". L3 (`qi-hpyc3az9` is unbuilt) dropped: one job, and the item is still in the queue itself (`overseer-queue.ts show qi-hpyc3az9`, read 2026-10-05). | eligible |
+| `prove-an-empty-queue-with-a-control-query` | `731a87e04b7d` | L1 (a finding that is an absence needs a control that would come back non-empty) already: `silent-success.md` § The habit — "A number that can honestly be zero needs its positive control asserted by the same run." L2 (re-run the Sentry search without `is:unresolved`) dropped: stale — since 2026-10-02 the sweep starts from `scripts/feedback-unswept.ts` (exists), and `feedback-reports.md` § Where the queue lives says "exit 2 = could not read, not "none"". L3 (`qi-hpyc3az9` is unbuilt) dropped: one job, and the item is still in the queue itself (`overseer-queue.ts show qi-hpyc3az9`, read 2026-10-05). **After review (RR-6):** widening the period is a second check, for a report that aged out of the window unresolved; `scripts/feedback-unswept.ts` still defaults to 30 days — propose RP5. | retain |
 | `prove-the-relaunch-before-stopping-the-old-process` | `d4f932c2c521` | L1 (run the relaunch shape against something harmless first) already: `overseer.md` § Things that will catch you — "Prove the relaunch before you stop a process." L2 (worktree isolation is a second gate: probe the other worktree's path too) propose BP10. L3 (the way out is `ExitWorktree` with `keep`, telling the Overseer first) propose BP10. L4 (a peer cannot be asked to run the blocked half) propose BP10. | retain |
 | `ps-grep-counts-its-own-apparatus` | `c78e3cd870e3` | L1 (`ps … \| grep -c` counts its own wrappers and any command that names the flag; walk `/proc` and match argv elements; print what matched) propose BP8. L2 (`pkill -f` kills its wrapper shell, exit 144, and everything chained after it never runs) propose BP9; the first half already: `docs/reusable/diagnose-box-resources.md` § The traps — "`pkill -f <string>` will match your own shell". | retain |
 | `public-read-audit-plan-not-built` | `5c1520af3681` | L1 dropped: the built/not-built status of plan 260902j is one job, and the plan's own Progress log is the record (the plan exists; the memory says the same). L2 (a vitest timeout inside `act()` fails every later test in the file) moved (AE4) — it is in the plan's log only, not in `testing.md`. L3 (a reference sweep that skips `scripts/` misses callers) already: `rename-or-move.md` — "postmortems, tests, fixtures, scripts, `package.json`", and `AGENTS.md` § Delegating — "code, docs, plans, tests, fixtures, scripts". | eligible |
 | `pull-latest-on-waking-up` | `ef0f7dcad733` | L1 (merge `origin/dev` first thing on waking, not at push time) propose AP8 — `worktrees.md` § The workflow has the merge only "when a piece of work is done". L2 (re-run tests after the merge) already: `worktrees.md` § The workflow — `npm test && npm run typecheck` follows the merge. L3 (merge, never rebase) already: `AGENTS.md` — "Always merge, never rebase". L4 (the fast-forward-only form for the shared primary) rides in AP8 as its last paragraph. L5 dropped: duplicate — fetch and merge as separate commands is the lesson of `worktree-session-refuses-compound-shell` (another batch). L6 dropped: stale — "a conflict is shown to Greg rather than resolved unilaterally" is reversed by `AGENTS.md`, "resolve it yourself … It goes to Greg only if it is a real product trade-off (Greg, 2026-09-10)". | retain |
 | `re-reading-your-own-work-is-a-zero-check` | `68ea533dea0a` | L1 (re-reading your own work finds nothing; buy an external check; five holes, none found by re-reading) propose DP1. L2 (when a check is green, make it go red) already: `docs/reusable/silent-success.md` § The habit — "ask what you would have to measure for it to look **wrong**". L3 (two fixture-uuid collisions diagnosed as one habit; the refuting values were in my own message) already: `silent-success.md` § The habit — "two fixture-id collisions read as one bad habit, when one was a counting-block id that hit a real row and the others were captured ids shared on purpose". | retain |
-| `remote-control-is-already-on-for-box-sessions` | `1273f09adf54` | L1 (check for the first-party phone client before building a dashboard) already: `agent-fleet-dashboard.md` — "Check first whether your harness already gives you a phone client". L2 (it fails quietly: 8 of 23 on 2026-09-08) already: `overseer-direction.md` § Remote Control fails quietly — "8 of 23 live sessions had Remote Control broken". L3 dropped: stale — the check by `bridgeSessionId` in `~/.claude/sessions/*.json`: of 8 such files on the box today one carries the field and it is null, so the field no longer says what the memory says. L4 (`claude agents --json` is the fast source) already: `overseer-direction.md` — "`claude agents --json` is fast (~1s, cross-repo) but incomplete". L5 dropped: stale — "`gjd-remote ls` takes 10–12s": `hetzner-remote-server-box.md` § How slow it is measures 1.85s. | eligible |
+| `remote-control-is-already-on-for-box-sessions` | `1273f09adf54` | L1 (check for the first-party phone client before building a dashboard) already: `agent-fleet-dashboard.md` — "Check first whether your harness already gives you a phone client". L2 (it fails quietly: 8 of 23 on 2026-09-08) already: `overseer-direction.md` § Remote Control fails quietly — "8 of 23 live sessions had Remote Control broken". L3 dropped: stale — the check by `bridgeSessionId` in `~/.claude/sessions/*.json`: of 8 such files on the box today one carries the field and it is null, so the field no longer says what the memory says. L4 (`claude agents --json` is the fast source) already: `overseer-direction.md` — "`claude agents --json` is fast (~1s, cross-repo) but incomplete". L5 dropped: stale — "`gjd-remote ls` takes 10–12s": `hetzner-remote-server-box.md` § How slow it is measures 1.85s. **After review (RR-18):** L3 was dropped on one day's sample (eight session files, one null `bridgeSessionId`), which shows the memory's count is out of date and not that the field is the wrong test. The launch-against-live distinction survives in `docs/plans/260907e-agent-fleet-dashboard.md`. Retained until somebody says whether that is enough. | retain |
 | `removing-a-worktree-hits-two-false-blockers` | `08f6a2d7b5a6` | L1 (`logs/` no longer blocks; it is walked) already: `worktrees.md` § A new `.gitignore` entry needs a verdict here — "`logs/` is now walked rather than counted". L2 (`.env.local — DIFFERS` "often clears itself now") dropped: stale. `worktrees.md` § `.env.local — DIFFERS` and `scripts/worktree-check.ts:787` both say the line-subset test "was tried here and reverted" on 2026-09-08. L3 (never print a value; compare key names) already: same section — "Do not run a plain `diff` on two `.env.local`s". L4 (untracked eval results are the dangerous kind) already: § `ExitWorktree` refuses for two reasons — "Those 44 were once somebody's *paid* eval results". L5 (a blocker is resolved by an action) already: § A new `.gitignore` entry — "A blocker is resolved by an action, not by an argument." | eligible |
 | `research-gets-a-docs-research-writeup` | `72525104f302` | L1 (an eval, model comparison or spike gets a write-up in `docs/investigations/`; external work in `docs/research/`) already: `investigations.md` § The rule — "gets a write-up here before the work is called done", with both of Greg's quotes; and `engineering-manager.md` — "write it up in the project's investigations folder before the stage is called done". L2 dropped: stale, "rule wording … pending Greg's approval" — the rule is in `investigations.md`. | eligible |
 | `scratchpad-scripts-cannot-import-repo-deps` | `0b2d5fc38414` | L1 (a script outside the repo cannot resolve the repo's packages, whatever the cwd; import by absolute path or `createRequire`) moved (CE7). | eligible |
@@ -182,10 +210,10 @@ Sorted by file name. The hash is the first twelve characters of the file's sha25
 
 ## The proposals
 
-43 of them, as each batch wrote them. **Before** is the text in the doc today; **After**
+49 of them, as each batch wrote them. **Before** is the text in the doc today; **After**
 is what would replace or follow it. The link paths inside a proposal are written for the doc it
 targets, not for this file. Numbering: the letter is the batch (A permissions and Overseer practice,
-B box and waiting, C git and tooling, D review and reasoning).
+B box and waiting, C git and tooling, D review and reasoning, R added after the result review).
 
 ### AP1 — `docs/project/overseer.md` § Dispatching agents
 
@@ -1275,3 +1303,127 @@ already measured and nothing has changed since, say so in the debrief and append
 
 Why here: the queue doc owns how its entries are read and written, and this is a required step
 rather than a description. Carries `a-sibling-sweep-may-have-already-measured` L3.
+
+### RP1 — `docs/project/linting.md` § The trap if anyone turns it on
+
+Added after GPT Sol's review (RR-2). Written by the orchestrator from the memory file.
+
+**Before:**
+
+```
+There is no undo: the recovery is `git show HEAD:<file> >` the file and re-apply your own change by
+hand, which is only possible because the other 197 lines were committed. Wrap by hand instead.
+```
+
+**After:**
+
+```
+There is no undo: the recovery is `git show HEAD:<file> >` the file and re-apply your own change by
+hand, which is only possible because the other 197 lines were committed. Look at
+`git diff --word-diff` first and confirm the only content changes in the file are yours: a peer's
+uncommitted edit in it would be overwritten too. Wrap by hand instead.
+```
+
+Why here: it is the recovery recipe, and it overwrites a file in a shared tree. Carries
+`biome-formatter-is-off-on-purpose` L2's precondition.
+
+### RP2 — `docs/project/hetzner-remote-server-box.md` § Traps, the `gh` bullet
+
+Added after review (RR-3).
+
+**Before:**
+
+```
+  `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
+  settings, Actions.
+```
+
+**After:**
+
+```
+  `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
+  settings, Actions. Run `gh auth status` before promising a step that needs the API, not after
+  doing everything around it. Then do every part that does not need it, and tell Greg which one
+  piece is his; he can run `gh auth login` in the session if he would rather it were done there.
+```
+
+Why here: beside the fact it acts on. Carries `no-github-cli-credential-on-this-box` L1's
+"how to apply".
+
+### RP3 — `docs/project/hetzner-remote-server-box.md` § Traps, the `npm run` bullet
+
+Added after review (RR-4).
+
+**Before:**
+
+```
+    has the story, and it is why that script has no default mode.
+```
+
+**After:**
+
+```
+    has the story, and it is why that script has no default mode. Never find out how a script
+    handles its arguments by passing a word that does something: use `--help`, a nonsense word, or
+    read the script.
+```
+
+Why here: beside the incident. Carries `npm-run-forwards-a-bare-argument`'s "how to apply".
+
+### RP4 — `docs/project/vercel-hosting-deployment.md` § Searching the logs
+
+Added after review (RR-5).
+
+**Before:** new, at the end of the bullet that ends
+
+```
+    answer and not a lost login. The Supabase MCP was refused the same way on 2026-09-19.
+```
+
+**After:**
+
+```
+    So do not plan an unattended job around reading production logs without first making the call
+    from such a session. What would change it is not code or a credential but an allow-list entry
+    for those two read-only tools, which is Greg's to add.
+```
+
+Why here: beside the measurement. Carries `no-vercel-credential-on-this-machine` L6's instruction
+and remedy. The memory ties the remedy to queue item `qi-hpyc3az9`, which is still open.
+
+### RP5 — `docs/project/feedback-reports.md` § Where the queue lives
+
+Added after review (RR-6). **No exact text is proposed**, because the memory's recipe was for a
+Sentry search and the sweep now reads `scripts/feedback-unswept.ts`. The lesson to carry: an empty
+result has two checks, not one. The first is a control that would come back non-empty if the query
+works (already in `silent-success.md` § The habit). The second is the window: a report that aged out
+of it unresolved is also absent, and the script's default is 30 days, so an empty sweep should be
+re-run once with a wider `--since` before it is reported as "nothing waiting". Whoever takes this
+should read the script's options and write the sentence against them.
+
+### RP6 — `docs/reusable/engineering-manager.md` § Stages
+
+Added after review (RR-7).
+
+**Before:** new, after the paragraph that ends
+
+```
+[git-commit-changes.md](git-commit-changes.md).
+```
+
+**After:**
+
+```
+
+**Before starting a slice a plan doc has queued for anyone, say so.** A queue that several sessions
+read is an invitation to all of them at once: on 2026-09-07 two sessions built the same slice from
+the same plan eleven minutes apart, and the merge kept both. Send one message to the live peers
+asking whether anyone is on it, and write *"Claimed, <date>, by <session>"* into the plan. When a
+peer asks you first, answer on timing, not ownership: a slice you reserved and are not working on
+is worth less than the same work done tonight by someone who is awake.
+```
+
+Why here: the Overseer's dispatch rules cover sessions it starts; this is for an agent picking up
+work itself. The Overseer's notes record that Greg, asked on 2026-09-07 whether to build tooling
+for this, said to just tell him and build nothing; that is a paraphrase, not a quote. Carries
+`announce-before-taking-a-queued-slice` L1 and L3.

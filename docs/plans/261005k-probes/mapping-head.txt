@@ -30,7 +30,11 @@ it is one of the {{NPROPOSALS}} proposals below, and proposals need Greg's yes b
 
 Four Opus subagents each read about twenty files in full, split each into its lessons, and for
 every lesson grepped the docs and read the passage before calling it *already*. One writer then
-applied the edits in sequence. GPT Sol reviewed the plan before any of it and the result after.
+applied the edits in sequence. GPT Sol reviewed the plan before any of it and the result after
+([its answer](../plans/261005k-port-overseer-auto-memory-result-review-sol.md)): it read all 35
+files then marked eligible, found seven that would have lost a lesson and one dropped on too thin a
+check, and those eight are now *retain*, each row saying why. It also found six sentences among
+the edits that were instructions or were no longer true, and they were rewritten.
 The batch reports, with each agent's doubts, are kept:
 [A](../plans/261005k-probes/report-A.md), [B](../plans/261005k-probes/report-B.md),
 [C](../plans/261005k-probes/report-C.md), [D](../plans/261005k-probes/report-D.md).
@@ -47,12 +51,36 @@ The batch reports, with each agent's doubts, are kept:
 The dates and numbers inside the ported text are the memories' own. Where an agent could check one
 against the tree it did, and the reports' Doubts sections say which it could not.
 
+**What the check script cannot tell you.** `check-mapping.py` checks the inventory and the hashes.
+It does not know whether a lesson is covered: change every *retain* to *eligible* and it still
+passes. The verdicts are a reviewed judgement, not a computed one.
+
+## Lessons in retained files that no proposal carries yet
+
+Sol sampled thirteen retained rows and found these. Each file is retained, so nothing is at risk
+today, but **landing that file's proposals does not make it eligible until these are settled too.**
+
+| memory file | the lesson still unplaced | nearest proposal |
+|---|---|---|
+| `a-named-worktree-may-hold-a-dead-sessions-work` | Look for an existing worktree on the topic *before* assuming a fresh start, not only after entering one. | CP5 |
+| `a-comment-is-not-a-traced-equality` | A fingerprint built for caching can leave out fields that a safety comparison needs. | DP6 |
+| `two-joins-that-disagree-are-a-measurement` | Report the disagreement row by row, and send the unfavourable reading to whoever decides, at the time. | DP2 |
+| `a-codex-self-review-looks-like-an-independent-one` | Brief the independent reviewer to treat the first artefact as a claim and test its named statements. | DP7 |
+| `full-suite-needs-tmux-on-this-box` | Whether a long command should ever be given a deadline: the `timeout` incident is in `testing.md`, the instruction is nowhere. | none |
+| `tmux-outlives-closed-tabs` | Where the source of `sessions.mjs` lives. The memory says Greg's laptop; nobody could check that from the box. | none |
+
+Two edits sit in a home the reviewer thought weak (RR-19): the `Write`-tool and `npm run` bullets
+are in the box's trap list, and describe the harness and npm, not the box. Left there, since no
+project doc owns either; a better home would be a proposal.
+
 ## Four of Greg's quotes could not be found in anything he typed
 
 A model wrote the memory files, so each quotation attributed to Greg was searched for in the
 session transcripts (`docs/plans/261005k-probes/check-quotes.py`, which looks for the string in a
-turn a person typed, and skips model output, peer messages and compaction summaries). Eight were
-found in his own turns. **Four were not**, and appear only in the Overseer's own summaries of what
+turn a person typed, and skips model output, peer messages and compaction summaries). The script
+finds candidates; it does not prove authorship, and its first version counted a compaction summary
+as typed. So each hit was then read in its turn, and GPT Sol read the source turns again
+independently. Eight were found in his own turns. **Four were not**, and appear only in the Overseer's own summaries of what
 he said and in its messages to other sessions:
 
 | in proposal | the string as the memory has it | memory's date |
@@ -99,6 +127,6 @@ Sorted by file name. The hash is the first twelve characters of the file's sha25
 {{NPROPOSALS}} of them, as each batch wrote them. **Before** is the text in the doc today; **After**
 is what would replace or follow it. The link paths inside a proposal are written for the doc it
 targets, not for this file. Numbering: the letter is the batch (A permissions and Overseer practice,
-B box and waiting, C git and tooling, D review and reasoning).
+B box and waiting, C git and tooling, D review and reasoning, R added after the result review).
 
 {{PROPOSALS}}

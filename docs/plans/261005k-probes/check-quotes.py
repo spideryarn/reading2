@@ -7,7 +7,10 @@ One distinctive substring per line (no quotation marks, nothing JSON would escap
 transcript files containing it, then looks for a row that is a real user turn: type "user", not a
 sidechain, and the substring in typed text rather than in a tool result. A hit in a tool result or
 an assistant turn only shows that a model repeated it, and so does a subagent hand-back or a
-peer message, which arrive as user turns: those are skipped by their markers. Prints the earliest typed hit's timestamp.
+peer message, which arrive as user turns: those are skipped by their markers. 
+
+A hit is a candidate, not proof: read the turn it names before calling the words his. A substring
+match does not check the whole quotation either.
 """
 import glob
 import json
@@ -23,15 +26,19 @@ def typed_text(row: dict) -> str:
     if row.get("type") != "user" or row.get("isSidechain"):
         return ""
     content = (row.get("message") or {}).get("content")
-    if isinstance(content, str):
-        return content
-    out = []
+    if row.get("isCompactSummary"):
+        return ""
+    out = [content] if isinstance(content, str) else []
+    content = [] if isinstance(content, str) else content
     for b in content or []:
         if isinstance(b, dict) and b.get("type") == "text":
             out.append(b.get("text", ""))
     text = "\n".join(out)
     # A subagent's hand-back, a peer's message and a harness notice all arrive as user turns.
-    if any(m in text for m in ("agent-message", "Subagent hand-back", "task-notification", "system-reminder")):
+    if any(m in text for m in (
+        "agent-message", "Subagent hand-back", "task-notification", "system-reminder",
+        "continued from a previous conversation", "Overseer here",
+    )):
         return ""
     return text
 

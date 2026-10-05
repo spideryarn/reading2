@@ -1200,7 +1200,7 @@ form.
 - **`gh` is installed and not logged in.** `gh auth status` answers *"You are not logged into any
   GitHub hosts"* and `GH_TOKEN` is unset (2026-09-02, unchanged 2026-10-05). `git` push and fetch to
   `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
-  settings, Actions. Those are done from Greg's Mac.
+  settings, Actions.
 - **The `Write` tool refuses a path outside the session's working directories.** `/tmp/foo.txt`
   comes back as *"Path is outside allowed working directories"*, and in an unattended session that
   refusal is final, because it counts as a permission request nobody can answer (2026-09-22). Bash

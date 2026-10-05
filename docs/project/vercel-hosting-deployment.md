@@ -88,8 +88,7 @@ Four things, each learned by getting it wrong first:
   diagnostic that exists anywhere: Sentry withholds that sentence on purpose
   ([job-failure.ts](../../src/job-failure.ts) § The log, and not Sentry), and nothing writes it to a
   store. One day of retention, then it is gone.
-- **The result usually overflows the tool limit and is written to a file.** Grep that file rather
-  than reading it.
+- **The result usually overflows the tool limit and is written to a file**, not returned inline.
 - **An unattended session may be refused the call while the credential is fine.** Measured
   2026-09-20 and 2026-09-21 in the feedback sweep: `list_teams` answered, and `list_projects` and
   `get_runtime_logs` were each refused with *"requires approval, and this session has no approval

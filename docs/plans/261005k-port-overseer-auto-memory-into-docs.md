@@ -13,7 +13,8 @@ starts without it.
 > in Git, ideally in our docs.md files, so that if we were to start a new box, it would not have
 > lost valuable insights.
 >
-> — Greg, 2026-10-05
+> — Greg, 2026-10-05, as the queue item gives it. He dictated it, and the transcript has "Clawed
+> code" where this says "Claude code".
 
 The standing rule is already in [AGENTS.md § How we write docs here](../../AGENTS.md#how-we-write-docs-here)
 ("Record decisions where they belong"). This job is the one-off backfill: every memory file ends up
@@ -118,4 +119,14 @@ existing `tests/doc-links.test.ts`. The check on meaning is Sol's sample, not a 
   the Overseer's compaction summaries and relays; the mapping says so and asks that they be
   confirmed. `tests/doc-links.test.ts` green after three link fixes, one of them a path in Sol's
   plan-review answer.
+- 2026-10-05 — stage 3. GPT Sol's review of commit `11e1ff2c8`
+  ([answer](261005k-port-overseer-auto-memory-result-review-sol.md)): not safe to delete on, twenty
+  findings, no P0. All taken. RR-1 to RR-7 and RR-18: eight rows moved from *eligible* to *retain*
+  (27 eligible, 58 retain), six of them with a new proposal RP1–RP6. RR-8 to RR-10: instructions
+  among the edits rewritten as descriptions (BE5, BE6, BE10, BE11, CE1, CE7), the `grep` claims in
+  CE6 corrected against GNU grep 3.11, and DE2's "only" removed. RR-11: the quote checker now
+  rejects compaction summaries and relays, and the mapping says a hit is a candidate. RR-12 to
+  RR-17: listed in the mapping as lessons no proposal carries yet. RR-19: left, and said. RR-20:
+  the quote above marked. One round only: the fixes are narrower than the findings and every
+  affected row is now *retain*, which is the safe direction.
 
