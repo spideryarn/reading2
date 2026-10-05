@@ -574,13 +574,13 @@ position is a top-of-section fact. `ScrollAlign` in [`scroll.ts`](../../src/web/
 
 **A centred arrival is where the reader is until something else moves the page.** Everything that
 asks "where is the reader" — the spy that writes `?at=`, the next jump's origin (so the chip),
-`beginJump`'s "already there", ↑ / ↓, `whereIsBlock`, and since 2026-10-05 the row Structure marks
-as current (`useColumnContext`, which reads at 40% of the window rather than under the bars, and a
-short centred heading is below that too) — measures at the reading line just under the
+`beginJump`'s "already there", ↑ / ↓, `whereIsBlock` — measures at the reading line just under the
 bars, and a centred block's top sits below it, so every one of them would otherwise name the block
-*above*. `scroll.ts` keeps one *arrival anchor*, set when a centred movement settles and cleared by
-the next movement of any kind or by the reader scrolling; those callers answer with it while it
-holds. "The reader scrolling" means a scroll event at **a different pixel** from the one the arrival
+*above*. Structure's current row (`useColumnContext`, since 2026-10-05) reads at 40% of the window;
+a short centred heading sits below that line too. `scroll.ts` keeps one *arrival anchor*, set when
+a centred movement settles and cleared by the next movement of any kind or by the reader scrolling;
+those callers answer with it while it holds. "The reader scrolling" means a scroll event at
+**a different pixel** from the one the arrival
 reached: the jump's own scroll event can turn up a second late behind a render, and until 2026-10-05
 a clock decided whose it was, so `?at=` was rewritten to the section before the one clicked
 ([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)). [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)

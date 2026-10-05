@@ -930,6 +930,15 @@ export function alignedOffset(o: {
 let anchor: { id: string; passage: string | undefined } | null = null;
 let anchorY = 0;
 let anchorListening = false;
+const anchorListeners = new Set<() => void>();
+
+/** Anchor changes can settle or end without scrolling; live position samplers must hear them. */
+export function subscribeArrivalAnchor(listener: () => void): () => void {
+  anchorListeners.add(listener);
+  return () => {
+    anchorListeners.delete(listener);
+  };
+}
 
 function onScrollWhileAnchored(): void {
   /* The glide's delayed event reports the pixel it just reached, and may
@@ -941,19 +950,23 @@ function onScrollWhileAnchored(): void {
 
 /** End a centred arrival without implying that a glide is in flight. */
 export function clearArrivalAnchor(): void {
+  const held = anchor !== null;
   anchor = null;
   if (anchorListening) {
     window.removeEventListener("scroll", onScrollWhileAnchored);
     anchorListening = false;
   }
+  if (held) for (const listener of anchorListeners) listener();
 }
 
 function holdAnchor(id: string, passage: string | undefined): void {
   anchor = { id, passage };
   anchorY = window.scrollY;
-  if (anchorListening) return;
-  window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
-  anchorListening = true;
+  if (!anchorListening) {
+    window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
+    anchorListening = true;
+  }
+  for (const listener of anchorListeners) listener();
 }
 
 /** The centred arrival the reader is standing on, or `null` — see `anchor`. */

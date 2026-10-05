@@ -23,7 +23,14 @@ let host: HTMLDivElement;
 let root: Root;
 /** Where `B`'s row sits in the 200px window; a test may move it. */
 let topOfB = 50;
-let frames: FrameRequestCallback[] = [];
+let frames = new Map<number, FrameRequestCallback>();
+let nextFrame = 0;
+
+function flushFrames(): void {
+  for (const [id, cb] of [...frames]) {
+    if (frames.delete(id)) cb(0);
+  }
+}
 
 function Harness({ sections, layoutKey }: { sections: Section[]; layoutKey: string }): ReactNode {
   const { focusRow } = useColumnContext({ sections, enabled: true, layoutKey });
@@ -46,6 +53,8 @@ function Harness({ sections, layoutKey }: { sections: Section[]; layoutKey: stri
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", NoResizeObserver);
   Object.defineProperty(window, "innerHeight", { configurable: true, value: 200 });
+  Object.defineProperty(window, "scrollY", { value: 0, writable: true, configurable: true });
+  Object.defineProperty(document.documentElement, "scrollHeight", { value: 1000, configurable: true });
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
@@ -53,10 +62,14 @@ beforeEach(() => {
     return { top, bottom: top + 20, height: 20 } as DOMRect;
   });
   topOfB = 50;
-  frames = [];
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+  frames = new Map();
+  nextFrame = 0;
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    frames.set(++nextFrame, cb);
+    return nextFrame;
+  });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => {
-    frames[id - 1] = () => {};
+    frames.delete(id);
   });
   vi.stubGlobal("CSS", { escape: (v: string) => v });
   host = document.createElement("div");
@@ -86,7 +99,7 @@ describe("Structure's current-row measurement", () => {
      reader had just clicked. A centred arrival is where the reader is
      (scroll.ts § `anchor`), here as for `?at=`. */
   it("names the section of a centred arrival, though its heading sits below the focus line", () => {
-    topOfB = 100; // the middle of the window; the focus line is at 80
+    topOfB = 90; // a 20px row centred in the window; the focus line is at 80
     act(() => root.render(<Harness sections={FIRST} layoutKey="k" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
 
@@ -94,7 +107,7 @@ describe("Structure's current-row measurement", () => {
     expect(arrivalAnchor()?.id).toBe(B);
     act(() => {
       window.dispatchEvent(new Event("scroll"));
-      for (const cb of frames.splice(0)) cb(0);
+      flushFrames();
     });
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("5");
 
@@ -102,7 +115,40 @@ describe("Structure's current-row measurement", () => {
     act(() => {
       Object.defineProperty(window, "scrollY", { value: 7, writable: true, configurable: true });
       window.dispatchEvent(new Event("scroll"));
-      for (const cb of frames.splice(0)) cb(0);
+      flushFrames();
+    });
+    expect(arrivalAnchor()).toBeNull();
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+  });
+
+  it("names an already centred arrival without a scroll event", () => {
+    topOfB = 90; // a 20px row centred in the 200px window
+    const scroll = vi.spyOn(window, "scrollTo");
+    act(() => root.render(<Harness sections={FIRST} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+
+    act(() => {
+      scrollToBlock(B, "auto", undefined, { align: "centre" });
+      flushFrames();
+    });
+    expect(arrivalAnchor()?.id).toBe(B);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("5");
+  });
+
+  it("returns to the focus line when the arrival ends without a scroll event", () => {
+    topOfB = 90;
+    act(() => root.render(<Harness sections={FIRST} layoutKey="k" />));
+    act(() => {
+      scrollToBlock(B, "auto", undefined, { align: "centre" });
+      window.dispatchEvent(new Event("scroll"));
+      flushFrames();
+    });
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("5");
+
+    act(() => {
+      clearArrivalAnchor();
+      flushFrames();
     });
     expect(arrivalAnchor()).toBeNull();
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");

@@ -181,4 +181,26 @@ than folded in.
   arrival holds, the line is the arrived row's own top. Red first in
   `tests/structure-focus-row.test.tsx` (`'0'` where `'5'` was expected). In a browser afterwards, six
   clicks on the long article: the marked part is the clicked one at 500 ms and at 4 s, and `?at=`
-  held all six.
+  held all six. Commit `93ba3980c`.
+- 2026-10-05: **GPT Sol's second, narrow review, of `93ba3980c`: approve with changes**
+  ([answer](261005c-a-late-scroll-event-code-review-2.md)), and the last round. D1 (P1), fixed by
+  it and kept: the highlight fix read the anchor but only re-measured on a scroll, so a jump to a
+  block that is *already centred* — which leaves an anchor and moves nothing — kept the old row
+  marked, and so did the hold ending without a scroll. `scroll.ts` now tells subscribers when the
+  anchor is set or cleared (`subscribeArrivalAnchor`) and the hook schedules its usual frame. Two
+  tests, red first. A side effect worth having: the mark no longer waits for a late scroll event.
+  D2 (P3): the `url-state.md` clause put Structure's 40% line in a sentence about the line under the
+  bars; reworded. Its diff was read, and grepped for attributed quotations: none.
+- 2026-10-05: **gates.** `npm run typecheck` green. `npm test`, full: 1,609 files passed, 6 failed.
+  Four are the fresh-worktree ones that want `npm run build` and `npm run build:fleet`
+  (`cold-start-lazy-imports`, `pdf-bundle-trace`, `fleet-decisions-route`, `fleet-reports-route`),
+  `fleet-composed-access` is the same missing `tools/fleet/web/dist` (its error is `ENOENT …
+  dist/assets`), and the sixth was `structure-focus-row` caught while the reviewer had written D1's
+  tests and not yet its fix. Re-run on the settled tree with the seven other scroll, bar and
+  doc-link files: 8 files, 111 tests, green. Browser, after D1: six clicks of six again.
+
+## Where this ended
+
+**Finished.** `?at=` holds after a Structure click and the row clicked is the one marked, at
+desktop, iPad and phone widths. Left for somebody else, and reported: the ↑ / ↓ chain timer in
+`DiagramPanel.tsx` and `keynav.ts` (review finding C3), which is the same class in another feature.

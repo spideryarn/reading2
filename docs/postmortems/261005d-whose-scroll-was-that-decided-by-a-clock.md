@@ -70,6 +70,12 @@ Siblings found by grepping `src/web` for the shape:
   row before the one clicked from the moment of landing. The report read as one symptom ("`?at=`
   is rewritten and the highlight follows it"); it was two defects that happened to agree. Fixed in
   the same plan, with its own red test.
+  The first fix (`93ba3980c`) also read an input without subscribing to its changes: an
+  already-centred jump leaves its anchor without scrolling, so no measurement ran and the old row
+  stayed marked. Class: **an unobserved state transition**. The sampler now hears anchor creation
+  and clearing; both no-scroll transitions went red first (`0` instead of `5` on creation, `5`
+  instead of `0` on clearing). A notification uses the existing frame scheduler; continuous polling
+  was rejected because the state owner can announce the change directly.
 - **`follow.ts` § `HANDS_OFF_MS`** is a clock, and is *not* this class: its signal is `wheel` and
   `touchmove`, which only a hand fires. Its own comment says so.
 
