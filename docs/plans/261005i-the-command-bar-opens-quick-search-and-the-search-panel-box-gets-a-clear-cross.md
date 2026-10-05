@@ -162,6 +162,34 @@ Also from the review, as tests: an existing quick session with other words is *r
 duplicated; a search sent before the saved list loads is held and asked; Back afterwards; the
 hidden rail; focus after the bar's dialog closes.
 
+Code review, GPT Sol, against committed stage `11ae9db7f`:
+
+| ID | Sev | Evidence | Finding | Fixed? |
+|---|---|---|---|---|
+| F6 | P2 | Established | The test claiming one Back leaves Search supplied an opener that only mounted the band, never pushed `mode=search`, and never pressed Back. The predicate test likewise did not cover Reader's rail wiring. | Yes. Renamed the stand-in test to its actual assertion; added real Reader tests through the command row, under StrictMode, pressing Back to verify the previous mode/rail and both previous matchers with their `find` words. |
+| F7 | P1 | Established; regression watched red | `openQuickSearch` omitted the herald shown by the Dock's own Enter. The existing herald contract includes command-bar picks; the excluded prose/chat controls do not establish an exemption for this row. The Reader test returned an empty herald after opening Search. | Yes. Both Search arrivals now call the same Reader opener, including a fresh herald nonce. The Dock's toggle-to-close still runs first, and has a regression check. [Root cause](../postmortems/261005h-sharing-an-arrival-predicate-drops-the-rest-of-the-press.md): sharing only an arrival predicate dropped another side effect of the press. |
+| F8 | P3 | Established | `search.md` described rail restoration and Back as differences from the Dock box, although both routes share them. The preceding cross plan still said the panel has no cross in the present tense immediately before saying it was built. | Yes. Corrected those descriptions without changing any quoted words or adding attribution. |
+| F9 | P1 | Reasoned from CSS geometry; inherited | An empty field while a search is busy has the spinner at the right but only the ordinary input padding. A long placeholder in a narrow band can run under it. The busy padding added here only covers filled fields. The same empty/busy overlap exists in the parent stage. | No: reported as wider, inherited behavior. Needs a layout reproduction and an empty/busy padding rule in a separate fix. |
+
+No defect established in the mount ref's StrictMode handling, the sealed handoff, row IDs or
+suggestion signatures, or the clear cross's vertical target. The mounted Reader checks restore the
+previous mode, matcher, words and hidden-rail choice with Back. Actual native-dialog focus restoration,
+soft-keyboard behavior and computed touch geometry remain for the planned browser pass; jsdom is
+not evidence for those.
+
+**Code-review verdict: ship after these fixes**, which are applied in this worktree. Browser and
+full-suite gates remain the stage owner's work; this review does not claim they passed.
+
+**Review validation:** the six requested files passed all 178 tests before editing. After the
+fix, those six plus `mode-herald-wiring.test.tsx` and `doc-links.test.ts` passed all 202 tests.
+`node --import tsx scripts/typecheck.ts` passed all four projects and its coverage guard (3128
+source files). Lint on the three changed TypeScript files exited 0 with two existing optional-chain
+warnings and three complexity notices; `git diff --check` passed. Removing the quick row's
+`generates` marker failed three tests, always replacing the matcher failed two, and removing
+`session?.edit("")` from clear failed two. Removing Reader's rail restoration also failed the new
+Reader test. Each mutation was restored; the final green run used the restored code. The herald
+regression was watched red against the candidate, then green after F7's fix.
+
 ## Progress
 
 - 2026-10-05: plan written.
@@ -200,3 +228,25 @@ hidden rail; focus after the bar's dialog closes.
     and desk focus, Escape, and no quick row for a visitor or on the Metadata page.
   - **Not tested:** the wiring in `Reader.tsx` itself (no test mounts it), and focus after the
     dialog closes.
+- 2026-10-05: **GPT Sol's code review** of `11ae9db7f`
+  ([261005i-code-review-sol.md](261005i-code-review-sol.md)): ship after its fixes, which it applied
+  (F6-F8 above; F9 is inherited and reported only). Its one change to code: the Dock's own Search
+  press now goes through `openQuickSearch` too, so the herald, the band and the rail rule are one
+  opener for the Search button, the bar's box and the command row
+  ([postmortem](../postmortems/261005h-sharing-an-arrival-predicate-drops-the-rest-of-the-press.md)).
+  Read and accepted; not re-reviewed, since it was round one and found nothing left open.
+- 2026-10-05: **Browser check**, a Sonnet subagent, Playwright on system Chrome, `fowler-phrenology`,
+  at 1440x900 (mouse), 820x1180 and 390x844 (touch), on `11ae9db7f`, before the review's fix. Every
+  item passed at all three: the bar's box and the bolt still search; *search for*, *find* and
+  *does it mention* draw the two rows, quick first with `generates`; Enter opens Search on quick
+  with exactly those words; arrow-down and Enter opens the exact words and asks nothing; a sentence
+  draws both rows and runs nothing until Enter; Back returns to words or meaning when Search was
+  already open, and leaves Search when it was not; focus is in the panel's box at a desk and not on
+  touch; a hidden rail comes back. The panel's cross: absent when empty, there in all three
+  matchers, empties and focuses; on touch its target is 40px wide and exactly the field's height,
+  and a press just under the field reaches the matcher buttons, at 12px and 16px roots; the spinner
+  sits left of it. Shots `261005i-shot-1` to `-6`.
+  **Two limits.** OpenRouter answered 403 on this box, so the search and command-pick calls were
+  mocked: what was checked is the request the page sent (`kind: "quick"`, the words) and the mocked
+  hits being drawn, not a real model answer. And a real soft keyboard was not observed. Not checked:
+  the quick matcher's *find* button under the cross on touch.

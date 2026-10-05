@@ -501,7 +501,8 @@ It is the bar box's Enter without the box (`quickSearchPress` in
 [`command-runners.ts`](../../src/web/command-runners.ts)): the words go into the shared draft, an
 `enter` handoff is left, and Search opens. So it is the same search either way in — a quick search
 already being typed is revised rather than joined by a second, and one sent before the saved list
-has loaded waits for it. Three things differ from the box:
+has loaded waits for it. The two routes share the rail and history rules; the command row also
+avoids focusing a newly mounted box on a touch screen:
 
 - **A hidden rail comes back**, as it does when the Dock opens Search (`arrivalBringsRailBack` in
   [`mode-press.ts`](../../src/web/reader/mode-press.ts)).

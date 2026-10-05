@@ -599,11 +599,12 @@ describe("a search sent from the command bar", () => {
      replaces it, so one Back leaves Search. With Search already open nothing
      was pushed, and a replace would overwrite the words or meaning view the
      reader was on: Back would skip it. */
-  it("replaces the entry its own opening pushed, so one Back still leaves Search", async () => {
+  it("does not push an extra matcher entry when the band has just mounted", async () => {
     const posted = server();
     mount({ url: "?match=meaning" });
     const before = history.length;
-    // The box's Enter is the same three steps, and this host's opener is its own.
+    // This host mounts the band without writing ?mode=. The actual opening and
+    // Back path are covered through Reader in mode-herald-wiring.test.tsx.
     type(barBox(), "the limits of free will");
     key(barBox(), { key: "Enter" });
     await flush();

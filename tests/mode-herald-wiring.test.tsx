@@ -315,3 +315,52 @@ describe("Reader hands the herald a press", () => {
 });
 
 const text = (): string => host.textContent ?? "";
+
+/** Exercise the command row through the Reader's actual executor and URL setters. */
+async function quickSearchFromBar(words: string): Promise<void> {
+  const proto = HTMLDialogElement.prototype;
+  proto.showModal = function () { this.open = true; };
+  proto.close = function () { this.open = false; };
+  await act(async () => host.querySelector<HTMLButtonElement>(".dock-commands")?.click());
+  const input = host.querySelector<HTMLInputElement>("input.cmdbar-input");
+  expect(input).not.toBeNull();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, `search for ${words}`);
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(host.querySelector(".cmdbar-row .cmdbar-name")?.textContent).toBe(`Quick search “${words}”`);
+  await act(async () => input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
+}
+
+describe("the command bar's quick search through Reader", () => {
+  it("the Dock quick-search opener still names Search, and its mode button still closes it", async () => {
+    await open("?mode=summary");
+    await act(async () => host.querySelector<HTMLButtonElement>(".dock-qs-bolt")?.click());
+    await until(() => modeInUrl() === "search" && new URLSearchParams(location.search).get("match") === "quick");
+    expect(herald()).toContain(MODE_LABEL.search);
+    await press(MODE_LABEL.search);
+    expect(modeInUrl()).toBe("plain");
+  });
+
+  it("opens Search, restores a hidden rail, and one Back returns to the previous mode", async () => {
+    await open("?mode=summary&match=meaning&spine=0");
+    await quickSearchFromBar("free will");
+    expect(new URLSearchParams(location.search).get("spine")).toBeNull();
+    expect(herald()).toContain(MODE_LABEL.search);
+    expect(herald()).toContain(MODE_CATALOG.search.description);
+    await act(async () => history.back());
+    await until(() => modeInUrl() === "summary");
+    expect(new URLSearchParams(location.search).get("match")).toBe("meaning");
+    expect(new URLSearchParams(location.search).get("spine")).toBe("0");
+  });
+
+  it.each(["words", "meaning"])("one Back restores an already-open %s matcher", async (matcher) => {
+    await open(`?mode=search&match=${matcher}&find=entropy`);
+    await quickSearchFromBar("free will");
+    await act(async () => history.back());
+    await until(() => new URLSearchParams(location.search).get("match") === matcher);
+    expect(modeInUrl()).toBe("search");
+    expect(new URLSearchParams(location.search).get("find")).toBe("entropy");
+  });
+});
