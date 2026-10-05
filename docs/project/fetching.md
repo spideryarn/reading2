@@ -451,7 +451,7 @@ Four things about it that are deliberate:
 - **It resolves in the step, from the job's own address**, so a retry and a refresh fetch the paper
   too.
 
-**arXiv is the only source, and today its one candidate is the PDF.** It recognises `abs`, `pdf`
+**arXiv was the first source, and today its one candidate is the PDF.** It recognises `abs`, `pdf`
 (with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
 `browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
 arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
@@ -464,6 +464,72 @@ the order.
 **Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
 read off the pasted address. A source only discovered after a fetch (a `doi.org` link that
 redirects to a publisher) does not fit and is not built.
+
+### The sources
+
+Since 2026-10-06 there are six, and two sites that are shapes of the first. Every one was chosen
+because its landing page imported as a stub of a few hundred words under the paper's title
+([261005e](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
+has the measurement and the ranking, and
+[the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
+which sources were left out and why).
+
+| Source | What it recognises | What it fetches, in order |
+|---|---|---|
+| `arxiv` | arXiv's own addresses, above. Also the pages *about* an arXiv paper: `huggingface.co/papers/<id>`, and `alphaxiv.org/abs/<id>` and `/overview/<id>` with or without `www.` | `arxiv.org/pdf/<id>` |
+| `acl` | `aclanthology.org/<id>`, with a trailing slash or `.pdf`; `doi.org/10.18653/v1/<id>` | `aclanthology.org/<id>.pdf` |
+| `pmlr` | `proceedings.mlr.press/v<N>/<name>.html`, `/v<N>/<name>.pdf`, `/v<N>/<name>/<name>.pdf` | `/v<N>/<name>/<name>.pdf`, then `/v<N>/<name>.pdf` |
+| `neurips` | `proceedings.neurips.cc` and `papers.nips.cc`: `/paper/<year>/hash/<hash>-Abstract[-<track>].html` and `/file/<hash>-Paper[-<track>].pdf`, with or without `/paper_files` in front | `proceedings.neurips.cc/paper_files/paper/<year>/file/<hash>-Paper[-<track>].pdf` |
+| `cvf` | `openaccess.thecvf.com/<collection>/html/<name>.html` and `/<collection>/papers/<name>.pdf`, the collection written `content_cvpr_2016` or `content/ICCV2021` | `/<collection>/papers/<name>.pdf` |
+| `jmlr` | `jmlr.org/papers/v<N>/<name>.html` and `/papers/volume<N>/<name>/<name>.pdf`, with or without `www.` | `jmlr.org/papers/volume<N>/<name>/<name>.pdf` |
+
+**A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
+exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
+opens arXiv. The three other places that ask "is this an arXiv paper?" ask the registry's
+`arxivIdOf` too (`identityOf` in `src/cited-in-spideryarn.ts`, `keysOf` in `src/citations.ts`,
+`arxivPdfUrl` in `src/paper-text.ts`), so a work an article cites by its Hugging Face page matches
+the arXiv article on the shelf and is read from arXiv's PDF.
+
+The rules every source follows, each held by `tests/paper-sources.test.ts` for every source:
+
+- **It matches an origin**: `http` or `https`, the named host exactly, no port, no credentials.
+- **A candidate is a fixed `https://` address on the source's own host**, built only from pieces
+  that a closed character class matched. No pattern lets through a dot segment, a percent sign, a
+  backslash or a doubled slash.
+- **The landing page, the PDF's own address and every candidate resolve to one paper.** The
+  article's address afterwards is the PDF's, and "do we already have this?" asks that address. A
+  source whose PDF ended somewhere its own pattern does not know would be imported, and paid for,
+  on every paste. `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last run is
+  [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt).
+- **Every candidate is the paper, as a PDF. The landing page is never one.** A stub stored under
+  the paper's key could not be replaced by pasting the PDF.
+- **The key holds the whole id and the slug is cut to 60 characters.** A CVF file name runs to 90.
+  The key is what `urlKey` gave the landing page before the source existed.
+- **A name keeps the case it was pasted in**, because these servers are case-sensitive. ACL's ids
+  are the exception: a DOI is case-insensitive, so `n19-1423` is spelled `N19-1423`.
+- **NeurIPS's ending is read off the link, never guessed.** The file is `-Paper.pdf` in some years
+  and `-Paper-Conference.pdf` or `-Paper-Datasets_and_Benchmarks.pdf` in others, and the abstract
+  page's own name carries the same ending.
+
+**What that costs.** Each of these serves the paper as a PDF only, and a PDF is read by a model:
+about ten US cents and one to three minutes, where the landing page took seconds and nothing. That
+is the price of the paper rather than its announcement, and the same as pasting the PDF's address.
+
+### A paper that is not where the rule says
+
+The grammars were learned from a few papers per site. When the last candidate answers 404 or 410,
+the import fails, where before 2026-10-06 it would have imported the abstract page. The card shows
+`FETCH_PAPER_MISSING` (`[fetch-paper-missing]`, `blocked`, no Retry): the site did not have the
+paper where it usually keeps it, so check the link, or download the PDF and upload it. It is not
+`[fetch-not-found]`, which says there is no page at the reader's address, because for these
+sources their address is usually fine and the missing one is ours. Nothing
+is charged: the fetch is the first step and a failed import releases its slot.
+
+Any other failure of a paper source keeps the sentence that failure always had. Either way
+`fetchFromPaperSource` in [`src/pipeline.ts`](../../src/pipeline.ts) writes one `warn` line: the
+source's name, how many candidates were asked, and the failure's bracketed code. A rule that keeps
+missing shows up as one source's name repeating. No address is logged. An address no source
+recognises fails exactly as it did, with no such line.
 
 **The article's address is the one its text came from.** `doc.url` of the candidate that was used
 is what the store keeps (`final_url`), so an arXiv article's source link opens the PDF, not the

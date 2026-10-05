@@ -144,6 +144,42 @@ describe("readPaperText", () => {
     expect(arxivPdfUrl("https://notarxiv.org/abs/1706.03762")).toBeNull();
   });
 
+  it("reads a page about an arXiv paper from arXiv's PDF, as it reads the abstract page", () => {
+    /* docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+       § The arXiv mirrors are arXiv. */
+    for (const [url, id] of [
+      ["https://huggingface.co/papers/1706.03762", "1706.03762"],
+      ["https://huggingface.co/papers/1706.03762v5", "1706.03762v5"],
+      ["https://alphaxiv.org/abs/1706.03762", "1706.03762"],
+      ["https://www.alphaxiv.org/abs/hep-th/9901001v2", "hep-th/9901001v2"],
+      ["https://www.alphaxiv.org/overview/1706.03762", "1706.03762"],
+      ["https://browse.arxiv.org/abs/1706.03762", "1706.03762"],
+      ["https://ARXIV.org/ABS/1706.03762V5/", "1706.03762v5"],
+    ] as const) {
+      expect(arxivPdfUrl(url), url).toBe(`https://arxiv.org/pdf/${id}`);
+      expect(arxivPdfUrl(url), url).toBe(arxivPdfUrl(`https://arxiv.org/abs/${id}`));
+    }
+  });
+
+  it("leaves an address that is already a rendering of the paper, or a resolver's, as it was", () => {
+    /* Each of these was null before the registry was asked, and each is fetched
+       as itself: a PDF and an HTML rendering are the paper already. */
+    for (const url of [
+      "https://arxiv.org/pdf/1706.03762v5.pdf",
+      "https://export.arxiv.org/pdf/1706.03762",
+      "https://arxiv.org/html/1706.03762v5",
+      "https://arxiv.org/format/1706.03762",
+      "https://doi.org/10.48550/arXiv.1706.03762",
+      "https://huggingface.co/papers",
+      "https://huggingface.co/openai/whisper-large-v3",
+      "https://alphaxiv.org/",
+      "https://arxiv.org/abs/1706.03762/extra",
+      "not a url",
+    ]) {
+      expect(arxivPdfUrl(url), url).toBeNull();
+    }
+  });
+
   it("calls a 403 refused and a 404 not-found", async () => {
     const { impl } = scripted({ "https://a.example/x": status(403), "https://a.example/y": status(404) });
     const refused = await readPaperText("https://a.example/x", seams(impl));

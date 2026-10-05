@@ -50,6 +50,7 @@ import { jsdom } from "./jsdom-lazy.js";
 import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
+import { arxivIdOf } from "./paper-sources.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -1439,8 +1440,23 @@ export function keysOf(work: Pick<CitedWork, "title" | "authors" | "year" | "url
   /* The decoded DOI, not its spelling in the link. Legacy percent links are
      ambiguous (doiOfUrl); idsByKey still inherits by the stored c.key. */
   if (work.linkFrom === "doi") idKey = `doi:${(doiOfUrl(work.url) ?? work.url).toLowerCase()}`;
-  else if (work.linkFrom === "arxiv") idKey = `arxiv:${work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
-  else if (work.linkFrom === "article") idKey = `url:${canonicalUrl(work.url)}`;
+  /* **Which arXiv paper is the registry's answer** (src/paper-sources.ts §
+     `arxivIdOf`), never a version. The slice is what this did before, kept for
+     a stored link the registry would not read.
+
+     An address the article itself gave is asked the same question, so a work
+     linked to a page *about* an arXiv paper (Hugging Face's, alphaXiv's) has
+     the key the arXiv link gets and is one work with it
+     (docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § The arXiv mirrors are arXiv). The link itself is not rewritten. A row
+     stored under its old `url:` key keeps its id through its `workKey`, as a
+     work whose link improved does (`inheritedBy`). */
+  else if (work.linkFrom === "arxiv") {
+    idKey = `arxiv:${arxivIdOf(work.url)?.workId ?? work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
+  } else if (work.linkFrom === "article") {
+    const arxiv = arxivIdOf(work.url);
+    idKey = arxiv === null ? `url:${canonicalUrl(work.url)}` : `arxiv:${arxiv.workId}`;
+  }
   const workKey = `work:${keyWords(work.title)}|${keyWords(firstAuthor(work.authors))}|${keyWords(work.year ?? "")}`;
   return { idKey, workKey };
 }

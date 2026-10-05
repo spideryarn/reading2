@@ -49,7 +49,7 @@ import { FetchFailure, type FetchedDocument, type FetchFailureCode, type FetchOp
 import { jsdom } from "./jsdom-lazy.js";
 import { log, since } from "./log.js";
 import type { PaperUnreadableReason } from "./messages.js";
-import { ARXIV_ID_PATTERN } from "./paper-sources.js";
+import { arxivIdOf } from "./paper-sources.js";
 import {
   baselineFor,
   pageLines,
@@ -167,25 +167,36 @@ export const PAPER_MAX_CHARS = 400_000;
 /** Empty positioned runs consume memory without advancing the character cap. */
 export const PAPER_MAX_TEXT_ITEMS = 200_000;
 
-/** `/abs/<id>` with its optional version, captured whole. The id pattern is src/paper-sources.ts's. */
-const ARXIV_ABS_PATH = new RegExp(`^/abs/((?:${ARXIV_ID_PATTERN})(?:v\\d+)?)/?$`, "i");
+/**
+ * The first path segment of a page *about* an arXiv paper: arXiv's own abstract
+ * page (`/abs/`), alphaXiv's (`/abs/`, `/overview/`) and Hugging Face's
+ * (`/papers/`). See `arxivPdfUrl`.
+ */
+const ABOUT_A_PAPER: ReadonlySet<string> = new Set(["abs", "overview", "papers"]);
 
 /**
- * arXiv's abstract page → its PDF. `null` for anything else.
+ * A page about an arXiv paper → the paper's PDF. `null` for anything else.
  *
  * Both id shapes (`1706.03762`, `hep-th/9901001`), with or without a version,
  * which is kept: a citation to `v1` is a citation to what `v1` says.
+ *
+ * **Which paper is the registry's answer** (src/paper-sources.ts § `arxivIdOf`),
+ * so the pages about a paper on Hugging Face and alphaXiv are read from arXiv's
+ * PDF as arXiv's own abstract page is
+ * (docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § The arXiv mirrors are arXiv). Until 2026-10-06 this had a parser of its own.
+ *
+ * **Only a page about the paper is rewritten**, which is what this did before:
+ * `arxivIdOf` also knows arXiv's `/pdf/`, `/html/` and `/format/` addresses and
+ * its DOI, and each of those is still `null` here and fetched as itself. A PDF
+ * or an HTML rendering is the paper already, and the callers that hold a DOI
+ * read its landing page for the identity it declares (src/paper-evidence.ts).
  */
 export function arxivPdfUrl(url: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (!/^(?:www\.|export\.)?arxiv\.org$/i.test(parsed.hostname)) return null;
-  const m = ARXIV_ABS_PATH.exec(parsed.pathname);
-  return m?.[1] ? `https://arxiv.org/pdf/${m[1]}` : null;
+  const id = arxivIdOf(url);
+  if (id === null) return null;
+  const first = new URL(url).pathname.split("/")[1]?.toLowerCase() ?? "";
+  return ABOUT_A_PAPER.has(first) ? `https://arxiv.org/pdf/${id.versionedId}` : null;
 }
 
 /** Which of our reasons a fetch failure is. Total over `FetchFailureCode`, so a new code is a red compile. */

@@ -19,7 +19,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FetchFailure, type FetchedDocument, type FetchOptions } from "../src/fetch.js";
 import { declaredFailure } from "../src/job-failure.js";
-import { codeOfMessage, fetchFailed } from "../src/messages.js";
+import { codeOfMessage, FETCH_PAPER_MISSING, fetchFailed, kindOfMessage, worthRetrying } from "../src/messages.js";
 import { type FetchCandidate, fetchDetail, fetchFirstCandidate, STEPS } from "../src/pipeline.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
@@ -38,8 +38,30 @@ vi.mock("../src/fetch.js", async (importOriginal) => {
 
 const { fetchDocument: realFetchDocument } = await vi.importActual<typeof import("../src/fetch.js")>("../src/fetch.js");
 
+/**
+ * What the pipeline wrote to its log at `warn`, as `[fields, message]` pairs:
+ * the line a failed paper-source fetch leaves. Spied on at src/log.ts's own
+ * seam, as tests/json-repair-is-counted.test.ts does, so it is what a running
+ * server would write and not a fake handed to the step.
+ */
+const warned: { component: string; fields: Record<string, unknown>; message: string }[] = [];
+
+vi.mock("../src/log.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/log.js")>();
+  return {
+    ...actual,
+    log: (component: string) => ({
+      ...actual.log(component as Parameters<typeof actual.log>[0]),
+      warn: (fields: Record<string, unknown>, message: string) => {
+        warned.push({ component, fields, message });
+      },
+    }),
+  };
+});
+
 afterEach(() => {
   network.seams = null;
+  warned.length = 0;
 });
 
 const HTML_ADDRESS = "https://arxiv.org/html/2608.13566";
@@ -317,5 +339,154 @@ describe("the fetch step itself", () => {
   it("asks for any other address exactly as it was given", async () => {
     const address = "https://example.com/abs/2608.13566?utm_source=x";
     expect(await requestedBy(address)).toEqual([address]);
+  });
+
+  /* ----------------------------------------------------------------------
+     A paper whose PDF is not where its source's rule says.
+     docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § What a wrong rule costs.
+     ---------------------------------------------------------------------- */
+
+  /** The line a failed paper-source fetch writes, and not the step's other warnings. */
+  const aboutAPaperSource = (line: (typeof warned)[number]) => line.fields.step === "fetch" && "source" in line.fields;
+
+  /** Run the step over a scripted network. Anything unscripted is a 404. */
+  async function stepFailure(url: string, script: Record<string, () => Response> = {}) {
+    const requested: string[] = [];
+    network.seams = {
+      attempts: 1,
+      sleep: async () => {},
+      resolve: async () => ["93.184.216.34"],
+      fetchImpl: async (address) => {
+        requested.push(address);
+        return (script[address] ?? status(404))();
+      },
+    };
+    const thrown = await failureOf(STEPS.fetch.run(ctx(url), memoryArtefacts(), nullCheckpointStore()));
+    return { thrown, requested, lines: warned.filter(aboutAPaperSource) };
+  }
+
+  const PMLR_PAGE = "https://proceedings.mlr.press/v139/radford21a.html";
+  const PMLR_NESTED = "https://proceedings.mlr.press/v139/radford21a/radford21a.pdf";
+  const PMLR_FLAT = "https://proceedings.mlr.press/v139/radford21a.pdf";
+
+  it("tries a source's second address when the first is absent, and never the landing page", async () => {
+    const { requested } = await stepFailure(PMLR_PAGE);
+    expect(requested).toEqual([PMLR_NESTED, PMLR_FLAT]);
+  });
+
+  describe("when a paper source's last candidate is absent", () => {
+    const cases: [string, string, number][] = [
+      ["https://aclanthology.org/2020.acl-main.703/", "acl", 1],
+      [PMLR_PAGE, "pmlr", 2],
+      ["https://proceedings.neurips.cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html", "neurips", 1],
+      ["https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html", "cvf", 1],
+      ["https://jmlr.org/papers/v15/srivastava14a.html", "jmlr", 1],
+      ["https://huggingface.co/papers/1706.03762", "arxiv", 1],
+      ["https://arxiv.org/abs/2608.13566", "arxiv", 1],
+    ];
+    for (const [url, source, tried] of cases) {
+      it(`${source}: the card says the paper is missing, without a Retry, and the log names the source`, async () => {
+        const { thrown, lines } = await stepFailure(url);
+        const failure = declaredFailure(thrown);
+        expect(failure).toEqual(FETCH_PAPER_MISSING);
+        expect(codeOf(thrown)).toBe("fetch-paper-missing");
+        expect(failure?.kind).toBe("blocked");
+        expect(kindOfMessage(failure?.message ?? "")).toBe("blocked");
+        expect(worthRetrying(failure?.message)).toBe(false);
+
+        expect(lines).toHaveLength(1);
+        expect(lines[0]?.component).toBe("pipeline");
+        expect(lines[0]?.fields).toEqual({
+          slug: "test-fetch-candidates",
+          step: "fetch",
+          source,
+          tried,
+          code: "fetch-paper-missing",
+        });
+        /* No address, in the line or in what Sentry is sent. */
+        const written = JSON.stringify(lines) + thrown.message;
+        for (const part of ["http", new URL(url).hostname, "radford", "2608", "1706", "703", "srivastava", "Residual", "3f5ee"]) {
+          expect(written).not.toContain(part);
+        }
+      });
+    }
+
+    it("says the plan's sentence, and that another go will not help", () => {
+      /* Pinned, unlike most copy: the plan records this wording as Greg's to
+         change, so a change to it should be one somebody made on purpose. */
+      expect(FETCH_PAPER_MISSING.message).toBe(
+        "This site did not have the paper where it usually keeps it. " +
+          "Trying again will not help. " +
+          "Check the link is right, or download the PDF from the site and upload it here. [fetch-paper-missing]",
+      );
+    });
+
+    it("counts a 410 as absent too", async () => {
+      const { thrown } = await stepFailure(PMLR_PAGE, { [PMLR_FLAT]: status(410) });
+      expect(codeOf(thrown)).toBe("fetch-paper-missing");
+    });
+  });
+
+  describe("and a paper source's other failures keep their own sentence, with the log line", () => {
+    const refused: [string, Record<string, () => Response>, string, number][] = [
+      ["a 403 on the first", { [PMLR_NESTED]: status(403) }, "fetch-refused", 1],
+      ["a 503 on the second", { [PMLR_FLAT]: status(503) }, "fetch-site-trouble", 2],
+      ["a web page where the last PDF should be", { [PMLR_FLAT]: () => page(ERROR_PAGE) }, "fetch-incomplete", 2],
+    ];
+    for (const [name, script, code, tried] of refused) {
+      it(name, async () => {
+        const { thrown, lines } = await stepFailure(PMLR_PAGE, script);
+        expect(codeOf(thrown)).toBe(code);
+        expect(lines.map((line) => line.fields)).toEqual([
+          { slug: "test-fetch-candidates", step: "fetch", source: "pmlr", tried, code },
+        ]);
+      });
+    }
+
+    it("a wrong kind after an absent first is not called missing", async () => {
+      /* The first candidate's 404 must not be remembered once the second has answered. */
+      const { thrown } = await stepFailure(PMLR_PAGE, { [PMLR_FLAT]: () => page(ERROR_PAGE) });
+      expect(codeOf(thrown)).toBe("fetch-incomplete");
+      expect(declaredFailure(thrown)?.kind).toBe("retry");
+    });
+  });
+
+  describe("an ordinary address that is absent", () => {
+    it("fails exactly as it did: check the address, and no paper-source line in the log", async () => {
+      for (const url of [
+        "https://example.com/why-trees",
+        "https://example.com/paper.pdf",
+        "https://aclanthology.org/volumes/2020.acl-main/",
+        "https://huggingface.co/openai/whisper-large-v3",
+      ]) {
+        const { thrown, requested, lines } = await stepFailure(url);
+        expect(requested).toEqual([url]);
+        expect(declaredFailure(thrown)).toEqual(fetchFailed("not-found", 404));
+        expect(codeOf(thrown)).toBe("fetch-not-found");
+        expect(thrown.message).toBe("The fetch by address failed: not-found, HTTP 404. [fetch-not-found]");
+        expect(lines).toEqual([]);
+      }
+    });
+  });
+
+  it("says nothing in the log when a paper source's fetch succeeds", async () => {
+    /* The control for the lines above: the step ran, reached the network and
+       wrote no warning. It fails later, at the store, which is not this test's. */
+    const requested: string[] = [];
+    network.seams = {
+      attempts: 1,
+      sleep: async () => {},
+      resolve: async () => ["93.184.216.34"],
+      fetchImpl: async (address) => {
+        requested.push(address);
+        return pdf();
+      },
+    };
+    await STEPS.fetch.run(ctx(PMLR_PAGE), memoryArtefacts(), nullCheckpointStore()).catch(() => {});
+    expect(requested).toEqual([PMLR_NESTED]);
+    /* The fake PDF does not open, and the page count says so in a line of its own. */
+    expect(warned.map((line) => line.message)).toEqual(["page count: test-fetch-candidates would not open"]);
+    expect(warned.filter(aboutAPaperSource)).toEqual([]);
   });
 });

@@ -143,6 +143,9 @@ asked for by address that did not arrive: one code for each way the fetch can fa
 `src/messages.ts`, total over the fetcher's own codes, and no sentence in it names the address, the
 host or the status
 ([ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under)).
+`[fetch-paper-missing]` is the one `fetch-` code outside that map: a paper source's PDF was not
+where the source usually keeps it
+([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
 `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the

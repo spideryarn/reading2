@@ -135,9 +135,9 @@ import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
-import { stageFailure } from "./job-failure.js";
+import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
-import { resolvePaperSource } from "./paper-sources.js";
+import { type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
 import { modelTitleTidier } from "./title-tidy-model.js";
 import { plainTitle } from "./html.js";
 import type { TitleTidier } from "./title-tidy.js";
@@ -191,8 +191,10 @@ import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile, profileIsStale } from "./profile.js";
 import {
   articleHadNoText,
+  codeOfMessage,
   documentHadTooLittleText,
   documentHasNoArticle,
+  FETCH_PAPER_MISSING,
   fetchFailed,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
@@ -2276,8 +2278,81 @@ export async function fetchFirstCandidate(
   throw stageFailure("ours", { generic: "The fetch step was given no address to try." });
 }
 
+/**
+ * **A paper source's fetch, and what its failure is called.** The loop is
+ * `fetchFirstCandidate`, unchanged: this decides nothing about which candidate
+ * is tried or when it moves on. It adds two things for a failure, and nothing
+ * for a success.
+ * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § What a wrong rule costs.
+ *
+ * **A paper that is not there gets its own sentence.** When the last address
+ * asked answered that it has no such document, the failure is
+ * `FETCH_PAPER_MISSING` and not `not-found`'s: that one tells the reader to
+ * check their address, and the address that is missing is one we worked out
+ * and they never saw. The fetcher is wrapped only to learn that, per request,
+ * so a 404 from an earlier candidate is forgotten once a later one has
+ * answered with anything else.
+ *
+ * **And a line in the log**, at `warn`: the source's name, how many addresses
+ * were asked and the failure's bracketed code. A rule that keeps missing shows
+ * up as one source's name repeating. No address is written, here or in the
+ * diagnostic: a log of article addresses is a reading history
+ * (docs/project/logging.md).
+ *
+ * A Stop or a deadline passes through untouched and unlogged. It is not the
+ * source's failure, and `runStep` in src/jobs.ts writes its own sentence for it.
+ */
+async function fetchFromPaperSource(
+  paper: ResolvedPaper,
+  ctx: { slug: string; signal: AbortSignal },
+): Promise<{ doc: FetchedDocument; candidate: FetchCandidate; tried: number }> {
+  let asked = 0;
+  let lastWasAbsent = false;
+  try {
+    return await fetchFirstCandidate(paper.candidates, {
+      signal: ctx.signal,
+      fetchDocument: async (address, options) => {
+        asked += 1;
+        lastWasAbsent = false;
+        try {
+          return await fetchDocument(address, options);
+        } catch (err) {
+          lastWasAbsent = saysItIsNotThere(err);
+          throw err;
+        }
+      },
+    });
+  } catch (err) {
+    if (ctx.signal.aborted) throw err;
+    const failure = lastWasAbsent
+      ? stageFailure(FETCH_PAPER_MISSING, {
+          authored: `No address the paper source gave had the paper: ${paper.source}, ${asked} asked.`,
+        })
+      : err;
+    plog.warn(
+      {
+        slug: ctx.slug,
+        step: "fetch",
+        source: paper.source,
+        tried: asked,
+        code: codeOfMessage(declaredFailure(failure)?.message ?? "") ?? "undeclared",
+      },
+      `fetch ${ctx.slug}: the paper source's fetch failed`,
+    );
+    throw failure;
+  }
+}
+
 /** How a paper source is written on the job card. One the table does not know is shown by its registry name. */
-const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = { arxiv: "arXiv" };
+const PAPER_SOURCE_LABEL: Readonly<Record<string, string>> = {
+  arxiv: "arXiv",
+  acl: "ACL Anthology",
+  pmlr: "PMLR",
+  neurips: "NeurIPS",
+  cvf: "CVF",
+  jmlr: "JMLR",
+};
 
 /**
  * What the fetch step says it fetched: the size, and for a paper source which
@@ -2329,10 +2404,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          promises nothing, which is the single `fetchDocument(url)` this always
          was. See `fetchFirstCandidate`. */
       const paper = resolvePaperSource(url);
-      const { doc, tried } = await fetchFirstCandidate(paper?.candidates ?? [{ url }], {
-        signal: ctx.signal,
-        fetchDocument,
-      });
+      const { doc, tried } =
+        paper === null
+          ? await fetchFirstCandidate([{ url }], { signal: ctx.signal, fetchDocument })
+          : await fetchFromPaperSource(paper, ctx);
       const via = paper === null ? null : { source: paper.source, format: doc.kind };
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on

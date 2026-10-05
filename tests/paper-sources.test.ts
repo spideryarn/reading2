@@ -4,6 +4,8 @@
  *
  * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { isSlug, urlKey } from "../src/ingest.js";
@@ -196,5 +198,548 @@ describe("ARXIV_ID_PATTERN", () => {
     expect(whole.test("math.GT/0309136")).toBe(true);
     expect(whole.test("2608.13566v1")).toBe(false);
     expect(whole.test("x2608.13566")).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------------
+   Part 2: the arXiv mirrors and the five other sources.
+   docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+   ------------------------------------------------------------------------ */
+
+describe("the arXiv mirrors are shapes of the arXiv source", () => {
+  const MIRRORS = [
+    "https://huggingface.co/papers/",
+    "http://huggingface.co/papers/",
+    "https://alphaxiv.org/abs/",
+    "https://www.alphaxiv.org/abs/",
+    "https://www.alphaxiv.org/overview/",
+    "https://alphaxiv.org/overview/",
+  ];
+
+  for (const prefix of MIRRORS) {
+    it(`${prefix}<id> resolves to exactly what arXiv's own link does`, () => {
+      for (const id of ["1706.03762", "1706.03762v5", "hep-th/9901001"]) {
+        const direct = resolvePaperSource(`https://arxiv.org/abs/${id}`);
+        expect(direct).not.toBeNull();
+        expect(resolvePaperSource(`${prefix}${id}`)).toEqual(direct);
+        expect(resolvePaperSource(`${prefix}${id}/?utm_source=x#top`)).toEqual(direct);
+        expect(arxivIdOf(`${prefix}${id}`)).toEqual(arxivIdOf(`https://arxiv.org/abs/${id}`));
+      }
+    });
+  }
+
+  it.each([
+    "https://huggingface.co/papers",
+    "https://huggingface.co/papers/",
+    "https://huggingface.co/papers/trending",
+    "https://huggingface.co/papers/not-an-arxiv-id",
+    "https://huggingface.co/papers/1706.03762/discussion",
+    "https://huggingface.co/papers/1706.03762abc",
+    "https://huggingface.co/openai/whisper-large-v3",
+    "https://huggingface.co/datasets/1706.03762",
+    "https://huggingface.co/abs/1706.03762",
+    "https://www.huggingface.co/papers/1706.03762",
+    "https://huggingface.co.evil.example/papers/1706.03762",
+    "https://huggingface.co:444/papers/1706.03762",
+    "https://user@huggingface.co/papers/1706.03762",
+    "https://alphaxiv.org/",
+    "https://alphaxiv.org/abs",
+    "https://alphaxiv.org/abs/",
+    "https://alphaxiv.org/papers/1706.03762",
+    "https://alphaxiv.org/abs/1706.03762/blog",
+    "https://alphaxiv.org/pdf/1706.03762",
+    "https://notalphaxiv.org/abs/1706.03762",
+    "https://alphaxiv.org:8443/abs/1706.03762",
+    "https://user:pw@www.alphaxiv.org/abs/1706.03762",
+  ])("answers null for %j", (url) => {
+    expect(resolvePaperSource(url)).toBeNull();
+    expect(arxivIdOf(url)).toBeNull();
+  });
+});
+
+/** One paper of a source: every address that names it, and what they must all resolve to. */
+interface SourceCase {
+  shapes: string[];
+  resolved: {
+    source: string;
+    id: string;
+    canonicalUrl: string;
+    key: string;
+    slug: string;
+    candidates: string[];
+  };
+  hosts: string[];
+  nearMisses: string[];
+}
+
+const NEURIPS_HASH = "3f5ee243547dee91fbd053c1c4a845aa";
+const NEURIPS_TRACK_HASH = "0001ca33ba34ce0351e4612b744b3936";
+const SWIN = "Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper";
+
+const SOURCE_CASES: Record<string, SourceCase> = {
+  "acl, a new-style id": {
+    shapes: [
+      "https://aclanthology.org/2020.acl-main.703/",
+      "https://aclanthology.org/2020.acl-main.703",
+      "https://aclanthology.org/2020.acl-main.703.pdf",
+      "http://aclanthology.org/2020.acl-main.703/",
+      "https://ACLANTHOLOGY.ORG/2020.ACL-MAIN.703/",
+      "https://aclanthology.org/2020.acl-main.703/?utm_source=x#abstract",
+      "https://doi.org/10.18653/v1/2020.acl-main.703",
+      "https://dx.doi.org/10.18653/v1/2020.acl-main.703",
+    ],
+    resolved: {
+      source: "acl",
+      id: "2020.acl-main.703",
+      canonicalUrl: "https://aclanthology.org/2020.acl-main.703/",
+      key: "aclanthology.org/2020.acl-main.703",
+      slug: "acl-2020-acl-main-703",
+      candidates: ["https://aclanthology.org/2020.acl-main.703.pdf"],
+    },
+    hosts: ["aclanthology.org"],
+    nearMisses: [
+      "https://aclanthology.org/",
+      "https://aclanthology.org/volumes/2020.acl-main/",
+      "https://aclanthology.org/events/acl-2020/",
+      "https://aclanthology.org/2020.acl-main.703/extra",
+      "https://aclanthology.org/2020.acl-main.703.pdf/extra",
+      "https://aclanthology.org/2020.acl-main.703.bib",
+      "https://aclanthology.org/2020.acl_main.703/",
+      "https://aclanthology.org/2020.acl-main.703x/",
+      "https://aclanthology.org/2020.acl-main/",
+      "https://aclanthology.org/x/2020.acl-main.703/",
+      "https://aclanthology.org.evil.example/2020.acl-main.703/",
+      "https://notaclanthology.org/2020.acl-main.703/",
+      "https://aclanthology.org:8443/2020.acl-main.703/",
+      "https://user:pw@aclanthology.org/2020.acl-main.703/",
+      "ftp://aclanthology.org/2020.acl-main.703/",
+      "https://doi.org/10.18653/v1/2020.acl-main.703/extra",
+      "https://doi.org/10.18653/v2/2020.acl-main.703",
+      "https://doi.org/10.18654/v1/2020.acl-main.703",
+      "https://doi.org:444/10.18653/v1/2020.acl-main.703",
+      "https://aclanthology.org/10.18653/v1/2020.acl-main.703",
+    ],
+  },
+  "acl, an old-style id": {
+    shapes: [
+      "https://aclanthology.org/N19-1423/",
+      "https://aclanthology.org/N19-1423",
+      "https://aclanthology.org/N19-1423.pdf",
+      "https://aclanthology.org/n19-1423/",
+      "https://doi.org/10.18653/v1/N19-1423",
+      "https://doi.org/10.18653/v1/n19-1423",
+    ],
+    resolved: {
+      source: "acl",
+      id: "N19-1423",
+      canonicalUrl: "https://aclanthology.org/N19-1423/",
+      key: "aclanthology.org/N19-1423",
+      slug: "acl-n19-1423",
+      candidates: ["https://aclanthology.org/N19-1423.pdf"],
+    },
+    hosts: ["aclanthology.org"],
+    nearMisses: [
+      "https://aclanthology.org/N19-142/",
+      "https://aclanthology.org/N19-14234567/",
+      "https://aclanthology.org/NN19-1423/",
+      "https://aclanthology.org/N19_1423/",
+      "https://aclanthology.org/N19-1423/N19-1423.pdf",
+    ],
+  },
+  "pmlr, the nested layout": {
+    shapes: [
+      "https://proceedings.mlr.press/v139/radford21a.html",
+      "http://proceedings.mlr.press/v139/radford21a.html",
+      "https://proceedings.mlr.press/v139/radford21a.pdf",
+      "https://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+      "http://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+      "https://proceedings.mlr.press/v139/radford21a.html?utm_source=x#abstract",
+    ],
+    resolved: {
+      source: "pmlr",
+      id: "v139/radford21a",
+      canonicalUrl: "https://proceedings.mlr.press/v139/radford21a.html",
+      key: "proceedings.mlr.press/v139/radford21a.html",
+      slug: "pmlr-v139-radford21a",
+      candidates: [
+        "https://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+        "https://proceedings.mlr.press/v139/radford21a.pdf",
+      ],
+    },
+    hosts: ["proceedings.mlr.press"],
+    nearMisses: [
+      "https://proceedings.mlr.press/",
+      "https://proceedings.mlr.press/v139/",
+      "https://proceedings.mlr.press/v139/radford21a",
+      "https://proceedings.mlr.press/v139/radford21a/",
+      "https://proceedings.mlr.press/v139/radford21a/other21b.pdf",
+      "https://proceedings.mlr.press/v139/radford21a/radford21a-supp.pdf",
+      "https://proceedings.mlr.press/v139/radford21a.html/extra",
+      "https://proceedings.mlr.press/v139/rad.ford21a.html",
+      "https://proceedings.mlr.press/vx/radford21a.html",
+      "https://proceedings.mlr.press/V139/radford21a.html",
+      "https://proceedings.mlr.press/x/v139/radford21a.html",
+      "https://mlr.press/v139/radford21a.html",
+      "https://proceedings.mlr.press.evil.example/v139/radford21a.html",
+      "https://proceedings.mlr.press:8080/v139/radford21a.html",
+      "https://user@proceedings.mlr.press/v139/radford21a.html",
+    ],
+  },
+  "neurips, no track": {
+    shapes: [
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://papers.nips.cc/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://papers.nips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `http://papers.nips.cc/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/file/${NEURIPS_HASH}-Paper.pdf`,
+      `https://proceedings.neurips.cc/paper/2017/file/${NEURIPS_HASH}-Paper.pdf`,
+      `https://papers.nips.cc/paper/2017/file/${NEURIPS_HASH}-Paper.pdf`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html?x=1#top`,
+    ],
+    resolved: {
+      source: "neurips",
+      id: `2017/${NEURIPS_HASH}`,
+      canonicalUrl: `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      key: `proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      slug: `neurips-2017-${NEURIPS_HASH}`,
+      candidates: [`https://proceedings.neurips.cc/paper_files/paper/2017/file/${NEURIPS_HASH}-Paper.pdf`],
+    },
+    hosts: ["proceedings.neurips.cc"],
+    nearMisses: [
+      "https://proceedings.neurips.cc/",
+      "https://proceedings.neurips.cc/paper_files/paper/2017",
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html/extra`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Reviews.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Paper.pdf`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/file/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/file/${NEURIPS_HASH}-Supplemental.pdf`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/file/${NEURIPS_HASH}-Bibtex.bib`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH.slice(1)}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}0-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/g${NEURIPS_HASH.slice(1)}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH.toUpperCase()}-Abstract.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/17/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc/x/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://neurips.cc/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc.evil.example/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://proceedings.neurips.cc:444/paper_files/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      `https://user:pw@papers.nips.cc/paper/2017/hash/${NEURIPS_HASH}-Abstract.html`,
+      "https://papers.nips.cc/paper/7181-attention-is-all-you-need",
+    ],
+  },
+  "neurips, a track": {
+    shapes: [
+      `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Conference.html`,
+      `https://papers.nips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Conference.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2023/file/${NEURIPS_TRACK_HASH}-Paper-Conference.pdf`,
+    ],
+    resolved: {
+      source: "neurips",
+      id: `2023/${NEURIPS_TRACK_HASH}`,
+      canonicalUrl: `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Conference.html`,
+      key: `proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Conference.html`,
+      slug: `neurips-2023-${NEURIPS_TRACK_HASH}`,
+      candidates: [`https://proceedings.neurips.cc/paper_files/paper/2023/file/${NEURIPS_TRACK_HASH}-Paper-Conference.pdf`],
+    },
+    hosts: ["proceedings.neurips.cc"],
+    nearMisses: [
+      `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Con.ference.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-Abstract-Con-ference.html`,
+      `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}-AbstractConference.html`,
+    ],
+  },
+  "cvf, the older collection style": {
+    shapes: [
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "http://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html?x=1#top",
+    ],
+    resolved: {
+      source: "cvf",
+      id: "content_cvpr_2016/He_Deep_Residual_Learning_CVPR_2016_paper",
+      canonicalUrl: "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      key: "openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      slug: "cvf-he-deep-residual-learning-cvpr-2016-paper",
+      candidates: ["https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf"],
+    },
+    hosts: ["openaccess.thecvf.com"],
+    nearMisses: [
+      "https://openaccess.thecvf.com/",
+      "https://openaccess.thecvf.com/CVPR2016",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+      "https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html/extra",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He.Deep_paper.html",
+      "https://openaccess.thecvf.com/content_cvpr_2016/supplemental/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+      "https://openaccess.thecvf.com/other_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com/x/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com/content/a/b/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com.evil.example/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://openaccess.thecvf.com:444/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://user@openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+    ],
+  },
+  "cvf, the newer collection style and a 90-character name": {
+    shapes: [
+      `https://openaccess.thecvf.com/content/ICCV2021/html/${SWIN}.html`,
+      `https://openaccess.thecvf.com/content/ICCV2021/papers/${SWIN}.pdf`,
+    ],
+    resolved: {
+      source: "cvf",
+      id: `content/ICCV2021/${SWIN}`,
+      canonicalUrl: `https://openaccess.thecvf.com/content/ICCV2021/html/${SWIN}.html`,
+      key: `openaccess.thecvf.com/content/ICCV2021/html/${SWIN}.html`,
+      slug: "cvf-liu-swin-transformer-hierarchical-vision-transformer-usi",
+      candidates: [`https://openaccess.thecvf.com/content/ICCV2021/papers/${SWIN}.pdf`],
+    },
+    hosts: ["openaccess.thecvf.com"],
+    nearMisses: [],
+  },
+  jmlr: {
+    shapes: [
+      "https://jmlr.org/papers/v15/srivastava14a.html",
+      "https://www.jmlr.org/papers/v15/srivastava14a.html",
+      "http://jmlr.org/papers/v15/srivastava14a.html",
+      "https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf",
+      "https://www.jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf",
+      "https://jmlr.org/papers/v15/srivastava14a.html?x=1#abs",
+    ],
+    resolved: {
+      source: "jmlr",
+      id: "v15/srivastava14a",
+      canonicalUrl: "https://jmlr.org/papers/v15/srivastava14a.html",
+      key: "jmlr.org/papers/v15/srivastava14a.html",
+      slug: "jmlr-v15-srivastava14a",
+      candidates: ["https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf"],
+    },
+    hosts: ["jmlr.org"],
+    nearMisses: [
+      "https://jmlr.org/",
+      "https://jmlr.org/papers/v15/",
+      "https://jmlr.org/papers/v15/srivastava14a",
+      "https://jmlr.org/papers/v15/srivastava14a.html/extra",
+      "https://jmlr.org/papers/v15/sriva.stava14a.html",
+      "https://jmlr.org/papers/v15/srivastava14a.pdf",
+      "https://jmlr.org/papers/volume15/srivastava14a/other.pdf",
+      "https://jmlr.org/papers/volume15/srivastava14a.pdf",
+      "https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.html",
+      "https://jmlr.org/papers/vx/srivastava14a.html",
+      "https://jmlr.org/x/papers/v15/srivastava14a.html",
+      "https://jmlr.org/proceedings/papers/v37/ioffe15.html",
+      "https://jmlr.csail.mit.edu/papers/v15/srivastava14a.html",
+      "https://jmlr.org.evil.example/papers/v15/srivastava14a.html",
+      "https://jmlr.org:444/papers/v15/srivastava14a.html",
+      "https://user:pw@jmlr.org/papers/v15/srivastava14a.html",
+    ],
+  },
+};
+
+const resolvedOrThrow = (url: string) => {
+  const got = resolvePaperSource(url);
+  if (got === null) throw new Error(`did not resolve: ${url}`);
+  return got;
+};
+
+describe("resolvePaperSource — the five other sources", () => {
+  for (const [name, wanted] of Object.entries(SOURCE_CASES)) {
+    describe(name, () => {
+      const whole = {
+        source: wanted.resolved.source,
+        versionedId: wanted.resolved.id,
+        workId: wanted.resolved.id,
+        canonicalUrl: wanted.resolved.canonicalUrl,
+        key: wanted.resolved.key,
+        slug: wanted.resolved.slug,
+        candidates: wanted.resolved.candidates.map((url) => ({ url, expect: "pdf" })),
+      };
+
+      it.each(wanted.shapes)("resolves %s to the one paper", (url) => {
+        expect(resolvePaperSource(url)).toEqual(whole);
+      });
+
+      it("resolves every candidate's own address, and the address it is known by, back to the same paper", () => {
+        for (const address of [...wanted.resolved.candidates, wanted.resolved.canonicalUrl]) {
+          expect(resolvePaperSource(address), address).toEqual(whole);
+          /* What the shelf lookup asks of the address the fetch ended on. */
+          expect(urlKey(address), address).toBe(wanted.resolved.key);
+        }
+      });
+
+      it("has the key urlKey gave its landing page before, a slug the store takes, and only PDFs on its own host", () => {
+        const got = resolvedOrThrow(wanted.shapes[0] as string);
+        expect(isSlug(got.slug)).toBe(true);
+        const landing = new URL(got.canonicalUrl);
+        expect(got.key).toBe(`${landing.hostname}${landing.pathname.replace(/\/$/, "")}`);
+        expect(got.candidates.length).toBeGreaterThan(0);
+        for (const candidate of got.candidates) {
+          expect(candidate.expect).toBe("pdf");
+          expect(candidate.url).not.toBe(got.canonicalUrl);
+          expect(new URL(candidate.url).protocol).toBe("https:");
+          expect(wanted.hosts).toContain(new URL(candidate.url).host);
+        }
+      });
+
+      if (wanted.nearMisses.length > 0) {
+        it.each(wanted.nearMisses)("answers null for %j", (url) => {
+          expect(resolvePaperSource(url)).toBeNull();
+        });
+      }
+    });
+  }
+
+  it("keeps the case the server spells a name in, in the key and in the candidate", () => {
+    /* CVF's and PMLR's file names are case-sensitive on the server, so a
+       lower-cased spelling is a different address there and stays a different
+       key here. ACL's ids are the exception: a DOI is case-insensitive, so both
+       spellings are folded to the one the Anthology serves. */
+    const cvf = resolvedOrThrow("https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html");
+    const lower = resolvedOrThrow("https://openaccess.thecvf.com/content_cvpr_2016/html/he_deep_residual_learning_cvpr_2016_paper.html");
+    expect(lower.key).not.toBe(cvf.key);
+    expect(lower.candidates[0]?.url).toContain("/he_deep_residual_learning_cvpr_2016_paper.pdf");
+    expect(resolvedOrThrow("https://ACLANTHOLOGY.ORG/n19-1423").candidates[0]?.url).toBe("https://aclanthology.org/N19-1423.pdf");
+    expect(resolvedOrThrow("https://aclanthology.org/2023.ACL-Long.1/").candidates[0]?.url).toBe("https://aclanthology.org/2023.acl-long.1.pdf");
+  });
+
+  it("gives two NeurIPS tracks of one hash two keys, so a wrong ending cannot be mistaken for the right one", () => {
+    const base = `https://proceedings.neurips.cc/paper_files/paper/2023/hash/${NEURIPS_TRACK_HASH}`;
+    const conference = resolvedOrThrow(`${base}-Abstract-Conference.html`);
+    const benchmarks = resolvedOrThrow(`${base}-Abstract-Datasets_and_Benchmarks.html`);
+    const none = resolvedOrThrow(`${base}-Abstract.html`);
+    expect(new Set([conference.key, benchmarks.key, none.key]).size).toBe(3);
+    expect(benchmarks.candidates).toEqual([
+      { url: `https://proceedings.neurips.cc/paper_files/paper/2023/file/${NEURIPS_TRACK_HASH}-Paper-Datasets_and_Benchmarks.pdf`, expect: "pdf" },
+    ]);
+  });
+
+  describe("a long CVF name", () => {
+    const cases = JSON.parse(readFileSync(path.join(import.meta.dirname, "../evals/paper-sources/cases.json"), "utf8")) as {
+      source: string;
+      label: string;
+      landingUrl: string;
+    }[];
+    const measured = cases.find((c) => c.source === "cvf" && c.label === "Swin");
+
+    it("is the 90-character one that was measured, and resolves with a cut slug and a whole key", () => {
+      if (measured === undefined) throw new Error("the Swin case has gone from evals/paper-sources/cases.json");
+      const name = new URL(measured.landingUrl).pathname.split("/").at(-1)?.replace(/\.html$/, "") ?? "";
+      expect(name.length).toBe(90);
+      const got = resolvedOrThrow(measured.landingUrl);
+      expect(isSlug(got.slug)).toBe(true);
+      expect(got.slug.length).toBeLessThanOrEqual(60);
+      expect(got.key).toContain(name);
+      expect(got.candidates[0]?.url).toContain(`/${name}.pdf`);
+    });
+
+    it("gives two names that share their first 60 characters different keys", () => {
+      const shared = "Author_A_Very_Long_Title_That_Goes_On_And_On_Past_Sixty_Characters_Before_It";
+      expect(shared.length).toBeGreaterThan(60);
+      const one = resolvedOrThrow(`https://openaccess.thecvf.com/content/CVPR2023/html/${shared}_Ends_CVPR_2023_paper.html`);
+      const two = resolvedOrThrow(`https://openaccess.thecvf.com/content/CVPR2023/html/${shared}_Stops_CVPR_2023_paper.html`);
+      expect(one.key).not.toBe(two.key);
+      expect(one.candidates[0]?.url).not.toBe(two.candidates[0]?.url);
+      /* The slug is only a name: `freeSlug` tells two articles with one apart. */
+      expect(isSlug(one.slug)).toBe(true);
+      expect(isSlug(two.slug)).toBe(true);
+    });
+
+    it("cuts the slug of every source to what the store takes, however long the id", () => {
+      const long = "a".repeat(80);
+      for (const url of [
+        `https://proceedings.mlr.press/v1/${long}.html`,
+        `https://openaccess.thecvf.com/content/CVPR2023/html/${long}-.html`,
+        `https://openaccess.thecvf.com/content/CVPR2023/html/${"a".repeat(55)}_____${long}.html`,
+      ]) {
+        const got = resolvedOrThrow(url);
+        expect(isSlug(got.slug), got.slug).toBe(true);
+        expect(got.slug.endsWith("-")).toBe(false);
+      }
+    });
+  });
+});
+
+describe("no pasted text reaches a candidate address", () => {
+  /** A good landing address of each source, and of each mirror, to bend. */
+  const GOOD: [string, string[]][] = [
+    ["https://arxiv.org/abs/2608.13566", ["arxiv.org"]],
+    ["https://huggingface.co/papers/1706.03762", ["arxiv.org"]],
+    ["https://www.alphaxiv.org/abs/1706.03762", ["arxiv.org"]],
+    ...Object.values(SOURCE_CASES).flatMap((c) => c.shapes.map((shape): [string, string[]] => [shape, c.hosts])),
+  ];
+
+  /** Ways to bend one address. Most must stop resolving; any that still does must stay clean. */
+  const bent = (good: string): string[] => {
+    const u = new URL(good);
+    const at = (pathname: string) => `${u.protocol}//${u.host}${pathname}`;
+    const p = u.pathname;
+    const stem = p.replace(/(\.html|\.pdf|\/)$/, "");
+    const tail = p.slice(stem.length);
+    return [
+      good,
+      good.toUpperCase(),
+      `${good}?next=https://evil.example/x.pdf`,
+      `${good}#https://evil.example/x.pdf`,
+      `${good}?a=..%2f..%2f&b=@evil.example`,
+      at(`${p}/..`),
+      at(`${p}/../x`),
+      at(`/x/..${p}`),
+      at(`/x/%2e%2e${p}`),
+      at(`/${p}`),
+      at(p.replace(/\/(?=[^/]*$)/, "//")),
+      at(`${stem}%2f..%2f..%2fetc${tail}`),
+      at(`${stem}%2Fevil${tail}`),
+      at(`${stem}@evil.example${tail}`),
+      at(`${stem}\\evil${tail}`),
+      at(`${stem}\\..\\..${tail}`),
+      at(`${stem}%00${tail}`),
+      at(`${stem} x${tail}`),
+      at(`${stem}?${tail}`),
+      at(`${stem};x=1${tail}`),
+      at(`${stem}%252e%252e${tail}`),
+      `${u.protocol}//evil.example@${u.host}${p}`,
+      `${u.protocol}//${u.host}@evil.example${p}`,
+      `${u.protocol}//${u.host}.evil.example${p}`,
+      `${u.protocol}//evil.example/${u.host}${p}`,
+      `${u.protocol}//evil.example/?u=${encodeURIComponent(good)}`,
+      `${u.protocol}//${u.host}:8443${p}`,
+      `${u.protocol}//${u.host}\\@evil.example${p}`,
+    ];
+  };
+
+  it("for every bent address: null, or https on the source's own host with a plain path", () => {
+    let resolved = 0;
+    let refused = 0;
+    for (const [good, hosts] of GOOD) {
+      for (const url of bent(good)) {
+        const got = resolvePaperSource(url);
+        if (got === null) {
+          refused += 1;
+          continue;
+        }
+        resolved += 1;
+        expect(isSlug(got.slug), url).toBe(true);
+        for (const candidate of got.candidates) {
+          const c = new URL(candidate.url);
+          expect(c.protocol, url).toBe("https:");
+          expect(hosts, url).toContain(c.host);
+          expect(c.username + c.password + c.search + c.hash, url).toBe("");
+          /* The address is exactly its origin and a plain path: nothing the
+             parser had to tidy, no dot segment, no doubled slash. */
+          expect(candidate.url, url).toBe(`https://${c.host}${c.pathname}`);
+          expect(c.pathname, url).toMatch(/^[A-Za-z0-9._/-]+$/);
+          expect(c.pathname, url).not.toMatch(/\/\.{1,2}(\/|$)|\/\//);
+          /* And it is still this source's paper. */
+          expect(resolvePaperSource(candidate.url)?.key, url).toBe(got.key);
+        }
+      }
+    }
+    /* Both arms ran: a sweep in which nothing resolved, or nothing was refused, proves nothing. */
+    expect(resolved).toBeGreaterThan(GOOD.length);
+    expect(refused).toBeGreaterThan(GOOD.length * 5);
   });
 });

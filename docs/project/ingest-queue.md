@@ -733,6 +733,13 @@ so `urlKey` answers `arxiv.org/abs/<id>` for all of them, and `slugFromUrl` answ
 slug (`arxiv-2608-13566`; it used to be `arxiv-2608`, because `.13566` read as a file extension).
 A version is part of the key: `2608.13566` and `2608.13566v1` are two articles.
 
+The same holds for the sources added on 2026-10-06. A Hugging Face or alphaXiv page about an arXiv
+paper has the arXiv paper's key. An ACL Anthology, PMLR, NeurIPS, CVF or JMLR paper has the key
+its landing page always had (`aclanthology.org/2020.acl-main.703`), and the PDF's own address now
+answers with it too. Their slugs are `acl-…`, `pmlr-…`, `neurips-…`, `cvf-…` and `jmlr-…`, cut to
+60 characters while the key keeps the whole id. The table of what each recognises is
+[fetching.md § The sources](fetching.md#the-sources).
+
 A job row stores the key it was queued with, so a job queued before that change carries the old
 one. `enqueue` therefore looks at an adopted active job with `sameWork`, which compares addresses
 by today's `urlKey`, and hands it back before the insert rather than trusting the stored keys to
@@ -2135,6 +2142,12 @@ body that arrived in part may not be. The codes are the `fetch-` family in
 [copy.md § The bracketed code](copy.md#the-bracketed-code);
 [`tests/fetch-failure-sentences.test.ts`](../../tests/fetch-failure-sentences.test.ts) holds the
 kind for each.
+
+One `fetch-` sentence is not in that map, because it is not one of the fetcher's codes:
+`FETCH_PAPER_MISSING`, `[fetch-paper-missing]`, `blocked`. A paper source's own PDF address
+answered that it has no such document, so the reader is told to check the link or download the
+PDF and upload it, not that their page does not exist
+([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
 
 ## The one security check
 

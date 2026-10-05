@@ -150,10 +150,13 @@ tells the reader to check the address for a slip, and their address is fine: wha
 PDF address we derived and they never saw. So when a paper source's last candidate is absent, the
 card says, under a new code `[fetch-paper-missing]`, blocked rather than retryable:
 
-> We found the page for this paper, but not the paper itself where this site usually keeps it.
-> Download the PDF from the site and upload it here.
+> This site did not have the paper where it usually keeps it. Trying again will not help. Check the
+> link is right, or download the PDF from the site and upload it here.
 
 **This is a new reader-facing sentence, written without Greg.** It is here so he can change it.
+(The first draft began "We found the page for this paper", which is not true: the pasted page is
+never fetched. An arXiv link whose paper is absent gets this sentence too, and there the likely
+cause is a mistyped id, hence "check the link".)
 
 **And a line in the log** (Sol's G13). Today's log line is written only when the fetch succeeds. A
 failed paper-source fetch logs the source's name, how many candidates were tried and the failure's
