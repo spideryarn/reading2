@@ -824,6 +824,23 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
       allow_fallbacks: true,
     },
   },
+  /* **An imported title, lightly tidied** (src/title-tidy-model.ts).
+     `paper-metadata`'s route above, copied for its reasons: what it sends is
+     the title of something a reader may have uploaded, so every endpoint is a
+     zero-retention one, and the answer is a strict JSON schema. A refusal that
+     survives the fallbacks costs nothing but the model's tidy: the caller
+     falls back to the rule. */
+  "title-tidy": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
@@ -1060,6 +1077,10 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      judged DeepSeek against Luna ran at this setting:
      evals/results/paper-metadata-2026-10-01.md. */
   "paper-metadata": { effort: "none" },
+  /* Recasing one line needs no thinking, and import waits on it. The setting
+     the eval ran at:
+     docs/investigations/261005b-title-tidying-rule-against-a-small-model.md. */
+  "title-tidy": { effort: "none" },
   /* Copying two words out of one sentence needs no thinking, and the reader
      is watching the bar. The setting every chat arm of the eval ran at, with
      no reasoning token spent on any of 600 answers

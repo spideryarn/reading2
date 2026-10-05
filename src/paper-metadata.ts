@@ -30,7 +30,7 @@ import { openRouterJson, type AiRequestBody } from "./ai-call.js";
 import { PAPER_METADATA_MODEL } from "./models.js";
 import { firstPagesText } from "./pdf.js";
 import { htmlDocumentText } from "./paper-text.js";
-import { tidiedTitle } from "./title-tidy.js";
+import { tidiedTitle, type TidiedTitle } from "./title-tidy.js";
 import type { Author, Meta } from "./types.js";
 
 /** How many pages are read. The title, byline and abstract are on these. */
@@ -331,6 +331,11 @@ export function titleFromFilename(filename: string | undefined): string | null {
   return stem ? stem : null;
 }
 
+/** A minimal paper's title before tidying: the model's or the page's own, else the file's name, else the slug. */
+export function paperTitle(input: { slug: string; filename?: string | undefined; found: PaperMetadata }): string {
+  return input.found.title ?? titleFromFilename(input.filename) ?? input.slug;
+}
+
 /**
  * **What the `metadata` step writes as the revision's `meta`** — pure, so the
  * ladder is testable without a database.
@@ -346,15 +351,20 @@ export function paperMeta(input: {
   kind: "pdf" | "html";
   filename?: string | undefined;
   found: PaperMetadata;
+  /**
+   * `paperTitle(input)` already tidied, when the caller had a tidier to ask —
+   * the `metadata` step does, and it is a model's (src/title-tidy-model.ts).
+   * Absent, the rule tidies it here.
+   */
+  tidied?: TidiedTitle | undefined;
 }): Meta {
   const { slug, kind, found } = input;
-  const title = found.title ?? titleFromFilename(input.filename) ?? slug;
   const authors: Author[] = found.authors.map((name) => ({ name, affiliations: [] }));
   return {
     slug,
-    /* Tidied as a full import's title is (src/title-tidy.ts, plan 261005g), but
-       with no body to say which words are acronyms: a minimal paper has none. */
-    ...tidiedTitle(title),
+    /* Tidied as a full import's title is (plans 261005g and 261005j). The rule
+       has no body to say which words are acronyms: a minimal paper has none. */
+    ...(input.tidied ?? tidiedTitle(paperTitle(input))),
     ...(authors.length > 0 ? { authors, byline: found.authors.join("; ") } : {}),
     ...(found.abstract ? { abstract: found.abstract } : {}),
     ...(found.doi ? { doi: found.doi } : {}),
