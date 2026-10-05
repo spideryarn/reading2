@@ -1,0 +1,212 @@
+{
+  "arm": "high-none-len1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "identity-spya-k8x09v",
+  "version": "simple-prompt/9",
+  "sourceSha256": "4489cb29836c49d266fdadbd055eead7a950f26a63beb5d18a4c744ebf8c45f0",
+  "at": "2026-10-05T02:34:03.287Z",
+  "bodyWords": 879,
+  "band": "short",
+  "bodyBlocks": 27,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "c88bcb88ff224afc",
+  "systemsSha256": "47e8c49b72a4f2c06d2b59f48baedad0cffe7a171c9b5acc24f3df40cf1a5d10",
+  "power": "high",
+  "guard": true,
+  "wallMs": 17598,
+  "costUsd": 0.0640656,
+  "tokens": {
+    "input": 8427,
+    "output": 1458,
+    "reasoning": 0
+  },
+  "briefReadyMs": 13370,
+  "fullerReadyMs": 17592,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 237,
+  "briefWords": 94,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham asking why talk about politics and religion goes so badly. He notes that online forums slide into religious fights, while threads on Javascript or baking do not. On religion, people feel no need for expertise, only strong beliefs, so everyone joins in.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-znm6fz",
+        "spya-pfruy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham asking why talk about politics and religion goes so badly.",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "He notes that online forums slide into religious fights, while threads on Javascript or baking do not.",
+          "id": "spya-znm6fz"
+        },
+        {
+          "text": "On religion, people feel no need for expertise, only strong beliefs, so everyone joins in.",
+          "id": "spya-pfruy3"
+        }
+      ]
+    },
+    {
+      "text": "He first tests one explanation: these topics have no definite answers, so no one can be proven wrong. He rejects it, because precise political questions, like what a policy will cost, end just as badly. His answer is that these topics become part of people's identity, their sense of who they are. People can never argue fruitfully about such things, since they are taking sides by definition.",
+      "ids": [
+        "spya-ah2ape",
+        "spya-gv44uj",
+        "spya-kwzcxp"
+      ],
+      "sentences": [
+        {
+          "text": "He first tests one explanation: these topics have no definite answers, so no one can be proven wrong.",
+          "id": "spya-ah2ape"
+        },
+        {
+          "text": "He rejects it, because precise political questions, like what a policy will cost, end just as badly.",
+          "id": "spya-gv44uj"
+        },
+        {
+          "text": "His answer is that these topics become part of people's identity, their sense of who they are.",
+          "id": "spya-kwzcxp",
+          "key": "become part of people's identity"
+        },
+        {
+          "text": "People can never argue fruitfully about such things, since they are taking sides by definition.",
+          "id": "spya-kwzcxp"
+        }
+      ]
+    },
+    {
+      "text": "From this, he draws several points. What triggers identity depends on the people, not the topic: a Bronze Age battle stirs no sides today. A topic that sparks fights still may have an answer, as with comparing programming languages. Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe with some people.",
+      "ids": [
+        "spya-uz3ta2",
+        "spya-s6tp4k",
+        "spya-zdmhnz"
+      ],
+      "sentences": [
+        {
+          "text": "From this, he draws several points.",
+          "id": null
+        },
+        {
+          "text": "What triggers identity depends on the people, not the topic: a Bronze Age battle stirs no sides today.",
+          "id": "spya-uz3ta2",
+          "key": "depends on the people, not the topic"
+        },
+        {
+          "text": "A topic that sparks fights still may have an answer, as with comparing programming languages.",
+          "id": "spya-s6tp4k"
+        },
+        {
+          "text": "Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe with some people.",
+          "id": "spya-zdmhnz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "He says the theory, if right, also explains how to have better ideas. If people cannot think clearly about what is part of their identity, let in as few things as possible. He allows that calling yourself a scientist may be a net win, since it commits you only to following evidence. His conclusion: the more labels you have for yourself, the dumber they make you.",
+      "ids": [
+        "spya-xv45wq",
+        "spya-nt9xpg",
+        "spya-mz9mzj"
+      ],
+      "sentences": [
+        {
+          "text": "He says the theory, if right, also explains how to have better ideas.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "If people cannot think clearly about what is part of their identity, let in as few things as possible.",
+          "id": "spya-xv45wq",
+          "key": "let in as few things as possible"
+        },
+        {
+          "text": "He allows that calling yourself a scientist may be a net win, since it commits you only to following evidence.",
+          "id": "spya-mz9mzj"
+        },
+        {
+          "text": "His conclusion: the more labels you have for yourself, the dumber they make you.",
+          "id": "spya-nt9xpg"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "In this short essay, Paul Graham asks why talk about politics and religion so often goes nowhere. His answer is that these topics become part of people's identity, meaning their sense of who they are. People can't argue usefully about something that is part of who they are.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-kwzcxp",
+        "spya-uz3ta2"
+      ],
+      "sentences": [
+        {
+          "text": "In this short essay, Paul Graham asks why talk about politics and religion so often goes nowhere.",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "His answer is that these topics become part of people's identity, meaning their sense of who they are.",
+          "id": "spya-kwzcxp",
+          "key": "part of people's identity"
+        },
+        {
+          "text": "People can't argue usefully about something that is part of who they are.",
+          "id": "spya-kwzcxp"
+        }
+      ]
+    },
+    {
+      "text": "He says this idea matters because it shows how to think more clearly, not just which talks to avoid. So his advice is to let as few things into your identity as possible. The more labels you give yourself, he argues, the dumber they make you.",
+      "ids": [
+        "spya-xv45wq",
+        "spya-nt9xpg"
+      ],
+      "sentences": [
+        {
+          "text": "He says this idea matters because it shows how to think more clearly, not just which talks to avoid.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "So his advice is to let as few things into your identity as possible.",
+          "id": "spya-xv45wq",
+          "key": "let as few things into your identity"
+        },
+        {
+          "text": "The more labels you give yourself, he argues, the dumber they make you.",
+          "id": "spya-nt9xpg"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

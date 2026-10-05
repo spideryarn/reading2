@@ -34,6 +34,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 ## See also
 
+- [261005a-reading-time-estimates-and-text-difficulty.md](../research/261005a-reading-time-estimates-and-text-difficulty.md)
+  — reading rates, the word-length equation, what readability formulas and model ratings can and
+  cannot see, for the "~N min" estimate
+
 - [261002c-recall-and-tutorial-pedagogy-for-remember-mode.md](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
   — retrieval practice, hint ladders, Socratic questions and one-to-one tutoring, for Remember's
   Recall and Tutorial prompts

@@ -434,7 +434,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        `test me` is left out for the same reason, and `flashcards` because the
        description denies it. Both spellings of *practise*. */
     aliases: ["recall", "memorise", "memorize", "study", "revise", "revision", "practice", "practise", "learn"],
-    experimental: true,
+    /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
+       *"I think recall submode for sure. I think quiz mode as well. And then
+       let's try tutorial too."* Explore, the fourth part, stays behind the
+       switch one level down (src/web/sub-modes.ts § `REMEMBER_SUB_MODES`).
+       docs/project/experimental-features.md. */
+    experimental: false,
   },
   quotes: {
     description: "The lines worth keeping — the piece's own sentences, chosen and checked against it",

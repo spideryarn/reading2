@@ -247,7 +247,14 @@ import {
 } from "./jobs.js";
 import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
-import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
+import { type AdminCosts, costWindowLabel, parseCostWindow } from "./cost-cube.js";
+import { authAdminEndpoint, gotruePages, listAccounts } from "./store/admin-accounts.js";
+import {
+  silentLiveSessionsForArticle,
+  SpendCubeTooLarge,
+  spendCube,
+  spendForArticle,
+} from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type {
   ClaimsFinish,
@@ -8382,6 +8389,69 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         silentLiveSessions,
       };
       send(res, 200, cost);
+    },
+  },
+
+  /* **The cost cube**, for `/admin/costs` — Greg, 2026-10-04 (report
+     spya-mykvhz). The ledger over `?since=&until=`, grouped by user, article,
+     task, model and day; the page filters, groups and pivots it in the browser
+     (src/cost-cube.ts). Behind the namespace gate like its siblings, which is
+     the check. docs/plans/261005a-admin-costs-page-cost-analysis-report-and-a-cost-tracking-audit.md.
+
+     **Asked as the administrator**, and that argument is the privacy rule: the
+     query names only the asker's own slugs, and anybody else's article is an
+     opaque id (src/store/ai-calls-spend-pg.ts § `spendCube`). */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/costs",
+    article: "none",
+    handler: async ({ user, request: { res, query } }) => {
+      /* A bound we cannot read is a 400, never "everything": a total over a
+         period nobody asked for looks exactly like the one they did. */
+      const asked = parseCostWindow(query.get("since"), query.get("until"));
+      if (!asked.ok) throw httpError(400, asked.message);
+      res.setHeader("Cache-Control", "private, no-store");
+      const { url, key } = authAdminEndpoint();
+      const [groups, accounts] = await Promise.all([
+        spendCube(asked.since ?? undefined, asked.until ?? undefined, user.id, key).catch((err) => {
+          if (err instanceof SpendCubeTooLarge) {
+            throw httpError(
+              400,
+              `That window has more than ${err.maxGroups} groups of calls. Ask for a shorter period.`,
+            );
+          }
+          throw err;
+        }),
+        /* The account listing alone, for the emails — not the users page's
+           nine-query read. */
+        /* **A failed listing costs the emails, not the page**: the money is
+           the ledger's and does not need the Auth service. Only the error's
+           class is logged — its message may carry the endpoint. */
+        listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+          log("http").warn(
+            { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+            "admin costs: the account listing failed, so the answer carries no emails",
+          );
+          return null;
+        }),
+      ]);
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
+      /* Every owner in the rows, and only those. One the Auth service does not
+         know — a deleted account's ledger rows outlive it — has no email. */
+      const owners = [...new Set(groups.map((g) => g.ownerId))].map((id) => ({
+        id,
+        email: emails.get(id) ?? null,
+      }));
+      const costs: AdminCosts = {
+        since: asked.since,
+        until: asked.until,
+        label: costWindowLabel(asked.since, asked.until),
+        rows: groups.map((g) => ({ ...g, category: costCategoryOf(g) })),
+        owners,
+        emailsAvailable: accounts !== null,
+      };
+      send(res, 200, costs);
     },
   },
 

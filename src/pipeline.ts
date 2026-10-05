@@ -215,6 +215,7 @@ import {
   type StepStamp,
 } from "./store/artifacts.js";
 import { checkCoverage, generateStructure } from "./structure.js";
+import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
   generateTweets,
@@ -677,6 +678,12 @@ export interface StepContext {
    * than two computed in two places.
    */
   deadlineAt?: number;
+  /**
+   * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
+   * which this file cannot import. The structure step's slices path stops
+   * itself inside it. `undefined` from a command line or a test.
+   */
+  stepBudgetMs?: number;
   /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
@@ -2878,6 +2885,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            another scoped call — see `StepContext.deadlineAt`. With the flag off
            it changes nothing at all. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
+        ...(ctx.stepBudgetMs !== undefined ? { stepBudgetMs: ctx.stepBudgetMs } : {}),
       });
       /* `run.elapsedMs`, not a timer around this closure. The stage times the
          model call itself, which is the number that answers "what does a tree
@@ -2894,6 +2902,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/structure.ts § `StructureSource`. */
           source: run.source.by,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
+          /* The slices path: how many, how many re-asked and refilled, or why
+             it gave way to the headings. src/structure-slices.ts. */
+          slices: run.source.by === "slices" ? run.source : null,
+          slicesFailed:
+            run.source.by === "headings" && run.source.reason === "answer-too-long" ? run.source.slicesFailed : null,
           /* Three counts, not one, and `strandedSupplement` is the one that
              matters: it is how an operator learns the apparatus was left out of
              the structure on a run that otherwise reports success. */
@@ -2949,7 +2962,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              evals/deepen/ was reduced to doing. */
           wholeDocumentResumed: run.wholeDocumentResumed,
           /* 2 is an answer that did not become a tree, asked for again —
-             src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read. */
+             src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read.
+             On the slices path it counts every request started, including failures and transport retries. */
           wholeDocumentCalls: run.wholeDocumentCalls,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
@@ -3058,9 +3072,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const fromHeadings =
         run.source.by === "model"
           ? ""
-          : run.source.reason === "answer-too-long"
-            ? ", from its headings (too long for one answer)"
-            : ", from its headings (a section was too long to label)";
+          : run.source.by === "slices"
+            ? `, read in ${run.source.slices} parts`
+            : run.source.reason === "answer-too-long"
+              ? `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[run.source.slicesFailed]})`
+              : ", from its headings (a section was too long to label)";
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },
@@ -4270,7 +4286,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       const stored = await store.stampFor(ctx.slug, "simple");
       return {
-        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta, stored?.promptVersion),
         promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
         model: stored?.model ?? CAPABLE_MODEL,
       };

@@ -1,0 +1,306 @@
+{
+ "note": "This is one stretch of a longer document. Nothing before or after it is shown, and the stretch may begin or end partway through a chapter.\nIts top-level sections will sit beside the other stretches' top-level sections in one table of contents. So where the document has chapters or other major divisions of its own, make each top-level section one whole chapter or division, however few or many that gives, and put the scenes, steps or sub-sections inside it one level down.\n\n",
+ "dollars": 1.4722279999999999,
+ "rows": [
+  {
+   "case": "book-slice-2",
+   "note": false,
+   "blocks": 628,
+   "headingBlocks": 36,
+   "reused": true,
+   "ok": true,
+   "seconds": null,
+   "dollars": null,
+   "topLevel": 7,
+   "sectionlessTopLevel": 1,
+   "sectionlessOverBatch": 1,
+   "sections": [
+    {
+     "title": "Power Punctuation!",
+     "blocks": 192,
+     "sections": 9
+    },
+    {
+     "title": "Visit the Sins",
+     "blocks": 73,
+     "sections": 7
+    },
+    {
+     "title": "Day Two with Ethan",
+     "blocks": 81,
+     "sections": 5
+    },
+    {
+     "title": "Leaving the Ward",
+     "blocks": 18,
+     "sections": 2
+    },
+    {
+     "title": "The Father Arrives",
+     "blocks": 27,
+     "sections": 2
+    },
+    {
+     "title": "The Reunion",
+     "blocks": 54,
+     "sections": 3
+    },
+    {
+     "title": "Afterword",
+     "blocks": 183,
+     "sections": 0
+    }
+   ]
+  },
+  {
+   "case": "book-slice-2",
+   "note": true,
+   "blocks": 628,
+   "headingBlocks": 36,
+   "reused": false,
+   "ok": true,
+   "seconds": 72.2,
+   "dollars": 0.180286,
+   "topLevel": 4,
+   "sectionlessTopLevel": 0,
+   "sectionlessOverBatch": 0,
+   "sections": [
+    {
+     "title": "Power Punctuation!",
+     "blocks": 192,
+     "sections": 9
+    },
+    {
+     "title": "Visit the Sins",
+     "blocks": 258,
+     "sections": 9
+    },
+    {
+     "title": "Constitutional Crisis",
+     "blocks": 127,
+     "sections": 8
+    },
+    {
+     "title": "Pester Power",
+     "blocks": 51,
+     "sections": 5
+    }
+   ]
+  },
+  {
+   "case": "paper-first-900",
+   "note": false,
+   "blocks": 900,
+   "headingBlocks": 101,
+   "reused": false,
+   "ok": true,
+   "seconds": 130.5,
+   "dollars": 0.416972,
+   "topLevel": 10,
+   "sectionlessTopLevel": 4,
+   "sectionlessOverBatch": 0,
+   "sections": [
+    {
+     "title": "Title and contents",
+     "blocks": 34,
+     "sections": 0
+    },
+    {
+     "title": "Preface",
+     "blocks": 7,
+     "sections": 0
+    },
+    {
+     "title": "Notation",
+     "blocks": 2,
+     "sections": 0
+    },
+    {
+     "title": "1 Introduction",
+     "blocks": 8,
+     "sections": 0
+    },
+    {
+     "title": "2 Learning in High Dimensions",
+     "blocks": 24,
+     "sections": 3
+    },
+    {
+     "title": "3 Geometric Priors",
+     "blocks": 151,
+     "sections": 6
+    },
+    {
+     "title": "4 Geometric Domains: the 5 Gs",
+     "blocks": 332,
+     "sections": 6
+    },
+    {
+     "title": "5 Geometric Deep Learning Models",
+     "blocks": 258,
+     "sections": 9
+    },
+    {
+     "title": "6 Problems and Applications",
+     "blocks": 68,
+     "sections": 10
+    },
+    {
+     "title": "7 Historic Perspective",
+     "blocks": 16,
+     "sections": 3
+    }
+   ]
+  },
+  {
+   "case": "paper-first-900",
+   "note": true,
+   "blocks": 900,
+   "headingBlocks": 101,
+   "reused": false,
+   "ok": true,
+   "seconds": 66.7,
+   "dollars": 0.323556,
+   "topLevel": 11,
+   "sectionlessTopLevel": 5,
+   "sectionlessOverBatch": 0,
+   "sections": [
+    {
+     "title": "Title and Authors",
+     "blocks": 4,
+     "sections": 0
+    },
+    {
+     "title": "Contents",
+     "blocks": 30,
+     "sections": 0
+    },
+    {
+     "title": "Preface",
+     "blocks": 7,
+     "sections": 0
+    },
+    {
+     "title": "Notation",
+     "blocks": 2,
+     "sections": 0
+    },
+    {
+     "title": "1 Introduction",
+     "blocks": 8,
+     "sections": 0
+    },
+    {
+     "title": "2 Learning in High Dimensions",
+     "blocks": 24,
+     "sections": 2
+    },
+    {
+     "title": "3 Geometric Priors",
+     "blocks": 151,
+     "sections": 6
+    },
+    {
+     "title": "4 Geometric Domains: the 5 Gs",
+     "blocks": 332,
+     "sections": 6
+    },
+    {
+     "title": "5 Geometric Deep Learning Models",
+     "blocks": 258,
+     "sections": 9
+    },
+    {
+     "title": "6 Problems and Applications",
+     "blocks": 68,
+     "sections": 12
+    },
+    {
+     "title": "7 Historic Perspective",
+     "blocks": 16,
+     "sections": 3
+    }
+   ]
+  },
+  {
+   "case": "book-slice-3-headingless",
+   "note": false,
+   "blocks": 904,
+   "headingBlocks": 0,
+   "reused": false,
+   "ok": true,
+   "seconds": 79.2,
+   "dollars": 0.25355,
+   "topLevel": 6,
+   "sectionlessTopLevel": 4,
+   "sectionlessOverBatch": 0,
+   "sections": [
+    {
+     "title": "Chicken Little",
+     "blocks": 512,
+     "sections": 9
+    },
+    {
+     "title": "Afterword",
+     "blocks": 2,
+     "sections": 0
+    },
+    {
+     "title": "Epoch and Advertisement",
+     "blocks": 5,
+     "sections": 0
+    },
+    {
+     "title": "BIGMAC",
+     "blocks": 369,
+     "sections": 8
+    },
+    {
+     "title": "Afterword",
+     "blocks": 6,
+     "sections": 0
+    },
+    {
+     "title": "I'm Only In It For the Money",
+     "blocks": 10,
+     "sections": 0
+    }
+   ]
+  },
+  {
+   "case": "book-slice-3-headingless",
+   "note": true,
+   "blocks": 904,
+   "headingBlocks": 0,
+   "reused": false,
+   "ok": true,
+   "seconds": 110.1,
+   "dollars": 0.297864,
+   "topLevel": 4,
+   "sectionlessTopLevel": 2,
+   "sectionlessOverBatch": 0,
+   "sections": [
+    {
+     "title": "Chicken Little",
+     "blocks": 514,
+     "sections": 8
+    },
+    {
+     "title": "Publication Note and Advertisement",
+     "blocks": 5,
+     "sections": 0
+    },
+    {
+     "title": "BIGMAC",
+     "blocks": 375,
+     "sections": 8
+    },
+    {
+     "title": "I'm Only In It For the Money, by Russell Galen",
+     "blocks": 10,
+     "sections": 0
+    }
+   ]
+  }
+ ]
+}

@@ -49,6 +49,8 @@ const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.A
 const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadAdminCosts = () =>
+  import("./AdminCostsPage.js").then((m) => ({ default: m.AdminCostsPage }));
 const loadAdminVouchers = () =>
   import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
 /* One loader per admin page, keyed by the union, so a page added to
@@ -59,6 +61,7 @@ const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
   users: loadAdminUsers,
   feedback: loadAdminFeedback,
   vouchers: loadAdminVouchers,
+  costs: loadAdminCosts,
 };
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is

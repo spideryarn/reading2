@@ -493,6 +493,23 @@ describe("the two lists cover every parameter the client writes", () => {
     "public",
     "topicsView",
     "tags",
+    /* `/admin/costs` (plan 261005a): its period, its switch, its grouping and
+       sort, and one filter per dimension. An administrator's page, never an
+       article's address. An article parameter given one of these names later
+       would be hidden by this list, so check here first. */
+    "period",
+    "evals",
+    "thenBy",
+    "sort",
+    "user",
+    "article",
+    "task",
+    "category",
+    "model",
+    "upstream",
+    "scope",
+    "outcome",
+    "day",
   ]);
 
   function clientFiles(dir: string): string[] {
@@ -536,6 +553,19 @@ describe("the two lists cover every parameter the client writes", () => {
          comparing turns "I did not match it" into a failure. GPT Sol, F3,
          2026-09-05. If this fires, widen the pattern — do not delete the
          count. */
+      /* **Widened 2026-10-05 for a named map**: `useQueryStates(PARAMS, …)`,
+         where `const PARAMS = { … };` is in the same file and closes on a line
+         of its own. AdminCostsPage.tsx passes options as a second argument, so
+         its call cannot end `})`. A name with no such declaration is not
+         counted, and the comparison below still fails. */
+      for (const m of text.matchAll(/useQueryStates\(([A-Z][A-Z0-9_]*)\b/g)) {
+        const declared = new RegExp(`^const ${m[1]} = \\{([\\s\\S]*?)^\\};`, "m").exec(text);
+        if (!declared) continue;
+        matched += 1;
+        for (const k of (declared[1] ?? "").matchAll(/^\s*([A-Za-z_$][\w$]*)\s*:/gm)) {
+          if (k[1]) keys.add(k[1]);
+        }
+      }
       const calls = [...text.matchAll(/useQueryStates\(/g)].length;
       expect(matched, `${file}: a useQueryStates call this scan cannot read`).toBe(calls);
     }

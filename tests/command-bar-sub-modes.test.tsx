@@ -257,10 +257,17 @@ describe("which sub-mode rows the bar offers", () => {
     const modeRows = rows()
       .filter((r) => r.dataset.kind === "mode")
       .map((r) => r.querySelector(".cmdbar-name")?.textContent);
-    expect(modeRows).not.toContain("Remember");
+    expect(modeRows).not.toContain("Referee");
     const names = subRows().map(fullName);
-    expect(names.some((n) => n.startsWith("Remember"))).toBe(false);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
+    /* Remember is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
+       three of its four parts; Explore is still behind the switch. */
+    expect(modeRows).toContain("Remember");
+    expect(names.filter((n) => n.startsWith("Remember"))).toEqual([
+      "Remember › Recall",
+      "Remember › Tutorial",
+      "Remember › Quiz",
+    ]);
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
     /* And not nothing: Summary's levels are for everybody. */
@@ -298,6 +305,32 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).toContain("Diagram › Trail");
     expect(names).not.toContain("Diagram › Drift");
   });
+
+  it.each(["article", "metadata"] as const)(
+    "with the switch off, offers Explore only for the carried Remember mode on %s",
+    (view) => {
+      for (const [search, offered] of [
+        ["?mode=remember&remember=explore", true],
+        ["?mode=chat&remember=explore", false],
+        ["?remember=explore", false],
+        ["?mode=remember&remember=unknown", false],
+        ["?mode=remember&remember=quiz", false],
+      ] as const) {
+        if (view === "metadata") metadataPage({ experimental: EXPERIMENTAL_OFF }, search);
+        else {
+          history.replaceState(null, "", `/read/a-piece${search}`);
+          reading({ experimental: EXPERIMENTAL_OFF, mode: search.includes("mode=remember") ? "remember" : "chat" });
+        }
+        openBar();
+        const names = subRows().map(fullName);
+        expect(names.includes("Remember › Explore"), search).toBe(offered);
+        expect(names).toEqual(expect.arrayContaining([
+          "Remember › Recall", "Remember › Tutorial", "Remember › Quiz",
+        ]));
+        act(() => dialog().close());
+      }
+    },
+  );
 
   it("gives every row a distinct id", () => {
     reading();

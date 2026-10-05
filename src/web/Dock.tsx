@@ -600,8 +600,8 @@ interface Props {
  * > And get rid of "Reading time" - that should be part of "Metadata".
  *
  * It already was: the metadata page has read time as one of its six stat cards
- * (Metadata.tsx § At a glance), with a tooltip that says it is words ÷ 230 and
- * a flat rate. So the bar was offering a button for something a page already
+ * (Metadata.tsx § At a glance), with a tooltip that said it was words ÷ 230 and
+ * a flat rate (ReadTimeCard.tsx since 2026-10-05, at 238). So the bar was offering a button for something a page already
  * answered. The one thing the placeholder carried that the page did not — that
  * the original version dropped the readability formulas for a model's
  * judgement, then scaled the estimate by how confident the model was — is now

@@ -92,6 +92,7 @@ import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator } from "../src/models.js
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEP_ORDER, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { hashProfile } from "../src/profile.js";
+import { inputFingerprint as simpleFingerprint } from "../src/simple-summary.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, STAMP_SOURCE, type StepStamp } from "../src/store/artifacts.js";
 import { readsPgArtifacts, siteFor, type JobDraftRef } from "../src/store/artifacts-pg.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -637,7 +638,22 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
         /* The premise, so a "stale" value that happens to be today's cannot
            turn this into a second current case. */
         expect(value).not.toBe(currentOf(step).stamp[field]);
-        const pair = await recordedAs(step, { [field]: value }, () => ask(step));
+        const patch: StepStamp = { [field]: value };
+        if (step === "simple" && field === "promptVersion") {
+          /* A summary an older prompt wrote carries that prompt's fingerprint:
+             since `simple-prompt/9` the length band is in it, and before it was
+             not (plan 261005b, F6). The older version with today's hash is a
+             row nothing can write, so the fixture gets the hash that prompt
+             would have stamped. */
+          const tree = await store().read(SLUG, "structure", "tree");
+          const meta = await store().read(SLUG, "extract", "meta");
+          if (!tree) throw new Error("the fixture has no tree to fingerprint");
+          patch.inputHash = simpleFingerprint(blocks, tree, meta ?? null, value);
+          expect(patch.inputHash, "the control: the older prompt's hash really differs").not.toBe(
+            currentOf(step).stamp.inputHash,
+          );
+        }
+        const pair = await recordedAs(step, patch, () => ask(step));
         expect(pair).toEqual(pinned ?? { queue: false, page: false });
         /* And the step was put back: a case that left it stale would make
            every later case's "current" a lie about the fixture. */

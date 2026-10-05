@@ -24,6 +24,8 @@ import {
   emptyDropped,
   generateSimpleSummary,
   inputFingerprint,
+  isStale,
+  renderPrompt,
 } from "../src/simple-summary.js";
 import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
@@ -168,7 +170,7 @@ const passed = { result: "passed", attempts: 1, retriedAfterFlag: false, stored:
  */
 function oldRow(simple: unknown = OLD_SIMPLE) {
   return {
-    version: "simple/2",
+    version: "simple/2" as const,
     promptVersion: "simple-prompt/7",
     generator: "stub-model",
     slug: "s",
@@ -290,10 +292,13 @@ describe("Brief's and Fuller's prompts", () => {
   /* A change to either prompt changes its hash here and wants a version bump.
      When the middle level went (stage 1) neither moved, so the version did not.
      `/8` is stage 2's longer Fuller: Fuller's hash moved and **Brief's is the
-     one `/7` shipped**, which is what "Brief unchanged" means. */
-  it("are the bytes `simple-prompt/8` shipped: Brief's as they were, Fuller's longer", () => {
+     one `/7` shipped**, which is what "Brief unchanged" means.
+     `/9` (plan 261005b) made the length follow the piece's, in four bands;
+     `SIMPLE_SYSTEMS` is the standard band's pair, and **neither hash moved**:
+     an article of 2,500 to 14,999 words is asked exactly what `/8` asked. */
+  it("are the bytes `simple-prompt/8` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/8");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/9");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
     expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
   });
@@ -307,12 +312,28 @@ describe("an unforced Summary preserves usable words for the same article", () =
   function storedRow() {
     const store = memoryArtefacts();
     const tree = { ...ARTICLE.tree, nodes: {} };
-    const row = { ...oldRow(), generator: CAPABLE_MODEL, sourceHash: inputFingerprint(BLOCKS, tree, ARTICLE.meta) };
+    const row = { ...oldRow(), generator: CAPABLE_MODEL, sourceHash: inputFingerprint(BLOCKS, tree, ARTICLE.meta, oldRow().promptVersion) };
     store.plant("s", "structure", "blocks", { blocks: BLOCKS });
     store.plant("s", "structure", "tree", tree);
     store.plant("s", "extract", "meta", { ...ARTICLE.meta, slug: "s" });
     return { store, row };
   }
+  it("keeps the pre-band hash and freshness for every pre-band prompt", async () => {
+    const { articleWithIds } = await import("../src/article-prompt.js");
+    const { store, row } = storedRow();
+    const tree = { ...ARTICLE.tree, nodes: {} };
+    const oldHash = createHash("sha256")
+      .update(`spya-simple-input/1\n${JSON.stringify([articleWithIds(ARTICLE.meta!, BLOCKS), renderPrompt(null)])}`)
+      .digest("hex").slice(0, 16);
+    for (let n = 1; n <= 8; n++) {
+      const promptVersion = `simple-prompt/${n}`;
+      const legacy = { ...row, promptVersion, sourceHash: oldHash };
+      expect(inputFingerprint(BLOCKS, tree, ARTICLE.meta, promptVersion)).toBe(oldHash);
+      expect(isStale(legacy, BLOCKS, tree, ARTICLE.meta)).toBe(false);
+      store.plant("s", "simple", "simple", legacy);
+      expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
+    }
+  });
   it("skips a stored summary from a different model generation", async () => {
     const { store, row } = storedRow();
     row.generator = "anthropic/claude-sonnet-4";

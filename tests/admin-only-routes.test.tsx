@@ -87,6 +87,8 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
         ? '{"reports":[],"hasMore":false}'
         : url.startsWith("/api/admin/vouchers")
           ? '{"vouchers":[]}'
+          : url.startsWith("/api/admin/costs")
+            ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[],"emailsAvailable":true}'
           : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
@@ -103,6 +105,9 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
    has, so a badly written loader still fails here. */
 await import("../src/web/AdminPage.js");
 await import("../src/web/DesignPage.js");
+/* The costs page is the heaviest of them (the table, the charts), and missed
+   the bounded wait below when it was left to load on demand. */
+await import("../src/web/AdminCostsPage.js");
 
 const { App } = await import("../src/web/App.js");
 
@@ -183,6 +188,12 @@ describe("/admin still refuses exactly as it did", () => {
     expect(heading()).toBe("Spideryarn");
   });
 
+  it("refuses the costs page to a reader", async () => {
+    session.user = READER;
+    await show("/admin/costs");
+    expect(heading()).toBe("Spideryarn");
+  });
+
   it("refuses the vouchers page to a reader", async () => {
     session.user = READER;
     await show("/admin/vouchers");
@@ -210,6 +221,7 @@ describe("the pages that load on demand", () => {
     ["/admin/users", "Users"],
     ["/admin/feedback", "Feedback"],
     ["/admin/vouchers", "Gift vouchers"],
+    ["/admin/costs", "Costs"],
     ["/design", "Design reference"],
   ];
   for (const [path, name] of variants) {
@@ -229,6 +241,8 @@ describe("the list itself", () => {
     /* The one admin page that writes (gift vouchers, plan 261001m). */
     expect(parseRoute("/admin/vouchers")).toEqual({ kind: "admin", page: "vouchers" });
     expect(adminOnly(parseRoute("/admin/vouchers"))).toBe(true);
+    expect(parseRoute("/admin/costs")).toEqual({ kind: "admin", page: "costs" });
+    expect(adminOnly(parseRoute("/admin/costs"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
     for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/help", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);

@@ -209,10 +209,11 @@ full and the pass condition is a person reading them.
 > account anything from the user profile or the why are you reading this information. … lots of
 > small increments is probably better than big, slow increments.
 
-The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=tutorial`). **Each chip has its
+The chip order and visibility are in [§ Who sees which chip](#who-sees-which-chip-since-2026-10-05)
+(`?remember=tutorial`). **Each visible chip has its
 own card** since 2026-10-04 (`REMEMBER_VIEW_HOW` in
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx)), and the band's (i) is two short sentences
-and a four-line list rather than one paragraph, because a chip's card never opens under a finger
+and a list of the visible parts rather than one paragraph, because a chip's card never opens under a finger
 ([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). Where Recall is closest to
 testing — the reader brings what they have — Tutorial is closest to teaching: each turn is a brief
 reaction, **one** small cited piece of the article, and **one** task (say it back, explain why, give
@@ -286,6 +287,13 @@ request is started from zero without comment; a short one that names a goal is t
 
 **What the reader thinks has its own sub-mode since the same day**: § Explore, the fourth
 sub-mode, below, which starts from the reader's comments, highlights and conversations.
+
+### Who sees which chip, since 2026-10-05
+
+Remember is in every reader's bar, with Recall, Tutorial
+and Quiz. Explore's chip is drawn only with the experimental-features switch on, or while the reader
+is in Explore. The reason and the mechanism are in
+[experimental-features.md](experimental-features.md#the-two-things-gated-below-mode-level).
 
 ## Explore, the fourth sub-mode
 
