@@ -1544,7 +1544,7 @@ describe("the prompt version (plans 261001p and 261003c)", () => {
     expect(out.version).toBe("simple/2");
     /* A literal pin, not a value derived from the output under test: otherwise
        changing both the producer and this imported constant stays green. */
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/9");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
     expect(out.promptVersion).toBe(SIMPLE_PROMPT_VERSION);
     expect(simplePromptVersion(out)).toBe(SIMPLE_PROMPT_VERSION);
     /* Pipeline freshness and artefact copies read this generic stamp. If they
