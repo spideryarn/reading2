@@ -2225,7 +2225,8 @@ export interface StructureArtefacts {
  * - `slices`: the whole table of contents would not fit one answer, so the
  *   body was asked about in `slices` slices. `reasked` answers did not pass and
  *   were asked for again; `refilled` sections came back undivided and were
- *   divided by a call of their own.
+ *   divided by a call of their own; `secondPass` slices failed when first
+ *   asked and were asked for once more.
  * - `answer-too-long`: the same document, where the slices did not make a
  *   tree; `slicesFailed` says which step gave out. What was asked for on the
  *   way is in the run's counts.
@@ -2238,7 +2239,7 @@ export interface StructureArtefacts {
  */
 export type StructureSource =
   | { by: "model" }
-  | { by: "slices"; slices: number; refilled: number; reasked: number }
+  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number }
   | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
   | { by: "headings"; reason: "labels-could-not-ask" };
 
@@ -2658,7 +2659,13 @@ export async function generateStructure(opts: {
       split,
       structure: stitched,
       built,
-      source: { by: "slices", slices: sliced.slices, refilled: sliced.refilled, reasked: sliced.reasked },
+      source: {
+        by: "slices",
+        slices: sliced.slices,
+        refilled: sliced.refilled,
+        reasked: sliced.reasked,
+        secondPass: sliced.secondPass,
+      },
       ...spent,
     });
   }

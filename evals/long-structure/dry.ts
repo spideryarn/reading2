@@ -101,7 +101,10 @@ const scenarios: Scenario[] = [
   { name: "B, the top call's connection drops three times", doc: "paper", arm: "B", injections: [{ kind: "top", nth: 0, fault: "transport", times: 3 }], status: "failed", failures: { transport: 1 }, reasks: 0, failure: "top:transport" },
   { name: "one, an answer that fails twice", doc: "paper", arm: "one", injections: [{ kind: "whole", nth: 0, fault: "garbage", times: 2 }], status: "failed", failures: { parse: 2 }, reasks: 1, failure: "parse" },
   { name: "A, a slice answer that is not JSON once", doc: "book", arm: "A", injections: [{ kind: "slice", nth: 1, fault: "garbage", times: 1 }], status: "ok", failures: { "answer-did-not-pass": 1 }, reasks: 1 },
-  { name: "A, a refused slice", doc: "book", arm: "A", injections: [{ kind: "slice", nth: 0, fault: "refuse", times: 1 }], status: "failed", failures: { "slices:slice-failed": 1 }, reasks: 0, failure: "slices:slice-failed" },
+  /* Until stage 1a of plan 261005j this was `failed`: a refused slice is now read
+     in two halves (src/structure-slices.ts § `readSlice`). `runSlices` reports
+     counts and one failure reason only, so the refusal itself is not in `failures`. */
+  { name: "A, a refused slice is read in two halves", doc: "book", arm: "A", injections: [{ kind: "slice", nth: 0, fault: "refuse", times: 1 }], status: "ok", failures: {}, reasks: 0 },
 ];
 
 console.log("injected failures:");

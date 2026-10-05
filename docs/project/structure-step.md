@@ -1151,16 +1151,29 @@ tree, and is an ordinary finished tree.
   leaving a neighbour's gist stretched over text that model never read.
 - **A top-level section that comes back with no sections of its own and more than `MAX_BATCH`
   blocks is asked for once more**, alone, and replaced by what comes back if that is two or more
-  sections.
-- **Slices, refills and the root are each checkpointed** under their own request, so a second run
-  on unchanged blocks asks for nothing.
+  sections. This "refill" is optional: if it fails, is refused, or runs past its time cap, the
+  section stays as it was and the run carries on (since 2026-10-05,
+  [261005j § Stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)).
+- **A slice whose answer is refused or cut short is asked for in two halves**, each once, cut at
+  the heading nearest its middle or else at the middle block (`halvingCut`). Each half must tile
+  its own blocks, the cut is one of the seams the final build is checked against, and a half is
+  not halved again. A slice under `HALVE_MIN_BLOCKS`, or with no safe cut near its middle, is not halved.
+- **A slice that fails is asked for once more, after the others.** A failed slice does not stop
+  the rest of the first pass. The second pass asks only for what is missing, once each, under the
+  same deadline rules, and a slice that fails there is the end of the run. How many slices were
+  actually asked in it is `secondPass` on `StructureSource`, in the step's log line and in its `detail`.
+- **Slices, halves, refills and the root are each checkpointed** under their own request, so a
+  second run on unchanged blocks asks for nothing. A refused or cut-short slice leaves a marker
+  under its own key (an entry with `halve` and no `answer`), so a later run goes straight to the
+  halves and does not buy the refused answer again.
 - **The slices keep a deadline of their own, ahead of the queue's**, and every call has a time
   cap. If the queue's deadline fired first the job would end as interrupted, whatever this step
   returned.
-- **On any failure it stops starting calls, waits for the ones in flight, and falls back** to the
-  tree below. A failed slice (after one re-ask), a failed refill, a failed root call, a joined tree
-  that will not build, a section the labels step could not ask about, or time running out. What
-  was spent is still counted. A reader's Stop is a cancellation, not a fallback.
+- **On a failure it cannot get past, it stops starting calls, waits for the ones in flight, and
+  falls back** to the tree below. A slice that failed in both passes, a slice refused or cut short
+  that could not be read in halves, a failed root call, a joined tree that will not build, a
+  section the labels step could not ask about, or time running out, which stops both passes at
+  once. What was spent is still counted. A reader's Stop is a cancellation, not a fallback.
 
 What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
 seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is

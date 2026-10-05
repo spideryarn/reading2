@@ -2790,8 +2790,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              src/structure.ts § `StructureSource`. */
           source: run.source.by,
           sourceReason: run.source.by === "headings" ? run.source.reason : null,
-          /* The slices path: how many, how many re-asked and refilled, or why
-             it gave way to the headings. src/structure-slices.ts. */
+          /* The slices path: how many, how many re-asked, refilled and asked
+             for in a second pass, or why it gave way to the headings.
+             src/structure-slices.ts. */
           slices: run.source.by === "slices" ? run.source : null,
           slicesFailed:
             run.source.by === "headings" && run.source.reason === "answer-too-long" ? run.source.slicesFailed : null,
@@ -2961,7 +2962,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         run.source.by === "model"
           ? ""
           : run.source.by === "slices"
-            ? `, read in ${run.source.slices} parts`
+            ? `, read in ${run.source.slices} parts${run.source.secondPass > 0 ? ` (${run.source.secondPass} asked for twice)` : ""}`
             : run.source.reason === "answer-too-long"
               ? `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[run.source.slicesFailed]})`
               : ", from its headings (a section was too long to label)";

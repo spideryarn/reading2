@@ -219,6 +219,79 @@ twice gives the plain tree and says so; the F4 cases. And one piece of arithmeti
 arithmetic: at assumed per-call failure rates of 1%, 3% and 10%, the share of documents left
 wholly plain, today against 1a.
 
+### Result: stage 1a (the slices half)
+
+Built 2026-10-05, in `runSlices` only. Not committed or reviewed as this is written.
+
+**What landed.**
+
+- **A failed refill keeps its section.** A refill is now an optional call: a transport failure, a
+  refusal, a cut-short answer, an answer that does not pass, or its own time cap leaves the
+  original section in place, and the root is still asked. Its spend is counted, and a good
+  answer that arrives late is still saved and still not used.
+- **A refused or cut-short slice is read in two halves** (`halvingCut`): at the heading nearest
+  the middle when one lies within a quarter of the slice of it, else at the middle block, and
+  never one block after a heading. Not under `HALVE_MIN_BLOCKS` (120), or when snapping past
+  consecutive headings leaves no safe cut within that middle band. The halves are asked one
+  after the other inside the slice's own place in the pool, each once, each accepted only if it
+  tiles its own blocks, and the cut is added to the outcome's `seams`. The first half is started
+  only if the second and the root would still fit after it. The decision is saved as a marker
+  under the refused request's own key, in the existing namespace (no migration), and is read
+  before asking.
+- **One second pass.** A slice that fails in the first pass no longer stops the others. What is
+  missing after it is asked for once more, one call each, and a failure there ends the run.
+  `secondPass` counts slices whose second-pass call actually started, excluding retries denied
+  admission; it is on the outcome, on `StructureSource`, in the step's log line and in its
+  `detail` ("read in 3 parts (1 asked for twice)").
+- **The one `stopped` flag is now two.** Out of time (a needed call passed its cap, or would not
+  fit) stops everything in both passes, as before. A final failure stops everything too. A
+  first-pass failure that another ask might mend stops nothing.
+
+**What did not, and why.** Cutting an unaskable section into windows is in `src/structure.ts`,
+and the retry as a successor job is in the job queue. Both are held until the
+open-before-structure work has landed in those files. A failed root call is still a required
+call asked in one pass (with its one re-ask): `source` does not yet say why a first attempt fell
+back, because inside one run there is no first attempt to report, only `secondPass`.
+
+**Decisions made while building, each a judgement.**
+
+- The second pass asks **once**, with no re-ask of an answer that does not pass. So a slice gets
+  at most three calls, or one whole and its two halves twice.
+- A refused or cut-short answer that cannot be halved (too small, or already a half) is **not**
+  asked for again in the second pass: the same request would get the same answer. It ends the
+  run where it happens, as it did.
+- No marker is kept for those, so a later run does ask again. A marker there would make one
+  refusal permanent for that document.
+- A second pass that cannot start for want of time reports `out-of-time`, not `slice-failed`.
+
+**The arithmetic** (`npx tsx evals/long-structure/fallback-arithmetic.ts`). The share of long
+documents left wholly plain, today then after 1a. **It is arithmetic about assumptions, not a
+measurement**: every pass is taken to fail independently with the same probability, the second
+pass included. Real failures cluster, so these figures are neither estimates nor bounds on the
+real rates. Halving, refills and running out of time are not in it.
+
+| assumed per-pass failure | 4 slices | 8 slices | 20 slices | 45 slices |
+|---|---|---|---|---|
+| 1% | 4.9% → 1.0% | 8.6% → 1.1% | 19.0% → 1.2% | 37.0% → 1.4% |
+| 3% | 14.1% → 3.3% | 24.0% → 3.7% | 47.3% → 4.7% | 75.4% → 6.9% |
+| 10% | 41.0% → 13.5% | 61.3% → 17.0% | 89.1% → 26.4% | 99.2% → 42.7% |
+
+Within these assumptions the root failure rate is the floor on the second figure, because the
+root call is still one required question. That is the next thing this arithmetic points at.
+
+**Tests.** `tests/structure-slices-second-pass.test.ts` started with 27 tests: 23 were red before the change;
+the three on `halvingCut` were written after it, and one (a reader's Stop in the first pass) is
+a guard that passed before and after. Sixteen existing expectations changed, because they
+encoded the behaviour this stage reverses: seven gained `secondPass: 0`, and the rest are named
+in the two older test files where they sit.
+
+The code review added two regressions and strengthened the second-pass cap check, each seen red:
+the retry count now excludes denied admission and queued peers stopped by a final failure, and
+halving cannot snap across consecutive headings beyond the allowed middle band.
+
+**Dry scenario.** `evals/long-structure/dry.ts` now expects the refused slice to succeed by
+halving, matching the new behaviour.
+
 ### Stage 1b: a failed part is plain, and the rest is kept (robust, the larger half)
 
 Built only if 1a's numbers, and what the eval sees fail, say the plain tree is still common
@@ -463,6 +536,11 @@ honestly and costs about $47 and two hours of an open tab for one article, with 
 - [x] Plan review by GPT Sol (read-only).
 - [ ] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
   Tests red first, gates, Sol code review, the arithmetic.
+  - [x] The slices half, in `src/structure-slices.ts`: a failed refill keeps its section, a
+    refused or cut-short slice is read in halves, one second pass over what failed, the
+    arithmetic. § Result: stage 1a (the slices half). Not yet through the Sol code review.
+  - [ ] A section too long for one labels call cut into windows on its own.
+  - [ ] The retry as a successor job, and a second attempt after a failed root call.
 - [ ] **1b.** The mixed tree, if 1a leaves a need. Its contract (F1, F2, F6) first.
 - [x] **2.** The eval. About $32.4. § Result: stage 2.
 - [ ] **3.** A strict schema for the per-part round, the first call measured alone, then B past

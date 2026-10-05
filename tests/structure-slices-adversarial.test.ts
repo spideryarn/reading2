@@ -57,7 +57,7 @@ describe("stage E adversarial regressions", () => {
     }
   });
 
-  it("a model start outside the slice is re-asked and then falls back", async () => {
+  it("a model start outside the slice is re-asked, asked for once more in the second pass, and then falls back", async () => {
     respond = (call) => {
       if (call.ids[0] !== body[0]!.id) return good(call);
       const answer = JSON.parse(sectionsAnswer(call.ids, 3));
@@ -65,7 +65,7 @@ describe("stage E adversarial regressions", () => {
       return JSON.stringify(answer);
     };
     expect(await run()).toMatchObject({ ok: false, failure: "slice-failed" });
-    expect(calls.filter((call) => call.ids[0] === body[0]!.id)).toHaveLength(2);
+    expect(calls.filter((call) => call.ids[0] === body[0]!.id)).toHaveLength(3);
     expect(calls.some((call) => call.root)).toBe(false);
   });
 
@@ -194,14 +194,29 @@ describe("stage E adversarial regressions", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("F26 a peer failure prevents a concurrently invalid slice from re-asking", async () => {
+  /* Since 261005j stage 1a a first-pass failure another ask might mend is not
+     the end of the run, so F26 is pinned on a failure that is: a slice too
+     small to halve whose answer is cut short. */
+  it("F26 a peer's final failure prevents a concurrently invalid slice from re-asking", async () => {
+    respond = (call) => {
+      if (call.ids[0] === body[0]!.id) return messageOf(sectionsAnswer(call.ids, 3), "max_tokens");
+      return ROOT_ONLY;
+    };
+    const out = await run();
+    expect(out).toMatchObject({ ok: false, failure: "slice-failed", secondPass: 0 });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("a peer's first-pass failure does not stop an invalid slice's re-ask, and both get the second pass", async () => {
     respond = (call) => {
       if (call.ids[0] === body[0]!.id) throw new Error("first peer failed");
       return ROOT_ONLY;
     };
     const out = await run();
-    expect(out).toMatchObject({ ok: false, failure: "slice-failed" });
-    expect(calls).toHaveLength(2);
+    expect(out).toMatchObject({ ok: false, failure: "slice-failed", secondPass: 2, reasked: 1 });
+    /* One and two in the first pass, one each in the second. */
+    expect(calls).toHaveLength(5);
+    expect(out.spend.calls).toBe(5);
   });
 
   it("awaits a second peer that rejects after the first has failed", async () => {
@@ -216,7 +231,8 @@ describe("stage E adversarial regressions", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(returned).toBe(false);
     rejectPeer(new Error("later failure"));
-    expect(await going).toMatchObject({ ok: false, spend: { calls: 2 } });
+    /* Two in the first pass, and each asked for once more. */
+    expect(await going).toMatchObject({ ok: false, spend: { calls: 4 } });
   });
 
   it("checkpoint read exceptions are misses and good answers are still written", async () => {
@@ -263,15 +279,20 @@ describe("stage E adversarial regressions", () => {
     expect(store.entries.size).toBe(3);
   });
 
-  it("F28 a failed refill stops admission, settles peers, and falls back", async () => {
+  /* F28 made a failed refill fall back. 261005j stage 1a reverses it: the
+     refill is optional, so every one is still asked and the root after them. */
+  it("F28 reversed: failed refills settle, are counted, and keep the sections they were to divide", async () => {
     const long = paragraphs(600);
     respond = (call) => {
+      if (call.root) return ROOT_ANSWER;
       if (call.ids.length === 300) return sectionsAnswer(call.ids, 130, true);
       throw new Error("refill failed");
     };
     const out = await run({ body: long });
-    expect(out).toMatchObject({ ok: false, failure: "slice-failed" });
-    expect(calls.filter((c) => c.root)).toHaveLength(0);
+    expect(out).toMatchObject({ ok: true, refilled: 0, sections: 4 });
+    expect(calls.filter((c) => c.root)).toHaveLength(1);
+    /* Two slices, four refills and the root. */
+    expect(calls).toHaveLength(7);
     expect(out.spend.calls).toBe(calls.length);
   });
 
