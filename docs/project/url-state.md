@@ -578,7 +578,10 @@ asks "where is the reader" — the spy that writes `?at=`, the next jump's origi
 bars, and a centred block's top sits below it, so every one of them would otherwise name the block
 *above*. `scroll.ts` keeps one *arrival anchor*, set when a centred movement settles and cleared by
 the next movement of any kind or by the reader scrolling; those callers answer with it while it
-holds. [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
+holds. "The reader scrolling" means a scroll event at **a different pixel** from the one the arrival
+reached: the jump's own scroll event can turn up a second late behind a render, and until 2026-10-05
+a clock decided whose it was, so `?at=` was rewritten to the section before the one clicked
+([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)). [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
 § After the plan review, F1.
 
 ### Debounced, not throttled

@@ -181,7 +181,7 @@ latched attribute is the lag above, permanently.
 this said it could not. Measured in a browser, 2026-09-07: `scrollTo(0, 400)` from the top hides the
 bar on the same frame the panel is still measured at its unsettled position, so it glides the whole
 244px instead of snapping to 44 and sliding 44 → 0. A scrollbar drag or a hard fling can do it, an
-ordinary scroll cannot, and `markOurScroll` already covers every jump the app itself starts. Left
+ordinary scroll cannot, and `ourScrollY` in `scroll.ts` already covers every jump the app itself starts. Left
 alone: the panel arrives in the right place either way, the overshoot is bounded by the masthead's
 height, and closing it would mean teaching `scroll.ts` whether another module's measurement had
 settled.

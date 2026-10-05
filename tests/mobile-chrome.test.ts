@@ -221,7 +221,7 @@ describe("stickyOffset with a status bar", () => {
    *
    * `stickyOffset` returned the bar's *current* coverage, and that is only the
    * right answer at rest. `scrollToBlock` calls this **once** and hands the
-   * number to `glide()` as a fixed destination; `markOurScroll` then stops the
+   * number to `glide()` as a fixed destination; `ourScrollY` (scroll.ts) then stops the
    * bar reacting to the jump, but it cannot stop a CSS transition that is
    * already running. So a reader who scrolls up — starting the 180ms reveal —
    * and clicks a gist 90ms later got a target placed under a bar on its way
