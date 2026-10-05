@@ -88,8 +88,10 @@ failed took Brief and Fuller with it.
   version stayed `simple-prompt/7` and nothing stored became outdated. It is `simple-prompt/8`
   since later the same day, for [the longer Fuller](#a-longer-fuller-since-2026-10-04), and
   `simple-prompt/9` since 2026-10-05, when
-  [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05). For a piece
-  of ordinary length both prompts' bytes are still the pinned ones.
+  [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05), and
+  `simple-prompt/10` since later that day, for
+  [a slightly longer Brief](#a-slightly-longer-brief-since-2026-10-05). For a piece of ordinary
+  length Fuller's bytes are still the pinned ones; Brief's moved once, at `/10`.
 - **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
   when Summary is written:
 
@@ -206,8 +208,9 @@ So Summary's band has two presses that rewrite, and each is drawn only when its 
   missing, because it cannot check the fingerprint (`pg.ts` § `loadSimpleSummary`).
   *Profile changed* is the stored `profileHash`
   against the reader's profile now ([`profile.ts`](../../src/profile.ts) § `profileIsStale`).
-  Two cases are deliberately not a change there: the reader cleared their profile, and the summary
-  was written when there was no profile at all.
+  One case is deliberately not a change there: the reader cleared their profile. A summary written
+  when there was no profile at all is a change once the reader writes one (Greg, 2026-10-05;
+  [reader-profile.md § Provenance](reader-profile.md#provenance-what-was-this-written-with-and-is-it-still-true)).
 - **A rewrite already asked for is not a new offer.** While a forced run is under way the band
   shows its progress, and if it failed, the failure and **Retry**. That includes a Rerun pressed
   in Metadata while Summary is open. These follow a press the reader has made.
@@ -287,7 +290,8 @@ the paragraphs.
   reader. ⓤ is the owner's profile icon.
 - **The reader's profile and goal shape every level**, through the shared `PROFILE_RULES` and
   `profileSection` ([src/profile.ts](../../src/profile.ts)): the goal decides what leads, and in
-  Fuller what the reader says they know is not explained. **Brief ignores the claimed
+  Fuller what the reader says they know is not explained
+  ([but never a term the piece itself introduces](#written-for-someone-who-has-not-read-it-since-2026-10-05)). **Brief ignores the claimed
   background**: it is for a reader in a hurry from outside the field, with at most two technical
   terms, each explained, and one plain phrase of method. Greg, 2026-10-02 (`spya-rpqqxb`): *"assume
   it's for someone with less expertise or in more of a hurry"* — his own profiled Brief had more
@@ -388,16 +392,17 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 
 - **The band changes three values in Fuller's LENGTH section and nothing else.** The standard
   band's Fuller prompt is `simple-prompt/8` byte for byte, so an article of ordinary length is
-  asked exactly what it was. The version is `simple-prompt/9`.
+  asked exactly what it was. This introduced `simple-prompt/9`.
 - **Before, the length did not follow the piece.** Asked for about 500 words whatever the piece,
   Fuller gave an 879-word essay 402 and 492 words, and a 48,000-word book 489 and 515. With bands
   the essay got 281 and 237, and the book 834 and 846. A blind judge preferred the banded Fuller
   in all eight pairs where its prompt differed
   ([261005a](../investigations/261005a-summary-length-bands-measured.md)).
-- **Brief is about 80 words for every piece**, byte for byte as it was. It was banded too in the
-  first build, 60 words for a short piece and up to 140 for a book, and the same judge preferred
-  the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay turned on
-  every time, and the book's longer one read as padded.
+- **Brief is one length for every piece**: about 80 words then, byte for byte as it was, and
+  [about 100 since later that day](#a-slightly-longer-brief-since-2026-10-05). It was banded too
+  in the first build, 60 words for a short piece and up to 140 for a book, and the same judge
+  preferred the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay
+  turned on every time, and the book's longer one read as padded.
 - **The band is counted over the body only**, the blocks the prompt shows, so a long bibliography
   or appendix does not make a piece "a book".
 - **Fuller's stored limit rose once, for every band**, to 13 paragraphs and 1,400 words
@@ -411,6 +416,91 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 
 The plan, the option passed over and Sol's reviews are
 [261005b](../plans/261005b-summary-length-follows-the-length-of-the-piece.md).
+
+<<<<<<< HEAD
+### Written for someone who has not read it (since 2026-10-05)
+
+> The brief summary is quite good, but the fuller summary often is hard for me to understand. And I
+> think it's because, I mean, it's fine that it uses some jargon from the article, but you have to
+> write it as if it's for someone who has not yet read the article. So I guess if you're going to
+> use jargon, you have to define it.
+>
+> Realty though they key principle is to write the fuller summary for someone who hasn't read it yet
+> rather than for someone who has.
+>
+> — Greg, 2026-10-05 (`spya-rntjxu`)
+
+**Fuller is written for a reader who has not read the piece.** Its prompt (`simple-prompt/11`)
+gains two bullets, `NOT_READ` in [`simple-summary.ts`](../../src/simple-summary.ts), naming the
+two faults:
+
+- **A name the piece introduces is a term like any other**: a term it coins or uses in its own
+  sense, an abbreviation, its label for a method, a group or an experiment. It is said in
+  everyday words, in the same sentence, the first time it is used.
+- **Nothing is referred to before the summary has introduced it**: "the second experiment" only
+  after the experiments have been said.
+
+**The reader's stated background does not cover what the piece introduces.** Fuller still leaves
+the established terms of a reader's field unexplained, but a paragraph after the shared profile
+rules (`AFTER_PROFILE.fuller`) says a term this piece introduces is new unless the reader's own
+description names it. The report came from a reader whose profile claims the paper's field; that
+alone does not make the paper's own names familiar.
+
+**This did not alter Brief**: Greg finds it good, and its two terms and one phrase of method
+leave little to point at. Brief was `/9`'s, byte for byte, while this was measured; its own
+change the same day, [a slightly longer Brief](#a-slightly-longer-brief-since-2026-10-05), is
+`/10`, and both are in `/11`.
+
+- **A whole section was built first, measured, and not shipped**: a heading, an opening
+  paragraph, eight bullets and a closing check. On five papers, set directly against the two
+  bullets, it split 5 pairs to 5 with the same count of places a reader could not follow, so by
+  the rule the plan declared beforehand the smaller change shipped. The section also ran past
+  its length in four writes of twenty; the two bullets did in none of fifteen.
+- **What is measured for the two bullets, for a reader with a profile**: against the old Fuller
+  a blind judge found them easier to follow in 6 pairs of 10 and harder in 1, and preferred them
+  in 6 of 10. The places a reader could not follow were 0.6 and 0.8 a summary, against 1.3. Every
+  main finding they left out, an old summary of the same piece left out too
+  ([261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md)).
+- **Mixed for a reader with no profile; no improvement claimed.** For the two bullets nothing
+  moved either way. It is in the Overseer's queue to look at properly (`qi-4meqvjr4`).
+- **Nothing stored was rewritten**, and nothing is made stale: a stored summary is *outdated*,
+  which is silent, and *Write it again* or Metadata's Rerun writes the new one.
+
+The plan, the section's text and GPT Sol's reviews are
+[261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md);
+the research is
+[261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md).
+=======
+### A slightly longer Brief (since 2026-10-05)
+
+> maybe Brief could be ever so slightly longer but not much
+>
+> — Greg, 2026-10-05 (answering [Q-brief-for-a-book], relayed by the Overseer)
+
+Brief is asked for about 100 words and never more than 150, where it was about 80 and 130
+(`BRIEF_LENGTH` in [`simple-summary.ts`](../../src/simple-summary.ts); `simple-prompt/10`). It
+is the same for every piece, and nothing else in its prompt moved.
+
+- **The ask and the page are different numbers.** Asked for 80, Brief came back at 97 words on
+  average (88 to 113). Asked for 100 it came back at 110 (91 to 137). So the reader sees about
+  thirteen words more.
+- **The blind judge's results are mixed.** It preferred the
+  longer Brief in six pairs of eleven and the old one in four; two writes of the old prompt
+  split four to one. It called the longer one the padded side in five pairs and the old one in
+  two. The control shows variation between writes, but does not establish that the change is
+  no worse. The padding flags count against it; the "not padded" bar has not been established.
+- **An ask of about 90 was measured too** and left: it moved the page by six words, and the
+  judge preferred the old Brief to it in eight pairs of eleven. This small comparison does
+  not establish that 90 is worse while 100 is no worse.
+- **Still not longer for a book than for an essay.** For the book the judge preferred the old
+  Brief in all four pairs, as it had in the first build's two.
+- **Brief's stored limit did not move**: 2 to 3 paragraphs and 240 words (`SIMPLE_LIMITS`).
+- **Nothing stored was rewritten.** A stored summary is *outdated*, which is silent; Metadata's
+  Rerun writes the new length.
+
+The measurement is
+[261005a § A slightly longer Brief](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
+>>>>>>> origin/dev
 
 ### Bold and bullets (since 2026-10-04)
 

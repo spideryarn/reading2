@@ -710,8 +710,8 @@ export function QuotesPanel({
      *changed*. It needs a replace intent in the job contract first. Plan
      261002b § Deferred. */
   const badge =
-    quotes && owner?.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} />
+    quotes && owner ? (
+      <WrittenForYou written={owner.profiled} changed={owner.profileChanged} slug={owner.slug} />
     ) : null;
   /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
      compute the same list from the same three lines. The prose marks this list

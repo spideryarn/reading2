@@ -28,7 +28,7 @@
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { escapeHtml, plainTitle } from "./html.js";
-import { tidiedTitle } from "./title-tidy.js";
+import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseMaths } from "./maths-import.js";
@@ -1179,6 +1179,11 @@ export async function runExtract(opts: {
    */
   url: string | null;
   slug: string;
+  /**
+   * What tidies the title for the shelf. Import hands in the model's
+   * (src/title-tidy-model.ts); absent, the rule alone, and no call.
+   */
+  titleTidier?: TitleTidier;
 }): Promise<ExtractResult> {
   const { slug } = opts;
   /* Before the DOM pass that asks whether each formula would draw: this is the
@@ -1240,10 +1245,18 @@ export async function runExtract(opts: {
   const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
   const meta: Meta = {
     slug,
-    /* **Tidied for the shelf, and only here** — all capitals made title case,
-       the original kept beside it (src/title-tidy.ts, plan 261005g). The page's
-       `<h1>` below keeps `title` as the author set it: the prose is theirs. */
-    ...(title ? tidiedTitle(title, { body: article.textContent, lang: article.lang }) : { title: slug }),
+    /* **Tidied for the shelf, and only here** — capitals, a site's name on the
+       end, the original kept beside it: by the tidier handed in (import's is a
+       small model, src/title-tidy-model.ts, plan 261005j) or by the rule
+       (src/title-tidy.ts, plan 261005g). The page's `<h1>` below keeps `title`
+       as the author set it: the prose is theirs. */
+    ...(title
+      ? await (opts.titleTidier ?? ruleTitleTidier)(title, {
+          body: article.textContent,
+          lang: article.lang,
+          siteName: article.siteName,
+        })
+      : { title: slug }),
     ...(byline ? { byline } : {}),
     /* The same list, structured: names and the affiliations the page declares
        for each, for the masthead and the Metadata page to show one at a time.

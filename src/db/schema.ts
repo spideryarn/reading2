@@ -3691,6 +3691,28 @@ export const chatThreads = spideryarn.table(
      * here.
      */
     kind: text("kind").notNull().default("chat"),
+
+    /**
+     * **Where the conversation was started from, when that was an item in
+     * another mode** — `ThreadOrigin` in src/types.ts, as four columns
+     * (docs/project/sql.md: columns over JSON). All null for every other
+     * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
+     *
+     * - `origin_mode`: which mode. `debate` is the only one written today.
+     * - `origin_item_id`: the item's id where it has a durable one (a glossary
+     *   entry, a cited work). Null for a claim, which has none.
+     * - `origin_block_id`: the block the item sits in. Points at the identity,
+     *   like `anchor_block_id`, so it survives a re-extraction.
+     * - `origin_quote`: the item's own words when the chat started. Article
+     *   prose or a model's: never logged.
+     *
+     * Written **on insert only**, like the anchor and the kind:
+     * `upsertThread`'s conflict clause does not name them.
+     */
+    originMode: text("origin_mode"),
+    originItemId: text("origin_item_id"),
+    originBlockId: text("origin_block_id"),
+    originQuote: text("origin_quote"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -3723,6 +3745,33 @@ export const chatThreads = spideryarn.table(
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
     check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial','explore')`),
+    /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
+       modes is wider than the union on purpose: the later callers are named
+       in the plan, and widening a CHECK is a migration each time. Necessary
+       and not sufficient, like the anchor's: the route checks the block is the
+       article's and the quote is not empty. */
+    check(
+      "chat_threads_origin_mode",
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations')`,
+    ),
+    /* No mode, no origin: the other three columns mean nothing without it. */
+    check(
+      "chat_threads_origin_none",
+      sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+    ),
+    /* A claim is a block and its words, and has no id. */
+    check(
+      "chat_threads_origin_debate",
+      sql`${t.originMode} is distinct from 'debate' or (${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originItemId} is null)`,
+    ),
+    /* Only a chat is started from an item; the other kinds are about the
+       whole article. */
+    check("chat_threads_origin_chat_only", sql`${t.originMode} is null or ${t.kind} = 'chat'`),
+    foreignKey({
+      name: "chat_threads_origin_identity_fk",
+      columns: [t.articleId, t.originBlockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }),
     /**
      * **One Remember thread per article.** Remember is its own single
      * conversation, not a list. On `article_id` alone: an article has one owner
@@ -6650,7 +6699,8 @@ export const linkSummaries = spideryarn.table(
  * - `state` null — a claim and no answer yet: somebody is asking right now,
  *   until `claimed_until`. An error on that ask deletes the row, so an error
  *   stores nothing.
- * - `found` — a record, fresh for 180 days from `fetched_at`.
+ * - `found` — a record, fresh for 180 days from `fetched_at`; a Crossref one
+ *   only once `cited_by_count_read_at` is set (see that column).
  * - `not-found` — neither registry has it, remembered for 7 days.
  *
  * A stale `found` or `not-found` row being refreshed keeps its old answer while
@@ -6680,6 +6730,23 @@ export const bibliographicRecords = spideryarn.table(
     doi: text("doi"),
     /** When the answer was fetched. Null on a claim with no answer. */
     fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    /**
+     * `WorkRecord.citedByCount`: Crossref's `is-referenced-by-count`, the works
+     * it holds that cite this one. Only on a `found` Crossref row. Null when
+     * Crossref gave none, and on every row from before 2026-10-05.
+     */
+    citedByCount: integer("cited_by_count"),
+    /**
+     * **When Crossref was asked for that count**: set to `fetched_at`'s moment
+     * on every `found` Crossref answer, count or no count, and null otherwise.
+     * A second timestamp because null here on a Crossref row means *never
+     * asked* (a row cached before the count was kept), which
+     * `cited_by_count is null` alone cannot tell from *asked, and there was
+     * none*. Such a row is not fresh (src/store/pg-bibliographic.ts §
+     * `freshSql`), so it is asked about once more.
+     * docs/plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md.
+     */
+    citedByCountReadAt: timestamp("cited_by_count_read_at", { withTimezone: true }),
     /** The single-flight claim: somebody is asking until then. Null when nobody is. */
     claimedUntil: timestamp("claimed_until", { withTimezone: true }),
   },
@@ -6698,6 +6765,24 @@ export const bibliographicRecords = spideryarn.table(
     check(
       "bibliographic_records_published_day",
       sql`${t.publishedDay} is null or (${t.state} is not distinct from 'found' and ${t.publishedDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')`,
+    ),
+    /**
+     * A count is Crossref's, on a found record, never negative, and always
+     * with the moment it was read. `is not distinct from`, because a claim's
+     * `state` and `source` are null and `= 'found'` would let it through
+     * (docs/postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md).
+     */
+    check(
+      "bibliographic_records_cited_by_count",
+      sql`${t.citedByCount} is null or (${t.citedByCount} >= 0
+            and ${t.state} is not distinct from 'found' and ${t.source} is not distinct from 'crossref'
+            and ${t.citedByCountReadAt} is not null)`,
+    ),
+    /** The moment says "Crossref was asked", so only a found Crossref record has one. */
+    check(
+      "bibliographic_records_cited_by_count_read_at",
+      sql`${t.citedByCountReadAt} is null
+            or (${t.state} is not distinct from 'found' and ${t.source} is not distinct from 'crossref')`,
     ),
     /** Same length, at most 100, and a family name for every author. */
     check(

@@ -1,0 +1,238 @@
+{
+  "arm": "high-none-brief100b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fh-spya-s3fq0d",
+  "version": "simple-prompt/9",
+  "sourceSha256": "b0a939a218811f37a9b2f934476a1ac1382de9813e5ac75cbb5ed80f02837d7c",
+  "at": "2026-10-05T16:58:09.541Z",
+  "bodyWords": 1398,
+  "band": "short",
+  "bodyBlocks": 33,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d0d920580e8f12ce",
+  "systemsSha256": "4113178025e31604f219be66e9eb57ffc8ba7b4b751e2d01d160d1d4c98a9f60",
+  "power": "high",
+  "guard": true,
+  "wallMs": 27426,
+  "costUsd": 0.0572308,
+  "tokens": {
+    "input": 8635,
+    "output": 1771,
+    "reasoning": 82
+  },
+  "briefReadyMs": 24497,
+  "fullerReadyMs": 27422,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 278,
+  "briefWords": 101,
+  "fuller": [
+    {
+      "text": "This is a short personal essay by Paul Graham about \"haters\": people who become obsessed with disliking someone famous. He wrote it first for startup founders, who are often surprised by the attention they get as their companies grow. But he says it applies to anyone who becomes famous enough. It matters because haters, he argues, are a worse side effect of fame than over-eager fans.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-fgn6m7",
+        "spya-zecn6c"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short personal essay by Paul Graham about \"haters\": people who become obsessed with disliking someone famous.",
+          "id": null,
+          "key": "haters"
+        },
+        {
+          "text": "He wrote it first for startup founders, who are often surprised by the attention they get as their companies grow.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "But he says it applies to anyone who becomes famous enough.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "It matters because haters, he argues, are a worse side effect of fame than over-eager fans.",
+          "id": "spya-zecn6c"
+        }
+      ]
+    },
+    {
+      "text": "His argument rests on a mirror image. A \"fanboy\" is a fan who is obsessive and uncritical, sees everything you do as good, and wants everyone to know it. He then describes a hater with the same paragraph, swapping \"good\" for \"bad\" throughout. His conclusion: haters are just fanboys with the sign switched.",
+      "ids": [
+        "spya-vnhntv",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "His argument rests on a mirror image.",
+          "id": null
+        },
+        {
+          "text": "A \"fanboy\" is a fan who is obsessive and uncritical, sees everything you do as good, and wants everyone to know it.",
+          "id": "spya-vnhntv"
+        },
+        {
+          "text": "He then describes a hater with the same paragraph, swapping \"good\" for \"bad\" throughout.",
+          "id": "spya-jbw53x"
+        },
+        {
+          "text": "His conclusion: haters are just fanboys with the sign switched.",
+          "id": "spya-j02p09",
+          "key": "fanboys with the sign switched"
+        }
+      ]
+    },
+    {
+      "text": "From years of watching, he draws out a few patterns, while saying he is not sure about all of them. Haters are not one-off trolls but a small group who attack again and again over a long time. They tend to call their target a \"fraud\", the only way to square that person's fame with their supposed lack of talent. Haters have rarely achieved much, and may be driven by frustrated talent, while people who do great work never become haters.",
+      "ids": [
+        "spya-ynrwzr",
+        "spya-j6y6p4",
+        "spya-hwxfgs"
+      ],
+      "sentences": [
+        {
+          "text": "From years of watching, he draws out a few patterns, while saying he is not sure about all of them.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "Haters are not one-off trolls but a small group who attack again and again over a long time.",
+          "id": "spya-ynrwzr"
+        },
+        {
+          "text": "They tend to call their target a \"fraud\", the only way to square that person's fame with their supposed lack of talent.",
+          "id": "spya-j6y6p4",
+          "key": "fraud"
+        },
+        {
+          "text": "Haters have rarely achieved much, and may be driven by frustrated talent, while people who do great work never become haters.",
+          "id": "spya-hwxfgs"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "He names two limits in his notes. Some people really are frauds, but thoughtful, neutral people are rarely fooled by them. Teenagers may grow out of being haters, though he doubts anyone over 25 will.",
+      "ids": [
+        "spya-xjaj8b",
+        "spya-zb2je7"
+      ],
+      "sentences": [
+        {
+          "text": "He names two limits in his notes.",
+          "id": null
+        },
+        {
+          "text": "Some people really are frauds, but thoughtful, neutral people are rarely fooled by them.",
+          "id": "spya-xjaj8b"
+        },
+        {
+          "text": "Teenagers may grow out of being haters, though he doubts anyone over 25 will.",
+          "id": "spya-zb2je7"
+        }
+      ]
+    },
+    {
+      "text": "The takeaway is to treat haters like obsessive fans and barely think about them. A hater is not someone you have a fixable dispute with, so trying to understand or appease them wastes time. As he puts it, it's not you, it's them.",
+      "ids": [
+        "spya-au77ew",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "The takeaway is to treat haters like obsessive fans and barely think about them.",
+          "id": "spya-ry7vzc",
+          "key": "barely think about them"
+        },
+        {
+          "text": "A hater is not someone you have a fixable dispute with, so trying to understand or appease them wastes time.",
+          "id": "spya-au77ew"
+        },
+        {
+          "text": "As he puts it, it's not you, it's them.",
+          "id": "spya-ry7vzc"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham explains \"haters\" and how famous people should deal with them. A hater is someone obsessed with disliking a famous person, who sees everything they do as bad. Graham's big idea is that haters are just fanboys with the sign switched.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham explains \"haters\" and how famous people should deal with them.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "A hater is someone obsessed with disliking a famous person, who sees everything they do as bad.",
+          "id": "spya-jbw53x"
+        },
+        {
+          "text": "Graham's big idea is that haters are just fanboys with the sign switched.",
+          "id": "spya-j02p09",
+          "key": "haters are just fanboys with the sign switched"
+        }
+      ]
+    },
+    {
+      "text": "A fanboy is an obsessive fan who thinks everything you do is good. Haters often call their target a \"fraud,\" someone who tricked everyone into thinking they were good. Seeing haters this way makes them easier to handle, says Graham. His main point is not to spend time thinking about them: it's not you, it's them.",
+      "ids": [
+        "spya-h30306",
+        "spya-wwfm44",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "A fanboy is an obsessive fan who thinks everything you do is good.",
+          "id": null
+        },
+        {
+          "text": "Haters often call their target a \"fraud,\" someone who tricked everyone into thinking they were good.",
+          "id": "spya-h30306"
+        },
+        {
+          "text": "Seeing haters this way makes them easier to handle, says Graham.",
+          "id": "spya-wwfm44"
+        },
+        {
+          "text": "His main point is not to spend time thinking about them: it's not you, it's them.",
+          "id": "spya-ry7vzc",
+          "key": "it's not you, it's them"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

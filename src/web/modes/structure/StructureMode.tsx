@@ -22,6 +22,11 @@
  * own** — the same position Summary is in. Nothing here is fetched: the tree
  * arrives in the page's own payload, so a visitor gets the whole of the mode
  * (src/web/visitor.ts § `POLICY`).
+ *
+ * **One exception since 2026-10-05, and it is why the band is told `owner`.**
+ * On a tree built from the author's headings because the model's could not be
+ * made, the head row says so, and the owner is offered another go
+ * (StructureNotice.tsx). The visitor gets the sentence and no press.
  */
 
 import { useQueryState } from "nuqs";
@@ -31,6 +36,7 @@ import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
 import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
+import { StructureNotice } from "../../StructureNotice.js";
 import { StructurePanel } from "../../StructurePanel.js";
 import { StructureArriving, type StructureArrival } from "./StructureArriving.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
@@ -136,6 +142,8 @@ export function StructureViewToggle({
 }
 
 export function StructureBand({
+  slug,
+  owner,
   article,
   leafDepth,
   sections,
@@ -147,6 +155,9 @@ export function StructureBand({
   arrival = null,
   onJump,
 }: {
+  /** The article's slug and whether it is the reader's own — for `StructureNotice` only. */
+  slug: string;
+  owner: boolean;
   article: Article;
   /** `Geometry.leafDepth` — how far down `buildSummaryTree` should walk. */
   leafDepth: number;
@@ -287,18 +298,26 @@ export function StructureBand({
    * it is open, so going back to Fisheye lands on the right one.
    */
   const [view, setView] = useQueryState("structure", structureParam);
-  const toggle = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
-  /* **The arriving line rides in the head, above the toggle**, so one line here
-     puts it at the top of all three presentations — both panels already draw
-     `head` as the band's first row — and neither panel learns it exists. With
-     nothing to say the head is the toggle alone, exactly as before. */
-  const head = arrival ? (
+  /* **The stand-in line rides in the head row**, under the chips, so one place
+     puts it in all three presentations. Both faces measure their room from
+     where their rows actually start (OutlinePanel.tsx § `measure`,
+     StructurePanel.tsx § `roomBelow`), so the columns, which never scroll,
+     give up rows to it rather than overflowing.
+
+     **Two lines, never both.** A tree that is waiting for the real one says so
+     through `arrival` (StructureArriving.tsx: still being built, or it stalled
+     and the owner may build it); a headings tree that is final says so through
+     `StructureNotice`. `arrival` wins, and is null once the real tree is in. */
+  const provisional = article.tree.provisional;
+  const head = (
     <>
-      <StructureArriving arrival={arrival} />
-      {toggle}
+      <StructureViewToggle view={view} onView={(v) => void setView(v)} />
+      {arrival ? (
+        <StructureArriving arrival={arrival} />
+      ) : provisional === "headings" ? (
+        <StructureNotice provisional={provisional} slug={slug} owner={owner} />
+      ) : null}
     </>
-  ) : (
-    toggle
   );
 
   if (view === "expanded" || face === "list") {

@@ -311,6 +311,32 @@ describe("memoryBibliographicStore, under lookupWork", () => {
     expect(urls).toHaveLength(2);
   });
 
+  it("says when it stored each answer, on its own clock, and stamps only a Crossref record's count", async () => {
+    /* Plan 261005i, GPT Sol's F1: this is the dry run's real store, not a test
+       fake, and `write` must answer "stored" for a miss too. */
+    const store = memoryBibliographicStore(() => Date.parse("2026-10-04T12:00:00.000Z"));
+    const counted = { message: { ...crossref.message, "is-referenced-by-count": 357 } };
+    const deps = { store, fetchJson: async () => counted, sleep: async () => {} };
+    const first = await lookupWork(id("10.1038/nn.4304"), deps);
+    expect(first).toMatchObject({
+      kind: "found",
+      record: { citedByCount: 357, citedByCountReadAt: "2026-10-04T12:00:00.000Z" },
+    });
+    expect(await lookupWork(id("10.1038/nn.4304"), deps)).toEqual(first);
+    const claim = { id: id("10.1000/gone"), until: new Date() };
+    expect(await store.write(claim, { kind: "not-found" })).toEqual(new Date("2026-10-04T12:00:00.000Z"));
+    expect(
+      await store.write(
+        { id: id("10.5281/zenodo.1"), until: new Date() },
+        { kind: "found", record: { id: id("10.5281/zenodo.1"), source: "datacite", title: "A dataset", authors: [], doi: "10.5281/zenodo.1" } },
+      ),
+    ).toEqual(new Date("2026-10-04T12:00:00.000Z"));
+    expect((await store.read(id("10.5281/zenodo.1"), { foundMs: 1, notFoundMs: 1 })).answer).toEqual({
+      kind: "found",
+      record: { id: "doi:10.5281/zenodo.1", source: "datacite", title: "A dataset", authors: [], doi: "10.5281/zenodo.1" },
+    });
+  });
+
   it("stops asking a service that said 429", async () => {
     let calls = 0;
     const deps = {

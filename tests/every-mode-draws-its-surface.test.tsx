@@ -1215,8 +1215,9 @@ const SPENDS: Record<Mode, Spend> = {
   },
   /* The tree's questions, the arc and other modes' lists are read, never
      generated: a press that started the Ideas job here would be the bug. Its
-     own relation words are the one thing the press that turns it on asks for
-     (docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
+     own relation words are the one thing it asks for, when the column is
+     shown — which a press does, so the post is seen here; the press itself
+     arms nothing (tests/marginalia-relations-on-open.test.tsx). */
   marginalia: { kind: "posts", steps: ["relations"] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },

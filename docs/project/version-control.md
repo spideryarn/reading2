@@ -305,6 +305,17 @@ more than it sounds — see [the section below](#the-cause-was-the-recipes-own-l
 where a whole day of phantom reverts survived precisely because every session was carefully
 avoiding the shared index.
 
+**Work that may have to wait gets its own commit, and it goes last.** A push sends ancestry, not
+files. On 2026-10-05 a session committed a prompt change together with its plan and research,
+then had to push the docs alone because the change could not yet be measured. `git push origin
+HEAD:dev` took the prompt commit with it, and a second commit had to put the three files back:
+`dev`'s tree was right, and its history and the first commit's message ("stays in the worktree")
+were not. With no rebase, no branch switching and one worktree a session, a commit cannot be
+lifted out afterwards. So when part of a change is gated, on a measurement or on Greg, commit
+the docs and the eval first and the gated code as a later commit of its own; then "push the
+docs" is pushing an earlier commit, and nothing has to be undone
+([261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md)).
+
 ### And the other half of that, which cost us twice on 2026-08-28
 
 *"A pathspec on `git commit` bypasses the index entirely"* is true, and it is the protection above.

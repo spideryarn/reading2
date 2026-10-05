@@ -1310,9 +1310,13 @@ function unseededWords(kind: Unseeded): string | null {
     case "none":
       return null;
     case "waiting":
-      /* *If you stay on this page*: words left before the article exists have
-         nothing to be saved to, and the line must not promise otherwise. */
-      return "Not saved yet. It saves once the article exists, if you stay on this page.";
+      /* Nothing. This said *Not saved yet. It saves once the article exists, if
+         you stay on this page.* until 2026-10-05, when Greg asked for "no scary
+         'unsaved' indicator": it flashed on nearly every import, over words
+         that were about to be saved. The hint above already says *once the
+         article exists*, and leaving with them is still questioned
+         (`useUnsavedWarning`). The two below are failures, and stay. */
+      return null;
     case "stopped":
       /* Not "there is no article": an unread purpose does not prove that (F13). */
       return "Not saved. The import stopped before this article's saved reason could be read.";

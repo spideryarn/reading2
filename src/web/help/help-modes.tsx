@@ -175,7 +175,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
           the box, to edit before you send; a recording stops after five minutes. Press Stop twice
           quickly and it sends by itself once the words arrive; this works here, in Feedback, in a
-          comment follow-up, in a quiz answer and when you annotate a passage.{" "}
+          comment follow-up, in a quiz answer and when you annotate a passage. In the command bar it
+          presses Enter for you instead.{" "}
           <strong>Live</strong>, beside it, is a spoken conversation you can interrupt. Your audio goes
           directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a
           while, and press <strong>Live</strong> again. A call ends after five minutes of quiet, or
@@ -704,6 +705,15 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           loosely or partly.
         </li>
         <li>
+          To look into one claim yourself, press the chat icon on its heading. It opens a new
+          conversation in <HelpRef to="mode-chat">Chat</HelpRef> with the claim quoted and a question
+          ready, and sends nothing until you press <strong>Send</strong>. Once you have asked, a line
+          under the claim shows how the chat’s latest answer begins; press it to open that
+          conversation again beside Debate. If a later search words the claim differently the line
+          goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever
+          added the article has this.
+        </li>
+        <li>
           Anything tagged <strong>AI</strong> is the AI’s reading, checked against nothing: the threads
           across sources, the key-source picks (starred), each page’s lean (Supportive, Critical,
           Neither for nor against, Could not tell) and its relevance. Quoted excerpts, by contrast, are
@@ -787,6 +797,18 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             them, to see the site, the day and the page’s own words. It is an AI estimate from web
             evidence, not a citation count, and the page’s words may be about something else on that
             page. Often no page says, and the row stays as it was.
+          </li>
+          <li>
+            Some rows also say something like <em>cited 357 times · Crossref</em>. That one is a real
+            count, not the model’s view: Crossref is the registry that issues most DOIs, and where the
+            article gives a DOI that Crossref holds, this is its own number for the work. Point at the
+            words, or tap them, for the day we read it; it is not refreshed after that. Crossref only
+            counts citations from works whose publishers have sent it their reference lists, so the
+            number is usually lower than Google Scholar’s, and it should not be compared across
+            fields or between an old work and a new one. <em>no citations recorded</em> means
+            Crossref has none on file, not that nobody has cited the work. Most rows have no count,
+            because most works are cited without a DOI. It sits beside influence and does not change
+            the order or what the slider hides.
           </li>
           <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}

@@ -215,6 +215,8 @@ function mount(proseBeside = true, rootFontPx = 16) {
       /* The band owns `?structure=` since 2026-10-01 (Fisheye / Expanded). */
       <NuqsAdapter>
         <StructureBand
+          slug="t"
+          owner={false}
           article={article}
           leafDepth={geometry.leafDepth}
           sections={buildSections(geometry, blocks)}
@@ -413,6 +415,8 @@ describe("the structure-arriving line", () => {
       root.render(
         <NuqsAdapter>
           <StructureBand
+            slug="s"
+            owner
             article={article}
             leafDepth={geometry.leafDepth}
             sections={buildSections(geometry, blocks)}

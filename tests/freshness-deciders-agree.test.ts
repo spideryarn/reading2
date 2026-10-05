@@ -638,9 +638,16 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
           const meta = await store().read(SLUG, "extract", "meta");
           if (!tree) throw new Error("the fixture has no tree to fingerprint");
           patch.inputHash = simpleFingerprint(blocks, tree, meta ?? null, value);
-          expect(patch.inputHash, "the control: the older prompt's hash really differs").not.toBe(
-            currentOf(step).stamp.inputHash,
-          );
+          /* The control. Up to `/8` the older prompt's hash really differs.
+             From `/9` on the band is in both, so the version before today's
+             stamps today's hash: that held the first time the version moved
+             past `/9`, at `/10` (plan 261005b § A slightly longer Brief), when
+             this asserted "differs" for every older version and went red. */
+          if (/^simple-prompt\/[1-8]$/.test(value)) {
+            expect(patch.inputHash, "a pre-band prompt's hash differs").not.toBe(currentOf(step).stamp.inputHash);
+          } else {
+            expect(patch.inputHash, "a banded prompt's hash is today's").toBe(currentOf(step).stamp.inputHash);
+          }
         }
         const pair = await recordedAs(step, patch, () => ask(step));
         expect(pair).toEqual(pinned ?? { queue: false, page: false });

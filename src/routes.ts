@@ -388,6 +388,7 @@ import { pickCommand } from "./command-pick-call.js";
 import type {
   Block,
   ChatAnchor,
+  ThreadOrigin,
   ChatThread,
   Comment,
   FeedbackEnvironment,
@@ -431,7 +432,7 @@ import {
 } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
+import { isThreadKind, MAX_VISIBLE_BLOCKS, ORIGIN_MODES, sameOrigin, THREAD_KINDS } from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -2840,6 +2841,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     expectedTailId,
     useProfile,
     anchor,
+    origin,
     kind,
     stance,
     help,
@@ -2985,8 +2987,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refuses the collision before inserting either message. Without this, the
      request could append a screenful to a Remember thread even though the fast
      check above had correctly seen no thread yet. */
+  /* An origin is chat-only as well (checked below), so it makes chat explicit
+     here for the same reason. */
   const beginKind = !wantsRetry && !wantsEdit
-    ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
+    ? (wantedKind ?? (visible !== undefined || origin !== undefined ? "chat" : undefined))
     : undefined;
   const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
@@ -3039,6 +3043,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
+  /* **Where the conversation was started from** (`ThreadOrigin`): the anchor's
+     rules, one for one. It belongs to the turn that creates a thread, so a
+     retry or an edit may not carry one; only a chat has one; and the shape is
+     checked here, before anything is read or written. That the block is this
+     article's is checked after `loadArticle`, and that an existing thread has
+     the same origin is checked under `inTurnOrder`.
+     docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1. */
+  if (origin !== undefined && (wantsRetry || wantsEdit)) {
+    throw httpError(400, "An origin can only be sent with a new question");
+  }
+  if (origin !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
+    throw httpError(400, "Only a chat can be started from an item in another mode");
+  }
+  const wantedOrigin = parseOrigin(origin);
   /* **`help: true` has a meaning, and the meaning is checked, not just the
      shape.**
 
@@ -3108,6 +3126,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
   if (wanted) await checkAnchor(wanted, article.blocks);
+  /* The origin's block is one of this article's. The foreign key would say so
+     too, as a 500 out of a transaction. The quote is not compared with the
+     block: it is a snapshot of the item's words, kept for the list to show. */
+  if (wantedOrigin && !article.blocks.some((b) => b.id === wantedOrigin.blockId)) {
+    throw httpError(400, "origin.blockId is not a block of this article");
+  }
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -3158,6 +3182,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
       if (existing && !sameAnchor(existing.anchor, wanted)) {
         throw httpError(409, "That conversation is already about a different passage");
+      }
+    }
+    /* **A thread's origin is set once**: the anchor's rule just above, and
+       read under the same lock. A thread that exists and was started from
+       somewhere else, or from nowhere, is refused; the identical origin
+       resent is let through, so a repeated send is harmless. */
+    if (wantedOrigin) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
+        throw httpError(409, "That conversation was not started from that item");
       }
     }
     /* **A thread is one kind for life**, and this is the same shape as the
@@ -3224,6 +3258,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             threadId,
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
+            ...(wantedOrigin ? { origin: wantedOrigin } : {}),
             ...(beginKind ? { kind: beginKind } : {}),
             /* No stance: the legacy wire field was validated and dropped
                above, so neither row receives it. `help`, below, belongs on
@@ -3343,6 +3378,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     frame("begin", {
       threadId: thread.id,
       title: thread.title,
+      /* Stored metadata, not the request's guess: the list can show its
+         source as soon as this acknowledgement arrives. */
+      ...(thread.origin ? { origin: thread.origin } : {}),
       messageId: reply.id,
       /* The *question's* id as well as the answer's, and leaving it out was a
          real bug rather than an omission.
@@ -4417,6 +4455,10 @@ function summarise(thread: ChatThread): ThreadSummary {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     ...(thread.anchor ? { anchor: thread.anchor } : {}),
+    /* Where it was started from, for the caller mode to find its own
+       conversation by. Like the anchor's quote, it travels in this response
+       body and is never logged. */
+    ...(thread.origin ? { origin: thread.origin } : {}),
     /* The reading view draws no marks for Remember — a Remember thread cannot be
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
@@ -4505,6 +4547,43 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
     throw httpError(400, "anchor.start must be a non-negative integer");
   }
   return { blockId, quote, start };
+}
+
+/**
+ * The `origin` field of a chat request, as a `ThreadOrigin` or nothing.
+ *
+ * Shape only; whether the block is the article's is checked by the caller,
+ * which has the article. A mode that is not built is a 400, including the ones
+ * the database's CHECK already lists.
+ *
+ * **No part of the quote reaches a thrown message**, for `parseAnchor`'s
+ * reason: messages are logged, and the quote is article prose.
+ */
+function parseOrigin(origin: unknown): ThreadOrigin | undefined {
+  if (origin === undefined || origin === null) return undefined;
+  if (typeof origin !== "object") throw httpError(400, "origin must be an object");
+  const { mode, blockId, quote } = origin as Record<string, unknown>;
+  const built = ORIGIN_MODES.find((m) => m === mode);
+  if (built === undefined) {
+    throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
+  }
+  switch (built) {
+    case "debate": {
+      if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
+        throw httpError(400, "origin.blockId must be a block id");
+      }
+      if (typeof quote !== "string" || quote.trim() === "") {
+        throw httpError(400, "origin.quote must be a non-empty string");
+      }
+      if (quote.length > MAX_ANCHOR_CHARS) {
+        throw httpError(413, `An origin's quote may be at most ${MAX_ANCHOR_CHARS} characters`);
+      }
+      return { mode: built, blockId, quote };
+    }
+    /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
+    default:
+      return built satisfies never;
+  }
 }
 
 /**
@@ -9443,9 +9522,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      /* **Not `withProfileChanged`**, whose rule calls an artefact written
-         without a profile never stale. A route is exactly what a profile should
-         change, so none → some counts here — `routeProfileIsStale`, the same
+      /* **Not `withProfileChanged`**, whose rule does not count a cleared
+         profile. A route is exactly what a profile should change, so any
+         difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited. */
       const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);

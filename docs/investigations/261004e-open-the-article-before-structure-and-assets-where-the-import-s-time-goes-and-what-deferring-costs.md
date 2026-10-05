@@ -196,3 +196,12 @@ and three things in the table above turned out to be avoidable:
   the prose on the **add page** while the import finishes, read from the job's draft, and open the
   real reading view when it publishes. Nothing is published without a tree, so nothing has to learn
   *no tree yet*. Not priced. [Q-read-while-importing] for Greg.
+
+  **Answered, 2026-10-05:**
+
+  > yes, this sounds promising, and definitely sounds worth a spike. it's ok to incur some costs
+  >
+  > — Greg, 2026-10-05
+
+  The spike, what it measured and what it recommends:
+  [261005b](261005b-read-while-importing-draft-prose-on-the-add-page-spiked.md).

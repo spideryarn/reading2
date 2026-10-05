@@ -1,0 +1,322 @@
+{
+  "arm": "high-about-new0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/9",
+  "sourceSha256": "ea4e45d25a2fbd7530eb71c965ad2678410afc34564f404deb0865a37da0213d",
+  "at": "2026-10-05T16:32:45.930Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 52773,
+  "costUsd": 0.2820828,
+  "tokens": {
+    "input": 15143,
+    "output": 6473,
+    "reasoning": 3585
+  },
+  "briefReadyMs": 21877,
+  "fullerReadyMs": 52749,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 570,
+  "briefWords": 101,
+  "fuller": [
+    {
+      "text": "This is a theory-and-review paper arguing that strong cognitive control is not always better. The authors treat the prefrontal cortex as a filter that weakens information judged irrelevant, so behaviour fits the current goal. Borrowing loosely from signal processing, they propose a Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This is a theory-and-review paper arguing that strong cognitive control is not always better.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "The authors treat the prefrontal cortex as a filter that weakens information judged irrelevant, so behaviour fits the current goal.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "Borrowing loosely from signal processing, they propose a Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "The usual view treats prefrontal control as the engine of complex thought, and most developmental work studies children's control deficits. Yet a growing body of work finds that not all complex cognition benefits from control, and children sometimes beat adults. In a choice task where one option pays off 75% of the time, adults pick it 75% of the time, for 62.5% success. Children pick it every time and reach 75%, and adult matching may draw on executive function.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The usual view treats prefrontal control as the engine of complex thought, and most developmental work studies children's control deficits.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Yet a growing body of work finds that not all complex cognition benefits from control, and children sometimes beat adults.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "In a choice task where one option pays off 75% of the time, adults pick it 75% of the time, for 62.5% success.",
+          "id": "spya-egkn3d",
+          "key": "62.5% success"
+        },
+        {
+          "text": "Children pick it every time and reach 75%, and adult matching may draw on executive function.",
+          "id": "spya-egkn3d"
+        }
+      ]
+    },
+    {
+      "text": "High control should help tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory. Hypofrontality, meaning reduced prefrontal activity, should help tasks that are implicit, stimulus-driven, hard to abstract, or too complex for working memory. The outcome reflects competition between prefrontal cortex and posterior or subcortical systems, such as sensorimotor cortex and the basal ganglia. Age, genes, brain damage, dual-task conditions and brain stimulation can all shift that balance.",
+      "ids": [
+        "spya-kyvz4a",
+        "spya-xe5yg6"
+      ],
+      "sentences": [
+        {
+          "text": "High control should help tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Hypofrontality, meaning reduced prefrontal activity, should help tasks that are implicit, stimulus-driven, hard to abstract, or too complex for working memory.",
+          "id": "spya-kyvz4a",
+          "key": "Hypofrontality"
+        },
+        {
+          "text": "The outcome reflects competition between prefrontal cortex and posterior or subcortical systems, such as sensorimotor cortex and the basal ganglia.",
+          "id": "spya-xe5yg6"
+        },
+        {
+          "text": "Age, genes, brain damage, dual-task conditions and brain stimulation can all shift that balance.",
+          "id": "spya-kyvz4a"
+        }
+      ]
+    },
+    {
+      "text": "For learning, the review gathers several lines of evidence. A secondary task helps adults learn rules they cannot put into words, and magnetic stimulation disrupting dorsolateral prefrontal cortex improved implicit motor learning. Retrieval-induced forgetting, where practising some items suppresses related ones, shrinks when prefrontal resources are taxed by a secondary task. Adults learn to look away from uninformative cues, cutting errors fast but distorting what they learn; 3-year-olds show less of this blocking than 4-year-olds. Given noisy artificial-language input, children produce only the most frequent form, while adults reproduce the noise.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-wx0kxu",
+        "spya-pttrqz"
+      ],
+      "sentences": [
+        {
+          "text": "For learning, the review gathers several lines of evidence.",
+          "id": null
+        },
+        {
+          "text": "A secondary task helps adults learn rules they cannot put into words, and magnetic stimulation disrupting dorsolateral prefrontal cortex improved implicit motor learning.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Retrieval-induced forgetting, where practising some items suppresses related ones, shrinks when prefrontal resources are taxed by a secondary task.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Adults learn to look away from uninformative cues, cutting errors fast but distorting what they learn; 3-year-olds show less of this blocking than 4-year-olds.",
+          "id": "spya-wx0kxu"
+        },
+        {
+          "text": "Given noisy artificial-language input, children produce only the most frequent form, while adults reproduce the noise.",
+          "id": "spya-pttrqz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The authors link this to competing learning systems. Prefrontal cortex and the caudate support explicit, rule-based learning, while the putamen supports habit-like procedural learning; caudate activity falls as putamen activity rises. Adults with low working memory capacity learn non-verbalizable category boundaries better than high-capacity adults. The mature prefrontal cortex may bias people toward the explicit system even when it fits the problem poorly.",
+      "ids": [
+        "spya-avc4bv",
+        "spya-k093yw"
+      ],
+      "sentences": [
+        {
+          "text": "The authors link this to competing learning systems.",
+          "id": null
+        },
+        {
+          "text": "Prefrontal cortex and the caudate support explicit, rule-based learning, while the putamen supports habit-like procedural learning; caudate activity falls as putamen activity rises.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "Adults with low working memory capacity learn non-verbalizable category boundaries better than high-capacity adults.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "The mature prefrontal cortex may bias people toward the explicit system even when it fits the problem poorly.",
+          "id": "spya-k093yw"
+        }
+      ]
+    },
+    {
+      "text": "Creativity is the second test case, since open-ended tasks may need raw perceptual detail that filtering discards. People generating unusual uses for objects showed lower prefrontal and higher visual-area activity than people generating typical uses. Inhibitory stimulation over left prefrontal cortex made people faster and more prolific at creative uses, but not on control tasks. Children also resist functional fixedness, the adult habit of seeing an object only by its usual function. Judging whether an idea works likely needs control again, so creative work may cycle between the two states.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq",
+        "spya-xmgzpp"
+      ],
+      "sentences": [
+        {
+          "text": "Creativity is the second test case, since open-ended tasks may need raw perceptual detail that filtering discards.",
+          "id": null
+        },
+        {
+          "text": "People generating unusual uses for objects showed lower prefrontal and higher visual-area activity than people generating typical uses.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Inhibitory stimulation over left prefrontal cortex made people faster and more prolific at creative uses, but not on control tasks.",
+          "id": "spya-peqnf8",
+          "key": "Inhibitory stimulation over left prefrontal cortex"
+        },
+        {
+          "text": "Children also resist functional fixedness, the adult habit of seeing an object only by its usual function.",
+          "id": "spya-gfuefq"
+        },
+        {
+          "text": "Judging whether an idea works likely needs control again, so creative work may cycle between the two states.",
+          "id": "spya-xmgzpp"
+        }
+      ]
+    },
+    {
+      "text": "The authors flag clear limits. Child advantages could stem from knowledge, strategies or other maturing brain regions, not only weak prefrontal control. Reversal learning needs some prefrontal function, and dopamine studies suggest an inverted-U relationship, so less control is not simply better. Creativity studies are few, patient findings are inconsistent, and the neural mechanism that sets the filter remains unspecified.",
+      "ids": [
+        "spya-uxhggj",
+        "spya-s0bmee",
+        "spya-t9zbas"
+      ],
+      "sentences": [
+        {
+          "text": "The authors flag clear limits.",
+          "id": null
+        },
+        {
+          "text": "Child advantages could stem from knowledge, strategies or other maturing brain regions, not only weak prefrontal control.",
+          "id": "spya-s0bmee"
+        },
+        {
+          "text": "Reversal learning needs some prefrontal function, and dopamine studies suggest an inverted-U relationship, so less control is not simply better.",
+          "id": "spya-uxhggj"
+        },
+        {
+          "text": "Creativity studies are few, patient findings are inconsistent, and the neural mechanism that sets the filter remains unspecified.",
+          "id": "spya-t9zbas"
+        }
+      ]
+    },
+    {
+      "text": "The unifying point is that transforming input has a cost: strategies that cut errors quickly can lose fidelity and completeness over time. The authors suggest the idea extends to complex multi-feature decisions and to emotion regulation. They conclude that cognitive control is a tool suited to some common challenges, not an all-purpose optimiser for every problem.",
+      "ids": [
+        "spya-xbrswq",
+        "spya-e5g0a5",
+        "spya-sp9606"
+      ],
+      "sentences": [
+        {
+          "text": "The unifying point is that transforming input has a cost: strategies that cut errors quickly can lose fidelity and completeness over time.",
+          "id": "spya-xbrswq",
+          "key": "transforming input has a cost"
+        },
+        {
+          "text": "The authors suggest the idea extends to complex multi-feature decisions and to emotion regulation.",
+          "id": "spya-sp9606"
+        },
+        {
+          "text": "They conclude that cognitive control is a tool suited to some common challenges, not an all-purpose optimiser for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review asks when cognitive control actually helps us think and learn. Cognitive control means the front of the brain filtering out details to stay on a goal. It is usually seen as always helpful, but growing evidence suggests it sometimes gets in the way.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks when cognitive control actually helps us think and learn.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "Cognitive control means the front of the brain filtering out details to stay on a goal.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "It is usually seen as always helpful, but growing evidence suggests it sometimes gets in the way.",
+          "id": "spya-ez5mym"
+        }
+      ]
+    },
+    {
+      "text": "The authors' Matched Filter Hypothesis says the best amount of filtering depends on the task. Strong control may suit clear, rule-based tasks small enough to hold in mind. Weak control may suit picking up hidden patterns and coming up with new ideas. So control is a tool for some jobs, not a fix for every problem.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-kyvz4a",
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "The authors' Matched Filter Hypothesis says the best amount of filtering depends on the task.",
+          "id": "spya-vxet4b",
+          "key": "Matched Filter Hypothesis"
+        },
+        {
+          "text": "Strong control may suit clear, rule-based tasks small enough to hold in mind.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Weak control may suit picking up hidden patterns and coming up with new ideas.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "So control is a tool for some jobs, not a fix for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

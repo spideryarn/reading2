@@ -1,0 +1,310 @@
+{
+  "arm": "high-none-brief90a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "dodo-spya-nyc4ud",
+  "version": "simple-prompt/9",
+  "sourceSha256": "2e8c225377af5fd75a998468fc4e0aa8f37c5338a0169a1f5ea55ce1326a15dc",
+  "at": "2026-10-05T17:01:10.238Z",
+  "bodyWords": 12143,
+  "band": "standard",
+  "bodyBlocks": 251,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "8cb613028679578b",
+  "systemsSha256": "97a6b82169a93149ea4a7c63bc1ed505124bddeb650271d05ac757e5d3cc7229",
+  "power": "high",
+  "guard": true,
+  "wallMs": 56389,
+  "costUsd": null,
+  "tokens": {
+    "input": 12828,
+    "output": 4127,
+    "reasoning": null
+  },
+  "briefReadyMs": 38510,
+  "fullerReadyMs": 56186,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 512,
+  "briefWords": 114,
+  "fuller": [
+    {
+      "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar. It belonged to the pigeon and dove family, and its closest relative was the also-extinct Rodrigues solitaire. Its closest living relative is the Nicobar pigeon. The article covers how the bird is classified, what it looked like, how it lived, how it died out, and its place in culture.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar.",
+          "id": "spya-yksdv0",
+          "key": "extinct bird that could not fly"
+        },
+        {
+          "text": "It belonged to the pigeon and dove family, and its closest relative was the also-extinct Rodrigues solitaire.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "Its closest living relative is the Nicobar pigeon.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "The article covers how the bird is classified, what it looked like, how it lived, how it died out, and its place in culture.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The dodo was first recorded by Dutch sailors in 1598 and was gone less than a century later. The article says this fast loss drew attention to a problem nobody had recognised before: humans could wipe out whole species. It has since been called an \"icon of extinction\", helped by its role in Alice's Adventures in Wonderland.",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-jnkm7z"
+      ],
+      "sentences": [
+        {
+          "text": "The dodo was first recorded by Dutch sailors in 1598 and was gone less than a century later.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "The article says this fast loss drew attention to a problem nobody had recognised before: humans could wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans could wipe out whole species"
+        },
+        {
+          "text": "It has since been called an \"icon of extinction\", helped by its role in Alice's Adventures in Wonderland.",
+          "id": "spya-jnkm7z"
+        }
+      ]
+    },
+    {
+      "text": "The evidence is thin, and the article is open about this. No complete specimen exists, so its looks come from 17th-century drawings, paintings and written accounts. Only sketches in one Dutch ship's journal are known to show living or freshly killed birds on Mauritius. Its DNA came from a single old museum specimen whose genetic material has broken down, so those results still need checking by others.",
+      "ids": [
+        "spya-t635r4",
+        "spya-kdjnw7",
+        "spya-fva080"
+      ],
+      "sentences": [
+        {
+          "text": "The evidence is thin, and the article is open about this.",
+          "id": null
+        },
+        {
+          "text": "No complete specimen exists, so its looks come from 17th-century drawings, paintings and written accounts.",
+          "id": "spya-t635r4"
+        },
+        {
+          "text": "Only sketches in one Dutch ship's journal are known to show living or freshly killed birds on Mauritius.",
+          "id": "spya-kdjnw7"
+        },
+        {
+          "text": "Its DNA came from a single old museum specimen whose genetic material has broken down, so those results still need checking by others.",
+          "id": "spya-fva080"
+        }
+      ]
+    },
+    {
+      "text": "Early scientists guessed it was a small ostrich, a vulture or other birds, until skull and leg studies in the 1840s linked it to pigeons. A 2002 DNA study confirmed this. It suggested the dodo and solitaire lines split about 23 million years ago, yet their islands are under 10 million years old. So their ancestors probably still flew for a long time, and the lack of plant-eating mammals later let both birds grow large and lose flight.",
+      "ids": [
+        "spya-mqwjb3",
+        "spya-dbqyy9",
+        "spya-x3fz45"
+      ],
+      "sentences": [
+        {
+          "text": "Early scientists guessed it was a small ostrich, a vulture or other birds, until skull and leg studies in the 1840s linked it to pigeons.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "A 2002 DNA study confirmed this.",
+          "id": "spya-dbqyy9"
+        },
+        {
+          "text": "It suggested the dodo and solitaire lines split about 23 million years ago, yet their islands are under 10 million years old.",
+          "id": "spya-x3fz45"
+        },
+        {
+          "text": "So their ancestors probably still flew for a long time, and the lack of plant-eating mammals later let both birds grow large and lose flight.",
+          "id": "spya-x3fz45"
+        }
+      ]
+    },
+    {
+      "text": "Dodos stood about 62.6 to 75 cm tall, and males were larger with longer beaks. Weight estimates still disagree; one 1993 study put wild birds at 10.6 to 17.5 kg, and a 2016 scan study gave 10.6 to 14.3 kg. Scientists now think the very fat birds in old European paintings were overfed captives or badly stuffed specimens.",
+      "ids": [
+        "spya-w2anzw",
+        "spya-naj2n2"
+      ],
+      "sentences": [
+        {
+          "text": "Dodos stood about 62.6 to 75 cm tall, and males were larger with longer beaks.",
+          "id": "spya-w2anzw"
+        },
+        {
+          "text": "Weight estimates still disagree; one 1993 study put wild birds at 10.6 to 17.5 kg, and a 2016 scan study gave 10.6 to 14.3 kg.",
+          "id": "spya-w2anzw",
+          "key": "10.6 to 17.5 kg"
+        },
+        {
+          "text": "Scientists now think the very fat birds in old European paintings were overfed captives or badly stuffed specimens.",
+          "id": "spya-naj2n2"
+        }
+      ]
+    },
+    {
+      "text": "Studies of its bones and brain case suggest a more capable bird than its reputation. Strength tests on its leg bones suggest it could run quite fast. Its brain size relative to its body matched modern pigeons, so it was probably about as intelligent. A 2026 study found improved sight, smell and touch, perhaps suiting activity at dusk and dawn.",
+      "ids": [
+        "spya-axn5h3",
+        "spya-rzgebh",
+        "spya-vts6ug"
+      ],
+      "sentences": [
+        {
+          "text": "Studies of its bones and brain case suggest a more capable bird than its reputation.",
+          "id": null
+        },
+        {
+          "text": "Strength tests on its leg bones suggest it could run quite fast.",
+          "id": "spya-axn5h3"
+        },
+        {
+          "text": "Its brain size relative to its body matched modern pigeons, so it was probably about as intelligent.",
+          "id": "spya-rzgebh",
+          "key": "probably about as intelligent"
+        },
+        {
+          "text": "A 2026 study found improved sight, smell and touch, perhaps suiting activity at dusk and dawn.",
+          "id": "spya-vts6ug"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Contrary to popular belief, human hunting was not the main cause of extinction. Animals people brought, especially pigs and macaque monkeys, raided nests and competed for food, while humans cut down the forest. The last widely accepted sighting is from 1662, though a 2003 statistical study estimated 1693, likely between 1688 and 1715. Later reports may describe a different flightless bird, the red rail, which took over the name.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-h0vyww",
+        "spya-y2j765"
+      ],
+      "sentences": [
+        {
+          "text": "Contrary to popular belief, human hunting was not the main cause of extinction.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "Animals people brought, especially pigs and macaque monkeys, raided nests and competed for food, while humans cut down the forest.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "The last widely accepted sighting is from 1662, though a 2003 statistical study estimated 1693, likely between 1688 and 1715.",
+          "id": "spya-h0vyww",
+          "key": "last widely accepted sighting is from 1662"
+        },
+        {
+          "text": "Later reports may describe a different flightless bird, the red rail, which took over the name.",
+          "id": "spya-y2j765"
+        }
+      ]
+    },
+    {
+      "text": "The article concludes the dodo was probably extinct by 1700, about a century after its discovery. Its exact date may never be settled unless new reports with clear descriptions turn up. Long shown as fat and clumsy, the dodo is now thought to have been well suited to its island home.",
+      "ids": [
+        "spya-tre7b7",
+        "spya-nfhcvx"
+      ],
+      "sentences": [
+        {
+          "text": "The article concludes the dodo was probably extinct by 1700, about a century after its discovery.",
+          "id": "spya-nfhcvx"
+        },
+        {
+          "text": "Its exact date may never be settled unless new reports with clear descriptions turn up.",
+          "id": "spya-nfhcvx"
+        },
+        {
+          "text": "Long shown as fat and clumsy, the dodo is now thought to have been well suited to its island home.",
+          "id": "spya-tre7b7",
+          "key": "well suited to its island home"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article is about the dodo, a large bird that could not fly. It lived only on Mauritius, an island in the Indian Ocean, and was a kind of pigeon. Its extinction, less than a century after people found it, made people notice that humans can wipe out whole species.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-ae8a2x"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about the dodo, a large bird that could not fly.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It lived only on Mauritius, an island in the Indian Ocean, and was a kind of pigeon.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "Its extinction, less than a century after people found it, made people notice that humans can wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans can wipe out whole species"
+        }
+      ]
+    },
+    {
+      "text": "Dutch sailors first wrote about it in 1598, and the last widely accepted sighting was in 1662. Hunting was not the main cause, the article says. Animals people brought, like pigs and monkeys, raided nests and ate its food, while forests were cut down. Old pictures show it fat and clumsy, but it now seems to have been well suited to its home.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "Dutch sailors first wrote about it in 1598, and the last widely accepted sighting was in 1662.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "Hunting was not the main cause, the article says.",
+          "id": "spya-rdu8bv",
+          "key": "Hunting was not the main cause"
+        },
+        {
+          "text": "Animals people brought, like pigs and monkeys, raided nests and ate its food, while forests were cut down.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "Old pictures show it fat and clumsy, but it now seems to have been well suited to its home.",
+          "id": "spya-tre7b7"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -136,6 +136,19 @@ is a known miss rather than a new path.
 
 - **[Q-title-model]** Should a small model do the recasing instead of the rule? See above.
   Recommendation: not yet; look at what the rule gets wrong on real imports first.
+  **Decided: yes, a small model** — Greg, 2026-10-05: "yes, a small model (e.g. GPT Luna or DeepSeek).
+  ideally piggybacking on an existing call we're already doing as part of the import process".
+  Built as [261005j](261005j-a-small-model-tidies-an-imported-title.md): a small model tidies the
+  title at import, and the rule here is its fallback.
+  **It is its own call, not a piggyback.** No one existing import call covers every import: a web
+  page's `extract`, the commonest, makes no model call at all; `pdf-frontmatter` is PDFs only and
+  answers in block ids; `paper-metadata` is batch-added papers only and is scored on copying the
+  title "exactly as printed"; `structure` and the new `reading-difficulty` run after the title is
+  stored, and `title` is in every generated mode's fingerprint. Riding on two of them and adding a
+  third for web pages would be three prompts and three checks for one job, so it is one cheap job,
+  `title-tidy` (about 1 second and 0.007 cents an import). The table is in
+  [261005j § Where the call goes](261005j-a-small-model-tidies-an-imported-title.md).
 - **[Q-title-backfill]** Should the articles already on shelves be tidied? It needs a script run
   against production, and it marks those articles' generated modes stale. Recommendation: a
   report-only script first, to count them.
+  **Decided: no backfill** — Greg, 2026-10-05: "no, just articles going forwards".

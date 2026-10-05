@@ -11,10 +11,11 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { reloadVeto } from "../src/web/safe-to-reload.js";
+import { SaveStatus } from "../src/web/ProfileBox.js";
 import { type AutosavedText, useAutosavedText } from "../src/web/useAutosavedText.js";
 
 /** Each save the hook started, in order, with a way to answer it. */
-let sent: Array<{ text: string; ok(stored: string): void; fail(message: string): void }> = [];
+let sent: Array<{ text: string; ok(stored: string): void; fail(message: string): void; reject(reason: unknown): void }> = [];
 let left: string[] = [];
 let syncFailure: Error | null = null;
 let leaveFailure: Error | null = null;
@@ -28,7 +29,7 @@ function Probe() {
     save: (text) => {
       if (syncFailure) throw syncFailure;
       return new Promise<string>((resolve, reject) => {
-        sent.push({ text, ok: resolve, fail: (m) => reject(new Error(m)) });
+        sent.push({ text, ok: resolve, fail: (m) => reject(new Error(m)), reject });
       });
     },
     leave: (text) => {
@@ -36,7 +37,7 @@ function Probe() {
       left.push(text);
     },
   });
-  return null;
+  return createElement(SaveStatus, { save: t.state });
 }
 const get = (): AutosavedText => {
   if (!t) throw new Error("no render");
@@ -93,6 +94,20 @@ describe("what lands after a save", () => {
     await act(async () => sent[0]?.fail("Over the limit"));
     expect(get().state).toEqual({ kind: "error", message: "Over the limit" });
   });
+
+  it.each([new Error(""), "network failed", undefined, null])(
+    "keeps a failure visible even when its rejection has no Error message (%s)",
+    async (reason) => {
+      act(() => get().setDraft("Words to keep"));
+      act(() => get().commit());
+      await act(async () => sent[0]?.reject(reason));
+      expect(get().state).toEqual({ kind: "error", message: "The request failed." });
+      expect(host.querySelector(".prof-save")?.textContent).toContain("Not saved — The request failed.");
+      expect(get().draft).toBe("Words to keep");
+      expect(get().saved).toBe("Stored");
+      expect(get().inFlight).toBe(false);
+    },
+  );
 
   /* The idle timer arms only on `dirty`. A refusal of older text shown over
      newer words would leave them unsent until the next keystroke or blur. */
@@ -161,6 +176,23 @@ describe("one save at a time", () => {
     act(() => get().commit());
     await act(async () => sent[0]?.fail("network"));
     expect(sent.map((s) => s.text)).toEqual(["one", "one two"]);
+  });
+
+  it("keeps a refusal visible when another blur queued the same words", async () => {
+    act(() => get().setDraft("Words to keep"));
+    act(() => get().commit());
+    act(() => get().commit());
+    await act(async () => sent[0]?.fail("The shelf is unavailable."));
+    expect(sent.map((s) => s.text)).toEqual(["Words to keep"]);
+    expect(get().state).toEqual({ kind: "error", message: "The shelf is unavailable." });
+    expect(host.querySelector(".prof-save")?.textContent).toContain("Not saved — The shelf is unavailable.");
+    expect(get().inFlight).toBe(false);
+
+    // A later explicit retry still works.
+    act(() => get().commit());
+    expect(sent).toHaveLength(2);
+    await act(async () => sent[1]?.ok("Words to keep"));
+    expect(get().state.kind).toBe("saved");
   });
 
   it("does not leave the queue stuck when save throws before returning a promise", async () => {

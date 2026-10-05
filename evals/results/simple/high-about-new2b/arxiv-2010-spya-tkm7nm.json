@@ -1,0 +1,287 @@
+{
+  "arm": "high-about-new2b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "arxiv-2010-spya-tkm7nm",
+  "version": "simple-prompt/10",
+  "sourceSha256": "8d2804f6152f3db03738a05ef35f3a657d44c21acbe393edebeb8f829bee6d5f",
+  "at": "2026-10-05T16:47:42.423Z",
+  "bodyWords": 8299,
+  "band": "standard",
+  "bodyBlocks": 155,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "e9208de21f4cc204",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 75879,
+  "costUsd": 0.222882,
+  "tokens": {
+    "input": 20513,
+    "output": 8991,
+    "reasoning": 4218
+  },
+  "briefReadyMs": 30033,
+  "fullerReadyMs": 75868,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 508,
+  "briefWords": 94,
+  "fuller": [
+    {
+      "text": "This research paper asks whether a standard Transformer, changed as little as possible, can classify images as well as convolutional networks (CNNs). The trick is to cut each image into fixed-size squares called patches, flatten each one, and project it linearly into a vector, exactly like a token embedding. The authors call the result the Vision Transformer, or ViT, and train it to label images with supervision.",
+      "ids": [
+        "spya-c9hp2d",
+        "spya-x4tvfn"
+      ],
+      "sentences": [
+        {
+          "text": "This research paper asks whether a standard Transformer, changed as little as possible, can classify images as well as convolutional networks (CNNs).",
+          "id": "spya-x4tvfn"
+        },
+        {
+          "text": "The trick is to cut each image into fixed-size squares called patches, flatten each one, and project it linearly into a vector, exactly like a token embedding.",
+          "id": "spya-c9hp2d",
+          "key": "patches"
+        },
+        {
+          "text": "The authors call the result the Vision Transformer, or ViT, and train it to label images with supervision.",
+          "id": "spya-c9hp2d",
+          "key": "Vision Transformer, or ViT"
+        }
+      ]
+    },
+    {
+      "text": "In vision, CNNs still dominate large-scale image recognition, even though Transformers have scaled to huge sizes in language. Earlier attempts to swap convolutions for attention used special attention patterns that need complex engineering to run fast on hardware accelerators. A plain Transformer, by contrast, can reuse scalable language-model code almost out of the box.",
+      "ids": [
+        "spya-vcka9f",
+        "spya-ped3se",
+        "spya-f5eanz"
+      ],
+      "sentences": [
+        {
+          "text": "In vision, CNNs still dominate large-scale image recognition, even though Transformers have scaled to huge sizes in language.",
+          "id": "spya-vcka9f"
+        },
+        {
+          "text": "Earlier attempts to swap convolutions for attention used special attention patterns that need complex engineering to run fast on hardware accelerators.",
+          "id": "spya-ped3se"
+        },
+        {
+          "text": "A plain Transformer, by contrast, can reuse scalable language-model code almost out of the box.",
+          "id": "spya-f5eanz"
+        }
+      ]
+    },
+    {
+      "text": "Like BERT, ViT puts an extra learnable token in front of the patches, and its final output serves as the image summary. Learned 1D position embeddings tell the model where each patch sits. The only built-in assumptions about images are the patch cutting and, when fine-tuning at higher resolution, stretching the position embeddings to the new grid. Names like ViT-L/16 mean the Large model (307M parameters) with 16-by-16-pixel patches; Base has 86M and Huge 632M.",
+      "ids": [
+        "spya-mgv7z9",
+        "spya-y2uga4",
+        "spya-esddmn"
+      ],
+      "sentences": [
+        {
+          "text": "Like BERT, ViT puts an extra learnable token in front of the patches, and its final output serves as the image summary.",
+          "id": "spya-mgv7z9"
+        },
+        {
+          "text": "Learned 1D position embeddings tell the model where each patch sits.",
+          "id": "spya-mgv7z9"
+        },
+        {
+          "text": "The only built-in assumptions about images are the patch cutting and, when fine-tuning at higher resolution, stretching the position embeddings to the new grid.",
+          "id": "spya-y2uga4"
+        },
+        {
+          "text": "Names like ViT-L/16 mean the Large model (307M parameters) with 16-by-16-pixel patches; Base has 86M and Huge 632M.",
+          "id": "spya-esddmn"
+        }
+      ]
+    },
+    {
+      "text": "The central finding is about data size. Trained on ImageNet's 1.3M images alone, ViT scores a few points below similar-sized ResNets, and Large does worse than Base. On ImageNet-21k (14M images) and Google's in-house JFT-300M (303M images), ViT catches up and then overtakes. On random JFT subsets, ViT-B/32 was much worse than ResNet50 at 9M images but better from 90M up. The authors conclude that a CNN's built-in assumptions help on small data, while large data lets the model learn those patterns itself.",
+      "ids": [
+        "spya-rqmje9",
+        "spya-nrfgnh",
+        "spya-edcsd3"
+      ],
+      "sentences": [
+        {
+          "text": "The central finding is about data size.",
+          "id": null
+        },
+        {
+          "text": "Trained on ImageNet's 1.3M images alone, ViT scores a few points below similar-sized ResNets, and Large does worse than Base.",
+          "id": "spya-rqmje9"
+        },
+        {
+          "text": "On ImageNet-21k (14M images) and Google's in-house JFT-300M (303M images), ViT catches up and then overtakes.",
+          "id": "spya-nrfgnh"
+        },
+        {
+          "text": "On random JFT subsets, ViT-B/32 was much worse than ResNet50 at 9M images but better from 90M up.",
+          "id": "spya-edcsd3"
+        },
+        {
+          "text": "The authors conclude that a CNN's built-in assumptions help on small data, while large data lets the model learn those patterns itself.",
+          "id": "spya-edcsd3",
+          "key": "large data lets the model learn those patterns"
+        }
+      ]
+    },
+    {
+      "text": "Against the best CNNs, pre-trained on JFT-300M, ViT did well on both accuracy and cost. ViT-H/14 reached 88.55% on ImageNet and 77.63% on VTAB, a set of 19 tasks with 1,000 training examples each. It used 2.5k TPU core-days of pre-training, against 9.9k for the large ResNet called BiT-L, though training settings may also affect this gap. In a controlled comparison, ViT needed about 2 to 4 times less compute than ResNets for the same accuracy, and showed no sign of levelling off. Hybrids, which feed CNN feature maps into ViT, helped only for small models.",
+      "ids": [
+        "spya-zh9ufa",
+        "spya-n6m6xj",
+        "spya-kd825n"
+      ],
+      "sentences": [
+        {
+          "text": "Against the best CNNs, pre-trained on JFT-300M, ViT did well on both accuracy and cost.",
+          "id": null
+        },
+        {
+          "text": "ViT-H/14 reached 88.55% on ImageNet and 77.63% on VTAB, a set of 19 tasks with 1,000 training examples each.",
+          "id": "spya-zh9ufa",
+          "key": "88.55% on ImageNet"
+        },
+        {
+          "text": "It used 2.5k TPU core-days of pre-training, against 9.9k for the large ResNet called BiT-L, though training settings may also affect this gap.",
+          "id": "spya-n6m6xj"
+        },
+        {
+          "text": "In a controlled comparison, ViT needed about 2 to 4 times less compute than ResNets for the same accuracy, and showed no sign of levelling off.",
+          "id": "spya-kd825n",
+          "key": "2 to 4 times less compute"
+        },
+        {
+          "text": "Hybrids, which feed CNN feature maps into ViT, helped only for small models.",
+          "id": "spya-kd825n"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Looking inside, the learned position embeddings came to reflect the image's rows, columns and distances on their own. Some attention heads already looked across most of the image in the lowest layers, others stayed local, and the average span grew with depth. A first try at BERT-style self-supervision, predicting hidden patches, gave ViT-B/16 79.9% on ImageNet: 2% better than training from scratch, but 4% behind supervised pre-training.",
+      "ids": [
+        "spya-s2qbwx",
+        "spya-trpqcg",
+        "spya-uckf04"
+      ],
+      "sentences": [
+        {
+          "text": "Looking inside, the learned position embeddings came to reflect the image's rows, columns and distances on their own.",
+          "id": "spya-s2qbwx"
+        },
+        {
+          "text": "Some attention heads already looked across most of the image in the lowest layers, others stayed local, and the average span grew with depth.",
+          "id": "spya-trpqcg"
+        },
+        {
+          "text": "A first try at BERT-style self-supervision, predicting hidden patches, gave ViT-B/16 79.9% on ImageNet: 2% better than training from scratch, but 4% behind supervised pre-training.",
+          "id": "spya-uckf04"
+        }
+      ]
+    },
+    {
+      "text": "The authors conclude that treating an image as a sequence of patches works surprisingly well when paired with large-scale pre-training. They say it matches or beats the state of the art on many image classification datasets while being relatively cheap to pre-train. Open problems they name are other vision tasks such as detection and segmentation, closing the self-supervised gap, and further scaling, which would likely help.",
+      "ids": [
+        "spya-n8f77s",
+        "spya-g38rm0"
+      ],
+      "sentences": [
+        {
+          "text": "The authors conclude that treating an image as a sequence of patches works surprisingly well when paired with large-scale pre-training.",
+          "id": "spya-n8f77s"
+        },
+        {
+          "text": "They say it matches or beats the state of the art on many image classification datasets while being relatively cheap to pre-train.",
+          "id": "spya-n8f77s"
+        },
+        {
+          "text": "Open problems they name are other vision tasks such as detection and segmentation, closing the self-supervised gap, and further scaling, which would likely help.",
+          "id": "spya-g38rm0"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This research paper asks whether the Transformer, the design behind today's language AI, can also recognize pictures. It cuts each picture into small squares and feeds them in like words in a sentence. This matters because, for pictures, older designs made just for images were still the best.",
+      "ids": [
+        "spya-c9hp2d",
+        "spya-vcka9f"
+      ],
+      "sentences": [
+        {
+          "text": "This research paper asks whether the Transformer, the design behind today's language AI, can also recognize pictures.",
+          "id": "spya-c9hp2d",
+          "key": "can also recognize pictures"
+        },
+        {
+          "text": "It cuts each picture into small squares and feeds them in like words in a sentence.",
+          "id": "spya-c9hp2d",
+          "key": "like words in a sentence"
+        },
+        {
+          "text": "This matters because, for pictures, older designs made just for images were still the best.",
+          "id": "spya-vcka9f"
+        }
+      ]
+    },
+    {
+      "text": "Trained on a modest pile of pictures, it scored a few points below those older designs. Given 14 to 300 million pictures, it came close to or beat the best, using less computing. The lesson: with enough examples, learning from data beats built-in assumptions about images.",
+      "ids": [
+        "spya-rqmje9",
+        "spya-c6k9fs",
+        "spya-x4tvfn"
+      ],
+      "sentences": [
+        {
+          "text": "Trained on a modest pile of pictures, it scored a few points below those older designs.",
+          "id": "spya-rqmje9"
+        },
+        {
+          "text": "Given 14 to 300 million pictures, it came close to or beat the best, using less computing.",
+          "id": "spya-c6k9fs",
+          "key": "came close to or beat the best"
+        },
+        {
+          "text": "The lesson: with enough examples, learning from data beats built-in assumptions about images.",
+          "id": "spya-c6k9fs"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      }
+    }
+  }
+}

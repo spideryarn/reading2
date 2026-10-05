@@ -154,6 +154,8 @@ step as for any article; Summary and the other modes work from titles only.
 
 **Not in D:** any new sentence on screen saying the structure is plainer. E removes most of the
 need, and where E fails the tree is still usable. Named in the debrief for Greg.
+**2026-10-05, later:** Greg asked for it, answering [Q-plain-tree-notice]; it is one line in
+Structure mode, [structure.md § When it is only the headings](../project/structure.md#when-it-is-only-the-headings).
 
 **What D does not fix, and says so:** Relations refuses at about 2,930 paragraphs with the same
 sentence, on that mode only. The article response against Vercel's 4.5 MB is `qi-sbytr395`.

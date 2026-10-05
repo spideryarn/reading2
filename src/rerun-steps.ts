@@ -30,6 +30,14 @@
  *    `structure` call it names, and the labels would be gone for the eleven
  *    minutes in between. A control whose whole design is *how many metered
  *    calls does one press buy* may not have a second one hiding behind it.
+ *
+ *    **It is offered in one other place since 2026-10-05, and that is the same
+ *    rule rather than an exception**: Structure mode's *Try again*, only on a
+ *    tree built from the author's headings because the model's could not be
+ *    made (src/web/StructureNotice.tsx). The objection above is to stripping
+ *    good labels from every article; that tree's labels were written against
+ *    sections its replacement does away with, so the label pass is owed anyway.
+ *    docs/project/structure.md § When it is only the headings.
  *  - **`illustrated` is out.** It refuses without a usable Sketch and does not
  *    pull the prerequisite in, and a run whose every plate failed returns
  *    *successfully* — so it can replace a good picture with an empty one.
@@ -104,8 +112,8 @@ export const METADATA_RERUN_STEPS = [
   "quiz",
   "faq",
   /* **Joined on 2026-10-03 with the step**, the way to redo the margin's
-     relation words by hand (an import normally makes them first; the owner's
-     press on Marginalia fills a missing or stale result). The three answers: **one**
+     relation words by hand (the column makes them the first time its owner
+     sees it, and again when they are stale). The three answers: **one**
      metered call a press — a single `streamMessage`, no tools
      (`generateRelations`), and none at all on an article with fewer than two
      paragraphs; **no prerequisite** beyond the article itself; and **safe to
