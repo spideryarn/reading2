@@ -1006,7 +1006,9 @@ aimed at stands instead of a measurement, so two rapid presses count as two rath
 way. How long it stands is keynav.ts's rule, shared with ↑ / ↓
 ([keyboard.md § Rapid presses chain from the last target](keyboard.md#rapid-presses-chain-from-the-last-target-not-from-the-page)):
 while our own jump is unfinished, and after it ends for as long as the page is still at the pixel it
-ended on.
+ended on with the target row's layout unchanged. Replacing the article's blocks, root or picture
+kind also drops the numeric aim; see `DiagramPanel.tsx` § `chain` and
+[the review postmortem](../postmortems/261005g-a-navigation-aim-outlives-the-layout-that-made-its-row-true.md).
 
 **The panel is told when its jump ends; it does not infer it.** A step hands `onFollow` a callback,
 and Reader carries it through `jumpTo` and `beginJump` to `scrollToBlock`'s own report, on every

@@ -270,3 +270,31 @@ and the browser check are still to come as of this commit.
   of the finished rule each turned tests red, including the "clear on done" design this plan first
   proposed. Known limit: the type stops `jumpTo` being passed as `onFollow` unwrapped, but only
   tests hold "every branch calls `ended`".
+
+## Code review fixes (2026-10-05)
+
+The independent review found three in-scope gaps, reproduced with tests before fixing:
+
+- Stage A: a reload request released the article before document replacement. Maths now shares
+  LazyPage's bounded grace hold. A pending check could also reload an abandoned load whose address
+  stayed the same; its abort signal now vetoes recovery before the session reload is claimed.
+  [Recovery postmortem](../postmortems/261005g-an-address-and-a-reload-request-are-not-a-loads-lifetime.md).
+- Stage C: settled aims survived reflow at unchanged `scrollY`, and Diagram kept a numeric aim
+  after its block order changed. A later press now checks the settled target's layout, and Diagram
+  drops aims when its block mapping or picture changes. This extends the accepted pixel rule;
+  unfinished jumps, rapid touch and clamped ends retain their aims.
+  [Navigation postmortem](../postmortems/261005g-a-navigation-aim-outlives-the-layout-that-made-its-row-true.md).
+- Stage B needed no code change. Mutating its ingress fix and independent geometry guard made the
+  relevant tests fail; the original code was restored.
+
+The earlier Stage A Progress decision to return immediately after a requested reload is superseded
+by this review fix. Browser checks and the complete database-backed suite remain to be run in an
+environment with network access. Nothing was committed during the review.
+
+**Wider server finding, reported only:** `src/public/dto.ts` § `publicTree` spreads
+`node.children` before the public response reaches the client. Calling the real `publicArticle`
+with a missing root or inner list threw `TypeError: node.children is not iterable`; its complete-tree
+control returned two nodes. The public route converts that exception to HTTP 500. Thus the client
+visitor tests prove safety for a delivered malformed payload, not an end-to-end visitor read from
+malformed storage. This and the already-noted `src/section-path.ts` server Skim walker remain outside
+the client stage's fix.

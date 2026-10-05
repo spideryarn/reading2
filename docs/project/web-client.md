@@ -121,8 +121,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
   `/build.json` whether a different build is live and reloads once if so, because a copy opened from
   a home-screen icon outlives every deploy. Two callers: `src/web/LazyPage.tsx` for a route's code,
-  and `src/web/maths.ts` § `renderArticleMaths` for temml, which waits for the answer before it
-  hands the article back.
+  and `src/web/maths.ts` § `renderArticleMaths` for temml, which waits for the answer and the shared
+  `RELOAD_GRACE_MS` when a reload was requested before handing the article back. The maths load's
+  abort signal also vetoes a pending check when a retry or reader change keeps the same address.
 - **`src/web/lib/own-label.ts` § `ownLabel`, `plainWords`** — a table read by a value the server
   sent (a kind, a relation, a provider): answers only for a key the table itself holds, so a value
   from a newer server, or `__proto__`, is `undefined` and the caller names the fallback. A bare

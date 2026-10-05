@@ -64,7 +64,7 @@ import { Link } from "./Link.js";
 import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 import { LIBRARY_HREF } from "./router.js";
-import { reloadIfStale, reloadPage } from "./stale-shell.js";
+import { RELOAD_GRACE_MS, reloadIfStale, reloadPage } from "./stale-shell.js";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -190,8 +190,6 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
  * **The original error is what is rethrown**, always — the check failing is
  * not the failure the boundary should report.
  */
-const RELOAD_GRACE_MS = 5000;
-
 async function orReloadIfStale(err: unknown): Promise<never> {
   let leaving = false;
   try {

@@ -72,7 +72,7 @@ import { findMathSpans, MATHS_SKIP_TAGS, temmlRenderer, type RenderTex } from ".
 import type { Article, Block } from "../types.js";
 import { openExternalLinksInNewTab } from "./external-links.js";
 import { sanitizeBlockHtml } from "./sanitize.js";
-import { reloadIfStale } from "./stale-shell.js";
+import { RELOAD_GRACE_MS, reloadIfStale } from "./stale-shell.js";
 
 /* The provenance mark this module writes onto a block it drew maths into, and
    the one question anybody else asks of it — in a module of their own, so a
@@ -226,11 +226,15 @@ export function renderBlockMaths(html: string, render: RenderTex): string {
  *  - **It is awaited before the article is handed back.** Nothing of the
  *    article is on screen yet, so there is nothing to type into. Handed back
  *    first, the reader could start a comment or a criterion, which
- *    `safeToReload` does not know about, and the reload would land on it.
+ *    `safeToReload` does not know about, and the reload would land on it. A
+ *    requested reload gets the lazy routes' grace period too: asking the
+ *    browser to leave does not mean it has already replaced this document.
  *  - **A load whose signal is already aborted asks nothing.** The import goes
  *    on after the reader has left, and a check begun then would read the
  *    address of the page they went to and could reload that one. Leaving
- *    while the check is pending is `reloadIfStale`'s own address comparison.
+ *    while the check is pending is guarded by both the signal and
+ *    `reloadIfStale`'s address comparison, because a different reader or a
+ *    retry can replace the load without changing the address.
  *  - **Only the default loader gets it by default.** A caller that passes its
  *    own `load` passes `recover` too if it wants one.
  *
@@ -241,12 +245,14 @@ export async function renderArticleMaths(
   opts: {
     load?: () => Promise<RenderTex>;
     signal?: AbortSignal;
-    /** What to try when `load` rejects. Resolves once it has asked, whatever the answer. */
-    recover?: () => Promise<unknown>;
+    /** What to try when `load` rejects. `true` means a reload was requested. */
+    recover?: (signal?: AbortSignal) => Promise<unknown>;
   } = {},
 ): Promise<Article> {
   const { load = loadTemml, signal } = opts;
-  const recover = opts.recover ?? (opts.load === undefined ? reloadIfStale : undefined);
+  const recover = opts.recover ?? (opts.load === undefined
+    ? (active?: AbortSignal) => reloadIfStale(undefined, active)
+    : undefined);
   const withMaths = new Set<Block>(article.blocks.filter((b) => blockHasMaths(b.html)));
   if (withMaths.size === 0 || signal?.aborted) return article;
 
@@ -256,7 +262,9 @@ export async function renderArticleMaths(
   } catch {
     if (recover && !signal?.aborted) {
       try {
-        await recover();
+        if (await recover(signal) === true && !signal?.aborted) {
+          await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
+        }
       } catch {
         /* The TeX stays, as it does for any load that failed. */
       }

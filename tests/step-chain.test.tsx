@@ -44,7 +44,7 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
 });
 
 const { scrollToTop } = await import("../src/web/scroll.js");
-const { beginJump, chainedRow, endChain, startChain, useArrowNav } = await import("../src/web/keynav.js");
+const { beginJump, chainedRow, endChain, measureRow, startChain, useArrowNav } = await import("../src/web/keynav.js");
 const { DiagramPanel } = await import("../src/web/DiagramPanel.js");
 const { buildSummaryTree } = await import("../src/web/tree.js");
 type NavPlan = import("../src/web/keynav.js").NavPlan;
@@ -83,14 +83,14 @@ const setScrollY = (y: number) =>
  */
 function layOut(tops: number[], max: number): void {
   const tbody = document.createElement("tbody");
-  tops.forEach((top, i) => {
+  tops.forEach((_top, i) => {
     const tr = document.createElement("tr");
     tr.dataset.block = id(i);
     const td = document.createElement("td");
     td.className = "text";
     tr.append(td);
     tr.getBoundingClientRect = () => {
-      const t = top - window.scrollY;
+      const t = tops[i]! - window.scrollY;
       return { top: t, bottom: t + 20, height: 20 } as DOMRect;
     };
     tbody.append(tr);
@@ -148,8 +148,12 @@ async function thePageMovesTo(y: number): Promise<void> {
   });
 }
 
+const tableResizes: (() => void)[] = [];
 class QuietResizeObserver {
-  observe() {}
+  constructor(private readonly changed: () => void) {}
+  observe(target: Element) {
+    if (target.id === "article") tableResizes.push(this.changed);
+  }
   unobserve() {}
   disconnect() {}
 }
@@ -159,6 +163,7 @@ let root: Root;
 
 beforeEach(() => {
   stepped.length = 0;
+  tableResizes.length = 0;
   frames = [];
   now = 1000;
   performance.now = () => now;
@@ -290,6 +295,21 @@ describe("↑ / ↓ over the real scroll", () => {
     expect(stepped).toEqual([id(2), id(8)]);
   });
 
+  it("measures a reflow after settlement even when scrollY is unchanged", async () => {
+    const tops = [...TALL];
+    await mount(tops, 20_000, 1000);
+    await key("ArrowDown");
+    await land();
+    const y = window.scrollY;
+    // Content above contracts; row 7 now stands at the same reading line.
+    tops.forEach((top, i) => { tops[i] = top - 5000; });
+    await act(async () => { for (const changed of tableResizes) changed(); });
+    expect(window.scrollY).toBe(y);
+    expect(measureRow(), "the reflow must change the row under the line").toBe(7);
+    await key("ArrowDown");
+    expect(stepped).toEqual([id(2), id(8)]);
+  });
+
   describe("at the end of the article, where the page cannot bring the row to the line (Sol P-8)", () => {
     /* Rows at 0, 200, 400 and 600 on a page that scrolls no further than 300.
        A step to row 2 settles at 300, where the row under the reading line is
@@ -354,13 +374,13 @@ describe("the Diagram's Previous / Next over the real scroll", () => {
    * Drift, whose ladder is one rung per body paragraph, with `onFollow` wired
    * the way Reader wires it: to the real `beginJump`, completion and all.
    */
-  async function mount(startY: number) {
+  async function mount(startY: number, tops = TALL, max = 20_000) {
     followed = [];
     const { summary, projection } = fixture();
-    layOut(TALL, 20_000);
+    layOut(tops, max);
     setScrollY(startY);
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify(projection), { status: 200 }));
-    await act(async () => {
+    const render = (blocks = BLOCKS) => {
       root.render(
         <DiagramPanel
           access={{ kind: "owner" }}
@@ -373,22 +393,24 @@ describe("the Diagram's Previous / Next over the real scroll", () => {
           onJump={() => {}}
           onFollow={(block, ended) => {
             followed.push(block);
-            beginJump(BLOCKS, block, () => {}, undefined, ended);
+            beginJump(blocks, block, () => {}, undefined, ended);
           }}
-          blocks={BLOCKS}
+          blocks={blocks}
           axis="spread"
           onAxis={() => {}}
           hue="section"
           onHue={() => {}}
         />,
       );
-    });
+    };
+    await act(async () => { render(); });
     // The projection's POST resolves, and the picture lays out on a frame.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     await frame(16);
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    return render;
   }
 
   const button = (which: "Previous" | "Next") => {
@@ -476,6 +498,102 @@ describe("the Diagram's Previous / Next over the real scroll", () => {
     await thePageMovesTo(7000);
     await press("Next");
     expect(followed.at(-1)).toBe(id(8));
+  });
+
+  it("measures a reflow after settlement even when scrollY is unchanged", async () => {
+    const tops = [...TALL];
+    await mount(1000, tops);
+    await press("Next");
+    await land();
+    const y = window.scrollY;
+    // Reader clears the old centred arrival when its layout changes.
+    const { clearArrivalAnchor } = await import("../src/web/scroll.js");
+    clearArrivalAnchor();
+    tops.forEach((top, i) => { tops[i] = top - 5500; });
+    await act(async () => { for (const changed of tableResizes) changed(); });
+    await frame(16);
+    expect(window.scrollY).toBe(y);
+    expect(measureRow(), "the reflow must change the row under the line").toBe(7);
+    await press("Next");
+    expect(followed).toEqual([id(2), id(8)]);
+  });
+
+  it("drops a numeric aim when re-extraction changes the block order at the same pixel", async () => {
+    const render = await mount(1000);
+    await press("Next");
+    await land();
+    const y = window.scrollY;
+    // Insert an existing final row ahead of the aim without moving its rect.
+    // The arrival anchor follows its stable id; the old numeric aim must not.
+    const body = document.querySelector("#article tbody")!;
+    body.prepend(body.lastElementChild!);
+    const reordered = [BLOCKS[11]!, ...BLOCKS.slice(0, 11)];
+    await act(async () => { render(reordered); });
+    expect(window.scrollY).toBe(y);
+    await press("Next");
+    expect(followed).toEqual([id(2), id(3)]);
+  });
+
+  it("updates the step buttons when reflow drops an aim but the measured row stays the same", async () => {
+    const tops = TALL.map((_, i) => i * 600);
+    await mount(600, tops, 700);
+    // Aim at the last rung without delivering the glide's frames. A touch on
+    // the bar stops that real glide before its click, preserving the aim.
+    for (let i = 0; i < 9; i++) await press("Next");
+    expect(followed.at(-1)).toBe(id(11));
+    await act(async () => {
+      button("Next").dispatchEvent(new Event("touchstart", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await frame(16);
+    expect(measureRow()).toBe(1);
+    expect(button("Next").getAttribute("aria-disabled")).toBe("true");
+
+    // Only the distant target reflows: the sampler invalidates the last-rung
+    // aim, but React cannot notice that ref change through an unchanged row.
+    const y = window.scrollY;
+    tops[11]! += 100;
+    await act(async () => { for (const changed of tableResizes) changed(); });
+    await frame(16);
+    expect(window.scrollY).toBe(y);
+    expect(measureRow()).toBe(1);
+    expect(button("Next").getAttribute("aria-disabled")).toBe("false");
+    await press("Next");
+    expect(followed.at(-1)).toBe(id(2));
+  });
+
+  it("updates the step buttons in the render that replaces the block map", async () => {
+    const tops = TALL.map((_, i) => i * 600);
+    const render = await mount(600, tops, 700);
+    for (let i = 0; i < 9; i++) await press("Next");
+    expect(followed.at(-1)).toBe(id(11));
+    await act(async () => {
+      button("Next").dispatchEvent(new Event("touchstart", { bubbles: true }));
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await frame(16);
+    expect(measureRow()).toBe(1);
+    expect(button("Next").getAttribute("aria-disabled")).toBe("true");
+
+    // Reorder two distant rows: the measured row stays put, but the numeric
+    // last-rung aim belongs to the block map the panel is replacing.
+    const body = document.querySelector("#article tbody")!;
+    body.append(body.children[10]!);
+    const reordered = [...BLOCKS.slice(0, 10), BLOCKS[11]!, BLOCKS[10]!];
+    await act(async () => { render(reordered); });
+    expect(measureRow()).toBe(1);
+    expect(button("Next").getAttribute("aria-disabled")).toBe("false");
+  });
+
+  it.each(["Next", "Previous"] as const)("keeps the clamped aim for a later %s", async (second) => {
+    const short = TALL.map((_, i) => i * 600);
+    await mount(600, short, 700);
+    await press("Next");
+    await land();
+    expect(window.scrollY).toBe(700);
+    await aLongRenderPasses();
+    await press(second);
+    expect(followed).toEqual([id(2), id(second === "Next" ? 3 : 1)]);
   });
 
   it("measures again once the page has moved to a pixel that is not ours", async () => {

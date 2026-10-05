@@ -398,9 +398,11 @@ movement. Instead `keynav.ts` remembers the row its own last jump was headed for
 there.
 
 **That aim stands while our own jump is unfinished, and after it ends for as long as the page is
-still at the pixel it ended on.** `scrollToBlock` reports how each jump ends, and the press that
-started it writes down `window.scrollY` then; the next press steps from the aim if the jump has not
-ended or the page is still exactly there, and measures otherwise. A wheel or a pointer still drops
+still at the pixel it ended on with the target row's layout unchanged.** `scrollToBlock` reports how
+each jump ends; `keynav.ts` § `Chain` records the offset and target layout then. A later press checks
+one target rectangle and the reading line before trusting a settled aim, because reflow can move
+rows without moving `scrollY`. A changed block mapping also drops the numeric aim. The next press
+measures when those facts no longer hold. A wheel or a pointer still drops
 it outright, as before. So:
 
 - a second press mid-glide steps from the aim (its own scroll cancels the first, which ends the

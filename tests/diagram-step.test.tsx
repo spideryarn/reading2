@@ -200,6 +200,7 @@ beforeEach(() => {
   jumped = [];
   followed = [];
   observers.length = 0;
+  vi.stubGlobal("CSS", { escape: (s: string) => s });
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   for (const [prop, value] of [
     ["clientWidth", SIZE.w],

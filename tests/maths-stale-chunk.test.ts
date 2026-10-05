@@ -16,8 +16,10 @@
  *  - **A load the reader has already left asks nothing** (P-2). The import
  *    goes on after the abort, and a check begun then would read the address of
  *    the page they went to.
- *  - **Leaving while the check is pending** is `reloadIfStale`'s own address
- *    comparison, exercised here through the real function.
+ *  - **Leaving while the check is pending** uses both the load's signal and
+ *    `reloadIfStale`'s address comparison, exercised through the real function.
+ *  - **A reload requested is not a document replaced**: the article remains
+ *    held through the lazy routes' grace period before the raw-TeX fallback.
  *
  * temml itself is mocked to fail, so the default loader is what rejects. The
  * timing cases inject a loader and a recovery they can hold open.
@@ -38,7 +40,7 @@ vi.mock("../src/web/stale-shell.js", async (importOriginal) => ({
 }));
 
 const { renderArticleMaths } = await import("../src/web/maths.js");
-const { reloadIfStale } = await vi.importActual<typeof import("../src/web/stale-shell.js")>(
+const { reloadIfStale, RELOADED_FOR_KEY } = await vi.importActual<typeof import("../src/web/stale-shell.js")>(
   "../src/web/stale-shell.js",
 );
 
@@ -102,20 +104,24 @@ function staleWorld(over: Partial<StaleShellDeps> = {}) {
   };
   return {
     reload,
-    recover: () => reloadIfStale(deps),
+    storage: deps.storage,
+    recover: (signal?: AbortSignal) => reloadIfStale(deps, signal),
     answer: () => asked.resolve(new Response(JSON.stringify(THEIR_STAMP), { status: 200 })),
   };
 }
 
 afterEach(() => {
   defaultRecovery.mockClear();
+  vi.useRealTimers();
 });
 
 describe("the default loader, when the chunk is gone", () => {
   it("asks whether a newer build is live, and hands back the article as it was", async () => {
     const a = withMaths();
-    expect(await renderArticleMaths(a)).toBe(a);
+    const stop = new AbortController();
+    expect(await renderArticleMaths(a, { signal: stop.signal })).toBe(a);
     expect(defaultRecovery).toHaveBeenCalledTimes(1);
+    expect(defaultRecovery).toHaveBeenCalledWith(undefined, stop.signal);
   });
 
   it("asks nothing for an article with no maths in it", async () => {
@@ -150,6 +156,24 @@ describe("a loader somebody passed in", () => {
 });
 
 describe("when the check runs, and what it holds back", () => {
+  it("holds the article while a requested reload starts, then releases it if navigation never starts", async () => {
+    vi.useFakeTimers();
+    defaultRecovery.mockResolvedValueOnce(true);
+    const a = withMaths();
+    let returned: Article | null = null;
+    const out = renderArticleMaths(a).then((article) => {
+      returned = article;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(defaultRecovery).toHaveBeenCalledTimes(1);
+    expect(returned, "a reload request is not an acknowledgement that this document was replaced").toBeNull();
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(returned).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    await out;
+    expect(returned).toBe(a);
+  });
+
   it("does not ask for a load the reader left before it failed", async () => {
     const stop = new AbortController();
     const loading = held<RenderTex>();
@@ -191,7 +215,9 @@ describe("when the check runs, and what it holds back", () => {
     });
     await settle();
     expect(world.reload).not.toHaveBeenCalled();
+    vi.useFakeTimers();
     world.answer();
+    await vi.advanceTimersByTimeAsync(5000);
     await out;
     expect(world.reload).toHaveBeenCalledTimes(1);
   });
@@ -214,6 +240,25 @@ describe("when the check runs, and what it holds back", () => {
     world.answer();
     expect(await out).toBe(a);
     expect(world.reload).not.toHaveBeenCalled();
+  });
+
+  it("does not reload an abandoned load when the reader or attempt changed at the same address", async () => {
+    const stop = new AbortController();
+    const world = staleWorld();
+    const a = withMaths();
+    const out = renderArticleMaths(a, {
+      load: async () => {
+        throw new Error("chunk gone");
+      },
+      signal: stop.signal,
+      recover: world.recover,
+    });
+    await settle();
+    stop.abort();
+    world.answer();
+    expect(await out).toBe(a);
+    expect(world.reload).not.toHaveBeenCalled();
+    expect(world.storage?.getItem(RELOADED_FOR_KEY), "an abandoned load must not spend the session's reload").toBeNull();
   });
 
   it("does not reload over words the reader has not sent", async () => {

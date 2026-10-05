@@ -79,6 +79,9 @@ export const RELOADED_FOR_KEY = "spy.reloaded-for-build";
 /** How long `/build.json` gets. It is a static file of a few hundred bytes. */
 const CHECK_TIMEOUT_MS = 4000;
 
+/** Keep failed content out of reach while the requested reload starts. */
+export const RELOAD_GRACE_MS = 5000;
+
 /**
  * How often the watcher asks while the page is visible. Greg, 2026-10-04
  * (spya-ym9dum): *"poll every 15 minutes or so"*. Approximate by nature: iOS
@@ -237,16 +240,20 @@ export function claimReload(storage: StaleShellDeps["storage"], build: string): 
  * means the reload call returned without throwing; the caller still needs a
  * fallback because browsers do not acknowledge that navigation began.
  */
-export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promise<boolean> {
+export async function reloadIfStale(
+  deps: StaleShellDeps = browserDeps(),
+  /** A caller's load can be replaced without the address changing. */
+  signal?: AbortSignal,
+): Promise<boolean> {
   const { mine, storage } = deps;
-  if (mine === null || storage === null) return false;
+  if (signal?.aborted || mine === null || storage === null) return false;
 
   const failedAt = deps.address();
   const theirs = await serverBuild(deps.fetch, deps.timeoutMs);
   if (theirs === null || theirs === mine) return false;
   /* Before the note is written, not only before the reload: a note left for a
      page the reader walked away from would spend the one reload on nothing. */
-  if (deps.address() !== failedAt) return false;
+  if (signal?.aborted || deps.address() !== failedAt) return false;
   /* The page that failed has nothing to lose, but the app around it may: Chat
      words on an article, a Feedback draft, an upload. Then the reader gets the
      message and its Reload button instead, and the one reload is not spent. */

@@ -71,7 +71,11 @@ Siblings found by grepping `src/web` for the shape:
   unfinished, and after it ends for as long as the page is still at the pixel it ended on — the
   anchor's rule above, applied to the chain (`keynav.ts` § `Chain`). A browser measurement found 0
   repeats in 436 two-press trials, so this sibling was fixed for its class, not for a symptom
-  anyone saw.
+  anyone saw. **Code review, also 2026-10-05:** an unchanged pixel alone does not establish an
+  unchanged layout. Settled aims now also check the target row's layout at the next press, and
+  Diagram drops numeric aims when its block mapping or picture changes;
+  [the review postmortem](261005g-a-navigation-aim-outlives-the-layout-that-made-its-row-true.md)
+  records the controlled reproductions.
 - **A neighbour of a different class, found by the same browser check:** the row Structure marks as
   current (`useColumnContext`) never asked the anchor at all, so on a long article it marked the
   row before the one clicked from the moment of landing. The report read as one symptom ("`?at=`

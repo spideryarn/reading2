@@ -612,20 +612,26 @@ const PART_HUES = 8;
  * are the ones moving it. The next measurement overwrites it either way, so an
  * interrupted jump corrects itself rather than leaving a lie on screen.
  */
-function useReaderRow(enabled: boolean): [number | null, (row: number) => void] {
-  const [row, setRow] = useState<number | null>(null);
+function useReaderRow(enabled: boolean, chain: { current: Chain | null }): [number | null, (row: number) => void] {
+  const [position, setPosition] = useState<{ row: number | null }>({ row: null });
   useEffect(() => {
     if (!enabled) {
       /* Back to `?at=` rather than the last row measured before the toggle:
          a stale number is worse than a coarse one, because nothing later can
          tell it is stale. */
-      setRow(null);
+      setPosition((previous) => previous.row === null ? previous : { row: null });
       return;
     }
     let frame = 0;
     const measure = () => {
       frame = 0;
-      setRow(measureRow());
+      const invalidated = chain.current !== null && chainedRow(chain.current, true) === null;
+      if (invalidated) chain.current = null;
+      const next = measureRow();
+      /* Losing an aim changes canStep even if the measured row repeats (a
+         cancelled or clamped aim can be ahead of it). A fresh position then
+         renders that change; ordinary unchanged samples retain their object. */
+      setPosition((previous) => !invalidated && previous.row === next ? previous : { row: next });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -646,17 +652,17 @@ function useReaderRow(enabled: boolean): [number | null, (row: number) => void] 
       ro?.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [enabled]);
+  }, [enabled, chain]);
   /* Gated on `enabled` so a press on a picture reading `?at=` does not set state
      nothing will read — the return below would throw the value away, and the
      render would happen anyway. */
   const assume = useCallback(
     (next: number) => {
-      if (enabled) setRow(next);
+      if (enabled) setPosition((previous) => previous.row === next ? previous : { row: next });
     },
     [enabled],
   );
-  return [enabled ? row : null, assume];
+  return [enabled ? position.row : null, assume];
 }
 
 export function DiagramPanel({
@@ -1016,7 +1022,13 @@ export function DiagramPanel({
    * its own last press aimed at. State is a frame behind and a chain is not
    * state at all.
    */
-  const [measuredRow, assumeRow] = useReaderRow(drawingPoints);
+  /* A row number belongs to this article and picture's ladder. A fresh holder
+     makes a replaced mapping visible to render immediately; the sampler also
+     reattaches and measures the new rows. Older endings still update only the
+     individual press object they captured. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: these are invalidation triggers — a numeric aim belongs to one block map and picture, even when scrollY is unchanged.
+  const chain = useMemo<{ current: Chain | null }>(() => ({ current: null }), [blocks, root, kind]);
+  const [measuredRow, assumeRow] = useReaderRow(drawingPoints, chain);
   const readerRow = measuredRow ?? atRow;
 
   /**
@@ -1249,7 +1261,6 @@ export function DiagramPanel({
    * and this cannot: here the press *is* a pointerdown, so dropping on it would
    * clear the chain a moment before every click that sets one.
    */
-  const chain = useRef<Chain | null>(null);
   useEffect(() => {
     /**
      * **Anything the reader does that is not another press of these buttons
@@ -1284,8 +1295,8 @@ export function DiagramPanel({
         window.removeEventListener(type, drop);
       }
     };
-  }, []);
-  const stepFrom = (): number => chainedRow(chain.current) ?? measureRow();
+  }, [chain]);
+  const stepFrom = (): number => chainedRow(chain.current, true) ?? measureRow();
 
   /**
    * One step through the article, and the picture follows because it is drawn
@@ -1312,7 +1323,7 @@ export function DiagramPanel({
     assumeRow(row);
     /* This press's own object, so that the older jump this one is about to
        cancel ends *its* chain and not this one (keynav.ts § `Chain`). */
-    const mine = startChain(row);
+    const mine = startChain(row, stop.blockId);
     chain.current = mine;
     onFollow(stop.blockId, () => endChain(mine));
   };
@@ -1328,12 +1339,13 @@ export function DiagramPanel({
    * by its own rule (keynav.ts § `Chain`), so a Previous that had just stepped
    * off the first rung went on announcing itself unavailable while working,
    * and a Next that had just landed on the last rung went on looking live
-   * while doing nothing — for as long as the reader kept pressing. **The same
-   * `chainedRow` the press reads**, so the look and the press cannot disagree
-   * about whether the aim still stands. Reading a ref in render is ordinarily
-   * how you get a value nothing re-renders for; here the press that writes it
-   * also calls `setRoving`, so a render always follows, and the page moving
-   * away re-renders through the measured row.
+   * while doing nothing — for as long as the reader kept pressing. **Render
+   * reads the cached pixel answer; a press also validates the target's layout.**
+   * The existing row sampler validates that layout outside render and publishes
+   * a fresh position when it discards an aim, even if the measured row has not
+   * changed. The press that writes an aim also updates the mark and roving
+   * state. The visual answer can still lag a change until the sampler runs;
+   * the press checks the page immediately without adding layout reads here.
    */
   const canStep = (dir: -1 | 1) =>
     starts.length > 0 && stepTarget(starts, chainedRow(chain.current) ?? rowForRung, dir) !== null;

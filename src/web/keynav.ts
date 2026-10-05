@@ -57,6 +57,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
 import { isFolded } from "./fold.js";
+import { blockRow } from "./rows.js";
 
 /**
  * The attribute a zone wears to say "arrows here mean this level".
@@ -97,7 +98,9 @@ const NAV_DEPTH_ATTR = "data-nav-depth";
  *    jump: the pixel changes, and the next press measures.
  *
  * It is the arrival anchor's rule (scroll.ts § `ourScrollY`) applied to the
- * chain, and like it nothing here expires.
+ * chain, and like it nothing here expires. A settled aim also belongs to the
+ * target row's layout: presses check its rectangle and reading line, since
+ * reflow can change the row under that line without changing scrollY.
  *
  * **This was a timer until 2026-10-05** (`CHAIN_MS`, the glide plus 400 ms). A
  * timer and the glide's frames are separate callbacks, so under a long render
@@ -116,11 +119,14 @@ export interface Chain {
   readonly row: number;
   /** `window.scrollY` when that press's jump ended, or `null` while it has not. */
   endedAtY: number | null;
+  readonly blockId?: BlockId;
+  /** The target's layout when the jump ended; read again only at a press or measurement. */
+  layout?: { element: HTMLElement; top: number; bottom: number; line: number };
 }
 
 /** A press has aimed at `row` and its jump has not ended. */
-export function startChain(row: number): Chain {
-  return { row, endedAtY: null };
+export function startChain(row: number, blockId?: BlockId): Chain {
+  return { row, endedAtY: null, ...(blockId === undefined ? {} : { blockId }) };
 }
 
 /**
@@ -130,12 +136,32 @@ export function startChain(row: number): Chain {
  */
 export function endChain(chain: Chain): void {
   chain.endedAtY = window.scrollY;
+  const element = chain.blockId === undefined ? null : blockRow(chain.blockId);
+  if (element) {
+    const { top, bottom } = element.getBoundingClientRect();
+    chain.layout = { element, top, bottom, line: readingLine() };
+  }
 }
 
-/** The row to step from if the last press's aim still stands, or `null`: measure. */
-export function chainedRow(chain: Chain | null): number | null {
+/**
+ * The row to step from, or `null`: measure. `checkLayout` is for a press or a
+ * position sampler; render reads the cached answer without layout reads.
+ */
+export function chainedRow(chain: Chain | null, checkLayout = false): number | null {
   if (chain === null) return null;
-  return chain.endedAtY === null || window.scrollY === chain.endedAtY ? chain.row : null;
+  if (chain.endedAtY === null) return chain.row;
+  if (window.scrollY !== chain.endedAtY) return null;
+  /* Pixels alone do not identify a reading position: a font, image, fold or
+     width change can move rows without moving scrollY. One target rect at a
+     press is enough to invalidate that aim; render's canStep uses the cached
+     answer, and Diagram's row sampler also checks it before updating state. */
+  if (checkLayout && chain.blockId !== undefined) {
+    const held = chain.layout;
+    if (!held?.element.isConnected || isFolded(chain.blockId)) return null;
+    const { top, bottom } = held.element.getBoundingClientRect();
+    if (top !== held.top || bottom !== held.bottom || readingLine() !== held.line) return null;
+  }
+  return chain.row;
 }
 
 /**
@@ -623,7 +649,7 @@ export function useArrowNav(
         const id = blocks[row]?.id;
         return id === undefined || !isFolded(id);
       });
-      const target = stepTarget(starts, chainedRow(chain.current) ?? measureRow(), dir);
+      const target = stepTarget(starts, chainedRow(chain.current, true) ?? measureRow(), dir);
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
       // keypress goes back to the browser, so ↓ on the last paragraph still
@@ -633,7 +659,7 @@ export function useArrowNav(
 
       /* This press's own object, so that the older jump this scroll is about
          to cancel ends *its* chain and not this one. */
-      const mine = startChain(target);
+      const mine = startChain(target, block.id);
       chain.current = mine;
       scrollToBlock(block.id, "smooth", () => endChain(mine));
     };
