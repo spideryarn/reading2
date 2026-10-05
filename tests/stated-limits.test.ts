@@ -58,6 +58,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => ({
     shown.push(ids.length);
     return {
       onText: () => {},
+      attempts: () => 1,
       finalMessage: async () => messageOf(isRootCall(params) ? ROOT_ANSWER : sectionsAnswer(ids)),
     };
   },

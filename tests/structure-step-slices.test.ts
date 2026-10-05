@@ -44,6 +44,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => ({
     calls.push(call);
     return {
       onText: () => {},
+      attempts: () => 1,
       finalMessage: async () => {
         const out = await respond(call);
         return typeof out === "string" ? messageOf(out) : out;
@@ -342,21 +343,29 @@ describe("a top-level section that came back undivided", () => {
     expect(out.wholeDocumentCalls).toBe(4);
   });
 
-  it("is kept when the refill fails, or comes back as one section", async () => {
+  it("gives D when a started refill fails or contributes no section", async () => {
     for (const refill of [
       () => {
         throw new Error("the refill call failed");
       },
       () => ROOT_ONLY,
-      (call: Call) => sectionsAnswer(call.ids, 500, true),
     ]) {
       calls = [];
       undivided(130, refill);
       const out = await run();
-      expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+      expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "slice-failed" });
       expect(refills(130), "a refill is asked for once, never re-asked").toHaveLength(1);
-      expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
+      expectBoundedTree(BLOCKS, out.parts.tree);
+      expect(calls.some((c) => c.root)).toBe(false);
     }
+  });
+
+  it("is kept when the refill returns one valid section, including the same giant section", async () => {
+    undivided(130, (call) => sectionsAnswer(call.ids, 500, true));
+    const out = await run();
+    expect(out.source).toEqual({ by: "slices", slices: 3, refilled: 0, reasked: 0 });
+    expect(topLevel(out.parts.tree)[0]!.title).toBe("Undivided");
+    expect(refills(130)).toHaveLength(1);
   });
 
   it("is not refilled a second time when the refill is itself undivided", async () => {
@@ -406,8 +415,8 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     const out = await run({ blocks: long });
     expect(out.source).toMatchObject({ by: "headings", slicesFailed: "slice-failed" });
     expect(calls).toHaveLength(SLICE_CONCURRENCY);
-    /* Seven answers came back and are counted; the one that threw has no usage to read. */
-    expect(out.wholeDocumentCalls).toBe(SLICE_CONCURRENCY - 1);
+    /* All eight calls count; only seven returned usage. */
+    expect(out.wholeDocumentCalls).toBe(SLICE_CONCURRENCY);
   }, 60_000);
 
   it("when a slice is refused or cut short, which is paid for and not asked again", async () => {
@@ -430,7 +439,7 @@ describe("a failure gives the headings tree, and says what was spent", () => {
     const out = await run();
     expect(out.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "root-call-failed" });
     expectBoundedTree(BLOCKS, out.parts.tree);
-    expect(out.wholeDocumentCalls).toBe(3);
+    expect(out.wholeDocumentCalls).toBe(4);
     expect(out.inputTokens).toBe(3 * USAGE.input_tokens);
   });
 
@@ -568,8 +577,8 @@ describe("the deadline (review F16)", () => {
     expect(calls[1]!.signal!.aborted).toBe(true);
     expect(stop.signal.aborted).toBe(false);
     expect(Date.now()).toBeLessThan(deadlineAt);
-    /* The two that answered are counted; the aborted one has no usage to read. */
-    expect(out!.wholeDocumentCalls).toBe(2);
+    /* All three calls count; the aborted one has no usage to read. */
+    expect(out!.wholeDocumentCalls).toBe(3);
   });
 
   it("skips a refill there is no time for, and still finishes the tree", async () => {

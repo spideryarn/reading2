@@ -308,7 +308,9 @@ export function acceptRoot(raw: string, question: SliceDeps["question"]): RootAn
   const words = gist.split(/\s+/).filter(Boolean).length;
   if (words === 0 || words > ROOT_GIST_MAX_WORDS) throw new Error(`The root gist is ${words} words.`);
   const kept = question({ title: "", gist, range: ["", ""], ...(typeof answer.question === "string" ? { question: answer.question } : {}) }, 0);
-  if (kept === undefined) throw new Error("The root question is missing, or is the gist asked again.");
+  if (kept === undefined || kept !== answer.question?.trim()) {
+    throw new Error("The root question is missing, unfinished, or is the gist asked again.");
+  }
   return { gist, question: kept };
 }
 
@@ -343,7 +345,7 @@ export interface SliceDeps {
 
 /** What this attempt asked a model for, whether or not a tree came of it. */
 export interface SlicesSpend {
-  /** Answers received and paid for: slices, re-asks, refills and the root. */
+  /** Requests started, including transport retries and calls without a returned answer. */
   calls: number;
   /** Answers read back from a checkpoint instead of bought. */
   resumed: number;
@@ -415,6 +417,11 @@ export async function runSlices(opts: {
   /** Set on the first failure: nothing new is started after it. */
   let stopped = false;
   let callError: unknown;
+  let failure: SlicesFailure | null = null;
+  const fail = (not: NotAsked, as: SlicesFailure): void => {
+    stopped = true;
+    if (not.why !== "stopped") failure ??= not.why === "out-of-time" ? "out-of-time" : as;
+  };
 
   /**
    * One question: its checkpoint, then up to `attempts` calls. Each call runs
@@ -428,9 +435,19 @@ export async function runSlices(opts: {
     capMs: number;
     thenMs: number;
     attempts: 1 | 2;
+    /** A required request stops admission at the failure site, before workers resume. */
+    failure: "slice-failed" | "root-call-failed";
+    /** A refill may be omitted before it starts when the cap cannot fit. */
+    skipIfShort?: boolean;
     text: (message: Anthropic.Message) => string;
     accept: (answer: string) => T;
   }): Promise<Asked<T>> => {
+    const refused = (why: NotAsked["why"]): NotAsked => {
+      const not: NotAsked = { ok: false, why };
+      fail(not, q.failure);
+      return not;
+    };
+    if (signal?.aborted) return { ok: false, why: "stopped" };
     const key = checkpointKey(q.canonical);
     try {
       const entry = (await checkpoints.read<Partial<Entry>>(slug, NAMESPACE, [key])).get(key);
@@ -448,8 +465,11 @@ export async function runSlices(opts: {
       plog.warn({ slug, key, err }, "could not read a slice checkpoint; asking again");
     }
     for (let attempt = 1; ; attempt++) {
-      if (stopped) return { ok: false, why: "stopped" };
-      if (Date.now() + q.capMs + q.thenMs > deadline) return { ok: false, why: "out-of-time" };
+      if (stopped || signal?.aborted) return { ok: false, why: "stopped" };
+      if (Date.now() + q.capMs + q.thenMs > deadline) {
+        return q.skipIfShort ? { ok: false, why: "out-of-time" } : refused("out-of-time");
+      }
+      const expiresAt = Date.now() + q.capMs;
       const own = new AbortController();
       const onStop = (): void => own.abort();
       if (signal?.aborted) own.abort();
@@ -457,37 +477,46 @@ export async function runSlices(opts: {
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
+        stopped = true;
+        failure ??= "out-of-time";
         own.abort();
       }, q.capMs);
       let message: Anthropic.Message;
+      let call: ReturnType<typeof streamMessage> | undefined;
       try {
-        message = await streamMessage("structure", q.params, { power, signal: own.signal }).finalMessage();
+        call = streamMessage("structure", q.params, { power, signal: own.signal });
+        message = await call.finalMessage();
       } catch (err) {
         callError ??= err;
         plog.warn({ slug, key, err: anthropicCallFailed(err), timedOut }, "a slice call did not come back");
-        return { ok: false, why: timedOut ? "out-of-time" : "failed" };
+        return refused(timedOut ? "out-of-time" : "failed");
       } finally {
+        if (call !== undefined) spend.calls += call.attempts();
         clearTimeout(timer);
         signal?.removeEventListener("abort", onStop);
       }
-      /* Counted before the answer is read: a refusal or a truncation is paid for too. */
-      spend.calls += 1;
+      /* Usage precedes acceptance: a refusal, truncation or late answer still spent tokens. */
       spend.usage.input_tokens += message.usage.input_tokens;
       spend.usage.output_tokens += message.usage.output_tokens;
+      const late = timedOut || Date.now() > expiresAt;
+      if (late) {
+        stopped = true;
+        failure ??= "out-of-time";
+      }
       let answer: string;
       try {
         answer = q.text(message);
       } catch (err) {
         /* Refused or cut short. Asked again it would be again, as for the whole-document call. */
         plog.warn({ slug, key, err }, "a slice answer was refused or cut short");
-        return { ok: false, why: "failed" };
+        return refused(late ? "out-of-time" : "failed");
       }
       let value: T;
       try {
         value = q.accept(answer);
       } catch (err) {
         plog.warn({ slug, key, err, attempt }, "a slice answer did not pass");
-        if (attempt >= q.attempts) return { ok: false, why: "failed" };
+        if (late || attempt >= q.attempts) return refused(late ? "out-of-time" : "failed");
         reasked += 1;
         continue;
       }
@@ -496,7 +525,7 @@ export async function runSlices(opts: {
       } catch (err) {
         plog.warn({ slug, key, err }, "could not save a slice checkpoint; a later attempt will ask again");
       }
-      return { ok: true, value };
+      return late ? refused("out-of-time") : { ok: true, value };
     }
   };
 
@@ -515,6 +544,8 @@ export async function runSlices(opts: {
       capMs: SLICE_CALL_CAP_MS,
       thenMs: ROOT_CALL_CAP_MS,
       attempts,
+      failure: "slice-failed",
+      skipIfShort: attempts === 1,
       text: (message) => finishedText(message, "table of contents", request.maxTokens, request.answerTokens, deps.headroom),
       accept: (answer) => {
         const { root } = deps.parse(answer, blocks);
@@ -524,11 +555,6 @@ export async function runSlices(opts: {
     });
   };
 
-  let failure: SlicesFailure | null = null;
-  const fail = (not: NotAsked, as: SlicesFailure): void => {
-    stopped = true;
-    if (not.why !== "stopped") failure ??= not.why === "out-of-time" ? "out-of-time" : as;
-  };
   /** Every way out. A reader's Stop wins over whatever else happened. */
   const done = (out: Stitched | null, slices: number): SlicesOutcome => {
     if (signal?.aborted) throw anthropicCallFailed(callError ?? signal.reason);
@@ -558,16 +584,21 @@ export async function runSlices(opts: {
         fail(got, "slice-failed");
         return null;
       }
-      opts.onProgress?.(`${++finished} of ${plan.length} parts of the table of contents`);
+      try {
+        opts.onProgress?.(`${++finished} of ${plan.length} parts of the table of contents`);
+      } catch (err) {
+        /* Progress is an observer. It cannot end a paid pool before its peers settle. */
+        plog.warn({ slug, err }, "could not report slice progress");
+      }
       return got.value;
     }),
   );
   if (stopped || perSlice.some((s) => s === null)) return done(null, plan.length);
   const promoted = perSlice.flatMap((s) => s ?? []);
 
-  /* Refills: once each, no re-ask, and skipped rather than failed when time is
-     short. A refill that fails, or comes back as one section, keeps the
-     original; the tree and labels checks decide whether that will do. */
+  /* Refills: once each, no re-ask, and skipped before admission when time is
+     short. A valid single section keeps the original. A failed started refill
+     stops admission and gives D, just like a failed slice. */
   const index = new Map(body.map((b, i) => [b.id, i]));
   const refills = await inPool(
     SLICE_CONCURRENCY,
@@ -579,7 +610,7 @@ export async function runSlices(opts: {
   );
   const refilled = refills.filter((r) => r.length > 1).length;
   const sections = refills.flat();
-  if (signal?.aborted) return done(null, plan.length);
+  if (stopped || signal?.aborted) return done(null, plan.length);
 
   const title = opts.bounded.nodes[opts.bounded.rootId]!.title;
   const rootParams = rootRequest(title, sections);
@@ -589,6 +620,7 @@ export async function runSlices(opts: {
     capMs: ROOT_CALL_CAP_MS,
     thenMs: 0,
     attempts: 2,
+    failure: "root-call-failed",
     text: (message) => finishedText(message, "table of contents root", ROOT_MAX_TOKENS, ROOT_ANSWER_TOKENS),
     accept: (answer) => acceptRoot(answer, deps.question),
   });

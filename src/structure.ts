@@ -2397,8 +2397,8 @@ export interface StructureRun {
    * for again — `REASK_STRUCTURE`. Logged at every value, because a re-ask that
    * has quietly become the common case doubles the stage's bill and its wait.
    *
-   * On the slices path it is every answer received: slices, re-asks, refills
-   * and the root, whether or not a tree came of them.
+   * On the slices path it is every request started: slices, re-asks, refills,
+   * the root and transport retries, including failed and aborted calls.
    */
   wholeDocumentCalls: number;
   /**
@@ -2622,7 +2622,7 @@ export async function generateStructure(opts: {
     });
     /* The deepening wave is not run on this path. It is off for every reader. */
     const spent: StructureSpend = {
-      wholeDocumentResumed: sliced.spend.calls === 0 && sliced.spend.resumed > 0,
+      wholeDocumentResumed: sliced.ok && sliced.spend.calls === 0 && sliced.spend.resumed > 0,
       wholeDocumentCalls: sliced.spend.calls,
       wholeDocumentUsage: sliced.spend.usage,
       deepen: null,

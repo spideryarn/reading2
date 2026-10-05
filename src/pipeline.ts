@@ -2948,7 +2948,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           wholeDocumentResumed: run.wholeDocumentResumed,
           /* 2 is an answer that did not become a tree, asked for again —
              src/structure.ts § the re-ask. Logged at 1 too, so a rate can be read.
-             On the slices path it counts every answer received. */
+             On the slices path it counts every request started, including failures and transport retries. */
           wholeDocumentCalls: run.wholeDocumentCalls,
           /* **What the deepening wave did**, and `null` where nobody asked for
              one — which is every article until stage 8 moves the flag
