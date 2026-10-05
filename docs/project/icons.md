@@ -229,7 +229,7 @@ Going forwards, then:
 
 - **A control that takes you somewhere** — into another mode, to a whole list — is an icon button,
   and its words live in its tooltip and its `aria-label`. For a mode, use **that mode's own icon**
-  from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
+  from the bar (`MODE_ICON` in [`mode-icons.ts`](../../src/web/mode-icons.ts)), so the button looks like where
   it goes: Skim's stop card opens Glossary with `BookA` and Ideas with `Lightbulb` (`OpenIn`
   in [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx)).
 - **Every icon has a tooltip.** No bare icon, anywhere. If the control has a keyboard shortcut, the

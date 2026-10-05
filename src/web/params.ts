@@ -349,6 +349,32 @@ export function marginInSearch(search: string): boolean {
 export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * **Which conversations Chat's list is narrowed to, by where they came from**
+ * — `?chatfrom=chats`, `debate`, `remember` or `passage`. Since 2026-10-05
+ * the list shows every conversation about the article (report `spya-hyfqkq`,
+ * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
+ * D5), and this is its filter.
+ *
+ * **No parser default**: absent is *All*. An unknown word parses to `null`,
+ * which is All too. A word whose source this article has no conversation from
+ * is replaced with All by the band, once the list has answered
+ * (`ConversationBand`), so a filter cannot hide everything with nothing on
+ * screen to say why. `replace`, like `?debatethread=`: it narrows a list
+ * rather than moving to a new view.
+ *
+ * `remember` is one word for Recall, Tutorial and Explore together. Which
+ * conversation belongs to which word is `chatFrom` in thread-source.ts; the
+ * words are here so this eager file does not import that one.
+ */
+export const CHAT_FROM_WORDS = ["chats", "debate", "remember", "passage"] as const;
+export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
+
+export const chatFromParam = createParser<ChatFrom>({
+  parse: (v) => (CHAT_FROM_WORDS.includes(v as ChatFrom) ? (v as ChatFrom) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
+
+/**
  * Which glossary term is selected, or none for a list nobody has picked from.
  *
  * A term id is minted by `mintId` (src/glossary.ts), so it is a block id by

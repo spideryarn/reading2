@@ -2,10 +2,10 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05: **a plan, reviewed, not built.** Stage 0 (the line in Structure) is
-being built separately and is not on `dev` as this is written. The paid eval in stage 2 is
-blocked: the box's OpenRouter key has no room left this
-month (`limit_remaining` 0), and the Overseer has taken that to Greg.
+Status as of 2026-10-05, evening: **stage 0 (the line in Structure) is on `dev`; the eval
+(stage 2) has run and is written up; nothing else is built.** Evidence: `src/web/StructureNotice.tsx`
+exists and `StructureBand` mounts it; `evals/results/long-structure-2026-10-05/matrix/` holds the
+cells and judgements. Stages 1a, 1b, 3, 4 and 5 are not started. Not deployed by this work.
 
 Another plan shares this name's prefix,
 `261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md`, by the
@@ -346,6 +346,35 @@ bar, stages 1a and 1b are the fix and stage 3 is not built.
 
 Written up under `docs/investigations/` before anything is built from it.
 
+### Result: stage 2, run 2026-10-05
+
+[The investigation](../investigations/261005c-long-document-structure-top-level-first-against-slices-and-one-call.md).
+$32.31 in the ledgers, about $32.4 in all, of the $40 cap. One run per cell on six documents (the
+joined seventh was cut off by the cap partway through its first cell, and there was no room for
+a second run), so a pilot. GPT Sol checked the write-up against the raw files:
+[stands with corrections](261005j-long-structure-eval-check-sol.md), all made, and they narrowed
+three of the conclusions below from my first draft.
+
+- **B against A, past the line: B, on the one book tried.** Both judges, on both variants of one
+  story collection, top level and summaries. Same time to finish, top level in half the time,
+  about half as much again in cost.
+- **B against one call, under the line: mixed.** Better and nearly twice as fast on the 160-page
+  paper at nearly twice the price; the judges split on Moby-Dick; worse on a short page.
+- **C against B: not shown to pay, and not cleanly tested.** No faster to the finished tree and
+  dearer; it lost two of three direct comparisons, one of them on its outline and not on its
+  summaries. It goes to the back of the queue, not in the bin.
+- **Neither bar in § What would decide it was met cleanly, because of two things the plan did
+  not expect.** The staged arms lost 4 of 14 runs outright to one call's answer failing
+  validation twice. And the first call is not steady: the same request on the same book gave 15
+  parts in one arm and 8 welded ones in the other.
+
+So stage 3 is **not** "build B". It is, in order: stage 1a; B's per-part round without its
+`verdict` and with a strict schema (which addresses seven of sixteen refused answers, not most);
+then a measurement of the first call alone (three draws on four documents, the present prompt
+against one revision: 24 calls, about $17 before re-asks); and only then B, for documents past
+the line. Stage 1b is not shown to be needed by this eval. Whether B should also take long
+documents under the line is a question for Greg, put with these numbers.
+
 ### Stage 3: build the shape the eval picks
 
 Planned in detail after stage 2, and reviewed again. In outline, if B wins: a top-level call with
@@ -426,14 +455,18 @@ honestly and costs about $47 and two hours of an open tab for one article, with 
 
 ## Stages
 
-- [ ] **0.** The line in Structure when the tree is the author's headings, with Try again for the
-  owner.
+- [x] **0.** The line in Structure when the tree is the author's headings, with Try again for the
+  owner. On `dev` as `8000e95dd`; [structure.md § When it is only the headings](../project/structure.md).
+  Browser-checked at 1440, 820 and 390 (`261005j-shot-*.png`) with the page's article response
+  patched to a headings tree; the light theme and a signed-out visitor were not looked at. The
+  full suite was not run (the box was overloaded and the Overseer asked sessions not to).
 - [x] Plan review by GPT Sol (read-only).
 - [ ] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
   Tests red first, gates, Sol code review, the arithmetic.
 - [ ] **1b.** The mixed tree, if 1a leaves a need. Its contract (F1, F2, F6) first.
-- [ ] **2.** The eval. Paid, cap $40, blocked on the OpenRouter key's limit.
-- [ ] **3.** The chosen shape, with its own plan section and review.
+- [x] **2.** The eval. About $32.4. § Result: stage 2.
+- [ ] **3.** A strict schema for the per-part round, the first call measured alone, then B past
+  the line, with its own plan section and review.
 - [ ] **4.** Delivery, on the open-before-structure work.
 - [ ] **5.** Labels on a spread of paragraphs past a ceiling of calls. Its own review first.
 

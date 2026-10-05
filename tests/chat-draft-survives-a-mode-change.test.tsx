@@ -376,16 +376,44 @@ describe("Chat keeps an unsent question while another mode is open", () => {
  * its words kept and no composer mounted to show them.
  */
 describe("the reader is put back in the conversation the words belong to", () => {
-  it("after Recall, which writes its own conversation's id over `?thread=`", async () => {
+  it("after Recall, whose non-chat id returns Chat to its list with the draft still on its row", async () => {
     stored = [A, RECALL];
     await arrive("chat", `?thread=${A.id}`);
     await type("held while I check what I remember");
     await go("remember");
     expect(param("thread"), "Recall did not take the address; this test is not testing F3").toBe(RECALL.id);
     await go("chat");
+    expect(open()).toBeNull();
+    expect(param("thread")).toBeNull();
+    const row = host.querySelector<HTMLButtonElement>(`.chat-thread[data-thread="${A.id}"] .chat-thread-open`);
+    expect(row).not.toBeNull();
+    await act(async () => row?.click());
+    await addressSettles();
     expect(open()?.id).toBe(A.id);
     expect(box().value).toBe("held while I check what I remember");
     expect(param("thread")).toBe(A.id);
+  });
+
+  it("keeps an unopened recovered origin draft through a second mode change", async () => {
+    stored = [RECALL];
+    const handoffOrigin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "The claim" };
+    handoff = {
+      slug: SLUG,
+      question: "Check this claim",
+      origin: handoffOrigin,
+    };
+    await arrive("chat");
+    await go("remember");
+    await go("chat");
+    expect(open()).toBeNull();
+    expect(threads()).toHaveLength(1);
+    expect(param("thread")).toBeNull();
+    await go("structure");
+    await go("chat");
+    expect(open()?.kind).toBe("chat");
+    expect(box().value).toBe("Check this claim");
+    expect(chatDraftsFor(SLUG).origin(open()?.id as string)).toEqual(handoffOrigin);
+    expect(posts()).toHaveLength(0);
   });
 
   it("after Quiz, which clears `?thread=`", async () => {

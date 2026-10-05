@@ -111,7 +111,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   chat: {
     keywords:
-      "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action",
+      "ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore",
     whenToUse: (
       <>
         <p>
@@ -160,7 +160,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </ul>
         <p>An answer with none of these came from the article alone. Chat decides when it needs them.</p>
         <p>
-          Each article keeps its own conversations under <strong>All conversations</strong>.{" "}
+          Each article keeps its own conversations under <strong>All conversations</strong>. That
+          list holds every conversation you have had about the article, not only the ones started
+          in Chat. A row from somewhere else has a small icon in front of it: point at it, or tap
+          it, to see where it came from, for example a claim in Debate, a passage, or Remember.
+          Pressing a Remember row takes you to Remember, where that conversation lives; it cannot
+          be renamed or deleted from Chat. When the list has conversations from more than one
+          place, the buttons above it (<strong>All</strong>, <strong>Chats</strong> and one for
+          each other place) narrow it.
+        </p>
+        <p>
           <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an
           answer still arriving. <strong>Answer again</strong> gets a fresh answer, and the pencil lets
           you rewrite your question.

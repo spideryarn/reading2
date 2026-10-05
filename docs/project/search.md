@@ -394,12 +394,46 @@ hook that carries them out is beside them, in
 Search mode stays open.
 
 - Leave Search mode, reload, or close the tab mid-search: the thorough search still finishes on the
-  server, and usually both rows are in the list afterwards, the thorough one unticked.
+  server, and both rows are in the list. They are tidied the next time the list is loaded in the
+  same browser; see below.
 - After a reload a swapped row sorts by its own time, not the quick row's.
 - With 30 saved searches the server's trim may already have dropped the quick row; the swap's
   delete then names a row that is gone, which is harmless.
 - The quick row is deleted without the server checking it is still the answer this tab saw. The
   swap requires the row to be finished here, and another tab cannot reset a finished quick row.
+
+**A pair left behind is tidied at the next load.** Built 2026-10-05, for Greg's answer to the
+plan's Q-reload:
+
+> I do find having a quick and a thorough next to each other slightly annoying, but I can live with
+> it if it gets tidied up after leaving Search mode
+>
+> — Greg, 2026-10-05
+
+The saved rows cannot say which thorough row the app started for which quick row: a reader who asks
+both by hand for the same words leaves the same two rows. So the pair is written down. When a
+thorough search starts by itself, the browser records the two ids and the words in `localStorage`
+([`stored-pairs.ts`](../../src/web/modes/search/stored-pairs.ts)). The record goes when that tab
+swaps the pair, drops it, or marks its answer to be thrown away. Leaving, reloading or closing the
+tab removes nothing, so what is still written is the pairs left behind.
+
+When Search mode next opens and the list arrives, each record for the article is checked once
+against the loaded rows (`tidyPair` in `auto-thorough.ts`):
+
+- both rows finished, both still holding the recorded words, the thorough row not ticked: **the
+  same swap as above**, with the colour, the tick and the place kept the same way.
+- either row still running: nothing is touched, and the next load looks again.
+- anything else (a row gone or failed, the quick row's words changed, the thorough row ticked by
+  the reader): both rows stay for good.
+
+What it leaves alone, on purpose: a pair with no record (made before this, in another browser, or
+by hand); everything while the browser is offline or the list came from its saved offline copy; and
+a failed thorough row. Come back to Search while the thorough search is still running and both rows
+show until the list is next loaded. A tick or a press on the thorough row cancels the tidy for good,
+even if it is unticked again; a gesture on the quick row does not. Each pair has its own storage
+key, so one tab forgetting a pair cannot be undone by another tab's write.
+Two tabs are still not checked against each other; the plan's § Follow-up says exactly what that can
+lose and why it was accepted.
 
 ## Search as you type, and the box in the bottom bar
 

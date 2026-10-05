@@ -212,10 +212,14 @@ export function PrivacyPage() {
               — GPT Sol, 2026-09-16. And "anybody reading an article you have
               shared" rather than "anybody else": the operator can read stored
               data, which this page says in its own paragraph above.
+              **For every article of the reader's own, since 2026-10-05**: until
+              then the bullet said "with experimental features on", which was
+              when it was kept. There is no control yet to turn it off or erase
+              it, and the bullet promises none.
               docs/project/privacy.md § Reading time. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
-            articles</strong> — with experimental features on, a running total of the seconds each
+            articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
             where you have been, for example. We keep the totals, not a history of your reading (our
             ordinary server logs do show when an update arrived). It is not shown to anybody reading

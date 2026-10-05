@@ -1,6 +1,6 @@
 ---
 reports: spya-qfu4uz
-ending: awaiting
+ending: shipped
 ---
 # Improve Spideryarn's SEO
 
@@ -15,7 +15,27 @@ from `/changelog`. Sentry event `8a91e0b92b6d4eba988893728732c8e0`.
 >
 > Use your judgment within reason, and ask me if you have questions that involve tradeoffs.
 
-**Awaiting Greg.** Researched and written up, nothing built, because the first step is his.
+**Shipped**, on `dev`, 2026-10-05, after Greg answered the two questions: our own pages, *"yes
+definitely we want those to be visible"*; a shared article, ever, *"no"*.
+
+Search engines may now list nine pages of ours (the homepage, `/features`,
+`/features/public-readable-sharing`, `/pricing`, `/changelog`, `/help`, `/privacy`, `/contact`,
+`/opensource`), each with its own title, description and canonical, and a sitemap that names them.
+Everything else still says `noindex`: every article, shelf, profile, admin page and API path. The
+page that tells authors what we do with a shared article was rewritten to match. How it works is
+[deployment.md](../project/deployment.md), under "Our own pages may be listed", and the plan is
+[261005f § Stage 2](../plans/261005f-link-previews-and-seo-for-shared-links.md#stage-2-what-gregs-five-answers-build).
+
+Not built, each named in the plan: the pages' text is still drawn by JavaScript, so a crawler that
+does not run it sees only the head; keywords, which no engine uses; and a canonical for an uploaded
+file, which does nothing for a page that is never listed.
+
+Not yet checked: a deployment. Three things about Vercel's routing can only be seen on one, and
+`scripts/check-public-shell.ts` asks about each.
+
+What stood here before the answers:
+
+*Awaiting Greg.* Researched and written up, nothing built, because the first step is his.
 
 The whole site is out of search engines on purpose: `robots.txt` says `Disallow: /`, every response
 says `noindex`, and `/features/public-readable-sharing` tells authors "It is kept out of search

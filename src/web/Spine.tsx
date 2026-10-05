@@ -280,7 +280,7 @@ interface Props {
   /**
    * How long the reader has spent on each block, as a reach in sixteenths of
    * the rail — `useReadingTime`'s `reach`, reading-time.ts § `readReach`.
-   * Empty for a visitor and with experimental features off, so nothing is drawn.
+   * Empty for a visitor, so nothing is drawn.
    */
   reading?: ReadonlyMap<BlockId, ReadReach> | undefined;
   /**

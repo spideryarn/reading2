@@ -81,6 +81,7 @@ function head(over: Partial<PublicHead> = {}): PublicHead {
     gist: "Consciousness research keeps circling one question that may not be the useful one.",
     canonical: "https://aeon.co/essays/the-hard-problem-is-a-distraction",
     authors: [],
+    image: null,
     ...over,
   };
 }
@@ -206,10 +207,10 @@ describe("what a link preview is told", () => {
     /* One head, not two: the shell's own `<title>` was inside the sentinels and
        has been replaced rather than joined. */
     expect(d.querySelectorAll("title")).toHaveLength(1);
-    /* Our own static picture, never the article's: a third-party lead image
-       would be an endorsement, a privacy contact and another untrusted `src`
-       sink. `summary_large_image` without an image draws a broken card, so the
-       two are asserted together. */
+    /* Our own static picture, for an article we hold no picture of. The
+       article's own is below, § the lead picture. `summary_large_image`
+       without an image draws a broken card, so the two are asserted
+       together. */
     expect(metaContent(d, 'meta[property="og:image"]')).toBe(OG_CARD.url);
     expect(metaContent(d, 'meta[name="twitter:image"]')).toBe(OG_CARD.url);
     expect(metaContent(d, 'meta[property="og:image:width"]')).toBe("1200");
