@@ -45,8 +45,64 @@
 .srch-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .srch-input::placeholder { color: var(--ink-faint); }
 /* The browser's own clear button on `type="search"`, which on a dark page is a
-   dark X on a dark field. Ours is Escape, and it is in the keydown handler. */
+   dark X on a dark field. Ours is Escape and `.srch-clear` below — the
+   browser's would be a second cross. */
 .srch-input::-webkit-search-cancel-button { display: none; }
+
+/* **The cross that empties the box** (plan 261005i), there only while the box
+   has words in it (`.srch-field--filled`). Out of the flow, over the input's
+   right-hand end; the input gives the room up from its own padding so the
+   words do not run under it, and gives up more while the spinner is showing
+   too, which then sits to the cross's left. Px like the cross, for the 12px
+   root.
+
+   Shaped like `.dock-qs-clear` (dock-quick-search.css), and for its reason
+   not `.close-x` (close.css): that is a 32px box that closes something, and
+   this is a small one that clears. */
+.srch-field--filled .srch-input { padding-right: 28px; }
+.srch-field--filled.srch-field--busy .srch-input { padding-right: 46px; }
+.srch-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-clear:hover { color: var(--ink); }
+.srch-clear:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: -1px;
+}
+/* The finger target: 40px wide, reaching left over the input, and **exactly
+   as tall as the field** — the cross is stretched to the field's height and
+   its target goes no further up or down. The bar's cross can declare 40px
+   tall because the Dock clips it; nothing clips this one, and the matcher
+   buttons are 0.4rem below, so a taller target would take their presses
+   (GPT Sol's F5 on the plan). `any-pointer`, as there: an iPad with a
+   trackpad reports `pointer: fine` and its reader still taps the glass. */
+@media (any-pointer: coarse) {
+  .srch-clear::after {
+    content: "";
+    position: absolute;
+    inset: 0 -4px 0 -16px;
+  }
+  .srch-clear {
+    top: 0;
+    bottom: 0;
+    height: auto;
+    transform: none;
+  }
+}
 /* The same arc, the same keyframe, and the same reduced-motion pulse as
    `.cmt-spinner` — see docs/project/icons.md#the-loading-spinner. Only the
    colour differs, because in this mode the working colour is the search hue. */
@@ -56,6 +112,9 @@
   animation: cmt-spin 0.7s linear infinite;
 }
 .srch-field .srch-spin { position: absolute; right: 0.5rem; }
+/* Left of the cross while both show (`.srch-clear` above). After the rule it
+   overrides, because the two have the same specificity. */
+.srch-field--filled .srch-spin { right: 28px; }
 @media (prefers-reduced-motion: reduce) {
   .srch-spin { animation: cmt-pulse 1.4s ease-in-out infinite; }
 }

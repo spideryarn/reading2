@@ -52,6 +52,7 @@ import { useEffect, useRef, useState } from "react";
 import { BookOpen, Cpu, SlidersHorizontal, User, UserCheck, Wallet } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { ownLabel } from "./lib/own-label.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { readHref } from "./router.js";
@@ -118,7 +119,9 @@ type ModelRow = {
  *
  * Falls back to the server's own string for anything unlisted, on the same
  * reasoning as `displayName` in src/models.ts — an unknown value should show
- * itself, not be swallowed.
+ * itself, not be swallowed. Read through `ownLabel` (lib/own-label.ts), as
+ * `WIRE_LABEL` is: a bare lookup answers with an object for `__proto__`, and
+ * `??` lets an object through.
  */
 const PROVIDER_LABEL: Record<string, string> = {
   anthropic: "Anthropic",
@@ -429,17 +432,17 @@ export function ProfilePage() {
                     third spelling. */}
                 <span
                   className="tw:font-mono tw:text-xs tw:text-foreground"
-                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider}${m.wire ? ` · ${WIRE_LABEL[m.wire] ?? m.wire} API` : ""}`}
+                  title={`${m.id} · via ${ownLabel(PROVIDER_LABEL, m.provider) ?? m.provider}${m.wire ? ` · ${ownLabel(WIRE_LABEL, m.wire) ?? m.wire} API` : ""}`}
                 >
                   {m.model}
                   {m.effort && <span className="tw:text-ink-faint"> · {m.effort}</span>}
                   <span className="tw:text-ink-faint">
                     {" · "}
-                    {PROVIDER_LABEL[m.provider] ?? m.provider}
+                    {ownLabel(PROVIDER_LABEL, m.provider) ?? m.provider}
                     {/* Only when the server names one. This printed
                         "(undefined)" on every row until 2026-10-03: the
                         route had never sent the field. */}
-                    {m.wire && ` (${WIRE_LABEL[m.wire] ?? m.wire})`}
+                    {m.wire && ` (${ownLabel(WIRE_LABEL, m.wire) ?? m.wire})`}
                     {/* An override is a one-off comparison somebody is running,
                         not this app's configuration, and the difference matters
                         to anyone reading the table to find out what the app

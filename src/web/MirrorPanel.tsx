@@ -60,6 +60,7 @@
 import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from "../referee-mirror-types.js";
 import type { BlockId } from "../types.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useMirror, type MirrorApi } from "./useMirror.js";
 import { signedValence } from "./valence.js";
 
@@ -300,6 +301,10 @@ function Coverage({ coverage }: { coverage: MirrorResult["coverage"] }) {
  * A total `Record` rather than a lookup with a fallback, so a sixth kind is a
  * red compile here as well as in the validator —
  * docs/project/typechecking.md.
+ *
+ * Total for the kinds this copy was built with. The kind on a remark comes off
+ * the wire, so the badge reads it through `ownLabel` (lib/own-label.ts) and a
+ * kind from a newer server shows as its own word.
  */
 const KIND_LABEL: Record<MirrorRemarkKind, string> = {
   specificity: "Hard for an author to act on",
@@ -354,7 +359,7 @@ function Remark({
   return (
     <li className="mir-remark" data-kind={remark.kind}>
       <p className="mir-head">
-        <span className="mir-kind">{KIND_LABEL[remark.kind]}</span>
+        <span className="mir-kind">{ownLabel(KIND_LABEL, remark.kind) ?? plainWords(remark.kind)}</span>
         {/* **This badge carried a card, and the card is gone**, 2026-09-02. Its
             first paragraph restated the badge — *"A randomised trial tested
             feedback of this shape"* under a label reading *A kind tested in a

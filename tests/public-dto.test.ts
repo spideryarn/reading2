@@ -768,6 +768,44 @@ describe("the public article payload", () => {
     expect(JSON.stringify(out)).not.toContain("whoAsked");
   });
 
+  /**
+   * **A stored node with no `children` key is a leaf, and a visitor still gets
+   * the article.** The tree is JSON out of the database and its type is a claim,
+   * not a check; spreading a list that is not there throws, and the public
+   * route turns that into a 500. The node goes out with `children: []`, which
+   * is the shape the client's own mend gives it (src/web/tree.ts §
+   * `withChildLists`). Review finding C-4 on plan 261005h.
+   */
+  it.each([
+    ["the root", "n0"],
+    ["an inner node", "n1"],
+  ] as const)("sends %s with an empty children list when the stored node has none", (_which, id) => {
+    const { children: _dropped, ...listless } = TREE.nodes[id]!;
+    const stored: Tree = { ...TREE, nodes: { ...TREE.nodes, [id]: listless as TreeNode } };
+    const out = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [BLOCK],
+      tree: stored,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(out.tree.nodes[id]!.children).toEqual([]);
+    /* And the node beside it is untouched. */
+    const other = id === "n0" ? "n1" : "n0";
+    expect(out.tree.nodes[other]!.children).toEqual(TREE.nodes[other]!.children);
+  });
+
   /** `null` from Postgres becomes an absent key, not `undefined`. */
   it("leaves an absent field absent rather than null", () => {
     const bare = publicArticle({

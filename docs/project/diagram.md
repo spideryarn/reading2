@@ -1002,10 +1002,24 @@ measurement overwrites it, so an interrupted jump corrects itself.
 
 **A press measures the page, and chains.** `readerRow` is React state and is a frame behind at best,
 so `stepTo` calls `measureRow()` itself; and because scrolling is animated, the row the last press
-aimed at stands for `CHAIN_MS` — keynav.ts's constant, for this exact problem — so two rapid presses
-count as two rather than landing half way. The first build asked `glideTarget()` instead and Sol
-found the gap: the glide clears its own handle in the same tick as its last `scrollTo`, leaving a
-window in which nothing is in flight and the measurement is still mid-air.
+aimed at stands instead of a measurement, so two rapid presses count as two rather than landing half
+way. How long it stands is keynav.ts's rule, shared with ↑ / ↓
+([keyboard.md § Rapid presses chain from the last target](keyboard.md#rapid-presses-chain-from-the-last-target-not-from-the-page)):
+while our own jump is unfinished, and after it ends for as long as the page is still at the pixel it
+ended on with the target row's layout unchanged. Replacing the article's blocks, root or picture
+kind also drops the numeric aim; see `DiagramPanel.tsx` § `chain` and
+[the review postmortem](../postmortems/261005g-a-navigation-aim-outlives-the-layout-that-made-its-row-true.md).
+
+**The panel is told when its jump ends; it does not infer it.** A step hands `onFollow` a callback,
+and Reader carries it through `jumpTo` and `beginJump` to `scrollToBlock`'s own report, on every
+branch, the one where the reader was already there included. `glideTarget()` cannot stand in for
+that: under reduced motion the page moves at once and the jump settles a frame later, and for that
+frame nothing is in flight while a centred row has no arrival anchor yet, so a measurement names the
+row before it (Sol, 2026-10-05). Until that day the aim stood for a 600 ms timer (`CHAIN_MS`),
+chosen in the first build because `glideTarget()` was thought to leave a gap after a smooth glide
+too; it does not, and the timer could drop the aim with the glide still pending
+([plan 261005h](../plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md)
+§ Stage C). `tests/step-chain.test.tsx` holds it, over the real scroll engine.
 
 **What ends the chain is *where* the gesture landed, not which gesture it was**, and getting that
 backwards broke the touch path the buttons exist for. The second build dropped the chain on any

@@ -71,6 +71,7 @@ import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { isCrumbSection } from "../crumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
+import type { FollowJump } from "../DiagramPanel.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
 import {
   type ChatHandoff,
@@ -146,7 +147,7 @@ import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
-import { modePress } from "./mode-press.js";
+import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -478,10 +479,9 @@ export function Reader({
   /**
    * **The mode the reader has just pressed, for `ModeHerald` to name.**
    *
-   * Set in the Dock's `onMode` below and nowhere else, because that is the one
-   * door a press comes through — the Dock's buttons and the command bar both
-   * reach it via `useActivateMode` — and a pasted `?mode=`, a Back step and a
-   * reload do not. The same *a mount is not a click* line activation.ts draws.
+   * Set by the Dock's `onMode` and the shared Search opener below. The Dock's
+   * buttons and command-bar picks reach them; a pasted `?mode=`, a Back step
+   * and a reload do not. The same *a mount is not a click* line activation.ts draws.
    *
    * **Component state and not the URL**, which is url-state.md applying rather
    * than being excepted: the URL is for what a link or a reload should
@@ -494,6 +494,19 @@ export function Reader({
   useEffect(() => {
     if (herald !== null && herald.mode !== mode) setHerald(null);
   }, [herald, mode]);
+
+  /**
+   * **Open Search for the command bar's *Quick search “X”* row** (plan
+   * 261005i) — `showBand`, plus the arrival rule the Dock's press runs for
+   * Search: its herald names the mode, and a rail the reader had put away comes
+   * back, since that is where the hits are drawn (`arrivalBringsRailBack`; F2
+   * on the plan). The Dock's Search arrival calls this same opener.
+   */
+  const openQuickSearch = useCallback(() => {
+    showBand("search");
+    setHerald((prev) => ({ mode: "search", nonce: (prev?.nonce ?? 0) + 1 }));
+    if (arrivalBringsRailBack({ next: "search", current: mode, showSpine })) void setShowSpine(null);
+  }, [showBand, mode, showSpine, setShowSpine]);
 
   /**
    * What stands between a visitor and the mode they have opened, if anything.
@@ -787,6 +800,11 @@ export function Reader({
     },
     [jumpTo, bandCovers, rememberBandFocus],
   );
+  /* **The Diagram walking the picture**: plain `jumpTo`, which does not step
+     the band aside, and with the step's `ended` put in `jumpTo`'s third
+     parameter rather than its second, which is a flash aim. The step buttons
+     need to hear that their jump is over — keynav.ts § `Chain`. */
+  const followTo = useCallback<FollowJump>((blockId, ended) => jumpTo(blockId, undefined, ended), [jumpTo]);
   useEffect(() => {
     if (bandBack) return;
     const was = bandFocus.current;
@@ -2452,6 +2470,9 @@ export function Reader({
    *    the Dock draws. The opener is the plain mode setter here too: the bar's
    *    press leaves a hand-off (find-more-handoff.ts) and the band presses its
    *    own Find more.
+   *  - `openQuickSearch` is **the owner's**, the cut the bar's own box makes
+   *    (Dock.tsx § `hasQuickSearch`): a visitor's band cannot ask. Plan
+   *    261005i.
    */
   const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
   const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
@@ -2484,6 +2505,7 @@ export function Reader({
               quotes: moreQuotes ? () => showBand("quotes") : undefined,
             }
           : undefined,
+        openQuickSearch: isOwner ? openQuickSearch : undefined,
       }),
     [
       slug,
@@ -2498,6 +2520,7 @@ export function Reader({
       bookmarkBlock,
       moreTerms,
       moreQuotes,
+      openQuickSearch,
     ],
   );
   /**
@@ -3047,7 +3070,7 @@ export function Reader({
             onJump={bandJump}
             /* Walking the picture follows it in the prose without stepping the
                band aside — DiagramPanel.tsx § `onFollow`. */
-            onFollow={jumpTo}
+            onFollow={followTo}
           />
         );
       /* **The first mode that could break on its own**, 2026-09-05 — the
@@ -4184,6 +4207,12 @@ export function Reader({
             }
           }
           armSkimOpening(skimArrival.current, mode, next);
+          /* One Search arrival for its Dock button, quick box and command row.
+             The toggle-to-close above has already handled a second mode press. */
+          if (next === "search" && sub === undefined) {
+            openQuickSearch();
+            return;
+          }
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */
           /* A command naming the mode already open, or the bar bringing a
@@ -4241,11 +4270,7 @@ export function Reader({
              this threaded through the piece, or concentrated in one section?
              So it earns the same arrival rule search has, for the same reason
              and with the same `null` rather than `true`. */
-          if (
-            (next === "search" || next === "ideas") &&
-            mode !== next &&
-            showSpine === false
-          ) {
+          if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
             void setShowSpine(null);
           }
         }}

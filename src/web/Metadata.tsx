@@ -283,6 +283,7 @@ import { type ArchiveControl, useArchive } from "./useArchive.js";
 import { downloadExport } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
+import { ownLabel } from "./lib/own-label.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
@@ -415,8 +416,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
  * complete. tests/metadata-unknown-stage.test.tsx.
  */
 function stageIcon(step: string): ComponentType<{ size?: number }> {
-  const known: Partial<Record<string, ComponentType<{ size?: number }>>> = STAGE_ICONS;
-  return (Object.hasOwn(known, step) ? known[step] : undefined) ?? CircleDashed;
+  return ownLabel(STAGE_ICONS, step) ?? CircleDashed;
 }
 
 /*

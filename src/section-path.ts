@@ -42,16 +42,22 @@ export function sectionNodesOf(
     const hi = index.get(node.range[1]);
     return lo !== undefined && hi !== undefined && lo <= at && at <= hi;
   };
+  /* **`?? []`: a node with no list is a leaf.** A tree is JSON out of the
+     store and its type is a claim, not a check. The client mends one where it
+     receives it (src/web/tree.ts § `withChildLists`), but Skim calls this on
+     the server with a tree that has been nowhere near that door.
+     tests/section-path-missing-children.test.ts. */
+  const childrenOf = (n: TreeNode): readonly string[] => n.children ?? [];
   const path: TreeNode[] = [];
   let node = tree.nodes[tree.rootId];
-  while (node && node.children.length > 0) {
-    const next = node.children.map((id) => tree.nodes[id]).find((child) => child && contains(child));
+  while (node && childrenOf(node).length > 0) {
+    const next = childrenOf(node).map((id) => tree.nodes[id]).find((child) => child && contains(child));
     if (!next) break;
     path.push(next);
     node = next;
   }
   if (path.length === 0) return [];
   const leaf = path.at(-1)!;
-  const ancestors = leaf.children.length === 0 ? path.slice(0, -1) : path;
+  const ancestors = childrenOf(leaf).length === 0 ? path.slice(0, -1) : path;
   return ancestors.length > 0 ? ancestors : [leaf];
 }
