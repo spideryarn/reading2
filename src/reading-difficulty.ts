@@ -55,7 +55,7 @@ export const RUN_GAP = "\n\n[…]\n\n";
 const SHORT_PARAGRAPH_WORDS = 5;
 
 /** Bump when `READING_DIFFICULTY_SYSTEM` or the sample changes what a rating means. */
-export const READING_DIFFICULTY_PROMPT_VERSION = "reading-difficulty/1";
+export const READING_DIFFICULTY_PROMPT_VERSION = "reading-difficulty/2";
 
 export const READING_DIFFICULTY_SYSTEM = `You judge how hard a piece of writing is to read, so that a reading app can tell its reader how long the piece will take.
 
@@ -156,11 +156,13 @@ export function ratingParagraphs(blocks: readonly (Treated & Pick<Block, "text">
  * paragraph that starts at or after `i / (runs - 1)` of the way to the last
  * share of the piece, and takes consecutive paragraphs while they fit its
  * share. So the first run is the opening, and the last begins inside the
- * final share and runs to the last paragraph.
+ * final share and runs to the last paragraph. The final share is reserved
+ * first, so an earlier run cannot consume the ending.
  *
  * **One exception to whole paragraphs**: a paragraph longer than a run's whole
- * share is cut to the share. Some PDFs arrive as a few blocks of thousands of
- * words each, and sending those whole would spend the budget many times over.
+ * share is sampled at the run's word position, and the final run takes its
+ * tail. Some PDFs arrive as a few blocks of thousands of words each, and
+ * sending those whole would spend the budget many times over.
  */
 export function sampleForRating(
   paragraphs: readonly string[],
@@ -182,29 +184,67 @@ export function sampleForRating(
     seen += size;
   }
 
+  /* The last run must reach the end even when the final paragraph is longer
+     than its share. Whole paragraphs where possible, a suffix otherwise. */
+  const tail: string[] = [];
+  let tailStart = total;
+  let tailWords = 0;
+  for (let at = kept.length - 1; at >= 0; at--) {
+    const size = sizes[at] ?? 0;
+    if (tailWords + size > share) {
+      if (tail.length === 0) {
+        tail.push((kept[at] ?? "").split(/\s+/).slice(-share).join(" "));
+        tailStart = total - share;
+      }
+      break;
+    }
+    tail.unshift(kept[at] ?? "");
+    tailWords += size;
+    tailStart = before[at] ?? 0;
+  }
+  /* Apply the same heading rule to the tail as to every other run. */
+  while (tail.length > 1 && wordsIn(tail[0] ?? "") < SHORT_PARAGRAPH_WORDS) {
+    tailStart += wordsIn(tail.shift() ?? "");
+  }
+
   const out: string[] = [];
+  /* A word position, rather than a paragraph index: one huge paragraph may
+     contain several runs, and consuming its opening must not skip its rest. */
   let next = 0;
-  for (let run = 0; run < runs && next < kept.length; run++) {
-    const target = (run * (total - share)) / (runs - 1);
-    let at = next;
-    while (at < kept.length - 1 && (before[at] ?? 0) < target) at += 1;
+  for (let run = 0; run < runs - 1; run++) {
+    const target = Math.max(next, (run * (total - share)) / (runs - 1));
+    let at = 0;
+    while (at < kept.length - 1 && (before[at] ?? 0) + (sizes[at] ?? 0) <= target) at += 1;
+    /* Keep an ordinary paragraph whole; only an oversized one can start
+       inside a paragraph. This preserves the existing ordinary samples. */
+    if ((before[at] ?? 0) < target && (sizes[at] ?? 0) <= share) at += 1;
     /* Not on a heading or a caption, when a real paragraph follows. */
     while (at < kept.length - 1 && (sizes[at] ?? 0) < SHORT_PARAGRAPH_WORDS) at += 1;
 
     const taken: string[] = [];
     let used = 0;
-    while (at < kept.length && used + (sizes[at] ?? 0) <= share) {
+    while (
+      at < kept.length &&
+      used + (sizes[at] ?? 0) <= share &&
+      (before[at] ?? 0) + (sizes[at] ?? 0) <= tailStart
+    ) {
       taken.push(kept[at] ?? "");
       used += sizes[at] ?? 0;
       at += 1;
     }
-    if (taken.length === 0 && at < kept.length) {
-      taken.push((kept[at] ?? "").split(/\s+/).slice(0, share).join(" "));
-      at += 1;
+    if (taken.length === 0 && at < kept.length && (sizes[at] ?? 0) > share) {
+      const offset = Math.max(0, Math.ceil(target - (before[at] ?? 0)));
+      const count = Math.min(share, (sizes[at] ?? 0) - offset, tailStart - (before[at] ?? 0) - offset);
+      if (count > 0) {
+        taken.push((kept[at] ?? "").split(/\s+/).slice(offset, offset + count).join(" "));
+        next = (before[at] ?? 0) + offset + count;
+      }
+    } else {
+      next = before[at] ?? total;
     }
     if (taken.length > 0) out.push(taken.join("\n\n"));
-    next = at;
   }
+  if (tail.length > 0) out.push(tail.join("\n\n"));
   return out.join(RUN_GAP);
 }
 

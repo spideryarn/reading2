@@ -207,6 +207,15 @@ The bar was written into the plan before the run.
   story, no children's text and no news item, so the easy end of both scales is untested.
 - The largest gap between two runs of one article is 0.13 of a multiplier.
 
+**A second run, the same evening**, after the code review changed how a piece made of very long
+paragraphs is sampled (prompt `reading-difficulty/2`; the first run's file is kept as
+`…-prompt-1.json`). 24 of 24 rated again; the two runs within one level on all 24, identical on 20
+for language and 17 for ideas; rank correlation with word length 0.76; $0.0281. The local corpus
+had moved, so 16 articles are in both runs. Of those, 9 got exactly the first run's rating and
+none moved more than one level on either scale. **So a rating is good to within one level, and
+about half the time a fresh rating of the same piece lands one level away on one scale.** With the
+table above one level is 4% to 9% of the minutes.
+
 **What it means for the minutes.** Nine of the 24 came back 3 and 3, which is 1.05×. So most
 essays gain about five percent, and most papers gain twenty to forty.
 

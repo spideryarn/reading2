@@ -256,7 +256,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A batch-added paper's title, authors and abstract, read inside the bulk
      import's `metadata` step. src/paper-metadata.ts. */
   "paper-metadata": "step-driven",
-  /* How hard the piece is to read, rated inside the `extract` step.
+  /* How hard the piece is to read, rated inside the `blocks` step.
      src/reading-difficulty.ts. */
   "reading-difficulty": "step-driven",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and

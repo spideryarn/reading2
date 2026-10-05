@@ -1608,6 +1608,7 @@ describe("a claim under Postgres", () => {
           parts: {
             blocks: { blocks: minted },
             stampedHtml: `<html><body>${minted.map((b) => b.html).join("")}</body></html>`,
+            readingDifficulty: { rated: false },
           } as never,
           detail: "blocks ran",
         };

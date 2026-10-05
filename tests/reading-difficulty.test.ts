@@ -120,6 +120,24 @@ describe("sampleForRating", () => {
     const sample = sampleForRating(piece(4, 20_000));
     expect(wordCount(sample.replaceAll("[…]", ""))).toBeLessThanOrEqual(SAMPLE_WORDS);
   });
+
+  it("samples across a single oversized paragraph and includes its ending", () => {
+    const paragraph = Array.from({ length: 20_000 }, (_, i) => `word${i}`).join(" ");
+    const sample = sampleForRating([paragraph]);
+    expect(sample.split(RUN_GAP)).toHaveLength(SAMPLE_RUNS);
+    expect(sample.startsWith("word0 ")).toBe(true);
+    expect(sample.endsWith("word19999")).toBe(true);
+    const sent = sample.replaceAll("[…]", "").split(/\s+/).filter(Boolean);
+    expect(sent).toHaveLength(SAMPLE_WORDS);
+    expect(new Set(sent).size).toBe(sent.length);
+  });
+
+  it("takes the tail of an oversized last paragraph, rather than its opening", () => {
+    const end = Array.from({ length: 2_000 }, (_, i) => `end${i}`).join(" ");
+    const sample = sampleForRating([...piece(80, 80), end]);
+    expect(sample.endsWith("end1999")).toBe(true);
+    expect(wordCount(sample.replaceAll("[…]", ""))).toBeLessThanOrEqual(SAMPLE_WORDS);
+  });
 });
 
 describe("difficultyRequest", () => {
@@ -170,7 +188,7 @@ describe("difficultyRequest", () => {
   it("carries the shared plain-words rule for the sentence a reader sees, and a version stamp", () => {
     expect(READING_DIFFICULTY_SYSTEM).toContain(plainWords("explain"));
     expect(READING_DIFFICULTY_SYSTEM).toContain("<document_text>");
-    expect(READING_DIFFICULTY_PROMPT_VERSION).toBe("reading-difficulty/1");
+    expect(READING_DIFFICULTY_PROMPT_VERSION).toBe("reading-difficulty/2");
   });
 });
 

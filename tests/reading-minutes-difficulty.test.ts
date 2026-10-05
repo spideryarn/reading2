@@ -31,7 +31,7 @@ describe("difficultyMultiplier", () => {
   it("is the product of the two tables, for pairs worked out by hand", () => {
     // 1.17 × 1.20
     expect(difficultyMultiplier({ language: 5, ideas: 5 })).toBeCloseTo(1.404, 10);
-    // 0.85 × 0.95
+    // 0.88 × 0.95
     expect(difficultyMultiplier({ language: 1, ideas: 1 })).toBeCloseTo(0.836, 10);
     // Plain words, hard ideas: 0.92 × 1.12
     expect(difficultyMultiplier({ language: 2, ideas: 4 })).toBeCloseTo(1.0304, 10);

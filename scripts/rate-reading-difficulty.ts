@@ -1,5 +1,5 @@
 /**
- * **Rate how hard one article is to read** — the call the `extract` step will
+ * **Rate how hard one article is to read** — the call the `blocks` step will
  * make on import, run on its own against a slug.
  *
  *     npx tsx scripts/rate-reading-difficulty.ts <slug>                  # dry run: print the rating
