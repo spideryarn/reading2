@@ -1,0 +1,1 @@
+{"source":"acmdl","label":"PRO-MTL","role":"fulltext","expect":"pdf","requestedUrl":"https://dl.acm.org/doi/pdf/10.1145/3718092","outcome":"fetch-failed","elapsedMs":63,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

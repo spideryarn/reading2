@@ -1,0 +1,1 @@
+{"source":"huggingface-papers","label":"DeepSeek-R1","role":"fulltext","expect":"pdf","requestedUrl":"https://arxiv.org/pdf/2501.12948","outcome":"ok","finalUrl":"https://arxiv.org/pdf/2501.12948","chainHosts":["arxiv.org"],"status":200,"kind":"pdf","bytes":5034998,"elapsedMs":98,"pdfPages":86}

@@ -1,0 +1,1 @@
+{"source":"aclanthology","label":"BART","role":"fulltext","expect":"pdf","requestedUrl":"https://aclanthology.org/2020.acl-main.703.pdf","outcome":"ok","finalUrl":"https://aclanthology.org/2020.acl-main.703.pdf","chainHosts":["aclanthology.org"],"status":200,"kind":"pdf","bytes":322247,"elapsedMs":672,"pdfPages":10}
