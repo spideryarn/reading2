@@ -13,6 +13,9 @@
 /** The title a preamble part wears — the one node the heading tree has no author text for. Ours. */
 export const PREAMBLE_TITLE = "Before the first heading";
 
+/** What a bounded tree's window wears when no block in it has a word to quote. Ours too. */
+export const UNTITLED_WINDOW_TITLE = "Untitled passage";
+
 /**
  * Are these two heading strings the same heading?
  *

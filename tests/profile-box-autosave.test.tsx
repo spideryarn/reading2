@@ -54,7 +54,7 @@ let host: HTMLDivElement;
 let root: Root;
 let commits = 0;
 
-function render(value: string, save: SaveState) {
+function render(value: string, save: SaveState, inFlight = false) {
   act(() => {
     root.render(
       createElement(ProfileBox, {
@@ -69,6 +69,7 @@ function render(value: string, save: SaveState) {
         },
         max: 500,
         save,
+        inFlight,
       }),
     );
   });
@@ -130,6 +131,35 @@ describe("saving after a pause", () => {
     expect(commits).toBe(0);
   });
 
+  /* GPT Sol's F2 on docs/plans/261004l-the-add-page-purpose-box-saves-as-you-type.md.
+     Loaded S, typed A, A's write goes, typed back to S: the box is clean and
+     no timer is armed. When A lands the box is dirty against A, with no
+     keystroke to start the pause, and nothing sent S until a blur. */
+  it("starts the pause when a write lands over a box that has moved back", () => {
+    render("S", { kind: "clean" });
+    render("A", { kind: "dirty" });
+    act(() => vi.advanceTimersByTime(AUTOSAVE_IDLE_MS));
+    expect(commits).toBe(1);
+    render("A", { kind: "saving" }, true);
+    render("S", { kind: "clean" }, true);
+    act(() => vi.advanceTimersByTime(AUTOSAVE_IDLE_MS * 3));
+    expect(commits).toBe(1);
+    /* A has landed: the same text in the box, now unsaved. */
+    render("S", { kind: "dirty" }, false);
+    act(() => vi.advanceTimersByTime(AUTOSAVE_IDLE_MS - 1));
+    expect(commits).toBe(1);
+    act(() => vi.advanceTimersByTime(1));
+    expect(commits, "S was never sent after A landed").toBe(2);
+  });
+
+  /* F12: a refusal must not earn another attempt by itself, whatever lands. */
+  it("does not start the pause over a refusal, even as the write ends", () => {
+    render("A", { kind: "saving" }, true);
+    render("A", { kind: "error", message: "Too long" }, false);
+    act(() => vi.advanceTimersByTime(AUTOSAVE_IDLE_MS * 3));
+    expect(commits).toBe(0);
+  });
+
   /* The dictation commits for itself when its words land; a save mid-recording
      would be a save of the box without them. */
   it("waits while the microphone is on", () => {
@@ -157,6 +187,13 @@ describe("leaving the page", () => {
 
   it("is questioned while a save is still on its way", () => {
     render("Cognitive", { kind: "saving" });
+    expect(leaving()).toBe(true);
+  });
+
+  /* The box can say clean while an older write is still on its way to replace
+     what it shows (the F2 shape); that is not safe to leave either. */
+  it("is questioned while any write is in flight, whatever the box says", () => {
+    render("S", { kind: "clean" }, true);
     expect(leaving()).toBe(true);
   });
 

@@ -8,7 +8,7 @@
  * > — Greg, 2026-10-01, spya-hbqezu
  *
  * The add page leaves a mark in this tab (src/web/ask-purpose.ts) only when it
- * opened the article by itself with its own box empty and never touched. This
+ * opened the article by itself with its own box never touched. This
  * component reads that mark and, if the article still has no purpose, asks.
  * docs/plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md
  * § Stage 3.
@@ -168,6 +168,7 @@ function Ask({ slug }: { slug: string }) {
           disabled={purpose.saved === null}
           rows={2}
           save={purpose.state}
+          inFlight={purpose.inFlight}
         />
         <div className="purpose-prompt-actions">
           <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>

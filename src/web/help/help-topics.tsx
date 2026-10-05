@@ -339,7 +339,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         </p>
         <p>
           Opening an article from your shelf returns you to where you left it on that device, but a
-          link always wins: if someone sends you a passage, it opens at their passage.
+          link always wins: if someone sends you a passage, it opens at their passage. When signed
+          in, an article you have not opened in this browser before can open in Summary, where the
+          window has room for it beside the text.
         </p>
         <p>
           The person you send it to can open it only if they can see the article — see{" "}
@@ -751,12 +753,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           article says. The glossary is where you will notice it most.
         </p>
         <p>
-          Each article also asks <strong>Why are you reading this?</strong> when you add it; change
-          the answer on its Metadata page. Something like “I want the methods, not the history” is
-          what helps — the quiz, for one, aims more of its questions at what you said.
+          Each article also asks <strong>Why are you reading this?</strong> while it is being added,
+          and saves your answer as you type; change it later on its Metadata page. Something like “I
+          want the methods, not the history” is what helps — the quiz, for one, aims more of its
+          questions at what you said.
         </p>
         <ul>
-          <li>Both boxes save themselves a couple of seconds after you stop typing.</li>
+          <li>These boxes save themselves a moment after you stop typing.</li>
           <li>
             Text written with your profile has a small <strong>person icon</strong> in the corner
             of its mode; point at it to see what it means, or press it to read and edit your

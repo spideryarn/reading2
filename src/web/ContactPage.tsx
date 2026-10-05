@@ -23,7 +23,7 @@
  * `className="site"` and a `SiteNav`, and carry the `--site-*` token scope with
  * them — a hero and a glow. That shell exists to sell something to a stranger
  * over a long scroll. This page is three short paragraphs, so it takes
- * `PrivacyPage.tsx`'s shape instead: a Home icon link, an `h1`, prose, and the
+ * `PrivacyPage.tsx`'s shape instead: a Home icon link (signed out), an `h1`, prose, and the
  * same `SiteFooter` every other page a reader lands on carries.
  *
  * **The footer is no longer one of the differences.** It was — the marketing
@@ -59,7 +59,7 @@
  */
 
 import { CONTACT_EMAIL } from "../site-text.js";
-import { BackLink } from "./BackLink.js";
+import { HomeLink } from "./BackLink.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
@@ -70,13 +70,9 @@ export function ContactPage() {
 
   return (
     <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
-          `history.back()`, and most people who open this page were *sent* to it
-          — from an email, from the footer of another page, from a link in an
-          article — so there was often no "back" for it to mean. It is also the
-          label the footer uses for the same destination, and one page should not
-          call one address two things. */}
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
+      {/* Signed out only: signed in, the corner logo is the way home.
+          BackLink.tsx § `HomeLink`, which also says why "Home" and not "Back". */}
+      <HomeLink className="tw:mb-6" />
 
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Contact

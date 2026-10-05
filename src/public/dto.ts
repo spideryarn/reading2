@@ -322,6 +322,8 @@ function publicTree(tree: Tree): Tree {
       ...opt(node, "navLabel"),
       ...opt(node, "summary"),
       ...opt(node, "sourceHeading"),
+      /* Whose words the title is, as `sourceHeading` is: a visitor's page draws the same faces. */
+      ...opt(node, "titleFrom"),
       /* **`treatment` crosses, and that is a decision.** The safe default here
          is to drop an optional field, and this one was dropped until 2026-08-29
          — with the test below saying in as many words that whoever landed the

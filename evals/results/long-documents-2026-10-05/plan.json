@@ -1,0 +1,170 @@
+{
+ "target": 1000,
+ "plans": [
+  {
+   "name": "real book",
+   "blocks": 3053,
+   "body": 3053,
+   "wholeDocumentFitsOneCall": false,
+   "bounded": {
+    "flat": false,
+    "parts": 13,
+    "sections": 77
+   },
+   "slices": [
+    {
+     "lo": 0,
+     "hi": 804,
+     "size": 805,
+     "startsOn": "body-start",
+     "maxTokens": 82525,
+     "answerEstimate": 18525,
+     "userChars": 182148
+    },
+    {
+     "lo": 805,
+     "hi": 1520,
+     "size": 716,
+     "startsOn": "part",
+     "maxTokens": 80425,
+     "answerEstimate": 16425,
+     "userChars": 173930
+    },
+    {
+     "lo": 1521,
+     "hi": 2148,
+     "size": 628,
+     "startsOn": "authored-section",
+     "maxTokens": 80425,
+     "answerEstimate": 16425,
+     "userChars": 112791
+    },
+    {
+     "lo": 2149,
+     "hi": 3052,
+     "size": 904,
+     "startsOn": "authored-section",
+     "maxTokens": 84800,
+     "answerEstimate": 20800,
+     "userChars": 222413
+    }
+   ]
+  },
+  {
+   "name": "synthetic dense paper, 250 pages",
+   "blocks": 3600,
+   "body": 3600,
+   "wholeDocumentFitsOneCall": false,
+   "bounded": {
+    "flat": false,
+    "parts": 450,
+    "sections": 900
+   },
+   "slices": [
+    {
+     "lo": 0,
+     "hi": 895,
+     "size": 896,
+     "startsOn": "body-start",
+     "maxTokens": 86900,
+     "answerEstimate": 22900,
+     "userChars": 558533
+    },
+    {
+     "lo": 896,
+     "hi": 1799,
+     "size": 904,
+     "startsOn": "part",
+     "maxTokens": 87075,
+     "answerEstimate": 23075,
+     "userChars": 563296
+    },
+    {
+     "lo": 1800,
+     "hi": 2695,
+     "size": 896,
+     "startsOn": "part",
+     "maxTokens": 86900,
+     "answerEstimate": 22900,
+     "userChars": 558231
+    },
+    {
+     "lo": 2696,
+     "hi": 3599,
+     "size": 904,
+     "startsOn": "part",
+     "maxTokens": 87075,
+     "answerEstimate": 23075,
+     "userChars": 563454
+    }
+   ]
+  },
+  {
+   "name": "synthetic headingless, 6000 blocks",
+   "blocks": 6000,
+   "body": 6000,
+   "wholeDocumentFitsOneCall": false,
+   "bounded": {
+    "flat": true,
+    "parts": 10,
+    "sections": 100
+   },
+   "slices": [
+    {
+     "lo": 0,
+     "hi": 1199,
+     "size": 1200,
+     "startsOn": "body-start",
+     "maxTokens": 91100,
+     "answerEstimate": 27100,
+     "userChars": 845170
+    },
+    {
+     "lo": 1200,
+     "hi": 1799,
+     "size": 600,
+     "startsOn": "part",
+     "maxTokens": 80425,
+     "answerEstimate": 16425,
+     "userChars": 422022
+    },
+    {
+     "lo": 1800,
+     "hi": 2999,
+     "size": 1200,
+     "startsOn": "part",
+     "maxTokens": 91100,
+     "answerEstimate": 27100,
+     "userChars": 844350
+    },
+    {
+     "lo": 3000,
+     "hi": 4199,
+     "size": 1200,
+     "startsOn": "part",
+     "maxTokens": 91100,
+     "answerEstimate": 27100,
+     "userChars": 844696
+    },
+    {
+     "lo": 4200,
+     "hi": 4799,
+     "size": 600,
+     "startsOn": "part",
+     "maxTokens": 80425,
+     "answerEstimate": 16425,
+     "userChars": 421845
+    },
+    {
+     "lo": 4800,
+     "hi": 5999,
+     "size": 1200,
+     "startsOn": "part",
+     "maxTokens": 91100,
+     "answerEstimate": 27100,
+     "userChars": 844688
+    }
+   ]
+  }
+ ]
+}

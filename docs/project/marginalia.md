@@ -117,7 +117,9 @@ options passed over and GPT Sol's review are in
   starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
   a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
   arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
-  [`src/web/useRelations.ts`](../../src/web/useRelations.ts).
+  [`src/web/useRelations.ts`](../../src/web/useRelations.ts). The first-open default that turns the
+  column on for a reader with the experimental switch on is such an arrival, not a press
+  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
 - **Nothing in the column says it is running.** The words appear when the job finishes; the job
   is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
