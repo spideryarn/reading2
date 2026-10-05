@@ -303,6 +303,19 @@ purpose (saved 77 s before the jobs were created on one); a focused box held the
 and **Open the article** saved and opened; a re-add showed the stored purpose and sent nothing;
 nothing scrolled sideways at 390 px.
 
+**GPT Sol on the server fix** (commit of *a purpose saved mid-import is no longer answered with
+404*, `workspace-write`, exit 0, answer file fresh):
+[code-review-2-sol](261004l-purpose-autosave-code-review-2-sol.md). My claim that every client of
+the PATCH already handled a null `entry` was false, and it fixed what that hid, red first: F20
+(`useShelf`'s archive, restore and undo put the null into the list and crashed the shelf), F21
+(the rename box dereferenced it), F22 (`patch(slug, {})` on a missing article resolved null instead
+of rejecting, and looked in the wrong half of the shelf for an archived one). None is reachable
+from the add page; all three were made reachable by the nullable answer. It also confirmed there is
+no second write on the purpose's path whose answer is read through the published-only list, and
+that a failed or cancelled import leaves its row and purpose for a Retry to reuse, never copied to
+another article. One wording of its I changed back: the rename box's label stays *Couldn't rename
+it*, which is what it nearly always is.
+
 ## Stages
 
 One stage: one page and one small class. Plan review (GPT Sol, read-only), build, code review

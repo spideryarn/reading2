@@ -705,10 +705,11 @@ export interface ShelfStore {
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
-   * assuming what the write did. **`null` means written, and not on the shelf
-   * yet**: the row exists and has no published revision, which is an article
-   * mid-import. Not an error, because the write happened. A slug with no row
-   * still rejects with not-found.
+   * assuming what the write did. **`null` means the owned row was found, but no
+   * shelf card was available to return** — for example, an article mid-import,
+   * or a concurrent edit moving it to the other archive state before the card
+   * is read. Any supplied changes were written. A slug with no owned row still
+   * rejects with not-found, including an empty change.
    */
   patch(
     slug: string,

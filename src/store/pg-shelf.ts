@@ -379,7 +379,10 @@ const rawPgShelfStore: ShelfStore = {
     // The route refuses an empty change before it gets here; this is the
     // belt-and-braces that stops a future caller producing `UPDATE … SET` with
     // nothing after it, which is a syntax error rather than a no-op.
-    if (Object.keys(set).length === 0) return entryFor(slug, false);
+    if (Object.keys(set).length === 0) {
+      const shelf = await rawPgShelfStore.read(slug);
+      return entryFor(slug, !!shelf.archivedAt);
+    }
     /* Compare normalized values inside the UPDATE: supplying a setting again
        is not a transition. A separate read would race another reader change.
        Use the database wall clock rather than the transaction's older start
@@ -550,9 +553,11 @@ const db = () => getDb();
  */
 async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry | null> {
   const entries = await pgArticleReader.listArticles({ archived });
-  /* `null`: the write above proved the row exists, so no card means the
-     article is not on the shelf yet, which is every article while it is being
-     imported. The add page saves the purpose then (plan 261004l), and until
+  /* `null`: the owned row was found above, so no card means the
+     article has no card in this shelf read. That includes every article while
+     it is being imported, and a concurrent edit moving it to the other archive
+     state between the write and this read. The add page saves the purpose
+     during import (plan 261004l), and until
      2026-10-05 this threw 404 after the UPDATE had committed: a request that
      reported failure and changed the data. `ShelfStore.patch`. */
   return entries.find((e) => e.slug === slug) ?? null;

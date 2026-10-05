@@ -131,7 +131,7 @@ const storePurpose = (slug: string, body: { purpose: string | null }): Response 
   const value = body.purpose?.trim() ?? "";
   if (value === "") purposes.delete(slug);
   else purposes.set(slug, value);
-  return json({ purpose: value === "" ? null : value });
+  return json({ entry: null, purpose: value === "" ? null : value });
 };
 /** How the PATCH answers. Replaced per test; the default stores what it was sent. */
 let patchAnswer: (body: { purpose: string | null }, slug: string) => Promise<Response> = async (body, slug) =>
