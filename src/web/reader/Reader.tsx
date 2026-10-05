@@ -3002,6 +3002,10 @@ export function Reader({
       case "structure":
         return (
           <StructureBand
+            slug={slug}
+            /* Only for the line a headings tree draws: the owner's is the one
+               with *Try again* on it (StructureNotice.tsx). */
+            owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
             sections={sections}

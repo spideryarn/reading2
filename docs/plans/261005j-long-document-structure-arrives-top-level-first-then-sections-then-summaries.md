@@ -48,8 +48,12 @@ the local database and production.
 A call the ledger records as `ok` came back; whether its answer was accepted is a different fact,
 recorded on the step, and the two rows above are kept apart for that reason.
 
-**There is no recorded slices failure to count.** The slices path is not deployed, and locally it
-has run on one real book, once, and worked (4 slices, 5 calls, 131 seconds, $1.00). So "why do
+**There is no recorded slices failure to count.** The slices path reached production on
+2026-10-05 at 14:04 (`618ab1509` is an ancestor of `origin/main`), a few hours before this
+measurement, and no long document has gone through it there yet. Locally it has run on one real
+book, once, and worked (4 slices, 5 calls, 131 seconds, $1.00). (This said "not deployed" as
+first written, taken from 261005a's status line and not checked; the counts were right and the
+reason was wrong.) So "why do
 the slices fail today" has no answer in the data, and the fallback rate is unknown. What can be
 said is read from the code (`runSlices`, `src/structure-slices.ts`, and its caller in
 `src/structure.ts`):
@@ -284,10 +288,18 @@ Greg's shape, and the two decisions inside it that nothing has measured:
   guess: how much of a call's time is the gists has never been measured, and a tree with titles
   and no gists is already something a reader can use, as the plain tree shows. The eval is there
   to settle it either way.
-- **The cascade's prompt is not an arm.** B's second round is the ordinary structure call on one
-  part, the prompt every article is cut by, as the slices use it. The expansion prompt has a
-  different schema, one measured run and no quality judgement; taking it would mean evaluating a
-  prompt as well as a shape. Named so the review can disagree.
+- **B's second round is the cascade's expansion prompt** (`expand/8`,
+  `src/structure-expand.ts`), reused unchanged. As first written this said the opposite: the
+  ordinary structure call on one part, to avoid evaluating a prompt as well as a shape. That
+  does not work. The ordinary call answers with three levels, and under a part that puts
+  paragraphs a level too deep; the expansion prompt was built for exactly "divide this one
+  section into one level of children". So the eval does test a prompt along with a shape, and its
+  write-up says which failures are the prompt's (it has no strict schema, and asks for a verdict
+  per child that nothing here uses).
+- **The three new prompts are the eval's own** (`evals/long-structure/prompts.ts`: `long-top/1`,
+  `long-sections/1`, `long-section-gists/1`). Their rules for titles, gists, questions and
+  boundaries are cut out of the production prompts by section name, not rewritten, so a
+  difference between arms is not a difference in what a gist is asked to be.
 
 **Corpus** (seven documents; block counts from the earlier work, to be re-checked by the harness
 before any paid call): the 250-page book (3,053 blocks, past the line) and a second document past
@@ -351,6 +363,67 @@ show model-written part titles perhaps a minute earlier, and it costs a third tr
 care that goes with one. If the gap between the first call and the finished tree is short, the
 answer is no.
 
+### Stage 5: an enormous document gets labels on a spread of its paragraphs, not on the first stretch
+
+Added 2026-10-05 at the Overseer's request. It is about the labels step, which runs after
+structure, and it is here because it is the same reader and the same document. Not reviewed by
+GPT Sol yet; it gets its own review before it is built.
+
+The problem is
+[261005c § (a)](261005c-long-document-follow-ups-stale-sentence-run-codex-overwrite-guard-breadcrumb-paragraph-source-guess-page-cap.md):
+a page of 120,000 short paragraphs plans about 2,000 label calls, the labels job gets three
+740-second windows, and so the labels stop partway down and end `failed`. Greg's answer to
+[Q-label-ceiling], as the Overseer relayed it to this session (his words, not seen by me at
+first hand):
+
+> for very large articles, we tweak/add to the prompt to say to only add labels for some of the
+> paragraphs (so that it's not just truncated partway down the articles)
+
+**What it would be.** Above a ceiling on planned label calls, the step labels a spread of
+paragraphs across the whole document and leaves the rest alone, so the end is covered as well as
+the start and the number of calls is bounded whatever the length.
+
+**Priced for the 120,000-paragraph case**, from the 250-page book's labels run (65 calls, four at
+a time, 221 seconds, $1.53: about $0.024 and 14 seconds a call, so about 200 calls fit one
+740-second window):
+
+| which paragraphs get a label | labels | calls | time, four at a time | cost |
+|---|---|---|---|---|
+| all of them (today's plan; does not finish) | 120,000 | about 2,000 | about 1.9 hours, 10 job windows | about $47 |
+| every 10th, a call per section as now | 12,000 | about 2,000 if each section is still its own call | no saving | no saving |
+| every 10th, ten sections to a call | 12,000 | about 200 | about 12 minutes, one window | about $5 to $10 (each call reads ten times the text) |
+| the first paragraph of each lowest section | about 2,000 | about 35 | about 2 minutes | about $1 to $2 |
+
+The second row is why the choice of which paragraphs matters less than **how many sections one
+call covers**: a call per section is 2,000 calls however few labels each writes. So the ceiling is
+on calls, and the spread is whatever fits under it. Proposed: a ceiling of 200 calls (one job
+window, about 12,000 paragraphs at full labelling, four times the 250-page book); below it,
+nothing changes; above it, the step labels one paragraph in *k*, the first of each lowest section
+always among them, with *k* chosen so the calls fit, and each call covers several neighbouring
+sections. The prompt gains what Greg describes: these marked paragraphs get a label, the others
+are context. That is a prompt change, measured before it is kept
+([prompting-guide.md](../project/prompting-guide.md)).
+
+**What changes in the rule.** [granularity-zoom.md](../project/granularity-zoom.md) says an
+absent `navLabel` on a paragraph means deliberately unlabelled and only that, and a revision has
+its paragraph labels everywhere or the whole layer is withheld (`Article.navLabelStatus`,
+`src/web/nav-labels.ts`). A spread breaks both, so:
+
+- `navLabelStatus` gains a value for "labelled in part, on purpose" (say `sampled`), stored on
+  the revision, so that state is never read off which labels happen to be there.
+- Under it the paragraph layer is drawn, not withheld. A paragraph with a label shows it; one
+  without shows **its own opening words, in the author's face**, as a headings-only section title
+  already does (`titleFrom: "opening-words"`, [fonts.md](../project/fonts.md)). That keeps the
+  rule that generated text never stands in for prose: the stand-in is the prose.
+- An absent label keeps its one meaning under every other status.
+- The reader is told once, where they ask for the paragraph layer: this document is long, so
+  only some paragraphs have a label.
+
+What it gives up: most paragraphs of such a document are never labelled, and the labels that
+exist were written with less of their neighbours in view. The alternative passed over is the
+progress rule in 261005c (keep going as long as a window made progress): it finishes the job
+honestly and costs about $47 and two hours of an open tab for one article, with a migration.
+
 ## Stages
 
 - [ ] **0.** The line in Structure when the tree is the author's headings, with Try again for the
@@ -362,6 +435,7 @@ answer is no.
 - [ ] **2.** The eval. Paid, cap $40, blocked on the OpenRouter key's limit.
 - [ ] **3.** The chosen shape, with its own plan section and review.
 - [ ] **4.** Delivery, on the open-before-structure work.
+- [ ] **5.** Labels on a spread of paragraphs past a ceiling of calls. Its own review first.
 
 ## The simpler options passed over
 
