@@ -267,7 +267,7 @@ export function stickyOffset(): number {
  * **Why the destination half is needed.** `scrollToBlock` used to call this
  * **once** and hand the number to `glide()` as a fixed target (since 2026-09-28
  * it is asked every frame — `aimAt` — but the frames early in a glide still
- * need a prediction rather than a half-slid bar); `markOurScroll` stops
+ * need a prediction rather than a half-slid bar); `ourScrollY` stops
  * the bar *reacting* to the jump but cannot stop a transition already in
  * flight. So a reader who scrolled up — starting the reveal — and clicked a
  * gist 90ms later got a target computed against half a bar, and the row they
@@ -535,22 +535,18 @@ export function watchBarVisibility(): () => void {
     pending = 0;
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
-    // `markOurScroll`.
-    if (
-      performance.now() < quietUntil &&
-      ourScrollY !== null &&
-      Math.abs(window.scrollY - ourScrollY) < 0.5
-    ) {
+    // `ourScrollY`.
+    /* Exactly, not within a tolerance: `ourScrollY` is the browser's own
+       readback, so an unmoved page reports the same number, and a quarter of a
+       pixel is the reader. With no clock to end it, a tolerance would ignore
+       that movement for good (GPT Sol, plan review of 261005c, F1). */
+    if (window.scrollY === ourScrollY) {
       from = window.scrollY;
       return;
     }
-    /* A different pixel inside the quiet window is the reader taking over,
-       not our delayed scroll event. Let the bar answer this movement and end
-       the window now rather than deafening it for the remaining 150ms. */
-    if (performance.now() < quietUntil) {
-      quietUntil = 0;
-      ourScrollY = null;
-    }
+    /* Any other pixel is the reader taking over. Let the bar answer this
+       movement, and forget ours. */
+    ourScrollY = null;
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
     if (next.hidden === hidden) return;
@@ -652,29 +648,39 @@ let aiming: number | null = null;
  * When the page is being moved by us rather than by the reader.
  *
  * **The bar must not react to our own scrolling, and this is a correctness
- * problem rather than a tidiness one.** Every jump in this file computes its
- * destination once, from `stickyOffset()`, and then travels. If the travel
- * itself can hide the controls bar — and a jump down the article is a downward
- * scroll, so it can — the clearance the destination was calculated with is no
- * longer the clearance that exists when it arrives, and the row lands a bar's height
- * under the header it was supposed to clear. An upward jump has the mirror
- * fault: it reveals the bar and lands behind it.
+ * problem rather than a tidiness one.** A jump must not hide or reveal the
+ * controls as though the reader had scrolled. When this guard was introduced,
+ * the destination was measured once, so reacting to the jump also changed the
+ * clearance underneath that fixed target. Caught by GPT Sol reviewing the
+ * plan, 2026-08-27, before it was ever run.
  *
- * Neither shows up as an error, and both look exactly like a jump that worked.
- * Caught by GPT Sol reviewing the plan, 2026-08-27, before it was ever run.
+ * The target is now re-measured every frame by `aimAt`, using
+ * `stickyDestination()` to reserve the bar's eventual coverage. That corrects
+ * the destination when layout changes; this guard keeps the bar's visibility
+ * from changing in response to our own movement.
  *
- * `mark()` is called by every path in this file that moves the page, and the
- * window it opens covers the whole animation with a little either side.
- * `watchBarVisibility` sits out anything inside it — chrome answers to the
- * reader's gesture, never to ours, which is the rule that makes the race
- * impossible rather than unlikely.
+ * **A scroll event that reports the pixel we last moved the page to is ours,
+ * whenever it arrives; one at any other pixel is the reader's.** Every path in
+ * this file that moves the page goes through `moveWindow`, which remembers
+ * where the browser actually put it, and `watchBarVisibility` and the arrival
+ * anchor sit out an event at that pixel — chrome answers to the reader's
+ * gesture, never to ours.
+ *
+ * **It used to be a clock**, and that was the bug: a *quiet window* opened when
+ * the glide began and closed 150ms after it was due to end, and outside it
+ * every scroll event was the reader. But a click that jumps also re-renders
+ * the reading view, and the glide's own last event waits behind that render —
+ * 745 to 1,243ms on a 1,025-block article, measured. It arrived after the
+ * window, at the very pixel the glide had reached, and was read as the reader
+ * leaving: the anchor went, `?at=` was rewritten to the section before the one
+ * clicked, and the bar hid itself for a jump. How long our event takes is not
+ * ours to promise; which pixel it reports is.
+ * docs/postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md.
+ *
+ * Nothing here expires. It is forgotten when an event arrives at another
+ * pixel, or when the reader's wheel or finger stops a glide (`cancel`).
  */
-let quietUntil = 0;
-/** The last pixel one of this module's `scrollTo` calls actually reached. */
 let ourScrollY: number | null = null;
-function markOurScroll(ms = SCROLL_MS + 150) {
-  quietUntil = performance.now() + ms;
-}
 
 /** Move the page and remember the browser's clamped/rounded answer. */
 function moveWindow(top: number): void {
@@ -696,21 +702,18 @@ let landing: ((outcome: ScrollOutcome) => void) | null = null;
  * the glide's own last frame, which ends the animation through here too.
  */
 function cancel(outcome: ScrollOutcome = "cancelled") {
-  /* **The reader taking over ends the quiet window, and must.** `cancel` is what
-     a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
-     line the page is moving because *they* are moving it — and leaving
-     `quietUntil` set would go on ignoring their scrolling for up to 350ms,
-     which is exactly the gesture most likely to be them reaching for the chrome
-     this suppresses. Cheap to get wrong, invisible when wrong: the bar would
-     merely feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
+  /* **The reader taking over ends our claim on the pixel, and must.** `cancel`
+     is what a wheel, a touch or a `pointercancel` runs (see `bail` below), so
+     past this line the page is moving because *they* are moving it — and a
+     reader's first event can land on the pixel our last frame reached, which
+     is exactly the gesture most likely to be them reaching for the chrome this
+     suppresses. Cheap to get wrong, invisible when wrong: the bar would merely
+     feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
   /* …but a glide's own last frame is not the reader taking over, and its
-     scroll event is still to come: keep the window it opened, which ends
-     150ms later on its own, so that event is not read as the reader scrolling
-     away from the arrival it has just made (`anchor`, plan 260929a). */
-  if (outcome !== "settled") {
-    quietUntil = 0;
-    ourScrollY = null;
-  }
+     scroll event is still to come: keep the pixel, so that event is not read
+     as the reader scrolling away from the arrival it has just made (`anchor`,
+     plan 260929a). */
+  if (outcome !== "settled") ourScrollY = null;
   /* Any movement at all ends a centred arrival's hold on the position. */
   clearArrivalAnchor();
   if (frame) cancelAnimationFrame(frame);
@@ -767,10 +770,6 @@ function glide(
     if (!provisional()) return done?.("settled");
     ms = 0;
   }
-  // AFTER the early return, not before it: a jump to where we already are moves
-  // nothing, and opening the quiet window for it would deafen the bar to a third
-  // of a second of the reader's own scrolling for no reason at all.
-  markOurScroll(ms + 150);
   const started = performance.now();
   /* An instant move has already arrived as far as `glideTarget` is concerned:
      the re-check only corrects. */
@@ -831,7 +830,6 @@ export function reducedMotion(): boolean {
  */
 export function scrollToTop() {
   cancel();
-  markOurScroll(150); // instant, so only the event it fires needs covering
   moveWindow(0);
 }
 
@@ -923,39 +921,52 @@ export function alignedOffset(o: {
  *
  * It lasts until the next movement of any kind — `cancel`, which every glide
  * runs first and which a wheel or touch mid-glide also runs — or a scroll
- * event outside our own quiet window. Inside that window, the glide's delayed
- * event keeps the same pixel and a reader's movement does not, so the pixel
- * decides. A re-flow that makes the browser scroll ends it too, and then the
- * reading line answers again, which is the old behaviour rather than a wrong
- * one.
+ * event at any pixel but the one it arrived at. The glide's own delayed event
+ * reports that pixel and a reader's movement does not, so the pixel decides,
+ * however late the event is (§ `ourScrollY`). A re-flow that makes the browser
+ * scroll ends it too, and then the reading line answers again, which is the
+ * old behaviour rather than a wrong one.
  */
 let anchor: { id: string; passage: string | undefined } | null = null;
 let anchorY = 0;
 let anchorListening = false;
+const anchorListeners = new Set<() => void>();
+
+/** Anchor changes can settle or end without scrolling; live position samplers must hear them. */
+export function subscribeArrivalAnchor(listener: () => void): () => void {
+  anchorListeners.add(listener);
+  return () => {
+    anchorListeners.delete(listener);
+  };
+}
 
 function onScrollWhileAnchored(): void {
-  /* The glide's delayed event reports the pixel it just reached. A reader can
-     scroll during that same 150ms window, though, and a different pixel is the
-     distinction the clock alone cannot make (plan 260929a code review, F1). */
-  if (performance.now() < quietUntil && Math.abs(window.scrollY - anchorY) < 0.5) return;
+  /* The glide's delayed event reports the pixel it just reached, and may
+     arrive a second later behind a render. The page has not moved, so the
+     reader has not left — no clock is asked (§ `ourScrollY`). */
+  if (window.scrollY === anchorY) return; // exactly: `anchorY` is a readback too
   clearArrivalAnchor();
 }
 
 /** End a centred arrival without implying that a glide is in flight. */
 export function clearArrivalAnchor(): void {
+  const held = anchor !== null;
   anchor = null;
   if (anchorListening) {
     window.removeEventListener("scroll", onScrollWhileAnchored);
     anchorListening = false;
   }
+  if (held) for (const listener of anchorListeners) listener();
 }
 
 function holdAnchor(id: string, passage: string | undefined): void {
   anchor = { id, passage };
   anchorY = window.scrollY;
-  if (anchorListening) return;
-  window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
-  anchorListening = true;
+  if (!anchorListening) {
+    window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
+    anchorListening = true;
+  }
+  for (const listener of anchorListeners) listener();
 }
 
 /** The centred arrival the reader is standing on, or `null` — see `anchor`. */
