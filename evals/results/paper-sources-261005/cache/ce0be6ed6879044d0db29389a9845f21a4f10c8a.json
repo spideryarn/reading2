@@ -1,0 +1,1 @@
+{"source":"doi-elsevier","label":"Deep learning in NN (Schmidhuber)","role":"fulltext","expect":"html","requestedUrl":"https://www.sciencedirect.com/science/article/pii/S0893608014002135","outcome":"fetch-failed","elapsedMs":104,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

@@ -1,0 +1,1 @@
+{"source":"chemrxiv","label":"Ion mobility","role":"fulltext","expect":"pdf","requestedUrl":"https://doi.org/10.26434/chemrxiv-2025-l6zz7/v4","outcome":"fetch-failed","elapsedMs":135,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}
