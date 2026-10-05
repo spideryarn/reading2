@@ -30,6 +30,7 @@ import { openRouterJson, type AiRequestBody } from "./ai-call.js";
 import { PAPER_METADATA_MODEL } from "./models.js";
 import { firstPagesText } from "./pdf.js";
 import { htmlDocumentText } from "./paper-text.js";
+import { tidiedTitle } from "./title-tidy.js";
 import type { Author, Meta } from "./types.js";
 
 /** How many pages are read. The title, byline and abstract are on these. */
@@ -351,7 +352,9 @@ export function paperMeta(input: {
   const authors: Author[] = found.authors.map((name) => ({ name, affiliations: [] }));
   return {
     slug,
-    title,
+    /* Tidied as a full import's title is (src/title-tidy.ts, plan 261005g), but
+       with no body to say which words are acronyms: a minimal paper has none. */
+    ...tidiedTitle(title),
     ...(authors.length > 0 ? { authors, byline: found.authors.join("; ") } : {}),
     ...(found.abstract ? { abstract: found.abstract } : {}),
     ...(found.doi ? { doi: found.doi } : {}),

@@ -211,6 +211,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
   return compact({
     slug: ref.slug,
     title: row.title,
+    titleOriginal: row.titleOriginal,
     byline: row.byline,
     authors: decodeAuthors(row.authors),
     siteName: row.siteName,
@@ -809,6 +810,7 @@ export async function stampForStep(
  */
 const META_COLUMNS = [
   "title",
+  "titleOriginal",
   "byline",
   "authors",
   "siteName",
@@ -828,6 +830,12 @@ const META_COLUMNS = [
   "pagesChecked",
 ] as const;
 
+function storedOriginal(meta: Meta): string | null {
+  if (typeof meta.titleOriginal !== "string" || typeof meta.title !== "string") return null;
+  const original = plainTitle(meta.titleOriginal);
+  return original && original !== plainTitle(meta.title) ? original : null;
+}
+
 /** `meta.json` taken apart into the columns it owns — the inverse of `readMeta`. */
 export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
   /* **Every column named, and `?? null` on every one of them.** A field the
@@ -838,6 +846,12 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
     /* The extractors already made it plain; this is the guard for the next
        producer that forgets. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
     title: typeof meta.title === "string" ? plainTitle(meta.title) : null,
+    /* Null when absent, so a re-extraction whose title needed no tidying clears
+       the last one's original rather than leaving it beside a title it is not
+       the original of. And through the same `plainTitle` as the title, so the
+       pair cannot differ in anything but the tidying — the Metadata page offers
+       this string back as a title. Plan 261005g. */
+    titleOriginal: storedOriginal(meta),
     byline: meta.byline ?? null,
     /* `?? null` like its neighbours, so a re-extraction that finds no declared
        authors clears the list rather than leaving the last one beside a new

@@ -124,6 +124,26 @@ describe("the front-matter pass inside the stage", () => {
     expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
   });
 
+  it("a title printed in capitals reaches meta in title case, with the original beside it", async () => {
+    /* Plan 261005g. The rendered page keeps the capitals: only `meta` is tidied. */
+    const shouted = FRONT.map((r) =>
+      r.text === "A landscape of consciousness" ? { ...r, text: "A LANDSCAPE OF CONSCIOUSNESS" } : r,
+    );
+    const result = await run(
+      frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
+      null,
+      shouted,
+    );
+    expect(result.meta.title).toBe("A Landscape of Consciousness");
+    expect(result.meta.titleOriginal).toBe("A LANDSCAPE OF CONSCIOUSNESS");
+    expect(result.extractedHtml).toContain("<title>A LANDSCAPE OF CONSCIOUSNESS</title>");
+  });
+
+  it("and a title that needed nothing has no original", async () => {
+    const result = await run(frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }));
+    expect(result.meta).not.toHaveProperty("titleOriginal");
+  });
+
   it("uses a verified author list for the byline and structured metadata", async () => {
     const result = await run(
       frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
