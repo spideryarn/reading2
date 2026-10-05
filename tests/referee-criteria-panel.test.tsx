@@ -823,3 +823,28 @@ describe("a criterion answered about an older paper says so on the row", () => {
     expect(host.textContent).toContain(WARNING);
   });
 });
+
+/* A criterion kind a newer server sends to a copy built before it. The line
+   under the criterion is a table read by that value. docs/plans/261005h,
+   Stage A. */
+describe("a criterion kind this copy of the app was built before", () => {
+  async function kindLine(row: SavedCriterion): Promise<string | null | undefined> {
+    answer = () => Promise.resolve(json({ criteria: [row], sourceHash: "h" }));
+    mount();
+    await flush();
+    expect(host.textContent, "no criterion reached the screen at all").toContain(row.criterion);
+    return host.querySelector(".crit-kind")?.textContent;
+  }
+
+  it("labels a kind it knows (the control)", async () => {
+    expect(await kindLine(diverging([], { sourceHash: "h" }))).toBe("For / against");
+  });
+
+  it.each(["a-newer-kind", "__proto__", "constructor", "toString"])(
+    "shows %s as the server's own word, and keeps the row",
+    async (kind) => {
+      const row = { ...diverging([], { sourceHash: "h" }), config: { kind } } as unknown as SavedCriterion;
+      expect(await kindLine(row)).toBe(kind.replaceAll("-", " "));
+    },
+  );
+});

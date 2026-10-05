@@ -204,3 +204,54 @@ describe("whose words a shut line is (fonts.md)", () => {
     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ui")).toBe(true);
   });
 });
+
+/* A relation or a provenance a newer server sends to a copy built before it.
+   Each stamp and each tip sentence is a table read by that value. The slot's
+   boundary catches a throw, so the failure is a block whose notes silently are
+   not there. docs/plans/261005h, Stage A. */
+describe("a value this copy of the app was built before", () => {
+  const UNKNOWN = ["a-newer-value", "__proto__", "constructor", "toString"];
+  const words = (value: string) => value.replaceAll("-", " ");
+  const idea = (provenance: string) =>
+    ({ kind: "idea", ideaId: "i1", name: "Locality", statement: "Causes act nearby.", provenance }) as unknown as MarginaliaNote;
+  const stamps = () => [...host.querySelectorAll(".marg-stamp")].map((el) => el.textContent);
+  const openIdea = () => act(async () => host.querySelector<HTMLButtonElement>("button.marg-idea")?.click());
+  const cardLines = () => [...document.querySelectorAll(".tip-soon-how")].map((el) => el.textContent);
+
+  beforeEach(() => {
+    /* React logs what the slot's boundary caught; the assertions report it. */
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stamps the values it knows (the control)", async () => {
+    paint([{ kind: "debate", items: [claim] }, idea("assumed")]);
+    expect(stamps()).toEqual(["disputes", "assumes"]);
+    await openIdea();
+    expect(cardLines()).toHaveLength(2);
+    expect(cardLines()[0]).toBe("The piece takes this for granted rather than arguing for it.");
+  });
+
+  it.each(UNKNOWN)("stamps a lone Debate page's relation %s as the server's own word", (relation) => {
+    paint([{ kind: "debate", items: [{ ...claim, relation } as unknown as MarginClaim] }]);
+    expect(stamps()).toEqual([words(relation)]);
+  });
+
+  it.each(UNKNOWN)("stamps relation %s on one of several Debate pages", (relation) => {
+    const other = { ...claim, id: "d2", relation } as unknown as MarginClaim;
+    paint([{ kind: "debate", items: [claim, other] }]);
+    /* Each page's own stamp is inside the note, which is shut until pressed. */
+    act(() => host.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    expect(stamps()).toEqual(["Debate", "disputes", words(relation)]);
+  });
+
+  it.each(UNKNOWN)("stamps an idea's provenance %s, and its card says only what it knows", async (provenance) => {
+    paint([idea(provenance)]);
+    expect(stamps()).toEqual([words(provenance)]);
+    await openIdea();
+    expect(document.body.textContent).toContain("Causes act nearby.");
+    expect(cardLines()).toHaveLength(1);
+  });
+});
