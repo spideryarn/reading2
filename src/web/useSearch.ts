@@ -278,7 +278,7 @@ export function useSearch(
    * Colours this tab has chosen, by run id — the reader's word on the subject.
    *
    * It exists for one race, and the race is easy to hit because a meaning
-   * search takes half a minute and the row is on screen the whole time.
+   * search takes about ten seconds, sometimes twenty or more, and the row is on screen the whole time.
    * Recolour a run that is still streaming, and the `done` frame that lands a
    * moment later is a snapshot of the row **as the server finished writing
    * it** — which may predate the PATCH. `put` would then paint the run back to
