@@ -177,6 +177,7 @@ import {
 } from "../assets.js";
 import { assetPath, publicAssetPath } from "../asset-delivery.js";
 import { RESERVED_ATTRS } from "../reserved.js";
+import { type ShareKey, withShareKey } from "../share-key.js";
 import type { Article } from "../types.js";
 import { apiFetch } from "./lib/api.js";
 import { publicFetch } from "./public-api.js";
@@ -192,8 +193,13 @@ type StoredFigure = Extract<PdfFigureEntry, { status: "stored" }>;
  * the same fact spelled two ways and one of them will eventually be passed
  * inverted. `resolveAccess` in App.tsx has the answer in its hand — it is the
  * branch it is already on — so it passes it rather than deriving it.
+ *
+ * **`link` is a visitor who came by a private link** (plan 261005e): the same
+ * public route and the same bare fetch as `public`, with the link's key on the
+ * request, because the asset route asks the same question the article route
+ * does. Its own arm, so an owner's request cannot be handed a key.
  */
-export type RehostFooting = "owned" | "public";
+export type RehostFooting = "owned" | "public" | { kind: "link"; key: ShareKey };
 
 /**
  * **One article load's claim on the fetches it starts and the object URLs it
@@ -1033,10 +1039,18 @@ async function fetchAsset(
   entry: { sha256: string; ext: AssetExt },
   signal: AbortSignal,
 ): Promise<Blob> {
+  /* A private link's key rides on the public path and nowhere else; the two
+     visitor arms are otherwise one request. */
   const res =
-    footing === "public"
-      ? await publicFetch(publicAssetPath(slug, entry.sha256, entry.ext), signal)
-      : await apiFetch(assetPath(slug, entry.sha256, entry.ext), { signal });
+    footing === "owned"
+      ? await apiFetch(assetPath(slug, entry.sha256, entry.ext), { signal })
+      : await publicFetch(
+          withShareKey(
+            publicAssetPath(slug, entry.sha256, entry.ext),
+            footing === "public" ? null : footing.key,
+          ),
+          signal,
+        );
   /* `res.ok` before `blob()`: an error body is perfectly good bytes, and
      without this the reader gets a picture of a JSON error message.
      IllustratedView.tsx § `usePlateBytes` learned that one. */

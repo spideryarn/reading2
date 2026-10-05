@@ -229,6 +229,7 @@ function isDrawableEntry(value: unknown): boolean {
     maybe(e.archivedAt, str) &&
     maybe(e.fixture, (v) => typeof v === "boolean") &&
     maybe(e.titleOverridden, (v) => typeof v === "boolean") &&
-    maybe(e.visibility, (v) => v === "public")
+    maybe(e.visibility, (v) => v === "public") &&
+    maybe(e.privateLinkOn, (v) => typeof v === "boolean")
   );
 }

@@ -12,7 +12,15 @@ import type { Article } from "../src/types.js";
 const apiFetch = vi.fn();
 vi.mock("../src/web/lib/api.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/web/lib/api.js")>()),
-  apiFetch: (...args: unknown[]) => apiFetch(...args),
+  /* The sharing card asks for its private link's state on its own route when
+     the page opens (src/web/PrivateLink.tsx). Answered here, so the one
+     `Response` each case queues for the page's own read is not read twice. */
+  apiFetch: (...args: unknown[]) =>
+    String(args[0]).endsWith("/share-link")
+      ? Promise.resolve(
+          new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+        )
+      : apiFetch(...args),
 }));
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -149,7 +157,7 @@ describe("the imported title through the page's rename", () => {
 
   it("is absent from the visitor's page even if handed an original", async () => {
     await act(async () => root.render(createElement(PublicMetadataPage, {
-      slug: SLUG, article: article(), signedIn: false, sessionUnconfirmed: false,
+      slug: SLUG, article: article(), signedIn: false, sessionUnconfirmed: false, sharedBy: "public",
       available: { arc: false, tweets: false, glossary: false, ideas: false, quotes: false,
         timeline: false, sketch: false, skim: false, faq: false, simpleSummary: false,
         citations: false, debate: false },

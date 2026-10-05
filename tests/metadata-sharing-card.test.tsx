@@ -147,6 +147,15 @@ beforeEach(() => {
         }),
       );
     }
+    /* The card's first control reads its private link on its own route
+       (src/web/PrivateLink.tsx). No link, so the public switch below it may
+       say *"Only you can read this"*; an unreadable `{}` here would make it
+       say only *"This is not public"*, which is right and is not this test. */
+    if (url.endsWith("/share-link")) {
+      return Promise.resolve(
+        new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    }
     return Promise.resolve(new Response("{}", { status: 200 }));
   });
   host = document.createElement("div");
@@ -161,7 +170,7 @@ afterEach(async () => {
 });
 
 /** The metadata page, settled, with nothing pressed. */
-async function open(): Promise<void> {
+async function open(onPrivateLink?: (slug: string, on: boolean | null) => void): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}/metadata`);
   await act(async () => {
     root.render(
@@ -173,6 +182,7 @@ async function open(): Promise<void> {
           article: ARTICLE,
           onRenamed: () => {},
           onVisibility: () => {},
+          ...(onPrivateLink ? { onPrivateLink } : {}),
         }),
       ),
     );
@@ -521,4 +531,30 @@ describe("the sharing card, on the page that owns it", () => {
     // And the switch is inside it, rather than the box being an empty sibling.
     expect(box?.textContent).toContain("Only you can read this");
   });
+});
+
+it("reports private-link reads and writes to the owner article, including an uncertain write", async () => {
+  sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
+  const updates: Array<[string, boolean | null]> = [];
+  const originalFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/share-link") && init?.method === "POST") {
+      return Promise.resolve(new Response(JSON.stringify({ on: true, key: "a".repeat(22), since: "2026-10-05T12:00:00Z" }), {
+        status: 200, headers: { "content-type": "application/json" },
+      }));
+    }
+    if (String(input).endsWith("/share-link") && init?.method === "DELETE") return Promise.reject(new Error("lost reply"));
+    return originalFetch(input, init);
+  });
+  await open((slug, on) => updates.push([slug, on]));
+  expect(updates.at(-1)).toEqual([SLUG, false]);
+  const press = async (text: string) => {
+    await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === text)?.click());
+  };
+  await press("Create a link");
+  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+  await press("Create the link");
+  expect(updates.at(-1)).toEqual([SLUG, true]);
+  await press("Turn off");
+  expect(updates.at(-1)).toEqual([SLUG, null]);
 });

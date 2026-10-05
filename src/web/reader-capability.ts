@@ -33,7 +33,7 @@
  */
 import type { CitedWork, Comment, Crossref, Glossary, ThreadSummary } from "../types.js";
 import type { SavedSearch } from "./useSearch.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { QuotesRead } from "./useQuotes.js";
 import type { CitationsRead } from "./useCitations.js";
@@ -251,6 +251,13 @@ export type ReaderCapability =
        * wording depends on — rather than beside `artefacts`.
        */
       sessionUnconfirmed: boolean;
+      /**
+       * **Which way in**: the article is public, or the address carried the
+       * key of its private link (plan 261005e). Beside the two above because
+       * only the wording depends on it: the notice under the masthead and the
+       * chip's hover. It grants and withholds nothing.
+       */
+      sharedBy: PublicSharedBy;
     };
 
 /**

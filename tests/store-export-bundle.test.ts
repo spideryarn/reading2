@@ -89,6 +89,8 @@ vi.mock("../src/store/blobs.js", async (importOriginal) => {
 
 const SLUG = "store-export-bundle-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-00000000b0d1";
+/** A private link's key on the fixture: 22 base64url characters, which the column's CHECK requires. */
+const SHARE_TOKEN = "ExPoRtBuNdLeFiXtUrE_-0";
 const REVISION_ID = "00000000-0000-4000-8000-00000000b0d2";
 /** Three blocks, deliberately inserted out of order — see the ordering test. */
 const BLOCKS = ["spya-bnd234", "spya-bne234", "spya-bnf234"] as const;
@@ -284,6 +286,9 @@ describe("the bundle is the faithful projection", () => {
         opens: 3,
         visibility: "public",
         publicAt: new Date(),
+        /* A private link on it, so the zip has a key to leave out (plan 261005e). */
+        shareToken: SHARE_TOKEN,
+        shareTokenAt: new Date(),
       })
       .onConflictDoNothing();
     await db
@@ -498,6 +503,35 @@ describe("the bundle is the faithful projection", () => {
     for (const [file, text] of bundled) {
       expect(text, `${file} carries the owner's auth uuid`).not.toContain(owner());
     }
+  });
+
+  /**
+   * **The private link's key is a credential, and a zip gets forwarded.**
+   *
+   * `article.json` is `rowJson` over the whole `articles` row, which ships
+   * every column nobody told it to drop, so `share_token` rode out in it the
+   * day the column was added. Anybody holding that key and the slug, which is
+   * in the same file, can read the article until its owner turns the link off.
+   *
+   * Over the whole zip and the rollback's files, for the reason the owner-uuid
+   * check above gives: the value is what must not be there, under any name.
+   * That a link exists, and since when, is sharing state and does cross.
+   */
+  it("leaves the private link's key out of every file, and keeps when it was made", async () => {
+    const article = parsed("article.json");
+    expect(article).not.toHaveProperty("shareToken");
+    expect(article.shareTokenAt).toEqual(expect.any(String));
+    /* The control: the fixture really has the key, so its absence is the code's doing. */
+    const [row] = await getDb()
+      .select({ token: schema.articles.shareToken })
+      .from(schema.articles)
+      .where(eq(schema.articles.id, ARTICLE_ID));
+    expect(row?.token).toBe(SHARE_TOKEN);
+    for (const [file, text] of bundled) {
+      expect(text, `${file} carries the private link's key`).not.toContain(SHARE_TOKEN);
+    }
+    const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
+    expect(shelf).not.toContain(SHARE_TOKEN);
   });
 
   it("leaves out a file with nothing in it, and keeps the README", () => {

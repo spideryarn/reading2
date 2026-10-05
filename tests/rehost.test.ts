@@ -30,6 +30,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AssetEntry, Assets, PdfFigureEntry } from "../src/assets.js";
 import type { Article, Block, BlockId } from "../src/types.js";
+import { parseShareKey, type ShareKey } from "../src/share-key.js";
+
+/** A private link's key, in the shape `parseShareKey` passes. */
+const LINK_KEY = parseShareKey("AbCdEfGhIjKlMnOpQrStUv") as ShareKey;
 
 /* The two transports, and they are the only things in this module that touch
    the network: `apiFetch` for an owner, `publicFetch` for a visitor. Mocked at
@@ -249,6 +253,34 @@ describe("rehostImages", () => {
       expect.any(AbortSignal),
     );
     expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+  });
+
+  /**
+   * **On a private link the figure's request carries the key**, because the
+   * asset route asks the same question the article route does and a private
+   * article answers 404 without it. Still `publicFetch`, so still no token and
+   * no cookies. Plan 261005e.
+   */
+  it("fetches a private link's figure off the public route, with the key and no token", async () => {
+    const sha = "c".repeat(64);
+    publicFetch.mockResolvedValue(okPng());
+    const article = articleWith(
+      [figureBlock("spya-cccccc", REF_ONE, "Figure 1.")],
+      [stored(REF_ONE, sha)],
+    );
+    const out = (
+      await rehostImages(article, "a-piece", { kind: "link", key: LINK_KEY }, beginArticleLoad())
+    ).article;
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(publicFetch).toHaveBeenCalledTimes(1);
+    expect(publicFetch).toHaveBeenCalledWith(
+      `/api/public/asset/a-piece/${sha}.png?key=${LINK_KEY}`,
+      expect.any(AbortSignal),
+    );
+    expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+    /* The key reaches the request and never the page: what the reader's DOM
+       holds is a `blob:`, which names nothing. */
+    expect(JSON.stringify(out)).not.toContain(LINK_KEY);
   });
 
   /**
@@ -870,6 +902,29 @@ describe("the article's own images", () => {
       expect.any(AbortSignal),
     );
     expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+  });
+
+  /** The other image path: an article's own images on a private link carry the key too. */
+  it("fetches a private link's image off the public route, with the key", async () => {
+    publicFetch.mockResolvedValue(okPng());
+    const article = articleWithImages(
+      [imageBlock("spya-img018", `<p><img src="${IMG_URL_STORED}" alt="">Some prose.</p>`)],
+      [storedImage(IMG_URL, SHA)],
+    );
+    const rehosted = await rehostImages(
+      article,
+      "a-piece",
+      { kind: "link", key: LINK_KEY },
+      beginArticleLoad(),
+    );
+    const out = (await rehosted.images) ?? rehosted.article;
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(publicFetch).toHaveBeenCalledWith(
+      `/api/public/asset/a-piece/${SHA}.png?key=${LINK_KEY}`,
+      expect.any(AbortSignal),
+    );
+    expect(out.blocks[0]?.html).toMatch(/src="blob:/);
+    expect(JSON.stringify(out)).not.toContain(LINK_KEY);
   });
 
   /** One picture used twice in one article is one object and one request. */

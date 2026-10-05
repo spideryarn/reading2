@@ -2045,6 +2045,8 @@ export interface Article {
    * insist on.
    */
   visibility?: Visibility;
+  /** Owner-only sharing state. Absent means unknown; never contains the key. */
+  privateLinkOn?: boolean;
 
   /**
    * **When the owner archived this article — `null` while it is on the shelf.**
@@ -2223,6 +2225,8 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /** Owner-only fact that a private link is on, independently of public visibility. */
+  privateLinkOn?: boolean;
   /**
    * Whether the pipeline can safely reuse the stored source document. A
    * rebuild with no web address leaves `fetch` unforced, so this is exactly
@@ -2651,6 +2655,29 @@ export interface VisibilityState {
    */
   publicAt: string | null;
 }
+
+/**
+ * **An article's private link, as its owner is told about it** — what
+ * `GET`, `POST` and `DELETE /api/article/:slug/share-link` all answer.
+ * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * A union, so "on with no key" and "off with a key" cannot be written. The
+ * link itself is `/read/<slug>?key=<key>`; the client builds it, from
+ * `SHARE_KEY_PARAM` in src/share-key.ts.
+ *
+ * **`key` is a credential, and this is the only response that carries it.**
+ * It is not on the article, the shelf, the export or anything a visitor is
+ * sent. Do not log this value or put it in an error.
+ */
+export type ShareLinkState =
+  | { on: false }
+  | {
+      on: true;
+      /** The 22-character key. Anybody who has it and the slug can read the article. */
+      key: string;
+      /** ISO time this key was made. Making a link again makes a new key and moves this. */
+      since: string;
+    };
 
 /**
  * Everything the owner's Access & Sharing card needs, in one block.

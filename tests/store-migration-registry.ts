@@ -3146,6 +3146,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tests/setup/private-db.ts. */
   "tests/private-lane-survives-a-module-reset.test.ts": "private-postgres",
   "tests/public-visibility-pg.test.ts": "private-postgres",
+  /* The private link, plan 261005e: seven seeded articles, the owner's route
+     and the public reads with a key. The bucket is a temp directory, mocked at
+     the `blobStore()` selector as `asset-route` mocks it. */
+  "tests/share-link-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane is decided by the one case
      that publishes: *a revision landing between the two reads* is now a second
      real publication onto a seeded article, taken while a request is halfway
@@ -3727,6 +3731,16 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` reaches Postgres only through `setRequestOwner`, to show `ownedSlug` filters " +
         "on the owner and not on the slug. Every insert in the file belongs to " +
         "`currentOwnerId()`, which the private lane provides.",
+    },
+  },
+  "tests/share-link-pg.test.ts": {
+    "00000000-0000-4000-8000-0000005a11ec": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` for the three share-link routes, which must answer 404 for " +
+        "an article that is not the caller's. Each resolves the slug through `ownedSlug` before " +
+        "it writes, so the id matches no row and is never put in a column: the same reason as " +
+        "`public-visibility-pg`'s, and here there is not even a billing anchor to create.",
     },
   },
   "tests/asset-route.test.ts": {

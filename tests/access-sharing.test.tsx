@@ -29,6 +29,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SHARING_COPY_FAILED,
   SHARING_NOT_PERSONALISED,
+  SHARING_OFF,
+  SHARING_OFF_LINK_UNKNOWN,
+  SHARING_OFF_WITH_LINK,
   SHARING_ON,
   SHARING_PERSONALISED,
   SHARING_RIGHTS_CONFIRM,
@@ -281,6 +284,62 @@ it("tells the owner a shared article is listed, not merely reachable by link", (
     expect(copy).toMatch(/\blist(?:s|ed)(?: it)? publicly\b/i);
     expect(copy).not.toMatch(/with the link can read/);
   }
+});
+
+/**
+ * **"Only you can read this" is false while a private link is on** (plan
+ * 261005e). The control above this one on the card holds the link's state and
+ * the card passes it down, so the sentence for a private article is one of
+ * three: nobody else, anybody with the link, or no claim about a link at all
+ * when its state could not be read.
+ */
+describe("what a private article's line says when there may be a private link", () => {
+  async function mountWithLink(privateLinkOn: boolean | null | undefined): Promise<void> {
+    await act(async () => {
+      root.render(
+        createElement(AccessSharing, {
+          slug: SLUG,
+          title: "A piece",
+          sharing: PRIVATE,
+          ...(privateLinkOn === undefined ? {} : { privateLinkOn }),
+        }),
+      );
+    });
+    await settle();
+  }
+
+  it("says only you, with no link and when mounted on its own", async () => {
+    await mountWithLink(false);
+    expect(host.textContent).toContain(SHARING_OFF);
+    await mountWithLink(undefined);
+    expect(host.textContent).toContain(SHARING_OFF);
+  });
+
+  it("does not say only you while a link is on, and says who else", async () => {
+    await mountWithLink(true);
+    expect(host.textContent).not.toContain(SHARING_OFF);
+    expect(host.textContent).toContain(SHARING_OFF_WITH_LINK);
+    expect(SHARING_OFF_WITH_LINK).toMatch(/not public/i);
+    expect(SHARING_OFF_WITH_LINK).toMatch(/private link/i);
+  });
+
+  it("claims nothing about who can read when the link's state is not known", async () => {
+    await mountWithLink(null);
+    expect(host.textContent).not.toContain(SHARING_OFF);
+    expect(host.textContent).not.toContain(SHARING_OFF_WITH_LINK);
+    expect(host.textContent).toContain(SHARING_OFF_LINK_UNKNOWN);
+    expect(SHARING_OFF_LINK_UNKNOWN).not.toMatch(/only you/i);
+  });
+
+  it("leaves a public article's line alone, whatever the link is", async () => {
+    await act(async () => {
+      root.render(
+        createElement(AccessSharing, { slug: SLUG, title: "A piece", sharing: SHARED, privateLinkOn: true }),
+      );
+    });
+    await settle();
+    expect(host.textContent).toContain(SHARING_ON);
+  });
 });
 
 describe("turning it on", () => {

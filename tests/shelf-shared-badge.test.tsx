@@ -212,3 +212,20 @@ describe("the table", () => {
     expect(host.textContent ?? "").not.toMatch(/private/i);
   });
 });
+
+for (const view of ["card", "table"] as const) {
+  it(`marks a link-shared article in the ${view}, and public still wins`, () => {
+    const shared = entry({ privateLinkOn: true });
+    paint(view === "card"
+      ? createElement(ShelfCard, { entry: shared, shelf, note: ADDED_NOTE(shared, NOW) })
+      : createElement(Table, { entries: [shared] }));
+    expect(host.textContent).toContain("Private link");
+    expect(badges()).toHaveLength(0);
+    const both = { ...shared, visibility: "public" as const };
+    paint(view === "card"
+      ? createElement(ShelfCard, { entry: both, shelf, note: ADDED_NOTE(both, NOW) })
+      : createElement(Table, { entries: [both] }));
+    expect(badges()).toHaveLength(1);
+    expect(host.textContent).not.toContain("Private link");
+  });
+}

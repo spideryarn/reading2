@@ -29,7 +29,7 @@
  */
 import type { LibraryEntry } from "../types.js";
 import { exactly } from "./relative-time.js";
-import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_MARK_ON_ARCHIVED, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import { NOT_PROCESSED_MARK } from "./ShelfEntry.js";
 import { TopicDot } from "./ShelfTermChip.js";
 import { type Voice, voiceClass } from "./voice.js";
@@ -105,6 +105,8 @@ export function paperCardFacts(entry: LibraryEntry, topics: readonly PaperTopic[
       label: "Shared",
       value: entry.archivedAt ? SHARING_MARK_ON_ARCHIVED : SHARING_ON,
     });
+  } else if (entry.privateLinkOn === true) {
+    facts.push({ label: PRIVATE_LINK_HEADING, value: SHARING_OFF_WITH_LINK });
   }
 
   const byline = [entry.byline, entry.siteName].filter((s): s is string => Boolean(s?.trim())).join(" · ");

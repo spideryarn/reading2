@@ -314,6 +314,8 @@ export function Reader({
      the chip in the bar below it, neither of which is drawn for an owner.
      PublicChrome.tsx § SharedNotice for why it is two things and not one. */
   const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
+  /* The same two read this. `"public"` for the owner is never consulted. */
+  const sharedBy = capability.kind === "visitor" ? capability.sharedBy : "public";
   /**
    * **Whether this reader sees the modes that are still being built**, handed
    * down to the bar rather than fetched by it.
@@ -3594,6 +3596,7 @@ export function Reader({
         <SharedNotice
           signedIn={signedIn}
           sessionUnconfirmed={sessionUnconfirmed}
+          sharedBy={sharedBy}
           source={{ url: webSource(article.meta), guess: article.sourceGuess }}
         />
       )}
@@ -3659,7 +3662,7 @@ export function Reader({
         <div className="controls">
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
-          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />}
           {/* Where in the structure the reader is — `showCrumbs` above. */}
           {showCrumbs && (
             <HeadingsCrumbs

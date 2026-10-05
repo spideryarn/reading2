@@ -41,7 +41,7 @@ import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
@@ -54,6 +54,7 @@ import {
   STRUCTURE_BUILDING,
   type StructureArrival,
 } from "../modes/structure/StructureArriving.js";
+import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
@@ -111,7 +112,10 @@ export function ArticlePage({
      article it made in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
-  const access = useArticleAccess(slug, readerId, attempt);
+  /* A private link's key, when the address has one (useShareKey.ts). A visitor's
+     requests carry it; an owner's never do. */
+  const shareKey = useShareKey();
+  const access = useArticleAccess(slug, readerId, attempt, shareKey);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -239,6 +243,7 @@ export function ArticlePage({
           crossrefs={access.crossrefs}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
+          sharedBy={access.sharedBy}
           view={view}
         />
       )}
@@ -327,6 +332,8 @@ function OwnedArticle({
     null,
   );
   const visibility = shared?.slug === slug ? shared.visibility : null;
+  const [linked, setLinked] = useState<{ slug: string; on: boolean | null } | null>(null);
+  const linkState = linked?.slug === slug ? linked.on : undefined;
 
   /**
    * **One archive controller across both views.** A request begun from the
@@ -359,7 +366,14 @@ function OwnedArticle({
       mine !== null
         ? { ...fetched, meta: { ...fetched.meta, title: mine.title }, titleOverridden: mine.overridden }
         : fetched;
-    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const guessedArticle = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    let guessedAt = guessedArticle;
+    if (linkState === null) {
+      const { privateLinkOn: _cleared, ...rest } = guessedArticle;
+      guessedAt = rest;
+    } else if (linkState !== undefined) {
+      guessedAt = { ...guessedArticle, privateLinkOn: linkState };
+    }
     if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -369,7 +383,7 @@ function OwnedArticle({
       return rest;
     }
     return { ...guessedAt, visibility };
-  }, [fetched, mine, guessed, visibility]);
+  }, [fetched, mine, guessed, visibility, linkState]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string, overridden: boolean) =>
@@ -391,6 +405,9 @@ function OwnedArticle({
     setShared((was) =>
       was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
     );
+  }, []);
+  const linkedTo = useCallback((forSlug: string, on: boolean | null) => {
+    setLinked((was) => was?.slug === forSlug && was.on === on ? was : { slug: forSlug, on });
   }, []);
 
   /**
@@ -433,6 +450,7 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        onPrivateLink={linkedTo}
         archive={archive}
       />
     );
@@ -685,10 +703,13 @@ function VisitorArticle({
   crossrefs,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
   view,
 }: {
   slug: string;
   article: Article;
+  /** Public, or by a private link. For the notice, on both views. */
+  sharedBy: PublicSharedBy;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -717,6 +738,7 @@ function VisitorArticle({
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}
+        sharedBy={sharedBy}
       />
     );
   return (
@@ -732,6 +754,7 @@ function VisitorArticle({
         crossrefs,
         signedIn,
         sessionUnconfirmed,
+        sharedBy,
       }}
     />
   );

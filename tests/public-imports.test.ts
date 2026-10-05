@@ -206,6 +206,62 @@ describe("the public API's import graph", () => {
   });
 
   /**
+   * **And so is its sibling, the private link's predicate.** Plan 261005e.
+   *
+   * The same closure `publicSlug` has, for the same reason: no owner anywhere
+   * in what it can reach. The key's type is an `import type`, which this walk
+   * does not follow, so `src/share-key.ts` is not in the list; it is checked on
+   * its own below, because the public routes import it for real.
+   */
+  it("and linkSharedSlug imports nothing but the schema", () => {
+    expect(graphFrom("src/store/link-shared-slug.ts")).toEqual([
+      "src/db/schema.ts",
+      "src/ids.ts",
+      "src/store/link-shared-slug.ts",
+    ]);
+  });
+
+  /** The module that joins the two leaves reaches them and the key's shape, and no further. */
+  it("and the access value reaches the two leaves and nothing else", () => {
+    expect(graphFrom("src/store/public-access.ts")).toEqual([
+      "src/db/schema.ts",
+      "src/ids.ts",
+      "src/store/link-shared-slug.ts",
+      "src/store/public-access.ts",
+      "src/store/public-slug.ts",
+    ]);
+  });
+
+  /** What a key looks like is a fact about a string. It imports nothing. */
+  it("and the key's shape is a leaf with no imports at all", () => {
+    expect(graphFrom("src/share-key.ts")).toEqual(["src/share-key.ts"]);
+  });
+
+  /**
+   * **The owner's side of the link is not in the public graph**, and the
+   * listing cannot be handed a key.
+   *
+   * `pg-share-link.ts` is the one module that reads the token out of the
+   * database and the one that writes the audit table; a public request that
+   * could reach it could be made to return a key. And `public-library.ts`
+   * reaching `public-access.ts` would be the first step to a link-shared
+   * article on the public shelf.
+   */
+  it("and no public door reaches the owner's share-link store, nor the listing a key", () => {
+    for (const entry of PUBLIC_ENTRIES) {
+      expect(graphFrom(entry), entry).not.toContain("src/store/pg-share-link.ts");
+    }
+    const listing = graphFrom("src/store/public-library.ts");
+    expect(listing).not.toContain("src/store/public-access.ts");
+    expect(listing).not.toContain("src/store/link-shared-slug.ts");
+    expect(listing).not.toContain("src/share-key.ts");
+    /* The control: the article reader does reach all three. */
+    const reader = graphFrom("src/store/public-reader.ts");
+    expect(reader).toContain("src/store/public-access.ts");
+    expect(reader).toContain("src/store/link-shared-slug.ts");
+  });
+
+  /**
    * **The positive control**, and the reason the three cases above are worth
    * believing.
    *
@@ -362,6 +418,11 @@ describe("the public API's tables", () => {
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
+   *
+   * `article_share_link_events` is not here either, and the list did not grow
+   * for the private link (plan 261005e): the key is a column of `articles`,
+   * which is compared in a `where` and never selected, and the audit table is
+   * written from the owner's side only (src/store/pg-share-link.ts).
    */
   const ALLOWED = [
     "articles",
