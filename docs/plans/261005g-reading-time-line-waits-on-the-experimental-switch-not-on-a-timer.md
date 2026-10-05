@@ -149,6 +149,10 @@ What would make you pick: **A** if you think the chart is good enough for a stra
 **B** if you do not, but want every record whole for the day it is; **C** if you want the line
 back without collecting anything new; **D** if it should stay unfinished-and-hidden for now.
 
+**Decided: A** — Greg, 2026-10-05. His whole answer to `Q-reading-time-switch` was "A". The
+trade-off was named to him with the question: readers cannot yet switch it off or erase it. Built
+the same day; § What landed, at the end.
+
 ## The simpler thing passed over
 
 Building **A** without asking. It is small and it is what the report's words ask for. Passed over
@@ -164,6 +168,47 @@ GPT Sol, read-only, 2026-10-05: approve with changes, four findings, all taken
 now names the two paths that can delay it; on-then-off is stated as an inference with what it does
 not exclude; the options gained C and the missing off-and-erase control; and the setter has three
 callers, not two (the command bar was missed).
+
+## What landed, 2026-10-05
+
+Option A, in one stage (`c4f1bc27b`, then the review fix and one more test).
+
+- **The change.** `OwnedReader` in `ArticlePage.tsx` passes `true` to `useReadingTime` where it
+  passed the switch. The hook keeps `enabled`, as the place an off switch would arrive.
+- **Reader-facing words.** `/privacy`'s bullet lost "with experimental features on"; its date
+  already read 5 October 2026. `/help` no longer calls the spine's area experimental, and the
+  Experimental features topic no longer lists it. `/profile` names no individual features, so
+  nothing changed there.
+- **Tests, red first.** `tests/public-network-trace.test.tsx` § "reads the owner's reading time with
+  experimental features off" failed before the change (no `GET /api/reading-time/…` in the trace)
+  and passes after.
+- **A test the change broke, found late.**
+  `tests/the-ideas-extraction-changed-no-requests.test.tsx` freezes an owner's requests in order,
+  and every owner now makes one more. Its position is not stable from run to run (the read waits
+  on an awaited gate), so the file now asserts it is made exactly once and holds the rest in
+  sequence as before. Run three times, green each time.
+- **GPT Sol's code review**: approve with changes, no P0 to P2
+  ([prompt](261005g-reading-time-out-of-the-switch-code-review-prompt.md),
+  [answer](261005g-reading-time-out-of-the-switch-code-review-sol.md)). One P3 fixed by the
+  reviewer: the new test now also checks the switch's store had loaded and read off, since a
+  request alone could leave it at its unloaded default. It traced ownership through the client and
+  both store methods, and found no other gate on the gutter, the card, the spine or the quiz
+  filter. One P3 left, outside this change: [reading-time.md](../project/reading-time.md) says
+  "Nothing yet on touch" of the line's card, and the reviewer says a tap opens it. Not checked here.
+- **Gates.** Typecheck green. Sixteen affected test files green. **The full suite was not run to
+  the end**: the box was overloaded all afternoon and the Overseer asked for full suites to stop. A
+  partial run is what found the frozen-trace test above; its only other red was a timing test in
+  `tests/fetch.test.ts` under load.
+- **Browser** (Playwright on the box, local dev, switch turned off through the API): the opening
+  `GET` answered 200 at load, the one-minute `POST` answered 204, the spine's area was drawn and
+  grew, it was drawn again straight after a reload from the stored totals, and the gutter line's
+  card said "You have spent 1 s here. It takes about 1 s to read." `/help` and `/privacy` read as
+  above. Shot: `261005g-shot-reading-time-switch-off.png`. Not checked in a browser: a signed-out
+  visitor (the trace test covers that no request goes out), touch, Safari. The console showed
+  resource 404s that were not looked into; none was a reading-time request.
+
+**Follow-ups, not built:** a setting to switch reading time off, and a way to erase the stored
+totals. [reading-time.md § Not built](../project/reading-time.md#not-built).
 
 ## Not a postmortem
 

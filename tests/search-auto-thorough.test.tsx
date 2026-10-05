@@ -17,10 +17,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Block, BlockId, SearchHit } from "../src/types.js";
+import type { Block, BlockId, SearchHit, SearchRun } from "../src/types.js";
+import { assignSlots } from "../src/web/hit-colours.js";
 import type { Found } from "../src/web/search-hits.js";
 import { PAUSE_MS } from "../src/web/quick-session.js";
 import { SETTLE_MS } from "../src/web/modes/search/auto-thorough.js";
+import { storedPairs, THOROUGH_PAIR_PREFIX } from "../src/web/modes/search/stored-pairs.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 
@@ -38,6 +40,23 @@ vi.mock("../src/web/lib/api.js", async () => {
       return r;
     },
   };
+});
+
+/* This jsdom has no `localStorage`; the pairs a reload tidies are kept there
+   (stored-pairs.ts). The shim tests/minimal-paper-ui.test.tsx uses. */
+const stored = new Map<string, string>();
+Object.defineProperty(window, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+    removeItem: (key: string) => void stored.delete(key),
+    clear: () => stored.clear(),
+    get length() {
+      return stored.size;
+    },
+    key: (i: number) => [...stored.keys()][i] ?? null,
+  },
 });
 
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
@@ -126,6 +145,8 @@ interface ServerOptions {
   meaningAs?: string;
   /** PATCH answers 500 with this message. */
   patchFails?: string;
+  /** What the opening GET answers: the rows saved before this tab loaded. */
+  saved?: SearchRun[];
 }
 
 /**
@@ -142,7 +163,7 @@ function server(options: ServerOptions = {}) {
     const method = (init.method ?? "GET").toUpperCase();
     const body = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
     calls.push({ method, url, body });
-    if (method === "GET") return Promise.resolve(json({ runs: [] }));
+    if (method === "GET") return Promise.resolve(json({ runs: config.saved ?? [] }));
     if (method === "PATCH" && config.patchFails !== undefined) {
       return Promise.resolve(json({ error: config.patchFails }, 500));
     }
@@ -209,12 +230,12 @@ function server(options: ServerOptions = {}) {
   };
 }
 
-function mount({ strict = false } = {}): void {
+function mount({ strict = false, slug = SLUG } = {}): void {
   const band = createElement(
     NuqsAdapter,
     null,
     createElement(SearchBand, {
-      slug: SLUG,
+      slug,
       blocks: BLOCKS,
       onJump: () => {},
       onFound: (next: Found[]) => {
@@ -792,5 +813,424 @@ describe("a quick search starts the thorough one", () => {
     enter();
     await flush();
     expect(s.asked("meaning")).toEqual(["other words"]);
+  });
+});
+
+/**
+ * **A pair left behind is tidied when the list is next loaded** — the plan's
+ * Q-reload. The reader left Search mode, reloaded or closed the tab while the
+ * thorough search was out, so the server has both rows; this tab loads them.
+ * Only a pair this browser wrote down at launch is tidied (stored-pairs.ts).
+ */
+describe("a quick row and its thorough row left behind are tidied on load", () => {
+  const QUICK_ID = "spya-qk3m9a";
+  const MEANING_ID = "spya-mn7w2d";
+  const quickRow = (over: Partial<SearchRun> = {}): SearchRun => ({
+    id: QUICK_ID,
+    criterion: WORDS,
+    kind: "quick",
+    createdAt: "2026-10-05T09:01:00.000Z",
+    status: "done",
+    hits: [QUICK_HIT],
+    ...over,
+  });
+  const thoroughRow = (over: Partial<SearchRun> = {}): SearchRun => ({
+    id: MEANING_ID,
+    criterion: WORDS,
+    kind: "meaning",
+    createdAt: "2026-10-05T09:01:03.000Z",
+    status: "done",
+    hits: [MEANING_HIT],
+    ...over,
+  });
+  const RECORD = { slug: SLUG, quickId: QUICK_ID, meaningId: MEANING_ID, words: WORDS };
+  const remembered = () => storedPairs.of(SLUG);
+  /** Open Search mode with these rows saved and these ids ticked in the URL. */
+  async function open(saved: SearchRun[], runs: string, options: { strict?: boolean } = {}) {
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${runs}`);
+    const s = server({ saved });
+    mount(options);
+    await flush();
+    return s;
+  }
+  /** Leave Search mode: the band unmounts, the page does not. */
+  async function leave(): Promise<void> {
+    await act(async () => root.unmount());
+    root = createRoot(host);
+  }
+
+  beforeEach(() => stored.clear());
+  afterEach(() => vi.restoreAllMocks());
+
+  it("the thorough row takes the quick row's place: one row, its tick, its colour, one delete", async () => {
+    await storedPairs.add(RECORD);
+    const saved = [quickRow(), thoroughRow()];
+    const slot = assignSlots(saved).get(QUICK_ID);
+    const s = await open(saved, QUICK_ID);
+
+    expect(listed()).toEqual([WORDS]);
+    expect(isQuick(rowFor(WORDS))).toBe(false);
+    expect(ticked()).toEqual([WORDS]);
+    await urlRuns(MEANING_ID);
+    expect(slotOf(rowFor(WORDS))).toBe(slot);
+    expect(s.patches()).toMatchObject([
+      { url: `/api/search/${SLUG}/${MEANING_ID}`, body: { colour: slot } },
+    ]);
+    expect(s.deletes()).toEqual([QUICK_ID]);
+    expect(found.map((f) => f.runId)).toEqual([MEANING_ID]);
+    expect(errorLines()).toEqual([]);
+    expect(await remembered()).toEqual([]);
+  });
+
+  it("leaves both rows when this browser did not launch the pair", async () => {
+    // The reader asked quick and thorough for the same words by hand: the same two rows, no record.
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(s.patches()).toEqual([]);
+  });
+
+  it("keeps a colour the reader pinned on the quick row", async () => {
+    await storedPairs.add(RECORD);
+    await open([quickRow({ colour: 5 }), thoroughRow()], QUICK_ID);
+    expect(isQuick(rowFor(WORDS)), "control: it was tidied").toBe(false);
+    expect(slotOf(rowFor(WORDS))).toBe(5);
+  });
+
+  it("an unticked quick row gives an unticked thorough row", async () => {
+    await storedPairs.add(RECORD);
+    const s = await open([quickRow(), thoroughRow()], "none");
+    expect(listed()).toEqual([WORDS]);
+    expect(isQuick(rowFor(WORDS))).toBe(false);
+    expect(ticked()).toEqual([]);
+    expect(s.deletes()).toEqual([QUICK_ID]);
+  });
+
+  it("keeps the quick row's place among rows asked meanwhile", async () => {
+    const between = quickRow({
+      id: "spya-qk3m9b",
+      criterion: "second question",
+      createdAt: "2026-10-05T09:01:02.000Z",
+    });
+    // Control, with no record so nothing is tidied: by its own time the thorough row is on top.
+    await open([quickRow(), between, thoroughRow()], QUICK_ID);
+    expect(listed()).toEqual([WORDS, "second question", WORDS]);
+    await leave();
+
+    await storedPairs.add(RECORD);
+    await open([quickRow(), between, thoroughRow()], QUICK_ID);
+    expect(listed()).toEqual(["second question", WORDS]);
+    expect(isQuick(rowFor(WORDS))).toBe(false);
+  });
+
+  it("a thorough row still running is left, and tidied at the load after it finishes", async () => {
+    await storedPairs.add(RECORD);
+    const s = await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(s.patches()).toEqual([]);
+    expect(await remembered()).toEqual([RECORD]);
+    await leave();
+
+    const later = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(listed()).toEqual([WORDS]);
+    expect(isQuick(rowFor(WORDS))).toBe(false);
+    expect(later.deletes()).toEqual([QUICK_ID]);
+  });
+
+  it.each([
+    ["the thorough row failed", quickRow(), thoroughRow({ status: "error", hits: [], error: "No." })],
+    ["the quick row's words were changed", quickRow({ criterion: `${WORDS} dualism` }), thoroughRow()],
+    ["the quick row failed", quickRow({ status: "error", hits: [], error: "No." }), thoroughRow()],
+  ])("leaves both rows, for good, when %s", async (_name, q, m) => {
+    await storedPairs.add(RECORD);
+    const s = await open([q, m], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(s.patches()).toEqual([]);
+    await urlRuns(QUICK_ID);
+    expect(await remembered()).toEqual([]);
+  });
+
+  it("leaves both rows when the reader has ticked the thorough one", async () => {
+    await storedPairs.add(RECORD);
+    const s = await open([quickRow(), thoroughRow()], `${QUICK_ID},${MEANING_ID}`);
+    expect(savedRows()).toHaveLength(2);
+    expect(ticked()).toEqual([WORDS, WORDS]);
+    expect(s.deletes()).toEqual([]);
+    expect(s.patches()).toEqual([]);
+    expect(await remembered()).toEqual([]);
+  });
+
+  it("does nothing offline, and keeps the pair for a load that reaches the server", async () => {
+    await storedPairs.add(RECORD);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(await remembered()).toEqual([RECORD]);
+  });
+
+  it("keeps a pair from a cached opening list even when the browser says online", async () => {
+    await storedPairs.add(RECORD);
+    history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick&runs=${QUICK_ID}`);
+    const saved = [quickRow(), thoroughRow()];
+    const s = server({ saved });
+    const online = answer;
+    answer = (url, init) => {
+      if ((init.method ?? "GET") !== "GET") return online(url, init);
+      const response = json({ runs: saved });
+      response.headers.set("x-spideryarn-offline", "copy");
+      return Promise.resolve(response);
+    };
+    mount();
+    await flush();
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(await remembered()).toEqual([RECORD]);
+    await leave();
+    const back = await open(saved, QUICK_ID);
+    expect(back.deletes()).toEqual([QUICK_ID]);
+  });
+
+  it("a second article waits for its own opening list inside the same mount", async () => {
+    await storedPairs.add(RECORD);
+    await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], QUICK_ID);
+    const nextSlug = "another-paper";
+    const next = { ...RECORD, slug: nextSlug, quickId: "spya-qk3m9c", meaningId: "spya-mn7w2f" };
+    await storedPairs.add(next);
+    const s = server({ saved: [quickRow({ id: next.quickId }), thoroughRow({ id: next.meaningId })] });
+    mount({ slug: nextSlug });
+    await flush();
+    expect(s.deletes()).toEqual([next.quickId]);
+    expect(savedRows()).toHaveLength(1);
+    expect(isQuick(savedRows()[0]!)).toBe(false);
+    expect(await remembered()).toEqual([RECORD]);
+    expect(await storedPairs.of(nextSlug)).toEqual([]);
+  });
+
+  it("another article's pair is not this one's", async () => {
+    await storedPairs.add({ ...RECORD, slug: "another-paper" });
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+  });
+
+  it("tidies once under StrictMode", async () => {
+    await storedPairs.add(RECORD);
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID, { strict: true });
+    expect(listed()).toEqual([WORDS]);
+    expect(s.deletes()).toEqual([QUICK_ID]);
+    expect(s.patches()).toHaveLength(1);
+  });
+
+  it("storage that holds something else is read as no pairs", async () => {
+    stored.set(THOROUGH_PAIR_PREFIX + MEANING_ID, JSON.stringify({ ...RECORD, meaningId: "spya-mn7w2x" }));
+    stored.set(`${THOROUGH_PAIR_PREFIX}spya-mn7w2y`, "not json");
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+  });
+
+  it.each(["tick then untick thorough", "press the thorough row, then the quick row"])(
+    "a reader's choice survives the next load: %s",
+    async (choice) => {
+      await storedPairs.add(RECORD);
+      await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], QUICK_ID);
+      expect(await remembered(), "control: the pending pair is eligible").toEqual([RECORD]);
+      const meaningRow = savedRows().find((r) => !isQuick(r))!;
+      if (choice === "tick then untick thorough") {
+        const tick = must<HTMLInputElement>('input[aria-label^="Also mark: "]', meaningRow);
+        click(tick);
+        click(tick);
+      } else {
+        click(must(".srch-saved-body", meaningRow));
+        click(must(".srch-saved-body", savedRows().find(isQuick)!));
+      }
+      await flush();
+      expect(await remembered()).toEqual([]);
+      await leave();
+      const back = await open([quickRow(), thoroughRow()], QUICK_ID);
+      expect(savedRows()).toHaveLength(2);
+      expect(back.deletes()).toEqual([]);
+    },
+  );
+
+  it("a ticked thorough row already declares a choice while it is pending", async () => {
+    await storedPairs.add(RECORD);
+    const s = await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], MEANING_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+    expect(await remembered()).toEqual([]);
+  });
+
+  it("a failed opening read keeps the record for a successful later load", async () => {
+    await storedPairs.add(RECORD);
+    const s = server();
+    const success = answer;
+    answer = (url, init) => (init.method ?? "GET") === "GET"
+      ? Promise.resolve(json({ error: "The saved searches could not load." }, 500))
+      : success(url, init);
+    mount();
+    await flush();
+    expect(errorLines()).not.toEqual([]);
+    expect(s.deletes()).toEqual([]);
+    expect(await remembered()).toEqual([RECORD]);
+    await leave();
+    const back = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(back.deletes()).toEqual([QUICK_ID]);
+  });
+
+  it("select all ticks the thorough row, so it cancels the tidy too (S2)", async () => {
+    storedPairs.add(RECORD);
+    await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], QUICK_ID);
+    expect(remembered(), "control: the pending pair is eligible").toEqual([RECORD]);
+    click(must(".srch-all input"));
+    await flush();
+    expect(ticked(), "control: select all ticked both").toHaveLength(2);
+    expect(remembered()).toEqual([]);
+  });
+
+  it.each(["forget", "invalidate"])("%s needs no write, so a full storage cannot keep a stale record", async (operation) => {
+    storedPairs.add(RECORD);
+    const fail = vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new DOMException("Full", "QuotaExceededError");
+    });
+    if (operation === "forget") storedPairs.forget(MEANING_ID);
+    else storedPairs.invalidate(QUICK_ID);
+    fail.mockRestore();
+    expect(remembered()).toEqual([]);
+    const s = await open([quickRow(), thoroughRow()], QUICK_ID);
+    expect(savedRows()).toHaveLength(2);
+    expect(s.deletes()).toEqual([]);
+  });
+
+  it("a gesture on the quick row alone does not cancel the tidy", async () => {
+    await storedPairs.add(RECORD);
+    await open([quickRow(), thoroughRow({ status: "pending", hits: [] })], QUICK_ID);
+    click(must(".srch-saved-body", savedRows().find(isQuick)!));
+    await flush();
+    expect(await remembered()).toEqual([RECORD]);
+  });
+
+  it("forgetting a pair touches no other pair's record, so no other tab's write can bring it back", () => {
+    // R1: with one list under one key, a tab writing its older copy of the list revived a forgotten pair.
+    const other = { ...RECORD, slug: "other-paper", meaningId: "spya-mn7w2e" };
+    storedPairs.add(RECORD);
+    storedPairs.add(other);
+    const writes = vi.spyOn(window.localStorage, "setItem");
+    storedPairs.forget(MEANING_ID);
+    expect(writes, "forgetting writes nothing").not.toHaveBeenCalled();
+    expect(remembered()).toEqual([]);
+    expect(storedPairs.of("other-paper")).toEqual([other]);
+    expect([...stored.keys()]).toEqual([THOROUGH_PAIR_PREFIX + other.meaningId]);
+  });
+
+  describe("what the tab that asked writes down", () => {
+    /** Type, press Enter, and have the thorough search out. */
+    async function launch() {
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick`);
+      const s = server();
+      mount();
+      await flush();
+      type(WORDS);
+      enter();
+      await flush();
+      return { s, quick: s.posts("quick")[0]!, meaning: s.posts("meaning")[0]! };
+    }
+
+    it("the pair, when the thorough search starts, and nothing once it is swapped in", async () => {
+      const { quick, meaning } = await launch();
+      expect(await remembered()).toEqual([
+        { slug: SLUG, quickId: quick.id, meaningId: meaning.id, words: WORDS },
+      ]);
+      act(() => meaning.finish());
+      await flush();
+      expect(isQuick(rowFor(WORDS)), "control: it did swap").toBe(false);
+      expect(await remembered()).toEqual([]);
+    });
+
+    it("nothing once the thorough search has failed", async () => {
+      const { meaning } = await launch();
+      expect(await remembered()).toHaveLength(1);
+      act(() => meaning.finish("error"));
+      await flush();
+      expect(await remembered()).toEqual([]);
+    });
+
+    it("nothing once the quick row's words change: that answer is to be thrown away", async () => {
+      // No Enter: Enter seals the session, and the next words would be a new row.
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick`);
+      const s = server();
+      mount();
+      await flush();
+      type(WORDS);
+      await pause();
+      await settle();
+      expect(await remembered()).toHaveLength(1);
+      type(`${WORDS} dualism`);
+      await pause();
+      expect(s.posts("quick")[1]?.revises, "control: the same row was revised").toBe(true);
+      expect(await remembered()).toEqual([]);
+    });
+
+    it("a revision followed by departure in the same batch revokes the pair", async () => {
+      const s = server();
+      mount();
+      await flush();
+      type(WORDS);
+      await pause();
+      await settle();
+      const quick = s.posts("quick")[0]!;
+      expect(await remembered(), "control: the automatic pair was written").toHaveLength(1);
+      // No passive effect can inspect the revised row before this departure.
+      act(() => {
+        searchDraftFor(SLUG).band()!.flush(`${WORDS} dualism`);
+        root.unmount();
+      });
+      root = createRoot(host);
+      expect(s.posts("quick")[1]?.revises).toBe(true);
+      expect(await remembered()).toEqual([]);
+      // Even if the row later returns to its original words, this answer was discarded.
+      const back = await open([quickRow({ id: quick.id }), thoroughRow({ id: s.posts("meaning")[0]!.id })], quick.id);
+      expect(savedRows()).toHaveLength(2);
+      expect(back.deletes()).toEqual([]);
+    });
+
+    it("nothing once begin answers thorough under another id: the record is not rewritten (S1)", async () => {
+      history.replaceState(null, "", `/read/${SLUG}?mode=search&match=quick`);
+      const s = server({ meaningAs: MEANING_ID });
+      const writes = vi.spyOn(window.localStorage, "setItem");
+      mount();
+      await flush();
+      type(WORDS);
+      enter();
+      await flush();
+      expect(s.posts("meaning")[0]?.id, "control: thorough was asked and renamed").toBe(MEANING_ID);
+      expect(writes, "control: the pair was written at launch").toHaveBeenCalledTimes(1);
+      expect(remembered()).toEqual([]);
+      expect([...stored.keys()]).toEqual([]);
+    });
+
+    it("leave Search mode mid-search, come back after it finished: one row", async () => {
+      const { quick, meaning } = await launch();
+      await urlRuns(quick.id);
+      await leave();
+      expect(await remembered(), "leaving does not forget the pair").toHaveLength(1);
+
+      // The server finished both; this is what the next opening GET answers.
+      const back = await open(
+        [
+          quickRow({ id: quick.id }),
+          thoroughRow({ id: meaning.id }),
+        ],
+        quick.id,
+      );
+      expect(listed()).toEqual([WORDS]);
+      expect(isQuick(rowFor(WORDS))).toBe(false);
+      expect(ticked()).toEqual([WORDS]);
+      expect(back.deletes()).toEqual([quick.id]);
+      await urlRuns(meaning.id);
+    });
   });
 });

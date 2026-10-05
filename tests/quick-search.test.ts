@@ -357,13 +357,17 @@ describe("quickPassagesStream", () => {
     expect((err as Error).cause).toBe("no-answers");
   });
 
+  /* **403 in the tests below, where it was 502 until 2026-10-05.** They are
+     about what quick search does once a chunk *has* failed, and since plan
+     261005j the gateway asks again after a 502 before it lets one fail
+     (tests/ai-call-transport-retry.test.ts). A 403 is a verdict, refused once. */
   it("fails when one chunk fails, and stops the others rather than paying for them", async () => {
     const blocks = Array.from({ length: 5 }, () => block("x".repeat(32_000)));
     let call = 0;
     const aborted: boolean[] = [];
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
       const mine = call++;
-      if (mine === 0) return Promise.resolve(reply("{}", 502));
+      if (mine === 0) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           aborted.push(true);
@@ -400,7 +404,7 @@ describe("quickPassagesStream", () => {
       const body = JSON.parse(String(init.body)) as Sent["body"];
       const ids = Object.keys(body.questions);
       if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
-      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           // Real cancellation still has asynchronous body/transport cleanup.
@@ -432,7 +436,7 @@ describe("quickPassagesStream", () => {
       const body = JSON.parse(String(init.body)) as Sent["body"];
       const ids = Object.keys(body.questions);
       if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
-      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           const delay = ids[0] === blocks[1]!.id ? 20 : 0;
@@ -443,7 +447,7 @@ describe("quickPassagesStream", () => {
     const { report } = await collectSpend(async () => {
       await expect(
         drain(quickPassagesStream({ meta, blocks, criterion: "q" })),
-      ).rejects.toMatchObject({ status: 502 });
+      ).rejects.toMatchObject({ status: 403 });
     });
     expect(report.pending).toEqual([]);
     expect(report.calls.map((c) => c.outcome).sort()).toEqual([
@@ -490,7 +494,7 @@ describe("quickPassagesStream", () => {
     const blocks = Array.from({ length: 3 }, () => block("x".repeat(32_000)));
     let call = 0;
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
-      if (call++ === 0) return Promise.resolve(reply("{}", 502));
+      if (call++ === 0) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           setTimeout(() => reject(init.signal?.reason), 60);
@@ -500,7 +504,7 @@ describe("quickPassagesStream", () => {
     const { report } = await collectSpend(async () => {
       await expect(
         drain(quickPassagesStream({ meta, blocks, criterion: "q", timeoutMs: 30 })),
-      ).rejects.toMatchObject({ status: 502 });
+      ).rejects.toMatchObject({ status: 403 });
     });
     expect(report.pending).toEqual([]);
     expect(report.calls.map((c) => c.outcome).sort()).toEqual(["aborted", "error"]);

@@ -757,9 +757,11 @@ it.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
-- **It starts nothing.** Arriving in Summary or with the notes on spends nothing
-  ([summaries.md](summaries.md), [marginalia.md](marginalia.md)); with no summary stored the owner
-  sees the empty state and **Write it**.
+- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in Summary spends
+  nothing ([summaries.md](summaries.md)); with no summary stored the owner sees the empty state and
+  **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
+  none, once, which is what Greg asked for
+  ([marginalia.md § Relation words](marginalia.md#relation-words)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

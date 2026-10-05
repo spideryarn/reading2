@@ -27,4 +27,11 @@ Three questions went to Greg with the debrief, none of them blocking: the "power
 (Q-tagline), the article's own picture on the card (Q-lead-image), and letting the preview robots
 in to pages other than shared articles and the homepage (Q-cards-for-other-pages).
 
+**Greg answered all three on 2026-10-05**, and two were built the same day. The "powered by" line
+stays off the card's text (*"use your judgment"*; the recommendation stood). The article's own first
+picture is on its card when we hold a copy of it, and our logo otherwise (*"hmmm, not sure. go with
+the lead image for now"*); one switch, `LEAD_IMAGE_ON_CARDS`, turns it back off. And the preview
+robots are let in to our other pages (*"yes, allow them"*), each of which now has a card that names
+it.
+
 Not yet checked: a real pasted link, which only a deploy can show.

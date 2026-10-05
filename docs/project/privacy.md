@@ -386,8 +386,9 @@ until that sentence moves. The same trap took three sentences down on 2026-09-02
 
 ## Reading time
 
-**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner with experimental features
-on, a running total of seconds per block of their own articles, drawn in the spine and the gutter.
+**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner, a running total of
+seconds per block of their own articles, drawn in the spine and the gutter. Only with experimental
+features on until 2026-10-05; for every owner since (below).
 The page's *What we keep* gained a bullet, because the list is only honest if it is complete, and
 "no advertising or analytics trackers" stays true: this is shown to the reader it is about and to
 nobody reading a shared link.
@@ -402,11 +403,15 @@ code has to keep true:
 - **"Not shown to anybody reading an article you have shared"**, not "to nobody else". An
   administrator can read stored data, which the page already says.
 
-**The experimental switch is availability, not consent**, and the bullet says "with experimental
-features on" as a fact about when it is kept, not as a permission. If recording ever moves out from
-behind the switch — Fable's recommendation in
-[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)
-— that clause goes, and `LAST_UPDATED` moves with it.
+**It is kept for every owner since 2026-10-05, and the bullet lost "with experimental features
+on".** That clause was a fact about when it was kept, never a permission: the switch was
+availability, not consent. Greg took reading time out from behind the switch
+([reading-time.md § Who gets it](reading-time.md#who-gets-it)), so the clause would have been false.
+`LAST_UPDATED` already read 5 October 2026 from another change that day, so it did not move.
+
+**The bullet promises no way to turn it off or erase it, because there is none yet.** It says the
+totals go when the article does, which is true. When an off switch or an erase is built, the bullet
+gains a sentence and the date moves.
 
 It goes with the article (a cascade through `block_identities`), and is in both exports.
 

@@ -36,7 +36,6 @@ import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
-import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
 import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
@@ -543,20 +542,19 @@ function OwnedReader({
    */
   const arc = useArc(slug, article.arc);
   /**
-   * **Where the reader has spent time**, recorded and drawn only with
-   * experimental features on — both halves, as availability rather than
-   * consent: it is new code on every paying reader's article view and new data
-   * about a person, so it starts where the unfinished things are.
-   * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
-   * § Who, and behind what, which also records Fable's case for recording for
-   * everyone.
+   * **Where the reader has spent time**, recorded and drawn for every owner —
+   * since 2026-10-05, when Greg took both halves out from behind the
+   * experimental switch. While it was behind it, nothing was sampled with the
+   * switch off, so a stretch read then looked unread for ever. Owner-only by
+   * being here. **`true` is the whole gate**: there is no setting to turn it
+   * off yet, and when there is, this argument is where it goes.
+   * docs/project/reading-time.md § Who gets it.
    */
-  const experimental = useExperimental();
   const words = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.words] as const)),
     [article.blocks],
   );
-  const readingTime = useReadingTime(slug, words, experimental.on);
+  const readingTime = useReadingTime(slug, words, true);
 
   return (
     <>

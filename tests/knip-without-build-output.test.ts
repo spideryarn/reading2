@@ -145,7 +145,7 @@ describe("Knip over this repo without a fresh build", () => {
   it("loads every config and sees the whole graph when dist/ is from another commit", async () => {
     mkdirSync(path.join(tree, "dist"), { recursive: true });
     writeFileSync(
-      path.join(tree, "dist", "index.html"),
+      path.join(tree, "dist", "shell.html"),
       '<!doctype html><html><head></head><body><script type="module" src="/assets/index-abc.js"></script></body></html>',
     );
     writeFileSync(
@@ -197,7 +197,7 @@ describe("the API build config, resolved the way vite build resolves it", () => 
 
   it("refuses to resolve when dist/ is from another commit", async () => {
     mkdirSync(path.join(tree, "dist"), { recursive: true });
-    writeFileSync(path.join(tree, "dist", "index.html"), BUILT());
+    writeFileSync(path.join(tree, "dist", "shell.html"), BUILT());
     writeFileSync(path.join(tree, "dist", "build.json"), JSON.stringify({ commit: "0f52886a1b2c3d4e5f60718293a4b5c6d7e8f901" }));
     await expect(resolveApiBuild()).rejects.toThrow(/Client shell is not from this build/);
   }, 60_000);
@@ -205,7 +205,7 @@ describe("the API build config, resolved the way vite build resolves it", () => 
   it("compiles the matching shell and its digest into the build", async () => {
     const html = BUILT();
     mkdirSync(path.join(tree, "dist"), { recursive: true });
-    writeFileSync(path.join(tree, "dist", "index.html"), html);
+    writeFileSync(path.join(tree, "dist", "shell.html"), html);
     writeFileSync(path.join(tree, "dist", "build.json"), JSON.stringify({ commit: COMMIT }));
     const config = await resolveApiBuild();
     expect(config.define?.__SPIDERYARN_BUILT_SHELL__).toBe(JSON.stringify(html));

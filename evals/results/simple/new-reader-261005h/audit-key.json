@@ -1,0 +1,180 @@
+{
+  "blindId": "035f8075b303",
+  "items": [
+    {
+      "id": "S01",
+      "arm": "about-new1a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S02",
+      "arm": "about-new1b",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S03",
+      "arm": "about-new1b",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S04",
+      "arm": "about-new0a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S05",
+      "arm": "none-new0a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S06",
+      "arm": "about-new0b",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S07",
+      "arm": "about-new0b",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S08",
+      "arm": "none-new1a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S09",
+      "arm": "about-new1b",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S10",
+      "arm": "about-new2a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S11",
+      "arm": "about-new1b",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S12",
+      "arm": "about-new2a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S13",
+      "arm": "about-new0b",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S14",
+      "arm": "about-new1b",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S15",
+      "arm": "about-new1a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S16",
+      "arm": "none-new1a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S17",
+      "arm": "none-new0a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S18",
+      "arm": "none-new0a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S19",
+      "arm": "none-new1a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S20",
+      "arm": "about-new2a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S21",
+      "arm": "about-new2a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S22",
+      "arm": "about-new0a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S23",
+      "arm": "none-new1a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S24",
+      "arm": "about-new0a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S25",
+      "arm": "about-new1a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "S26",
+      "arm": "none-new0a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S27",
+      "arm": "about-new0a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S28",
+      "arm": "none-new1a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "S29",
+      "arm": "about-new0a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "S30",
+      "arm": "about-new1a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S31",
+      "arm": "about-new0b",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S32",
+      "arm": "about-new1a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S33",
+      "arm": "about-new0b",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "S34",
+      "arm": "about-new2a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "S35",
+      "arm": "none-new0a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    }
+  ]
+}

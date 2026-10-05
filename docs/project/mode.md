@@ -49,6 +49,8 @@ For things this checklist does not hold:
   `tests/auto-modes.test.tsx` fails until that list matches the one derived from the catalogue
   ([`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)): a new non-experimental mode is one
   line there, and is paid for on every import by a reader who has not switched it off.
+  Marginalia is the one main mode left off: its relation words are made the first time its column
+  is shown ([marginalia.md § Relation words](marginalia.md#relation-words)).
   [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 - **Checking it in a browser**: [browser-control.md](browser-control.md), then
   [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.

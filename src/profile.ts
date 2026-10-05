@@ -267,33 +267,40 @@ export function hashProfile(rendered: string): string {
 /**
  * Is an artefact's recorded profile the one we would write from now?
  *
- * Three states in `recorded`, and only one of them is stale:
+ * Three states in `recorded`:
  *
  * | `recorded` | means | stale? |
  * |---|---|---|
  * | `undefined` | written before this feature existed | **no** |
- * | `null` | written deliberately *without* a profile | **no** |
+ * | `null` | written without a profile | once they have one |
  * | a hash | written from that profile | only if it differs from `now` |
  *
- * **`null` is never stale**, and that line is the whole design. A reader who
- * deliberately generated a plain glossary must not be nagged about it for ever
- * — the checkbox that produced it would then be a control whose result the app
- * immediately complains about. `undefined` is never stale for a gentler reason:
- * nobody's existing artefacts should light up with a warning about a profile
- * they never had.
+ * **A first profile counts as a change** — Greg, 2026-10-05: "B treat a first
+ * profile as a change". Until then `null` was never stale, a rule from when
+ * writing without a profile was a choice (a *Use your profile* box, removed
+ * 2026-09-13): a reader who had asked for a plain glossary was not to be
+ * nagged about it. A first profile now offers the rewrite. Plain-list top-ups
+ * still run without the current profile, and older opt-outs exist, so `null`
+ * says only "written without one". `null` against `null` is still nothing to say.
  *
- * And **clearing the profile marks nothing stale**, which falls out of the same
- * rule: `now` is `null`, and a recorded hash compared against `null` would say
- * "changed". It does not, because you have not changed what you want from the
- * article — you have stopped telling us, and that is not a reason to rewrite
- * anything.
+ * `undefined` is never stale: nobody's oldest artefacts should light up about
+ * a profile they never had, and nothing can say what they were written with.
+ * It is told from `null` by the document itself: direct writers stamp a hash
+ * or null, while Illustrated preserves its Sketch's stamp, including absence.
+ * The stamp is a field of the stored JSON rather than a column.
+ *
+ * And **clearing the profile marks nothing stale**: `now` is `null`, and a
+ * recorded hash compared against `null` would say "changed". It does not,
+ * because you have not changed what you want from the article — you have
+ * stopped telling us, and that is not a reason to rewrite anything.
+ *
+ * This only ever *offers* a rewrite. Nothing is rewritten by it.
  */
 export function profileIsStale(
   recorded: string | null | undefined,
   now: string | null,
 ): boolean {
-  if (recorded === undefined || recorded === null) return false;
+  if (recorded === undefined) return false;
   if (now === null) return false;
   return recorded !== now;
 }
-

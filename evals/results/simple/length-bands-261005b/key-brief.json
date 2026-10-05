@@ -1,0 +1,218 @@
+[
+  {
+    "id": "P01",
+    "kind": "control",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P02",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "brief100a",
+    "B": "len0a"
+  },
+  {
+    "id": "P03",
+    "kind": "control",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P04",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "brief",
+    "A": "len0a",
+    "B": "brief90a"
+  },
+  {
+    "id": "P05",
+    "kind": "control",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P06",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "brief",
+    "A": "brief90b",
+    "B": "len0b"
+  },
+  {
+    "id": "P07",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "brief",
+    "A": "len0a",
+    "B": "brief100a"
+  },
+  {
+    "id": "P08",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "brief90b",
+    "B": "len0b"
+  },
+  {
+    "id": "P09",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "brief90a",
+    "B": "len0a"
+  },
+  {
+    "id": "P10",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "brief90a",
+    "B": "len0a"
+  },
+  {
+    "id": "P11",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0a",
+    "B": "brief100a"
+  },
+  {
+    "id": "P12",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief90b"
+  },
+  {
+    "id": "P13",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "brief100b",
+    "B": "len0b"
+  },
+  {
+    "id": "P14",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "brief90a",
+    "B": "len0a"
+  },
+  {
+    "id": "P15",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief100b"
+  },
+  {
+    "id": "P16",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "brief100a",
+    "B": "len0a"
+  },
+  {
+    "id": "P17",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief100b"
+  },
+  {
+    "id": "P18",
+    "kind": "control",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P19",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "brief90a",
+    "B": "len0a"
+  },
+  {
+    "id": "P20",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "brief90b",
+    "B": "len0b"
+  },
+  {
+    "id": "P21",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief90b"
+  },
+  {
+    "id": "P22",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "brief100b",
+    "B": "len0b"
+  },
+  {
+    "id": "P23",
+    "kind": "test",
+    "slug": "scaling-hypothesis",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief100b"
+  },
+  {
+    "id": "P24",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len0a",
+    "B": "brief100a"
+  },
+  {
+    "id": "P25",
+    "kind": "control",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P26",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief100b"
+  },
+  {
+    "id": "P27",
+    "kind": "test",
+    "slug": "scaling-hypothesis",
+    "level": "brief",
+    "A": "len0b",
+    "B": "brief90b"
+  }
+]

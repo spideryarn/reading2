@@ -72,9 +72,10 @@ import { rootFontPx, usableWidth } from "./reader/measure.js";
 import { useExperimental } from "./useExperimental.js";
 
 /**
- * The parameters worth putting back, and every one of them is inert on arrival:
- * arriving with it set draws a view and asks nothing of the server that the
- * article's own page load did not already ask.
+ * The parameters worth putting back. Most only draw a view on arrival;
+ * `margin=1` also makes missing relation words when the owner's column fits
+ * on screen (useRelations.ts). The modes whose restoration would start
+ * other work are excluded by `NEEDS_AN_EXPLICIT_PRESS` below.
  *
  * The vocabulary is params.ts; `tests/last-view.test.ts` scans the tree for
  * `useQueryState` keys and fails if one is in neither this list nor the one
@@ -84,7 +85,7 @@ export const REMEMBERED = [
   "at", // the section you were reading
   "spine", // the bird's-eye rail
   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
-  "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
+  "margin", // Marginalia's column of notes, right of the prose — a restore makes its relation words if there are none (useRelations.ts)
   "summary", // brief, fuller or thread — dormant without `mode`, and a restore never opens the thread
   "structure", // fisheye or expanded — nothing to generate either way
   "diagram", // which of the five pictures
@@ -495,10 +496,12 @@ export function writeLastView(slug: string, search: string, storage: StorageSour
  * out for a reader whose switch was off.
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  *
- * Neither parameter starts anything on arrival — checked in the hooks, as
- * `NEEDS_AN_EXPLICIT_PRESS` above says to: Summary's `useSimple` and
- * Marginalia's `useRelations` both spend through `useAutoRun`, which waits for
- * a press.
+ * `?mode=summary` starts nothing on arrival — checked in the hook, as
+ * `NEEDS_AN_EXPLICIT_PRESS` above says to: `useSimple` spends through
+ * `useAutoRun`, which waits for a press. **`?margin=1` does, on purpose, since
+ * 2026-10-05**: the column asks for its relation words when it is shown, and
+ * this default is the case Greg's decision was made for (useRelations.ts) —
+ * one call, once per article, for its owner.
  */
 export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
   if (bandCoversProse(windowWidth)) return "";

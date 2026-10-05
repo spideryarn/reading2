@@ -3055,6 +3055,10 @@ export function Reader({
       case "structure":
         return (
           <StructureBand
+            slug={slug}
+            /* Only for the line a headings tree draws: the owner's is the one
+               with *Try again* on it (StructureNotice.tsx). */
+            owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
             sections={sections}
@@ -3454,7 +3458,7 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
+        {owner && <OwnerMarginFeed slug={slug} shown={marginRoom} onFeed={setOwnerFeed} />}
         {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}

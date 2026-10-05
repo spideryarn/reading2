@@ -599,7 +599,9 @@ const { App } = await import("../src/web/App.js");
    `onAuthStateChange` at module load; a static import at the top of this file
    would run that before `authListeners` above had been initialised, and the
    whole suite would fail to load rather than fail a test. */
-const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
+const { resetForTests: resetExperimental, snapshot: experimentalSnapshot } = await import(
+  "../src/web/experimental-store.js"
+);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -3522,6 +3524,35 @@ describe("the same address, as the owner", () => {
     expect(host.textContent).not.toContain("View only");
     /* The fixture has a web address, so it does not look for one. */
     expect(trace.filter((r) => r.url.startsWith("/api/source-guess/"))).toEqual([]);
+  });
+
+  /**
+   * **Reading time is recorded and drawn for every owner, switch or no
+   * switch** — Greg, 2026-10-05, answering `Q-reading-time-switch` with "A"
+   * (docs/project/reading-time.md § Who gets it). Until then the opening read
+   * went out only with experimental features on, and a stretch read with the
+   * switch off looked unread for ever. Through the real `App`, because the
+   * gate was one argument in `OwnedReader` and a unit test of the hook cannot
+   * see it. The visitor half is the exactly-equal trace in "a signed-in reader
+   * who does not own it": nobody but the owner asks.
+   */
+  it("reads the owner's reading time with experimental features off", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    expect(experimentalSince, "the switch is off for this case").toBeNull();
+    await open();
+
+    const lines = () => trace.map((r) => `${r.method} ${r.url}`);
+    await vi.waitFor(() => expect(lines()).toContain(`GET /api/reading-time/${SLUG}`));
+    /* A request alone could leave the store at its unloaded off default. */
+    expect(lines()).toContain("GET /api/reader");
+    await vi.waitFor(() =>
+      expect(experimentalSnapshot()).toMatchObject({
+        loaded: true,
+        on: false,
+        since: null,
+        loadError: null,
+      }),
+    );
   });
 
   /**
