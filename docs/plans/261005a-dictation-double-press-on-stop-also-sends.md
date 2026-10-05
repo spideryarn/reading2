@@ -210,3 +210,9 @@ the command bar it would run the command the dictated phrase matched, before you
 phrase. Yes gives one rule everywhere. No (what is built) keeps the double press to boxes where the
 worst case is a message you would have sent anyway. Recommendation: no for the command bar, yes for
 Illustrated only if you find yourself wanting it.
+
+**Decided: yes for the command bar** — Greg, 2026-10-05:
+
+> Q-double-stop-elsewhere yes for the command bar
+
+Illustrated stays as built (no double press). Dispatched to session `command-bar-double-stop`.

@@ -136,6 +136,10 @@ is a known miss rather than a new path.
 
 - **[Q-title-model]** Should a small model do the recasing instead of the rule? See above.
   Recommendation: not yet; look at what the rule gets wrong on real imports first.
+  **Decided: yes, a small model** — Greg, 2026-10-05: "yes, a small model (e.g. GPT Luna or DeepSeek).
+  ideally piggybacking on an existing call we're already doing as part of the import process".
+  Dispatched to session `title-model`.
 - **[Q-title-backfill]** Should the articles already on shelves be tidied? It needs a script run
   against production, and it marks those articles' generated modes stale. Recommendation: a
   report-only script first, to count them.
+  **Decided: no backfill** — Greg, 2026-10-05: "no, just articles going forwards".

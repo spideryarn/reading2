@@ -139,6 +139,7 @@ const rawPgSearchStore: SearchStore = {
 
   async begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     searchKind: SearchKind,
     wantedId?: string,
@@ -152,29 +153,14 @@ const rawPgSearchStore: SearchStore = {
 
     const run = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
-      /* Inside the lock, so the fingerprint and the row are written against one
-         state of the article. Outside it, a re-extraction committing between
-         **these two reads** would stamp a run with a hash of blocks the model
-         was never shown. The filesystem half cannot take a lock and says so
-         where it reads (src/searches.ts § beginRun).
+      /* **The fingerprint is the caller's, not read here** (plan 261005i § D).
+         It is the hash of the blocks the caller is about to send the model, so
+         the row and the answer are about the same blocks whatever is extracted
+         in between. Until 2026-10-05 it was read under this lock and the
+         handler loaded the article afterwards, and a re-extraction in the gap
+         stamped a fresh answer with the old hash (GPT Sol, 2026-09-04).
 
-         **What the lock does not cover, found by GPT Sol on 2026-09-04.** It
-         ends when this transaction commits, and `search` in src/routes.ts calls
-         `loadArticle(slug)` *after* that — so a re-extraction landing in the
-         gap gives the model R2's blocks and leaves this row holding R1's hash.
-         The run is then reported **stale when it is exactly current**, which is
-         the opposite failure from the one above and the harmless one of the
-         two: a false "older version" on a fresh answer, self-correcting on the
-         next run. The comment here used to imply the lock closed both windows
-         and it never did.
-
-         Fixing it properly means fingerprinting the blocks the model was
-         actually shown — `finishRun` writing the hash of `article.blocks`
-         rather than `begin` writing the hash of whatever was current when it
-         took the lock — which is a change to this store's write path and
-         belongs to whoever owns searches, not to the public read that surfaced
-         it. docs/plans/260904c-more-modes-on-a-shared-link.md § Still open. */
-      const sourceHash = await sourceHashFor(articleId, tx);
+         The lock stays: it orders the read of existing runs against the write. */
       const existing = await runsFor(articleId, tx);
       const { run: decided, kind } = withRun(
         existing,

@@ -50,13 +50,14 @@
  *   on purpose (src/pipeline.ts § `structure` says why at length), so
  *   `stepIsDone` is presence alone; its `isCurrent` arm compares the run row's
  *   `input_hash` with the blocks.
- * - **`blocks`: the queue says not done, the page says done.** It has an
- *   `isDone` (`blocksMatchTheirHtml`: would stage 3 produce this artefact again
- *   from stage 2's HTML?) and no `isCurrent` arm at all — it falls to
- *   `default: true`, under a comment that says there is *"nothing to compare"*.
+ * - **`blocks`: the queue said not done, the page said done. Closed
+ *   2026-10-05.** It has an `isDone` (would stage 3 produce this artefact again
+ *   from stage 2's HTML?) and had no `isCurrent` arm, so it fell to
+ *   `default: true`. Both now call `blocksAreWhatTheirHtmlProduces`
+ *   (src/blocks.ts), and its cases below assert agreement.
  *
- * Both are pinned below as the exact observed pair, in ordinary tests — see
- * `DISAGREEMENTS`.
+ * `structure` is pinned below as the exact observed pair, in an ordinary test —
+ * see `DISAGREEMENTS`.
  *
  * ## Seeded by SQL, and why that is right here
  *
@@ -92,6 +93,7 @@ import { CAPABLE_MODEL, HIGH_POWER_MODEL, sameGenerator } from "../src/models.js
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { STEP_ORDER, STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
 import { hashProfile } from "../src/profile.js";
+import { sanitizeHtml } from "../src/sanitize.js";
 import { inputFingerprint as simpleFingerprint } from "../src/simple-summary.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, STAMP_SOURCE, type StepStamp } from "../src/store/artifacts.js";
 import { readsPgArtifacts, siteFor, type JobDraftRef } from "../src/store/artifacts-pg.js";
@@ -192,21 +194,9 @@ interface Pair {
  *   tree silently drops `arc` entries — so this is a known gap rather than an
  *   accident, but it is still two answers to one question: Metadata reports a
  *   stage out of date that no unforced job will ever re-run.
- * - **`blocks:extractedHtml`** — stage 2's HTML is no longer the document these
- *   blocks were cut from (or the block rows are no longer what stage 3 would
- *   cut). The queue says *not done* (`blocksMatchTheirHtml`, the step's
- *   `isDone`); the page says *current*, because `blocks` has no arm in
- *   `isCurrent` and lands on `default: true`. That arm's comment — *"fetch,
- *   extract, blocks — nothing to compare, in either store"* — is not true of
- *   `blocks`. The cost is small in the direction it is wrong (stage 3 makes no
- *   model call), but it is the `default: true` shape that caught `ideas`,
- *   `sketch` and `timeline` in turn: tests/store-revision-columns.test.ts
- *   requires an arm for every step with a `stamp`, and a step that decides with
- *   `isDone` instead is invisible to it.
  */
 const DISAGREEMENTS: Record<string, Pair> = {
   "structure:inputHash": { queue: true, page: false },
-  "blocks:extractedHtml": { queue: false, page: true },
 };
 
 /**
@@ -610,8 +600,7 @@ describe("the cases cover every step that can be stale", () => {
     for (const key of Object.keys(DISAGREEMENTS)) {
       const [step, field] = key.split(":") as [StepName, string];
       expect(CASES[step], key).toBeDefined();
-      /* `blocks` goes stale on something that is not a recorded field. */
-      if (step !== "blocks") expect(CASES[step], key).toContain(field);
+      expect(CASES[step], key).toContain(field);
     }
   });
 });
@@ -649,9 +638,16 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
           const meta = await store().read(SLUG, "extract", "meta");
           if (!tree) throw new Error("the fixture has no tree to fingerprint");
           patch.inputHash = simpleFingerprint(blocks, tree, meta ?? null, value);
-          expect(patch.inputHash, "the control: the older prompt's hash really differs").not.toBe(
-            currentOf(step).stamp.inputHash,
-          );
+          /* The control. Up to `/8` the older prompt's hash really differs.
+             From `/9` on the band is in both, so the version before today's
+             stamps today's hash: that held the first time the version moved
+             past `/9`, at `/10` (plan 261005b § A slightly longer Brief), when
+             this asserted "differs" for every older version and went red. */
+          if (/^simple-prompt\/[1-8]$/.test(value)) {
+            expect(patch.inputHash, "a pre-band prompt's hash differs").not.toBe(currentOf(step).stamp.inputHash);
+          } else {
+            expect(patch.inputHash, "a banded prompt's hash is today's").toBe(currentOf(step).stamp.inputHash);
+          }
         }
         const pair = await recordedAs(step, patch, () => ask(step));
         expect(pair).toEqual(pinned ?? { queue: false, page: false });
@@ -693,10 +689,13 @@ describe.each(Object.entries(CASES) as [StepName, readonly Field[]][])(
 /**
  * `blocks` carries no stamp, so there is no recorded field to make stale. It
  * goes stale when the document it was cut from changes — `extract` ran again —
- * and the queue notices by re-splitting stage 2's HTML and comparing.
+ * and the queue notices by re-splitting stage 2's HTML and comparing. The page
+ * makes the same call on the same three inputs (src/store/pg.ts § `case
+ * "blocks"`), so the two agree by construction; until 2026-10-05 the page had
+ * no arm and called every finished `blocks` run current.
  */
 describe("blocks: stage 2's HTML moves underneath a finished stage 3", () => {
-  it("FINDING — disagree: the queue would re-run it, the page calls it current", async () => {
+  it("both call it stale: the queue would re-run it, and the page says so", async () => {
     const [was] = await getDb()
       .select({ html: articleRevisions.extractedHtml })
       .from(articleRevisions)
@@ -712,9 +711,40 @@ describe("blocks: stage 2's HTML moves underneath a finished stage 3", () => {
     expect(await ask("blocks")).toEqual({ queue: true, page: true });
     try {
       await set(`${was.html}<p>A paragraph the re-extraction found.</p>`);
-      expect(await ask("blocks")).toEqual(DISAGREEMENTS["blocks:extractedHtml"]);
+      expect(await ask("blocks")).toEqual({ queue: false, page: false });
     } finally {
       await set(was.html);
+    }
+    expect(await ask("blocks")).toEqual({ queue: true, page: true });
+  });
+
+  /**
+   * **The same function is not enough; it has to be fed the same blocks.** The
+   * pipeline's read returns a block's HTML as stored, and the page's ordinary
+   * read (`blocksFor`) returns it sanitised. A stored block carrying markup the
+   * sanitiser removes is therefore a different block to each: the replay never
+   * produces that markup, so the raw block does not match and the cleaned one
+   * does. The page's arm reads the raw rows for this reason. GPT Sol's PF1 on
+   * plan 261005i.
+   */
+  it("both call it stale when a stored block carries markup the sanitiser would remove", async () => {
+    const target = blocks.find((b) => b.kind !== "heading" && b.html.startsWith("<p"));
+    if (!target) throw new Error("the fixture has no paragraph to mark");
+    const dirty = target.html.replace(/^<p/, '<p data-hit="1"');
+    /* The premise: the two reads really would see two different blocks. */
+    expect(dirty).not.toBe(target.html);
+    expect(sanitizeHtml(dirty)).toBe(sanitizeHtml(target.html));
+    const where = and(
+      eq(revisionBlocks.revisionId, ref.revisionId),
+      eq(revisionBlocks.blockId, target.id),
+    );
+    const [was] = await getDb().select({ html: revisionBlocks.html }).from(revisionBlocks).where(where);
+    if (!was) throw new Error("the fixture block has no row");
+    try {
+      await getDb().update(revisionBlocks).set({ html: dirty }).where(where);
+      expect(await ask("blocks")).toEqual({ queue: false, page: false });
+    } finally {
+      await getDb().update(revisionBlocks).set({ html: was.html }).where(where);
     }
     expect(await ask("blocks")).toEqual({ queue: true, page: true });
   });
@@ -876,11 +906,12 @@ describe("when the article itself moves, every step gets the same answer from bo
 
   /**
    * The blocks hash moves, so every step stamped against the prose goes stale —
-   * and both pinned disagreements show again, `structure`'s this time reached
-   * the way it really happens (the blocks changed underneath a finished tree)
-   * rather than by editing its row.
+   * `blocks` among them, to both, because the stored block is no longer what
+   * stage 3 would cut. The pinned disagreement shows again, reached the way it
+   * really happens (the blocks changed underneath a finished tree) rather than
+   * by editing `structure`'s row.
    */
-  it("a paragraph's text changes — FINDING: blocks and structure disagree, the rest agree", async () => {
+  it("a paragraph's text changes — FINDING: structure disagrees, the rest agree", async () => {
     const target = blocks.filter((b) => isBodyEvidence(b) && b.kind !== "heading").at(-1);
     if (!target) throw new Error("the fixture has no body block to edit");
     const where = and(
@@ -894,13 +925,12 @@ describe("when the article itself moves, every step gets the same answer from bo
         .where(where);
       const { stale, disagree } = read(await askAll());
       expect(disagree).toEqual({
-        blocks: DISAGREEMENTS["blocks:extractedHtml"],
         structure: DISAGREEMENTS["structure:inputHash"],
       });
       /* Three stamped steps do not read a paragraph's text, on either side:
          `assets` hashes each block's HTML for its figures, `skim` hashes the
          quotes it was offered, and `illustrated` hashes the sketch. */
-      expect(stale).toEqual(inOrder(["labels", ...READS_THE_HEAD]));
+      expect(stale).toEqual(inOrder(["blocks", "labels", ...READS_THE_HEAD]));
     } finally {
       await getDb().update(revisionBlocks).set({ text: target.text }).where(where);
     }
