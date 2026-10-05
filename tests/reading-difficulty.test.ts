@@ -274,7 +274,7 @@ describe("rateReadingDifficulty", () => {
 
   it("leaves the piece unrated when the provider refuses", async () => {
     const gateway: DifficultyGateway = async () => {
-      throw new ProviderRefused(429, "rate limited", new Headers());
+      throw new ProviderRefused(429, "rate limited", new Headers(), false);
     };
     expect(await rateReadingDifficulty(ESSAY, { gateway })).toEqual({ kind: "unrated", why: "refused" });
   });
