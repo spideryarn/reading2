@@ -151,6 +151,8 @@ import { type TagsControl, tagRunners } from "./command-runners.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
+import { setAppearance, useAppearance } from "./appearance.js";
+import { appearanceRows } from "./appearance-commands.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
 import { useDictationField } from "./useDictationField.js";
 import { type MetadataSection, type Mode, type RememberView, modeParam, rememberInSearch, withSection } from "./params.js";
@@ -1115,6 +1117,11 @@ function commandGenerates(command: Command): boolean {
   }
 }
 
+/** A row's `marker`, which only a row with words of its own can carry. */
+function commandMarker(command: Command): string | undefined {
+  return command.kind === "page" || command.kind === "action" ? command.marker : undefined;
+}
+
 /**
  * **Whether pressing this row does nothing but take the reader somewhere** —
  * the one question that decides whether a row a model picked from a sentence
@@ -1431,6 +1438,9 @@ export function CommandBar({
    * call site would make it bite, and the day the Dock's own renders get
    * expensive is the day to do that rather than now.
    */
+  /* The appearance in force, for which of its three rows is marked `current`
+     (appearance-commands.ts). The store's own hook, as /profile reads it. */
+  const appearance = useAppearance();
   const commands = useMemo(
     () => [
       ...modes.map(modeCommand),
@@ -1446,8 +1456,11 @@ export function CommandBar({
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */
       ...experimentalRows(experimental),
+      /* Typed-only too, and last for the same reason. No gate of their own:
+         the choice is the device's, and the write is synchronous. */
+      ...appearanceRows(appearance, setAppearance),
     ],
-    [modes, experimental, diagram, article, openComments, openFeedback, queue],
+    [modes, experimental, diagram, article, openComments, openFeedback, queue, appearance],
   );
   /**
    * **The ranked rows, and the argument rows after them when the query has
@@ -2054,6 +2067,14 @@ export function CommandBar({
                 {commandGenerates(command) && (
                   <span className="cmdbar-generates tw:shrink-0 tw:text-xs tw:text-ink-faint">
                     {GENERATES_MARKER}
+                  </span>
+                )}
+                {/* The same kind of note, about the reader rather than the
+                    row: `current` on the appearance in force (command-match.ts
+                    § `CommandWords.marker`). */}
+                {commandMarker(command) !== undefined && (
+                  <span className="cmdbar-marker tw:shrink-0 tw:text-xs tw:text-ink-faint">
+                    {commandMarker(command)}
                   </span>
                 )}
               </div>

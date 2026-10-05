@@ -373,7 +373,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <em>look up entropy</em> opens a matching term already visible in the glossary, or, once
             the article has a glossary, offers to look it up and add it.{" "}
             <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}
-            <em>experimental</em> turns experimental features on or off. <em>find more terms</em> and{" "}
+            <em>experimental</em> turns experimental features on or off. <em>dark mode</em>,{" "}
+            <em>light mode</em> and <em>system</em> change the page’s colours on this device, the
+            choice your Profile also has. <em>find more terms</em> and{" "}
             <em>more quotes</em> open Glossary or Quotes and press its <strong>Find more</strong> for
             you; they are offered only while that list can be added to. Press the microphone in the
             box to say it instead of typing.

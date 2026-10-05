@@ -28,9 +28,10 @@ trusted input; `feedback-reporter.ts` exited 0 on its production row.
   and `tests/command-pick-catalogue.test.ts` (generates
   `src/command-pick-catalogue.generated.json`, the words the sentence-picking model is shown).
 - No mode, sub-mode, page or action today has a label or alias containing `theme`, `appearance`,
-  `dark`, `light` or `system` (grep of `mode-catalog.ts`, `sub-modes.ts`, `article-commands.ts`,
-  `rerun-commands.ts`, `find-more.ts`, `CommandBar.tsx`). Descriptions were not checked by grep;
-  the alias test below is what checks ranking.
+  `dark` or `system`. One contains `light`: Search's alias `highlight` (the first draft of this
+  plan said none did; GPT Sol's F4). It still opens Search, because a mode row comes before these
+  on a tie and `highlight` is a whole-alias match there. The alias test below is what checks
+  ranking.
 
 ## What we'll build
 
@@ -47,8 +48,11 @@ memo:
 - **The names are /profile's**: *Appearance*, and *System / Light / Dark*, so the two doors use the
   same words. Typing `appearance`, `theme` or `colour scheme` lists all three; `dark`, `light` and
   `system` each put theirs first (alias prefix; the label contains them too).
-- **All three are always offered, and the one in force says so** — its description gains
-  *This is what you have now.* Pressing it sets the same value again and closes. This departs from
+- **All three are always offered, and the one in force is marked** with the muted word `current`
+  after its sentence, where a spending row has `generates`. Pressing it sets the same value again
+  and closes. The mark is a new optional field on a row, `marker`, drawn and never matched on or
+  sent; the first draft put a sentence in the description instead, which the pick catalogue
+  cannot hold (below, F2). This departs from
   the rule Archive and the experimental switch follow (*one row whose label follows the state, so
   there is never a row that does nothing*), on purpose: those are two-state toggles, and this is a
   choice among three. Hiding the current one would mean a reader in Dark who types `dark mode` gets
@@ -61,10 +65,11 @@ memo:
   closes on the new colours. Not saved (storage refused): the colours still change, and the bar
   stays open with /profile's own sentence, *Couldn't save it on this device, so it lasts until you
   close this page.*
-- **Offered wherever the bar is**: the reading view and the owner's Metadata page, to a visitor as
-  well as a signed-in reader, because the choice is the device's and needs no account. The
-  experimental row's `loaded / signedIn / saving` gate has no equivalent here: the write is
-  synchronous.
+- **Offered wherever the bar is**, which is the reading view and the owner's Metadata page. The
+  rows have no gate of their own (the experimental row's `loaded / signedIn / saving` has no
+  equivalent: the choice is the device's and the write is synchronous). **A visitor on somebody
+  else's article has no command bar at all** (`Dock.tsx`, `useCommandBarChord(!isVisitor, …)`), so
+  gets no rows; the first draft promised them some (F1).
 - `CommandBar` reads the current choice with `useAppearance()` and hands it, with `setAppearance`,
   to `appearanceRows(current, set)`. The row builder takes both as arguments so the tests can pass
   stubs.
@@ -75,8 +80,8 @@ memo:
   `tests/command-bar-arguments.test.tsx`): the three rows are absent from the opening list;
   `theme` and `appearance` list all three; `dark mode`, `light mode`, `system` each put theirs
   first; Enter on *Appearance: Light* leaves `localStorage["spya.appearance"] === "light"` and
-  `<html data-theme="light">` and closes the bar; the row in force carries *This is what you have
-  now.* and the other two do not; with `localStorage.setItem` throwing, the theme is applied, the
+  `<html data-theme="light">` and closes the bar; the row in force carries the `current` mark and the
+  other two do not; with `localStorage.setItem` throwing, the theme is applied, the
   bar stays open, and the sentence is shown.
 - The three hand-built lists gain the rows: the collision matrix (no label or alias parses as an
   argument verb), the mode-alias ranking (no mode alias now lands on an appearance row first), and
@@ -89,6 +94,27 @@ memo:
 - `help-page.md` says the Help page has a deploy step that keeps it true; if the page's text names
   where the appearance is set, it gains the command.
 - `docs/user-feedback/` note, and `feedback-endings.ts`.
+
+## After GPT Sol's plan review
+
+[261005d-theme-commands-plan-review-sol.md](261005d-theme-commands-plan-review-sol.md), verdict
+*build with the changes above*. All four accepted.
+
+- **F1 (P1), the visitor path is unreachable.** True: the bar is not drawn for a visitor. The plan
+  is narrowed to the bars that exist; opening the bar to visitors is its own piece of work, with
+  every other row to review.
+- **F2 (P1), a description that changes with state breaks the catalogue.**
+  `src/command-pick-catalogue.generated.json` holds one description per (id, label), and the server
+  answers from it. So descriptions are static and the mark is the separate `marker` field.
+- **F3 (P2), tests for the paths that matter.** Added: each of the three sets its own value; a
+  model pick at confidence 1 is drawn and changes nothing until Enter
+  (`tests/command-bar-pick.test.tsx`); a refused save moves the mark as well as saying so; a press
+  on the Metadata page. The three ids surviving `knownOptions` is the regenerated catalogue.
+- **F4 (P3), `highlight` contains `light`.** Corrected under What exists.
+
+The first two runs of this review never reached the model (*Selected model is at capacity*, exit 1,
+empty answer file) on the pinned `gpt-5.6-sol`; the third, with the family name `sol`, ran on
+`gpt-6.1-sol`.
 
 ## The simpler option passed over
 
