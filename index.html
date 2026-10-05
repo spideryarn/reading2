@@ -78,6 +78,31 @@
          indexable by accident. Fail closed: a document that says nothing about
          robots is a document that may be indexed. -->
     <meta name="robots" content="noindex, nofollow" />
+    <!-- **The card for every page that is not a shared article** — the
+         homepage, /changelog, /features — since 2026-10-05. Before it, a link
+         to any of them previewed as the bare product name. A shared article's
+         own card replaces these with the rest of the region
+         (src/public/page-head.ts). Fetching for a card is not indexing: the
+         robots line above is untouched.
+         **No `og:url`, on purpose.** This one head is served at every path, so
+         any address written here is wrong for most of them; and its absence is
+         how `articleWaitTitle` (src/web/page-title.ts) and
+         scripts/check-public-shell.ts know a head was not composed for an
+         article. The image address is `OG_CARD` in src/public/page-head.ts,
+         written out because this file is not built from TypeScript;
+         tests/og-card.test.ts holds the two together. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Spideryarn" />
+    <meta property="og:title" content="Spideryarn · AI-assisted reading" />
+    <meta property="og:description" content="AI-assisted reading: an article at whatever level of detail you need." />
+    <meta property="og:image" content="https://www.spideryarn.com/og-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Spideryarn" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Spideryarn · AI-assisted reading" />
+    <meta name="twitter:description" content="AI-assisted reading: an article at whatever level of detail you need." />
+    <meta name="twitter:image" content="https://www.spideryarn.com/og-card.png" />
     <!-- spideryarn:managed-head:end -->
     <!-- **No referrer, from any page of this app, to anywhere.**
 

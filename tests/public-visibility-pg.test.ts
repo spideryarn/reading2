@@ -965,6 +965,9 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        two projections really are different, in a database rather than in a
        generated string. */
     expect(head).toHaveProperty("gist");
+    /* Names for the card, filtered by `publicAuthorNames` (tests/public-dto.test.ts).
+       This fixture has no structured authors, so none. */
+    expect(head.authors).toEqual([]);
     /* **The candidate canonical arrives raw, and is refused downstream.** This
        fixture's `final_url` carries a signed query parameter on purpose, which
        is the hazard: publishing it would hand out the signature, and stripping

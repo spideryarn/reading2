@@ -468,10 +468,12 @@ SPIDERYARN-READING2-2W, when the mark was a border:
 
 `quoteAlpha` (beside `quoteTier`) runs from **0.70** at `priorityOf` 0.5 and below — and for the
 unscored — to **1.00** at 1.0, linearly, and travels as `--quote-a` in the inline style
-`annotateHtml` already writes for `--hit-a`. **The fill's strength is the tier's base times that**:
-0.20 for light and 0.32 for heavy, so light runs 0.14 to 0.17 (a light quote's priority stops below
-0.80) and heavy 0.28 to 0.32. Tier and fade
-**move the same way**, so a heavier quote is always also a brighter one and the two can never
+`annotateHtml` already writes for `--hit-a`. **The fill's strength is the tier's base times that.**
+The bases are per appearance (`--quote-fill-light` and `--quote-fill-heavy`, beside `--quote-rgb` in
+`styles/tokens.css`): 0.20 and 0.32 on the light page, so light runs 0.14 to 0.18 (a light quote's
+priority stops below 0.80) and heavy 0.28 to 0.32; 0.28 and 0.36 on the dark page, so 0.20 to 0.25
+and 0.32 to 0.36 (§ [Stronger on the dark page](#stronger-on-the-dark-page-since-2026-10-05)). Tier
+and fade **move the same way**, so a heavier quote is always also a brighter one and the two can never
 cancel. It spends the finding of 260907c's acceptance pass, that priority *"does help skimming — but
 through brightness more than thickness"*: with a fill, brightness is all there is.
 
@@ -480,13 +482,44 @@ the box, 2026-09-07, on stroke widths: three tiers scored **13/20, which is chan
 **12/12**. It has not been re-run on fills. The step between the tiers is asserted in the test
 below; whether a reader sees it is the browser check's.
 
-**The words keep their colour, and five things are tested, not felt.**
+**The words keep their colour, and these are tested, not felt.**
 [tests/quote-fill.test.ts](../../tests/quote-fill.test.ts) reads the real tokens in both themes and
 requires: the article's ink and its soft ink clear 4.5:1 on the strongest fill there can be; a link
 inside a quote clears 3:1 on it (**the weakest pairing, and what set the strengths**: a link is only
 5.7:1 on the bare light page, and at the first build's 0.42 it was 2.9:1); the faintest fill still
 differs from the page; the heavy tier is stronger than the light where they meet; and the spine
 strip, a thin line in the same colour at `QUOTE_ALPHA_FLOOR`, clears 3:1.
+
+#### Stronger on the dark page, since 2026-10-05
+
+Greg, two days after the fill shipped (`spya-s0gppw`):
+
+> The quote highlighting color is not very visible against the black background in dark mode. Take a
+> screenshot and see if you can slightly tweak it.
+
+The dark page's quote colour is a pale lavender, `204 151 243`, and it was drawn at the light page's
+two strengths. At 14% over near-black that is a dark grey with a little purple in it. **The dark
+page's strengths are now 0.28 and 0.36**, up from 0.20 and 0.32, so a light quote is about 40%
+stronger and a heavy one about 12%
+([261005f](../plans/261005f-dark-quote-fill-stronger.md)). The light page's are what they were, and
+the test pins them.
+
+**What stops it going further.** A search hit over a quote draws its outline on the fill, and the
+blue automatic search colour (`--cat-4`) is 3.03:1 on the strongest dark fill; at 0.38 it is under
+3. The light tier's 0.28 clears the OKLab floor; at 0.30 the two tiers are nearly one.
+
+**The colour did not move**, though a more saturated purple looked better in the prose. The spine
+strip shares it and is drawn on the rail's panel, a lighter ground than the page, where a darker
+purple fell from 3.3:1 to 2.2:1 (GPT Sol's plan review).
+
+**The old contrast check did not catch the complaint**: the faintest fill passed its
+"differs from the page" floor at 1.22. That ratio measures luminance only, while OKLab distance also
+counts chroma. So on the dark page the test asks for both (the old fill was 0.107 from the page, the
+new one 0.146, and the OKLab floor is 0.14).
+
+**Known gap**: the test sums every foreground over the page, and a quote can also sit on `--muted`
+(a code block) or under a glossary or cross-reference rule. Those pairings were under their floors
+before this and are a little further under now; 261005f § Found, not fixed here has the numbers.
 
 **Purple, because the reader has fills of their own.** Since 2026-10-03 a reader's highlight is a
 wash in yellow, green, blue or pink. The quote colour was a green at hue about 163, which as a wash

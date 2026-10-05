@@ -481,19 +481,27 @@ mark.hit[data-wash][data-wash-end]:dir(rtl) {
    brightness. The two inputs are unchanged, so nothing moved in TypeScript:
    `data-quote` is the tier (`quoteTier`) and sets the base strength, and
    `--quote-a` (0.70 to 1.00, `quoteAlpha`) scales it. They move the same way,
-   so a heavier quote is always also a brighter one. Light runs 0.14 to 0.17
-   (a light quote's priority stops below 0.80, so its `--quote-a` stops at
-   0.87) and heavy 0.28 to 0.32: a visible step at the tier, and a continuous
-   fade inside each. Still two tiers and not three, for the blind test of 2026-09-07.
+   so a heavier quote is always also a brighter one. On the light page light
+   runs 0.14 to 0.18 (a light quote's priority stops below 0.80, but rounding
+   lets `--quote-a` reach 0.88) and heavy 0.28 to 0.32: a visible step at the
+   tier, and a continuous fade inside each. Still two tiers and not three, for
+   the blind test of 2026-09-07.
+
+   **The two base strengths are the theme's**, `--quote-fill-light` and
+   `--quote-fill-heavy` beside `--quote-rgb` in styles/tokens.css, since
+   2026-10-05: the dark page needed a stronger fill than the light one
+   (`spya-s0gppw`, plan 261005f), and the token file is where the themes differ.
 
    **The words keep their colour, and their contrast is tested.**
    tests/quote-fill.test.ts composites the strongest fill over the page from
    the real tokens, in both themes, and requires the article's ink and its
    soft ink to clear 4.5:1 on it, and a link 3:1. **The link is what set the
-   strengths**: the first build had 0.30 and 0.42, and a link inside a heavy
-   quote came out at 2.9:1 on the light page (GPT Sol's plan review asked for
-   the other two foregrounds; the sum found it). A link is only 5.7:1 on the
-   bare light page, so no visible fill keeps it at 4.5.
+   light page's strengths**: the first build had 0.30 and 0.42, and a link
+   inside a heavy quote came out at 2.9:1 on the light page (GPT Sol's plan
+   review asked for the other two foregrounds; the sum found it). A link is
+   only 5.7:1 on the bare light page, so no visible fill keeps it at 4.5. On
+   the dark page the blue automatic search outline holds the heavy tier down;
+   the visibility floor and the step between tiers bound the light one.
 
    **Square pieces, rounded true ends.** `annotateHtml` emits one `<mark>` per
    text node and splits again at every annotation boundary, so ONE quote
@@ -508,7 +516,7 @@ mark.hit[data-wash][data-wash-end]:dir(rtl) {
    the start of each. Without it two fills of one tier weld into one long
    quote; the outline had the same problem and solved it with inset caps. */
 mark.hit[data-quote] {
-  --quote-fill: 0.2;
+  --quote-fill: var(--quote-fill-light);
   background-color: rgb(var(--quote-rgb) / calc(var(--quote-a, 0.95) * var(--quote-fill)));
   border-radius: 0;
   -webkit-box-decoration-break: slice;
@@ -517,7 +525,7 @@ mark.hit[data-quote] {
 /* The heavy tier. See `QuoteTier` in src/types.ts for the numbers and the
    reasoning behind two. */
 mark.hit[data-quote="2"] {
-  --quote-fill: 0.32;
+  --quote-fill: var(--quote-fill-heavy);
 }
 mark.hit[data-quote][data-quote-start] {
   border-start-start-radius: 2px;

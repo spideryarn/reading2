@@ -13,6 +13,23 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-05 · SPIDERYARN-READING2-DB (spya-dxufdw) · the reading-time line "appeared a minute
+  late": no matching delay was found. Most likely Experimental features was off when the article
+  loaded and the line drew the instant it was switched on; with it off nothing is recorded either.
+  The question is whether reading time comes out from behind the switch. Four options, A to D,
+  and there is no control yet to turn it off or erase it. Recommended: yes, all of
+  it, for every owner (A) · qi-73z36z3g ·
+  [261005g § Questions for Greg](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md#questions-for-greg) ·
+  [note](261005_0729-reading-time-line-appears-a-minute-after-the-article-loads.md)
+
+- 2026-10-04 · spya-qfu4uz · improving SEO: not built, because the whole site is `noindex` on
+  purpose and says so to authors, so nothing a search engine could read is read until that
+  changes. Two questions. Recommended: let search engines list Spideryarn's own pages (the homepage,
+  `/features`, `/pricing`, `/help`, `/changelog`, `/privacy`; about a day), and keep shared articles
+  out of search, which is what Google asks of a republisher · qi-jge946v7 ·
+  [261005f § Questions for Greg](../plans/261005f-link-previews-and-seo-for-shared-links.md#questions-for-greg) ·
+  [note](261004_1711-improve-spideryarn-seo.md)
+
 - 2026-10-04 · spya-hwdefp and spya-v322fd (SPIDERYARN-READING2-D7) · sharing an article with some
   people: not built, because Greg asked to discuss first and every version changes who may read
   an article, a listed defence. Three stages, three questions. Recommended: a private link first

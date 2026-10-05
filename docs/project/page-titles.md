@@ -340,6 +340,19 @@ sinks, read by different things — rather than between two copies of one rule. 
 `og:site_name`, so repeating the app's name spends the visible half of it saying one word twice, and
 an `…` in published metadata is a claim that the title contained one.
 
+**Since 2026-10-05 the card also says who wrote it and carries a picture**
+([261005f](../plans/261005f-link-previews-and-seo-for-shared-links.md); Greg, 2026-10-04: *"Probably
+the article title and/or authors first in the title"*). `og:title` ends ` · Jane Doe`, ` · Jane Doe
+and John Smith` or ` · Jane Doe et al.` (`cardTitle` in `page-head.ts`), from the names a visitor is
+already shown (`publicAuthorNames`, [`src/public/dto.ts`](../../src/public/dto.ts)). The tab does
+not: the client rewrites it a second later, and a name there would be a tab that changes. The
+picture is one static image for the whole site, `public/og-card.png`, drawn by
+`scripts/make-og-card.ts`. And every page that is not a shared article has a card too, written
+by hand in `index.html`, with **no `og:url`**: that tag is now the only thing that says a head was
+composed for an article, which `articleWaitTitle` below and `scripts/check-public-shell.ts` both
+read. The research is
+[261005b](../research/261005b-link-previews-and-seo-for-republished-articles.md).
+
 `tests/page-head.test.ts` § *the one title rule, applied by both sides* is the check, and its expected
 strings are written out rather than computed from either side — an expectation spelled
 `documentTitle(t)` would agree with every possible behaviour of `documentTitle`, which is how a test

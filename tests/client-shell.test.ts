@@ -208,6 +208,7 @@ describe("the digest that is served to the deployed check", () => {
       title: "T",
       gist: null,
       canonical: null,
+      authors: [],
     });
     expect(composed).not.toBe(BUILT);
     expect(createHash("sha256").update(Buffer.from(composed, "utf8")).digest("hex")).not.toBe(
