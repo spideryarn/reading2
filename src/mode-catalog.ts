@@ -648,13 +648,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
        and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
        thing it generates is its own relation words — so, but, vs
-       (src/relations.ts, plan 261003f), queued on import
-       (src/auto-mode-steps.ts, plan 261005d) or by the owner's press where
-       there are none; other modes' lists are only read. The
+       (src/relations.ts, plan 261003f), asked for the first time the owner's
+       column is shown (src/web/useRelations.ts, plan 261005d), never on
+       import; other modes' lists are only read. The
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, when the article is added or the first time its owner turns the column on. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */

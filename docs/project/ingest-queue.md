@@ -617,8 +617,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 
 **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
 it.** When an import's first full publication commits, the same transaction queues one job per main
-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
-relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
 cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
 mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
 reader's profile as it stood at publication.

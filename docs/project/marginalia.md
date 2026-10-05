@@ -112,19 +112,34 @@ options passed over and GPT Sol's review are in
   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
   *why* or *e.g.* later is a row in each table and no new model call.
-- **An import queues it, since 2026-10-05**, with the other main modes' steps, when the mode left
-  the experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md); [ingest-queue.md](ingest-queue.md)).
-- **Otherwise the press that turns the column on asks for it**: on an article imported before
-  then, or with the add page's box unticked, or where the queued run failed. Marginalia's row in
-  `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
-  starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
-  a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
-  arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
-  [`src/web/useRelations.ts`](../../src/web/useRelations.ts). The first-open default that turns the
-  column on is such an arrival, not a press
-  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
-- **Nothing in the column says it is running.** The words appear when the job finishes; the job
-  is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+- **Made when the column is shown, not on import and not on a press.**
+
+  > generate linking words when Marginalia mode is opened
+  >
+  > — Greg, 2026-10-05
+
+  The owner's column mounting is what asks ([`src/web/useRelations.ts`](../../src/web/useRelations.ts),
+  through `useAutoRunOnArrival` in [`useAutoRun.ts`](../../src/web/useAutoRun.ts), the rule the
+  thread in Summary already used). So it does not matter what showed the column: a press of the
+  toggle, the first-open default that turns it on with nobody pressing anything
+  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)),
+  a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press could
+  not carry it, because the default arrives without one, and a new article would then have had no
+  words until the column was turned off and on.
+  - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
+    last word. Turning the column off and on again buys nothing, and a failed run does not loop.
+  - **A stale or outdated list counts as none**, so the next showing rewrites it.
+  - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the owner's feed
+    still reads, but waits to generate until the notes fit on screen. A visitor's column never reaches the hook.
+  - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
+    `delegated` and answers `null`: the command bar still marks the row as one that may start work,
+    and the import's list, which is derived from that table, does not include it.
+  - **For part of 2026-10-05 an import queued it**, with the other main modes' steps
+    ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
+    for every article, opened or not. **No backfill**: an article from before gets its words the
+    next time its owner has the column open (Greg: *"yes leave that for now"*).
+- **Nothing in the column says it is running.** The notes are drawn without the words, and the
+  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
   rewritten one.
