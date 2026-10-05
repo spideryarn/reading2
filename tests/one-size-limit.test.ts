@@ -264,8 +264,11 @@ describe("the job card under an address that is over the limit", () => {
         fetchImpl: async () => { throw error; },
       };
       const thrown = await STEPS.fetch.run(ctx(), memoryArtefacts(), nullCheckpointStore()).catch((err: unknown) => err);
-      expect(thrown).toBeInstanceOf(FetchFailure);
-      expect((thrown as FetchFailure).code).not.toBe("too-large");
+      /* Since 2026-10-04 the step throws a declared failure for every code
+         rather than the `FetchFailure` itself (src/pipeline.ts §
+         `fetchStepFailure`), so the diagnostic's code is what says which. */
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).not.toContain("[fetch-big]");
       expect(readerFailureOf(thrown, STEPS.fetch.label).message).not.toContain("[fetch-big]");
     });
   }
@@ -276,8 +279,8 @@ describe("the job card under an address that is over the limit", () => {
     const fetchImpl = vi.fn();
     network.seams = { attempts: 1, resolve: async () => ["93.184.216.34"], fetchImpl };
     const thrown = await STEPS.fetch.run(ctx(controller.signal), memoryArtefacts(), nullCheckpointStore()).catch((err: unknown) => err);
-    expect(thrown).toBeInstanceOf(FetchFailure);
-    expect((thrown as FetchFailure).code).toBe("timeout");
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain("timeout");
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(readerFailureOf(thrown, STEPS.fetch.label).message).not.toContain("[fetch-big]");
   });

@@ -33,7 +33,7 @@ import {
   summaryParam,
   threadParam,
 } from "../src/web/params.js";
-import { subModeParams, subModesOf, withSubMode, type SubMode } from "../src/web/sub-modes.js";
+import { returnToSubMode, subModeParams, subModesOf, withSubMode, type SubMode } from "../src/web/sub-modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 let host: HTMLDivElement;
@@ -88,7 +88,7 @@ function reading(props: Record<string, unknown> = {}): void {
  */
 function ReaderNavHarness(): ReturnType<typeof createElement> {
   const [mode, setMode] = useQueryState("mode", modeParam);
-  const [, setSubNav] = useQueryStates({
+  const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
     remember: rememberParam,
     thread: threadParam,
@@ -106,7 +106,11 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     onMode(next, sub) {
       /* Marginalia is a switch, not a band (`BandMode`); not under test here. */
       if (sub === undefined) {
-        if (isBandMode(next)) void setMode(next);
+        if (isBandMode(next) && next !== mode) {
+          const back = returnToSubMode(next, { remember: subNav.remember });
+          if (back === null) void setMode(next);
+          else void setSubNav(back, { history: "push" });
+        }
       } else void setSubNav(subModeParams(sub), { history: "push" });
     },
   });
@@ -456,6 +460,17 @@ describe("Enter on a sub-mode row, on the reading view", () => {
         params.get("thread") === "spya-k3m9qt"
       );
     });
+  });
+
+  it("the Reader harness also clears a Chat thread on a plain return to retained Quiz", async () => {
+    readingThroughReader("?mode=chat&remember=quiz&thread=spya-k3m9qt");
+    const push = vi.spyOn(history, "pushState");
+    const remember = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Remember"]');
+    expect(remember).not.toBeNull();
+    act(() => remember?.click());
+    await until(() => new URLSearchParams(location.search).get("mode") === "remember");
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(new URLSearchParams(location.search).get("thread")).toBeNull();
   });
 });
 

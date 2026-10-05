@@ -330,10 +330,44 @@ export function subModeParams(sub: SubMode): SubModeParams {
   }
 }
 
+/**
+ * **What a press on a mode alone must write beyond `mode`**, given the
+ * sub-mode parameters the address has kept — or `null`, which is nearly always
+ * the answer: write `mode` and nothing else.
+ *
+ * A sub-mode parameter outlives its mode on purpose (url-state.md § a sub-mode
+ * parameter outlives its mode), so pressing Remember with `remember=quiz` still
+ * in the address returns the reader to the Quiz. That return is a navigation
+ * *to Quiz*, and Remember's rule 1 says Quiz and a cleared `thread` are one
+ * navigation: coming from a Chat conversation, `mode` alone would mount the
+ * Quiz with Chat's thread still selected, for `RememberBand` to drop an effect
+ * later (GPT Sol, F2 of the 261004l plan review). So that one return is
+ * `subModeParams`' answer for Quiz, the same as the chip and the command bar's
+ * row write, rather than a second copy of the rule.
+ *
+ * Only Quiz. Recall, Tutorial and Explore each overrule a stale thread
+ * themselves and write their own, and no other mode's sub-mode touches a second
+ * key. Both doors ask this: Reader.tsx § the Dock's `onMode`, and Dock.tsx §
+ * `modeLinkHref` for the metadata page's link.
+ */
+export function returnToSubMode(
+  next: Mode,
+  retained: { readonly remember: RememberView },
+): SubModeParams | null {
+  return next === "remember" && retained.remember === "quiz"
+    ? subModeParams({ mode: "remember", view: "quiz" })
+    : null;
+}
+
 /** `search` with a sub-mode's parameters written into it. Leading `?` kept when there is anything. */
 export function withSubMode(search: string, sub: SubMode): string {
+  return withSubModeParams(search, subModeParams(sub));
+}
+
+/** `withSubMode`'s second half, for a caller that already holds the parameters (`returnToSubMode`). */
+export function withSubModeParams(search: string, written: SubModeParams): string {
   const params = new URLSearchParams(search);
-  for (const [key, value] of Object.entries(subModeParams(sub))) {
+  for (const [key, value] of Object.entries(written)) {
     if (value === null) params.delete(key);
     else if (value !== undefined) params.set(key, value);
   }

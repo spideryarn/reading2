@@ -1882,6 +1882,41 @@ export interface SkipCounts {
  */
 export type EmbeddingReason = "config" | "provider" | "busy";
 
+/**
+ * Why a fetch failed, as something to switch on.
+ *
+ * These exist because **every network and TLS failure in Node arrives as the
+ * identical `TypeError: fetch failed`** — DNS, refused connection, expired
+ * certificate, self-signed certificate and a missing intermediate are one
+ * string at the top level, and the difference lives only in `err.cause.code`.
+ * Code that matches on the message learns nothing, which is exactly the trap
+ * the previous version fell into (docs/project/original-version/extraction.md).
+ *
+ * **Declared here, not in [fetch.ts](fetch.ts) where every one of them is
+ * raised**, for `EmbeddingReason`'s reason above: [messages.ts](messages.ts)
+ * holds a total map from these to the sentence a reader gets (`fetchFailed`),
+ * and it may not import `fetch.ts`, type-only or not. `fetch.ts` re-exports the
+ * name, so every other importer is unchanged. Moved 2026-10-04.
+ */
+export type FetchFailureCode =
+  | "invalid-url"
+  | "unsupported-scheme"
+  | "blocked-address"
+  | "dns"
+  | "connection"
+  | "certificate"
+  | "timeout"
+  | "too-many-redirects"
+  | "unauthorized"
+  | "forbidden"
+  | "not-found"
+  | "rate-limited"
+  | "server-error"
+  | "http-error"
+  | "too-large"
+  | "unsupported-type"
+  | "empty";
+
 export interface ProjectionResponse {
   model: string;
   /** How many blocks were embedded. Short ones and non-prose are skipped. */
