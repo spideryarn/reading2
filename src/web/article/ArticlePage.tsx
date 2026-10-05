@@ -42,7 +42,7 @@ import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
-import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
+import { ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
@@ -56,6 +56,7 @@ import {
 } from "../modes/structure/StructureArriving.js";
 import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
+import { OwnerNotShared } from "./StillBeingAdded.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
 /**
@@ -108,8 +109,8 @@ export function ArticlePage({
      re-runs that file. src/web/last-view.ts has the whole of it, including why
      a shared link always beats the memory. */
   useLastView(slug, view);
-  /* Bumped by the not-yet-read page once *Read this* is done, to load the
-     article it made in place. */
+  /* Bumped by the not-yet-read page once *Read this* is done, and by the
+     still-being-added page once its import is, to load the article in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
   /* A private link's key, when the address has one (useShareKey.ts). A visitor's
@@ -161,11 +162,16 @@ export function ArticlePage({
      especially so, since the mark is the only thing on screen that says whose
      page this is. The last branch draws none: it mounts a `Dock`, and the bar
      carries the wordmark there (2026-09-06 — see that branch). */
-  if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
+  /* **Signed in, it may be the reader's own import that has not published
+     yet**, opened from the link its job card hands out. `OwnerNotShared` looks
+     for that job and draws it; with none it is `NotSharedPage`, as it always
+     was. A signed-out visitor is untouched. StillBeingAdded.tsx, plan 261005l. */
+  if (access.kind === "not-shared")
+    return signedIn ? <OwnerNotShared slug={slug} onPublished={reread} /> : <LandingPage />;
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
      this one, and the error page is a `<pre>` with nothing to press. It draws
-     its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
+     its own corner logo, as `NotSharedPage` does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
 
   /* **Yours, and not read through yet** (plan 261001m): the paper's title,

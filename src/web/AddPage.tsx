@@ -83,6 +83,9 @@ import { Button } from "@/components/ui/button";
 import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
+import { asVisibilityState } from "./AccessSharing.js";
+import { ShareAtAdd, type ShareIo, shareUnsettled } from "./add-share.js";
+import { AddShare } from "./AddShare.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -190,6 +193,63 @@ const putHighPower: PutHighPower = (slug, on) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ on }),
   }).then((r) => readJson<{ highPowerSince: string | null }>(r));
+
+/**
+ * *Make it public*'s two requests (src/web/add-share.ts).
+ *
+ * **The probe is the read Metadata's sharing card is drawn from**,
+ * `GET /api/metadata/:slug`: 404 until the slug has a published revision, 200
+ * once it has. Only a fresh server answer counts, and the body is never read:
+ * `stillOnTheServer` in Metadata.tsx asks the same question the same way and
+ * says why at length. `apiFetch` answers a GET it could not send from the
+ * offline cache, as a 200 with a header on it, and a copy from last week does
+ * not say there is an article here now.
+ *
+ * **The write is the card's own**, with its reply checked by the card's own
+ * parser. `rightsConfirmed` goes on the publish only: the server refuses it on
+ * an unpublish (AccessSharing.tsx § `set`).
+ */
+const shareIo: ShareIo = {
+  async probe(slug) {
+    const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
+    if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
+    if (res.status === 404) return "none";
+    return res.status === 200 ? "article" : "unknown";
+  },
+  put: (slug, to) =>
+    apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        to === "public" ? { visibility: to, rightsConfirmed: true } : { visibility: to },
+      ),
+    }).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
+};
+
+/** The page's share, and the `/add/` address it belongs to. */
+interface ShareHeld {
+  source: string;
+  share: ShareAtAdd;
+}
+
+/**
+ * **The share for this address and this article**, the held one or its
+ * successor, or none before there is a slug. One per slug, never retargeted
+ * (GPT Sol's plan review, P1; add-share.ts says what goes wrong otherwise):
+ *
+ *  - **a new slug within one address** (a Retry that comes back under another
+ *    article: `slugForRetry`) is a new share, starting from its own probe;
+ *  - **a new address** holds none until its own job has a slug;
+ *  - **no slug** (a poll that briefly has no matching job) keeps the one it
+ *    has, as `purposeFor` keeps its session.
+ *
+ * Making one starts nothing: this is called during render, and only a
+ * committed render disposes the old share and starts the new one.
+ */
+function shareFor(held: ShareHeld | null, source: string, slug: string | null): ShareHeld | null {
+  if (held?.source === source && (slug === null || held.share.slug === slug)) return held;
+  return slug === null ? null : { source, share: new ShareAtAdd(slug, shareIo) };
+}
 
 /**
  * The purpose session's three requests (src/web/add-purpose.ts). `save` and
@@ -705,6 +765,33 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
 
   /**
+   * ***Make it public* for this add**, one share per slug — plan 261005l § 3.
+   * The job's own slug, or the completion's, never one derived from the
+   * address: the same rule as High-powered AI above. Render selects a
+   * candidate; a committed render disposes the one it replaces, which takes
+   * back whatever that one shared under its own slug, and starts the new
+   * one's probe.
+   *
+   * **Not disposed on unmount**: a reader who shared and then opened the
+   * article has not asked for that to be undone, and StrictMode's
+   * unmount-and-mount-again must not undo it either.
+   */
+  const shareRef = useRef<ShareHeld | null>(null);
+  const shareHeld = shareFor(shareRef.current, wanted, highPowerSlug);
+  const share = shareHeld?.share ?? null;
+  useLayoutEffect(() => {
+    if (shareRef.current === shareHeld) return;
+    shareRef.current?.share.dispose();
+    shareRef.current = shareHeld;
+    shareHeld?.share.start();
+  }, [shareHeld]);
+  /* Whether a 404 from the switch is *not yet*: the same question High-powered
+     AI asks, with the same answer. */
+  useEffect(() => {
+    share?.observe(highPowerAlive);
+  }, [share, highPowerAlive]);
+
+  /**
    * **The purpose session for this address and this article** (plan 261004l
    * § 1). The job's own slug, or the completion's, never one derived from the
    * address: the same rule as High-powered AI above. Render selects a candidate;
@@ -779,10 +866,27 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     /* A different completion supersedes a press still waiting on the old one.
        The waiting effect below checks this guard before doing anything. */
     claimed.current = null;
+    /* **The import has finished, so the article's row exists**: a share still
+       waiting for it is sent now, and one that gave up while the job sat
+       queued is sent again (add-share.ts § `settle`). Here and not in
+       `openArticle`, because what it answers decides whether the page leaves.
+       Only the share for this completion's own article. */
+    const sharing = shareRef.current?.share ?? null;
+    if (sharing?.slug === completionSlug) void sharing.settle();
+    /* **A third reason not to leave by itself**: the sharing confirmation is
+       open, or there is an answer about sharing the reader has not had the
+       chance to read. A fast import would otherwise navigate out from under
+       the question. A share that is on, or a box never touched, holds nothing
+       up. GPT Sol's plan review, P2-5. */
+    const sharingUnsettled = sharing !== null && shareUnsettled(sharing.get());
     /* **Nothing to wait for**: the box is not focused, and it holds nothing
        the server does not have. Never typed in, or typed and saved with no
        write in flight. Read from the session in this tick, not from a render. */
-    if (!focusedRef.current && !purposeRef.current?.session.get().unsaved) {
+    if (
+      !focusedRef.current &&
+      !purposeRef.current?.session.get().unsaved &&
+      !sharingUnsettled
+    ) {
       /* **And ask once, when it opens**, if the reader never so much as
          clicked into the box: the "didn't notice it" case. Greg, 2026-10-01,
          spya-hbqezu; plan 261001s § Stage 3. Only here: either button is a
@@ -1150,6 +1254,10 @@ export function AddPage({ source: origin }: { source: AddSource }) {
         </label>
       )}
       {(showAutoModes || deciding) && <AddHighPower intent={highPower} />}
+      {/* Under High-powered AI, once the job has a slug to share. `offer` is
+          the interval the two boxes above are drawn for; a share that has
+          been asked for stays up outside it (AddShare.tsx). */}
+      {share && <AddShare share={share} offer={showAutoModes || deciding} />}
 
       {showPurpose && (
         <PurposeBox
