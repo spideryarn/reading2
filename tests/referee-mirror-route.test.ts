@@ -457,6 +457,71 @@ describe("Referee's mirror route", { timeout: 60_000 }, () => {
    * the gateway handed to `fetch`, not off anything the route says about itself.
    */
   describe("a referee who leaves while the model is answering", () => {
+    it.each(["abort", "provider failure"] as const)(
+      "handles %s before fetch resolves without hiding an independent failure",
+      async (ending) => {
+        await asTestOwner(() =>
+          commentStore.create(SLUG, { ...FIRST, body: "This claim needs evidence." }),
+        );
+        monitoring.capture.mockClear();
+        let upstream: AbortSignal | undefined;
+        let rejectFetch!: (reason: unknown) => void;
+        let opened!: () => void;
+        const fetching = new Promise<void>((resolve) => {
+          opened = resolve;
+        });
+        vi.stubGlobal("fetch", (_input: unknown, init?: RequestInit) => {
+          upstream = init?.signal ?? undefined;
+          return new Promise<Response>((_resolve, reject) => {
+            rejectFetch = reject;
+            upstream?.addEventListener("abort", () => reject(upstream?.reason), {
+              once: true,
+            });
+            opened();
+          });
+        });
+        const req = Object.assign((async function* () {})(), {
+          method: "POST",
+          url: URL_FOR(SLUG),
+          headers: AUTHED_HEADERS,
+        }) as unknown as IncomingMessage;
+        const res = Object.assign(new EventEmitter(), {
+          writableEnded: false,
+          destroyed: false,
+          statusCode: 200,
+          setHeader() {},
+          writeHead() {},
+          flushHeaders() {},
+          write() {},
+          end() {
+            this.writableEnded = true;
+          },
+        });
+        const failure = new Error("upstream connection failed independently");
+        const pending = handleApi(req, res as unknown as ServerResponse, acceptAny);
+        try {
+          await fetching;
+          // Reject first, then disconnect before the rejection's catch runs.
+          if (ending === "provider failure") rejectFetch(failure);
+          res.destroyed = true;
+          res.emit("close");
+          expect(upstream?.aborted).toBe(true);
+        } finally {
+          rejectFetch(new Error("test over"));
+          await pending;
+        }
+        expect(res.writableEnded).toBe(true);
+        if (ending === "abort") {
+          expect(monitoring.capture).not.toHaveBeenCalled();
+        } else {
+          expect(monitoring.capture).toHaveBeenCalledWith(failure, {
+            route: "referee-mirror",
+            slug: SLUG,
+          });
+        }
+      },
+    );
+
     it("aborts the upstream call, files no failure, and records the call as aborted", async () => {
       await asTestOwner(() =>
         commentStore.create(SLUG, { ...FIRST, body: "This claim is not supported by the data." }),
@@ -533,10 +598,11 @@ describe("Referee's mirror route", { timeout: 60_000 }, () => {
 
       /* A person closing a tab is not an incident. */
       expect(monitoring.capture).not.toHaveBeenCalled();
+      expect(res.writableEnded).toBe(true);
 
       /* **And the ledger says what happened.** One row for the call, marked
-         `aborted` rather than `ok`, with no price on it: the usage chunk is the
-         last thing a provider sends and this call never got that far, so the
+         `aborted` rather than `ok`, with no price on it: this stub never sends
+         priced usage before the abort, so the
          honest cost is "not told", not zero. */
       const { sql } = await import("drizzle-orm");
       const rows = (

@@ -497,8 +497,11 @@ Built, as of 2026-09-01, and here is the whole of it:
   because the browser draws them and nothing under `src/web/` may import a module that reaches
   `node:crypto` (`tests/client-imports.test.ts`).
 - **The route** — `POST /api/referee/mirror/:slug`, no body, SSE out. It reads the article, the
-  comments and the criteria before a header goes out, and nothing is stored. A `delta` frame carries
-  **a character count, not characters**: what streams is one raw JSON object whose pointers the
+  comments and the criteria before a header goes out, and nothing is stored. Leaving cancels the
+  model call (`runMirror` in [`src/routes.ts`](../../src/routes.ts)); the decision is in
+  [261005i](../plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md).
+  A `delta` frame carries **a character count, not characters**: what streams is one raw JSON
+  object whose pointers the
   validator has not checked yet, so there is nothing in it a panel could honestly show — the count
   buys the one thing streaming buys here, which is the referee being able to tell *waiting* from
   *being answered*.

@@ -1447,6 +1447,17 @@ export function validateRemarks(
 const READER_LEFT = "The referee disconnected before this finished.";
 
 /**
+ * Was this the error `mirrorStream` throws for a referee who left?
+ *
+ * For the route, which must not file a closed tab as a failure and must still
+ * file everything else. "The signal is aborted" is the weaker question: a
+ * provider can fail on its own a moment before the referee goes, and that
+ * failure arrives at the same catch with the signal already aborted.
+ */
+export const isRefereeLeft = (err: unknown): boolean =>
+  err instanceof Error && err.message === READER_LEFT;
+
+/**
  * **Read the referee's comments and say what is worth another look.**
  *
  * This is the whole implementation; `mirror` below drains it. Modelled line for

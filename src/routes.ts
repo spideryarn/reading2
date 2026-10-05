@@ -130,7 +130,7 @@ import { scanArticleSource } from "./source-scan.js";
 /* Referee mode's Mirror sub-mode. The generator, and only the generator: the
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
-import { mirrorStream } from "./referee-mirror.js";
+import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
 /* A pure predicate, so importing it here does not drag the filesystem store
    into a file that must work with either one — the same rule the `withEdit` /
    `withRetry` import above states. The palette's *size* is deliberately not in
@@ -1292,10 +1292,11 @@ function sse(res: ServerResponse): {
    *                           `runRefereeCriterion`, `runRefereeClaims`, and
    *                           `search` for a meaning run
    *
-   * Every stream that runs on stores its answer, so the reader finds it when
-   * they come back. The converse is still not a rule: `streamAskedTerm` stores
-   * its term and stops. Each caller's own comment says why. Greg was asked
-   * whether there should be one rule and chose the narrow step — stop Mirror,
+   * Every stream that runs on has a save path for its answer; a deleted or
+   * superseded row can refuse the save. The converse is still not a rule:
+   * `streamAskedTerm` stores its term and stops. Each caller's own comment says
+   * why. Greg was asked whether there should be one rule and chose the narrow
+   * step — stop Mirror,
    * which stored nothing, and change nothing else
    * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4). When
    * you add a stream, choose on purpose and add it to this list.
@@ -5353,9 +5354,11 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
        function owns the response and the outer catch never sees the error —
        the same reasoning as `answer`, `markOneAnswer` and `streamChat`. A
-       referee who left is not a failure worth an issue — `streamAskedTerm`'s
-       rule — and `frame` below is a no-op on their closed socket. */
-    if (!gone.aborted) captureFailure(err, { route: "referee-mirror", slug });
+       referee who left is not a failure worth an issue, and `frame` below is a
+       no-op on their closed socket. **Asked of the error, not of `gone`:** a
+       provider that fails on its own just before the referee goes reaches here
+       with the signal aborted too, and that one is still a failure. */
+    if (!isRefereeLeft(err)) captureFailure(err, { route: "referee-mirror", slug });
     /* No partial text travels with it, unlike the quiz's. Half of a JSON
        object is not half of an answer: nothing in it has been checked, and a
        remark whose pointers have not been verified is exactly the
