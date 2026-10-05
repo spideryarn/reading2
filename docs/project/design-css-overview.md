@@ -166,7 +166,8 @@ on this page, and the fact that slot 6 sits close enough to the brand orange to 
 about.
 
 **Quotes add a token rather than another search hue.** A quote is a fill, like a
-highlighter pen, in `--quote-rgb` (a purple; `--quote-color` is the alias beside it), and its strength
+highlighter pen, in `--quote-prose-rgb` (a purple; `--quote-rgb` is the spine strip's, the same
+colour on the light page and a lighter one of the same hue on the dark), and its strength
 carries the quote's priority. **Quotes fill; search hits outline**, since 2026-10-03,
 when Greg swapped the two (`spya-xrgste`). `--hit-wash-rgb` is now only the pressed hit's faint wash
 and the quick hit's ring. The mechanism, the two tiers, why purple, and the month it was the other

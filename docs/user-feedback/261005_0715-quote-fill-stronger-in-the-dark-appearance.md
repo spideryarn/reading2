@@ -17,6 +17,9 @@ This also answers `[Q-quote-fill-strength]` in
 [261003_1447](261003_1447-quotes-filled-like-a-highlighter-pen-search-outlined.md) for the dark
 page.
 
+**Changed again the same day**: Greg found it still a little hard to see on an iPad, and the dark
+fill became a deeper purple. § The question, and Greg's answer, at the end.
+
 ## What changed
 
 In the dark appearance only, the purple fill behind a quote is stronger. An ordinary quote is about
@@ -54,18 +57,51 @@ are slightly further under now: softer text inside a code block under a top-prio
 glossary or cross-reference underline under one. Each needs a top-priority quote in that spot. It is
 queue entry `qi-9wyymfdy`, a proposal waiting for a yes.
 
-## A question for Greg
+## The question, and Greg's answer
 
-### [Q-dark-quote-colour] Should the dark quote colour be a deeper purple as well?
+`[Q-dark-quote-colour]` asked whether the dark quote colour should be a deeper purple as well:
+**A**, as built, the same lavender drawn stronger; or **B**, a deeper purple in the prose with the
+spine strip keeping its colour, which gives up his rule of 2026-09-10 that the two are one colour
+(*"use the same colour we use for their outline-border"*). The recommendation was A unless it still
+looked too faint.
 
-Background: the fill is a pale lavender drawn faintly, which over black reads as grey-purple. A
-more saturated purple reads as purple at the same strength, and in a side-by-side it looked better
-than what was built.
+Greg, 2026-10-05, after looking at A on an iPad:
 
-- **A. As built**: same colour, stronger. The spine strip and search outlines are unaffected.
-- **B. A deeper purple in the prose, and the spine strip keeps today's colour.** More obviously a
-  highlighter. It means the strip and the fill are no longer literally one colour, which you asked
-  for on 2026-09-10 (*"use the same colour we use for their outline-border"*), and the blue search
-  outline over a quote needs a look.
+> the purple Quote-highlights in dark mode on an iPad screen were a little hard to see. I don't mind
+> if they're slightly different from the Spine
 
-Recommendation: **A** unless it still looks too faint once deployed; then B is the next step.
+**So B, built the same day**, on `dev`, not deployed. Plan:
+[261005j](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md); the
+reasoning is in
+[quotes.md § A deeper purple in the dark prose](../project/quotes.md#a-deeper-purple-in-the-dark-prose-since-2026-10-05).
+
+In the dark appearance the fill behind a quote is now a deeper, more saturated purple, drawn more
+strongly, so it reads as purple where the first fix read as grey-purple. The strip that marks quotes
+down the spine keeps its lighter colour, at the same hue. The light appearance is exactly as it was.
+
+The words on a quote are as readable as before or more so, and a full-confidence blue search
+outline over a top-priority quote is easier to see. The tiers are slightly further apart in
+OKLab distance and slightly closer in luminance contrast. Of the pairings Sol found above, soft text in a code block under a top-priority quote now
+clears its target; the glossary underline improves, while the cross-reference underline loses a
+very small amount of contrast. Both remain under 3:1, which stays with `qi-9wyymfdy`.
+
+Before and after, dark, the same article at desktop width
+([before](../plans/261005j-shot-before-article-dark-1440.png),
+[after](../plans/261005j-shot-after-article-dark-1440.png)) and at an iPad's 820
+([before](../plans/261005j-shot-before-article-dark-820.png),
+[after](../plans/261005j-shot-after-article-dark-820.png)). It is a bigger step than the first
+fix: a page with many quotes reads as quite purple. In the light appearance the computed colours
+are the same before and after.
+
+**Not checked**: a real iPad, which is where it was seen; Safari and Firefox; phone width.
+
+## Independent review
+
+The review corrected the arithmetic and the claim that only one pairing loses contrast. In
+particular low-confidence search outlines lose contrast on the deeper purple, even though their
+opaque bands improve. The smaller page-coloured gap and the reader washes' lower luminance contrast
+are recorded in [the plan's overlap audit](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md#independent-review-overlaps-and-grounds).
+These losses are small and on signals that were already under 3:1, so they were accepted as the
+price of the more visible quote Greg asked for; adjusting the outline is the next step if a search
+hit over a top-priority quote proves hard to see. The palette and
+strengths were left as built.

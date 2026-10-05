@@ -342,13 +342,16 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
   } as UseDebate;
 }
 
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+
 describe("a Debate row on screen", () => {
   it("draws the registry by-line and names the exact fields it supplied", async () => {
     const row = claim("shown", { authors: ["Extracted Author"], publishedYear: 2024, registry: RECORD });
     await act(async () =>
       root.render(
         createElement(DebatePanel, {
-          access: { kind: "owner", owner: debateOwner(row), citers: { result: { kind: "no-doi" }, retry: () => {} } },
+          access: { kind: "owner", owner: debateOwner(row), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
           onJump: () => {},
           /* The fixture is a claim row, so Claims is the sub-mode that draws it. */
           view: "claims",

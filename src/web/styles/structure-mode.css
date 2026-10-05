@@ -446,3 +446,35 @@
   font-weight: 600;
 }
 .struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+
+/* **The line a headings tree draws, and the owner's press under it**
+   (StructureNotice.tsx), in the same head row as the chips and under them:
+   the row wraps, and the line takes a whole row of it. Both faces, so the
+   rule names both bands. Our own sentence, so the band's own face. Soft ink
+   and the mid tier: it is a caption on the whole list, not a row in it. The
+   columns' rows are counted from where the grid starts, so the height this
+   takes comes out of them rather than off the end of the band.
+   docs/project/structure.md § When it is only the headings. */
+.mode-band:is(.struct, .outln) > .band-head { flex-wrap: wrap; }
+.struct-notice {
+  flex: 1 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  color: var(--ink-soft);
+  font-size: var(--structure-tier-mid);
+  line-height: 1.4;
+}
+.struct-notice-says { flex: 1 1 14rem; margin: 0; }
+.struct-notice-again { flex: none; max-width: 100%; }
+.struct-notice-done {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 0;
+  color: var(--ink);
+}
