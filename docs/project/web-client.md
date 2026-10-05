@@ -135,7 +135,7 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   `src/web/useReloadForNewBuild.ts`, whose one caller is `src/web/ChangelogPage.tsx`. Both reloads
   share one note of the builds this session has reloaded for (`claimReload`), so neither can loop.
 - **`src/web/safe-to-reload.ts` § `safeToReload`** — ask before replacing the page under the reader:
-  no while offline, while a Chat, Remember or Feedback draft is held, or while an upload is going or
+  no while offline, while a Chat, Learn or Feedback draft is held, or while an upload is going or
   autosaved text is unsent (`src/web/unload-guard.ts` § `warnBeforeUnload`, the one place a
   `beforeunload` warning is raised, so the two cannot disagree). Both automatic reloads ask it. A new kind of unsent
   work is one more line in its `VETOES`, not a second check somewhere else.
@@ -247,7 +247,7 @@ on the mode. `MODE_CONTAINMENT` there is a `Record<Mode, …>`, so a new mode do
 somebody has said whether its band is contained; the only exemption is Plain, which
 has no band — a boundary around either would have to take the article with it. The token a band's
 boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the presses arm
-from, including Diagram's picture and the Referee and Remember chips. `band()` makes the visitor's
+from, including Diagram's picture and the Referee and Learn chips. `band()` makes the visitor's
 not-available `VisitorBand` part of that same choice, so the sentence that replaces an owner-only or
 missing-artefact band cannot take the shared article with it either.
 

@@ -236,7 +236,7 @@ Four decisions, each from GPT Sol's plan review
 - **Fenced like `article_links`**: the titles are the publisher's words and the *used for* lines a
   model's, so the rows go inside `untrusted()` and our sentences stay outside it.
 
-**It reaches every mode that shares `CHAT_TOOLS`** — typed Chat, Remember, Candidates and Live —
+**It reaches every mode that shares `CHAT_TOOLS`** — typed Chat, Learn, Candidates and Live —
 deliberately: it is read-only and article-local, and a per-kind tool list is more machinery than
 that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the
 sets the allowlist in [§ Still open](#still-open) would use. *(A per-kind list did arrive, on
@@ -446,29 +446,29 @@ Since 2026-10-05, for report `spya-hyfqkq`
 ([261005i](../plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md), D5).
 From 2026-10-01 it showed chats only.
 
-- **What is listed.** Chats, and Remember's Recall, Tutorial and Explore conversations. Referee's
+- **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
   Candidates thread is not: it is not a conversation the reader had.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Debate*), a Remember kind (*From Remember › Recall*), an anchor (*About a
+  from a claim in Debate*), a Learn kind (*From Learn › Recall*), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
   ([`mode-icons.ts`](../../src/web/mode-icons.ts), which the Dock reads too), with a card a tap
   opens. A plain chat has none.
-- **A Remember row leads back to Remember.** A press goes to `mode=remember` on that sub-mode with
+- **A Learn row leads back to Learn.** A press goes to `mode=remember` on that sub-mode with
   `thread` set, in one navigation. It is named for its sub-mode and has no rename or delete;
-  *Start over* lives in Remember.
+  *Start over* lives in Learn.
 - **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
   screen, which the server refuses on any kind but `chat`. So `ConversationBand` hands the panel
   `listed` (every kind but Candidates) and `threads` (chats only), and the open conversation, the
   drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
-  cleared by replace once the list has loaded. An article whose only conversations are Remember's
+  cleared by replace once the list has loaded. An article whose only conversations are Learn's
   shows those rows and does not begin a blank chat; the box under the list and the + start one.
   A known non-chat URL takes precedence over reopening an older chat draft: its unsent words
   stay available on that chat's row. A missing local draft gets a row too, preserving its pending
   origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
-  Remember's three sub-modes as one. It is drawn only when there is more than one source. The
+  Learn's three sub-modes as one. It is drawn only when there is more than one source. The
   choice is `?chatfrom=` ([url-state.md](url-state.md)).
 
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
@@ -579,7 +579,7 @@ verified against the schema:
 
 - **`chat_threads.kind` is `'chat' | 'remember' | 'candidates'`**
   ([`schema.ts:2806`](../../src/db/schema.ts)). A public query that does not filter `kind = 'chat'`
-  **in SQL** publishes Remember transcripts and Referee candidate machinery, whatever the visitor's
+  **in SQL** publishes Learn transcripts and Referee candidate machinery, whatever the visitor's
   UI chooses to draw. The client filters `candidates` today; a client-side filter is not a boundary.
 - **`ToolRun.label` and `.detail` can name a private article's title or slug**
   ([`src/types.ts`](../../src/types.ts) § `ToolRun`), so `tools` must not cross wholesale even
@@ -768,7 +768,7 @@ ignore them."* Below the cache breakpoint, like the position line it replaces.
 
 Where it is deliberately not sent, so nobody files these as gaps:
 
-- **Remember.** Its prompt says not to guess how far the reader has got, and a screenful is that
+- **Learn.** Its prompt says not to guess how far the reader has got, and a screenful is that
   guess. The route refuses `visible` on any thread that is not a chat.
 - **A band lying over the prose** (a phone). Reader's `proseOnScreen` is false, nothing is sent,
   and the old `at` line goes as before.
@@ -827,7 +827,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Remember, Tutorial, Explore and
+- **Who gets them.** Chat and the passage chat dialog, the owner's. Learn, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`

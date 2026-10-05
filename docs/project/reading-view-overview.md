@@ -176,7 +176,7 @@ readers never are.
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
   261001k and 261001n above.
 
-The last two band modes — **chat** and **remember**, and the quiz that is remember's other half — are
+The last two band modes — **chat** and **learn**, and the quiz that is Learn's other half — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
 That is every band mode; `plain` and Marginalia open none — Marginalia draws its column on the
 right instead, beside a band or without one.
@@ -193,10 +193,10 @@ right instead, beside a band or without one.
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
   not to ship the first one, and the one mode that cannot be used to avoid reading.
-- **[quiz.md](quiz.md)** — the other half of Remember, where the questions come the other way: a
+- **[quiz.md](quiz.md)** — the other half of Learn, where the questions come the other way: a
   dozen short-answer questions cached per article, easy ones first and central ones within that, and
   a marker told outright that the article outranks its own reference answer.
-- **[remembering-vision.md](remembering-vision.md)** — where Remember is going: Recall, Tutorial and
+- **[remembering-vision.md](remembering-vision.md)** — where Learn is going: Recall, Tutorial and
   Quiz as three directions of one exchange, Explore as the one about the reader's own thinking, what
   they share (brief, block links, hints that make success likely), and the ideas not built yet. Read
   it before adding a fifth.
@@ -288,13 +288,13 @@ nothing is sent. The models, the measurement and what is not built:
 [chat-llm-help-commands-vision.md § Where we are](chat-llm-help-commands-vision.md#where-we-are).
 
 **Sub-modes have rows of their own since 2026-10-01** — Greg, SPIDERYARN-READING2-77: *"In the
-Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Remember › Quiz*,
+Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Learn › Quiz*,
 *Diagram › Illustrated*, *Referee › Claims*, *Summary › Thread* and the rest sit after the mode rows
 and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
 arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
 `generates` marker rule. Only a mode the Dock draws offers its sub-modes, and Diagram offers the
 pictures its chip row would. A sub-mode here means a control that **replaces the whole band** —
-Remember, Diagram, Referee and Summary's plain-words levels; the names live once, in
+Learn, Diagram, Referee and Summary's plain-words levels; the names live once, in
 [`src/web/sub-modes.ts`](../../src/web/sub-modes.ts), and the chips read them from there. Orderings
 and matchers inside a mode (Quotes' rank, Search's Words | Meaning) are not offered, by decision
 rather than oversight —

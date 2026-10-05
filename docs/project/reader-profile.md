@@ -419,7 +419,7 @@ into account that we have done so"*. Fable's review objected that a checkbox rea
 regenerate-and-wait, a model call hidden behind the lightest control in the interface. So the label
 went on the text, and a row reading *☑ Use your profile 👤* went beside every button that spends —
 the glossary's Find / Find them again / Find more, quotes, ideas, tweets, sketch, and the chat and
-Remember composer. The checkbox was seeded from the artefact on screen, so it needed no storage; it
+Learn composer. The checkbox was seeded from the artefact on screen, so it needed no storage; it
 was absent for a reader with no profile; the 👤 button beside it opened the panel and, alone, read
 *Your profile*, because that reader most needed to know what "your profile" meant (2026-08-30). A run
 that had started itself showed *Using your profile* in the checkbox's place (2026-08-31).
@@ -440,9 +440,9 @@ Where the icon is:
 
 | Surface | Mark |
 |---|---|
-| glossary, ideas, quotes, Summary (Thread included), Remember's Quiz | the person icon in the band's corner, beside the (i) |
+| glossary, ideas, quotes, Summary (Thread included), Learn's Quiz | the person icon in the band's corner, beside the (i) |
 | sketch | the same icon, in the picture's own bar |
-| chat, Remember's conversations, explain | — |
+| chat, Learn's conversations, explain | — |
 
 **Chat gets no icon**, because an answer is not an artefact anybody rewrites, so there is nothing
 for one to describe. Every answer uses the profile, except the reading-candidates list

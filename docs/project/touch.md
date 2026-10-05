@@ -580,7 +580,7 @@ offer is now a button. Product-control strings outside the Help prose that say *
 listed, each with what a finger presses instead, in
 `tests/words-that-name-a-key-have-something-to-press.test.ts`.
 
-**Once the key has done its thing, the keyboard goes away.** Greg, from an iPad in Remember's
+**Once the key has done its thing, the keyboard goes away.** Greg, from an iPad in Learn's
 tutorial, 2026-10-03 (spya-gmtt4b):
 
 > what I end up doing is pressing the carriage return button, and then sometimes I can actually

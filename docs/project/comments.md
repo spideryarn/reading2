@@ -846,7 +846,7 @@ start away from the reader who is on it.
 
 Every typed conversation is one component, `Conversation` in
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § A streamed answer stays where it starts:
-Chat in the band, the block chat in all three of its places, Remember and Explore. When an answer
+Chat in the band, the block chat in all three of its places, Learn and Explore. When an answer
 starts it puts the question at the top of the transcript **once**, with an empty block of *room*
 after the last turn so that is a place the scroller can reach, and from then on streamed words, the
 finishing frame and a tool row arriving above the text move nothing. *Latest* appears when the
@@ -1103,7 +1103,7 @@ order (`orderDrawer` in [`comment-nav.ts`](../../src/web/comment-nav.ts)), each 
 summaries' `lastLine` is not kept live, so a question asked this visit would say *thinking…* under
 the answer the reader had just read. Nor the title, which is *Help me understand.* on every "?".
 Pressing one goes through the same jump a comment row uses (`jumpToComment`, with `openChatThread`
-as the opener): the floating chat dialog, or the band in Chat mode, and from Remember it switches to
+as the opener): the floating chat dialog, or the band in Chat mode, and from Learn it switches to
 Chat. They are still chats, in `chat_threads`; the drawer only shows them. Left out: an unanchored
 chat (it is about the whole piece, and stays in Chat mode), and a chat a comment already points at
 through `threadId` (*Ask AI*), whose comment row covers it. The count on the Comments

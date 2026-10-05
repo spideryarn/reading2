@@ -86,7 +86,7 @@ ${PROFILE_RULES}`;
   exactly are all the prompt's business. Do not delete a field rule to make room for this one.
 - **Delete the prompt's old plain-words bullet** when it gains the section, so it gives one rule, not
   two.
-- **Watch for the rule fighting one already there.** Chat and Remember may bring in what they
+- **Watch for the rule fighting one already there.** Chat and Learn may bring in what they
   found on the web, so neither may be told to use "no term the piece did not use"; that clause was
   written once and cut for exactly this reason.
 - **Block ids and numbers are not words for a reader either, and that rule lives with the ids.**
