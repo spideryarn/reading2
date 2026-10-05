@@ -138,7 +138,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             <strong>Marginalia</strong> is a column of notes on the right of the article, which can
-            stay open beside any panel. It is <HelpRef to="experimental-features">experimental</HelpRef>.
+            stay open beside any panel.
           </li>
           <li>
             <strong>The bottom bar</strong> starts with the way home (the Spideryarn wordmark). On

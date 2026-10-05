@@ -154,7 +154,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
   Both now live there, and still need different voices — the
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
 - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
-  other modes have already made, and the automatic help comments in 7E were declined for the same
+  other modes have already made (and, since 2026-10-03, its own relation words:
+  [marginalia.md](marginalia.md#relation-words)), and the automatic help comments in 7E were declined for the same
   reason. Greg would have had it run the missing modes, but only if a mode made later never reached
   the margin:
 
@@ -175,8 +176,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
 - **Phones.** On a phone a band already covers the article, and a passage link in it scrolls text
   you cannot see (5A), and the notes do not fit at all under 612px. The vision has no phone answer
   yet.
-- **Experimental gating.** Marginalia, the typefaces, cross-references, Debate, Diagram and FAQ are
-  behind the switch or owner-only. A vision that makes them the default view is also a decision to
+- **Experimental gating.** Debate, Diagram and FAQ are behind the switch (Marginalia was until
+  2026-10-05, the typefaces until 2026-10-02) or owner-only. A vision that makes them the default view is also a decision to
   take them out from behind it.
 
 ## A path, simplest first

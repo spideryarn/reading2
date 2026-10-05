@@ -10,8 +10,8 @@ goes stale.
 what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
 which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
 [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
-Marginalia, which draws a column of notes to the right of the prose instead, behind the
-experimental switch — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
+Marginalia, which draws a column of notes to the right of the prose instead (behind the
+experimental switch until 2026-10-05) — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
 beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mode.md)). So *a mode
 is open* and *a band is open* are separate questions
 ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
@@ -161,7 +161,7 @@ readers never are.
   column of notes, each level with the block it is about and scrolling with the text — each
   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
   a head pinned at the top saying which part and section you are in and, from the arc, where the
-  argument has got to. It opens no band, generates nothing, and hides its notes on a window too
+  argument has got to. It opens no band, generates only its own relation words ([marginalia.md](marginalia.md#relation-words)), and hides its notes on a window too
   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
   band you choose; where there is no room for both (under 900px) but room for the column alone

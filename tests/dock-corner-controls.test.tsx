@@ -573,8 +573,10 @@ describe("the route walk: one branded home control, never two triggers", () => {
     await show(`/read/${SLUG}`);
     const group = document.querySelector('[role="radiogroup"]');
     expect(group).not.toBeNull();
+    /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
+       drawn after the group, never a radio in it (plan 261005d). */
     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(
-      visibleModes(false, "plain").length,
+      visibleModes(false, "plain").filter((m) => m.mode !== "marginalia").length,
     );
   });
 

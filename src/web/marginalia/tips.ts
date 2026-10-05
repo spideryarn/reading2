@@ -76,7 +76,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
 
 /** Where a relation word came from: the same for all of them. */
 const RELATION_ORIGIN =
-  "Written by AI, which read each paragraph against the one before it. Made for Marginalia when you turn it on. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
+  "Written by AI, which read each paragraph against the one before it. Made for Marginalia. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
 
 /**
  * **What each relation word means**, in a card of its own on the word (a

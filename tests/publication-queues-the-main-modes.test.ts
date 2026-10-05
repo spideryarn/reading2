@@ -18,7 +18,7 @@
  *    only the clause under test keeps it out.
  * 2. **The opt-out**: `reader_profiles.auto_modes_off_at`, read in the
  *    transaction. No row is on.
- * 3. **The jobs**: the seven requests of src/auto-mode-steps.ts, written out
+ * 3. **The jobs**: the eight requests of src/auto-mode-steps.ts, written out
  *    here a second time so the test does not agree with the code by reading it;
  *    free; carrying the reader's rendered profile; in order, after the labels
  *    job — including a labels holder whose `created_at` is later than the
@@ -128,6 +128,7 @@ const EXPECTED: StepName[][] = [
   ["glossary"],
   ["quotes"],
   ["ideas"],
+  ["relations"],
   ["simple"],
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
@@ -481,7 +482,7 @@ describe("an import's first full publication queues the main modes", () => {
     const exact = await db().execute<{ distinct_stamps: number }>(sql`
       select count(distinct created_at)::int as distinct_stamps
         from spideryarn.jobs where slug = ${slug} and id <> ${job.id}`);
-    expect(exact.rows[0]?.distinct_stamps, "two successors share a created_at").toBe(8);
+    expect(exact.rows[0]?.distinct_stamps, "two successors share a created_at").toBe(9);
   });
 
   /* ------------------------------------------------------------------ 2 -- */

@@ -741,11 +741,12 @@ it.
   window too narrow for a band, uses the first open up: the default is not held over for a wider
   window or a later sign-in. An article already in this browser that was last left in Plain at the
   top had no key before this shipped, so it gets the default once.
-- **Marginalia joins only with the experimental switch on**, because it is behind that switch
-  ([experimental-features.md](experimental-features.md)). So the default waits for the switch's
-  answer. If settings are already loaded, the address is settled before paint; otherwise the
-  default waits for them, whether the article payload has arrived yet or not. The shelf does not
-  load this setting itself. A switch that never answers means no default.
+- **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
+  experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
+  switch on. The default still waits for the settings store's answer, because that is where
+  "signed in" comes from. If settings are already loaded, the address is settled before paint;
+  otherwise the default waits for them, whether the article payload has arrived yet or not. The
+  shelf does not load settings itself. A store that never answers means no default.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.

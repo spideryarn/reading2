@@ -2034,12 +2034,25 @@ describe("a signed-out browser on a shared document", () => {
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
       /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
-         address is `?margin=1` (261001i): kept drawn and pressed while the notes
-         are on, and pressing it — which turns them off — stays public too. */
+         address is `?margin=1` (261001i). Since 2026-10-05 it is on a
+         stranger's default bar, unpressed (plan 261005d, GPT Sol's P2): so
+         both presses are made from a bare page, on and then off, and each
+         stays public and sends nothing but GETs. Until then only the press
+         that turns the notes off was reachable. */
       if (mode === "marginalia") {
         await remount();
-        await open("?margin=1");
+        await open();
         trace.length = 0;
+        const closed = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+        expect(closed?.getAttribute("aria-label"), "the notes' toggle is on a stranger's bar").toBe(
+          MODE_LABEL.marginalia,
+        );
+        expect(closed?.getAttribute("aria-pressed")).toBe("false");
+        await act(async () => (closed as HTMLButtonElement).click());
+        await settle();
+        expect(outsidePublic(), "after turning marginalia on").toEqual([]);
+        expect(trace.filter((r) => r.method !== "GET"), "after turning marginalia on").toEqual([]);
+        expect(new URLSearchParams(location.search).get("margin")).toBe("1");
         const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
         expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
           MODE_LABEL.marginalia,

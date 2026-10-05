@@ -647,20 +647,23 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        top-level parts (src/structure.ts § `questionFor`), the sentence at the
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
        and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
-       thing turning it on generates is its own relation words — so, but, vs
-       (src/relations.ts, plan 261003f); other modes' lists are only read. The
+       thing it generates is its own relation words — so, but, vs
+       (src/relations.ts, plan 261003f), queued on import
+       (src/auto-mode-steps.ts, plan 261005d) or by the owner's press where
+       there are none; other modes' lists are only read. The
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "Turning it on marks where the argument turns, with one model pass that puts so, but or vs beside those paragraphs. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, when the article is added or the first time its owner turns the column on. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */
     aliases: ["annotations", "margin notes", "margin", "margins", "sidenotes", "side notes", "marginal notes"],
-    /* **Behind the switch**: a first experiment with a column on the right,
-       which Greg asked to "play with" (SPIDERYARN-READING2-7K). Nothing in it
-       is finished enough to put on every reader's bar.
-       docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
-    experimental: true,
+    /* **Out from behind the switch on 2026-10-05.** It went in on 2026-10-01
+       as a first experiment with a column on the right. Greg, 2026-10-04
+       (spya-vv54j2): "Let's take the annotations mode out of experimental
+       features, i.e. make it a mainstream feature available to everybody."
+       docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+    experimental: false,
   },
 };

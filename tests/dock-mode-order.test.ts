@@ -71,7 +71,8 @@ describe("the mode bar's order", () => {
   it("with the switch off, draws lines only where two surviving runs meet", () => {
     /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
        Remember (since 2026-10-05, spya-cnqcjf): the critical run is hidden
-       whole, so no line is left for it. */
+       whole, so no line is left for it. Marginalia's toggle is last, in a
+       frame of its own, since it left the switch the same day (spya-vv54j2). */
     const drawn = visibleModes(false, undefined);
     expect(drawn.map((m) => m.mode)).toEqual([
       "plain",
@@ -84,8 +85,12 @@ describe("the mode bar's order", () => {
       "search",
       "chat",
       "remember",
+      "marginalia",
     ]);
-    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "skim", "search"].sort());
+    /* The bar asks about the bands only: the toggle's frame is its own edge
+       (Dock.tsx § the three frames). */
+    const bands = drawn.filter((m) => m.mode !== "marginalia");
+    expect([...groupStarts(bands)].sort()).toEqual(["structure", "skim", "search"].sort());
   });
 
   it("gives a retained experimental mode its own line when it is alone in its run", () => {
