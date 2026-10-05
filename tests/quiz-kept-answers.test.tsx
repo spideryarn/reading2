@@ -393,6 +393,36 @@ describe("an answer is still there when you come back", () => {
     expect(mark()).toBe("A mark of “My answer to one.”.");
   });
 
+  it("keeps the offline answers when a later same-batch read cannot load attempts", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    await paint();
+    server.attempts = null;
+    await act(async () => owner.refresh());
+    await settle();
+    expect(box()?.value).toBe("What I said to one.");
+
+    server.offline = true;
+    await reload();
+    expect(box()?.value).toBe("What I said to one.");
+    expect(mark()).toBe("A mark of “What I said to one.”.");
+  });
+
+  it("never carries cached answers into a different batch whose attempts cannot be read", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    await paint();
+    server.batchId = "spya-batch3";
+    server.attempts = null;
+    await act(async () => owner.refresh());
+    await settle();
+
+    server.offline = true;
+    await reload();
+    expect(owner.quiz?.batchId).toBe("spya-batch3");
+    expect(box()?.value).toBe("");
+    expect(owner.answered.size).toBe(0);
+    expect(host.textContent).toContain(NOT_LOADED);
+  });
+
   it("and a mark that failed neither re-reads nor costs the offline copy its questions (F1)", async () => {
     await paint();
     const before = server.quizReads;
@@ -598,6 +628,51 @@ describe("a mark that finished and could not be saved (F7)", () => {
 });
 
 describe("the box is filled once the question on screen has settled (F3)", () => {
+  it("restores the arrival's question when the band mounts over an already loaded batch", async () => {
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
+    showBand = false;
+    await paint();
+    arrival = { batchId: server.batchId, questionId: Q2 };
+    showBand = true;
+    await paint();
+
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("What I said to two.");
+    expect(mark()).toBe("A mark of “What I said to two.”.");
+    expect(owner.attempt?.questionId).toBe(Q2);
+  });
+
+  it("leaves an unanswered arrival empty, even when the opening question has a kept answer", async () => {
+    strict = true;
+    server.attempts = [kept(Q1, "What I said to one.")];
+    showBand = false;
+    await paint();
+    arrival = { batchId: server.batchId, questionId: Q2 };
+    showBand = true;
+    await paint();
+
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+    expect(mark()).toBeNull();
+    expect(owner.attempt).toBeNull();
+  });
+
+  it.each([
+    { batchId: "spya-anoldbatch", questionId: Q2 },
+    { batchId: "spya-batch2", questionId: "spya-qm9qt5" },
+  ])("still restores question one for an ignored arrival %j", async (ignored) => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    showBand = false;
+    await paint();
+    arrival = ignored;
+    showBand = true;
+    await paint();
+
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("What I said to one.");
+    expect(mark()).toBe("A mark of “What I said to one.”.");
+  });
+
   const reading = (): ReadSoFar => ({
     /* One is about a passage not read yet; two and three are read. */
     levels: new Map([[READ, 3]]) as ReadSoFar["levels"],

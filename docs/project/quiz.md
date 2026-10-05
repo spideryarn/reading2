@@ -567,7 +567,7 @@ section's first missed question — the steer. The plan and GPT Sol's review are
   are not stored. A reload starts fresh." What still dies with the visit is the position on the
   path and the hidden verdict map (which also resets on a new batch). The verdict is not written to
   a log either — a per-answer right/wrong on a log line is a stored grade wearing a different hat,
-  and [privacy.md § Quiz answers](privacy.md#quiz-answers) says in public that we do not keep one.
+  and [privacy.md § Quiz answers](privacy.md#quiz-answers) records the decision not to keep one.
 - **No reader profile in the stamp.** The response's `profileChanged` (since 2026-10-02, above) is
   a label for the badge; nothing re-runs on it.
 - **Not scoped to `?at=`.** Whole article, every time — narrowed only by what you have read,

@@ -92,6 +92,7 @@ import { setClientMonitoringUser } from "../monitoring.js";
 import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
+import type { QuizResponse } from "../../types.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
 const SNIPPET = 300;
@@ -821,7 +822,23 @@ function saving(
     const copy = res.clone();
     void copy
       .json()
-      .then((body) => writeCached(input, body, ticket, slugOf(input)))
+      .then(async (body) => {
+        /* "Could not read" must not replace a complete copy of this batch.
+           Leave the existing record untouched: copying its answers into this
+           newer ticket could overwrite a full read that commits meanwhile.
+           The live response remains null for useQuizRead to handle. */
+        if (/^\/api\/quiz\/[^/?]+$/.test(input)) {
+          const quiz = body as Partial<QuizResponse> | null;
+          if (quiz?.attempts === null && typeof quiz.quiz?.batchId === "string") {
+            const previous = (await readCached(input, owner))?.body as Partial<QuizResponse> | undefined;
+            if (
+              previous?.quiz?.batchId === quiz.quiz.batchId &&
+              Array.isArray(previous.attempts)
+            ) return;
+          }
+        }
+        await writeCached(input, body, ticket, slugOf(input));
+      })
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the
            previous copy — if any — is left alone rather than replaced by half

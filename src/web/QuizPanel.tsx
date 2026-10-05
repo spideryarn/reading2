@@ -830,9 +830,10 @@ export function QuizPanel({
    * question actually on screen.
    *
    * **Declared after the batch reset, the filter, the arrival and the verdict
-   * effects, on purpose**, because it reads what they leave: on a mount the
-   * reset above clears the attempt and the box in this same commit, and the
-   * later write is the one that lands. It is keyed on the batch, the id of
+   * effects, on purpose**, so their scheduled moves take precedence. State
+   * writes do not change this effect's captured values: a valid arrival to a
+   * different question must wait for its destination to render before we
+   * restore. It is keyed on the batch, the id of
    * the question drawn, and that question's kept answer — so it runs when the
    * walk lands somewhere (however it got there), and again when kept answers
    * arrive after the question did.
@@ -852,6 +853,14 @@ export function QuizPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate triggers — landing on a question, or its kept answer arriving; `typed` and the attempt are read as they stand (see above), and `showKept` is read fresh
   useEffect(() => {
     if (shownId === undefined || !keptHere) return;
+    /* The arrival effect above schedules state; this closure still sees the
+       question from before that move. Wait for its destination to render. */
+    if (
+      arrival &&
+      arrival.batchId === quiz?.batchId &&
+      arrival.questionId !== shownId &&
+      questions.some((q) => q.id === arrival.questionId)
+    ) return;
     if (owner.attempt !== null || typed !== "") return;
     setTyped(keptHere.answer);
     owner.showKept(shownId);

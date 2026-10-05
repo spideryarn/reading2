@@ -615,6 +615,40 @@ describe("marking an answer keeps the quiz it did not change", () => {
     });
   });
 
+  it("a partial quiz read cannot roll back a full read that commits while it checks the copy", async () => {
+    const quiz = (attempts: unknown) => new Response(JSON.stringify({
+      quiz: { batchId: "b" }, attempts,
+    }), { status: 200, headers: { "content-type": "application/json" } });
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([{ questionId: "q", answer: "old" }])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+
+    let checked!: () => void;
+    const checking = new Promise<void>((resolve) => { checked = resolve; });
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    readCache.mockImplementationOnce(async (url: string) => {
+      const earlier = { body: held.get(url), savedAt: 1000 };
+      checked();
+      await blocked;
+      return earlier;
+    });
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz(null)));
+    await apiFetch("/api/quiz/gibbon");
+    await checking;
+
+    // Another tab finishes its full read while the partial read holds an old copy.
+    vi.stubGlobal("fetch", () => Promise.resolve(quiz([{ questionId: "q", answer: "new" }])));
+    await apiFetch("/api/quiz/gibbon");
+    await settle();
+    release();
+    await settle();
+
+    vi.stubGlobal("fetch", () => Promise.reject(new TypeError("Failed to fetch")));
+    const res = await apiFetch("/api/quiz/gibbon");
+    expect((await res.json()).attempts).toEqual([{ questionId: "q", answer: "new" }]);
+  });
+
   /* The other direction, so "never invalidate anything" is not a passing
      implementation of the exemption. `PATCH /api/comments/<slug>/<id>/mark` is
      the same last segment on a route that really does write — the referee's own
