@@ -467,9 +467,12 @@ wide window you get the second column only when Marginalia is already on.
   doubts and cleared them: an anchorless thread draws in `ChatDialog`, the composite FK is
   right, `MAX_ANCHOR_CHARS` (20,000) is ample, and `reader_notes` needs nothing.
 - 2026-10-05 — the first build stage, by an Opus subagent, tests red first; committed as
-  `eaf3a3fee`. The migration is `drizzle/20261005150617_chat_thread_origin.sql`, additive, applied
-  to the local database only (`Target: postgresql://postgres@127.0.0.1:54362/postgres`). What it
-  decided that the plan had not:
+  `eaf3a3fee`. The migration was `drizzle/20261005150617_chat_thread_origin.sql`, additive,
+  applied to the local database only (`Target: postgresql://postgres@127.0.0.1:54362/postgres`).
+  **It was regenerated before landing as `20261005181010_chat_thread_origin`**, byte-identical
+  SQL, because `20261005151925_bibliographic_records_cited_by_count` reached dev first from the
+  same parent snapshot (`db:chain` green afterwards). That left the shared local database holding
+  a ledger row for the old stamp; see the last Log entry. What it decided that the plan had not:
   - **Keeping the caller's summaries current (F1) is a refetch**, `refresh()` on
     `useChatAnchors`, with the guards widened so a refetch cannot undo a local write or land
     after a newer one.
@@ -506,3 +509,18 @@ wide window you get the second column only when Marginalia is already on.
   its origin are intact). Sol's fix was a publish-and-subscribe channel in the draft store; that
   is more moving parts than the residual is worth. Written at the site, `onConfirmed` in
   `ConversationModes.tsx`.
+- 2026-10-05 — the session died when the box ran out of memory, and was resumed. Merged
+  `origin/dev` twice (one import conflict in `src/chat.ts`, both sides kept; the journal taken
+  from dev and the migration regenerated, above). **Pushed to dev with these checks on the merged
+  tree: typecheck clean, `npm run db:chain` green, the regenerated SQL byte-identical to the
+  reviewed one.** Not run on the merged tree: any test file (the box refused three test runs for
+  memory), the full suite, and the browser check, which was cut off by the crash with no report.
+  The last green test run was on `1cf578937`, before the merge.
+- **The shared local database still holds a ledger row for the old stamp** (`created_at
+  1791212777965`, hash `83ca1bea5332…`) and the four `origin_*` columns it made, so `db:migrate`
+  refuses there for every tree. I wrote the repair (reverse my own nine statements and delete that
+  one row, in one transaction under the migration lock, then an ordinary `db:migrate` applies
+  `…151925` and `…181010` in order) and the auto-mode classifier refused it as a change to a
+  shared resource, dry run included. It is with the Overseer and Greg to decide.
+- **Not started**: the second build stage (Chat lists every conversation, with its source and a
+  filter) and the feedback note for `spya-hyfqkq`.
