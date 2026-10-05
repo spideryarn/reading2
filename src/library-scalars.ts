@@ -233,6 +233,7 @@ export function describeArticle(input: {
    * reads the column the query already selected.
    */
   visibility?: Visibility;
+  privateLinkOn?: boolean;
   /**
    * Whether a no-address rebuild can skip `fetch` and reuse the source.
    * Required at this construction seam so a new caller cannot silently turn
@@ -290,6 +291,7 @@ export function describeArticle(input: {
        `=== "public"`, so an absence and a private article are the same
        question answered the same way. */
     ...(input.visibility === "public" ? { visibility: "public" as const } : {}),
+    ...(input.privateLinkOn === undefined ? {} : { privateLinkOn: input.privateLinkOn }),
     sourceReusable: input.sourceReusable,
     ...(input.fixture ? { fixture: true as const } : {}),
     /* Always sent, so a card never has to guess; the two only a minimal paper

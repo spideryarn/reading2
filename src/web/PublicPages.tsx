@@ -19,7 +19,7 @@
 import { ExternalLink } from "lucide-react";
 
 import type { Article, SourceGuess } from "../types.js";
-import type { PublicArtefacts, PublicMeta } from "../public-types.js";
+import type { PublicArtefacts, PublicMeta, PublicSharedBy } from "../public-types.js";
 import {
   BANNER_SOURCE_GUESS_CANONICAL,
   BANNER_SOURCE_GUESS_MATCHING,
@@ -109,6 +109,7 @@ export function PublicMetadataPage({
   available,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
 }: {
   slug: string;
   article: Article;
@@ -117,6 +118,8 @@ export function PublicMetadataPage({
   signedIn: boolean;
   /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
   sessionUnconfirmed: boolean;
+  /** For the notice below only — reader-capability.ts § sharedBy. */
+  sharedBy: PublicSharedBy;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
@@ -171,7 +174,7 @@ export function PublicMetadataPage({
             does not disclose which absence was behind it. */}
         <SourceRow url={webSource(meta)} guess={article.sourceGuess} />
 
-        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
+        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>

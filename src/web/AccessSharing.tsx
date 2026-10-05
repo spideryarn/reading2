@@ -50,6 +50,8 @@ import {
   SHARING_CONFIRM_TITLE,
   SHARING_NOT_PERSONALISED,
   SHARING_OFF,
+  SHARING_OFF_LINK_UNKNOWN,
+  SHARING_OFF_WITH_LINK,
   SHARING_ON,
   SHARING_PERSONALISED,
   sharingPersonalisedList,
@@ -214,11 +216,22 @@ export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
   };
 }
 
+/**
+ * What the switch says of an article that is not public, given what is known
+ * about its private link. *"Only you can read this"* only when there is none.
+ */
+function notPublicLine(privateLinkOn: boolean | null): string {
+  if (privateLinkOn === true) return SHARING_OFF_WITH_LINK;
+  if (privateLinkOn === null) return SHARING_OFF_LINK_UNKNOWN;
+  return SHARING_OFF;
+}
+
 export function AccessSharing({
   slug,
   title,
   sharing,
   onVisibility,
+  privateLinkOn = false,
 }: {
   slug: string;
   title: string;
@@ -257,6 +270,16 @@ export function AccessSharing({
    * pixel: neither is a state in which it is safe to draw a switch.
    */
   sharing: ArticleSharing | undefined;
+  /**
+   * **Whether the article has a private link on**, from the control drawn
+   * above this one (PrivateLink.tsx, which is the only thing that reads it):
+   * `true`, `false`, or `null` for *it could not say*. It changes one
+   * sentence: a private article's *"Only you can read this"* is false while a
+   * link is on, and unproven while the link's state is unknown.
+   *
+   * Absent when the card is mounted on its own, and then it reads as `false`.
+   */
+  privateLinkOn?: boolean | null;
 }) {
   /**
    * What this card has learned since the page loaded, or `null` for nothing.
@@ -489,7 +512,7 @@ export function AccessSharing({
               <span className="tw:mt-[3px] tw:shrink-0">
                 {shared ? <Globe size={14} /> : <Lock size={14} />}
               </span>
-              {shared ? SHARING_ON : SHARING_OFF}
+              {shared ? SHARING_ON : notPublicLine(privateLinkOn)}
             </p>
             {shared && publicAt && (
               <p className="tw:m-0 tw:text-xs tw:text-ink-faint">Shared since {exactly(publicAt)}.</p>
@@ -740,7 +763,7 @@ export function AccessSharing({
  * One `TooltipGroup` per card, so sweeping the row is instant after the first —
  * the same reasoning as `Metadata.tsx`'s "At a glance", and the same delays.
  */
-function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
+export function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
   if (!inventory) return null;
   const { shared, ifBuilt, withheld } = inventory;
   return (
@@ -835,7 +858,7 @@ function InventoryList({
   );
 }
 
-function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
+export function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
   const said =
     kinds === undefined
       ? SHARING_PERSONALISED
@@ -865,8 +888,25 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
  * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
  * the newest-press-wins token and the timer that takes the tick away again are
  * explained once, in useCopy.ts.
+ *
+ * **Used twice on this card since 2026-10-05**: for the public address here,
+ * and for a private link in PrivateLink.tsx, which passes its own `label` and
+ * `tip` because the public tip's *"the article is already readable without
+ * it"* is false of a private link. The box is an `<input>` that can shrink
+ * (`min-w-0`), so a long address scrolls inside it and does not widen a
+ * phone's page.
  */
-function CopyLink({ link }: { link: string }) {
+export function CopyLink({
+  link,
+  label = "The link to share",
+  tip = SHARING_COPY_TIP,
+}: {
+  link: string;
+  /** The box's accessible name. */
+  label?: string;
+  /** What the Copy button's hover says. */
+  tip?: string;
+}) {
   /* A tick goes after 1.5 seconds. `failedMs: null` is the failure staying
      until a later press settles, for the reason above. */
   const { state, copy } = useCopy({ copiedMs: 1500, failedMs: null });
@@ -878,9 +918,9 @@ function CopyLink({ link }: { link: string }) {
           value={link}
           onFocus={(e) => e.currentTarget.select()}
           className="tw:min-w-0 tw:flex-1 tw:rounded tw:border tw:border-rule tw:bg-background tw:px-2 tw:py-1 tw:font-mono tw:text-xs tw:text-ink"
-          aria-label="The link to share"
+          aria-label={label}
         />
-        <Tooltip placement="bottom" content={<TipNote>{SHARING_COPY_TIP}</TipNote>}>
+        <Tooltip placement="bottom" content={<TipNote>{tip}</TipNote>}>
           <Button
             type="button"
             variant="outline"

@@ -99,6 +99,7 @@ import type { Placement } from "@floating-ui/react";
 import { MessageSquareWarning } from "lucide-react";
 
 import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
+import { withoutShareKey } from "../share-key.js";
 import { useRoute } from "./router.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
@@ -219,6 +220,13 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
           (`isWebUrl`), and docs/project/privacy.md § What a bug report carries
           tells the reader this happens.
 
+          **With one parameter taken off: a private link's `key`.** On
+          `/read/<slug>?key=…` the address is the credential, and a report's
+          address goes to our table, a Sentry tag and the admin email. So it
+          is removed here, before anything is sent; the server removes it
+          again for an older client (src/share-key.ts § `withoutShareKey`,
+          plan 261005e).
+
           **Computed here and not in a trigger**, since the split: the host
           reads `useRoute()` once, so two triggers on one page cannot disagree
           about which article a report is against. */}
@@ -227,7 +235,7 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
         prefill={prefill}
         onClose={() => setOpen(false)}
         where={{
-          url: location.href,
+          url: withoutShareKey(location.href),
           /* **The slug stays, beside the URL rather than inside it.** It is
              validated, it is the join onto an article, and "how many reports
              mention this piece" should be a `WHERE` rather than a `LIKE` over

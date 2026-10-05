@@ -56,6 +56,16 @@ Greg's authorisation"* whenever it changes content, whether or not the item was 
 (`scripts/overseer-queue.ts` § `lapses`); on a proposal nothing lapses, and `show <id>`'s
 `authority:` line before the edit is what says which case it was.
 
+**And `list` shows none of an item's body.** It cuts each title at 66 characters
+(`scripts/overseer-queue.ts` § `describeItem`), so whatever earlier runs appended to an entry, and
+its `History:` lines with their timestamps, appear only in `show <id>`. On 2026-09-20 a sweep
+re-derived a measurement that a sibling sweep had appended to the same entry four hours earlier:
+`git log` and `gjd-remote ls` both looked untouched, because the earlier sweep changed nothing in
+the repo and its session had ended. It happened again on 2026-09-23, on an entry by then 154 lines
+long with six dated appendices: the opening and the newest appendix were read, and the fact was in
+an older one. Each author appends rather than revises, so the newest section is the least likely
+to hold a fact recorded earlier.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is

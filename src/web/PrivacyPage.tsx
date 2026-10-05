@@ -526,7 +526,7 @@ export function PrivacyPage() {
             thing is how one of them goes stale. This says the shape of it and
             points at the card. */}
         <p>
-          Two exceptions, and both are worth knowing. If you mark an article{" "}
+          Three exceptions, and all are worth knowing. If you mark an article{" "}
           <strong className="tw:text-foreground">public</strong>, anyone can read it without signing
           in, and it is listed publicly where somebody who was never sent the link can find it —
           that is what the setting is for. They get the article, its outline, summaries (the plain-words
@@ -541,7 +541,14 @@ export function PrivacyPage() {
           asked, and the questions you put to the piece along with the passages they found. They can
           read all of that and add none of it. Your chat conversations are not shared, and neither
           is your profile. The
-          sharing card lists exactly what will go out before you turn it on. And{" "}
+          sharing card lists exactly what will go out before you turn it on. If you make a{" "}
+          <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
+          the link can read the article without signing in, and can pass it on. An article shared
+          only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
+          included. We cannot tell you who has read it. The link’s key is part of its address, so
+          it stays in the browser history of whoever opens it. Turning the link off refuses the
+          next request made with it; it cannot take back what somebody has already read or copied.
+          And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
           written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
@@ -599,7 +606,8 @@ export function PrivacyPage() {
           The Feedback button sends us what you write, your email address, the build you were
           running and the address of the page you were on — the whole address, including anything
           after the <code>?</code>, so if you were searching for something, that search text comes
-          with it. It goes to our database, to Sentry and, as an email, to our own inbox, and the
+          with it. One thing is taken off first: a report sent from a page you opened by a private
+          link records the address without the link’s key. It goes to our database, to Sentry and, as an email, to our own inbox, and the
           point of saying so here is that
           you can leave the box until you are on a page you don’t mind us seeing.
         </p>
@@ -645,6 +653,9 @@ export function PrivacyPage() {
           but the link you gave out still opens it. Archiving is about your shelf; sharing is about
           the link. To close the link, use{" "}
           <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
+          A private link is the same: archiving leaves it working, and{" "}
+          <strong className="tw:text-foreground">Turn off</strong> on the article’s own page closes
+          it.
         </p>
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete
@@ -657,7 +668,8 @@ export function PrivacyPage() {
           which is how we know what running this costs — it holds the job, the model and the price,
           not what was said. We keep a
           <strong className="tw:text-foreground"> thin audit trail</strong>: that an article existed
-          under a given name, when it was shared publicly, that a voice session happened. And we
+          under a given name, when it was shared publicly, when a private link to it was made or
+          turned off (never the link itself), that a voice session happened. And we
           keep the <strong className="tw:text-foreground">original downloaded file</strong>, stored
           under a fingerprint of its own contents rather than under your name, so that if somebody
           else added the same document it is the same file and deleting your copy cannot take
@@ -795,7 +807,9 @@ export function PrivacyPage() {
         <p>
           When somebody adds an article to Spideryarn we fetch it and keep a copy of the text so
           that they can read it here. If they turn sharing on, that copy becomes readable by anyone
-          and is listed on our public shelf. We ask them to confirm they have the right to share it
+          and is listed on our public shelf. They can also make a private link, which lets anyone
+          who has the link read that copy without it being listed. Either way we ask them to
+          confirm they have the right to share it
           — that is a promise they make, not a check we run, because we have no way of knowing who
           owns a page we fetched.
         </p>
@@ -811,8 +825,9 @@ export function PrivacyPage() {
           originally published, and a line about your connection to it. The first of those is the
           one we cannot work without: if a message doesn’t say which page it is about, all we can
           do is write back and ask. We will take a fair complaint at face value rather
-          than asking you to prove anything first: we make the article private, which takes it off
-          the public shelf and stops the shared link opening it, and then we come back to you.
+          than asking you to prove anything first: we make the article private and turn off any
+          private link to it, which takes it off
+          the public shelf and stops a shared link opening it, and then we come back to you.
         </p>
         <p>
           The limits are worth saying plainly. One person reads that mailbox and does this by hand,

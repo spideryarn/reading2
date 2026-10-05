@@ -37,7 +37,7 @@ import type {
   ToolRun,
 } from "./types.js";
 import { isSingleThreadKind, isThreadKind, sameOrigin } from "./types.js";
-import { titleFrom } from "./chat-title.js";
+import { titleFrom, titleFromOrigin } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -350,7 +350,9 @@ export function withTurn(
     // The first question names the thread. Later ones do not — a conversation
     // is about what it started as, and renaming it under the reader as it
     // wanders would lose them the entry they were looking for in the list.
-    title: base.messages.length === 0 ? titleFrom(question) : base.title,
+    title: base.messages.length === 0
+      ? (base.origin ? titleFromOrigin(base.origin) : titleFrom(question))
+      : base.title,
     updatedAt: at,
     messages: [...base.messages, user, reply],
   };

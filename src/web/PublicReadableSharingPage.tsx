@@ -228,6 +228,31 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
           </p>
         </Section>
 
+        {/* **The private link, added 2026-10-05** (plan 261005e). The same
+            republishing, to fewer people, so it gets one section that says
+            what differs and that everything else here still applies. Second
+            person is still the author. Each claim is held to the code in
+            tests/public-readable-sharing-page.test.tsx § what it says about a
+            private link: not listed, the notice, no preview, turning it off,
+            the tick-box and the record. It is never called secret: a link can
+            be forwarded, and the page says so. */}
+        <Section title="A private link">
+          <p>
+            A reader can also make a private link to an article, instead of or as well as making it
+            public. Anyone who has that link can read the same copy without an account, and can
+            pass the link on. An article shared only this way is not on our shelf of shared articles
+            and is not used as an example anywhere, and its page tells whoever opens it that it is a
+            private link. Pasting a link to an article shared only this way into a chat shows no title or description of the piece. The
+            reader who made the link can turn it off, and it stops working on the next request.
+          </p>
+          <p>
+            Everything else on this page applies to it as it does to a public article. The same
+            tick-box stands in front of it, we keep the same record of who made it and when, and the
+            offer at the top is the same: if your work is behind one, write to <Mail /> and we will
+            take it down.
+          </p>
+        </Section>
+
         <Section title="Your name and your address stay on it">
           {/* **The qualification is not pedantry, it is most of the sentence.**
               `publicSourceUrl` goes through `safePublicCanonical` (src/urls.ts),

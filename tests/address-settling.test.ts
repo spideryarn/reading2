@@ -118,7 +118,7 @@ async function serverTitle(pathname: string, search: string): Promise<string | n
     res,
     slug: SLUG,
     shell: { html: SHELL, sha256: "a".repeat(64) },
-    read: async () => HEAD,
+    read: async () => ({ sharedBy: "public", head: HEAD }),
   });
 
   const title = /<title>([\s\S]*?)<\/title>/.exec(body)?.[1] ?? null;

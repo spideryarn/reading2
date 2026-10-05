@@ -66,6 +66,11 @@ function noticeFor(provisional: ProvisionalTree): Notice | null {
         offer: "Trying again may make it.",
         press: "Try again",
       };
+    case "awaiting-structure":
+      /* Not this component's line: the real tree is on its way, or stalled, and
+         which of those is something only the open page's jobs list knows.
+         StructureArriving.tsx says it, and StructureBand picks between the two. */
+      return null;
     default:
       provisional satisfies never;
       return null;

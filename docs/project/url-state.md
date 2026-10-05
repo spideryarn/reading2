@@ -91,6 +91,15 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
 | `remember` | which part of Remember is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
 
+**`key` is not in this table, because it is not view state.** `/read/<slug>?key=<key>` is a private
+link, and the key is a credential
+([public-readable-sharing.md § A private link](public-readable-sharing.md#a-private-link-the-same-republishing-to-fewer-people)).
+No parser owns it and nothing in the app writes it. It stays on the address because nuqs and
+`carriedSearch` both keep parameters they do not own, so a mode change, a passage link and the trip
+to the Metadata page and back all carry it. It is read in one place
+([`src/web/useShareKey.ts`](../../src/web/useShareKey.ts)), never remembered (`last-view.ts` writes
+an allowlist it is not on), and taken off the address a bug report records.
+
 **`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.

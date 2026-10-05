@@ -1204,9 +1204,15 @@ this step.
   heading on every page: on the first real book through this path, 58 of 76 parts were called
   *With a Little Help*. With the rule it is 13 parts, named for the stories.
 - **It has no gists**, and is marked `provisional: "headings"`, which is what excuses it from the
-  gist rule in `checkTree`. Nothing treats that mark as "still arriving". Since 2026-10-05
-  Structure mode reads it to say so on screen, and offers the owner another run:
+  gist rule in `checkTree`. That value means **final**: nothing is coming to replace it. Since
+  2026-10-05 Structure mode reads it to say so on screen, and offers the owner another run:
   [structure.md § When it is only the headings](structure.md#when-it-is-only-the-headings).
+- **The same tree is also published on purpose, marked `provisional: "awaiting-structure"`**, by a
+  first import from the browser, so the article opens before the model call
+  ([ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure)).
+  That value means the opposite: a `["structure"]` job is queued to replace it. Ask
+  `awaitingStructure(tree)` ([`src/types.ts`](../../src/types.ts)), never the bare flag, since the
+  two values want different things from every reader.
 - **A model's tree takes the same path when the labels step could not start on it**: one holding a
   section too long for one labels call (`unaskableBatches`, [`src/labels.ts`](../../src/labels.ts)).
 - **`StructureRun.source` says which path ran** (one answer, slices, or headings and why), and the

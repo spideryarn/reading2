@@ -49,7 +49,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { SHARED_LINK_CARRIES, UNSHARING_COSTS_ALLOWANCE } from "../src/messages.js";
+import { SHARED_BY_PRIVATE_LINK, SHARED_LINK_CARRIES, UNSHARING_COSTS_ALLOWANCE } from "../src/messages.js";
 import { LEAD_IMAGE_ON_CARDS } from "../src/public/page-head.js";
 import { CRAWLABLE_NOINDEX_ROBOTS_ALLOWS, NOINDEX_HEADER_SOURCE, SITE_BRAND_FILES, SITE_PAGE_ROBOTS_ALLOWS, sitemapXml } from "../src/site-pages.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
@@ -475,4 +475,67 @@ describe("the public-readable-sharing page", () => {
        instead. docs/plans/260906g-…§ Two of the five claims were not true. */
     expect(PAGE).not.toMatch(/legally and ethically/i);
   });
+
+  /* ── the private link ─────────────────────────────────────────────────── */
+
+  /**
+   * **A private link is the same republishing to fewer people**, so the page
+   * has to say it exists and that the offer covers it
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+   * Each claim is held to the code that makes it true, as the claims above are.
+   */
+  describe("what it says about a private link", () => {
+    it("says what one is: anyone who has it can read, and can pass it on", () => {
+      expect(PAGE).toMatch(/private link/);
+      expect(PAGE).toMatch(/[Aa]nyone who has (that|the) link can read/);
+      expect(PAGE).toMatch(/pass (it|the link) on/);
+      /* And the server really does let a key in on the article route. */
+      expect(read("src/store/public-access.ts")).toMatch(/or\(publicSlug\(slug\), linkSharedSlug\(slug, access\.key\)\)/);
+    });
+
+    it("says it is not listed, and the listing cannot see one", () => {
+      expect(PAGE).toMatch(/not on our shelf of shared articles/);
+      /* The shelf's query is built on `publicSlug`'s meaning of public and
+         never on the access value a key rides in. */
+      const library = read("src/store/public-library.ts");
+      expect(library).not.toMatch(/from "\.\/public-access\.js"|from "\.\/link-shared-slug\.js"/);
+    });
+
+    it("says the page tells its reader it is a private link, and the notice does", () => {
+      expect(PAGE).toMatch(/tells whoever opens it that it is a private link/);
+      expect(SHARED_BY_PRIVATE_LINK).toMatch(/private link/i);
+      expect(read("src/web/PublicChrome.tsx")).toMatch(/SHARED_BY_PRIVATE_LINK/);
+    });
+
+    it("says a pasted private link shows no preview of the piece, and the page handler sends none", () => {
+      expect(PAGE).toMatch(/Pasting a link to an article shared only this way into a chat shows no title or description/);
+      /* A link share is its own arm in the page handler, with no head. */
+      expect(read("src/public/page.ts")).toMatch(/found\.sharedBy === "public" \? \{ kind: "found", head: found\.head \} : \{ kind: "link" \}/);
+    });
+
+    it("says it can be turned off, and the owner's route can", () => {
+      expect(PAGE).toMatch(/turn (it|the link) off/);
+      expect(read("src/store/pg-share-link.ts")).toMatch(/turnOff/);
+    });
+
+    it("says the same tick-box and the same record stand behind it", () => {
+      expect(PAGE).toMatch(/same tick-box/);
+      expect(PAGE).toMatch(/who made it and when/);
+      expect(read("src/routes.ts")).toMatch(/rightsConfirmed !== true\) throw httpError\(400, "A private link needs rightsConfirmed: true"\)/);
+      expect(read("src/db/schema.ts")).toContain('"article_share_link_events"');
+    });
+
+    it("extends the takedown offer to it", () => {
+      expect(PAGE).toMatch(/behind (one|a private link)[^.]*write to/i);
+    });
+
+    it("does not call a private link secret or secure", () => {
+      /* It is a link, and a link can be forwarded. */
+      expect(PAGE).not.toMatch(/private link[^.]*\b(secret|secure|only you)\b/i);
+    });
+  });
+});
+
+it("qualifies Help's listing promise for an article that is only link-shared", () => {
+  expect(read("src/web/help/help-topics.tsx")).toMatch(/An article shared only this way is not listed anywhere/);
 });

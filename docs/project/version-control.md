@@ -258,6 +258,16 @@ land?" identically either way, which is what a worktree sweep asks
 **Most landings never conflict.** A plain non-fast-forward merges automatically, so the proposal rule
 fires on real textual conflicts only, not on every push.
 
+**A merge refused over a dirty tree has once taken the edits with it.** On 2026-10-01, in a
+worktree with six modified tracked files, `git merge --no-edit origin/dev` printed *"Please commit
+your changes or stash them … Aborting"* and *"Merge with strategy ort failed"*, and afterwards all
+six files were back at `HEAD`, sharing one mtime. No autostash setting was on. `git status` showed
+only untracked files, which looks like an ordinary state. The edits survived as an unreferenced
+commit named `WIP on <branch>: <sha> …`, with an `index on …` twin. They were found with
+`git fsck --no-reflogs --unreachable`, then `git log --no-walk` over the commit ids it lists,
+and written back one file at a time with `git show <sha>:<path> > <path>`. Seen once and not
+reproduced; the cause is not known.
+
 ### Commit your own files, by name, in one command
 
 ```bash
@@ -847,6 +857,15 @@ by a deploy, not by a test ([deployment.md](deployment.md)).
 
 `git status` before you commit, and read the untracked list rather than skimming past it. If
 something you import is in it, it is yours to add.
+
+**A tracked file left out of the pathspec does the same, and the untracked list cannot show it.**
+The recipe's list of paths is typed by hand. On 2026-09-07 a commit of fourteen files left out
+`src/web/visitor.ts`: `HEAD` had a new member of `Mode` and no row for it in the total
+`Record<Mode, VisitorPolicy>`, so every public reader crashed. `npm test`, `npm run typecheck` and
+`npm run check` were green throughout, because all three read the working tree, which had the
+row. GPT Sol found it by extracting the commit to a scratch directory and running the visitor
+tests against that. After the commit the omitted file is still there as a ` M` line in
+`git status --porcelain`.
 
 **And the variant where the import is not yours at all.** The recipe's trailing `--` pathspec commits
 a named file *from the working tree*, so naming a file a peer is halfway through commits their half

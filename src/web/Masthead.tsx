@@ -49,7 +49,7 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { Archive, ExternalLink, FileQuestion, Globe, Lock, Undo2, Upload } from "lucide-react";
+import { Archive, ExternalLink, FileQuestion, Globe, Link2, Lock, Undo2, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
   SHARING_MARK_HOW_PRIVATE,
@@ -61,6 +61,12 @@ import {
   SHARING_MARK_PRESS_PRIVATE,
   SHARING_MARK_PRESS_PUBLIC,
   SHARING_OFF,
+  SHARING_OFF_WITH_LINK,
+  SHARING_OFF_LINK_UNKNOWN,
+  PRIVATE_LINK_HEADING,
+  PRIVATE_LINK_CANNOT_UNRING,
+  SHARING_MARK_NAME_LINK,
+  SHARING_MARK_PRESS_LINK,
   SHARING_ON,
 } from "../messages.js";
 import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
@@ -195,6 +201,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
       <SharingMark
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
+        privateLinkOn={article.privateLinkOn}
         archived={archive?.at === undefined ? undefined : archive.at !== null}
       />
       {/* Owner-only: the controller is mounted by OwnedArticle and is absent
@@ -837,11 +844,13 @@ export function addressParts(url: string): { host: string; rest: string } | null
 function SharingMark({
   slug,
   visibility,
+  privateLinkOn,
   archived,
 }: {
   slug: string;
   /** `undefined` means the store could not say — see the header. */
   visibility: Visibility | undefined;
+  privateLinkOn: boolean | undefined;
   /**
    * Whether the article is archived, `undefined` when we do not know. **Archived
    * means off the public list too** (public-library.ts § the `archivedAt`
@@ -857,27 +866,41 @@ function SharingMark({
   if (visibility === undefined) return null;
 
   const shared = visibility === "public";
+  const linked = !shared && privateLinkOn === true;
   /* Two strings, and they are deliberately not one — see `SHARING_MARK_NAME_PUBLIC`
      in src/messages.ts. The tooltip becomes `aria-describedby`, so a name
      holding the same sentence is announced twice. */
-  const tip = shared
-    ? archived === true
-      ? SHARING_MARK_ON_ARCHIVED
-      : archived === false
-        ? SHARING_ON
-        : SHARING_MARK_ON_ARCHIVE_UNKNOWN
-    : SHARING_OFF;
-  const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
-  /* The state as a word, which is what a reader hovering this actually came for
-     — `SHARING_BADGE` because the shelf already calls it that, and an owner who
-     has met *Shared* on a card should not meet a synonym here. */
-  const head = shared ? SHARING_BADGE : "Private";
-  /* The half a reader cannot work out by pressing — `ControlTip`'s rule. Both
-     are about what *stopping* or *starting* does not do. */
-  const how = shared ? SHARING_MARK_HOW_PUBLIC : SHARING_MARK_HOW_PRIVATE;
-  /* Where the press goes, as its own line rather than a sentence tacked onto
-     the state — spya-d886ah, src/messages.ts § `SHARING_MARK_PRESS_PUBLIC`. */
-  const press = shared ? SHARING_MARK_PRESS_PUBLIC : SHARING_MARK_PRESS_PRIVATE;
+  const privateMark = linked
+    ? {
+        tip: SHARING_OFF_WITH_LINK,
+        name: SHARING_MARK_NAME_LINK,
+        head: PRIVATE_LINK_HEADING,
+        how: PRIVATE_LINK_CANNOT_UNRING,
+        press: SHARING_MARK_PRESS_LINK,
+        icon: <Link2 size={14} strokeWidth={1.75} />,
+      }
+    : {
+        tip: privateLinkOn === false ? SHARING_OFF : SHARING_OFF_LINK_UNKNOWN,
+        name: SHARING_MARK_NAME_PRIVATE,
+        head: "Private",
+        how: SHARING_MARK_HOW_PRIVATE,
+        press: SHARING_MARK_PRESS_PRIVATE,
+        icon: <Lock size={14} strokeWidth={1.75} />,
+      };
+  /* Public access wins when both controls are on. Keep each mark's words and
+     icon together so they describe the same access state. */
+  const { tip, name, head, how, press, icon } = shared
+    ? {
+        tip: archived === true
+          ? SHARING_MARK_ON_ARCHIVED
+          : archived === false ? SHARING_ON : SHARING_MARK_ON_ARCHIVE_UNKNOWN,
+        name: SHARING_MARK_NAME_PUBLIC,
+        head: SHARING_BADGE,
+        how: SHARING_MARK_HOW_PUBLIC,
+        press: SHARING_MARK_PRESS_PUBLIC,
+        icon: <Globe size={14} strokeWidth={1.75} />,
+      }
+    : privateMark;
 
   /* The view state carried across, so stepping out to the switch and coming
      back returns the reader to the paragraph they left — the same
@@ -916,7 +939,7 @@ function SharingMark({
           shared ? "tw:text-highlight-text" : "tw:text-ink-faint"
         }`}
       >
-        {shared ? <Globe size={14} strokeWidth={1.75} /> : <Lock size={14} strokeWidth={1.75} />}
+        {icon}
       </Link>
     </Tooltip>
   );
