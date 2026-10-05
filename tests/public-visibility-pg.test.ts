@@ -952,7 +952,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * The same fixture, refused above and served here — the positive control that
    * makes the 404 mean something rather than `publicSlug` matching nothing.
    */
-  it("and now the head has the four values a preview is built from", async () => {
+  it("and now the head has the five values a preview is built from", async () => {
     const head = await pgPublicReader.loadHead(SLUG);
     expect(head.slug).toBe(SLUG);
     /* Whatever the fixture's title is, it is a string rather than the absence
@@ -980,7 +980,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And nothing that renders came with it. A head read that quietly grew a
        `blocks` or a `tree` key is the failure this whole projection exists to
        make impossible, and it would not show up in any assertion above. */
-    expect(Object.keys(head).sort()).toEqual(["canonical", "gist", "slug", "title"]);
+    expect(Object.keys(head).sort()).toEqual(["authors", "canonical", "gist", "slug", "title"]);
   });
 
   it("wrote exactly one event, saying who and from what to what", async () => {
