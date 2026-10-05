@@ -12,6 +12,10 @@
  * `WorktreeCreate` hook *replaces* worktree creation rather than following it —
  * see docs/project/worktrees.md.
  *
+ * `npm run worktree:setup` does not start here. It starts in
+ * scripts/worktree-setup-bootstrap.mjs, which is plain Node: this file needs
+ * `tsx` and a package to run, and a new worktree has neither until step 3.
+ *
  * ## The guard, which is the most important line here
  *
  * This script runs `npm ci`, which **deletes `node_modules` and reinstalls it**.
@@ -38,6 +42,7 @@ import { fileURLToPath } from "node:url";
 
 import { describeMaterialise, materialiseCorpus } from "./corpus-materialise.js";
 import { TRUNK_BRANCH } from "./deploy-checks.js";
+import { alreadyInstalled } from "./worktree-deps.js";
 import { describeFreshen, freshenFromTrunk, freshenIsFatal } from "./worktree-freshen.js";
 import { inLinkedWorktree, PRIMARY_PORT } from "./worktree-port.js";
 
@@ -113,23 +118,32 @@ if (freshened.kind === "merged" || freshened.kind === "already-level") {
 
 /* `--prefer-offline` because the npm cache is shared and warm; the flags after
    it just cut noise. Measured at 16.6 s and 681 MB in a real worktree on
-   2026-09-01 — the plan's earlier 4–5 s and 564 MB were both optimistic. */
-info("npm ci --prefer-offline (about 15–20 s, 680 MB)");
-const install = spawnSync("npm", ["ci", "--prefer-offline", "--no-audit", "--no-fund"], {
-  cwd: ROOT,
-  encoding: "utf8",
-  stdio: ["ignore", "pipe", "pipe"],
-});
-if (install.status !== 0) {
-  refuse("npm ci failed", [`${install.stdout ?? ""}${install.stderr ?? ""}`.trimEnd().split("\n").slice(-15).join("\n       ")]);
-}
-ok("dependencies installed");
-/* Benign, but it looks alarming and somebody will chase it: npm no longer runs
-   package install scripts without approval, so esbuild's postinstall is skipped.
-   Its platform binary arrives as an optional dependency instead, which is why
-   vite and vitest work anyway — checked by running a suite in a worktree. */
-if (`${install.stdout ?? ""}`.includes("install-scripts")) {
-  info("npm skipped some install scripts (esbuild) — expected, and harmless here");
+   2026-09-01 — the plan's earlier 4–5 s and 564 MB were both optimistic.
+
+   Skipped when scripts/worktree-setup-bootstrap.mjs has just done it: a tree with
+   nothing installed cannot start this script at all, so the bootstrap installs
+   first, and the merge above makes that install stale only if it moved the
+   lockfile — scripts/worktree-deps.ts. */
+if (alreadyInstalled(ROOT)) {
+  ok("dependencies installed a moment ago, and the merge did not move package-lock.json");
+} else {
+  info("npm ci --prefer-offline (about 15–20 s, 680 MB)");
+  const install = spawnSync("npm", ["ci", "--prefer-offline", "--no-audit", "--no-fund"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (install.status !== 0) {
+    refuse("npm ci failed", [`${install.stdout ?? ""}${install.stderr ?? ""}`.trimEnd().split("\n").slice(-15).join("\n       ")]);
+  }
+  ok("dependencies installed");
+  /* Benign, but it looks alarming and somebody will chase it: npm no longer runs
+     package install scripts without approval, so esbuild's postinstall is skipped.
+     Its platform binary arrives as an optional dependency instead, which is why
+     vite and vitest work anyway — checked by running a suite in a worktree. */
+  if (`${install.stdout ?? ""}`.includes("install-scripts")) {
+    info("npm skipped some install scripts (esbuild) — expected, and harmless here");
+  }
 }
 
 /* ------------------------------------------------------------------ */

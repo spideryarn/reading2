@@ -1,0 +1,1 @@
+{"source":"oxford-academic","label":"BWA bioinformatics","role":"landing","expect":null,"requestedUrl":"https://academic.oup.com/bioinformatics/article/25/14/1754/225615","outcome":"fetch-failed","elapsedMs":76,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

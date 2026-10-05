@@ -2025,6 +2025,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
   },
+  "tests/command-suggest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the command bar's suggestions (plan 261005k, " +
+      "2026-10-05). It seeds two articles with `scratchArticleInPg`, writes a purpose on each, " +
+      "and drives `POST /api/command-suggest/:slug` and `GET /api/reader` through `handleApi` " +
+      "with the model's address stubbed — entirely Postgres. Its reach into the condemned " +
+      "modules is the seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off " +
+      "the graph, not re-witnessed.",
+  },
   "tests/glossary-added-term.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2941,6 +2953,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      the owner's GET through the route, reading rows back out of
      `quiz_attempts`. The marker is a script; no model is called. */
   "tests/quiz-attempts-route.test.ts": "private-postgres",
+  /* Seeds two articles, writes a purpose on each, and drives the command
+     bar's suggest POST and the reader GET through the route. The model's
+     address is stubbed; no model is called. */
+  "tests/command-suggest-route.test.ts": "private-postgres",
   /* Seeds three articles, writes a glossary on each, and drives adding a
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */

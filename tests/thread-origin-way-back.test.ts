@@ -10,18 +10,22 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { ThreadOrigin, ThreadSummary } from "../src/types.js";
+import { originColumns, originFromColumns } from "../src/thread-origin.js";
+import { isLensOrigin, sameOrigin, type ThreadOrigin, type ThreadSummary } from "../src/types.js";
 import { threadSource } from "../src/web/thread-source.js";
 import {
   anchored,
   countByBlock,
   helpThreadFor,
+  lensThreads,
   threadFor,
   threadForOrigin,
 } from "../src/web/useChatAnchors.js";
 
 const BLOCK = "spya-bbbbbb";
-const CLAIM: ThreadOrigin = { mode: "debate", blockId: BLOCK, quote: "RNA can transfer a memory" };
+const CLAIM_WORDS = "RNA can transfer a memory";
+const CLAIM: ThreadOrigin = { mode: "debate", blockId: BLOCK, quote: CLAIM_WORDS };
+const LENS: ThreadOrigin = { mode: "debate", lens: "how it relates to Smith 2019" };
 
 function summary(over: Partial<ThreadSummary> & { id: string }): ThreadSummary {
   return {
@@ -88,5 +92,119 @@ describe("threadSource", () => {
 
   it("says nothing for a plain chat (the other rules are tests/thread-source.test.ts)", () => {
     expect(threadSource({ kind: "chat" })).toBeNull();
+  });
+
+  it("says a lens conversation was started from an angle in Debate, with the reader's words", () => {
+    expect(threadSource({ kind: "chat", origin: LENS })).toEqual({
+      from: "debate",
+      mode: "debate",
+      label: "Started from an angle in Debate",
+      quote: "how it relates to Smith 2019",
+      voice: "reader",
+    });
+    expect(threadSource({ kind: "chat", origin: CLAIM })?.voice, "a claim is the article's words").toBeUndefined();
+  });
+});
+
+/**
+ * **The second shape, a lens** (plan 261005k, A). Both shapes say
+ * `mode: "debate"`, so nothing may tell them apart by the mode.
+ */
+describe("a lens and a claim", () => {
+  it("are told apart by what they carry", () => {
+    expect(isLensOrigin(LENS)).toBe(true);
+    expect(isLensOrigin(CLAIM)).toBe(false);
+  });
+
+  it("are the same origin only as the same shape with the same words", () => {
+    expect(sameOrigin(LENS, { ...LENS })).toBe(true);
+    expect(sameOrigin(CLAIM, { ...CLAIM })).toBe(true);
+    expect(sameOrigin(LENS, { mode: "debate", lens: "replication attempts" })).toBe(false);
+    expect(sameOrigin(CLAIM, LENS)).toBe(false);
+    expect(sameOrigin(LENS, CLAIM)).toBe(false);
+    /* The lens's words are the claim's: still two different things. */
+    expect(sameOrigin(CLAIM, { mode: "debate", lens: CLAIM_WORDS })).toBe(false);
+    expect(sameOrigin({ mode: "debate", lens: CLAIM_WORDS }, CLAIM)).toBe(false);
+  });
+
+  it("do not find each other's conversations", () => {
+    const list = [
+      summary({ id: "spya-aaa333", origin: CLAIM }),
+      summary({ id: "spya-aaa444", origin: LENS }),
+    ];
+    expect(threadForOrigin(list, CLAIM)?.id).toBe("spya-aaa333");
+    expect(threadForOrigin(list, LENS)?.id).toBe("spya-aaa444");
+    expect(threadForOrigin(list, { mode: "debate", lens: CLAIM_WORDS })).toBeUndefined();
+  });
+
+  it("a lens conversation is nobody's block chat either", () => {
+    const list = [summary({ id: "spya-aaa444", origin: LENS })];
+    expect(threadFor(list, BLOCK)).toBeUndefined();
+    expect(anchored(list)).toEqual([]);
+  });
+});
+
+describe("lensThreads", () => {
+  it("lists the chats started from an angle, newest first, and nothing else", () => {
+    const list = [
+      summary({ id: "spya-aaa222" }),
+      summary({ id: "spya-aaa333", origin: CLAIM }),
+      summary({ id: "spya-aaa444", origin: LENS, updatedAt: "2026-10-05T11:00:00.000Z" }),
+      summary({
+        id: "spya-aaa555",
+        origin: { mode: "debate", lens: "replication attempts" },
+        updatedAt: "2026-10-05T12:00:00.000Z",
+      }),
+      /* The database refuses this row; the list is the floating chat's way in. */
+      summary({ id: "spya-aaa666", origin: LENS, kind: "explore" }),
+    ];
+    expect(lensThreads(list).map((t) => [t.id, t.origin.lens])).toEqual([
+      ["spya-aaa555", "replication attempts"],
+      ["spya-aaa444", "how it relates to Smith 2019"],
+    ]);
+  });
+
+  it("keeps two chats started from the same angle as two lines", () => {
+    const list = [summary({ id: "spya-aaa444", origin: LENS }), summary({ id: "spya-aaa555", origin: LENS })];
+    expect(lensThreads(list)).toHaveLength(2);
+  });
+});
+
+/**
+ * **The mapping between the union and its columns, both ways**
+ * (src/thread-origin.ts). The store, the export and the seeder all call it, so
+ * a shape lost here is lost in all three.
+ */
+describe("the origin's columns, both ways", () => {
+  const NONE = { originMode: null, originItemId: null, originBlockId: null, originQuote: null, originLens: null };
+
+  it("writes a claim as a block and a quote, with no lens", () => {
+    expect(originColumns(CLAIM)).toEqual({
+      ...NONE,
+      originMode: "debate",
+      originBlockId: BLOCK,
+      originQuote: CLAIM_WORDS,
+    });
+  });
+
+  it("writes a lens as the lens, with no block and no quote", () => {
+    expect(originColumns(LENS)).toEqual({ ...NONE, originMode: "debate", originLens: "how it relates to Smith 2019" });
+  });
+
+  it("writes nothing for no origin", () => {
+    expect(originColumns(undefined)).toEqual(NONE);
+  });
+
+  it("reads each back as it was written", () => {
+    expect(originFromColumns(originColumns(CLAIM))).toEqual({ origin: CLAIM });
+    expect(originFromColumns(originColumns(LENS))).toEqual({ origin: LENS });
+    expect(originFromColumns(NONE)).toEqual({});
+  });
+
+  it("reads a row the database would refuse as no origin, never as half of one", () => {
+    const mixed = { ...NONE, originMode: "debate", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" };
+    expect(originFromColumns(mixed)).toEqual({});
+    expect(originFromColumns({ ...NONE, originMode: "debate" })).toEqual({});
+    expect(originFromColumns({ ...NONE, originMode: "summary", originLens: "an angle" })).toEqual({});
   });
 });

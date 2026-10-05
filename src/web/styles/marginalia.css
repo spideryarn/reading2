@@ -181,11 +181,34 @@ p.marg-shut {
   outline: 2px solid var(--rule-strong);
   outline-offset: 2px;
 }
+/* **The line answers the pointer** (Greg, spya-xf6m2u: the card said to press
+   and *"I don't see anything to press"*). Its words are underlined and its
+   chevron darkens under a pointer or the keyboard, so what the card calls
+   "this line" is visibly the thing to press. `hover: hover`, so a finger's tap
+   does not leave the underline stuck on. */
+@media (hover: hover) {
+  .marg-shut-button:hover .marg-shut-line {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .marg-shut-button:hover .marg-chevron {
+    color: var(--ink);
+  }
+}
+.marg-shut-button:focus-visible .marg-shut-line {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.marg-shut-button:focus-visible .marg-chevron {
+  color: var(--ink);
+}
 .marg-chevron {
   position: absolute;
   left: -0.9rem;
   top: 0.2rem;
-  color: var(--ink-faint);
+  /* A shade darker than the stamp beside it: it is the one mark that says the
+     line opens. */
+  color: var(--ink-soft);
   transition: rotate 120ms ease;
 }
 .marg-shut[data-open] .marg-chevron {

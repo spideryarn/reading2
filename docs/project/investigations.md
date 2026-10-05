@@ -30,6 +30,9 @@ measured with scripted readers and a blind judge:
 - [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md) —
   Explore against Chat with the `reader_notes` tool: a product comparison, the numbers set before
   the run, and the one it did not meet.
+- [261005e](../investigations/261005e-explore-prompt-widened-to-critiques-of-the-piece.md) —
+  Explore's prompt widened to critiques of the piece: before and after with a scripted critic, a
+  blind read inside its control's spread, and the false "no source" claims that took two revisions.
 
 ## Naming
 

@@ -175,8 +175,9 @@ const SHARED_STARTS: Readonly<Record<string, readonly Mode[]>> = {
   s: ["structure", "summary", "skim", "search"],
   d: ["diagram", "debate"],
   c: ["citations", "chat"],
-  r: ["referee", "remember"],
-  re: ["referee", "remember"],
+  /* `r` and `re` were shared by Referee and Remember until 2026-10-05, when
+     Remember became Learn: each now names Referee alone, and the test below
+     that asks for "the one mode it names first" covers them. */
 };
 
 describe("every start of a mode's name", () => {

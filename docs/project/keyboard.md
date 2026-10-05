@@ -215,9 +215,9 @@ The band's ‹ › and the door's *Next stop ›* name their key on their cards 
 >
 > — Greg, 2026-09-30, SPIDERYARN-READING2-71
 
-**While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
+**While Learn's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
 same seam as Skim's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
-`null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
+`null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Learn — so
 it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
 
 The handler is the buttons' own rule, so the keys can do no more than the buttons: no wrap at

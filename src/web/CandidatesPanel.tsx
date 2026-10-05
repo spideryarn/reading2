@@ -79,7 +79,7 @@ import { REFEREE_CANDIDATES_REACHES_SEARCH } from "../messages.js";
 import { CitedMarkdown } from "./Cited.js";
 import { type ArtefactStatus, useAutoRun } from "./useAutoRun.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
-import { isSendEnter } from "./key-chord.js";
+import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { BlockRef } from "./BlockRef.js";
 import { hostOf } from "../urls.js";
 import { useChat } from "./useChat.js";
@@ -868,6 +868,8 @@ function Composer({
             e.preventDefault();
             send();
           }
+          /* A held Enter sends nothing, and adds no blank lines either. */
+          if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
       <button

@@ -1,0 +1,4024 @@
+[
+ {
+  "source": "biorxiv",
+  "label": "African rope squirrels",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 127578,
+  "elapsedMs": 552,
+  "meta": {
+   "citation_title": [
+    "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.08.25.672055.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.08.25.672055"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)",
+  "byline": "Pascal Baelo; Léa Fourchault; Nicolas Laurent; Claude Mande; Anne Laudisoit; Nicaise Amundala; Ganiyat Temidayo Saliu; Guy-Crispin Gembu; Joachim Mariën; Sophie Gryseels; Jan Hulselmans; Erik Verheyen",
+  "words": 452,
+  "blocks": 22,
+  "headings": 5,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)\nView ORCID ProfilePascal Baelo · bioRxiv · ~3 min read\nNew Results\n, View ORCID ProfileLéa Fourchaul",
+  "last200": "he copyright holder for this preprint is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made available under a CC-BY-NC-ND 4.0 International license."
+ },
+ {
+  "source": "biorxiv",
+  "label": "African rope squirrels",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 285637,
+  "elapsedMs": 1860,
+  "meta": {
+   "citation_title": [
+    "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.08.25.672055.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.08.25.672055"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)",
+  "byline": "Pascal Baelo; Léa Fourchault; Nicolas Laurent; Claude Mande; Anne Laudisoit; Nicaise Amundala; Ganiyat Temidayo Saliu; Guy-Crispin Gembu; Joachim Mariën; Sophie Gryseels; Jan Hulselmans; Erik Verheyen",
+  "words": 7515,
+  "blocks": 162,
+  "headings": 29,
+  "figures": 0,
+  "images": 2,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)\nView ORCID ProfilePascal Baelo · bioRxiv · ~52 min read\nNew Results\n, View ORCID ProfileLéa Fourchau",
+  "last200": "w\n↵ Zhang J, Kapli P, Pavlidis P, Stamatakis P. 2013. A general species delimitation method With applications to phylogenetic placements. Bioinformatics 29:2869–2876. doi:10.1093/bioinformatics/btt499"
+ },
+ {
+  "source": "biorxiv",
+  "label": "African rope squirrels",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 1444992,
+  "elapsedMs": 3274,
+  "pdfPages": 37
+ },
+ {
+  "source": "biorxiv",
+  "label": "ASC glial reactivity",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 120255,
+  "elapsedMs": 1339,
+  "meta": {
+   "citation_title": [
+    "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.06.19.660521.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.06.19.660521"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury",
+  "byline": "Tao Li; Sergio Castro-Gomez; Pablo Botella Lucena; Ana Vieira-Saecker; Sarah Schwartz; Yushuang Deng; Yingying Ding; Verena Stein; Eicke Latz; Michael T. Heneka",
+  "words": 347,
+  "blocks": 21,
+  "headings": 5,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury\nView ORCID ProfileTao Li · bioRxiv · ~3 min read\nConfirmatory Results\ndoi: https://doi.org/10.1101",
+  "last200": "he copyright holder for this preprint is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made available under a CC-BY-NC-ND 4.0 International license."
+ },
+ {
+  "source": "biorxiv",
+  "label": "ASC glial reactivity",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 362612,
+  "elapsedMs": 1597,
+  "meta": {
+   "citation_title": [
+    "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.06.19.660521.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.06.19.660521"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury",
+  "byline": "Tao Li; Sergio Castro-Gomez; Pablo Botella Lucena; Ana Vieira-Saecker; Sarah Schwartz; Yushuang Deng; Yingying Ding; Verena Stein; Eicke Latz; Michael T. Heneka",
+  "words": 9803,
+  "blocks": 208,
+  "headings": 34,
+  "figures": 0,
+  "images": 11,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury\nView ORCID ProfileTao Li · bioRxiv · ~67 min read\nConfirmatory Results\ndoi: https://doi.org/10.110",
+  "last200": " of Immunohistochemistry Prepared Tissue Using ImageJ. J Vis Exp. 2018;(136):57648.\n69.↵ Lenhard W, Lenhard A. Testing the Significance of Correlations [preprint]. 2014. doi:10.13140/RG.2.1.2954.1367."
+ },
+ {
+  "source": "biorxiv",
+  "label": "ASC glial reactivity",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 12269343,
+  "elapsedMs": 2989,
+  "pdfPages": 55
+ },
+ {
+  "source": "medrxiv",
+  "label": "Potassium channel",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7",
+  "outcome": "fetch-failed",
+  "elapsedMs": 90,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "medrxiv",
+  "label": "Potassium channel",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7.full",
+  "outcome": "fetch-failed",
+  "elapsedMs": 74,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "medrxiv",
+  "label": "Potassium channel",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2025.07.17.25331613v7.full.pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 84,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "medrxiv",
+  "label": "Hepatitis WGS",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3",
+  "outcome": "fetch-failed",
+  "elapsedMs": 70,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "medrxiv",
+  "label": "Hepatitis WGS",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3.full",
+  "outcome": "fetch-failed",
+  "elapsedMs": 70,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "medrxiv",
+  "label": "Hepatitis WGS",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.medrxiv.org/content/10.1101/2024.08.12.24311345v3.full.pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 64,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (Nat Commun)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pubmed.ncbi.nlm.nih.gov/40750793/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pubmed.ncbi.nlm.nih.gov/40750793/",
+  "chainHosts": [
+   "pubmed.ncbi.nlm.nih.gov"
+  ],
+  "status": 203,
+  "kind": "html",
+  "bytes": 5590,
+  "elapsedMs": 176,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 28 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (Nat Commun)",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20454,
+  "elapsedMs": 147,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (eLife)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pubmed.ncbi.nlm.nih.gov/40888484/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pubmed.ncbi.nlm.nih.gov/40888484/",
+  "chainHosts": [
+   "pubmed.ncbi.nlm.nih.gov"
+  ],
+  "status": 203,
+  "kind": "html",
+  "bytes": 5590,
+  "elapsedMs": 143,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 28 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pubmed",
+  "label": "in PMC (eLife)",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12401548/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12401548/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20455,
+  "elapsedMs": 166,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pubmed",
+  "label": "not in PMC (Lancet)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pubmed.ncbi.nlm.nih.gov/40885583/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pubmed.ncbi.nlm.nih.gov/40885583/",
+  "chainHosts": [
+   "pubmed.ncbi.nlm.nih.gov"
+  ],
+  "status": 203,
+  "kind": "html",
+  "bytes": 5590,
+  "elapsedMs": 274,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 28 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pubmed",
+  "label": "not in PMC (Nature news)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pubmed.ncbi.nlm.nih.gov/40866691/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pubmed.ncbi.nlm.nih.gov/40866691/",
+  "chainHosts": [
+   "pubmed.ncbi.nlm.nih.gov"
+  ],
+  "status": 203,
+  "kind": "html",
+  "bytes": 5590,
+  "elapsedMs": 146,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 28 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pmc",
+  "label": "Nat Commun flat bands",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20454,
+  "elapsedMs": 147,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pmc",
+  "label": "Nat Commun flat bands",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/pdf/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12317057/pdf/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20463,
+  "elapsedMs": 149,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pmc",
+  "label": "PLOS GH multiparity",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20455,
+  "elapsedMs": 148,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "pmc",
+  "label": "PLOS GH multiparity",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/pdf/",
+  "outcome": "extract-refused",
+  "finalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12393760/pdf/",
+  "chainHosts": [
+   "pmc.ncbi.nlm.nih.gov"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20466,
+  "elapsedMs": 167,
+  "meta": {
+   "canonical": [
+    "https://www.google.com/recaptcha/challengepage"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 130 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "europepmc",
+  "label": "Nat Commun flat bands",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://europepmc.org/article/MED/40750793",
+  "outcome": "fetch-failed",
+  "elapsedMs": 92,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "europepmc",
+  "label": "Nat Commun flat bands",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://europepmc.org/article/PMC/PMC12317057",
+  "outcome": "fetch-failed",
+  "elapsedMs": 55,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "europepmc",
+  "label": "Nat Commun flat bands",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://europepmc.org/backend/ptpmcrender.fcgi?accid=PMC12317057&blobtype=pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 65,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "europepmc",
+  "label": "eLife burial",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://europepmc.org/article/PMC/PMC12401548",
+  "outcome": "fetch-failed",
+  "elapsedMs": 59,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "europepmc",
+  "label": "eLife burial",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://europepmc.org/backend/ptpmcrender.fcgi?accid=PMC12401548&blobtype=pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 66,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "AlphaFold 2021",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1038/s41586-021-03819-2",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-021-03819-2?error=cookies_not_supported&code=6e93d5d8-4e48-4f2e-a2b3-1b3423d2f884",
+  "chainHosts": [
+   "doi.org",
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 617406,
+  "elapsedMs": 675,
+  "meta": {
+   "citation_pdf_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2.pdf"
+   ],
+   "citation_fulltext_html_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "citation_title": [
+    "Highly accurate protein structure prediction with AlphaFold"
+   ],
+   "citation_doi": [
+    "10.1038/s41586-021-03819-2"
+   ],
+   "og:url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "canonical": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ]
+  },
+  "challenge": [],
+  "title": "Highly accurate protein structure prediction with AlphaFold",
+  "byline": "John Jumper; Richard Evans; Alexander Pritzel; Tim Green; Michael Figurnov; Olaf Ronneberger; Kathryn Tunyasuvunakool; Russ Bates; Augustin Žídek; Anna Potapenko; Alex Bridgland; Clemens Meyer; Simon A. A. Kohl; Andrew J. Ballard; Andrew Cowie; Bernardino Romera-Paredes; Stanislav Nikolov; Rishub Jain; Jonas Adler; Trevor Back; Stig Petersen; David Reiman; Ellen Clancy; Michal Zielinski; Martin Steinegger; Michalina Pacholska; Tamas Berghammer; Sebastian Bodenstein; David Silver; Oriol Vinyals; Andrew W. Senior; Koray Kavukcuoglu; Pushmeet Kohli; Demis Hassabis",
+  "words": 10366,
+  "blocks": 262,
+  "headings": 43,
+  "figures": 5,
+  "images": 9,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Highly accurate protein structure prediction with AlphaFold\nHassabis, Demis · Nature · ~76 min read\nAbstract\nProteins are essential to life, and understanding their structure can facilitate a mechanis",
+  "last200": "adii as published in: \"Atomic Structures of all the Twenty Essential Amino Acids and a Tripeptide, with Bond Lengths as Sums of Atomic Covalent Radii\" by Raji Heyrovska, https://arxiv.org/ftp/arxiv..."
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "AlphaFold 2021",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.nature.com/articles/s41586-021-03819-2",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-021-03819-2?error=cookies_not_supported&code=90d79d64-f20f-4a79-9e93-e37830ade10b",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 617406,
+  "elapsedMs": 648,
+  "meta": {
+   "citation_pdf_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2.pdf"
+   ],
+   "citation_fulltext_html_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "citation_title": [
+    "Highly accurate protein structure prediction with AlphaFold"
+   ],
+   "citation_doi": [
+    "10.1038/s41586-021-03819-2"
+   ],
+   "og:url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "canonical": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ]
+  },
+  "challenge": [],
+  "title": "Highly accurate protein structure prediction with AlphaFold",
+  "byline": "John Jumper; Richard Evans; Alexander Pritzel; Tim Green; Michael Figurnov; Olaf Ronneberger; Kathryn Tunyasuvunakool; Russ Bates; Augustin Žídek; Anna Potapenko; Alex Bridgland; Clemens Meyer; Simon A. A. Kohl; Andrew J. Ballard; Andrew Cowie; Bernardino Romera-Paredes; Stanislav Nikolov; Rishub Jain; Jonas Adler; Trevor Back; Stig Petersen; David Reiman; Ellen Clancy; Michal Zielinski; Martin Steinegger; Michalina Pacholska; Tamas Berghammer; Sebastian Bodenstein; David Silver; Oriol Vinyals; Andrew W. Senior; Koray Kavukcuoglu; Pushmeet Kohli; Demis Hassabis",
+  "words": 10366,
+  "blocks": 262,
+  "headings": 43,
+  "figures": 5,
+  "images": 9,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Highly accurate protein structure prediction with AlphaFold\nHassabis, Demis · Nature · ~76 min read\nAbstract\nProteins are essential to life, and understanding their structure can facilitate a mechanis",
+  "last200": "adii as published in: \"Atomic Structures of all the Twenty Essential Amino Acids and a Tripeptide, with Bond Lengths as Sums of Atomic Covalent Radii\" by Raji Heyrovska, https://arxiv.org/ftp/arxiv..."
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "AlphaFold 2021",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nature.com/articles/s41586-021-03819-2.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-021-03819-2.pdf?error=cookies_not_supported&code=3dd48ca7-e964-45c1-b53c-0ddfbcf8ab10",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 3651992,
+  "elapsedMs": 616,
+  "pdfPages": 12
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "GNoME materials",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1038/s41586-023-06735-9",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-023-06735-9?error=cookies_not_supported&code=f2f010ed-fbee-4770-9836-a8e706d2bbfb",
+  "chainHosts": [
+   "doi.org",
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 507512,
+  "elapsedMs": 696,
+  "meta": {
+   "citation_pdf_url": [
+    "https://www.nature.com/articles/s41586-023-06735-9.pdf"
+   ],
+   "citation_fulltext_html_url": [
+    "https://www.nature.com/articles/s41586-023-06735-9"
+   ],
+   "citation_title": [
+    "Scaling deep learning for materials discovery"
+   ],
+   "citation_doi": [
+    "10.1038/s41586-023-06735-9"
+   ],
+   "og:url": [
+    "https://www.nature.com/articles/s41586-023-06735-9"
+   ],
+   "canonical": [
+    "https://www.nature.com/articles/s41586-023-06735-9"
+   ]
+  },
+  "challenge": [],
+  "title": "Scaling deep learning for materials discovery",
+  "byline": "Amil Merchant; Simon Batzner; Samuel S. Schoenholz; Muratahan Aykol; Gowoon Cheon; Ekin Dogus Cubuk",
+  "words": 11260,
+  "blocks": 242,
+  "headings": 66,
+  "figures": 3,
+  "images": 4,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Scaling deep learning for materials discovery\nCubuk, Ekin Dogus · Nature · ~80 min read\nMain\nThe discovery of energetically favourable inorganic crystals is of fundamental scientific and technological",
+  "last200": "ad citation\nReceived: 08 May 2023\nAccepted: 10 October 2023\nPublished: 29 November 2023\nVersion of record: 29 November 2023\nIssue date: 07 December 2023\nDOI: https://doi.org/10.1038/s41586-023-06735-9"
+ },
+ {
+  "source": "doi-nature-oa",
+  "label": "GNoME materials",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nature.com/articles/s41586-023-06735-9.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-023-06735-9.pdf?error=cookies_not_supported&code=7b111dac-3c0b-49a1-83bf-88e2e551e039",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 3132539,
+  "elapsedMs": 576,
+  "pdfPages": 11
+ },
+ {
+  "source": "doi-springer",
+  "label": "U-Net chapter",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1007/978-3-319-24574-4_28",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28",
+  "chainHosts": [
+   "doi.org",
+   "link.springer.com",
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 257,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "doi-springer",
+  "label": "U-Net chapter",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 101,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "doi-springer",
+  "label": "ImageNet IJCV",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1007/s11263-015-0816-y",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/article/10.1007/s11263-015-0816-y",
+  "chainHosts": [
+   "doi.org",
+   "link.springer.com",
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 372,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "doi-springer",
+  "label": "ImageNet IJCV",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 74,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Explanation in AI (Miller)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1016/j.artint.2018.07.007",
+  "outcome": "extract-refused",
+  "finalUrl": "https://linkinghub.elsevier.com/retrieve/pii/S0004370218305988",
+  "chainHosts": [
+   "doi.org",
+   "linkinghub.elsevier.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 2690,
+  "elapsedMs": 649,
+  "meta": {},
+  "challenge": [],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Explanation in AI (Miller)",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.sciencedirect.com/science/article/pii/S0004370218305988",
+  "outcome": "fetch-failed",
+  "elapsedMs": 100,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Deep learning in NN (Schmidhuber)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1016/j.neunet.2014.09.003",
+  "outcome": "extract-refused",
+  "finalUrl": "https://linkinghub.elsevier.com/retrieve/pii/S0893608014002135",
+  "chainHosts": [
+   "doi.org",
+   "linkinghub.elsevier.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 2662,
+  "elapsedMs": 487,
+  "meta": {},
+  "challenge": [],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-elsevier",
+  "label": "Deep learning in NN (Schmidhuber)",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.sciencedirect.com/science/article/pii/S0893608014002135",
+  "outcome": "fetch-failed",
+  "elapsedMs": 104,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Methods Ecol Evol 2017",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1111/2041-210X.12941",
+  "outcome": "fetch-failed",
+  "elapsedMs": 314,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Methods Ecol Evol 2017",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12941",
+  "outcome": "fetch-failed",
+  "elapsedMs": 87,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Methods Ecol Evol 2017",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/2041-210X.12941",
+  "outcome": "fetch-failed",
+  "elapsedMs": 88,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Wiley Ecol Evol 2017",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1002/ece3.3615",
+  "outcome": "fetch-failed",
+  "elapsedMs": 163,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-wiley",
+  "label": "Wiley Ecol Evol 2017",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.3615",
+  "outcome": "fetch-failed",
+  "elapsedMs": 72,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-acm",
+  "label": "Optuna KDD19",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1145/3292500.3330701",
+  "outcome": "fetch-failed",
+  "elapsedMs": 130,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-acm",
+  "label": "Optuna KDD19",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://dl.acm.org/doi/pdf/10.1145/3292500.3330701",
+  "outcome": "fetch-failed",
+  "elapsedMs": 58,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-acm",
+  "label": "Interlocking building blocks",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1145/3716305",
+  "outcome": "fetch-failed",
+  "elapsedMs": 142,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-acm",
+  "label": "Interlocking building blocks",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://dl.acm.org/doi/pdf/10.1145/3716305",
+  "outcome": "fetch-failed",
+  "elapsedMs": 60,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "doi-ieee",
+  "label": "ResNet CVPR16",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1109/CVPR.2016.90",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/7780459/",
+  "chainHosts": [
+   "doi.org",
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 149,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-ieee",
+  "label": "ResNet CVPR16",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://ieeexplore.ieee.org/document/7780459",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/7780459",
+  "chainHosts": [
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 32,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-ieee",
+  "label": "LeNet 1998",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1109/5.726791",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/726791/",
+  "chainHosts": [
+   "doi.org",
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 137,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-ieee",
+  "label": "LeNet 1998",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://ieeexplore.ieee.org/document/726791",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/726791",
+  "chainHosts": [
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 37,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "doi-plos",
+  "label": "Why most findings false",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1371/journal.pmed.0020124",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "chainHosts": [
+   "doi.org",
+   "dx.plos.org",
+   "journals.plos.org",
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 182701,
+  "elapsedMs": 764,
+  "meta": {
+   "citation_doi": [
+    "10.1371/journal.pmed.0020124"
+   ],
+   "citation_title": [
+    "Why Most Published Research Findings Are False"
+   ],
+   "citation_pdf_url": [
+    "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable"
+   ],
+   "og:url": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ],
+   "canonical": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ]
+  },
+  "challenge": [],
+  "title": "Why Most Published Research Findings Are False",
+  "byline": "Why Most Published Research Findings Are False John P. A. Ioannidis",
+  "words": 5315,
+  "blocks": 101,
+  "headings": 14,
+  "figures": 0,
+  "images": 7,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Why Most Published Research Findings Are False\nWhy Most Published Research Findings Are False John P. A. Ioannidis · · ~35 min read\nLoading metrics\nOpen Access\nEssay\nJohn P. A. Ioannidis\n\nx\nPublished:",
+  "last200": "nical research. JAMA 294: 218–228.\n37. Hsueh HM, Chen JJ, Kodell RL (2003) Comparison of methods for estimating the number of true null hypotheses in multiplicity testing. J Biopharm Stat 13: 675–689."
+ },
+ {
+  "source": "doi-plos",
+  "label": "Why most findings false",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 182701,
+  "elapsedMs": 468,
+  "meta": {
+   "citation_doi": [
+    "10.1371/journal.pmed.0020124"
+   ],
+   "citation_title": [
+    "Why Most Published Research Findings Are False"
+   ],
+   "citation_pdf_url": [
+    "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable"
+   ],
+   "og:url": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ],
+   "canonical": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ]
+  },
+  "challenge": [],
+  "title": "Why Most Published Research Findings Are False",
+  "byline": "Why Most Published Research Findings Are False John P. A. Ioannidis",
+  "words": 5315,
+  "blocks": 101,
+  "headings": 14,
+  "figures": 0,
+  "images": 7,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Why Most Published Research Findings Are False\nWhy Most Published Research Findings Are False John P. A. Ioannidis · · ~35 min read\nLoading metrics\nOpen Access\nEssay\nJohn P. A. Ioannidis\n\nx\nPublished:",
+  "last200": "nical research. JAMA 294: 218–228.\n37. Hsueh HM, Chen JJ, Kodell RL (2003) Comparison of methods for estimating the number of true null hypotheses in multiplicity testing. J Biopharm Stat 13: 675–689."
+ },
+ {
+  "source": "doi-plos",
+  "label": "Why most findings false",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 255629,
+  "elapsedMs": 570,
+  "pdfPages": 6
+ },
+ {
+  "source": "doi-plos",
+  "label": "PLOS GH multiparity",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1371/journal.pgph.0005051",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/globalpublichealth/article?id=10.1371/journal.pgph.0005051",
+  "chainHosts": [
+   "doi.org",
+   "dx.plos.org",
+   "journals.plos.org",
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 216142,
+  "elapsedMs": 1847,
+  "meta": {
+   "citation_doi": [
+    "10.1371/journal.pgph.0005051"
+   ],
+   "citation_title": [
+    "Grand multiparity and its associated factors in Zambia: Evidence from the 2018 Zambia Demographic and Health Survey"
+   ],
+   "citation_pdf_url": [
+    "https://journals.plos.org/globalpublichealth/article/file?id=10.1371/journal.pgph.0005051&type=printable"
+   ],
+   "og:url": [
+    "https://journals.plos.org/globalpublichealth/article?id=10.1371/journal.pgph.0005051"
+   ],
+   "canonical": [
+    "https://journals.plos.org/globalpublichealth/article?id=10.1371/journal.pgph.0005051"
+   ]
+  },
+  "challenge": [],
+  "title": "Grand multiparity and its associated factors in Zambia: Evidence from the 2018 Zambia Demographic and Health Survey",
+  "byline": "Peter Mumba; Emmanuel Musonda; Mwangala Mulasinkwanda; Jessy Mutale Nkonde; Vanessa Moonga; Stephen Jere; Samson Shumba",
+  "words": 6121,
+  "blocks": 153,
+  "headings": 18,
+  "figures": 0,
+  "images": 7,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Grand multiparity and its associated factors in Zambia: Evidence from the 2018 Zambia Demographic and Health Survey\nPeter Mumba , · · ~43 min read\nLoading metrics\nOpen Access\nPeer-reviewed\nResearch Ar",
+  "last200": "6. Mumba P, Miyoba TO, Musonda E, Mulasikwanda M, Shumba S. Trends, spatial distribution and determinants of maternal home deliveries in Zambia. BMC Pregnancy Childbirth. 2025;25(1):422. pmid:40211161"
+ },
+ {
+  "source": "doi-plos",
+  "label": "PLOS GH multiparity",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://journals.plos.org/globalpublichealth/article/file?id=10.1371/journal.pgph.0005051&type=printable",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/globalpublichealth/article/file?id=10.1371/journal.pgph.0005051&type=printable",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 587063,
+  "elapsedMs": 747,
+  "pdfPages": 16
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "African rope squirrels",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1101/2025.08.25.672055",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2",
+  "chainHosts": [
+   "doi.org",
+   "biorxiv.org",
+   "www.biorxiv.org",
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 127578,
+  "elapsedMs": 771,
+  "meta": {
+   "citation_title": [
+    "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.08.25.672055.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.08.25.672055"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)",
+  "byline": "Pascal Baelo; Léa Fourchault; Nicolas Laurent; Claude Mande; Anne Laudisoit; Nicaise Amundala; Ganiyat Temidayo Saliu; Guy-Crispin Gembu; Joachim Mariën; Sophie Gryseels; Jan Hulselmans; Erik Verheyen",
+  "words": 452,
+  "blocks": 22,
+  "headings": 5,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Reassessing the diversity and distribution of African rope squirrels (Funisciurus Trouessart, 1880)\nView ORCID ProfilePascal Baelo · bioRxiv · ~3 min read\nNew Results\n, View ORCID ProfileLéa Fourchaul",
+  "last200": "he copyright holder for this preprint is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made available under a CC-BY-NC-ND 4.0 International license."
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "African rope squirrels",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.08.25.672055v2.full.pdf",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 1444992,
+  "elapsedMs": 3274,
+  "pdfPages": 37
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "ASC glial reactivity",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.1101/2025.06.19.660521",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2",
+  "chainHosts": [
+   "doi.org",
+   "biorxiv.org",
+   "www.biorxiv.org",
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 120256,
+  "elapsedMs": 657,
+  "meta": {
+   "citation_title": [
+    "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury"
+   ],
+   "citation_pdf_url": [
+    "https://www.biorxiv.org/content/biorxiv/early/2025/09/01/2025.06.19.660521.full.pdf"
+   ],
+   "citation_doi": [
+    "10.1101/2025.06.19.660521"
+   ],
+   "canonical": [
+    "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury",
+  "byline": "Tao Li; Sergio Castro-Gomez; Pablo Botella Lucena; Ana Vieira-Saecker; Sarah Schwartz; Yushuang Deng; Yingying Ding; Verena Stein; Eicke Latz; Michael T. Heneka",
+  "words": 347,
+  "blocks": 21,
+  "headings": 5,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "ASC contributes to sustained neuroinflammation and mild cognitive impairment after closed-head injury\nView ORCID ProfileTao Li · bioRxiv · ~3 min read\nConfirmatory Results\ndoi: https://doi.org/10.1101",
+  "last200": "he copyright holder for this preprint is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity. It is made available under a CC-BY-NC-ND 4.0 International license."
+ },
+ {
+  "source": "doi-biorxiv",
+  "label": "ASC glial reactivity",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.biorxiv.org/content/10.1101/2025.06.19.660521v2.full.pdf",
+  "chainHosts": [
+   "www.biorxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 12269343,
+  "elapsedMs": 2989,
+  "pdfPages": 55
+ },
+ {
+  "source": "openreview",
+  "label": "Lottery ticket (ICLR19)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://openreview.net/forum?id=rJl-b3RcF7",
+  "outcome": "extract-refused",
+  "finalUrl": "https://openreview.net/challenge?redirect=%2Fforum%3Fid%3DrJl-b3RcF7",
+  "chainHosts": [
+   "openreview.net",
+   "openreview.net"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4787,
+  "elapsedMs": 878,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 146 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "openreview",
+  "label": "Lottery ticket (ICLR19)",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://openreview.net/pdf?id=rJl-b3RcF7",
+  "outcome": "extract-refused",
+  "finalUrl": "https://openreview.net/challenge?redirect=%2Fpdf%3Fid%3DrJl-b3RcF7",
+  "chainHosts": [
+   "openreview.net",
+   "openreview.net"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4783,
+  "elapsedMs": 318,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 146 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "openreview",
+  "label": "Graph attention (ICLR18)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://openreview.net/forum?id=rJXMpikCZ",
+  "outcome": "extract-refused",
+  "finalUrl": "https://openreview.net/challenge?redirect=%2Fforum%3Fid%3DrJXMpikCZ",
+  "chainHosts": [
+   "openreview.net",
+   "openreview.net"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4785,
+  "elapsedMs": 441,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 146 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "openreview",
+  "label": "Graph attention (ICLR18)",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://openreview.net/pdf?id=rJXMpikCZ",
+  "outcome": "extract-refused",
+  "finalUrl": "https://openreview.net/challenge?redirect=%2Fpdf%3Fid%3DrJXMpikCZ",
+  "chainHosts": [
+   "openreview.net",
+   "openreview.net"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4781,
+  "elapsedMs": 319,
+  "meta": {},
+  "challenge": [],
+  "extractError": "TooLittleTextToRead: Readability returned 146 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "aclanthology",
+  "label": "BART",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://aclanthology.org/2020.acl-main.703/",
+  "outcome": "ok",
+  "finalUrl": "https://aclanthology.org/2020.acl-main.703/",
+  "chainHosts": [
+   "aclanthology.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 46603,
+  "elapsedMs": 483,
+  "meta": {
+   "og:url": [
+    "https://aclanthology.org/2020.acl-main.703/"
+   ]
+  },
+  "challenge": [],
+  "title": "BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension",
+  "byline": "Mike Lewis; Yinhan Liu; Naman Goyal; Marjan Ghazvininejad; Abdelrahman Mohamed; Omer Levy; Veselin Stoyanov; Luke Zettlemoyer",
+  "words": 339,
+  "blocks": 41,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension\nAdjust author names and order to match the PDF. · ACL Anthology · ~2 min read\n\nAbstrac",
+  "last200": "ining for Natural Language Generation, Translation, and Comprehension (Lewis et al., ACL 2020)\nCopy Citation:\nPDF:\nhttps://aclanthology.org/2020.acl-main.703.pdf\nVideo:\nhttp://slideslive.com/38929218\n"
+ },
+ {
+  "source": "aclanthology",
+  "label": "BART",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://aclanthology.org/2020.acl-main.703.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://aclanthology.org/2020.acl-main.703.pdf",
+  "chainHosts": [
+   "aclanthology.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 322247,
+  "elapsedMs": 672,
+  "pdfPages": 10
+ },
+ {
+  "source": "aclanthology",
+  "label": "ACL 2023 long 1",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://aclanthology.org/2023.acl-long.1/",
+  "outcome": "ok",
+  "finalUrl": "https://aclanthology.org/2023.acl-long.1/",
+  "chainHosts": [
+   "aclanthology.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 47088,
+  "elapsedMs": 481,
+  "meta": {
+   "og:url": [
+    "https://aclanthology.org/2023.acl-long.1/"
+   ]
+  },
+  "challenge": [],
+  "title": "One Cannot Stand for Everyone! Leveraging Multiple User Simulators to train Task-oriented Dialogue Systems",
+  "byline": "Yajiao Liu; Xin Jiang; Yichun Yin; Yasheng Wang; Fei Mi; Qun Liu; Xiang Wan; Benyou Wang",
+  "words": 397,
+  "blocks": 41,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "One Cannot Stand for Everyone! Leveraging Multiple User Simulators to train Task-oriented Dialogue Systems\nAdjust author names and order to match the PDF. · ACL Anthology · ~3 min read\n\nAbstract\nUser ",
+  "last200": "ple User Simulators to train Task-oriented Dialogue Systems (Liu et al., ACL 2023)\nCopy Citation:\nPDF:\nhttps://aclanthology.org/2023.acl-long.1.pdf\nVideo:\nhttps://aclanthology.org/2023.acl-long.1.mp4\n"
+ },
+ {
+  "source": "aclanthology",
+  "label": "ACL 2023 long 1",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://aclanthology.org/2023.acl-long.1.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://aclanthology.org/2023.acl-long.1.pdf",
+  "chainHosts": [
+   "aclanthology.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 4602729,
+  "elapsedMs": 1046,
+  "pdfPages": 21
+ },
+ {
+  "source": "ssrn",
+  "label": "SSRN 3340189",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3340189",
+  "outcome": "fetch-failed",
+  "elapsedMs": 114,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "ssrn",
+  "label": "SSRN 4389233",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4389233",
+  "outcome": "fetch-failed",
+  "elapsedMs": 66,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "semanticscholar",
+  "label": "Attention is all you need",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.semanticscholar.org/paper/Attention-is-All-you-Need-Vaswani-Shazeer/204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+  "outcome": "extract-refused",
+  "finalUrl": "https://www.semanticscholar.org/paper/Attention-is-All-you-Need-Vaswani-Shazeer/204e3073870fae3d05bcbc2f6a8e263d9b72e776",
+  "chainHosts": [
+   "www.semanticscholar.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2064,
+  "elapsedMs": 62,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "semanticscholar",
+  "label": "BERT",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.semanticscholar.org/paper/BERT%3A-Pre-training-of-Deep-Bidirectional-for-Devlin-Chang/df2b0e26d0599ce3e70df8a9da02e51594e0e992",
+  "outcome": "extract-refused",
+  "finalUrl": "https://www.semanticscholar.org/paper/BERT%3A-Pre-training-of-Deep-Bidirectional-for-Devlin-Chang/df2b0e26d0599ce3e70df8a9da02e51594e0e992",
+  "chainHosts": [
+   "www.semanticscholar.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2064,
+  "elapsedMs": 38,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "pmlr",
+  "label": "CLIP",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://proceedings.mlr.press/v139/radford21a.html",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.mlr.press/v139/radford21a.html",
+  "chainHosts": [
+   "proceedings.mlr.press"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 17313,
+  "elapsedMs": 255,
+  "meta": {
+   "citation_title": [
+    "Learning Transferable Visual Models From Natural Language Supervision"
+   ],
+   "citation_pdf_url": [
+    "http://proceedings.mlr.press/v139/radford21a/radford21a.pdf"
+   ],
+   "og:url": [
+    "https://proceedings.mlr.press/v139/radford21a.html"
+   ]
+  },
+  "challenge": [],
+  "title": "Learning Transferable Visual Models From Natural Language Supervision",
+  "byline": "Alec Radford; Jong Wook Kim; Chris Hallacy; Aditya Ramesh; Gabriel Goh; Sandhini Agarwal; Girish Sastry; Amanda Askell; Pamela Mishkin; Jack Clark; Gretchen Krueger; Ilya Sutskever",
+  "words": 917,
+  "blocks": 17,
+  "headings": 4,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Learning Transferable Visual Models From Natural Language Supervision\nPMLR · ~6 min read\n[edit]\nAlec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry,",
+  "last200": "of the 38th International Conference on Machine Learning, in Proceedings of Machine Learning Research 139:8748-8763 Available from https://proceedings.mlr.press/v139/radford21a.html.\n\nRelated Material"
+ },
+ {
+  "source": "pmlr",
+  "label": "CLIP",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "http://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+  "outcome": "ok",
+  "finalUrl": "http://proceedings.mlr.press/v139/radford21a/radford21a.pdf",
+  "chainHosts": [
+   "proceedings.mlr.press"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 3526772,
+  "elapsedMs": 347,
+  "pdfPages": 16
+ },
+ {
+  "source": "pmlr",
+  "label": "BatchNorm",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://proceedings.mlr.press/v37/ioffe15.html",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.mlr.press/v37/ioffe15.html",
+  "chainHosts": [
+   "proceedings.mlr.press"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 17799,
+  "elapsedMs": 175,
+  "meta": {
+   "citation_title": [
+    "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift"
+   ],
+   "citation_pdf_url": [
+    "http://proceedings.mlr.press/v37/ioffe15.pdf"
+   ],
+   "og:url": [
+    "https://proceedings.mlr.press/v37/ioffe15.html"
+   ]
+  },
+  "challenge": [],
+  "title": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+  "byline": "Sergey Ioffe, Christian Szegedy",
+  "words": 973,
+  "blocks": 18,
+  "headings": 4,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift\nSergey Ioffe, Christian Szegedy · PMLR · ~7 min read\n[edit]\nProceedings of the 32nd International Conferenc",
+  "last200": "edings of the 32nd International Conference on Machine Learning, in Proceedings of Machine Learning Research 37:448-456 Available from https://proceedings.mlr.press/v37/ioffe15.html.\n\nRelated Material"
+ },
+ {
+  "source": "pmlr",
+  "label": "BatchNorm",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "http://proceedings.mlr.press/v37/ioffe15.pdf",
+  "outcome": "ok",
+  "finalUrl": "http://proceedings.mlr.press/v37/ioffe15.pdf",
+  "chainHosts": [
+   "proceedings.mlr.press"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 318669,
+  "elapsedMs": 240,
+  "pdfPages": 9
+ },
+ {
+  "source": "neurips",
+  "label": "Attention is all you need",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+  "chainHosts": [
+   "proceedings.neurips.cc"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 9309,
+  "elapsedMs": 799,
+  "meta": {
+   "citation_title": [
+    "Attention is All you Need"
+   ],
+   "citation_pdf_url": [
+    "https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "Attention is All you Need",
+  "byline": "Ashish Vaswani; Noam Shazeer; Niki Parmar; Jakob Uszkoreit; Llion Jones; Aidan N. Gomez; Łukasz Kaiser; Illia Polosukhin",
+  "words": 198,
+  "blocks": 7,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Attention is All you Need\n· ~1 min read\nAbstract\nThe dominant sequence transduction models are based on complex recurrent orconvolutional neural networks in an encoder and decoder configuration. The b",
+  "last200": "to requesting a name change in the electronic proceedings.\nUse the \"Report an Issue\" link to request a name change.\nDo not remove: This comment is monitored to verify that the site is working properly"
+ },
+ {
+  "source": "neurips",
+  "label": "Attention is all you need",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf",
+  "chainHosts": [
+   "proceedings.neurips.cc"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 569417,
+  "elapsedMs": 1614,
+  "pdfPages": 11
+ },
+ {
+  "source": "neurips",
+  "label": "GPT-3",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2020/hash/1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html",
+  "chainHosts": [
+   "proceedings.neurips.cc"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 11597,
+  "elapsedMs": 742,
+  "meta": {
+   "citation_title": [
+    "Language Models are Few-Shot Learners"
+   ],
+   "citation_pdf_url": [
+    "https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "Language Models are Few-Shot Learners",
+  "byline": "Tom Brown; Benjamin Mann; Nick Ryder; Melanie Subbiah; Jared D Kaplan; Prafulla Dhariwal; Arvind Neelakantan; Pranav Shyam; Girish Sastry; Amanda Askell; Sandhini Agarwal; Ariel Herbert-Voss; Gretchen Krueger; Tom Henighan; Rewon Child; Aditya Ramesh; Daniel Ziegler; Jeffrey Wu; Clemens Winter; Chris Hesse; Mark Chen; Eric Sigler; Mateusz Litwin; Scott Gray; Benjamin Chess; Jack Clark; Christopher Berner; Sam McCandlish; Alec Radford; Ilya Sutskever; Dario Amodei",
+  "words": 198,
+  "blocks": 7,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Language Models are Few-Shot Learners\n· ~1 min read\nAbstract\nWe demonstrate that scaling up language models greatly improves task-agnostic, few-shot performance, sometimes even becoming competitive wi",
+  "last200": "to requesting a name change in the electronic proceedings.\nUse the \"Report an Issue\" link to request a name change.\nDo not remove: This comment is monitored to verify that the site is working properly"
+ },
+ {
+  "source": "neurips",
+  "label": "GPT-3",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf",
+  "chainHosts": [
+   "proceedings.neurips.cc"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 1283694,
+  "elapsedMs": 1916,
+  "pdfPages": 25
+ },
+ {
+  "source": "cvf",
+  "label": "ResNet",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+  "outcome": "ok",
+  "finalUrl": "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+  "chainHosts": [
+   "openaccess.thecvf.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4935,
+  "elapsedMs": 564,
+  "meta": {
+   "citation_title": [
+    "Deep Residual Learning for Image Recognition"
+   ],
+   "citation_pdf_url": [
+    "http://www.cv-foundation.org/openaccess/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "CVPR 2016 Open Access Repository",
+  "byline": "Kaiming He; Xiangyu Zhang; Shaoqing Ren; Jian Sun",
+  "words": 286,
+  "blocks": 10,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "CVPR 2016 Open Access Repository\n· ~2 min read\nDeep Residual Learning for Image Recognition\nKaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun; Proceedings of the IEEE Conference on Computer Vision and",
+  "last200": " Sun, Jian}, title = {Deep Residual Learning for Image Recognition}, booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, month = {June}, year = {2016} }"
+ },
+ {
+  "source": "cvf",
+  "label": "ResNet",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://openaccess.thecvf.com/content_cvpr_2016/papers/He_Deep_Residual_Learning_CVPR_2016_paper.pdf",
+  "chainHosts": [
+   "openaccess.thecvf.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 603123,
+  "elapsedMs": 999,
+  "pdfPages": 9
+ },
+ {
+  "source": "cvf",
+  "label": "Swin",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://openaccess.thecvf.com/content/ICCV2021/html/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.html",
+  "outcome": "ok",
+  "finalUrl": "https://openaccess.thecvf.com/content/ICCV2021/html/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.html",
+  "chainHosts": [
+   "openaccess.thecvf.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 6849,
+  "elapsedMs": 353,
+  "meta": {
+   "citation_title": [
+    "Swin Transformer: Hierarchical Vision Transformer Using Shifted Windows"
+   ],
+   "citation_pdf_url": [
+    "https://openaccess.thecvf.com/content/ICCV2021/papers/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "ICCV 2021 Open Access Repository",
+  "byline": "Ze Liu; Yutong Lin; Yue Cao; Han Hu; Yixuan Wei; Zheng Zhang; Stephen Lin; Baining Guo",
+  "words": 339,
+  "blocks": 16,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "ICCV 2021 Open Access Repository\n· ~2 min read\nSwin Transformer: Hierarchical Vision Transformer Using Shifted Windows\nZe Liu, Yutong Lin, Yue Cao, Han Hu, Yixuan Wei, Zheng Zhang, Stephen Lin, Bainin",
+  "last200": "hical Vision Transformer Using Shifted Windows}, booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)}, month = {October}, year = {2021}, pages = {10012-10022} }"
+ },
+ {
+  "source": "cvf",
+  "label": "Swin",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://openaccess.thecvf.com/content/ICCV2021/papers/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://openaccess.thecvf.com/content/ICCV2021/papers/Liu_Swin_Transformer_Hierarchical_Vision_Transformer_Using_Shifted_Windows_ICCV_2021_paper.pdf",
+  "chainHosts": [
+   "openaccess.thecvf.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 1387205,
+  "elapsedMs": 1311,
+  "pdfPages": 11
+ },
+ {
+  "source": "jmlr",
+  "label": "Dropout",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://jmlr.org/papers/v15/srivastava14a.html",
+  "outcome": "ok",
+  "finalUrl": "https://jmlr.org/papers/v15/srivastava14a.html",
+  "chainHosts": [
+   "jmlr.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 6165,
+  "elapsedMs": 437,
+  "meta": {
+   "citation_title": [
+    "Dropout: A Simple Way to Prevent Neural Networks from Overfitting"
+   ],
+   "citation_pdf_url": [
+    "http://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "Dropout: A Simple Way to Prevent Neural Networks from Overfitting",
+  "byline": "Nitish Srivastava; Geoffrey Hinton; Alex Krizhevsky; Ilya Sutskever; Ruslan Salakhutdinov",
+  "words": 197,
+  "blocks": 6,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Dropout: A Simple Way to Prevent Neural Networks from Overfitting\n· ~1 min read\nNitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, Ruslan Salakhutdinov; 15(56):1929−1958, 2014.\nAbstr",
+  "last200": " networks on supervised learning tasks in vision, speech recognition, document classification and computational biology, obtaining state-of-the-art results on many benchmark data sets.\n[abs][pdf][bib]"
+ },
+ {
+  "source": "jmlr",
+  "label": "Dropout",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://jmlr.org/papers/volume15/srivastava14a/srivastava14a.pdf",
+  "chainHosts": [
+   "jmlr.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 2869095,
+  "elapsedMs": 112,
+  "pdfPages": 30
+ },
+ {
+  "source": "jmlr",
+  "label": "scikit-learn",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://jmlr.org/papers/v12/pedregosa11a.html",
+  "outcome": "ok",
+  "finalUrl": "https://jmlr.org/papers/v12/pedregosa11a.html",
+  "chainHosts": [
+   "jmlr.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 6429,
+  "elapsedMs": 151,
+  "meta": {
+   "citation_title": [
+    "Scikit-learn: Machine Learning in Python"
+   ],
+   "citation_pdf_url": [
+    "http://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf"
+   ]
+  },
+  "challenge": [],
+  "title": "Scikit-learn: Machine Learning in Python",
+  "byline": "Fabian Pedregosa; Gaël Varoquaux; Alexandre Gramfort; Vincent Michel; Bertrand Thirion; Olivier Grisel; Mathieu Blondel; Peter Prettenhofer; Ron Weiss; Vincent Dubourg; Jake Vanderplas; Alexandre Passos; David Cournapeau; Matthieu Brucher; Matthieu Perrot; Édouard Duchesnay",
+  "words": 123,
+  "blocks": 6,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Scikit-learn: Machine Learning in Python\n· ~1 min read\nFabian Pedregosa, Gaël Varoquaux, Alexandre Gramfort, Vincent Michel, Bertrand Thirion, Olivier Grisel, Mathieu Blondel, Peter Prettenhofer, Ron ",
+  "last200": "d BSD license, encouraging its use in both academic and commercial settings. Source code, binaries, and documentation can be downloaded from http://scikit-learn.sourceforge.net.\n[abs][pdf][bib] [code]"
+ },
+ {
+  "source": "jmlr",
+  "label": "scikit-learn",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://jmlr.org/papers/volume12/pedregosa11a/pedregosa11a.pdf",
+  "chainHosts": [
+   "jmlr.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 42310,
+  "elapsedMs": 308,
+  "pdfPages": 6
+ },
+ {
+  "source": "nature",
+  "label": "OA: AlphaFold",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.nature.com/articles/s41586-021-03819-2",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-021-03819-2?error=cookies_not_supported&code=90d79d64-f20f-4a79-9e93-e37830ade10b",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 617406,
+  "elapsedMs": 648,
+  "meta": {
+   "citation_pdf_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2.pdf"
+   ],
+   "citation_fulltext_html_url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "citation_title": [
+    "Highly accurate protein structure prediction with AlphaFold"
+   ],
+   "citation_doi": [
+    "10.1038/s41586-021-03819-2"
+   ],
+   "og:url": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ],
+   "canonical": [
+    "https://www.nature.com/articles/s41586-021-03819-2"
+   ]
+  },
+  "challenge": [],
+  "title": "Highly accurate protein structure prediction with AlphaFold",
+  "byline": "John Jumper; Richard Evans; Alexander Pritzel; Tim Green; Michael Figurnov; Olaf Ronneberger; Kathryn Tunyasuvunakool; Russ Bates; Augustin Žídek; Anna Potapenko; Alex Bridgland; Clemens Meyer; Simon A. A. Kohl; Andrew J. Ballard; Andrew Cowie; Bernardino Romera-Paredes; Stanislav Nikolov; Rishub Jain; Jonas Adler; Trevor Back; Stig Petersen; David Reiman; Ellen Clancy; Michal Zielinski; Martin Steinegger; Michalina Pacholska; Tamas Berghammer; Sebastian Bodenstein; David Silver; Oriol Vinyals; Andrew W. Senior; Koray Kavukcuoglu; Pushmeet Kohli; Demis Hassabis",
+  "words": 10366,
+  "blocks": 262,
+  "headings": 43,
+  "figures": 5,
+  "images": 9,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Highly accurate protein structure prediction with AlphaFold\nHassabis, Demis · Nature · ~76 min read\nAbstract\nProteins are essential to life, and understanding their structure can facilitate a mechanis",
+  "last200": "adii as published in: \"Atomic Structures of all the Twenty Essential Amino Acids and a Tripeptide, with Bond Lengths as Sums of Atomic Covalent Radii\" by Raji Heyrovska, https://arxiv.org/ftp/arxiv..."
+ },
+ {
+  "source": "nature",
+  "label": "OA: AlphaFold",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nature.com/articles/s41586-021-03819-2.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/s41586-021-03819-2.pdf?error=cookies_not_supported&code=3dd48ca7-e964-45c1-b53c-0ddfbcf8ab10",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 3651992,
+  "elapsedMs": 616,
+  "pdfPages": 12
+ },
+ {
+  "source": "nature",
+  "label": "paywalled: Go (2016)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.nature.com/articles/nature16961",
+  "outcome": "ok",
+  "finalUrl": "https://www.nature.com/articles/nature16961?error=cookies_not_supported&code=a80d6cb4-4836-40a3-9cfd-f0194199c21e",
+  "chainHosts": [
+   "www.nature.com",
+   "idp.nature.com",
+   "idp.nature.com",
+   "www.nature.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 395767,
+  "elapsedMs": 762,
+  "meta": {
+   "citation_pdf_url": [
+    "https://www.nature.com/articles/nature16961.pdf"
+   ],
+   "citation_fulltext_html_url": [
+    "https://www.nature.com/articles/nature16961"
+   ],
+   "citation_title": [
+    "Mastering the game of Go with deep neural networks and tree search"
+   ],
+   "citation_doi": [
+    "10.1038/nature16961"
+   ],
+   "og:url": [
+    "https://www.nature.com/articles/nature16961"
+   ],
+   "canonical": [
+    "https://www.nature.com/articles/nature16961"
+   ]
+  },
+  "challenge": [],
+  "title": "Mastering the game of Go with deep neural networks and tree search",
+  "byline": "David Silver; Aja Huang; Chris J. Maddison; Arthur Guez; Laurent Sifre; George van den Driessche; Julian Schrittwieser; Ioannis Antonoglou; Veda Panneershelvam; Marc Lanctot; Sander Dieleman; Dominik Grewe; John Nham; Nal Kalchbrenner; Ilya Sutskever; Timothy Lillicrap; Madeleine Leach; Koray Kavukcuoglu; Thore Graepel; Demis Hassabis",
+  "words": 1336,
+  "blocks": 66,
+  "headings": 2,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Mastering the game of Go with deep neural networks and tree search\nHassabis, Demis · Nature · ~10 min read\nReferences\nAllis, L. V. Searching for Solutions in Games and Artificial Intelligence. PhD the",
+  "last200": "ence, 3–10 (2011)\nDean, J. et al. Large scale distributed deep networks. In Advances in Neural Information Processing Systems, 1223–1231 (2012)\nGo ratings. http://www.goratings.org\nDownload references"
+ },
+ {
+  "source": "nature",
+  "label": "paywalled: Go (2016)",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nature.com/articles/nature16961.pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 772,
+  "failure": {
+   "code": "too-many-redirects",
+   "status": null,
+   "message": "That address redirected more than 5 times."
+  }
+ },
+ {
+  "source": "science",
+  "label": "GraphCast",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.science.org/doi/10.1126/science.adi2336",
+  "outcome": "fetch-failed",
+  "elapsedMs": 105,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "science",
+  "label": "GraphCast",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.science.org/doi/pdf/10.1126/science.adi2336",
+  "outcome": "fetch-failed",
+  "elapsedMs": 62,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "science",
+  "label": "Silencing mito (OA via PMC)",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.science.org/doi/10.1126/science.adr3498",
+  "outcome": "fetch-failed",
+  "elapsedMs": 66,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "science",
+  "label": "Silencing mito (OA via PMC)",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.science.org/doi/pdf/10.1126/science.adr3498",
+  "outcome": "fetch-failed",
+  "elapsedMs": 56,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pnas",
+  "label": "Catastrophic forgetting",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.pnas.org/doi/10.1073/pnas.1611835114",
+  "outcome": "fetch-failed",
+  "elapsedMs": 57,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pnas",
+  "label": "Catastrophic forgetting",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.pnas.org/doi/full/10.1073/pnas.1611835114",
+  "outcome": "fetch-failed",
+  "elapsedMs": 62,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pnas",
+  "label": "Catastrophic forgetting",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.pnas.org/doi/pdf/10.1073/pnas.1611835114",
+  "outcome": "fetch-failed",
+  "elapsedMs": 63,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pnas",
+  "label": "Proofreading DNA pol",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.pnas.org/doi/10.1073/pnas.2507232122",
+  "outcome": "fetch-failed",
+  "elapsedMs": 54,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "pnas",
+  "label": "Proofreading DNA pol",
+  "role": "fulltext",
+  "expect": "html",
+  "requestedUrl": "https://www.pnas.org/doi/full/10.1073/pnas.2507232122",
+  "outcome": "fetch-failed",
+  "elapsedMs": 61,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "plos",
+  "label": "Why most findings false",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 182701,
+  "elapsedMs": 468,
+  "meta": {
+   "citation_doi": [
+    "10.1371/journal.pmed.0020124"
+   ],
+   "citation_title": [
+    "Why Most Published Research Findings Are False"
+   ],
+   "citation_pdf_url": [
+    "https://journals.plos.org/plosmedicine/article/file?id=10.1371/journal.pmed.0020124&type=printable"
+   ],
+   "og:url": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ],
+   "canonical": [
+    "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.0020124"
+   ]
+  },
+  "challenge": [],
+  "title": "Why Most Published Research Findings Are False",
+  "byline": "Why Most Published Research Findings Are False John P. A. Ioannidis",
+  "words": 5315,
+  "blocks": 101,
+  "headings": 14,
+  "figures": 0,
+  "images": 7,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Why Most Published Research Findings Are False\nWhy Most Published Research Findings Are False John P. A. Ioannidis · · ~35 min read\nLoading metrics\nOpen Access\nEssay\nJohn P. A. Ioannidis\n\nx\nPublished:",
+  "last200": "nical research. JAMA 294: 218–228.\n37. Hsueh HM, Chen JJ, Kodell RL (2003) Comparison of methods for estimating the number of true null hypotheses in multiplicity testing. J Biopharm Stat 13: 675–689."
+ },
+ {
+  "source": "plos",
+  "label": "PNTD resistance",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0013363",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0013363",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 261755,
+  "elapsedMs": 924,
+  "meta": {
+   "citation_doi": [
+    "10.1371/journal.pntd.0013363"
+   ],
+   "citation_title": [
+    "Emergence of extensively and pan-drug resistance in clinical bacterial isolates: A systematic scoping review from Ethiopian public health perspective"
+   ],
+   "citation_pdf_url": [
+    "https://journals.plos.org/plosntds/article/file?id=10.1371/journal.pntd.0013363&type=printable"
+   ],
+   "og:url": [
+    "https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0013363"
+   ],
+   "canonical": [
+    "https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0013363"
+   ]
+  },
+  "challenge": [],
+  "title": "Emergence of extensively and pan-drug resistance in clinical bacterial isolates: A systematic scoping review from Ethiopian public health perspective",
+  "byline": "Muluneh Assefa; Mitkie Tigabie; Azanaw Amare; Getu Girmay; Alene Geteneh; Getnet Ayalew; Sirak Biset; Wesam Taher Almagharbeh",
+  "words": 6926,
+  "blocks": 191,
+  "headings": 36,
+  "figures": 0,
+  "images": 6,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Emergence of extensively and pan-drug resistance in clinical bacterial isolates: A systematic scoping review from Ethiopian public health perspective\nMuluneh Assefa , · · ~52 min read\nLoading metrics\n",
+  "last200": " M, Gebray HM, Reta MAJBID. Prevalence of genes encoding carbapenem-resistance in Klebsiella pneumoniae recovered from clinical samples in Africa: systematic review and meta-analysis. 2025;25(1):1–22."
+ },
+ {
+  "source": "plos",
+  "label": "PNTD resistance",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://journals.plos.org/plosntds/article/file?id=10.1371/journal.pntd.0013363&type=printable",
+  "outcome": "ok",
+  "finalUrl": "https://journals.plos.org/plosntds/article/file?id=10.1371/journal.pntd.0013363&type=printable",
+  "chainHosts": [
+   "journals.plos.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 663724,
+  "elapsedMs": 847,
+  "pdfPages": 15
+ },
+ {
+  "source": "elife",
+  "label": "Deliberate burial",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://elifesciences.org/articles/89106",
+  "outcome": "fetch-failed",
+  "elapsedMs": 218,
+  "failure": {
+   "code": "http-error",
+   "status": 406,
+   "message": "Couldn't fetch that page (HTTP 406)."
+  }
+ },
+ {
+  "source": "elife",
+  "label": "Opsins",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://elifesciences.org/articles/105451",
+  "outcome": "fetch-failed",
+  "elapsedMs": 165,
+  "failure": {
+   "code": "http-error",
+   "status": 406,
+   "message": "Couldn't fetch that page (HTTP 406)."
+  }
+ },
+ {
+  "source": "frontiers",
+  "label": "Depression college students",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/full",
+  "outcome": "ok",
+  "finalUrl": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/full",
+  "chainHosts": [
+   "www.frontiersin.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 595599,
+  "elapsedMs": 773,
+  "meta": {
+   "citation_doi": [
+    "10.3389/fpsyg.2025.1558407"
+   ],
+   "citation_title": [
+    "The impact of life stressors on depression in college students: the chain mediating role of environmental adaptation and coping styles"
+   ],
+   "citation_pdf_url": [
+    "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/pdf"
+   ],
+   "canonical": [
+    "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/full"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "The impact of life stressors on depression in college students: the chain mediating role of environmental adaptation and coping styles",
+  "byline": "Huanhuan Yang, Jing Zhao, Yuan Qin, Yongning Qian",
+  "words": 4469,
+  "blocks": 145,
+  "headings": 30,
+  "figures": 0,
+  "images": 0,
+  "tables": 3,
+  "hasReferences": true,
+  "first200": "The impact of life stressors on depression in college students: the chain mediating role of environmental adaptation and coping styles\nHuanhuan Yang, Jing Zhao, Yuan Qin, Yongning Qian · Frontiers · ~",
+  "last200": "r those of the publisher, the editors and the reviewers. Any product that may be evaluated in this article or claim that may be made by its manufacturer is not guaranteed or endorsed by the publisher."
+ },
+ {
+  "source": "frontiers",
+  "label": "Depression college students",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2025.1558407/pdf",
+  "chainHosts": [
+   "www.frontiersin.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 335943,
+  "elapsedMs": 439,
+  "pdfPages": 6
+ },
+ {
+  "source": "frontiers",
+  "label": "Algae-bacteria",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/full",
+  "outcome": "ok",
+  "finalUrl": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/full",
+  "chainHosts": [
+   "www.frontiersin.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 863993,
+  "elapsedMs": 146,
+  "meta": {
+   "citation_doi": [
+    "10.3389/fmicb.2025.1691537"
+   ],
+   "citation_title": [
+    "Reestablishment of an algae-bacteria pest model using continuous passage in the laboratory"
+   ],
+   "citation_pdf_url": [
+    "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/pdf"
+   ],
+   "canonical": [
+    "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/full"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Reestablishment of an algae-bacteria pest model using continuous passage in the laboratory",
+  "byline": "Nguyen, Thuy M.; Abeykoon, W. K. N. L.; Corcoran, Alina A.",
+  "words": 7540,
+  "blocks": 148,
+  "headings": 24,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": true,
+  "first200": "Reestablishment of an algae-bacteria pest model using continuous passage in the laboratory\nThuy M. Nguyen, W. K. N. L. Abeykoon, Alina A. Corcoran · Frontiers · ~54 min read\nAbstract\nIntroduction:\nThe",
+  "last200": "r those of the publisher, the editors and the reviewers. Any product that may be evaluated in this article or claim that may be made by its manufacturer is not guaranteed or endorsed by the publisher."
+ },
+ {
+  "source": "frontiers",
+  "label": "Algae-bacteria",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2025.1691537/pdf",
+  "chainHosts": [
+   "www.frontiersin.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 7245985,
+  "elapsedMs": 1005,
+  "pdfPages": 11
+ },
+ {
+  "source": "mdpi",
+  "label": "Origami lens",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.mdpi.com/2079-9292/14/19/3892",
+  "outcome": "fetch-failed",
+  "elapsedMs": 61,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "mdpi",
+  "label": "Origami lens",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.mdpi.com/2079-9292/14/19/3892/pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 45,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "mdpi",
+  "label": "AUV navigation",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.mdpi.com/2077-1312/13/2/303",
+  "outcome": "fetch-failed",
+  "elapsedMs": 82,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "mdpi",
+  "label": "AUV navigation",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.mdpi.com/2077-1312/13/2/303/pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 44,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "sciencedirect",
+  "label": "Explanation in AI",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.sciencedirect.com/science/article/pii/S0004370218305988",
+  "outcome": "fetch-failed",
+  "elapsedMs": 100,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "sciencedirect",
+  "label": "Deep learning overview",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.sciencedirect.com/science/article/pii/S0893608014002135",
+  "outcome": "fetch-failed",
+  "elapsedMs": 104,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "springerlink",
+  "label": "ImageNet IJCV",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://link.springer.com/article/10.1007/s11263-015-0816-y",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/article/10.1007/s11263-015-0816-y",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 71,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "springerlink",
+  "label": "ImageNet IJCV",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/content/pdf/10.1007/s11263-015-0816-y.pdf",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 74,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "springerlink",
+  "label": "U-Net chapter",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 78,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "springerlink",
+  "label": "U-Net chapter",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+  "outcome": "extract-refused",
+  "finalUrl": "https://link.springer.com/content/pdf/10.1007/978-3-319-24574-4_28.pdf",
+  "chainHosts": [
+   "link.springer.com"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 3038,
+  "elapsedMs": 101,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "TooLittleTextToRead: Readability returned 209 characters, below its own 500-character threshold, so it had already concluded this parse failed."
+ },
+ {
+  "source": "wiley",
+  "label": "Methods Ecol Evol",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://besjournals.onlinelibrary.wiley.com/doi/10.1111/2041-210X.12941",
+  "outcome": "fetch-failed",
+  "elapsedMs": 66,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "wiley",
+  "label": "Methods Ecol Evol",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/2041-210X.12941",
+  "outcome": "fetch-failed",
+  "elapsedMs": 88,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "wiley",
+  "label": "Ecol Evol",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://onlinelibrary.wiley.com/doi/10.1002/ece3.3615",
+  "outcome": "fetch-failed",
+  "elapsedMs": 64,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "wiley",
+  "label": "Ecol Evol",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.3615",
+  "outcome": "fetch-failed",
+  "elapsedMs": 61,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "acmdl",
+  "label": "Optuna",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://dl.acm.org/doi/10.1145/3292500.3330701",
+  "outcome": "fetch-failed",
+  "elapsedMs": 337,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "acmdl",
+  "label": "Optuna",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://dl.acm.org/doi/pdf/10.1145/3292500.3330701",
+  "outcome": "fetch-failed",
+  "elapsedMs": 58,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "acmdl",
+  "label": "PRO-MTL",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://dl.acm.org/doi/10.1145/3718092",
+  "outcome": "fetch-failed",
+  "elapsedMs": 51,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "acmdl",
+  "label": "PRO-MTL",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://dl.acm.org/doi/pdf/10.1145/3718092",
+  "outcome": "fetch-failed",
+  "elapsedMs": 63,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "ieeexplore",
+  "label": "ResNet",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://ieeexplore.ieee.org/document/7780459",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/7780459",
+  "chainHosts": [
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 32,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "ieeexplore",
+  "label": "ResNet",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7780459",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/7780459/;jsessionid=ED23EDE04BAD7132B108D6AF7F6EBF6D",
+  "chainHosts": [
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 328,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "ieeexplore",
+  "label": "LeNet",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://ieeexplore.ieee.org/document/726791",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/726791",
+  "chainHosts": [
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 37,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "ieeexplore",
+  "label": "LeNet",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=726791",
+  "outcome": "extract-refused",
+  "finalUrl": "https://ieeexplore.ieee.org/document/726791/;jsessionid=B0430810DA6B0B8A291BA08FE07F8FEE",
+  "chainHosts": [
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org",
+   "ieeexplore.ieee.org"
+  ],
+  "status": 202,
+  "kind": "html",
+  "bytes": 2058,
+  "elapsedMs": 300,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "researchgate",
+  "label": "ResearchGate Attention",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.researchgate.net/publication/317558625_Attention_Is_All_You_Need",
+  "outcome": "fetch-failed",
+  "elapsedMs": 64,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "researchgate",
+  "label": "ResearchGate BERT",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.researchgate.net/publication/328230984_BERT_Pre-training_of_Deep_Bidirectional_Transformers_for_Language_Understanding",
+  "outcome": "fetch-failed",
+  "elapsedMs": 73,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "Attention",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://huggingface.co/papers/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://huggingface.co/papers/1706.03762",
+  "chainHosts": [
+   "huggingface.co"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 291293,
+  "elapsedMs": 347,
+  "meta": {
+   "og:url": [
+    "https://huggingface.co/papers/1706.03762"
+   ],
+   "canonical": [
+    "https://huggingface.co/papers/1706.03762"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Paper page - Attention Is All You Need",
+  "byline": "Ashish Vaswani ,",
+  "words": 380,
+  "blocks": 85,
+  "headings": 14,
+  "figures": 0,
+  "images": 4,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Paper page - Attention Is All You Need\nAshish Vaswani , · · ~3 min read\nPublished on Jun 12, 2017\nAuthors:\n,\n,\n,\n,\nAbstract\nThe Transformer architecture, based purely on attention mechanisms, achieves",
+  "last200": "Apr 17\n•\n1\n•\n28\nBrowse 8 datasets citing this paper\nSpaces citing this paper 388\nBrowse 388 spaces citing this paper\nCollections including this paper 111\nBrowse 111 collections that include this paper"
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "Attention",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/1706.03762",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 2215244,
+  "elapsedMs": 83,
+  "pdfPages": 15
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "DeepSeek-R1",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://huggingface.co/papers/2501.12948",
+  "outcome": "ok",
+  "finalUrl": "https://huggingface.co/papers/2501.12948",
+  "chainHosts": [
+   "huggingface.co"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 319494,
+  "elapsedMs": 260,
+  "meta": {
+   "og:url": [
+    "https://huggingface.co/papers/2501.12948"
+   ],
+   "canonical": [
+    "https://huggingface.co/papers/2501.12948"
+   ]
+  },
+  "challenge": [
+   "captcha"
+  ],
+  "title": "Paper page - DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+  "byline": "DeepSeek-AI ,",
+  "words": 358,
+  "blocks": 106,
+  "headings": 14,
+  "figures": 0,
+  "images": 5,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Paper page - DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning\nDeepSeek-AI , · · ~2 min read\nPublished on Jan 22, 2025\n·\nSubmitted by\n\nAK\n\non Jan 23, 2025\n#1 Paper of ",
+  "last200": "\n•\n120\n•\n2\nBrowse 17 datasets citing this paper\nSpaces citing this paper 4,312\nBrowse 4,312 spaces citing this paper\nCollections including this paper 131\nBrowse 131 collections that include this paper"
+ },
+ {
+  "source": "huggingface-papers",
+  "label": "DeepSeek-R1",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/2501.12948",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/2501.12948",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 5034998,
+  "elapsedMs": 98,
+  "pdfPages": 86
+ },
+ {
+  "source": "alphaxiv",
+  "label": "Attention",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.alphaxiv.org/abs/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://www.alphaxiv.org/abs/1706.03762",
+  "chainHosts": [
+   "www.alphaxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 339917,
+  "elapsedMs": 341,
+  "meta": {
+   "og:url": [
+    "https://www.alphaxiv.org/abs/1706.03762"
+   ],
+   "citation_title": [
+    "Attention Is All You Need"
+   ],
+   "citation_pdf_url": [
+    "https://pdfs.assets.alphaxiv.org/1706.03762v7.pdf"
+   ],
+   "citation_arxiv_id": [
+    "1706.03762"
+   ],
+   "canonical": [
+    "https://www.alphaxiv.org/abs/1706.03762"
+   ]
+  },
+  "challenge": [],
+  "title": "Attention Is All You Need",
+  "byline": "Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin",
+  "words": 673,
+  "blocks": 17,
+  "headings": 2,
+  "figures": 2,
+  "images": 2,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Attention Is All You Need\nAshish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin · arXiv · ~4 min read\nTranslation requires a model to",
+  "last200": "le model beats a prior ensemble on English-to-German with lower estimated compute. However, no matched recurrent or convolutional control isolates self-attention as the sole cause of that improvement."
+ },
+ {
+  "source": "alphaxiv",
+  "label": "Attention",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/1706.03762",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 2215244,
+  "elapsedMs": 83,
+  "pdfPages": 15
+ },
+ {
+  "source": "alphaxiv",
+  "label": "DeepSeek-R1",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.alphaxiv.org/abs/2501.12948",
+  "outcome": "ok",
+  "finalUrl": "https://www.alphaxiv.org/abs/2501.12948",
+  "chainHosts": [
+   "www.alphaxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 564939,
+  "elapsedMs": 813,
+  "meta": {
+   "og:url": [
+    "https://www.alphaxiv.org/abs/2501.12948"
+   ],
+   "citation_title": [
+    "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning"
+   ],
+   "citation_pdf_url": [
+    "https://pdfs.assets.alphaxiv.org/2501.12948v2.pdf"
+   ],
+   "citation_arxiv_id": [
+    "2501.12948"
+   ],
+   "canonical": [
+    "https://www.alphaxiv.org/abs/2501.12948"
+   ]
+  },
+  "challenge": [],
+  "title": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+  "byline": "DeepSeek-AI, Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, Xiaokang Zhang, Xingkai Yu, Yu Wu, Z.F. Wu, Zhibin Gou, Zhihong Shao, Zhuoshu Li, Ziyi Gao, Aixin Liu, Bing Xue, Bingxuan Wang, Bochao Wu, Bei Feng, Chengda Lu, Chenggang Zhao, Chengqi Deng, Chenyu Zhang, Chong Ruan, Damai Dai, Deli Chen, Dongjie Ji, Erhang Li, Fangyun Lin, Fucong Dai, Fuli Luo, Guangbo Hao, Guanting Chen, Guowei Li, H. Zhang, Han Bao, Hanwei Xu, Haocheng Wang, Honghui Ding, Huajian Xin, Huazuo Gao, Hui Qu, Hui Li, Jianzhong Guo, Jiashi Li, Jiawei Wang, Jingchang Chen, Jingyang Yuan, Junjie Qiu, Junlong Li, J.L. Cai, Jiaqi Ni, Jian Liang, Jin Chen, Kai Dong, Kai Hu, Kaige Gao, Kang Guan, Kexin Huang, Kuai Yu, Lean Wang, Lecong Zhang, Liang Zhao, Litong Wang, Liyue Zhang, Lei Xu, Leyi Xia, Mingchuan Zhang, Minghua Zhang, Minghui Tang, Meng Li, Miaojun Wang, Mingming Li, Ning Tian, Panpan Huang, Peng Zhang, Qiancheng Wang, Qinyu Chen, Qiushi Du, Ruiqi Ge, Ruisong Zhang, Ruizhe Pan, Runji Wang, R.J. Chen, R.L. Jin, Ruyi Chen, Shanghao Lu, Shangyan Zhou, Shanhuang Chen, Shengfeng Ye, Shiyu Wang, Shuiping Yu, Shunfeng Zhou, Shuting Pan, S.S. Li, Shuang Zhou, Shaoqing Wu, Tao Yun, Tian Pei, Tianyu Sun, T. Wang, Wangding Zeng, Wanjia Zhao, Wen Liu, Wenfeng Liang, Wenjun Gao, Wenqin Yu, Wentao Zhang, W.L. Xiao, Wei An, Xiaodong Liu, Xiaohan Wang, Xiaokang Chen, Xiaotao Nie, Xin Cheng, Xin Liu, Xin Xie, Xingchao Liu, Xinyu Yang, Xinyuan Li, Xuecheng Su, Xuheng Lin, X.Q. Li, Xiangyue Jin, Xiaojin Shen, Xiaosha Chen, Xiaowen Sun, Xiaoxiang Wang, Xinnan Song, Xinyi Zhou, Xianzu Wang, Xinxia Shan, Y.K. Li, Y.Q. Wang, Y.X. Wei, Yang Zhang, Yanhong Xu, Yao Li, Yao Zhao, Yaofeng Sun, Yaohui Wang, Yi Yu, Yichao Zhang, Yifan Shi, Yiliang Xiong, Ying He, Yishi Piao, Yisong Wang, Yixuan Tan, Yiyang Ma, Yiyuan Liu, Yongqiang Guo, Yuan Ou, Yuduan Wang, Yue Gong, Yuheng Zou, Yujia He, Yunfan Xiong, Yuxiang Luo, Yuxiang You, Yuxuan Liu, Yuyang Zhou, Y.X. Zhu, Yanping Huang, Yaohui Li, Yi Zheng, Yuchen Zhu, Yunxian Ma, Ying Tang, Yukun Zha, Yuting Yan, Z.Z. Ren, Zehui Ren, Zhangli Sha, Zhe Fu, Zhean Xu, Zhenda Xie, Zhengyan Zhang, Zhewen Hao, Zhicheng Ma, Zhigang Yan, Zhiyu Wu, Zihui Gu, Zijia Zhu, Zijun Liu, Zilin Li, Ziwei Xie, Ziyang Song, Zizheng Pan, Zhen Huang, Zhipeng Xu, Zhongyu Zhang, Zhen Zhang, Zhongyu Zhang, Zhen Zhang",
+  "words": 1022,
+  "blocks": 16,
+  "headings": 1,
+  "figures": 2,
+  "images": 2,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning\nDeepSeek-AI, Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shiron",
+  "last200": "T and preference-based training for broader tasks. The authors also describe the model's vivid reasoning style as engineered heuristics, which they do not treat as evidence of human-like intelligence."
+ },
+ {
+  "source": "alphaxiv",
+  "label": "DeepSeek-R1",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/2501.12948",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/2501.12948",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 5034998,
+  "elapsedMs": 98,
+  "pdfPages": 86
+ },
+ {
+  "source": "ar5iv",
+  "label": "Attention",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://ar5iv.labs.arxiv.org/html/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://ar5iv.labs.arxiv.org/html/1706.03762",
+  "chainHosts": [
+   "ar5iv.labs.arxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 167302,
+  "elapsedMs": 184,
+  "meta": {
+   "og:url": [
+    "https://ar5iv.labs.arxiv.org/html/1706.03762"
+   ],
+   "canonical": [
+    "https://ar5iv.labs.arxiv.org/html/1706.03762"
+   ]
+  },
+  "challenge": [],
+  "title": "Attention Is All You Need",
+  "byline": "Affiliation: Google Brain Email: noam@google.com",
+  "words": 5638,
+  "blocks": 151,
+  "headings": 31,
+  "figures": 9,
+  "images": 3,
+  "tables": 9,
+  "hasReferences": true,
+  "first200": "Attention Is All You Need\nAffiliation: Google Brain Email: noam@google.com · ar5iv · ~41 min read\nProvided proper attribution is provided, Google hereby grants permission to reproduce the tables and f",
+  "last200": "lated to the structure of the sentence. We give two such examples above, from two different heads from the encoder self-attention at layer 5 of 6. The heads clearly learned to perform different tasks."
+ },
+ {
+  "source": "ar5iv",
+  "label": "Attention",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/1706.03762",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/1706.03762",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 2215244,
+  "elapsedMs": 83,
+  "pdfPages": 15
+ },
+ {
+  "source": "ar5iv",
+  "label": "ResNet",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://ar5iv.org/abs/1512.03385",
+  "outcome": "ok",
+  "finalUrl": "https://ar5iv.labs.arxiv.org/html/1512.03385",
+  "chainHosts": [
+   "ar5iv.org",
+   "ar5iv.labs.arxiv.org",
+   "ar5iv.labs.arxiv.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 344278,
+  "elapsedMs": 661,
+  "meta": {
+   "og:url": [
+    "https://ar5iv.labs.arxiv.org/html/1512.03385"
+   ],
+   "canonical": [
+    "https://ar5iv.labs.arxiv.org/html/1512.03385"
+   ]
+  },
+  "challenge": [],
+  "title": "Deep Residual Learning for Image Recognition",
+  "byline": "Kaiming He",
+  "words": 8949,
+  "blocks": 174,
+  "headings": 17,
+  "figures": 18,
+  "images": 0,
+  "tables": 22,
+  "hasReferences": true,
+  "first200": "Deep Residual Learning for Image Recognition\nKaiming He · ar5iv · ~64 min read\nAbstract\nDeeper neural networks are more difficult to train. We present a residual learning framework to ease the trainin",
+  "last200": " set. This number significantly outperforms the ILSVRC 14 results (Table 14), showing a 64% relative reduction of error. This result won the 1st place in the ImageNet localization task in ILSVRC 2015."
+ },
+ {
+  "source": "ar5iv",
+  "label": "ResNet",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://arxiv.org/pdf/1512.03385",
+  "outcome": "ok",
+  "finalUrl": "https://arxiv.org/pdf/1512.03385",
+  "chainHosts": [
+   "arxiv.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 819383,
+  "elapsedMs": 61,
+  "pdfPages": 12
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "PsyArXiv np2vd",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://osf.io/preprints/psyarxiv/np2vd",
+  "outcome": "extract-refused",
+  "finalUrl": "https://osf.io/preprints/psyarxiv/np2vd",
+  "chainHosts": [
+   "osf.io"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4207,
+  "elapsedMs": 156,
+  "meta": {},
+  "challenge": [],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "PsyArXiv np2vd",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://osf.io/download/np2vd/",
+  "outcome": "ok",
+  "finalUrl": "https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e?response-content-disposition=attachment%3B%20filename%3D%22Janker%2C%20Musslick%2C%20Dreisbach_2026_v3.pdf%22%3B%20filename%2A%3DUTF-8%27%27Janker%252C%2520Musslick%252C%2520Dreisbach_2026_v3.pdf&GoogleAccessId=files-us%40cos-osf-prod.iam.gserviceaccount.com&Expires=1791239455&Signature=hlh0fGe2Mk1TgZfz9witXqUXXcwxjJm7WCtA%2B%2BL8Ai08kBoT2O2b4uDtpQFCuDfRS7KCIAPg4o9f5aJYdA9fxKw9fC3a6XFtfXU%2Bvs1mnLL6MACVVlsCR3W99uhdJgQJFJFZRXoIOZaymJemX72H2gh5juXcIz3LpT3i3bgAdV%2F%2BCOhKw4X%2FfrxCq66jdRIAjkA2WHd8PHQc9CAEcAlFujiyaxbkax3OflOR4FzFygBWCwuzVWjWt%2BanHKKhEHFGqdjE27LMDWlVx24PLJun%2BdajnwXa%2FTqgaD4vIzuVOMAsffF72EOryP8mMcPiTAqUwGgyipfaIFrq9PYdlovIbw%3D%3D",
+  "chainHosts": [
+   "osf.io",
+   "files.osf.io",
+   "storage.googleapis.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 962101,
+  "elapsedMs": 2388,
+  "pdfPages": 40
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "OSF vxh6m",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://osf.io/preprints/osf/vxh6m",
+  "outcome": "extract-refused",
+  "finalUrl": "https://osf.io/preprints/osf/vxh6m",
+  "chainHosts": [
+   "osf.io"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 4207,
+  "elapsedMs": 160,
+  "meta": {},
+  "challenge": [],
+  "extractError": "ReadabilityRefused: Readability could not parse this page."
+ },
+ {
+  "source": "osf-psyarxiv",
+  "label": "OSF vxh6m",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://osf.io/download/vxh6m/",
+  "outcome": "ok",
+  "finalUrl": "https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a?response-content-disposition=attachment%3B%20filename%3D%22Cyclic_Scheduling_Algorithm.pdf%22%3B%20filename%2A%3DUTF-8%27%27Cyclic_Scheduling_Algorithm.pdf&GoogleAccessId=files-us%40cos-osf-prod.iam.gserviceaccount.com&Expires=1791239464&Signature=VFJM3hXqJNWMSoaSmLzft2BNuU5PSA6deoAlrcuS%2BUe3FohNVKvKgRokyh%2BD9XQtd2pZih34r%2BNf4jevV0lFv%2FDcc3Ws86mB2jDx8sHeC0p2XTzugaNN78WOZEzcx6Gt3GjysA8NMWA%2F4al3cGPmKFd04uw2USRK7mo21N781o1IpiZ9Xj%2FhjGsOmxCCKWACXn1bwd3oTCP6eChaVfZXlfWo1lOtWv7Hz%2BF2z2V5BsSAa9jkCP%2Bb0ZGkiktQXF3mMbcByP3NTBfHtG6QCe8CUeh2vSyg5yidZrdvpUT5D%2B5LRetXQJNglkG3tyUC7b8o0Bdu0scSX%2FnK%2F9XDFbD%2F0w%3D%3D",
+  "chainHosts": [
+   "osf.io",
+   "files.osf.io",
+   "storage.googleapis.com"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 449067,
+  "elapsedMs": 2416,
+  "pdfPages": 11
+ },
+ {
+  "source": "chemrxiv",
+  "label": "Ion mobility",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://chemrxiv.org/engage/chemrxiv/article-details/chemrxiv-2025-l6zz7",
+  "outcome": "fetch-failed",
+  "elapsedMs": 609,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "chemrxiv",
+  "label": "Ion mobility",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://doi.org/10.26434/chemrxiv-2025-l6zz7/v4",
+  "outcome": "fetch-failed",
+  "elapsedMs": 135,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "chemrxiv",
+  "label": "Droplet motion",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://doi.org/10.26434/chemrxiv.15009878/v1",
+  "outcome": "fetch-failed",
+  "elapsedMs": 140,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "nber",
+  "label": "w30000",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.nber.org/papers/w30000",
+  "outcome": "ok",
+  "finalUrl": "https://www.nber.org/papers/w30000",
+  "chainHosts": [
+   "www.nber.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 95474,
+  "elapsedMs": 813,
+  "meta": {
+   "citation_title": [
+    "The US COVID-19 Baby Bust and Rebound"
+   ],
+   "citation_doi": [
+    "10.3386/w30000"
+   ],
+   "citation_pdf_url": [
+    "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf"
+   ],
+   "og:url": [
+    "https://www.nber.org/papers/w30000"
+   ],
+   "canonical": [
+    "https://www.nber.org/papers/w30000"
+   ]
+  },
+  "challenge": [],
+  "title": "The US COVID-19 Baby Bust and Rebound",
+  "byline": "Melissa Schettini Kearney & Phillip B. Levine",
+  "words": 407,
+  "blocks": 29,
+  "headings": 4,
+  "figures": 0,
+  "images": 2,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "The US COVID-19 Baby Bust and Rebound\nMelissa Schettini Kearney & Phillip B. Levine · NBER · ~4 min read\nHome\nResearch\nWorking Papers\nThe US COVID-19 Baby Bust and Rebound\nWorking Paper 30000\nDOI 10.3",
+  "last200": "niversity and will soon...\n\nMethods Lectures\nPresenters: Melissa Dell & Ashesh Rambachan\nResearch Associate Melissa Dell of Harvard University and Ashesh Rambachan of MIT delivered the 2026 Methods..."
+ },
+ {
+  "source": "nber",
+  "label": "w30000",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.nber.org/system/files/working_papers/w30000/w30000.pdf",
+  "chainHosts": [
+   "www.nber.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 1077387,
+  "elapsedMs": 2309,
+  "pdfPages": 41
+ },
+ {
+  "source": "nber",
+  "label": "w31000",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.nber.org/papers/w31000",
+  "outcome": "ok",
+  "finalUrl": "https://www.nber.org/papers/w31000",
+  "chainHosts": [
+   "www.nber.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 91802,
+  "elapsedMs": 566,
+  "meta": {
+   "citation_title": [
+    "Human Capital and Climate Change"
+   ],
+   "citation_doi": [
+    "10.3386/w31000"
+   ],
+   "citation_pdf_url": [
+    "https://www.nber.org/system/files/working_papers/w31000/w31000.pdf"
+   ],
+   "og:url": [
+    "https://www.nber.org/papers/w31000"
+   ],
+   "canonical": [
+    "https://www.nber.org/papers/w31000"
+   ]
+  },
+  "challenge": [],
+  "title": "Human Capital and Climate Change",
+  "byline": "Noam Angrist; Kevin Winseck; Harry A. Patrinos; Joshua S. Graff Zivin",
+  "words": 490,
+  "blocks": 35,
+  "headings": 3,
+  "figures": 0,
+  "images": 2,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Human Capital and Climate Change\nNoam Angrist, · NBER · ~14 min read\nEXPLORE Research Findings Working Papers Books & Chapters Videos Periodicals The Digest The Reporter The Bulletin on the Economics ",
+  "last200": "niversity and will soon...\n\nMethods Lectures\nPresenters: Melissa Dell & Ashesh Rambachan\nResearch Associate Melissa Dell of Harvard University and Ashesh Rambachan of MIT delivered the 2026 Methods..."
+ },
+ {
+  "source": "nber",
+  "label": "w31000",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.nber.org/system/files/working_papers/w31000/w31000.pdf",
+  "outcome": "ok",
+  "finalUrl": "https://www.nber.org/system/files/working_papers/w31000/w31000.pdf",
+  "chainHosts": [
+   "www.nber.org"
+  ],
+  "status": 200,
+  "kind": "pdf",
+  "bytes": 585851,
+  "elapsedMs": 2587,
+  "pdfPages": 28
+ },
+ {
+  "source": "zenodo",
+  "label": "Zenodo 3233821",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://zenodo.org/records/3233821",
+  "outcome": "ok",
+  "finalUrl": "https://zenodo.org/records/3233822",
+  "chainHosts": [
+   "zenodo.org",
+   "zenodo.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 95326,
+  "elapsedMs": 901,
+  "meta": {
+   "citation_title": [
+    "PLATE X. Fig. 1 in New genera and species from the Belly River Series (mid-Cretaceous)"
+   ],
+   "citation_doi": [
+    "10.5281/zenodo.3233822"
+   ],
+   "og:url": [
+    "https://zenodo.org/records/3233822"
+   ],
+   "canonical": [
+    "https://zenodo.org/records/3233822"
+   ]
+  },
+  "challenge": [],
+  "title": "PLATE X. Fig. 1 in New genera and species from the Belly River Series (mid-Cretaceous)",
+  "byline": "Lambe L. M.",
+  "words": 147,
+  "blocks": 13,
+  "headings": 7,
+  "figures": 0,
+  "images": 0,
+  "tables": 1,
+  "hasReferences": false,
+  "first200": "PLATE X. Fig. 1 in New genera and species from the Belly River Series (mid-Cretaceous)\nZenodo · ~3 min read\nPublished December 31, 1902 | Version v1\nDescription\nPLATE X. Fig. 1. Trachodon (Pteropelyx)",
+  "last200": "page 109, DOI: 10.5281/zenodo.3233762\nFiles\nfigure.png\nFiles (36.1 kB)\nName Size Download all figure.png md5:445db835ab6e19b150db33b11fc4e0bc 36.1 kB Preview Download\nLinked records\nAdditional details"
+ },
+ {
+  "source": "zenodo",
+  "label": "Zenodo 7152285",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://zenodo.org/records/7152285",
+  "outcome": "ok",
+  "finalUrl": "https://zenodo.org/records/7152286",
+  "chainHosts": [
+   "zenodo.org",
+   "zenodo.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 99214,
+  "elapsedMs": 325,
+  "meta": {
+   "citation_title": [
+    "Open-Source Intelligence (OSINT) Next generation challenges, priorities, and opportunities"
+   ],
+   "citation_doi": [
+    "10.5281/zenodo.7152286"
+   ],
+   "og:url": [
+    "https://zenodo.org/records/7152286"
+   ],
+   "citation_pdf_url": [
+    "https://zenodo.org/records/7152286/files/NOTIONES-Booklet-A5-Open-SOurce-INtelligence.pdf"
+   ],
+   "canonical": [
+    "https://zenodo.org/records/7152286"
+   ]
+  },
+  "challenge": [],
+  "title": "Open-Source Intelligence (OSINT) Next generation challenges, priorities, and opportunities",
+  "byline": "Andrew Staniforth; David Fortune",
+  "words": 187,
+  "blocks": 11,
+  "headings": 6,
+  "figures": 0,
+  "images": 0,
+  "tables": 1,
+  "hasReferences": false,
+  "first200": "Open-Source Intelligence (OSINT) Next generation challenges, priorities, and opportunities\nZenodo · ~2 min read\nPublished August 30, 2022 | Version v1\n1. SAHER (Europe) OÜ\nDescription\nOpen-Source-Inte",
+  "last200": "t-A5-Open-SOurce-INtelligence.pdf\nFiles (1.5 MB)\nName Size Download all NOTIONES-Booklet-A5-Open-SOurce-INtelligence.pdf md5:a6bddc01a6fdc1a0b2e1c975da8fcec2 1.5 MB Preview Download\nAdditional details"
+ },
+ {
+  "source": "hal",
+  "label": "Cerrado woody plants",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://hal.science/hal-05779468",
+  "outcome": "ok",
+  "finalUrl": "https://hal.science/hal-05779468",
+  "chainHosts": [
+   "hal.science"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 12610,
+  "elapsedMs": 115,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "title": "Making sure you're not a bot!",
+  "words": 178,
+  "blocks": 7,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Making sure you're not a bot!\n· ~1 min read\nLoading...\nYou are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies aggress",
+  "last200": " likely to be legitimate.\nPlease note that Anubis requires the use of modern JavaScript features that plugins like JShelter will disable. Please disable JShelter or other such plugins for this domain."
+ },
+ {
+  "source": "hal",
+  "label": "Cerrado woody plants",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://hal.science/hal-05779468/document",
+  "outcome": "ok",
+  "finalUrl": "https://hal.science/hal-05779468/document",
+  "chainHosts": [
+   "hal.science"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 12610,
+  "elapsedMs": 86,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "title": "Making sure you're not a bot!",
+  "words": 178,
+  "blocks": 7,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Making sure you're not a bot!\n· ~1 min read\nLoading...\nYou are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies aggress",
+  "last200": " likely to be legitimate.\nPlease note that Anubis requires the use of modern JavaScript features that plugins like JShelter will disable. Please disable JShelter or other such plugins for this domain."
+ },
+ {
+  "source": "hal",
+  "label": "Constraint acquisition LLM",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484",
+  "outcome": "ok",
+  "finalUrl": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484",
+  "chainHosts": [
+   "hal-lirmm.ccsd.cnrs.fr"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 12610,
+  "elapsedMs": 159,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "title": "Making sure you're not a bot!",
+  "words": 178,
+  "blocks": 7,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Making sure you're not a bot!\n· ~1 min read\nLoading...\nYou are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies aggress",
+  "last200": " likely to be legitimate.\nPlease note that Anubis requires the use of modern JavaScript features that plugins like JShelter will disable. Please disable JShelter or other such plugins for this domain."
+ },
+ {
+  "source": "hal",
+  "label": "Constraint acquisition LLM",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484/document",
+  "outcome": "ok",
+  "finalUrl": "https://hal-lirmm.ccsd.cnrs.fr/lirmm-05779484/document",
+  "chainHosts": [
+   "hal-lirmm.ccsd.cnrs.fr"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 12610,
+  "elapsedMs": 117,
+  "meta": {},
+  "challenge": [
+   "enable javascript"
+  ],
+  "title": "Making sure you're not a bot!",
+  "words": 178,
+  "blocks": 7,
+  "headings": 1,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Making sure you're not a bot!\n· ~1 min read\nLoading...\nYou are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies aggress",
+  "last200": " likely to be legitimate.\nPlease note that Anubis requires the use of modern JavaScript features that plugins like JShelter will disable. Please disable JShelter or other such plugins for this domain."
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2023/1",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://eprint.iacr.org/2023/001",
+  "outcome": "ok",
+  "finalUrl": "https://eprint.iacr.org/2023/001",
+  "chainHosts": [
+   "eprint.iacr.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 17525,
+  "elapsedMs": 585,
+  "meta": {
+   "citation_title": [
+    "Time is money, friend! Timing Side-channel Attack against Garbled Circuit Constructions"
+   ],
+   "citation_pdf_url": [
+    "https://eprint.iacr.org/2023/001.pdf"
+   ],
+   "og:url": [
+    "https://eprint.iacr.org/2023/001"
+   ]
+  },
+  "challenge": [],
+  "title": "Time is money, friend! Timing Side-channel Attack against Garbled Circuit Constructions",
+  "byline": "Mohammad Hashemi; Domenic Forte; Fatemeh Ganji",
+  "words": 338,
+  "blocks": 10,
+  "headings": 4,
+  "figures": 0,
+  "images": 0,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Time is money, friend! Timing Side-channel Attack against Garbled Circuit Constructions\nMohammad Hashemi, Worcester Polytechnic Institute · IACR Cryptology ePrint Archive · ~2 min read\nPaper 2023/001\n",
+  "last200": "ng Side-channel Attack against Garbled Circuit Constructions},\n      howpublished = {Cryptology {ePrint} Archive, Paper 2023/001},\n      year = {2023},\n      url = {https://eprint.iacr.org/2023/001}\n}"
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2023/1",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://eprint.iacr.org/2023/001.pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 69,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2024/100",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://eprint.iacr.org/2024/100",
+  "outcome": "ok",
+  "finalUrl": "https://eprint.iacr.org/2024/100",
+  "chainHosts": [
+   "eprint.iacr.org"
+  ],
+  "status": 200,
+  "kind": "html",
+  "bytes": 20078,
+  "elapsedMs": 598,
+  "meta": {
+   "citation_title": [
+    "Fuzzy Extractors are Practical: Cryptographic Strength Key Derivation from the Iris"
+   ],
+   "citation_pdf_url": [
+    "https://eprint.iacr.org/2024/100.pdf"
+   ],
+   "og:url": [
+    "https://eprint.iacr.org/2024/100"
+   ]
+  },
+  "challenge": [],
+  "title": "Fuzzy Extractors are Practical: Cryptographic Strength Key Derivation from the Iris",
+  "byline": "Amey Shukla; Luke Demarest; Benjamin Fuller; Sohaib Ahmad; Caleb Manicke; Alexander Russell; Sixia Chen",
+  "words": 429,
+  "blocks": 15,
+  "headings": 4,
+  "figures": 0,
+  "images": 6,
+  "tables": 0,
+  "hasReferences": false,
+  "first200": "Fuzzy Extractors are Practical: Cryptographic Strength Key Derivation from the Iris\nAmey Shukla, University of Connecticut · IACR Cryptology ePrint Archive · ~3 min read\nPaper 2024/100\nFuzzy Extractor",
+  "last200": "ivation from the Iris},\n      howpublished = {Cryptology {ePrint} Archive, Paper 2024/100},\n      year = {2024},\n      doi = {10.1145/3719027.3765098},\n      url = {https://eprint.iacr.org/2024/100}\n}"
+ },
+ {
+  "source": "iacr-eprint",
+  "label": "2024/100",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://eprint.iacr.org/2024/100.pdf",
+  "outcome": "fetch-failed",
+  "elapsedMs": 68,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "oxford-academic",
+  "label": "BWA bioinformatics",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://academic.oup.com/bioinformatics/article/25/14/1754/225615",
+  "outcome": "fetch-failed",
+  "elapsedMs": 76,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "oxford-academic",
+  "label": "Pfam NAR",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://academic.oup.com/nar/article/49/D1/D412/5943866",
+  "outcome": "fetch-failed",
+  "elapsedMs": 73,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "taylor-francis",
+  "label": "ASA p-values",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.tandfonline.com/doi/full/10.1080/00031305.2016.1154108",
+  "outcome": "fetch-failed",
+  "elapsedMs": 74,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "taylor-francis",
+  "label": "ASA p-values",
+  "role": "fulltext",
+  "expect": "pdf",
+  "requestedUrl": "https://www.tandfonline.com/doi/pdf/10.1080/00031305.2016.1154108",
+  "outcome": "fetch-failed",
+  "elapsedMs": 59,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ },
+ {
+  "source": "taylor-francis",
+  "label": "JASA",
+  "role": "landing",
+  "expect": null,
+  "requestedUrl": "https://www.tandfonline.com/doi/abs/10.1080/01621459.2017.1285773",
+  "outcome": "fetch-failed",
+  "elapsedMs": 65,
+  "failure": {
+   "code": "forbidden",
+   "status": 403,
+   "message": "That site refused the request. Sites that police automated readers usually answer this way."
+  }
+ }
+]

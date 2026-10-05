@@ -86,7 +86,7 @@ anchored, so placing it costs layout, not a model call.
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
 | Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
-| Search, Chat, Remember / Quiz, Referee | the reader's own actions | tools, not columns | — |
+| Search, Chat, Learn / Quiz, Referee | the reader's own actions | tools, not columns | — |
 
 The finding that matters: **most of the right-hand column's content is already made and already
 anchored.** The expensive items — rebuttals, conclusions, explanations — are the two that need a new

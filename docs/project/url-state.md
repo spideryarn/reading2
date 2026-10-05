@@ -89,7 +89,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
-| `remember` | which part of Remember is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+| `remember` | which part of Learn is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [remember-mode.md](remember-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
 
 **`key` is not in this table, because it is not view state.** `/read/<slug>?key=<key>` is a private
 link, and the key is a credential
@@ -107,9 +107,9 @@ page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser
 **A sub-mode parameter outlives its mode, deliberately.** `remember`, `diagram`, `referee`,
 `summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
 buttons write `mode` alone. So `?mode=chat&remember=quiz` is not a leak: the parameter is read only
-by its own mode and does nothing under any other, and it is what makes pressing Remember again
+by its own mode and does nothing under any other, and it is what makes pressing Learn again
 return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
-key: back to Remember with `remember=quiz` kept also clears `?thread=`, in the same pushed entry,
+key: back to Learn with `remember=quiz` kept also clears `?thread=`, in the same pushed entry,
 because Quiz and a selected conversation cannot both be shown
 ([`sub-modes.ts`](../../src/web/sub-modes.ts) § `returnToSubMode`;
 `tests/sub-mode-param-outlives-its-mode.test.tsx`;
@@ -264,10 +264,10 @@ opposite of "the reader turned every column off".
 So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
 already right — and leaving chat mode puts the panel back where the reader left it, for free.
 
-**In `mode=chat` the id has to name a chat.** Remember writes its own conversation's id into
+**In `mode=chat` the id has to name a chat.** Learn writes its own conversation's id into
 `?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
 `chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
-and shows the list. Going the other way is one navigation: a press on a Remember row in Chat's list
+and shows the list. Going the other way is one navigation: a press on a Learn row in Chat's list
 sets `mode=remember`, `remember=<sub-mode>` and `thread=<id>` together, pushed.
 
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
@@ -702,9 +702,9 @@ an open conversation and a search are things the reader **did**, not places they
 
 **And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `remember`.** Each
 of those starts something merely by being arrived in — Diagram POSTs `/api/similar` or
-`/api/projection` for three of its five pictures, which costs a model call; Remember and Chat both
+`/api/projection` for three of its five pictures, which costs a model call; Learn and Chat both
 open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or
-Remember later returns the reader to the picture or the half they had chosen. The list is
+Learn later returns the reader to the picture or the half they had chosen. The list is
 `NEEDS_AN_EXPLICIT_PRESS` in [`last-view.ts`](../../src/web/last-view.ts), with the evidence for
 each beside it. **Summary is remembered as no mode too while its view is the thread**
 (`mode=summary` with `summary=thread`, or the older `mode=tweets`): opening the thread with none

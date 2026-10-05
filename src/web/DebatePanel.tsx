@@ -179,14 +179,15 @@ import {
   type BlockId,
   type Citer,
   type CitersResult,
+  type ClaimOrigin,
   type Debate,
   type DebateBears,
   type DebateCounts,
   type DebateKeySource,
   type DebateLean,
   type IdentificationLevel,
+  MAX_LENS_CHARS,
   type RegistrySource,
-  type ThreadOrigin,
   type ThreadSummary,
   distinctSources,
   identificationLevel,
@@ -195,6 +196,7 @@ import {
   readStoredLean,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { isImeComposing } from "./key-chord.js";
 import { receptionSections } from "./debate-levels.js";
 import {
   type ClaimGroup,
@@ -236,7 +238,7 @@ import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { threadForOrigin } from "./useChatAnchors.js";
+import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseCiters } from "./useCiters.js";
@@ -830,15 +832,25 @@ export type DebateAccess =
  * debate-threads.ts already use that word here for a synthesis theme.
  *
  * Nothing is stored on the claim. The conversation records the claim it was
- * started from (`ThreadOrigin`: the block and the words), and the mark is found
+ * started from (`ClaimOrigin`: the block and the words), and the mark is found
  * by matching the claim against `summaries` — the reading view's list, which
  * `Reader` owns and keeps current.
+ *
+ * **And an angle's chat, since the same day** (`onLens`, plan 261005k, A):
+ * the box at the top of the panel starts one, and *Your angles* under it is
+ * the way back, found in the same `summaries` (`lensThreads`).
  */
 export interface DebateClaimChats {
   summaries: readonly ThreadSummary[];
   /** Start a fresh chat about this claim. Goes to Chat with the question unsent; spends nothing. */
-  onCheck(origin: ThreadOrigin): void;
-  /** Open the conversation already started from a claim, beside Debate. */
+  onCheck(origin: ClaimOrigin): void;
+  /**
+   * Start a fresh chat that looks at the debate from this angle, the reader's
+   * own words. Goes to Chat with the question unsent, as `onCheck` does: no
+   * search runs and nothing is spent until they press Send there.
+   */
+  onLens(lens: string): void;
+  /** Open a conversation already started from a claim or an angle, beside Debate. */
   onOpen(threadId: string): void;
 }
 
@@ -846,6 +858,20 @@ export interface DebateClaimChats {
 export const DEBATE_CHECK_CLAIM = "Check this claim in chat";
 /** The mark on a claim a chat was started from. */
 export const DEBATE_OPEN_CLAIM_CHAT = "Open the chat about this claim";
+
+/** The angle box: its accessible name, and (with an ellipsis) its placeholder. */
+export const DEBATE_LENS_LABEL = "Look at the debate from an angle";
+/** The box's button. The words Glossary's handoff to Chat already uses. */
+export const DEBATE_LENS_SEND = "Ask in chat";
+/** The button's tooltip: where a press goes, and that it sends and spends nothing. */
+export const DEBATE_LENS_TIP =
+  "Opens Chat with a question about what others say on this, ready for you to edit. Nothing is sent until you press Send there.";
+/** The heading over the chats started from an angle. */
+export const DEBATE_ANGLES_HEAD = "Your angles";
+/** A line of *Your angles*: its accessible name. */
+export const DEBATE_OPEN_ANGLE_CHAT = "Open the chat about this angle";
+/** How many of them are on screen before *Show all*. */
+export const DEBATE_ANGLES_SHOWN = 3;
 
 interface Props {
   access: DebateAccess;
@@ -1160,6 +1186,13 @@ export function DebatePanel({
       }
     >
 
+      {/* **The angle box and *Your angles*, first and unconditional for the
+          owner**: before any search is stored, while one is loading, on a
+          stale one. An angle is a chat and needs no stored debate (GPT Sol's
+          review of plan 261005k, answer 2). A visitor has no chat and gets
+          neither. */}
+      {access.kind === "owner" && <Angles chats={access.claimChats} />}
+
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && (
@@ -1320,6 +1353,120 @@ export function DebatePanel({
 
     </ModeSurface>
   );
+}
+
+/**
+ * **Look at the debate from an angle** — the owner's box at the top of the
+ * panel, and *Your angles* under it.
+ * Plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
+ *
+ * ```
+ *  [ Look at the debate from an angle…        ] [💬 Ask in chat]
+ *  YOUR ANGLES
+ *   💬 “replication attempts”                               2
+ *   💬 “how it relates to Smith 2019”                       1
+ * ```
+ *
+ * **The box starts a chat; it does not steer the stored search.** Enter or
+ * the button hands the words to `Reader`, which opens Chat on a fresh
+ * conversation with the question in its box, unsent. So this component starts
+ * no job and has no waiting state: there is nothing to wait for until the
+ * reader presses Send in Chat. Why a chat and not a steered search is in
+ * docs/project/debate.md § Look at the debate from an angle.
+ *
+ * **The list is the way back**, one line per chat started from an angle,
+ * newest first, found in the reading view's thread summaries (`lensThreads`).
+ * A line opens its chat beside Debate, as a claim's mark does. The newest
+ * `DEBATE_ANGLES_SHOWN` and then *Show all*, so a reader with many does not
+ * have to scroll past them to reach the debate on a phone.
+ *
+ * The box and its row are Glossary's *Look up a term* (`.gloss-ask`), which
+ * this band already shares the `gloss` feature with: the same field, the
+ * reader's face from voices.css, and the same room left for the band's (i).
+ * No sentence under the box (docs/project/mode.md): what a press does is the
+ * button's tooltip.
+ */
+function Angles({ chats }: { chats: DebateClaimChats }) {
+  const [lens, setLens] = useState("");
+  const [all, setAll] = useState(false);
+  const angles = useMemo(() => lensThreads(chats.summaries), [chats.summaries]);
+  const shown = all ? angles : angles.slice(0, DEBATE_ANGLES_SHOWN);
+  const words = lens.trim();
+  return (
+    <div className="gloss-ask dbt-lens">
+      <form
+        className="gloss-ask-row dbt-lens-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (words === "") return;
+          chats.onLens(words);
+          /* The words are in Chat's box now, where they can still be edited. */
+          setLens("");
+        }}
+      >
+        {/* `maxLength` is the server's cap, counted here before trimming, so
+            the box can only refuse what the route would refuse or a little
+            more: the harmless direction (GlossaryPanel.tsx § `AskATerm`). */}
+        <input
+          className="gloss-ask-input"
+          type="text"
+          /* Enter submits this form and goes to Chat. */
+          enterKeyHint="go"
+          value={lens}
+          maxLength={MAX_LENS_CHARS}
+          placeholder={`${DEBATE_LENS_LABEL}…`}
+          aria-label={DEBATE_LENS_LABEL}
+          onChange={(e) => setLens(e.target.value)}
+          onKeyDown={(e) => {
+            /* Accepting an IME candidate is not a request to open Chat.
+               Cancel implicit submission, including engines that report 229
+               instead of isComposing; an ordinary Enter still uses the form. */
+            if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
+          }}
+        />
+        <button type="submit" className="gloss-btn dbt-lens-send" disabled={words === ""} title={DEBATE_LENS_TIP}>
+          <MessagesSquare size={12} aria-hidden="true" />
+          {DEBATE_LENS_SEND}
+        </button>
+      </form>
+      {angles.length > 0 && (
+        <div className="dbt-angles">
+          <h3 className="dbt-group-head dbt-angles-head">{DEBATE_ANGLES_HEAD}</h3>
+          <ul className="dbt-angles-list">
+            {shown.map((chat) => (
+              <li key={chat.id}>
+                <button
+                  type="button"
+                  className="dbt-angle"
+                  aria-label={`${DEBATE_OPEN_ANGLE_CHAT}: ${chat.origin.lens}`}
+                  title={angleChatTip(chat.turns)}
+                  onClick={() => chats.onOpen(chat.id)}
+                >
+                  <MessageSquare size={12} aria-hidden="true" />
+                  {/* What the reader typed, so in the reader's face
+                      (docs/project/fonts.md). The quotation marks are ours. */}
+                  <span className="dbt-angle-quoted">
+                    “<span className="dbt-angle-words voice-reader">{chat.origin.lens}</span>”
+                  </span>
+                  <span className="dbt-angle-count">{chat.turns}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {!all && angles.length > DEBATE_ANGLES_SHOWN && (
+            <button type="button" className="dbt-more dbt-angles-more" onClick={() => setAll(true)}>
+              Show all {angles.length}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A line's tooltip: what a press does, and what the number is. */
+function angleChatTip(turns: number): string {
+  return `${DEBATE_OPEN_ANGLE_CHAT}. ${turns} ${turns === 1 ? "question" : "questions"} so far.`;
 }
 
 /** How many citing papers are on screen before *Show all*. */
@@ -1965,7 +2112,7 @@ function ClaimsList({
       {groups.map((group) => {
         /* The claim's identity is `(blockId, claimQuote)` — debate-order.ts —
            and that pair is the whole of what its chat remembers. */
-        const origin: ThreadOrigin = { mode: "debate", blockId: group.blockId, quote: group.claimQuote };
+        const origin: ClaimOrigin = { mode: "debate", blockId: group.blockId, quote: group.claimQuote };
         const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
         return (
           <details key={`${group.blockId} ${group.claimQuote}`} className="dbt-group dbt-claim-group" open>

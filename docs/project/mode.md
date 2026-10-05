@@ -117,7 +117,7 @@ Then the residue, which is why this page exists:
 
   Modes with nothing to generate (Plain and Structure) open without a run. So do
   surfaces that need the reader's words first (Search, Chat, Referee's Criteria and Mirror,
-  Remember's Recall). So a new
+  Learn's Recall). So a new
   artefact-backed mode wants a name in
   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
   with the **unforced** verb. The traps, and the one mode deliberately left out, are
@@ -307,7 +307,7 @@ the current modes that is almost always one of three things: **it reads somethin
 stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
-or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining
+or **it waits on the reader's own words** (Search, Chat, Referee, Learn). Plain is the remaining
 one and generates nothing at all.
 
 Five things to get right, and the first is the one that cost this field a whole review round:
@@ -404,7 +404,7 @@ Then the residue nothing refuses at compile time:
 - **`PUBLIC_PROJECTIONS` and the public DTO** — and a visitor may read it by default. A mode that
   stores what it generates shows the stored output to a visitor on a public article, and only
   *making* it is the owner's; `owners-only` is for a mode whose stored output is the reader's own
-  writing (Chat, Remember, Referee). Four modes took `owners-only` as "a staging decision" and a
+  writing (Chat, Learn, Referee). Four modes took `owners-only` as "a staging decision" and a
   visitor was refused a Skim that had already been paid for —
   [the postmortem](../postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md):
   [`public-reader.ts`](../../src/store/public-reader.ts) and

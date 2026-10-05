@@ -52,7 +52,11 @@ one would otherwise be missed; it would not be, so it is not
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
-  reason for a citation, or the comment and the first lines of its AI answer. This was
+  reference entry for a citation (not the model's reason, since 261003j), or the comment and the
+  first lines of its AI answer. **The line is the button**, so its card says "Press this line" and
+  its words are underlined under a pointer or keyboard focus (Greg, `spya-xf6m2u`: *"the tooltip
+  says to 'press it' but I don't see anything to press"*;
+  [261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md)). This was
   [report 82](../user-feedback/261002_0300-marginalia-shows-other-modes-items.md), and the reasons
   are in [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md):
 
