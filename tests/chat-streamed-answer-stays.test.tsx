@@ -420,6 +420,19 @@ describe("a typed answer in a panel of fixed height", () => {
     expect(roomOf(scroller())).toBe(310);
   });
 
+  it("puts the question back when the clamp's scroll event arrives before the observer", () => {
+    taken = 36;
+    paint(EARLIER);
+    heights = [100, 800, 60, 30];
+    paint(asked(""));
+    taken = 0;
+    act(() => {
+      scroller().dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(scroller().scrollTop, "a clamp is not the reader's choice").toBe(QUESTION_TOP);
+    expect(roomOf(scroller())).toBe(310);
+  });
+
   it("does not shrink the room out from under a reader who scrolled down into it", () => {
     paint(EARLIER);
     heights = [100, 800, 60, 30];

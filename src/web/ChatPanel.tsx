@@ -1432,6 +1432,23 @@ export function Conversation({
           const atBottom =
             empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
           const h = hold.current;
+          /* **A clamp is not the reader.** When the panel grows taller under a
+             hold (the "Latest" pill leaving as a question is sent, the composer
+             shrinking back to one row) the room is briefly too short and the
+             browser pulls `scrollTop` down to the new maximum. If anything
+             forced a layout first, this event arrives *before* the resize
+             observer, and recording it as the reader's choice left a follow-up
+             question 36px low (the second browser pass of plan 261005f). Its
+             signature cannot be a reader: above where the hold last was, and
+             exactly at the end of what there is to scroll. */
+          if (
+            h?.placed &&
+            el.scrollTop < h.top - 0.5 &&
+            el.scrollHeight - el.clientHeight - el.scrollTop < 1
+          ) {
+            settle();
+            return;
+          }
           /* `settle` writes scrollTop to place or compensate a hold, and the
              browser reports that write through this same event. Only a
              different position is evidence that the reader moved. */

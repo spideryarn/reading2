@@ -467,6 +467,12 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* The transcript decides where it is itself (ChatPanel.tsx § A streamed
+     answer stays where it starts), and a browser's own scroll anchoring, where
+     there is one, is a second opinion it cannot see: in Chrome it moved a
+     just-placed question 31px up the moment the first words replaced
+     "thinking…". Safari has none, so this also makes the two agree. */
+  overflow-anchor: none;
   padding: 0.7rem;
   /* The band is narrow and the turns are prose, so they get the reading face
      rather than the UI one — an answer set in the interface font reads as a

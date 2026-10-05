@@ -200,7 +200,22 @@ Two things it found, both fixed afterwards:
   and the room is now sized for wherever the view is as well as for the placement, so shrinking it
   cannot clamp a reader who scrolled down into it.
 
-*The second pass, on the reviewed code, is below the code review.*
+**Second pass, on `d128b1d3d`** (after the code review; sampled every 50 ms, through the finish and
+2.3 s past it). The first line's drift was **0 px in every case**: Chat first question and follow-up,
+with and without the pill showing at the send; the card, first and follow-up; the floating panel;
+a phone; an answer that opens with a heading; hovering turns mid-stream. A real wheel scroll of 150 px
+up or down mid-stream stayed exactly where the reader put it. *Latest* jumped once and did not
+follow. No React warning.
+
+It found one more thing. **In a follow-up, the question jumped 31 to 57 px up, and was clipped, at
+the moment the first words replaced "thinking…".** The answer's line then held perfectly, which is
+why the drift numbers pass. Chrome's own scroll anchoring was the mover, and it was also hiding that
+the 36 px clamp above was still not corrected: the clamp's scroll event can arrive before the
+resize observer, and was being recorded as the reader's choice. Both fixed: `.chat-scroll` is
+`overflow-anchor: none`, so the transcript's position has one author, and a clamp is recognised by
+its signature in the scroll handler (above where the hold was, and exactly at the end) and put back.
+
+*The third pass, on that fix, is below.*
 
 ## The plan review
 
