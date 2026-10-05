@@ -163,8 +163,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           Each article keeps its own conversations under <strong>All conversations</strong>. That
           list holds every conversation you have had about the article, not only the ones started
           in Chat. A row from somewhere else has a small icon in front of it: point at it, or tap
-          it, to see where it came from, for example a claim in Debate, a passage, or Remember.
-          Pressing a Remember row takes you to Remember, where that conversation lives; it cannot
+          it, to see where it came from, for example a claim in Debate, a passage, or Learn.
+          Pressing a Learn row takes you to Learn, where that conversation lives; it cannot
           be renamed or deleted from Chat. When the list has conversations from more than one
           place, the buttons above it (<strong>All</strong>, <strong>Chats</strong> and one for
           each other place) narrow it.
@@ -514,7 +514,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   remember: {
     keywords:
-      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn check understanding explain back study revise",
+      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn remember check understanding explain back study revise critique criticism problems objections weaknesses",
     whenToUse: (
       <>
         <p>
@@ -562,7 +562,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             in a sentence or two. Writing them takes about a minute the first time.
           </li>
         </ul>
-        <p>Remember is only for whoever added the article.</p>
+        <p>Learn is only for whoever added the article.</p>
       </>
     ),
     reading: (

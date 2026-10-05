@@ -81,6 +81,7 @@ import {
 import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import { splitHint } from "../recall-hint.js";
+import { MODE_LABEL } from "../title-text.js";
 import type {
   BlockId,
   ChatMessage,
@@ -573,7 +574,7 @@ export function ChatPanel({
       }
       head={
         <>
-          {/* **Remember's header says Remember**, never the thread's title: there
+          {/* **The header says the mode's name** (Learn; Remember until 2026-10-05), never the thread's title: there
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
@@ -583,7 +584,7 @@ export function ChatPanel({
               reason Quiz's own row dropped its name on 2026-09-05. */}
           <h2 className={remember && subMode ? "sr-only" : undefined}>
             {remember ? (
-              "Remember"
+              MODE_LABEL.remember
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -681,7 +682,7 @@ export function ChatPanel({
            an empty band begins its conversation, and while Start over's DELETE
            is out — and in none of them is there anywhere for a question to go.
            Plan 261001m, F1 and F6. */
-        <ChatListLoading what="your Remember conversation" />
+        <ChatListLoading what={`your ${MODE_LABEL.remember} conversation`} />
       ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
@@ -1033,7 +1034,7 @@ function ThreadList({
                        where the press goes, since it leaves Chat. */
                     title={
                       view
-                        ? `Open in Remember › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
+                        ? `Open in ${MODE_LABEL.remember} › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
                         : describe(t)
                     }
                     onClick={() => (view ? onOpenRemember?.(view, t.id) : onOpen(t.id))}

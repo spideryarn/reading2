@@ -303,7 +303,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <H2 eyebrow="Internalise">Find out what you kept.</H2>
         <Gallery>
           {/* Greg, 2026-08-27, the review-mode request, rephrased to the reader. */}
-          <Portrait shot={SHOTS.remember} title="Remember." mode="remember">
+          <Portrait shot={SHOTS.remember} title="Learn." mode="remember">
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,

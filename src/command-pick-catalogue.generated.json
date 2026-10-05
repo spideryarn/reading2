@@ -362,18 +362,18 @@
  },
  {
   "id": "mode:remember",
-  "label": "Remember",
-  "description": "Work the piece into memory through Recall, a short Tutorial or a Quiz, or Explore what you think of it — not saved notes or flashcards",
+  "label": "Learn",
+  "description": "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
   "aliases": [
    "recall",
+   "remember",
    "memorise",
    "memorize",
    "study",
    "revise",
    "revision",
    "practice",
-   "practise",
-   "learn"
+   "practise"
   ],
   "kind": "mode",
   "generates": false,
@@ -727,10 +727,12 @@
   "label": "Recall",
   "description": "Say what you took from the piece, and find out where it holds up",
   "aliases": [
-   "Remember",
+   "Learn",
+   "Recall Learn",
+   "Learn Recall",
+   "Recall mode",
    "Recall Remember",
-   "Remember Recall",
-   "Recall mode"
+   "Remember Recall"
   ],
   "kind": "submode",
   "generates": false,
@@ -747,10 +749,12 @@
   "label": "Tutorial",
   "description": "Short turns: a little of the piece at a time, then a question for you to answer in your own words",
   "aliases": [
-   "Remember",
+   "Learn",
+   "Tutorial Learn",
+   "Learn Tutorial",
+   "Tutorial mode",
    "Tutorial Remember",
-   "Remember Tutorial",
-   "Tutorial mode"
+   "Remember Tutorial"
   ],
   "kind": "submode",
   "generates": false,
@@ -767,10 +771,12 @@
   "label": "Explore",
   "description": "Think it through for yourself: starts from what you have marked and discussed, and looks beyond the piece",
   "aliases": [
-   "Remember",
+   "Learn",
+   "Explore Learn",
+   "Learn Explore",
+   "Explore mode",
    "Explore Remember",
-   "Remember Explore",
-   "Explore mode"
+   "Remember Explore"
   ],
   "kind": "submode",
   "generates": false,
@@ -786,10 +792,12 @@
   "label": "Quiz",
   "description": "The piece asks you questions, and your answers are marked against it",
   "aliases": [
-   "Remember",
+   "Learn",
+   "Quiz Learn",
+   "Learn Quiz",
+   "Quiz mode",
    "Quiz Remember",
-   "Remember Quiz",
-   "Quiz mode"
+   "Remember Quiz"
   ],
   "kind": "submode",
   "generates": true,

@@ -60,7 +60,7 @@ const TITLES = {
   "Or say it out loud.": "chat",
   "FAQ.": "faq",
   "Debate.": "debate",
-  "Remember.": "remember",
+  "Learn.": "remember",
   "Quiz.": "remember",
   "Referee mode.": "referee",
   /* The thread is Summary's Thread view since 2026-10-03 (plan 261003l); its

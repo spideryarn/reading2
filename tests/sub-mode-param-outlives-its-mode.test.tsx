@@ -279,7 +279,7 @@ describe("a sub-mode parameter outlives its mode", () => {
     expect(param("remember"), "kept beside another mode, on purpose").toBe("quiz");
     expect(host.querySelector(".quiz-stub"), "and inert there: Chat's band, not the Quiz").toBeNull();
 
-    await pressMode("Remember");
+    await pressMode("Learn");
     await until(() => param("mode") === "remember", "Remember never opened");
     expect(param("remember")).toBe("quiz");
     expect(host.querySelector(".quiz-stub"), "back on the half the reader chose").not.toBeNull();
@@ -294,7 +294,7 @@ describe("returning to Remember's Quiz from a Chat conversation", () => {
     expect(quizFrames, "Quiz is not drawn under Chat").toEqual([]);
     const push = vi.spyOn(history, "pushState");
 
-    await pressMode("Remember");
+    await pressMode("Learn");
     await until(() => param("mode") === "remember" && param("thread") === null, "Remember's Quiz never opened");
 
     expect(quizFrames.length, "the Quiz half was drawn").toBeGreaterThan(0);

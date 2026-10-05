@@ -271,6 +271,22 @@ export interface CommandText {
  * `kind` check in this file has: **a check that names the minority arm keeps
  * working as arms are added; one that names the majority does not.**
  */
+/**
+ * **What a mode used to be called**, for the compound names of its sub-mode
+ * rows only. A sub-mode row takes its parent's *label* as a nickname, not the
+ * parent's catalogue aliases, so when a label changes the old compound
+ * (*remember quiz*) would find nothing, though the old word alone still finds
+ * the mode through its alias (`MODE_CATALOG.remember.aliases`). GPT Sol, plan
+ * review of 261005l, PR-2.
+ *
+ * The compounds and not the bare word: the bare old name should select the
+ * mode's own row, and four sub-mode rows answering to it would crowd it.
+ */
+const FORMER_PARENT_NAMES: Partial<Record<Mode, readonly string[]>> = {
+  /* Learn was Remember until 2026-10-05 (Greg, spya-mvmpks). */
+  remember: ["Remember"],
+};
+
 export function commandText(command: Command): CommandText {
   if (command.kind === "submode") {
     const words = subModeWords(command.sub);
@@ -288,6 +304,10 @@ export function commandText(command: Command): CommandText {
         `${words.label} ${parent}`,
         `${parent} ${words.label}`,
         `${words.label} mode`,
+        ...(FORMER_PARENT_NAMES[command.sub.mode] ?? []).flatMap((former) => [
+          `${words.label} ${former}`,
+          `${former} ${words.label}`,
+        ]),
         /* The sub-mode's own nicknames — Summary's Thread answers to `tweets`
            (sub-modes.ts § `SubModeWords`). Here and not on the parent's catalog
            row, so the word selects this row and not the mode's. */

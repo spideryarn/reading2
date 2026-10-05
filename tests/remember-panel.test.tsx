@@ -185,7 +185,7 @@ describe("Remember's panel is one conversation", () => {
 
   it("says Remember in the header, and offers Start over but no close, new or rename", () => {
     paint(rememberThread());
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector('button[title="All conversations"]')).toBeNull();
     expect(host.querySelector('button[title="Start remembering"]')).toBeNull();
     expect(host.querySelector('button[title^="Rename"]')).toBeNull();
@@ -201,7 +201,7 @@ describe("Remember's panel is one conversation", () => {
     act(() =>
       root.render(createElement(ChatPanel, props({ threads: [open], threadId: open.id, canStartOver: false }))),
     );
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector("button.chat-icon.danger")).toBeNull();
   });
 
@@ -318,7 +318,7 @@ describe("Explore's panel", () => {
     const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
     expect(box?.rows).toBe(6);
     expect(box?.placeholder).toMatch(/What do you make of it/);
-    expect(host.querySelector(".band-head h2")?.textContent).toBe("Remember");
+    expect(host.querySelector(".band-head h2")?.textContent).toBe("Learn");
     expect(host.querySelector('[aria-label="Explore what you think about this article"]')).not.toBeNull();
   });
 

@@ -490,7 +490,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>Tied to passages.</strong> Quotes are cut out of the article: the model only
             chose them. FAQ writes no answers at all; each question points to the passages that
-            respond to it. Summary and its thread, Ideas, Remember and Chat link each claim to the
+            respond to it. Summary and its thread, Ideas, Learn and Chat link each claim to the
             paragraphs behind it, so you can check in one click.
           </li>
           <li>
