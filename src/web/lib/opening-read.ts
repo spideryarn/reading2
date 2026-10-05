@@ -59,6 +59,8 @@ export class OpeningReadTimedOut extends ReaderFacingError {
 export interface OpeningRead<T> {
   /** The parsed body, or `OpeningReadTimedOut`, or whatever the read threw. */
   body: Promise<T>;
+  /** The response came from the browser's saved copy, rather than the server. */
+  readonly fromCopy: boolean;
   /** The panel is going away: stop the clock and the request. */
   abandon(): void;
 }
@@ -91,9 +93,14 @@ export function openingRead<T>(url: string, options: OpeningReadOptions = {}): O
       request.abort();
     }, deadlineMs);
   });
-  const read = apiFetch(url, { signal: request.signal }).then((r) => readJson<T>(r));
+  let fromCopy = false;
+  const read = apiFetch(url, { signal: request.signal }).then((r) => {
+    fromCopy = r.headers.get("x-spideryarn-offline") === "copy";
+    return readJson<T>(r);
+  });
   return {
     body: Promise.race([read, deadline]).finally(() => clearTimeout(clock)),
+    get fromCopy() { return fromCopy; },
     abandon() {
       clearTimeout(clock);
       request.abort();

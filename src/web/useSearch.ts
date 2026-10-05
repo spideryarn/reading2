@@ -105,6 +105,8 @@ export interface SearchApi {
    * saved ones had not loaded. Plan 260908f § A.
    */
   loadError: string | null;
+  /** The opening list was served from a saved offline copy; automatic tidy must wait. */
+  loadFromCopy: boolean;
   /**
    * Run a new search of this kind — `quick` or `meaning`. Returns the id it
    * minted, so `?runs=` can name it.
@@ -219,6 +221,7 @@ export function useSearch(
     [],
   );
   const [loaded, setLoaded] = useState(false);
+  const [loadFromCopy, setLoadFromCopy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -358,6 +361,7 @@ export function useSearch(
        back to not-knowing, and leaving this true would show the *previous*
        article's emptiness as though it were this one's. */
     setLoaded(false);
+    setLoadFromCopy(false);
     setLoadError(null);
     setFingerprint(null);
     /* With a deadline, because `loaded` is what lets the reader press Find —
@@ -368,6 +372,7 @@ export function useSearch(
     read.body
       .then((body) => {
         if (!live) return;
+        setLoadFromCopy(read.fromCopy);
         /* A body with an `error` in it is a failed load as much as a thrown one
            is — there are no runs in it, and "nothing searched for yet" read off
            it is the same false claim. */
@@ -872,6 +877,7 @@ export function useSearch(
     loaded,
     loadFailed: loadError !== null,
     loadError,
+    loadFromCopy,
     ask,
     retry,
     revise,
