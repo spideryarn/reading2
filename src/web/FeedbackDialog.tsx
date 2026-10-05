@@ -122,6 +122,7 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
@@ -715,6 +716,16 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
   const dictationBusy = dictate.busy;
+  /* Dismissed words, screenshots and audio all survive navigation here.
+     Audio may have no transcript yet, and its device backup is best effort.
+     `open` is deliberately not part of the reload veto. */
+  const holdsDraft =
+    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+  useEffect(() => {
+    noteFeedbackDraft(holdsDraft);
+    return () => noteFeedbackDraft(false);
+  }, [holdsDraft]);
+
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 

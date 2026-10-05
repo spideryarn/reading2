@@ -70,6 +70,9 @@ export interface ChatDrafts {
    */
   destination(): string | null | undefined;
   setDestination(id: string | null): void;
+
+  /** Whether any of the three boxes holds words — more than spaces — right now. */
+  holdsWords(): boolean;
 }
 
 export function createChatDrafts(): ChatDrafts {
@@ -117,6 +120,13 @@ export function createChatDrafts(): ChatDrafts {
     setDestination(id) {
       destination = id;
     },
+    holdsWords() {
+      const some = (texts: Iterable<string>): boolean => {
+        for (const text of texts) if (text.trim() !== "") return true;
+        return false;
+      };
+      return list.trim() !== "" || some(threads.values()) || some(remember.values());
+    },
   };
 }
 
@@ -134,6 +144,16 @@ export function chatDraftsFor(slug: string): ChatDrafts {
     drafts.set(slug, d);
   }
   return d;
+}
+
+/**
+ * Whether any article holds unsent words. They live only in this page's
+ * memory, so this is the question to ask before replacing the page —
+ * safe-to-reload.ts.
+ */
+export function anyChatDraftHeld(): boolean {
+  for (const d of drafts.values()) if (d.holdsWords()) return true;
+  return false;
 }
 
 /**
