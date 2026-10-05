@@ -39,6 +39,7 @@ import { ownIdsOfDocument, ownIdsOfPage, ownIdsOfPdf, withRegistryFacts, type Re
 import {
   lookupWork,
   realIsoDay,
+  withCountReadAt,
   type BibliographicStore,
   type CachedAnswer,
   type LimiterService,
@@ -432,9 +433,13 @@ export function memoryBibliographicStore(now: () => number = Date.now): Bibliogr
     read: async (id) => ({ answer: answers.get(id) ?? null, claimed: false }),
     claim: async (id, _fresh, leaseMs) => ({ id, until: new Date(now() + leaseMs) }),
     release: async () => {},
+    /* Every answer is stored, so every write says when, on the injected clock;
+       a Crossref record is kept with that as the moment its count was read,
+       as the Postgres store keeps it (plan 261005i). */
     write: async (claim, answer) => {
-      answers.set(claim.id, answer);
-      return true;
+      const storedAt = new Date(now());
+      answers.set(claim.id, withCountReadAt(answer, storedAt));
+      return storedAt;
     },
     coolingDown: async (service) => now() < coolUntil[service],
     takeSlot: async (service, leaseMs) => ({ service, slot: 1, until: new Date(now() + leaseMs) }),

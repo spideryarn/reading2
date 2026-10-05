@@ -36,6 +36,8 @@ import {
   type MetadataGateway,
 } from "../src/paper-metadata.js";
 
+import { doiUrl } from "../src/doi-url.js";
+
 const ROOT = path.join(import.meta.dirname, "..");
 
 beforeEach(() => vi.stubEnv("OPENROUTER_API_KEY", "sk-test-key"));
@@ -61,6 +63,82 @@ describe("normaliseDoi", () => {
     expect(normaliseDoi("http://dx.doi.org/10.5194/hgss-12-43-2021")).toBe("10.5194/hgss-12-43-2021");
     expect(normaliseDoi("doi: 10.3389/fpsyg.2023.1052726")).toBe("10.3389/fpsyg.2023.1052726");
     expect(normaliseDoi("DOI:10.3389/fpsyg.2023.1052726.")).toBe("10.3389/fpsyg.2023.1052726");
+  });
+
+  /* GPT Sol's finding 7 on plan 261004j, built in 261005i stage 2. A DOI that
+     arrives as an already-encoded doi.org address used to keep its escapes, and
+     `doiUrl` then encoded the `%` again: `%28` became `%2528`, a different
+     work or none. docs/postmortems/261004m-an-encoder-is-not-reversible-…. */
+  describe("an address that arrives percent-encoded is decoded once", () => {
+    const LANCET = "10.1016/S0140-6736(01)05627-6";
+
+    it("decodes encoded brackets, for every spelling of the resolver", () => {
+      for (const prefix of [
+        "https://doi.org/",
+        "http://doi.org/",
+        "https://dx.doi.org/",
+        "http://dx.doi.org/",
+        "HTTPS://DOI.ORG/",
+        "https://DX.DOI.org/",
+      ]) {
+        expect(normaliseDoi(`${prefix}10.1016/S0140-6736%2801%2905627-6`), prefix).toBe(LANCET);
+      }
+    });
+
+    it("gives a DOI whose link is the address it came from, not that address encoded again", () => {
+      const address = "https://doi.org/10.1234/a%5B1%5D";
+      const doi = normaliseDoi(address);
+      expect(doi).toBe("10.1234/a[1]");
+      expect(doiUrl(doi!)).toBe(address);
+      expect(doiUrl(doi!)).not.toContain("%25");
+    });
+
+    it("keeps a bracket the address encoded at the very end: only a sentence's punctuation is trimmed", () => {
+      /* GPT Sol's F5: decode first and trim second, and `a%5B1%5D` loses its last bracket. */
+      expect(normaliseDoi("https://doi.org/10.1234/a%5B1%5D")).toBe("10.1234/a[1]");
+      expect(normaliseDoi("https://doi.org/10.1234/a%5B1%5D.")).toBe("10.1234/a[1]");
+      expect(normaliseDoi("https://doi.org/10.1016/S0140-6736%2801%29).")).toBe("10.1016/S0140-6736(01)");
+      expect(normaliseDoi("https://doi.org/10.1234/a%2E")).toBe("10.1234/a.");
+      /* Written literally, a closing bracket is still read as the sentence's, as it always was. */
+      expect(normaliseDoi("(https://doi.org/10.5194/hgss-12-43-2021)")).toBeNull();
+      expect(normaliseDoi("https://doi.org/10.5194/hgss-12-43-2021).")).toBe("10.5194/hgss-12-43-2021");
+    });
+
+    it("decodes once: an encoded percent sign becomes a literal one and goes no further", () => {
+      expect(normaliseDoi("https://doi.org/10.1234/a%252Fb")).toBe("10.1234/a%2Fb");
+      expect(doiUrl("10.1234/a%2Fb")).toBe("https://doi.org/10.1234/a%252Fb");
+    });
+
+    it("reads `%2F` in an address as a slash, the ambiguity `doiOfUrl` documents", () => {
+      /* An old writer may have meant a literal `%2F`; the address cannot say. */
+      expect(normaliseDoi("https://doi.org/10.1234/a%2Fb")).toBe("10.1234/a/b");
+    });
+
+    it("leaves a malformed escape, and everything else in that path, as written", () => {
+      expect(normaliseDoi("https://doi.org/10.1234/a%zz%28b")).toBe("10.1234/a%zz%28b");
+      expect(normaliseDoi("https://doi.org/10.1234/100%")).toBe("10.1234/100%");
+    });
+
+    it("does not decode a bare DOI or a `doi:` string: neither is an address", () => {
+      expect(normaliseDoi("10.1234/a%28b%29c")).toBe("10.1234/a%28b%29c");
+      expect(normaliseDoi("doi:10.1234/a%28b%29c")).toBe("10.1234/a%28b%29c");
+      expect(normaliseDoi("DOI: 10.1234/a%252Fb")).toBe("10.1234/a%252Fb");
+    });
+
+    it("refuses an address whose decoded path is not a DOI we keep", () => {
+      for (const bad of [
+        "https://doi.org/10.1234/has%20space",
+        "https://doi.org/10.1234/has%3Fquery",
+        "https://doi.org/10.1234/a%22quote",
+        "https://doi.org/10.1234/caf%C3%A9",
+        "https://doi.org/not-a-doi",
+        "https://doi.org/",
+        "https://example.org/10.1234/x",
+        "https://doi.org.example.org/10.1234/x",
+      ]) {
+        expect(normaliseDoi(bad), bad).toBeNull();
+      }
+    });
   });
 
   it("drops anything that is not a DOI", () => {

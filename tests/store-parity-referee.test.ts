@@ -315,6 +315,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     const first = await store.begin(
       SLUG,
+      HASH,
       "Are the controls adequate?",
       { kind: "single" },
       "spya-crta22",
@@ -337,6 +338,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     const second = await store.begin(
       SLUG,
+      HASH,
       "How strong is the evidence?",
       {
         kind: "diverging",
@@ -360,6 +362,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        referee fixes and runs again. */
     const retried = await store.begin(
       SLUG,
+      HASH,
       "How strong is the evidence?",
       {
         kind: "diverging",
@@ -406,7 +409,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     // reading the list and pressing a swatch, so it is a no-op, not a throw.
     await take("recolour a criterion nobody has", await store.recolour(SLUG, "spya-crtz99", 2));
 
-    const third = await store.begin(SLUG, "Is the sample big enough?", { kind: "single" }, "spya-crtc22", now);
+    const third = await store.begin(SLUG, HASH, "Is the sample big enough?", { kind: "single" }, "spya-crtc22", now);
     await take("begin a third and abandon it", third.row);
 
     /* A **negative** grace window, and that is deliberate rather than sloppy:
@@ -497,21 +500,21 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     const start = Date.parse("2026-08-01T00:00:00.000Z");
     const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
 
-    const oldest = await store.begin(SLUG, "the one that failed", { kind: "single" }, undefined, at(0));
+    const oldest = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, undefined, at(0));
     await store.finish(SLUG, oldest.row.id, { status: "error", error: "the provider refused" }, oldest.attempt);
     for (let i = 1; i < MAX_CRITERIA; i++) {
-      const { row, attempt } = await store.begin(SLUG, `criterion ${i}`, { kind: "single" }, undefined, at(i));
+      const { row, attempt } = await store.begin(SLUG, HASH, `criterion ${i}`, { kind: "single" }, undefined, at(i));
       await store.finish(SLUG, row.id, { status: "done", results: [] }, attempt);
     }
     expect(await store.load(SLUG)).toHaveLength(MAX_CRITERIA);
 
     // Retried: the same row, the same date, waiting again.
-    const retry = await store.begin(SLUG, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
+    const retry = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
     expect(retry.row.id).toBe(oldest.row.id);
     expect(retry.row.createdAt).toBe(oldest.row.createdAt);
 
     // And while it is out, one more criterion is begun.
-    await store.begin(SLUG, "one more", { kind: "single" }, undefined, at(101));
+    await store.begin(SLUG, HASH, "one more", { kind: "single" }, undefined, at(101));
 
     const kept = await store.load(SLUG);
     expect(kept.find((c) => c.id === oldest.row.id)?.status).toBe("pending");
@@ -537,6 +540,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
       const now = clock();
       const begun = await store.begin(
         SLUG,
+        HASH,
         "Does this cut for or against?",
         { kind: "diverging", poles: { against: "against", favour: "for" }, scale: "rg" },
         "spya-crtd22",
@@ -607,6 +611,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        the two agreeing here is part of what is being checked. */
     await criteria.begin(
       SLUG,
+      HASH,
       "Are the controls adequate?",
       {
         kind: "diverging",
@@ -821,7 +826,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
   });
 
   it("writes the shared sentence over a swept criterion", async () => {
-    await pgRefereeCriteriaStore.begin(SLUG, "Abandoned", { kind: "single" }, "spya-crte22");
+    await pgRefereeCriteriaStore.begin(SLUG, HASH, "Abandoned", { kind: "single" }, "spya-crte22");
     const swept = await pgRefereeCriteriaStore.sweepPending(SLUG, {
       keep: new Set<string>(),
       graceMs: -1000,

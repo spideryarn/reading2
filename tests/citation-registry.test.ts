@@ -118,6 +118,52 @@ describe("what an answer puts on the row", () => {
     expect(out.counts).toMatchObject({ identified: 1, asked: 1, found: 1, conflict: 0 });
   });
 
+  describe("Crossref's citation count (plan 261005i)", () => {
+    const READ = "2026-10-04T12:00:00.000Z";
+    const attached = async (over: Partial<WorkRecord>, title = "Attention is all you need") => {
+      const reg = fake({ "doi:10.5555/attention": { kind: "found", record: record("doi:10.5555/attention", title, over) } });
+      return await attachCitationRegistry(list([ATTENTION]), reg);
+    };
+
+    it("puts the count and the moment it was read on a found Crossref row, and counts it", async () => {
+      const out = await attached({ citedByCount: 357, citedByCountReadAt: READ });
+      expect(out.citations.citations[0]?.registry).toMatchObject({
+        kind: "found",
+        source: "crossref",
+        citedBy: { count: 357, readAt: READ },
+      });
+      expect(out.counts).toMatchObject({ found: 1, counted: 1 });
+    });
+
+    it("keeps a zero: Crossref recording none is an answer", async () => {
+      const out = await attached({ citedByCount: 0, citedByCountReadAt: READ });
+      expect(out.citations.citations[0]?.registry).toMatchObject({ citedBy: { count: 0, readAt: READ } });
+      expect(out.counts.counted).toBe(1);
+    });
+
+    it("adds nothing when Crossref gave no count, or the moment is missing", async () => {
+      for (const over of [{ citedByCountReadAt: READ }, { citedByCount: 357 }, {}] as Partial<WorkRecord>[]) {
+        const out = await attached(over);
+        expect(out.citations.citations[0]?.registry).toMatchObject({ kind: "found" });
+        expect(out.citations.citations[0]?.registry).not.toHaveProperty("citedBy");
+        expect(out.counts).toMatchObject({ found: 1, counted: 0 });
+      }
+    });
+
+    it("never puts a count on a DataCite record, whatever the record carries", async () => {
+      const out = await attached({ source: "datacite", citedByCount: 357, citedByCountReadAt: READ });
+      expect(out.citations.citations[0]?.registry).toMatchObject({ kind: "found", source: "datacite" });
+      expect(out.citations.citations[0]?.registry).not.toHaveProperty("citedBy");
+      expect(out.counts.counted).toBe(0);
+    });
+
+    it("never puts a count on a conflict: that is another work's count", async () => {
+      const out = await attached({ citedByCount: 357, citedByCountReadAt: READ }, "Soil microbiomes of the Atacama desert");
+      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "crossref" });
+      expect(out.counts).toMatchObject({ conflict: 1, counted: 0 });
+    });
+  });
+
   it("keeps a disagreeing title as a conflict, and none of the record", async () => {
     const reg = fake({
       "doi:10.5555/attention": {
