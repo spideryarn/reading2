@@ -1754,111 +1754,114 @@ async function answer(
   const key = `${slug}/${comment.id}`;
   const release = answering.hold(key);
 
-  const { frame } = sse(res);
-  frame("begin", comment);
-
-  /**
-   * Send the `done` frame, carrying **what the store actually holds**.
-   *
-   * `commentStore.patch` answers `undefined` when this attempt is no longer the
-   * live one — a sweep buried it and the reader has begun another. Framing our
-   * own answer then would put it back on their screen, which is the overwrite
-   * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
-   * whatever the `done` frame carries. So on a refusal the row is read back and
-   * framed instead, and the reader's panel ends up agreeing with the database.
-   *
-   * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
-   * simply stays silent. The comment client turns a stream that ends without a
-   * `done` into "The answer stopped arriving. Try again." and writes that error
-   * over the row — so silence here would clobber the newer attempt in the UI
-   * with a message about an older one.
-   *
-   * The fallback is our own patch, for the case where the read finds nothing:
-   * the comment was deleted mid-answer, and `useComments` already knows what to
-   * do with a `done` frame for an id it has deleted.
-   */
-  const settle = async (patch: AnswerFinish): Promise<void> => {
-    const kept = await commentStore.patch(slug, comment.id, patch, attempt);
-    if (kept) {
-      frame("done", { ...comment, ...patch });
-      return;
-    }
-    let stored: Comment | undefined;
-    try {
-      stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
-    } catch (readErr) {
-      // The write was refused and the read-back failed too. Say so, then fall
-      // back — a `done` frame the reader can act on beats a stream that stops.
-      log("store").error(
-        { ...errorFields(readErr), slug, id: comment.id },
-        `could not read back a superseded explanation for ${slug}`,
-      );
-    }
-    frame("done", stored ?? { ...comment, ...patch });
-  };
-
-  let text = "";
   try {
-    for await (const event of explainStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      blockId,
-      quote,
-      dig,
-      profile,
-    })) {
-      if (event.type === "delta") {
-        text += event.text;
-        frame("delta", { text: event.text });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", comment);
+
+    /**
+     * Send the `done` frame, carrying **what the store actually holds**.
+     *
+     * `commentStore.patch` answers `undefined` when this attempt is no longer the
+     * live one — a sweep buried it and the reader has begun another. Framing our
+     * own answer then would put it back on their screen, which is the overwrite
+     * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
+     * whatever the `done` frame carries. So on a refusal the row is read back and
+     * framed instead, and the reader's panel ends up agreeing with the database.
+     *
+     * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
+     * simply stays silent. The comment client turns a stream that ends without a
+     * `done` into "The answer stopped arriving. Try again." and writes that error
+     * over the row — so silence here would clobber the newer attempt in the UI
+     * with a message about an older one.
+     *
+     * The fallback is our own patch, for the case where the read finds nothing:
+     * the comment was deleted mid-answer, and `useComments` already knows what to
+     * do with a `done` frame for an id it has deleted.
+     */
+    const settle = async (patch: AnswerFinish): Promise<void> => {
+      const kept = await commentStore.patch(slug, comment.id, patch, attempt);
+      if (kept) {
+        frame("done", { ...comment, ...patch });
+        return;
       }
-      await settle({
-        status: "done" as const,
-        answer: event.answer,
-        citations: event.citations,
-        searches: event.searches,
-        model: event.model,
-      });
-    }
-  } catch (err) {
-    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
-       function owns the response and the outer catch never sees the error — so
-       a failure inside a stream is invisible to the seam in `serveApi`, and a
-       stream is exactly where a model call fails. Same reasoning at the two
-       other streams below. */
-    captureFailure(err, { route: "explain", slug });
-    /* The partial answer is kept, exactly as chat keeps one. Half an
-       explanation and a reason beats a spinner that turns into nothing, and the
-       reader has already read the half. */
-    const patch = {
-      status: "error" as const,
-      error: sayToReader(err, { route: "explain", slug }),
-      ...(text.trim() ? { answer: text.trim() } : {}),
+      let stored: Comment | undefined;
+      try {
+        stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
+      } catch (readErr) {
+        // The write was refused and the read-back failed too. Say so, then fall
+        // back — a `done` frame the reader can act on beats a stream that stops.
+        log("store").error(
+          { ...errorFields(readErr), slug, id: comment.id },
+          `could not read back a superseded explanation for ${slug}`,
+        );
+      }
+      frame("done", stored ?? { ...comment, ...patch });
     };
-    /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
-       error would reach the outer handler, which would try to `send` a JSON 500
-       onto a response that is already an open event stream — and the reader
-       would see the stream simply stop. A store that cannot record the failure
-       is a worse thing than a failure, and it is worth its own line. */
+
+    let text = "";
     try {
-      await settle(patch);
-    } catch (storeErr) {
-      log("store").error(
-        { ...errorFields(storeErr), slug, id: comment.id },
-        `could not record a failed explanation for ${slug}`,
-      );
-      /* The secondary failure, and worth its own issue rather than a footnote
-         on the first: one of these means a model call failed, two mean the
-         store is broken too, and only the second is an emergency. */
-      captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
-      /* `settle` frames the `done` itself, so this is the one path that still
-         has to: the store could not be told, and the reader must still be. */
-      frame("done", { ...comment, ...patch });
+      for await (const event of explainStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        blockId,
+        quote,
+        dig,
+        profile,
+      })) {
+        if (event.type === "delta") {
+          text += event.text;
+          frame("delta", { text: event.text });
+          continue;
+        }
+        await settle({
+          status: "done" as const,
+          answer: event.answer,
+          citations: event.citations,
+          searches: event.searches,
+          model: event.model,
+        });
+      }
+    } catch (err) {
+      /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+         function owns the response and the outer catch never sees the error — so
+         a failure inside a stream is invisible to the seam in `serveApi`, and a
+         stream is exactly where a model call fails. Same reasoning at the two
+         other streams below. */
+      captureFailure(err, { route: "explain", slug });
+      /* The partial answer is kept, exactly as chat keeps one. Half an
+         explanation and a reason beats a spinner that turns into nothing, and the
+         reader has already read the half. */
+      const patch = {
+        status: "error" as const,
+        error: sayToReader(err, { route: "explain", slug }),
+        ...(text.trim() ? { answer: text.trim() } : {}),
+      };
+      /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
+         error would reach the outer handler, which would try to `send` a JSON 500
+         onto a response that is already an open event stream — and the reader
+         would see the stream simply stop. A store that cannot record the failure
+         is a worse thing than a failure, and it is worth its own line. */
+      try {
+        await settle(patch);
+      } catch (storeErr) {
+        log("store").error(
+          { ...errorFields(storeErr), slug, id: comment.id },
+          `could not record a failed explanation for ${slug}`,
+        );
+        /* The secondary failure, and worth its own issue rather than a footnote
+           on the first: one of these means a model call failed, two mean the
+           store is broken too, and only the second is an emergency. */
+        captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
+        /* `settle` frames the `done` itself, so this is the one path that still
+           has to: the store could not be told, and the reader must still be. */
+        frame("done", { ...comment, ...patch });
+      }
+    } finally {
+      res.end();
     }
   } finally {
     release();
-    res.end();
     await freeDig?.();
   }
 }

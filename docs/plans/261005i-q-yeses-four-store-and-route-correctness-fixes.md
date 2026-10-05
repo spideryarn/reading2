@@ -186,4 +186,59 @@ wins**; each builder is handed the review itself.
 - **D, from the body.** Dropping `refuseAPaperNotReadYet` would add `loadArticle`'s `paper` payload
   to the 409; keep the call unless that shape is checked.
 
-*(more as items land)*
+### 2026-10-05 — all four landed
+
+| Item | Queue id | Commit | What happened |
+|---|---|---|---|
+| B | `qi-g25rz5tc` | `40c217dd6` | The lock is **not** redundant and stays. Publication (`publishRevisionIn`, `src/store/pg-revisions.ts`) flips `processing` to `full` under the article lock with no billing lock. A new case holds that write open and shows a share blocked behind it; with `.for("update")` deleted it answers 409. The two-publish case is kept and renamed. No behaviour change. |
+| A | `qi-paam4re2` | `c0b2e1727` | `blocksAreWhatTheirHtmlProduces` in `src/blocks.ts`, called by the queue and by `isCurrent`. `blocksFor` was split so the page reads the rows once and feeds the arm the stored copy. The guard and the agreement test were red first. |
+| C | `qi-dwkg6wh4` | `d5a445c32` | `src/live-keys.ts`; `searching`, `refereeing`, `pullingClaims` and `answering` all use it, and `beganAnswering` is gone. Sol's reasoned F4 was **reproduced** in all three handlers. |
+| D | `qi-rw8ppcgf` | `7fc1b41fb` | `begin` takes `sourceHash` after `slug` in both stores; both handlers load the article first. 85 test callers migrated; the untyped fake fixed by hand. |
+
+Built by three Opus subagents in parallel (A; B; C then D). Every fix was red first and mutated
+afterwards; the outputs are quoted in
+[the code review prompt](261005i-q-yeses-four-store-and-route-correctness-fixes-code-review-prompt.md).
+
+What differed from the plan:
+
+- **A.** The pure function takes nullable inputs and answers false when one is missing, so that
+  rule is shared too. The measured cost is up to about a second on the largest article, per load
+  of the Metadata page only (`GET /api/metadata/:slug` has no other client caller).
+- **D.** The handler tests stand in for a re-extraction by rewriting one `revision_blocks.text`
+  row and restoring it in `finally`; no helper edits a loaded article's blocks. They pin the
+  handler's order, and only the store tests pin whose hash is written.
+- **D, for a reader.** A `loadArticle` that fails is now an HTTP error with no stored row. Both
+  panels already turn a failed POST into a local error row with a retry (`useSearch.ts`,
+  `useCriteria.ts`); it is gone on reload, where the stored one was not. No client change, so no
+  browser pass.
+
+**GPT Sol's code review: land after its fixes.**
+[The review](261005i-q-yeses-four-store-and-route-correctness-fixes-code-review-sol.md). One round.
+
+- **CF6 (P1, reproduced), fixed by the reviewer.** The comment answer took its live hold before
+  the stream was opened and outside any `finally`, so a response that threw during setup pinned
+  the comment's id in every later sweep. It predates this work, and C moving `answering` onto the
+  shared helper is what put it in scope. One outer `try`/`finally` now covers setup; two cases in
+  `tests/comment-answer-marker.test.ts`;
+  [postmortem](../postmortems/261005h-a-live-hold-before-the-cleanup-boundary-survives-stream-setup-failure.md).
+  I read the diff (a re-indent and the outer block) and re-ran `routes`, `comment-sweep`,
+  `referee-stream-lifetime` and the new file: 195 and 77 passing.
+- **CF7, CF8, CF9 (P3), fixed by the reviewer.** `block-ids.md` described a comparison that
+  ignored ids, which the replay has not done for some time; a sentence in `pg-visibility.ts`
+  overstated what the billing lock is needed for; `architecture.md` gets a line for `liveKeys`.
+- **CF10 (P1, reasoned, wider, pre-existing), not built.** `GET` of saved searches does not send
+  the article's current fingerprint, so the panel cannot reliably mark a saved search as from an
+  older version. `search.md` already says so. It is a client change and goes to the queue.
+
+**Gates.** `npm run typecheck`: all four projects pass. `npm test` at `7fc1b41fb`: 1633 files
+passed, 1 failed — `tests/worktree-remove.test.ts`, two cases about a worktree's lock, which pass
+when the file is run alone and touch nothing here. The suite was not re-run after the review's
+fixes; the files they touch were.
+
+**Found, not fixed.**
+
+1. CF10, above.
+2. `structure` still disagrees the other way (queue *done*, page *not current*). Deliberate, pinned.
+3. `contracts.ts` says "both stores call it" of `withRun` and `withCriterion`; there is one store.
+4. About ten test comments name `blocksMatchTheirHtml (src/pipeline.ts)` as where the three
+   questions live. It is still the entry point, so they are not wrong, only one hop short.

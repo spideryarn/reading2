@@ -21,10 +21,9 @@
  *
  * **Two toggles at once are queued by the billing lock.** Only the owner can
  * change an article, so two calls for one article share one billing row, and
- * the second waits there until the first has committed. Without that both
- * would see `private`, both write `public`, and write **two** publish events
- * for one transition — a log that says a thing happened twice is worse than no
- * log, because it is the kind of wrong that gets believed.
+ * the second waits there until the first has committed. That lock already
+ * prevents both from reading `private` and writing two publish events for one
+ * transition; the article lock would also serialise those two toggles.
  *
  * **The article's row lock is for a writer that does not hold the billing
  * lock.** There is one: the publication that lands a tree on a minimal paper
