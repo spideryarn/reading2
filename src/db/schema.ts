@@ -4650,6 +4650,61 @@ export const glossaryHiddenEntries = spideryarn.table(
   ],
 );
 
+/**
+ * **Every finished mark in the quiz** — the reader's answer and the mark it was
+ * given, so that both are still there when they come back.
+ * docs/plans/261005b-quiz-answers-are-kept-and-restored.md § The table (report
+ * spya-e8ujxn). Until 2026-10-05 nothing about an answer was stored.
+ *
+ * - **Append-only, one row per finished mark.** Answering a question again
+ *   adds a row; the read takes the latest per question
+ *   (src/store/pg-quiz-attempts.ts). `created_at` is when the mark finished,
+ *   from the database default — no store names it.
+ * - **`batch_id` and `question_id` are text with no foreign key**, because the
+ *   batch they name lives inside one JSON column (`article_revisions.quiz`)
+ *   that *Write them again* overwrites. Which is why **`question` is copied
+ *   in**: once the batch has been replaced, the row's ids name nothing, and the
+ *   question's words at the time are what keeps it meaning something.
+ * - **Rows for a replaced batch are kept**, not shown: the read is scoped to
+ *   the current batch, and the export carries all of them.
+ * - **No `owner_id`**, like `reading_time`: only the owner writes, and
+ *   ownership is inherited through the article, which also takes these rows
+ *   with it when it is deleted.
+ * - **No verdict column.** Whether the reader got it right is not stored —
+ *   docs/project/quiz.md § What is deliberately not here.
+ *
+ * The public read never touches this table.
+ */
+export const quizAttempts = spideryarn.table(
+  "quiz_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `Quiz.batchId` — the batch the answer was marked against. */
+    batchId: text("batch_id").notNull(),
+    questionId: text("question_id").notNull(),
+    /** The question's words when it was answered — see the header. */
+    question: text("question").notNull(),
+    /**
+     * The reader's words as they went to the marker, trimmed. **4,000 is
+     * `MAX_QUIZ_ANSWER_CHARS`** in src/types.ts, which the route enforces
+     * first; `char_length` counts code points and the route counts UTF-16
+     * units, so this never refuses an answer the route let through.
+     */
+    answer: text("answer").notNull(),
+    /** The mark, exactly as the reader saw it. */
+    reply: text("reply").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("quiz_attempts_answer_length", sql`char_length(${t.answer}) between 1 and 4000`),
+    /** The one read: this batch's latest answer to each question. */
+    index("quiz_attempts_latest").on(t.articleId, t.batchId, t.questionId, t.createdAt.desc()),
+  ],
+);
+
 /* -------------------------------------------------------- reader profile -- */
 
 /**

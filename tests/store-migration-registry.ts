@@ -1998,6 +1998,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/quiz-attempts-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with kept quiz answers (plan 261005b, 2026-10-05). It " +
+      "seeds three articles with `scratchArticleInPg`, each with a quiz written into the clone, " +
+      "and drives `POST /api/quiz/:slug/mark` and `GET /api/quiz/:slug` through `handleApi`, " +
+      "reading rows back out of `quiz_attempts` — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step, as for " +
+      "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
   "tests/glossary-added-term.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2877,6 +2889,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
   "tests/glossary-hidden-route.test.ts": "private-postgres",
+  /* Seeds three articles with a quiz each and drives the quiz mark POST and
+     the owner's GET through the route, reading rows back out of
+     `quiz_attempts`. The marker is a script; no model is called. */
+  "tests/quiz-attempts-route.test.ts": "private-postgres",
   /* Seeds three articles, writes a glossary on each, and drives adding a
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */

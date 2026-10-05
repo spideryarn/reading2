@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "4 October 2026";
+const LAST_UPDATED = "5 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -190,11 +190,19 @@ export function PrivacyPage() {
             <strong className="tw:text-foreground">The articles you add</strong> — we fetch the page
             you point us at and store its text and images. A PDF you upload is stored as a file.
           </li>
+          {/* **Quiz answers are on this list since 2026-10-05**, and until then
+              the bullet ended "Quiz answers are the exception: they go to a
+              model to be marked and are not stored" — true at the time. Greg
+              asked for the answers to be kept so they are still there when a
+              reader comes back (report spya-e8ujxn), and `quiz_attempts` now
+              holds each answer and the reply it was given. What is still not
+              kept is whether an answer was judged right or wrong.
+              docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
-            highlights, chat and voice conversations, saved searches, and the “about you” profile
-            you can fill in, which is there to be given to the model. Quiz answers are the exception:
-            they go to a model to be marked and are not stored.
+            highlights, chat and voice conversations, saved searches, your answers to quiz
+            questions, with what the AI wrote back about each, and the “about you” profile you can
+            fill in, which is there to be given to the model.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures

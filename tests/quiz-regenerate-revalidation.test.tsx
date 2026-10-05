@@ -40,7 +40,7 @@ const batch = (batchId: string) => ({
   batchId, slug: "a-piece", profileHash: "the-old-profile", questions: [],
 }) as unknown as Quiz;
 const response = (batchId: string, stale = false): Response => Response.json({
-  quiz: batch(batchId), stale, outdated: false, profileChanged: batchId === "old-batch",
+  quiz: batch(batchId), stale, outdated: false, profileChanged: batchId === "old-batch", attempts: [],
 } satisfies QuizResponse);
 let openingStale = false;
 let nextRead: Promise<Response> | null = null;

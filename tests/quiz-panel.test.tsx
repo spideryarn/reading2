@@ -153,6 +153,11 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     stalled: false,
     attempt: null,
     answered: new Set<string>(),
+    /* Nothing kept: restoring an answer is tests/quiz-kept-answers.test.tsx,
+       which runs the real hooks. */
+    kept: new Map(),
+    keptUnread: false,
+    showKept: () => {},
     profiled: false,
     profileChanged: false,
     rewriting: false,
@@ -455,7 +460,7 @@ describe("a mark stays bound to the answer it was computed from", () => {
     expect(host.textContent).not.toContain("answered");
     /* The mark itself stays on screen. Throwing it away on a keystroke is the
        other way of being wrong here — it is the thing the reader is editing
-       against, and nothing stores it. */
+       against. */
     expect(host.textContent).toContain("You have the cost claim");
   });
 

@@ -5102,10 +5102,40 @@ export interface QuizResponse {
   outdated: boolean;
   /** Written for a profile the reader has since changed. `ThreadResponse`. */
   profileChanged: boolean;
+  /**
+   * **The reader's kept answers to this batch**, the latest per question —
+   * since 2026-10-05 (plan 261005b, report spya-e8ujxn).
+   *
+   * **`null` is "could not be read", and it is not `[]`**, which says the
+   * reader has answered nothing. The route answers `null` when the attempts
+   * read threw, so that the questions still arrive; the client then keeps what
+   * it already had for this batch (GPT Sol's plan review, F5).
+   */
+  attempts: QuizKeptAnswer[] | null;
 }
 
-/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
-export type QuizFound = Omit<QuizResponse, "profileChanged">;
+/**
+ * One finished mark, as the owner's read returns it: the answer, the mark it
+ * was given, and when. A row of `quiz_attempts` (src/db/schema.ts) less the
+ * batch — the read is scoped to one — and the question's words, which the
+ * client already has. **No verdict**: whether the reader got it right is not
+ * stored.
+ */
+export interface QuizKeptAnswer {
+  questionId: QuizQuestionId;
+  /** The reader's words, as they went to the marker. */
+  answer: string;
+  /** The mark, as the reader saw it. */
+  reply: string;
+  /** ISO time the mark finished — the row's `created_at`. */
+  answeredAt: string;
+}
+
+/**
+ * What the store returns; the route adds `profileChanged` (as `IdeasFound`)
+ * and `attempts`, which is a second read from a different table.
+ */
+export type QuizFound = Omit<QuizResponse, "profileChanged" | "attempts">;
 
 /**
  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.

@@ -20,9 +20,24 @@
  * two-thirds of what it does is history, and history is the thing this feature
  * does not have.
  *
- * Nothing is stored, either. A reload starts the quiz fresh — the questions
- * persist because they are an artefact, and the answers do not persist at all.
- * So `answered` and `reply` below are session state and nothing else reads them.
+ * ## Each finished mark is kept, and put back
+ *
+ * Nothing was stored until 2026-10-05, and a reader who left the quiz came
+ * back to empty boxes (report spya-e8ujxn). The server now keeps every mark
+ * that reaches `done` and `GET /api/quiz/:slug` returns the latest per
+ * question as `attempts`
+ * (docs/plans/261005b-quiz-answers-are-kept-and-restored.md).
+ *
+ * **Two records, kept apart, in `useQuizRead`** — which lives above the band,
+ * so both outlive it: what the server last said (`fromServer`, replaced by
+ * each read that could say) and this visit's own finished marks (`thisVisit`,
+ * which no read touches). `kept` is the two merged, the later answer to each
+ * question winning, and `answered` is its keys — one source for the tick, the
+ * restored box and the restored mark. Why two and not one is on
+ * `useQuizRead`.
+ *
+ * Still not a history: the attempt on screen is one answer and one reply, and
+ * whether the reader got it right is not kept anywhere.
  *
  * ## The terminal contract, which is the whole of why `mark` is careful
  *
@@ -40,7 +55,7 @@
  *
  * See docs/plans/260831al-review-quiz-sub-mode.md and src/quiz.ts.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Job, Quiz, QuizQuestionId, QuizResponse, QuizVerdict } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useAutoRun } from "./useAutoRun.js";
@@ -119,6 +134,36 @@ export interface Attempt {
    * to treat it as an error.
    */
   verdict?: QuizVerdict;
+  /**
+   * **Put back from a kept answer, not marked just now** — `showKept`.
+   *
+   * It looks like any other finished mark, and that is the point; the one
+   * thing that must tell them apart is the panel's verdict effect, which reads
+   * a `done` attempt with no verdict as *a new mark that could not be judged*
+   * and forgets the old verdict. A restored attempt never has one — verdicts
+   * are not stored — so without this flag, Next then Previous would un-learn a
+   * verdict earned a minute ago. GPT Sol's plan review of 261005b, F4.
+   */
+  restored?: true;
+  /**
+   * **The mark finished and the server could not store it.** It is on screen
+   * and in this visit's record, and it will not be there after a reload — the
+   * panel says so under the mark. Absent on every mark that was stored.
+   */
+  notSaved?: true;
+}
+
+/**
+ * One kept answer, as the panel restores it — a `QuizKeptAnswer` from the
+ * server, or a mark that finished this visit.
+ */
+export interface KeptAnswer {
+  answer: string;
+  reply: string;
+  /** ISO. The row's `created_at`; this machine's clock only when `saved` is false. */
+  answeredAt: string;
+  /** False when the server said it could not store this one — `Attempt.notSaved`. */
+  saved: boolean;
 }
 
 export interface UseQuiz {
@@ -154,8 +199,21 @@ export interface UseQuiz {
   stalled: boolean;
   /** The attempt in front of the reader, or null before they have answered anything. */
   attempt: Attempt | null;
-  /** Which questions have been marked to a `done` this session. Never persisted. */
+  /**
+   * Which questions of this batch have a finished mark — the keys of `kept`,
+   * so it includes answers from earlier visits.
+   */
   answered: ReadonlySet<QuizQuestionId>;
+  /** `QuizRead.kept`: the latest finished answer to each question of this batch. */
+  kept: ReadonlyMap<QuizQuestionId, KeptAnswer>;
+  /** `QuizRead.keptUnread`. */
+  keptUnread: boolean;
+  /**
+   * **Put the kept answer to this question on screen as its mark.** The panel
+   * calls it, with the box, from its one restoring effect. Does nothing when
+   * there is no kept answer or a mark is in flight.
+   */
+  showKept(questionId: QuizQuestionId): void;
   /** These were written for a reader profile — `quiz.profileHash != null`. */
   profiled: boolean;
   /** …and the reader's profile has changed since. The server's verdict. */
@@ -234,6 +292,67 @@ export interface QuizRead {
   reload(): Promise<void>;
   /** Read again because a job has just written a new batch. `OrderedRead.refresh`. */
   refresh(): Promise<void>;
+  /**
+   * **The latest finished answer to each question of the batch on screen** —
+   * the server's and this visit's, merged. Empty for a batch nobody has
+   * answered, and never carries another batch's or another article's.
+   */
+  kept: ReadonlyMap<QuizQuestionId, KeptAnswer>;
+  /**
+   * **The server could not read the kept answers, and we hold none for this
+   * batch from an earlier read.** Not the same as having none: the panel says
+   * so, and offers the read again.
+   */
+  keptUnread: boolean;
+  /**
+   * Record a mark that has just finished — `useQuiz.mark`, on `done`.
+   * `answeredAt` is the server's time for the stored row, or `null` when it
+   * said the save failed.
+   */
+  noteMark(
+    batchId: string,
+    questionId: QuizQuestionId,
+    mark: { answer: string; reply: string; answeredAt: string | null },
+  ): void;
+}
+
+/** One batch's kept answers, and which batch of which article that is. */
+interface KeptSet {
+  /** `keptKey`, or `null` for "nothing held". */
+  readonly key: string | null;
+  readonly byQuestion: ReadonlyMap<QuizQuestionId, KeptAnswer>;
+  /** False when the server said it could not read them (`attempts: null`). Always true of `thisVisit`. */
+  readonly known: boolean;
+}
+
+const NOTHING_KEPT: KeptSet = { key: null, byQuestion: new Map(), known: true };
+
+/** A batch id is minted per run of one article's quiz; the slug is belt and braces. */
+const keptKey = (slug: string, batchId: string) => `${slug}\n${batchId}`;
+
+/**
+ * The server's `attempts`, as a map — **validated rather than cast**, because
+ * these go straight into the reader's answer box. Anything that is not a list
+ * is `null`: "could not say", which is also what an offline copy saved before
+ * 2026-10-05 looks like.
+ */
+function keptFromServer(attempts: unknown): Map<QuizQuestionId, KeptAnswer> | null {
+  if (!Array.isArray(attempts)) return null;
+  const out = new Map<QuizQuestionId, KeptAnswer>();
+  for (const one of attempts as unknown[]) {
+    const { questionId, answer, reply, answeredAt } = (one ?? {}) as Record<string, unknown>;
+    if (
+      typeof questionId !== "string" ||
+      typeof answer !== "string" ||
+      typeof reply !== "string" ||
+      typeof answeredAt !== "string" ||
+      Number.isNaN(Date.parse(answeredAt))
+    ) {
+      continue;
+    }
+    out.set(questionId, { answer, reply, answeredAt, saved: true });
+  }
+  return out;
 }
 
 export function useQuizRead(slug: string): QuizRead {
@@ -246,6 +365,62 @@ export function useQuizRead(slug: string): QuizRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+
+  /**
+   * **The kept answers, as two records that never write to each other.**
+   *
+   * - `fromServer` is what the last read that *could say* said about one
+   *   batch. A read that answers `attempts: null` leaves it alone when it is
+   *   about the same batch — "could not read" is not "none" — and for a batch
+   *   we hold nothing for, it records that we do not know (`known: false`).
+   * - `thisVisit` is every mark that reached `done` in this tab, stored or
+   *   not. Only `noteMark` writes it.
+   *
+   * **One map seeded by reads and patched by marks was the first design, and
+   * it loses answers**: a revalidation that left before a save lands after it
+   * and replaces the map with a picture from before the answer existed. Kept
+   * apart, that read can only replace what the server said, and the merge
+   * below still has the newer answer. It is also what lets a mark whose save
+   * failed survive Next and Previous. GPT Sol's plan review of 261005b, F2 and
+   * F7.
+   *
+   * Both carry the batch they are about, so neither needs clearing: a set
+   * whose key is not the batch on screen is simply not read.
+   */
+  const [fromServer, setFromServer] = useState<KeptSet>(NOTHING_KEPT);
+  const [thisVisit, setThisVisit] = useState<KeptSet>(NOTHING_KEPT);
+  const serverSaid = useRef(fromServer);
+  serverSaid.current = fromServer;
+
+  const noteMark = useCallback<QuizRead["noteMark"]>(
+    (batchId, questionId, mark) => {
+      const key = keptKey(slug, batchId);
+      setThisVisit((was) => {
+        const byQuestion = new Map(was.key === key ? was.byQuestion : []);
+        let answeredAt = mark.answeredAt;
+        if (answeredAt === null) {
+          /* Not stored, so there is no row's time: this machine's clock — but
+             never earlier than an answer we already hold for the question. The
+             merge takes the later of two, the other is stamped by the server,
+             and a laptop clock a minute slow must not put the reader's older
+             answer back over the one they have just been marked on. */
+          const held = [
+            byQuestion.get(questionId),
+            serverSaid.current.key === key ? serverSaid.current.byQuestion.get(questionId) : undefined,
+          ].map((one) => (one ? Date.parse(one.answeredAt) + 1 : 0));
+          answeredAt = new Date(Math.max(Date.now(), ...held)).toISOString();
+        }
+        byQuestion.set(questionId, {
+          answer: mark.answer,
+          reply: mark.reply,
+          answeredAt,
+          saved: mark.answeredAt !== null,
+        });
+        return { key, byQuestion, known: true };
+      });
+    },
+    [slug],
+  );
 
   /**
    * The read itself — the parse, the 404 branch and the error copy, which are
@@ -267,6 +442,7 @@ export function useQuizRead(slug: string): QuizRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        setFromServer(NOTHING_KEPT);
         landed(started, res, null);
         setError(null);
         setStatus("none");
@@ -283,6 +459,16 @@ export function useQuizRead(slug: string): QuizRead {
          (written for nobody) both mean no badge. */
       setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
+      /* With the batch it is about, in the same commit as the batch. */
+      const key = keptKey(slug, loaded.quiz.batchId);
+      const theirs = keptFromServer(loaded.attempts);
+      setFromServer((was) =>
+        theirs
+          ? { key, byQuestion: theirs, known: true }
+          : was.key === key
+            ? was
+            : { key, byQuestion: new Map(), known: false },
+      );
       landed(started, res, loaded.quiz.batchId);
       setError(null);
       setStatus("ready");
@@ -322,6 +508,23 @@ export function useQuizRead(slug: string): QuizRead {
     await reload();
   }, [quiz, reload]);
 
+  /* **Per question, whichever answer is later.** This visit's wins a tie: it
+     is the same row the server will describe on its next read. */
+  const batchKey = quiz ? keptKey(slug, quiz.batchId) : null;
+  const kept = useMemo(() => {
+    const out = new Map<QuizQuestionId, KeptAnswer>();
+    if (batchKey === null) return out;
+    if (fromServer.key === batchKey) for (const [id, theirs] of fromServer.byQuestion) out.set(id, theirs);
+    if (thisVisit.key === batchKey) {
+      for (const [id, mine] of thisVisit.byQuestion) {
+        const theirs = out.get(id);
+        if (!theirs || Date.parse(mine.answeredAt) >= Date.parse(theirs.answeredAt)) out.set(id, mine);
+      }
+    }
+    return out;
+  }, [batchKey, fromServer, thisVisit]);
+  const keptUnread = batchKey !== null && fromServer.key === batchKey && !fromServer.known;
+
   return {
     status,
     quiz,
@@ -334,6 +537,9 @@ export function useQuizRead(slug: string): QuizRead {
     retryRead,
     reload,
     refresh,
+    kept,
+    keptUnread,
+    noteMark,
   };
 }
 
@@ -343,8 +549,14 @@ export function useQuizRead(slug: string): QuizRead {
  */
 export function useQuiz(slug: string, read: QuizRead): UseQuiz {
   const { status, quiz, stale, outdated, profiled, profileChanged, error, reload, refresh } = read;
+  const { kept, noteMark } = read;
   const [attempt, setAttempt] = useState<Attempt | null>(null);
-  const [answered, setAnswered] = useState<Set<QuizQuestionId>>(() => new Set());
+  /* **Derived, not kept** — until 2026-10-05 this was a set of its own, added
+     to on `done` and emptied on a new batch. `kept` is scoped to the batch on
+     screen already (a replacement batch can reuse question ids with new
+     meanings: GPT Sol's plan review, 260930i finding 6), so the tick and the
+     restored answer cannot disagree. */
+  const answered = useMemo(() => new Set(kept.keys()), [kept]);
 
   /* **Revalidate on mount, behind whatever is on screen** — `useQuotes`' reason:
      `useStepJob`'s first poll is a baseline and does not announce a job that had
@@ -355,14 +567,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     void reload();
   }, [reload]);
 
-  /* **The ticks go with the batch.** A replacement batch can reuse question ids
-     with new meanings, so a tick kept across it would call a question answered
-     that nobody has answered. GPT Sol's plan review, 260930i finding 6. */
   const batchId = quiz?.batchId;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — a new batch
-  useEffect(() => {
-    setAnswered(new Set());
-  }, [batchId]);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary,
@@ -442,6 +647,25 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     setAttempt(null);
   }, [abort]);
 
+  const showKept = useCallback(
+    (questionId: QuizQuestionId) => {
+      const one = kept.get(questionId);
+      /* A mark in flight owns the attempt; the panel asks only when there is
+         none, and this is the same refusal `mark` makes, from the other side. */
+      if (!one || live.current) return;
+      setAttempt({
+        questionId,
+        answer: one.answer,
+        status: "done",
+        reply: one.reply,
+        error: null,
+        restored: true,
+        ...(one.saved ? {} : { notSaved: true as const }),
+      });
+    },
+    [kept],
+  );
+
   const mark = useCallback(
     async (questionId: QuizQuestionId, answer: string) => {
       /* One live request per attempt. A press while one is running is a
@@ -486,7 +710,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
         /* **The reply is what `readAnswerStream` returns**, and it returns only
            on a `done` frame. There is no other road to the two lines below,
            which is the whole of the terminal contract as the client keeps it. */
-        const { reply, verdict } = await readAnswerStream(
+        const { reply, verdict, answeredAt } = await readAnswerStream(
           res.body,
           {
             delta: (text) => {
@@ -494,7 +718,22 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
               setAttempt({ questionId, answer, status: "marking", reply: text, error: null });
             },
             done: (data) => {
-              const sent = data as { reply?: unknown; verdict?: unknown } | null;
+              const sent = data as {
+                reply?: unknown;
+                verdict?: unknown;
+                answeredAt?: unknown;
+                kept?: unknown;
+              } | null;
+              /* **Stored only if the server gave the row's time and did not
+                 say otherwise.** `kept: false` is the save having failed; a
+                 `done` with no `answeredAt` at all is a server from before
+                 2026-10-05, which stored nothing — and saying "saved" for
+                 either would be a promise the next reload breaks. */
+              const at = sent?.answeredAt;
+              const answeredAt =
+                sent?.kept !== false && typeof at === "string" && !Number.isNaN(Date.parse(at))
+                  ? at
+                  : null;
               /* **Validated rather than cast**, because this decides whether the
                  next step carries its premise and a stray string would decide it
                  on nonsense. Any other value is absence, which means *show the
@@ -508,7 +747,11 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
                  `done` still hands back what the reader watched arrive — and is
                  never the "could not read" refusal an `undefined` here means. */
               const whole = sent?.reply;
-              return { reply: typeof whole === "string" && whole.trim() ? whole : partial, verdict };
+              return {
+                reply: typeof whole === "string" && whole.trim() ? whole : partial,
+                verdict,
+                answeredAt,
+              };
             },
           },
           MARK_STOPS,
@@ -520,12 +763,24 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
           reply,
           error: null,
           ...(verdict ? { verdict } : {}),
+          ...(answeredAt === null ? { notSaved: true as const } : {}),
         });
-        setAnswered((was) => {
-          const next = new Set(was);
-          next.add(questionId);
-          return next;
-        });
+        /* **The tick, and what Next → Previous puts back** — stored or not: a
+           mark the reader watched finish is theirs for this visit either way. */
+        noteMark(batchId, questionId, { answer, reply, answeredAt });
+        if (answeredAt !== null) {
+          /* **Read the quiz again, behind the screen, because the offline copy
+             of it is now out of date.** `apiFetch` deliberately does not throw
+             the cached `GET /api/quiz/<slug>` away on a mark — answering a
+             question must not cost the reader the questions
+             (lib/api.ts § `LEAVE_CACHED_RESOURCE_CURRENT`) — so without this a
+             reload with no network would bring the quiz back unanswered. A
+             successful GET rewrites the copy, with the answer in it. Only
+             after a mark that was stored: a failed one changed nothing on the
+             server. `refresh` trails a read already out rather than joining
+             it, since that one may have left before the save. F1 and F2. */
+          void refresh();
+        }
       } catch (err) {
         if (controller.signal.aborted) {
           /* The reader moved on or the panel went. Not a failure, and not
@@ -547,7 +802,7 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
         if (live.current === controller) live.current = null;
       }
     },
-    [quiz?.batchId, slug],
+    [quiz?.batchId, slug, noteMark, refresh],
   );
 
   return {
@@ -563,6 +818,9 @@ export function useQuiz(slug: string, read: QuizRead): UseQuiz {
     stalled: queue.stalled,
     attempt,
     answered,
+    kept,
+    keptUnread: read.keptUnread,
+    showKept,
     profiled,
     profileChanged,
     rewriting,

@@ -128,6 +128,47 @@ there is no second loading state. A read of attempts that fails does not take th
 - The schema gates that fire on their own: `action-tables-have-created-at`, `store-export-covers-tables`,
   `db:chain`, `migration-snapshots`.
 
+## After GPT Sol's plan review
+
+[The review](261005b-quiz-answers-plan-review-sol.md) of `bed0d44c8`: build with changes. All eight
+findings accepted; where this section and the text above disagree, this section wins.
+
+- **F1, the offline cache.** `src/web/lib/api.ts` deliberately does not invalidate the cached quiz
+  GET on a mark, so a reload offline would bring back "unanswered". After a mark that was saved, the
+  cached quiz response is refreshed through the existing cache machinery (a background re-read is
+  enough); a failed mark must not evict the questions. Test: cache, answer, restore offline.
+- **F2 and F7, two maps, not one.** The server's `attempts` and **this visit's finished marks** are
+  kept apart in `useQuizRead`: `fromServer` (replaced by each GET that carried attempts) and
+  `thisVisit` (added to on every `done`, saved or not, never touched by a GET, cleared only by a new
+  batch or slug). What the panel reads is, per question, whichever is later by `answeredAt`. So a GET
+  that started before a save cannot erase it, and a finished mark whose save failed is still there
+  after Next → Previous. `record()` returns the row's `created_at` and `done` carries it as
+  `answeredAt`; a failed save uses the client's clock and carries `kept: false`, and the mark shows
+  one quiet line, *"This answer could not be saved, so it will not be here when you come back."*
+- **F3, one restoring effect.** Not inside `move`. A single effect after the navigation effects,
+  keyed on batch and the id of the question actually on screen: if there is no attempt for that
+  question and the box is empty, fill both from the kept answer. It never overwrites a draft or a
+  live mark. Tests: batch + filter + arrival in one commit, same-index arrival, StrictMode.
+- **F4, a restored mark is not a new mark.** The restored attempt carries `restored: true` and the
+  verdict effect skips it, so Next → Previous does not delete a verdict earned this visit. A new
+  mark with no verdict still clears the old one.
+- **F5, "could not read" is not "none".** `attempts: null` when the attempts read failed; the client
+  then keeps what it had for the same batch, and on an opening read says, quietly, that the kept
+  answers could not be loaded, with the band's existing retry.
+- **F6, both exports.** `ArticleRows`, `readArticleRows`, both `ARTICLE_TABLE_COVERAGE` destinations,
+  and the serialisers in `src/store/export.ts` (rollback) and `src/store/export-bundle.ts` (the
+  reader's), each tested with a sentinel attempt including one from a replaced batch.
+- **F8, the save boundary.** A reader who leaves during the verdict call still gets a `done` from
+  `markAnswerStream`, so the row is written with nobody listening. That is the rule, not an accident:
+  **a mark that finished is kept, whether or not its last frame was delivered.** Tested.
+- **Append stays.** Sol notes a latest-answer upsert is the smaller product scope. Kept as append
+  because the code is the same size and the times of earlier tries are the thing Greg's "store when
+  it happened" asks for; the `question` column is what makes those rows mean anything.
+- Recorded, no work: the article foreign key covers deletion and account erasure; a successor
+  revision keeps the article id; reset keeps the rows; the public payload and admin views are
+  explicit projections and do not pick the table up. One test that a non-owner and the public read
+  get no attempts.
+
 ## Open questions for Greg (not blocking)
 
 - **Q-quiz-verdict** — keep the hidden right/wrong with each stored answer, so that after a return
@@ -139,4 +180,40 @@ there is no second loading state. A read of attempts that fails does not take th
 
 ## What landed
 
-(filled in at the end)
+Built 2026-10-05, in one stage, as the section above describes. Where things are:
+
+- **Table and migration**: `quizAttempts` in `src/db/schema.ts`;
+  `drizzle/20261005032955_quiz_attempts.sql`. The answer's CHECK is `char_length between 1 and 4000`.
+- **Store**: `src/store/pg-quiz-attempts.ts` (`record`, `latestForBatch`), `QuizAttemptStore` in
+  `contracts.ts`, `quizAttemptStore` in `index.ts`.
+- **Route**: `markOneAnswer` writes the row and then sends `done` with `answeredAt` (or
+  `kept: false`); `GET /api/quiz/:slug` adds `attempts` (`null` when that read failed).
+- **Client**: `useQuizRead` holds `fromServer` and `thisVisit` and exposes `kept`, `keptUnread`,
+  `noteMark`; `useQuiz` derives `answered` from `kept` and adds `showKept`; `QuizPanel` has the one
+  restoring effect, the `restored` skip in the verdict effect, and the two failure lines.
+- **Exports**: `quiz-attempts.json` in both.
+- **Tests**: `tests/quiz-attempts-route.test.ts`, `tests/quiz-kept-answers.test.tsx`, and cases added
+  to `store-export-covers-tables`, `api-fetch-offline`, `privacy-page` and `public-reads`.
+- **Docs**: [quiz.md § Answers are kept](../project/quiz.md#answers-are-kept),
+  [privacy.md § Quiz answers](../project/privacy.md#quiz-answers), export.md, and `/privacy`.
+
+Five things were decided while building, none of them a change of design:
+
+- **The restoring effect is keyed on the batch, the question drawn and its kept answer, and reads
+  the box and the attempt without depending on them.** Keyed on them too, a reader who typed over
+  an empty box and then cleared it would have had their old answer jump back in.
+- **It restores only when there is no attempt at all**, not merely none for this question. Every
+  road to a new question goes through `move`, which clears the attempt, so the two are the same in
+  practice; the stricter test cannot replace a mark in flight.
+- **A failed save's time is this machine's clock, but never earlier than an answer already held
+  for that question.** The merge takes the later of two and the other is stamped by the server, so
+  a slow laptop clock would otherwise put the older, saved answer back over the newer one (F7's
+  second case). Tested with a server time in 2099.
+- **A `done` with no `answeredAt` counts as not saved**, as well as one with `kept: false`: that is
+  what a server from before this change sends during a deploy, and it stored nothing.
+- **F1 is a re-read, not a cache write**: `useQuiz.mark` calls the read's `refresh` after a stored
+  mark, which also serves F2 (it trails a read already out). The exemption in `lib/api.ts` is
+  unchanged and its comment now says why it survives.
+
+Not built, as planned: no stored verdict, no change to which question opens, no change to either
+prompt. `/help` says nothing about quiz answers being forgotten, so it did not change.

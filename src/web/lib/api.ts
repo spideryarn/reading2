@@ -949,18 +949,27 @@ function cacheable(input: string): boolean {
  *
  * A non-GET is assumed to have changed the thing it names, which is right for
  * every route but one: `POST /api/quiz/<slug>/mark` sends one answer and
- * streams the marking back. **It stores no quiz state** — no attempt, no score,
- * no answer, no change to the questions — so `GET /api/quiz/<slug>` answers
- * exactly what it answered before and the cached copy is still current.
+ * streams the marking back. **It changes nothing about the questions**, and
+ * the questions are what a reader with no network needs from the copy.
  *
- * **It is not literally a write that writes nothing**, which is what this used
- * to be called. Marking makes a model call, and that call's spend goes through
- * the request's collector to an `ai_calls` ledger row — the route says so
- * itself, of the article it attaches to *"every row this request writes"*.
- * Accounting is recorded; nothing the offline store holds is affected by it.
- * That distinction is the whole name: the test is not *did the server write*,
- * it is *did the thing we cached change*. GPT Sol, 2026-09-02:
- * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3.
+ * **Since 2026-10-05 it does change what `GET /api/quiz/<slug>` answers**: a
+ * mark that finishes is stored, and the read returns it under `attempts`
+ * (plan 261005b). Until then this comment said the copy was "still current"
+ * after a mark, and it was. The exemption stays anyway, because the two ways
+ * of being wrong are not equal: throwing the copy away here happens when the
+ * response *headers* arrive, before anybody knows whether the mark will
+ * finish — so a mark that then failed would have cost the reader every
+ * question for the sake of an answer that was never stored. Instead the copy
+ * is kept and **brought up to date by a read**: `useQuiz.mark` reads the quiz
+ * again after a mark the server said it stored, and a successful GET rewrites
+ * the copy with the answer in it. In between, the copy is one answer behind,
+ * which is the same thing a second device is.
+ *
+ * Marking also makes a model call, whose spend goes through the request's
+ * collector to an `ai_calls` ledger row; nothing the offline store holds is
+ * affected by that. The first version of this exemption was reviewed by GPT
+ * Sol, 2026-09-02: docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3;
+ * this one in docs/plans/261005b-quiz-answers-plan-review-sol.md, F1.
  *
  * Exempted here rather than inside `resourceOf`, which answers a different
  * question — *which* resource a URL is about — and would still be right if it

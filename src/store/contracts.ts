@@ -94,6 +94,8 @@ import type {
   IllustratedFound,
   SketchFound,
   QuizFound,
+  QuizKeptAnswer,
+  QuizQuestionId,
   FaqFound,
   RelationsResponse,
   CrossrefsFound,
@@ -1657,6 +1659,32 @@ export interface ReadingTimeStore {
    * caller validates the shape before this is reached.
    */
   add(slug: string, seconds: Record<string, number>): Promise<void>;
+}
+
+/**
+ * The owner's finished quiz marks on one article — `quiz_attempts`,
+ * docs/plans/261005b-quiz-answers-are-kept-and-restored.md. Both methods are
+ * owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface QuizAttemptStore {
+  /**
+   * **Append one finished mark**, and return when the database says it
+   * happened (the row's `created_at`, ISO). Never an upsert: answering again
+   * is a second row.
+   */
+  record(
+    slug: string,
+    attempt: {
+      batchId: string;
+      questionId: QuizQuestionId;
+      /** The question's words, copied in — the batch they came from can be replaced. */
+      question: string;
+      answer: string;
+      reply: string;
+    },
+  ): Promise<string>;
+  /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
+  latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
 }
 
 /**

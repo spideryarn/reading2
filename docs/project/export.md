@@ -34,7 +34,10 @@ file-by-file list, and the thing to edit when the layout changes.
                       block-identities.json, assets.json
     augmentations/    tree, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, arc,
                       tweets, labels, comments, chat, searches, referee-claims, referee-criteria,
-                      tags (your own, since 261003d)
+                      tags (your own, since 261003d), quiz-attempts (your answers and the
+                      mark each was given, since 261005b — every one, including answers to
+                      questions that have since been rewritten; each row carries its
+                      question's words for that reason)
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
 has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,
