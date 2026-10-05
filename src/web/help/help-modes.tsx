@@ -267,8 +267,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
           <strong>Quick search</strong> box in the bottom bar, tap the <strong>⚡</strong> button when
-          it is shown instead, or press <strong>/</strong>. The box keeps your words after a search,
-          so you can add to them; the <strong>×</strong> at its right-hand end empties it.
+          it is shown instead, or press <strong>/</strong>. Typing <em>search for …</em> in the
+          command bar does it too: the first row it offers is the quick search, and the second
+          finds the exact words. The box keeps your words after a search, so you can add to them;
+          the <strong>×</strong> at its right-hand end empties it, and the box in the Search panel
+          has one as well.
         </p>
       </>
     ),

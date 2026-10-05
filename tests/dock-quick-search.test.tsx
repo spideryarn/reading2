@@ -46,6 +46,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { DockQuickSearch } = await import("../src/web/DockQuickSearch.js");
 const { Dock } = await import("../src/web/Dock.js");
+const { searchDraftFor } = await import("../src/web/search-draft.js");
 
 let slugCounter = 0;
 /** A fresh article per case: the draft store is per article and outlives a mount. */
@@ -533,6 +534,125 @@ describe("handoffs before the band mounts", () => {
     type(panelBox()!, "why replication fails");
     await pause();
     expect(posted.map((p) => p.criterion)).toEqual(["why replication fails"]);
+  });
+});
+
+/**
+ * **A search sent from the command bar** (plan 261005i) — the bar's *Quick
+ * search “X”* row does the box's Enter without the box: the words into the
+ * draft, an `enter` handoff, Search opened (command-runners.ts §
+ * `readingExecutor`). These drive the draft the way that row does and hold
+ * what GPT Sol's plan review asked to see held.
+ */
+describe("a search sent from the command bar", () => {
+  /** The row's first two steps; `mount({ startOpen: true })` is its third. */
+  const send = (words: string) => {
+    act(() => {
+      const draft = searchDraftFor(SLUG);
+      draft.set(words);
+      draft.handOff("enter");
+    });
+  };
+  const coarse = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: coarse)",
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("revises the quick search being typed rather than adding a second", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    type(panelBox() as HTMLInputElement, "why replication");
+    await pause();
+    expect(posted).toHaveLength(1);
+    send("the limits of free will");
+    await flush();
+    expect(posted[1]).toEqual({
+      id: posted[0]?.id,
+      criterion: "the limits of free will",
+      kind: "quick",
+      revises: true,
+    });
+    expect(panelBox()?.value).toBe("the limits of free will");
+  });
+
+  it("is held until the saved list has loaded, then asked once", async () => {
+    const posted = server();
+    const originalAnswer = answer;
+    let releaseGet = () => {};
+    answer = (url, init) => (init.method ?? "GET") === "GET"
+      ? new Promise((resolve) => { releaseGet = () => resolve(json({ runs: [] })); })
+      : originalAnswer(url, init);
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    expect(posted).toHaveLength(0);
+    releaseGet();
+    await flush();
+    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["the limits of free will", "quick"]]);
+  });
+
+  /* Sol's F3. Opening Search pushes an entry, and the switch to *quick* then
+     replaces it, so one Back leaves Search. With Search already open nothing
+     was pushed, and a replace would overwrite the words or meaning view the
+     reader was on: Back would skip it. */
+  it("replaces the entry its own opening pushed, so one Back still leaves Search", async () => {
+    const posted = server();
+    mount({ url: "?match=meaning" });
+    const before = history.length;
+    // The box's Enter is the same three steps, and this host's opener is its own.
+    type(barBox(), "the limits of free will");
+    key(barBox(), { key: "Enter" });
+    await flush();
+    expect(match()).toBe("quick");
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(history.length).toBe(before);
+  });
+
+  it.each(["words", "meaning"])("pushes when Search was already open on %s, so Back returns to it", async (was) => {
+    const posted = server();
+    mount({ startOpen: true, url: `?mode=search&match=${was}` });
+    await flush();
+    const before = history.length;
+    send("the limits of free will");
+    await flush();
+    expect(match()).toBe("quick");
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(history.length).toBe(before + 1);
+  });
+
+  /* Sol's F4: a submitted search has nothing left to type, so on a touch
+     screen the box that mounts for it does not raise the keyboard over the
+     hits. The ⚡ asks for the box, and a desk keeps its caret. */
+  it("on a touch screen, does not focus the box that mounts for it", async () => {
+    coarse();
+    const posted = server();
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(panelBox()?.value).toBe("the limits of free will");
+    expect(document.activeElement).not.toBe(panelBox());
+  });
+
+  it("on a touch screen, the ⚡ still focuses the box", async () => {
+    coarse();
+    server();
+    act(() => searchDraftFor(SLUG).handOff("quick"));
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
+  });
+
+  it("at a desk, the box that mounts for it has the focus", async () => {
+    server();
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
   });
 });
 

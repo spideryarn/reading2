@@ -477,6 +477,53 @@ be visible while the bar box has focus; they share the same words and typing ses
   [`Dock.tsx`](../../src/web/Dock.tsx)).
 - **`/` focuses it** — [keyboard.md § Quick search: the slash key](keyboard.md#quick-search-the-slash-key).
 
+### From the command bar
+
+**Since 2026-10-05, *search for X* typed into the command bar opens a quick search**
+([261005i](../plans/261005i-the-command-bar-opens-quick-search-and-the-search-panel-box-gets-a-clear-cross.md)).
+Greg was asked how far quick search should move into the bar: keep the icon and change nothing (A),
+keep the icon and make *search for X* open quick search (B), or remove the icon (C).
+
+> Q-bar-3 actually I'm not 100% sure what's best. If you recommend B, I'm open to that
+>
+> — Greg, 2026-10-04
+
+So B: **the box and the ⚡ stay**, and removing them is still open
+([interface-vision.md § Decluttering the bottom bar](interface-vision.md#decluttering-the-bottom-bar)).
+
+Every `find` in the bar — a typed verb (*search for*, *find*, *does it mention* …) or a sentence a
+model read as one — now draws two rows: ***Quick search “X”*** first, so Enter runs it, and
+*Find “X” in this article* (exact words, as before) second. The quick row is marked `generates`
+because it calls a model and saves a search, and like every argument row it is drawn and pressed,
+never run from the words alone.
+
+It is the bar box's Enter without the box (`quickSearchPress` in
+[`command-runners.ts`](../../src/web/command-runners.ts)): the words go into the shared draft, an
+`enter` handoff is left, and Search opens. So it is the same search either way in — a quick search
+already being typed is revised rather than joined by a second, and one sent before the saved list
+has loaded waits for it. Three things differ from the box:
+
+- **A hidden rail comes back**, as it does when the Dock opens Search (`arrivalBringsRailBack` in
+  [`mode-press.ts`](../../src/web/reader/mode-press.ts)).
+- **Back.** If Search was closed, one Back leaves it. If it was already open on words or meaning,
+  the switch to quick is its own history entry, so Back returns to that view. (The box had this
+  wrong until now: it replaced the entry and Back skipped the view.)
+- **On a touch screen the panel's box does not take focus** when it mounts for a search already
+  sent, so the keyboard does not rise over the hits. The ⚡ still focuses it.
+
+Only on the owner's reading view, the cut the box makes. A visitor, and the Metadata page, get the
+exact-words row alone. A *Find “X”* chip in a chat answer still opens the exact-words search.
+
+### The cross in the panel's own box
+
+The Search panel's box has the same cross since 2026-10-05, for all three matchers (Greg,
+2026-10-04: *"Q-panel-box-cross yes"*). A phone has no Escape, and the ⚡ sends a phone to this box.
+It is Escape's clear (one `clear` in `Box`,
+[`SearchPanel.tsx`](../../src/web/SearchPanel.tsx)): it empties the box, leaves the ticked searches
+alone, and puts the cursor in the box. `.srch-clear` in
+[`search.css`](../../src/web/styles/search.css); its finger target is 40px wide but only as tall
+as the field, because the matcher buttons sit just below and nothing clips it.
+
 ## Why this is on the augment side of the line
 
 [vision.md](vision.md) exists to refuse tools that read the article *instead of* you. A results list

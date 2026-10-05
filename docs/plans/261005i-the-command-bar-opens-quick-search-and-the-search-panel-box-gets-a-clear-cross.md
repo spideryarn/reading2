@@ -165,3 +165,38 @@ hidden rail; focus after the bar's dialog closes.
 ## Progress
 
 - 2026-10-05: plan written.
+- 2026-10-05: both parts built, with their tests, docs and Help. Not yet done: the Sol code review,
+  the browser pass, the full suite.
+  - **Part A.** `CommandExecutor.quickSearch`, built by `quickSearchPress` in `readingExecutor`
+    from an opener the reading view hands over for the owner. `quickSearchRow` in `CommandBar.tsx`
+    draws it in front of every ready `find` row, `generates: true`. `src/command-pick.ts` is
+    untouched and `tests/command-pick-catalogue.test.ts` passes without regenerating.
+  - **F2, differently from the ledger's wording.** The Dock's door is a closure inside Reader's
+    JSX, a thousand lines below where the executor is built, so the executor cannot call it
+    without moving it. Instead the arrival rule became one function, `arrivalBringsRailBack`
+    (`mode-press.ts`), which the Dock's `onMode` and a new `openQuickSearch` in `Reader.tsx` both
+    ask; `openQuickSearch` is `showBand("search")` plus that rule. The plan review allowed either
+    ("its non-toggling activation or a shared Reader opener"). **What the Dock's door does that
+    this does not:** it names the mode in the herald. Glossary's and Find more's rows do not
+    either.
+  - **F3 was real.** With Search open on words or meaning, a handoff's switch to quick left
+    `history.length` unchanged (watched red, both matchers). `useBarHandoff` now replaces only on
+    the band's first look at the handoffs after mounting, and pushes otherwise. This also changes
+    the Dock box: typing there with Search open on another matcher now pushes.
+  - **F4.** `quietMount` is also true when an `enter` handoff is pending at mount under
+    `pointer: coarse`. With Search already mounted nothing focuses the panel's box; where the
+    focus lands after the command bar's dialog closes is the browser's restore, and is for the
+    browser pass, as is the real soft keyboard.
+  - **Part B.** One `clear()` in `Box` for Escape and the cross. `.srch-clear` is 20px, and under
+    `any-pointer: coarse` it is stretched to the field's height with a target 40px wide and no
+    taller (F5). The input's right padding grows again while the spinner shows, which the plan did
+    not say: without it the words ran under the spinner once it moved left.
+  - **Tests watched red, then green:** the two-row draw for three verbs, Enter running the quick
+    search, a model's `find` answer, `readingExecutor`'s quick search, `arrivalBringsRailBack`,
+    push-when-already-open (F3), no focus on a touch screen (F4), and the panel cross (presence for
+    three matchers, quick clear, words clear, the CSS, and the spinner rule's order, which caught
+    a rule that lost to an equal one below it). **Green from the start**, so characterising what
+    was already true: revise-not-duplicate, held-until-loaded, replace-when-just-opened, the ⚡
+    and desk focus, Escape, and no quick row for a visitor or on the Metadata page.
+  - **Not tested:** the wiring in `Reader.tsx` itself (no test mounts it), and focus after the
+    dialog closes.

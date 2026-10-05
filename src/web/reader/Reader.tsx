@@ -146,7 +146,7 @@ import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
-import { modePress } from "./mode-press.js";
+import { arrivalBringsRailBack, modePress } from "./mode-press.js";
 import {
   bandCoversProse,
   bandShapeFor,
@@ -470,6 +470,18 @@ export function Reader({
     },
     [mode, setMode],
   );
+  /**
+   * **Open Search for the command bar's *Quick search “X”* row** (plan
+   * 261005i) — `showBand`, plus the arrival rule the Dock's press runs for
+   * Search: a rail the reader had put away comes back, since that is where
+   * the hits are drawn (mode-press.ts § `arrivalBringsRailBack`; GPT Sol's F2
+   * on the plan). The same two writes, in the same tick, as the Dock's quick
+   * search makes.
+   */
+  const openQuickSearch = useCallback(() => {
+    showBand("search");
+    if (arrivalBringsRailBack({ next: "search", current: mode, showSpine })) void setShowSpine(null);
+  }, [showBand, mode, showSpine, setShowSpine]);
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
      reader can make further pushes of their own (a footnote jump, a Skim
@@ -2452,6 +2464,9 @@ export function Reader({
    *    the Dock draws. The opener is the plain mode setter here too: the bar's
    *    press leaves a hand-off (find-more-handoff.ts) and the band presses its
    *    own Find more.
+   *  - `openQuickSearch` is **the owner's**, the cut the bar's own box makes
+   *    (Dock.tsx § `hasQuickSearch`): a visitor's band cannot ask. Plan
+   *    261005i.
    */
   const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
   const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
@@ -2484,6 +2499,7 @@ export function Reader({
               quotes: moreQuotes ? () => showBand("quotes") : undefined,
             }
           : undefined,
+        openQuickSearch: isOwner ? openQuickSearch : undefined,
       }),
     [
       slug,
@@ -2498,6 +2514,7 @@ export function Reader({
       bookmarkBlock,
       moreTerms,
       moreQuotes,
+      openQuickSearch,
     ],
   );
   /**
@@ -4241,11 +4258,7 @@ export function Reader({
              this threaded through the piece, or concentrated in one section?
              So it earns the same arrival rule search has, for the same reason
              and with the same `null` rather than `true`. */
-          if (
-            (next === "search" || next === "ideas") &&
-            mode !== next &&
-            showSpine === false
-          ) {
+          if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
             void setShowSpine(null);
           }
         }}

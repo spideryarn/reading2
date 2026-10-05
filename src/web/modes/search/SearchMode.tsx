@@ -272,10 +272,17 @@ export function SearchBand({
  *   bar's keystrokes, Enter, focus and blur reach the very session the
  *   panel's box drives. One session, one row, whichever box is typed in.
  * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
- *   this band was closed or on another matcher. Not on *quick* yet: switch,
- *   replacing the history entry the mode's own press just pushed so one Back
- *   still leaves Search mode, and take it on the next pass. On *quick*: ask
- *   with the draft as it is now, which is the latest the reader typed.
+ *   this band was closed or on another matcher, or the command bar's *Quick
+ *   search “X”* row (plan 261005i). Not on *quick* yet: switch, and take it on
+ *   the next pass. On *quick*: ask with the draft as it is now, which is the
+ *   latest the reader typed.
+ *
+ *   **The switch replaces the history entry only when the band has just
+ *   mounted**, which is when the press that left the handoff also pushed
+ *   Search open: one Back then still leaves Search mode. A band already open
+ *   on words or meaning had nothing pushed for it (both openers skip a
+ *   same-mode write), so there the switch pushes, and Back returns to the view
+ *   the reader was on rather than skipping it (GPT Sol's F3 on that plan).
  *
  * Declared after the matcher-switch effect in `SearchBand`, so a switch's
  * `end` runs before the handoff starts the new session, not after it.
@@ -288,6 +295,10 @@ function useBarHandoff(
 ): void {
   const [, setMatch] = useQueryState("match", matchParam);
   const handoff = useHandoff(draft);
+  /* Is this the band's first look at the handoffs, the one a mount gets? A
+     handoff found then came with the press that opened Search; one found
+     later reached a band that was already open, and nothing was pushed. */
+  const opening = useRef(true);
   const lifetime = useRef<{ draft: SearchDraft } | null>(null);
   useEffect(() => {
     const token = { draft };
@@ -312,9 +323,12 @@ function useBarHandoff(
   useEffect(() => {
     let live = true;
     queueMicrotask(() => {
-      if (!live || draft.handoff() === null) return;
+      if (!live) return;
+      const opened = opening.current;
+      opening.current = false;
+      if (draft.handoff() === null) return;
       if (matcher !== "quick") {
-        void setMatch("quick", { history: "replace" });
+        void setMatch("quick", { history: opened ? "replace" : "push" });
         clearOpenHit();
         return;
       }
