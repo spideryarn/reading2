@@ -428,7 +428,7 @@ existing checkpoint namespace under their own request keys.
 **The code review.** [GPT Sol](261005a-long-documents-stage-e-code-review-sol.md): ship with the
 fixes it made, eight of them, each seen red first: F22 (the call count left out failed calls and
 retries), F23 (a root "question" that was a statement), F24 (a call answering after its time cap
-could still publish), F25, F26 (a failed slice stopped admission a moment late), F27, F28, F30.
+could still publish), F25, F26 (a failed slice stopped admission a moment late), F27, F28, F30. A second, read-only pass found one more, **F31**: a re-ask could start a millisecond after a peer's time cap. Fixed red-first by the implementer, and [checked closed](261005a-long-documents-stage-e-f31-check-sol.md).
 Two new test files, one of which drives the real job walk through the queue.
 
 - **F28 changes a decision of mine.** I had a failed refill keep the section it was meant to
