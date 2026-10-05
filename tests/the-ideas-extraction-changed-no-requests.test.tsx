@@ -236,6 +236,7 @@ const ARTICLE: PublicArticle = {
      what the publisher-host assertions below are measured against. */
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   blocks: [
     {
       id: "spya-aaaaaa",

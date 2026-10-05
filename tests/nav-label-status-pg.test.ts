@@ -53,6 +53,7 @@ import { articleRevisions, articles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { beginRevision } from "../src/store/pg-revisions.js";
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { loadArticle } from "../src/store/index.js";
 import type { NavLabelStatus } from "../src/types.js";
@@ -187,7 +188,7 @@ describe("reading it back", () => {
     await share();
     for (const status of ["ready", "pending", "failed"] as const) {
       await setColumn(status);
-      const shared = await pgPublicReader.loadArticle(SLUG);
+      const shared = await pgPublicReader.loadArticle(SLUG, PUBLIC_ONLY);
       expect(shared.navLabelStatus, status).toBe(status);
     }
     await setColumn("ready");

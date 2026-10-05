@@ -95,6 +95,7 @@ import type {
   SourceGuessStore,
   SourceStore,
   VisibilityStore,
+  ShareLinkStore,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { pgRealtimeSessionStore } from "./realtime-sessions-pg.js";
@@ -124,6 +125,7 @@ import { pgTagStore } from "./pg-tags.js";
 import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
+import { pgShareLinkStore } from "./pg-share-link.js";
 import { pgHighPowerStore } from "./pg-high-power.js";
 
 import { postgresBlobStore } from "./blobs.js";
@@ -475,6 +477,13 @@ export const adminStore: AdminStore = guarded("admin", pgAdminStore);
  * docs/plans/260827ai-public-read-only-access.md.
  */
 export const visibilityStore: VisibilityStore = guarded("visibility", pgVisibilityStore);
+
+/**
+ * The owner's private link for one article — src/store/pg-share-link.ts. What
+ * it lets a visitor read goes through src/store/public-reader.ts, like the
+ * public reads above, and not through this file.
+ */
+export const shareLinkStore: ShareLinkStore = guarded("share-link", pgShareLinkStore);
 
 /** High-powered AI's column — plan 260930f, src/store/pg-high-power.ts. */
 export const highPowerStore: HighPowerStore = guarded("high-power", pgHighPowerStore);

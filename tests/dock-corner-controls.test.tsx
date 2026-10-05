@@ -211,6 +211,7 @@ const SHARED: PublicArticle = {
   tree: TREE,
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   comments: [],
   searches: [],
 };

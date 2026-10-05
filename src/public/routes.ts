@@ -49,6 +49,8 @@ import {
   type PublicCollectionRouteName,
   type PublicSlugRouteName,
 } from "./route-names.js";
+import { parseShareKey } from "../share-key.js";
+import { type PublicAccess, accessFor } from "../store/public-access.js";
 import { pgPublicLibraryReader } from "../store/public-library.js";
 import { type PublicAsset, pgPublicReader } from "../store/public-reader.js";
 
@@ -63,6 +65,23 @@ export interface PublicRequest {
   res: ServerResponse;
   path: string;
   method: string;
+  /**
+   * **The one thing a public handler is told about the query string**: the
+   * caller's `?key=`, exactly as it arrived, or `null` when there was none.
+   * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+   *
+   * One named field rather than the parsed query, so everything above still
+   * holds: routes go on matching on `path` alone, and no handler can read a
+   * parameter nobody decided it should have. Required rather than optional, so
+   * a transport that forgot to pass it does not compile; a forgotten key would
+   * make every private link a 404 and look like a wrong key.
+   *
+   * **Untrusted and unbounded here.** `servePublicApi` runs it through
+   * `parseShareKey` before any reader sees it, and what the readers take is the
+   * `PublicAccess` built from that. It is a secret: it is never put in an
+   * error message, and `serveApi` logs the path, which does not carry it.
+   */
+  key: string | null;
 }
 
 /** An error carrying the HTTP status it should be reported as. Mirrors src/routes.ts. */
@@ -197,10 +216,18 @@ export function isPublicNamespace(path: string): boolean {
  * later fails to compile rather than falling out of the loop into the 404.
  */
 export type PublicRoute =
-  | (PublicSlugRouteName & { read(slug: string): Promise<unknown> })
+  | (PublicSlugRouteName & { read(slug: string, access: PublicAccess): Promise<unknown> })
+  /* **No access here, and that is the library's whole defence against a key.**
+     A listing names no slug, so a key has nothing to open; this reader cannot
+     be handed one. */
   | (PublicCollectionRouteName & { read(): Promise<unknown> })
   | (PublicAssetRouteName & {
-      read(slug: string, sha256: string, ext: string): Promise<PublicAsset | null>;
+      read(
+        slug: string,
+        sha256: string,
+        ext: string,
+        access: PublicAccess,
+      ): Promise<PublicAsset | null>;
     });
 
 /**
@@ -213,8 +240,8 @@ export type PublicRoute =
  * wrong record is a type error at the line somebody wrote it, which is the
  * cheapest place to find out. The coverage guard below reads both.
  */
-const SLUG_READS: Record<string, (slug: string) => Promise<unknown>> = {
-  article: (slug) => pgPublicReader.loadArticle(slug),
+const SLUG_READS: Record<string, (slug: string, access: PublicAccess) => Promise<unknown>> = {
+  article: (slug, access) => pgPublicReader.loadArticle(slug, access),
 };
 
 const COLLECTION_READS: Record<string, () => Promise<unknown>> = {
@@ -231,9 +258,9 @@ const COLLECTION_READS: Record<string, () => Promise<unknown>> = {
  */
 const ASSET_READS: Record<
   string,
-  (slug: string, sha256: string, ext: string) => Promise<PublicAsset | null>
+  (slug: string, sha256: string, ext: string, access: PublicAccess) => Promise<PublicAsset | null>
 > = {
-  asset: (slug, sha256, ext) => pgPublicReader.loadAsset(slug, sha256, ext),
+  asset: (slug, sha256, ext, access) => pgPublicReader.loadAsset(slug, sha256, ext, access),
 };
 
 /**
@@ -368,6 +395,11 @@ function slugFrom(match: RegExpExecArray): string {
  */
 export async function servePublicApi(request: PublicRequest): Promise<void> {
   const { res, path, method } = request;
+  /* **Bounded here, once, before any route is matched.** A key of the wrong
+     length or with a character base64url does not have becomes no key at all,
+     so it gets the answer a request without one gets: there is no 400 for a
+     malformed key for anybody to tell from a wrong one. */
+  const access = accessFor(parseShareKey(request.key));
 
   /* **Method, then slug, then store, then the read**, and the order is the
      content of these four lines. The slug is validated before the store is
@@ -405,7 +437,7 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
     switch (route.kind) {
       case "slug": {
         const slug = slugFrom(matched);
-        send(res, 200, await route.read(slug), method);
+        send(res, 200, await route.read(slug, access), method);
         return;
       }
       case "collection": {
@@ -419,7 +451,7 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
            extensions, and neither is ever joined onto anything: `loadAsset`
            only ever *compares* them with what the manifest says. */
         const slug = slugFrom(matched);
-        const found = await route.read(slug, matched[2] ?? "", matched[3] ?? "");
+        const found = await route.read(slug, matched[2] ?? "", matched[3] ?? "", access);
         /* **`null` is a 404 and is deliberately the same 404 as an article
            nobody shared.** A visitor who names a real hash of somebody else's
            private article must not be able to tell it apart from a hash of

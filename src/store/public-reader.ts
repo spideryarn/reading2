@@ -14,11 +14,18 @@
  * > owned and public predicates have the same Drizzle SQL type; swapping them
  * > compiles and leaks or hides data.
  *
- * So `publicCurrentRevisionQuery` below takes a slug and a projection and
- * **nothing else**. There is no `where`, no `predicate`, no `scope`, no
- * `{ kind: "owned" | "public" }`. The only way to make this reader return a
- * private article is to edit the one `.where(publicSlug(slug))` in this file,
- * which is a change a reviewer can see rather than a call site that compiles.
+ * So `publicCurrentRevisionQuery` below takes a slug, a projection and a
+ * `PublicAccess`, and **no predicate**. There is no `where`, no `scope`, no
+ * `{ kind: "owned" | "public" }`. The only way to make this reader return an
+ * article that is neither public nor opened with its own key is to edit
+ * `publicAccessWhere` or one of its two leaves, which is a change a reviewer
+ * can see rather than a call site that compiles.
+ *
+ * **The access value arrived on 2026-10-05, with the private link**
+ * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md),
+ * and [public-access.ts](public-access.ts) says why it is not the parameter
+ * this paragraph refuses: it has no arm that can name an owner, and what a
+ * caller chooses with it is only whether a key came with the request.
  *
  * The cost is duplication, and it is the point rather than a regret: the owner
  * reader's mappings are *wrong here on purpose*. It runs the meta through
@@ -69,7 +76,7 @@ import { isStale as crossrefsIsStale } from "../crossrefs-fingerprint.js";
 import { isSlug } from "../ingest.js";
 import { blobStore } from "./blobs.js";
 import { canonicalKey } from "../source.js";
-import { publicSlug } from "./public-slug.js";
+import { type PublicAccess, publicAccessWhere } from "./public-access.js";
 import { publicArticle, publicAuthorNames } from "../public/dto.js";
 
 /**
@@ -146,9 +153,23 @@ export interface PublicAsset {
   contentType: string;
 }
 
+/**
+ * **What the head read found, and which way the visitor got in.**
+ *
+ * Two arms, and the second carries no head on purpose. A private article
+ * opened with its key is served as a page, and that page says nothing about
+ * the article in its `<head>`: a chat app that unfurls a private link must not
+ * learn the title. With no `head` on the `link` arm there is nothing for a
+ * caller to put in a tag by mistake.
+ *
+ * A **public** article opened with a key is the `public` arm, like one opened
+ * with none. Public wins.
+ */
+export type PublicHeadFound = { sharedBy: "public"; head: PublicHead } | { sharedBy: "link" };
+
 export interface PublicArticleReader {
-  loadArticle(slug: string): Promise<PublicArticle>;
-  loadHead(slug: string): Promise<PublicHead>;
+  loadArticle(slug: string, access: PublicAccess): Promise<PublicArticle>;
+  loadHead(slug: string, access: PublicAccess): Promise<PublicHeadFound>;
 
   /**
    * **One picture of a shared article** — the public twin of
@@ -169,16 +190,22 @@ export interface PublicArticleReader {
    * reaches the bucket is `canonicalKey` rebuilt from the manifest entry. GPT
    * Sol, I-5, and src/asset-delivery.ts states the rule at length.
    */
-  loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null>;
+  loadAsset(
+    slug: string,
+    sha256: string,
+    ext: string,
+    access: PublicAccess,
+  ): Promise<PublicAsset | null>;
 }
 
 /**
  * A 404 shaped like every other one here, and the **only** answer a public read
  * has to a slug it cannot serve.
  *
- * Three quite different situations collapse into it, deliberately: there is no
- * such article, there is one and it is private, and there is one and it has no
- * readable revision. Telling them apart would tell a stranger whether a
+ * Four quite different situations collapse into it, deliberately: there is no
+ * such article, there is one and it is private, there is one and the key sent
+ * with the request is not its key, and there is one and it has no readable
+ * revision. Telling them apart would tell a stranger whether a
  * document exists — the same rule that makes a slug you do not own a 404 rather
  * than a 403 (docs/project/auth.md § Whose data is it).
  */
@@ -502,6 +529,13 @@ export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
  * up `owner_id`, `title_override` and `purpose` in one careless line. Only
  * `slug` comes off that table, and it is the one the caller already knows.
  *
+ * **And one yes-or-no computed from it, since 2026-10-05: `isPublic`.** With a
+ * key in the request a row can match either way, and the caller has to know
+ * which: a private article opened by its link gets a different notice and no
+ * preview card. It is `visibility = 'public'` asked in SQL, so the column's
+ * value does not cross and `share_token` is never in the select list at all —
+ * tests/public-reads.test.ts reads the statement for both.
+ *
  * **Every public read goes through here, and that is the rule rather than a
  * convenience.** A read that builds its own `select` gets its predicate from
  * itself, and the SQL test goes on reading this helper — which is exactly what
@@ -513,17 +547,27 @@ export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
 export function publicCurrentRevisionQuery<K extends PublicRead>(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
   read: K,
 ) {
   return db
-    .select({ slug: articles.slug, revision: PUBLIC_PROJECTIONS[read] })
+    .select({
+      slug: articles.slug,
+      isPublic: sql<boolean>`${articles.visibility} = 'public'`.as("is_public"),
+      revision: PUBLIC_PROJECTIONS[read],
+    })
     .from(articles)
     /* The same join the owner read uses, and it carries the same guarantee for
        free: `current_revision_id` only ever points at a published revision, so
        there is no `status` clause to remember here. */
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(publicSlug(slug))
+    .where(publicAccessWhere(slug, access))
     .limit(1);
+}
+
+/** Which way a matched row let the visitor in. Public wins: see public-access.ts. */
+function sharedByOf(found: { isPublic: boolean }): "public" | "link" {
+  return found.isPublic ? "public" : "link";
 }
 
 /**
@@ -581,6 +625,7 @@ const PUBLIC_COMMENTS_WHERE = sql`${comments.criterionId} is null and ${comments
 export function publicCommentsQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -596,7 +641,7 @@ export function publicCommentsQuery(
     })
     .from(comments)
     .innerJoin(articles, eq(articles.id, comments.articleId))
-    .where(and(publicSlug(slug), PUBLIC_COMMENTS_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_COMMENTS_WHERE))
     .orderBy(asc(comments.createdAt), asc(comments.id));
 }
 
@@ -636,6 +681,7 @@ const PUBLIC_SEARCHES_WHERE = sql`${searchRuns.status} = 'done'`;
 export function publicSearchesQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -649,7 +695,7 @@ export function publicSearchesQuery(
     })
     .from(searchRuns)
     .innerJoin(articles, eq(articles.id, searchRuns.articleId))
-    .where(and(publicSlug(slug), PUBLIC_SEARCHES_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_SEARCHES_WHERE))
     .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
 }
 
@@ -682,6 +728,7 @@ const PUBLIC_SOURCE_GUESS_WHERE = sql`${uploadSourceGuesses.status} = 'found'`;
 export function publicSourceGuessQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -691,7 +738,7 @@ export function publicSourceGuessQuery(
     })
     .from(uploadSourceGuesses)
     .innerJoin(articles, eq(articles.id, uploadSourceGuesses.articleId))
-    .where(and(publicSlug(slug), PUBLIC_SOURCE_GUESS_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_SOURCE_GUESS_WHERE))
     .limit(1);
 }
 
@@ -742,11 +789,11 @@ export function publicBlocksQuery(
 
 
 export const pgPublicReader: PublicArticleReader = {
-  async loadArticle(slug: string): Promise<PublicArticle> {
+  async loadArticle(slug: string, access: PublicAccess): Promise<PublicArticle> {
     requireSlug(slug);
     return scrubbed("article", async () => {
       const db = getDb();
-      const [found] = await publicCurrentRevisionQuery(db, slug, "article");
+      const [found] = await publicCurrentRevisionQuery(db, slug, access, "article");
       if (!found) throw notShared(slug);
 
       const rows = await publicBlocksQuery(db, found.revision.id);
@@ -801,9 +848,9 @@ export const pgPublicReader: PublicArticleReader = {
          article that fails the tree-and-blocks bar below is a 404, and there is
          no point reading anybody's comments for a page that will not be
          served. */
-      const commentRows = await publicCommentsQuery(db, slug);
-      const searchRows = await publicSearchesQuery(db, slug);
-      const [guessRow] = await publicSourceGuessQuery(db, slug);
+      const commentRows = await publicCommentsQuery(db, slug, access);
+      const searchRows = await publicSearchesQuery(db, slug, access);
+      const [guessRow] = await publicSourceGuessQuery(db, slug, access);
 
       /**
        * **The article's fingerprint, from the rows this read already has.**
@@ -864,6 +911,7 @@ export const pgPublicReader: PublicArticleReader = {
 
       return publicArticle({
         slug: found.slug,
+        sharedBy: sharedByOf(found),
         title: found.revision.title,
         byline: found.revision.byline,
         siteName: found.revision.siteName,
@@ -984,15 +1032,21 @@ export const pgPublicReader: PublicArticleReader = {
    * stranger can tell those apart — a 404 whose `<title>` differs is as much of
    * a disclosure as a 403.
    */
-  async loadHead(slug: string): Promise<PublicHead> {
+  async loadHead(slug: string, access: PublicAccess): Promise<PublicHeadFound> {
     requireSlug(slug);
     return scrubbed("head", async () => {
       const db = getDb();
-      const [found] = await publicCurrentRevisionQuery(db, slug, "head");
+      const [found] = await publicCurrentRevisionQuery(db, slug, access, "head");
       if (!found) throw notShared(slug);
       if (!found.revision.hasTree || !found.revision.hasBlocks) throw notShared(slug);
 
-      return {
+      /* **A private article opened by its link has no head to give.** The page
+         is served, with the plain shell: see `PublicHeadFound`. Decided after
+         the readability bar, so a link to an unreadable revision is the same
+         404 its public twin would be. */
+      if (sharedByOf(found) === "link") return { sharedBy: "link" };
+
+      const head: PublicHead = {
         slug: found.slug,
         /* **The slug is the last resort, and it is not optional.** `metaFrom`
            in src/public/dto.ts is `title ?? headingTitle ?? slug`, and that is
@@ -1015,6 +1069,7 @@ export const pgPublicReader: PublicArticleReader = {
         canonical: found.revision.finalUrl,
         authors: publicAuthorNames(found.revision.authors, found.revision.byline),
       };
+      return { sharedBy: "public", head };
     });
   },
 
@@ -1036,10 +1091,15 @@ export const pgPublicReader: PublicArticleReader = {
    * is misconfigured is the wrong sentence. `scrubbed` lets it through because
    * it carries its own `status`.
    */
-  async loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null> {
+  async loadAsset(
+    slug: string,
+    sha256: string,
+    ext: string,
+    access: PublicAccess,
+  ): Promise<PublicAsset | null> {
     requireSlug(slug);
     return scrubbed("asset", async () => {
-      const [found] = await publicCurrentRevisionQuery(getDb(), slug, "asset");
+      const [found] = await publicCurrentRevisionQuery(getDb(), slug, access, "asset");
       if (!found) throw notShared(slug);
 
       const entry = storedAssetFor((found.revision.assets as Assets | null) ?? undefined, sha256, ext);

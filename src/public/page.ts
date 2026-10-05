@@ -35,8 +35,9 @@
  *
  * | Case | Status | Head |
  * |---|---|---|
- * | Public and readable | 200 | Enhanced |
- * | Private, absent, or an unreadable revision | 404 | Unmodified default |
+ * | Public and readable, with any `?key=` or none | 200 | Enhanced |
+ * | **Private and readable, with its own `?key=`** | **200** | **Unmodified default** |
+ * | Private with a wrong key or none, absent, or an unreadable revision | 404 | Unmodified default |
  * | `/read/public`, the reserved shelf address | 200 | Unmodified default |
  * | Malformed slug | 400 | Unmodified default |
  * | Method other than GET or HEAD | 405 + `Allow: GET, HEAD` | Unmodified default |
@@ -78,6 +79,25 @@
  * slug, an absent slug and a broken revision all get everywhere else in this
  * feature. src/store/public-reader.ts § `notShared`.
  *
+ * ### A private link is a 200 that says nothing about the article
+ *
+ * Since 2026-10-05 an owner can make a private link, `/read/<slug>?key=…`
+ * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+ * Without the second row above, the person it was sent to would get a 404
+ * status carrying the application, which then loads the article anyway: a page
+ * that works and says it does not. So a right key is a 200.
+ *
+ * **Its head is the default one**, with no title, description or `og:` tag of
+ * the article's. A chat app that unfurls the link is the first thing to fetch
+ * it, and what it shows is seen by everybody in the conversation and kept by
+ * the chat service; the title of a private article is not theirs to have. A
+ * service that is handed the whole link holds the key and could open it, as
+ * any recipient can. What this row stops is the automatic preview.
+ *
+ * A wrong key is not a row of its own. It reads as no key, so it is whatever
+ * the article is without one: a 404 for a private article, byte for byte the
+ * 404 of an absent one, and the full 200 for a public one.
+ *
  * ## Robots
  *
  * **This module sets no `X-Robots-Tag`.** The site-wide `noindex, nofollow` in
@@ -92,7 +112,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { isSlug, PUBLIC_LIBRARY_SLUG } from "../ingest.js";
 import { errorFields, log } from "../log.js";
 import { captureFailure } from "../monitoring.js";
-import type { PublicHead } from "../store/public-reader.js";
+import { SHARE_KEY_PARAM, parseShareKey } from "../share-key.js";
+import { type PublicAccess, accessFor } from "../store/public-access.js";
+import type { PublicHead, PublicHeadFound } from "../store/public-reader.js";
 import { pgPublicReader } from "../store/public-reader.js";
 import { readMode, viewFor } from "../read-address.js";
 import { composeShell } from "./page-head.js";
@@ -136,16 +158,21 @@ export function builtShell(): BuiltShell | null {
 }
 
 /**
- * What the head read came back as — **three outcomes, not two.**
+ * What the head read came back as — **four outcomes, not two.**
  *
  * `not-shared` and `failed` are different answers with different statuses, and
  * collapsing them is the mistake this type exists to prevent: an empty result
  * means *we know, and the answer is no*, while a thrown driver error means *we
  * do not know*. docs/reusable/silent-success.md, and the memory note that an
  * empty list is not the same as never having asked.
+ *
+ * `link` is the fourth, since 2026-10-05: a private article whose own key came
+ * with the request. It carries no head, so there is no title here for the
+ * decision below to publish by mistake.
  */
 export type HeadLoad =
   | { kind: "found"; head: PublicHead }
+  | { kind: "link" }
   | { kind: "not-shared" }
   | { kind: "failed" };
 
@@ -236,6 +263,8 @@ export function decidePublicPage(
   if (!isSlug(slug)) return { status: 400, headers, head: null };
 
   if (load?.kind === "found") return { status: 200, headers, head: load.head };
+  /* A private link: the page is there, and its head says nothing about it. */
+  if (load?.kind === "link") return { status: 200, headers, head: null };
   if (load?.kind === "not-shared") return { status: 404, headers, head: null };
   /* `failed`, or a `null` that should not have got here. Both mean the head is
      unknown. The body is still the whole application — we write it ourselves,
@@ -254,9 +283,14 @@ export function decidePublicPage(
  * has already run the same `isSlug` — so everything else is by definition
  * unexpected, including the 500 `scrubbed` raises for a database error.
  */
-async function loadHead(slug: string, read: (slug: string) => Promise<PublicHead>): Promise<HeadLoad> {
+async function loadHead(
+  slug: string,
+  access: PublicAccess,
+  read: (slug: string, access: PublicAccess) => Promise<PublicHeadFound>,
+): Promise<HeadLoad> {
   try {
-    return { kind: "found", head: await read(slug) };
+    const found = await read(slug, access);
+    return found.sharedBy === "public" ? { kind: "found", head: found.head } : { kind: "link" };
   } catch (err) {
     if ((err as { status?: number }).status === 404) return { kind: "not-shared" };
     /* **Visible rather than swallowed.** Serving the default shell is the right
@@ -266,7 +300,9 @@ async function loadHead(slug: string, read: (slug: string) => Promise<PublicHead
        slug is in the line because it is in the URL of the request that raised
        it and nothing else identifies which article lost its preview; no message
        from the reader is — `scrubbed` has already replaced it with a fixed
-       sentence, and this catch does not undo that. */
+       sentence, and this catch does not undo that. **Nor is the key**: `access`
+       is not in the line, and `path` is the route's name rather than the
+       address that was asked for. */
     log("http").error(
       { ...errorFields(err), slug, path: "/read/:slug", status: 503 },
       "the public head read failed; serving the page with the default head",
@@ -326,7 +362,7 @@ export async function servePublicReadPage(args: {
   /** Already decoded exactly once, by `originalUrl`. Do not decode it again. */
   slug: string;
   shell: BuiltShell;
-  read?: (slug: string) => Promise<PublicHead>;
+  read?: (slug: string, access: PublicAccess) => Promise<PublicHeadFound>;
 }): Promise<void> {
   const { res, slug, shell } = args;
   const method = args.req.method ?? "GET";
@@ -335,14 +371,25 @@ export async function servePublicReadPage(args: {
   /* The address may be a legacy spelling of the metadata page, which the client
      rewrites before it draws anything — src/read-address.ts. */
   const view = viewFor(url);
-  const read = args.read ?? ((s: string) => pgPublicReader.loadHead(s));
+  const read =
+    args.read ?? ((s: string, a: PublicAccess) => pgPublicReader.loadHead(s, a));
+  /* **The key, off the same `req.url` the mode came from**, bounded by
+     `parseShareKey` exactly as `servePublicApi` bounds its own. The query is
+     split off by hand rather than with `new URL`, which needs a base and
+     throws on an address it dislikes; `URLSearchParams` does neither. */
+  const queryAt = url.indexOf("?");
+  const access = accessFor(
+    parseShareKey(
+      new URLSearchParams(queryAt < 0 ? "" : url.slice(queryAt + 1)).get(SHARE_KEY_PARAM),
+    ),
+  );
 
   /* **No head read for the reserved address.** `decidePublicPage` answers it
      from a constant, so loading one would be a database round trip whose answer
      is thrown away — and it would put a public read of a slug no article may
      have into the log on every visit. */
   const wanted = READ_METHODS.includes(method) && slug !== PUBLIC_LIBRARY_SLUG && isSlug(slug);
-  const load = wanted ? await loadHead(slug, read) : null;
+  const load = wanted ? await loadHead(slug, access, read) : null;
   const decision = decidePublicPage(method, slug, load, shell.sha256);
 
   const body = composeShell(shell.html, decision.head, mode, view);

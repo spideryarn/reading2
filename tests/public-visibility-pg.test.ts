@@ -52,6 +52,8 @@ import { loadEnvLocal } from "../src/env.js";
 import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
+import { publicHeadOf } from "./helpers/public-head.js";
 import { blockHashQuery } from "../src/store/pg.js";
 import { inputFingerprint as crossrefsFingerprint } from "../src/crossrefs-fingerprint.js";
 import { citedMetaFingerprintOf } from "../src/source-hash.js";
@@ -876,7 +878,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    */
   it("and its head is 404 as well, so a preview cannot name it", async () => {
     expect((await articleRow())?.visibility).toBe("private");
-    await expect(pgPublicReader.loadHead(SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadHead(SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 
   it("refuses to be published without the rights confirmation", async () => {
@@ -953,7 +955,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * makes the 404 mean something rather than `publicSlug` matching nothing.
    */
   it("and now the head has the five values a preview is built from", async () => {
-    const head = await pgPublicReader.loadHead(SLUG);
+    const head = await publicHeadOf(SLUG);
     expect(head.slug).toBe(SLUG);
     /* Whatever the fixture's title is, it is a string rather than the absence
        of one — the composer's clamping and escaping are unit-tested in
@@ -1520,7 +1522,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * disclosure is the thing that must not move, and it is asserted first.
    */
   it("changes the owner's tab at mount, which is the accepted cost of hiding the rename", async () => {
-    const head = await pgPublicReader.loadHead(SLUG);
+    const head = await publicHeadOf(SLUG);
 
     /* **The property that must never regress, first.** Everything above an
        assertion is a lid on it, and this is the one worth the whole case. */
@@ -1817,7 +1819,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
               setHeader() {},
               end() {},
             } as unknown as ServerResponse;
-            await servePublicApi({ res, path, method: "GET" }).catch((err: Error) => {
+            await servePublicApi({ res, path, method: "GET", key: null }).catch((err: Error) => {
               /* The two misses throw a 404, which is an answer rather than a
                  fault. Anything else is a real failure and must surface. */
               if ((err as { status?: number }).status !== 404) throw err;
@@ -1989,7 +1991,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
       await runInRequest(async () => {
         /* Ownerless, like every other visit to this namespace. */
         expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
-        await servePublicApi({ res, path: "/api/public/library", method: "GET" });
+        await servePublicApi({ res, path: "/api/public/library", method: "GET", key: null });
       });
       expect(status).toBe(200);
       return (JSON.parse(text) as { entries: { slug: string }[] }).entries.map((e) => e.slug);
@@ -2473,7 +2475,7 @@ describe("a public article whose revision has no blocks", { timeout: 60_000 }, (
       .where(eq(articles.id, BONELESS_ID));
     expect(row?.visibility).toBe("public");
 
-    await expect(pgPublicReader.loadHead(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadHead(BONELESS_SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 
   /**
@@ -2486,7 +2488,7 @@ describe("a public article whose revision has no blocks", { timeout: 60_000 }, (
    * it fetched and the other asks in SQL.
    */
   it("and by the article read as well, which counts the blocks it fetched", async () => {
-    await expect(pgPublicReader.loadArticle(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadArticle(BONELESS_SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 });
 
@@ -2583,7 +2585,7 @@ describe("a public article with neither a title nor an <h1>", { timeout: 60_000 
   afterAll(cleanTitleless);
 
   it("gives the head the same title the client is about to set", async () => {
-    const head = await pgPublicReader.loadHead(TITLELESS_SLUG);
+    const head = await publicHeadOf(TITLELESS_SLUG);
     const r = await call("GET", `/api/public/article/${TITLELESS_SLUG}`);
     /* A precondition rather than a claim: without a payload there is no client
        title to disagree with, and the failure below would be about the wrong
@@ -2748,7 +2750,7 @@ describe("a public article whose only title is its first <h1>", { timeout: 60_00
   afterAll(cleanHeaded);
 
   it("finds the same <h1> in SQL that the payload finds in TypeScript", async () => {
-    const head = await pgPublicReader.loadHead(HEADED_SLUG);
+    const head = await publicHeadOf(HEADED_SLUG);
     const r = await call("GET", `/api/public/article/${HEADED_SLUG}`);
     expect(r.status, "the fixture must be served at all").toBe(200);
     const client = (r.body as { meta: { title: string | null } }).meta.title;

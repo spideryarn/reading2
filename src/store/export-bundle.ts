@@ -380,8 +380,17 @@ function manifestJson(
 function articleJson(rows: ArticleRows): string {
   /* `id` and `currentRevisionId` are internal uuids that name nothing else in
      the zip; `fixture` says this is the shipped demo, which is about our
-     deployment rather than about the reader's article. */
-  return json(rowJson(rows.article, ["id", "currentRevisionId", "fixture"]));
+     deployment rather than about the reader's article.
+
+     **`shareToken` is a credential, and a zip gets forwarded.** It is the key
+     of the article's private link (src/db/schema.ts § `shareToken`): anybody
+     holding it and the slug can read the article until the owner turns the
+     link off, and the slug is in this same file. `rowJson` ships every column
+     it is not told to drop, so this one is named. `shareTokenAt` stays: that
+     a link was made, and when, is sharing state like `publicAt`. The owner
+     copies the link itself from the Access & Sharing card.
+     tests/store-export-bundle.test.ts looks for the key across the whole zip. */
+  return json(rowJson(rows.article, ["id", "currentRevisionId", "fixture", "shareToken"]));
 }
 
 /**

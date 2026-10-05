@@ -43,6 +43,7 @@ const ARTICLE: PublicArticle = {
      `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   comments: [],
   searches: [],
   tree: { version: "t", generator: "t", slug: "a-piece", rootId: "n0", nodes: {} },

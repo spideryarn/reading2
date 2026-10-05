@@ -79,6 +79,7 @@ function publish(debate: Debate): PublicDebate {
     timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate,
     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
     navLabelStatus: "ready", sourceGuess: null,
+    sharedBy: "public",
   });
   if (!payload.debate) throw new Error("The DTO dropped the debate");
   return payload.debate;
