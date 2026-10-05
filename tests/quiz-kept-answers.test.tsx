@@ -436,6 +436,23 @@ describe("an answer is still there when you come back", () => {
     expect(asked()).toBe("Question number 1?");
     expect(box()?.value).toBe("");
   });
+
+  it("and a mark that fails further along leaves the reader on that question, with their words", async () => {
+    /* The browser check saw the panel back on question 1 twice after a failed
+       mark, while a reviewer was editing the tree under its dev server. This
+       is the control that says the panel does not do that by itself. */
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
+    await paint();
+    await press("Next question");
+    await press("Next question");
+    expect(asked()).toBe("Question number 3?");
+
+    server.mark = "fails";
+    await answer("My answer to three.");
+    expect(asked()).toBe("Question number 3?");
+    expect(box()?.value).toBe("My answer to three.");
+    expect(heading()).not.toContain("— answered");
+  });
 });
 
 describe("what a restored answer must not do", () => {

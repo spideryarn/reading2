@@ -217,3 +217,33 @@ Five things were decided while building, none of them a change of design:
 
 Not built, as planned: no stored verdict, no change to which question opens, no change to either
 prompt. `/help` says nothing about quiz answers being forgotten, so it did not change.
+
+### GPT Sol's code review, and the browser check
+
+[The code review](261005b-quiz-answers-code-review-sol.md) of `523e771cf`: approve with the fixes
+made, committed as `96901255c`. Three findings, all fixed by the reviewer, red first:
+
+- **C1 (P1)**: a question opened from the prose could have its box filled with the answer of the
+  question that was open before. The restoring effect now waits for the arrival's destination.
+  [Postmortem 261005d](../postmortems/261005d-later-effects-still-read-the-render-before-earlier-state-writes.md).
+- **C2 (P1)**: a read that came back with `attempts: null` replaced the offline copy and erased the
+  answers in it. A complete copy of the same batch is now left alone.
+  [Postmortem 261005e](../postmortems/261005e-a-partial-success-must-not-replace-a-complete-offline-copy.md).
+- **C3 (P3)**: quiz.md said the privacy page publicly promises no stored verdict; the page says
+  nothing about verdicts. Reworded.
+
+One round, not two: the only code after the review is the reviewer's own, plus one control test.
+
+**Browser** (a Sonnet subagent, Playwright, local dev server, article `fowler-phrenology`): an answer
+and its mark came back after Next then Previous, after leaving for Chat and returning, and after a
+reload, with the right answer under the right question; the list ticks them; the "previous answer"
+note works on a restored answer; no "saved", date or right/wrong word appears; at 820 and 390 wide
+the restored box shows the whole answer with no inner scroll and nothing overflows.
+
+Two limits on that check. OpenRouter began refusing the marking call (403) part-way through, so a
+**fresh** mark was only seen at desktop width; iPad and phone were checked on restoring and layout.
+And twice, after a refused mark on a later question, the panel was seen back on question 1; three
+later attempts did not repeat it. The reviewer was editing `QuizPanel.tsx` under that dev server at
+the time, and a hot reload resets the panel to question 1, which is the likely cause but was not
+proven. `tests/quiz-kept-answers.test.tsx` now has the control: a failed mark on question 3 leaves
+the reader on question 3 with their words.
