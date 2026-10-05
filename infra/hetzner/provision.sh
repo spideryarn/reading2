@@ -191,6 +191,17 @@ grep -q "/mnt/data/home /home" /etc/fstab || \
   echo "/mnt/data/home /home none bind,nofail,x-systemd.requires-mounts-for=/mnt/data 0 0" >> /etc/fstab
 mountpoint -q /home || mount --bind /mnt/data/home /home
 
+echo "=== worktrees off the volume ==="
+# A worktree is ~1.2 GB and the volume behind /home is 49 GB; it filled to 100% on
+# 2026-10-05 while / had 70 GB free. .claude/hooks/worktree-create.sh puts a new
+# worktree here when this directory exists, and in the repo when it does not -- so
+# without this line a rebuilt box quietly goes back to filling /home.
+# /var/tmp rather than /tmp: /tmp is aged out after 30 days (tmpfiles.d/tmp.conf) and
+# /var/tmp is not. It is on the DISPOSABLE disk on purpose; a worktree is a checkout
+# plus node_modules, and anything worth keeping in one is pushed.
+# docs/project/worktrees.md § Where a worktree's bytes live.
+install -d -m 0775 -o "$USER_NAME" -g "$USER_NAME" /var/tmp/spideryarn-worktrees
+
 echo "=== node ==="
 # The first build died here, and quietly: Ubuntu 24.04 already had its own
 # nodejs 18 installed, so `apt-get install nodejs` reported "already the

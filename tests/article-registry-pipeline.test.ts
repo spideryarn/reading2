@@ -10,7 +10,8 @@ vi.mock("../src/fetch.js", async (original) => ({
 }));
 
 const { readRawBytes } = await import("../src/fetch.js");
-const { STEPS, articleRegistryDeps } = await import("../src/pipeline.js");
+const { STEPS, articleRegistryDeps, titleTidiers } = await import("../src/pipeline.js");
+const { ruleTitleTidier } = await import("../src/title-tidy.js");
 const { memoryArtefacts } = await import("./helpers/memory-artefacts.js");
 const { nullCheckpointStore } = await import("../src/store/checkpoints.js");
 
@@ -39,11 +40,13 @@ async function extract(old: Meta, full: boolean, title = TITLE, answer: LookupRe
     `<body><article><h1>${title}</h1>${"<p>A careful discussion of entropy and the arrow of time in open quantum systems. We measure the system and consider what this means for time and physics.</p>".repeat(30)}</article></body></html>`,
   ));
   const lookup = vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue(answer);
+  /* The step's title tidy is a model's (plan 261005j); here it is the rule. */
+  const tidy = vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
   const result = await STEPS.extract.run({
     slug: "s", url: "https://example.org/paper", report: () => {}, preview: () => {},
     signal: new AbortController().signal, cacheArticle: false, power: "standard",
   }, store, nullCheckpointStore());
-  return { meta: result.parts?.meta, lookup };
+  return { meta: result.parts?.meta, lookup, tidy };
 }
 
 describe("registry metadata retained during extraction", () => {
@@ -96,5 +99,35 @@ describe("registry metadata retained during extraction", () => {
   it("keeps them whatever title the fuller reading gives: Read this re-reads the same bytes", async () => {
     const { meta } = await extract(previous, false, "A different article about the mechanics of fluid flow");
     expect(meta).toMatchObject({ doi: previous.doi, journal: previous.journal, publishedAt: previous.publishedAt });
+  });
+});
+
+/* Plan 261005j: a model does not answer the same way twice, and `title` is in
+   every generated mode's fingerprint. */
+describe("the title across a re-extraction", () => {
+  const SHOUTED = "THE ORDER OF TIME";
+
+  it("keeps the title the last revision tidied, and asks nobody, when the same title arrives", async () => {
+    const held: Meta = { ...previous, title: "The Order of Time, as tidied before", titleOriginal: SHOUTED };
+    const { meta, tidy } = await extract(held, true, SHOUTED);
+    expect(meta?.title).toBe("The Order of Time, as tidied before");
+    expect(meta?.titleOriginal).toBe(SHOUTED);
+    expect(tidy).not.toHaveBeenCalled();
+  });
+
+  it("asks again when a different title arrives", async () => {
+    const held: Meta = { ...previous, title: "Something Else", titleOriginal: "SOMETHING ELSE" };
+    const { meta, tidy } = await extract(held, true, SHOUTED);
+    expect(meta?.title).toBe("The Order of Time");
+    expect(tidy).toHaveBeenCalledOnce();
+  });
+
+  it("asks about a title stored as it came, so one imported before any tidying is still tidied", async () => {
+    const { meta, tidy } = await extract({ ...previous, title: SHOUTED }, true, SHOUTED);
+    expect(meta?.title).toBe("The Order of Time");
+    expect(meta?.titleOriginal).toBe(SHOUTED);
+    expect(tidy).toHaveBeenCalledOnce();
+    /* Bound to the step's own cancellation, which `runExtract` has no signal to carry. */
+    expect(tidy.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

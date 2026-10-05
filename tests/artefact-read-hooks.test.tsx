@@ -101,6 +101,11 @@ vi.mock("../src/web/lib/api.js", async () => {
       throw new ReaderFacingError(`${kind} read failed`);
     }
     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
+    if (url.startsWith("/api/relations/") && present.has("relations")) {
+      return new Response(JSON.stringify({ relations: { relations: {} }, stale: false, outdated: false }), {
+        status: 200,
+      });
+    }
     return new Response(null, { status: 404 });
   };
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
@@ -157,9 +162,12 @@ const READS = [
 ] as const;
 
 describe("the read hooks start no job", () => {
-  it("the actual owner Marginalia feed performs only its five artefact GETs, and no press means no job", async () => {
+  it("the actual owner Marginalia feed performs only its five artefact GETs, and starts no job for the four lists it only reads", async () => {
+    /* The relation words are stored, so the one thing the feed may make has
+       nothing to make; the other four lists are absent and stay unasked for. */
+    present = new Set(["relations"]);
     await act(async () => {
-      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", onFeed: vi.fn() }));
+      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", shown: true, onFeed: vi.fn() }));
     });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
@@ -168,8 +176,9 @@ describe("the read hooks start no job", () => {
       "/api/debate/read-hooks",
       "/api/faq/read-hooks",
       "/api/ideas/read-hooks",
-      /* Marginalia's own artefact. Its hook can start a job, but only on a
-         press (useRelations.ts); a mount, as here, asks for nothing. */
+      /* Marginalia's own artefact. Its hook starts a job when the column is
+         shown with none stored (tests/marginalia-relations-on-open.test.tsx);
+         here there is one. */
       "/api/relations/read-hooks",
       "/api/timeline/read-hooks",
     ]);

@@ -88,8 +88,10 @@ failed took Brief and Fuller with it.
   version stayed `simple-prompt/7` and nothing stored became outdated. It is `simple-prompt/8`
   since later the same day, for [the longer Fuller](#a-longer-fuller-since-2026-10-04), and
   `simple-prompt/9` since 2026-10-05, when
-  [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05). For a piece
-  of ordinary length both prompts' bytes are still the pinned ones.
+  [the length began to follow the piece](#length-follows-the-piece-since-2026-10-05), and
+  `simple-prompt/10` since later that day, for
+  [a slightly longer Brief](#a-slightly-longer-brief-since-2026-10-05). For a piece of ordinary
+  length Fuller's bytes are still the pinned ones; Brief's moved once, at `/10`.
 - **No stored summary was rewritten, and none will be because of this.** Greg, the same day, on
   when Summary is written:
 
@@ -389,16 +391,17 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 
 - **The band changes three values in Fuller's LENGTH section and nothing else.** The standard
   band's Fuller prompt is `simple-prompt/8` byte for byte, so an article of ordinary length is
-  asked exactly what it was. The version is `simple-prompt/9`.
+  asked exactly what it was. This introduced `simple-prompt/9`.
 - **Before, the length did not follow the piece.** Asked for about 500 words whatever the piece,
   Fuller gave an 879-word essay 402 and 492 words, and a 48,000-word book 489 and 515. With bands
   the essay got 281 and 237, and the book 834 and 846. A blind judge preferred the banded Fuller
   in all eight pairs where its prompt differed
   ([261005a](../investigations/261005a-summary-length-bands-measured.md)).
-- **Brief is about 80 words for every piece**, byte for byte as it was. It was banded too in the
-  first build, 60 words for a short piece and up to 140 for a book, and the same judge preferred
-  the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay turned on
-  every time, and the book's longer one read as padded.
+- **Brief is one length for every piece**: about 80 words then, byte for byte as it was, and
+  [about 100 since later that day](#a-slightly-longer-brief-since-2026-10-05). It was banded too
+  in the first build, 60 words for a short piece and up to 140 for a book, and the same judge
+  preferred the unbanded Brief in six pairs of eight: the 60-word one left out a point the essay
+  turned on every time, and the book's longer one read as padded.
 - **The band is counted over the body only**, the blocks the prompt shows, so a long bibliography
   or appendix does not make a piece "a book".
 - **Fuller's stored limit rose once, for every band**, to 13 paragraphs and 1,400 words
@@ -412,6 +415,36 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 
 The plan, the option passed over and Sol's reviews are
 [261005b](../plans/261005b-summary-length-follows-the-length-of-the-piece.md).
+
+### A slightly longer Brief (since 2026-10-05)
+
+> maybe Brief could be ever so slightly longer but not much
+>
+> — Greg, 2026-10-05 (answering [Q-brief-for-a-book], relayed by the Overseer)
+
+Brief is asked for about 100 words and never more than 150, where it was about 80 and 130
+(`BRIEF_LENGTH` in [`simple-summary.ts`](../../src/simple-summary.ts); `simple-prompt/10`). It
+is the same for every piece, and nothing else in its prompt moved.
+
+- **The ask and the page are different numbers.** Asked for 80, Brief came back at 97 words on
+  average (88 to 113). Asked for 100 it came back at 110 (91 to 137). So the reader sees about
+  thirteen words more.
+- **The blind judge's results are mixed.** It preferred the
+  longer Brief in six pairs of eleven and the old one in four; two writes of the old prompt
+  split four to one. It called the longer one the padded side in five pairs and the old one in
+  two. The control shows variation between writes, but does not establish that the change is
+  no worse. The padding flags count against it; the "not padded" bar has not been established.
+- **An ask of about 90 was measured too** and left: it moved the page by six words, and the
+  judge preferred the old Brief to it in eight pairs of eleven. This small comparison does
+  not establish that 90 is worse while 100 is no worse.
+- **Still not longer for a book than for an essay.** For the book the judge preferred the old
+  Brief in all four pairs, as it had in the first build's two.
+- **Brief's stored limit did not move**: 2 to 3 paragraphs and 240 words (`SIMPLE_LIMITS`).
+- **Nothing stored was rewritten.** A stored summary is *outdated*, which is silent; Metadata's
+  Rerun writes the new length.
+
+The measurement is
+[261005a § A slightly longer Brief](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
 
 ### Bold and bullets (since 2026-10-04)
 

@@ -41,7 +41,7 @@ if the article still has none — a one-shot `sessionStorage` mark from the add 
 [plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
 
 **The add page's box saves as you type** since 2026-10-04 (Greg: *"B with a small debounce of some
-kind"*): 700 ms after the last keystroke, on blur, and on the way out, as soon as the article's row
+kind"*): one second after the last keystroke, on blur, and on the way out, as soon as the article's row
 exists; words typed before that are held and saved the moment it does. The reason is timing. The
 server queues the first modes when the import publishes, with the purpose stored by then
 ([plan 261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
@@ -57,9 +57,20 @@ Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.j
 with the rest of the filesystem store.
 
 **Both boxes save themselves** two seconds after the reader stops typing, as well as on blur and
-⌘↵, say *Saving…* and then a green-ticked *Saved*, and ask before the page closes with a save
-pending. Greg, 2026-09-30: *"make it clearer when it has saved … if I try and close the page before
-it has saved, either warn the user, or auto-save"*. The box, its timer and its status line are
+⌘↵, and ask before the page closes with a save pending. **The line under the box is quiet unless a
+save failed**: it reads *Saves as you type.* throughout, a faint green tick (tooltip *Saved*) appears
+when a save lands and fades after two seconds, and only a refusal takes the line over, as *Not saved
+— reason*, until the reader edits or retries. Reduced motion keeps the two-second hold and removes
+the fade ([`profile.css`](../../src/web/styles/profile.css)). The add page stays quiet while waiting
+for the article to exist, and still shows failures if the import stops or its read gives up.
+
+> The "Why are you reading this?" autosave is good. can we make it a bit less visually intrusive, e.g. a faint green tick that appears when it saves (with a tooltip) and then fades away, with no scary "unsaved" indicator. and/or perhaps a 1s rather than 0.7s debounce is fine to avoid it appearing too often and distracting the user
+>
+> — Greg, 2026-10-05
+
+The autosave itself is
+Greg's, 2026-09-30: *"make it clearer when it has saved … if I try and close the page before it has
+saved, either warn the user, or auto-save"*. The box, its timer and its status line are
 `ProfileBox`; the save behind it — one at a time, never written back over words typed since — is
 [`useAutosavedText`](../../src/web/useAutosavedText.ts), which any other box holding saved text can
 use. [261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md).

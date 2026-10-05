@@ -380,7 +380,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             choice your Profile also has. <em>find more terms</em> and{" "}
             <em>more quotes</em> open Glossary or Quotes and press its <strong>Find more</strong> for
             you; they are offered only while that list can be added to. Press the microphone in the
-            box to say it instead of typing.
+            box to say it instead of typing. Press Stop twice quickly and the bar presses{" "}
+            <kbd>Enter</kbd> for you once the words arrive: it runs the command you named, or asks
+            what you meant.
           </li>
           <li>
             If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}

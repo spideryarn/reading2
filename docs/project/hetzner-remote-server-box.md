@@ -1187,6 +1187,13 @@ form.
 - Sessions and their artefacts are keyed by Claude session id, not by name — two concurrent `new`
   runs could otherwise start each other's job. `cmdNew` in
   [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) says why.
+- **`/home` is the small disk.** It is the 49 GB volume and `/` is the 300 GB one, which is the
+  opposite of what the names suggest, and `df -h` on `/` alone says there is plenty of room. It
+  filled to 100% on 2026-10-05 with worktrees, and a full `/home` fails peers' commits and worktree
+  creation rather than anything of yours. New worktrees have gone to
+  `/var/tmp/spideryarn-worktrees/` since then —
+  [worktrees.md § Where a worktree's bytes live](worktrees.md#where-a-worktrees-bytes-live). Anything
+  else large and disposable belongs on `/` too.
 
 ## Known holes
 

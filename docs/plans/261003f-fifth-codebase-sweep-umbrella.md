@@ -472,6 +472,14 @@ Which of the seven really save was read from the code by one reviewer, not teste
 this checks each first.
 
 **5. Start deleting abandoned drafts?** (`STEP_START_DRAFT_SWEEP`, carried over from earlier sweeps)
+**Decided 2026-10-04, built 2026-10-05:** yes. Greg: *"Q-draft-sweep yes"*.
+[261005j](261005j-draft-sweep-deletes-and-the-count-mode-goes.md). The sweep deletes and the count
+mode is gone; that reaches production at the next deploy. The backlog already there was cleared on
+2026-10-05 by `scripts/draft-sweep-backlog.ts --prod --delete`: **118 revisions across 36 articles,
+57.5 MiB of block rows, 118 of 118 deleted, none left, every article still there.** (It was 75
+across 29 when read on 10-03; the same rule, two more days.) The text below is the question as it
+was asked.
+
 When a pipeline step runs, it writes a draft copy of the article's data and publishes it at the
 end. If the step dies, the draft is left behind. A sweep at the start of each new job finds drafts
 that are more than six hours old, belong to no job, and were never published or current — only

@@ -152,20 +152,24 @@ describe("which steps are queued", () => {
        became delegated — and `modeStep` answers `null` for a delegated mode,
        so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
        watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
-    /* `relations` since 2026-10-05, when Marginalia left the switch: its press
-       makes the relation words, so the rule above puts them on the list
-       (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
+    /* **No `relations`.** Marginalia is a main mode since 2026-10-05, and for
+       part of that day its relation words were queued here. Greg: "generate
+       linking words when Marginalia mode is opened" — so its row is delegated
+       and names no step, and the column asks when it is shown
+       (tests/marginalia-relations-on-open.test.tsx;
+       docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
     expect(derivedAutoModeSteps()).toEqual([
       "tweets",
       "glossary",
       "quotes",
       "ideas",
-      "relations",
       "simple",
       "skim",
       "crossrefs",
     ]);
     expect(modeStep("summary")).toBeNull();
+    expect(modeStep("marginalia")).toBeNull();
+    expect(AUTO_MODE_STEPS).not.toContain("relations");
   });
 
   it("the written list the server queues from equals the derived one", () => {
@@ -198,7 +202,7 @@ describe("which steps are queued", () => {
   it("names them to the reader", () => {
     /* Summary once, though two of the steps are its own (its lengths and its
        thread). It must not vanish with its `fixed` row (F2). */
-    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas, Marginalia and Skim are prepared");
+    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas and Skim are prepared");
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
@@ -216,7 +220,6 @@ describe("what each job asks for", () => {
       ["glossary"],
       ["quotes"],
       ["ideas"],
-      ["relations"],
       ["simple"],
       ["quotes", "ideas", "skim"],
       ["crossrefs"],
@@ -227,7 +230,7 @@ describe("what each job asks for", () => {
     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
        goes before it. The publication stamps them in this order. */
     const { together, after } = autoModePosts();
-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["relations"], ["simple"], ["crossrefs"]]);
+    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["crossrefs"]]);
     expect(after).toEqual([["quotes", "ideas", "skim"]]);
   });
 
