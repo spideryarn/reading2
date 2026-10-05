@@ -190,6 +190,48 @@ request is worse than no claim. GPT Sol's review, 2026-08-26. The real fence, if
 enough, is a check on the tool call's arguments in [`src/chat-tools.ts`](../../src/chat-tools.ts) —
 not more prompt.
 
+### The command bar's suggestions: the one exception
+
+**One call does turn the profile into words that leave, and it is an exception to the rule above,
+not a reading of it.** When the owner presses *Suggest what to do here* in the command bar
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), a small
+model is shown both boxes and writes up to three searches, names up to two modes, and writes at
+most one question for chat. The searches and the question are made from what the reader wrote.
+
+Greg was asked ([Q-bar-4]): *"Should the command bar's model be allowed to read your reader
+profile, so your 'Why you're reading this' note can prompt it to propose actions?"*
+
+> Q-bar-4 yes
+>
+> — Greg, 2026-10-04
+
+**Why it is allowed here and nowhere else.** In chat, a model deciding by itself to put the profile
+into a web search is something the reader never sees. Here the words are shown to the reader as a
+list, each with a reason, and nothing is done with any of them until the reader presses that one.
+The press is the reader's, on words they have read.
+
+**Where the words can then go.** A pressed search is a quick search like any other
+([search.md](search.md#quick-search-a-meaning-search-in-about-a-second)): it is sent to the quick
+search model with the article's passages, it is stored, and a stored search is shown to visitors if
+the article is shared. A pressed question lands in Chat's box unsent; once the reader sends it, chat
+may search the web with it. The privacy page says both
+([privacy.md § The command bar's suggestions are made from the profile](privacy.md#the-command-bars-suggestions-are-made-from-the-profile)).
+
+**Keeping personal details out is asked of a model. It is not enforced.** The call has rules of its
+own, not `PROFILE_RULES` (which forbids exactly this, and stays word for word as it is for every
+other prompt). They tell the model to build the searches and the question from the *topic* of the
+reason for reading, and to leave out anything about the person, from either box: a personal detail
+can sit in the reason too. *About you* is there so the model can tell a first read from an expert's
+when it picks modes; it is told never to take search words from it. Nothing in the code can tell a
+topic from a personal detail, so nothing checks the answer for one, and no doc or page may say the
+details are kept out. What a run of made-up readers showed is in
+[261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md).
+
+The prompt is `SUGGEST_SYSTEM` in
+[`src/command-suggest-call.ts`](../../src/command-suggest-call.ts). The model does not see the
+article. The list is kept in the browser for the visit and dropped when either box is saved; it is
+never stored on the server and never logged.
+
 ### The rules live in `SYSTEM`, and they are always there
 
 `PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all seven profiled system prompts —

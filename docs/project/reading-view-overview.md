@@ -430,6 +430,21 @@ does. If the device refuses to keep the choice the colours still change and the 
 say it will last only until the page is closed. Words in
 [`src/web/appearance-commands.ts`](../../src/web/appearance-commands.ts).
 
+**It proposes a short list from why you are reading, since 2026-10-05**
+([261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)).
+On the owner's reading view, for an article that has a *why you're reading this*, an empty bar opens
+on *Suggest what to do here*. Pressing it makes one small model call; the bar stays open and then
+draws, under *From why you're reading*, up to three quick searches, up to two modes and one
+question for chat about what the web says, each with a line saying why. **Every one is a row the
+bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
+lens handoff), and nothing runs without its own press, whatever the model returned. The list is
+kept for the visit in state of its own, hidden while the reader types, and dropped when *About you*
+or the reason is saved. The model is shown the reader's profile and our words for the modes, never
+the article. That makes this the one place the profile becomes words that can leave the
+conversation: [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
+Shapes in [`src/command-suggest.ts`](../../src/command-suggest.ts), the prompt and the call in
+[`src/command-suggest-call.ts`](../../src/command-suggest-call.ts).
+
 **The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
 microphone every other box has, and nothing can be pressed while it is listening —
 [dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box).

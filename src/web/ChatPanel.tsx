@@ -109,7 +109,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
-import { isSendEnter } from "./key-chord.js";
+import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import {
   CHAT_FROM_LABEL,
@@ -123,6 +123,7 @@ import { MODE_ICON } from "./mode-icons.js";
 import type { ChatFrom } from "./params.js";
 import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 import { usePressToggle } from "./usePressToggle.js";
+import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -1112,8 +1113,9 @@ function ThreadList({
  * is), so a finger's tap opens it and the keyboard can reach it; hover and
  * focus open it too. A sibling of the row's own button and not inside it, so
  * pressing the icon never opens the row, and the card and the row's `title`
- * are never both on screen. A quote is the article's words, so it takes the
- * author's face.
+ * are never both on screen. The quote takes the face of whoever wrote it:
+ * the author's for the article's words, the reader's for an angle they typed
+ * (`ThreadSource.voice`).
  */
 function ThreadSourceMark({ source }: { source: ThreadSource }) {
   const { open, onOpenChange, trigger } = usePressToggle();
@@ -1128,7 +1130,7 @@ function ThreadSourceMark({ source }: { source: ThreadSource }) {
         <TipNote>
           {source.label}
           {source.quote !== undefined && (
-            <span className="chat-thread-source-quote voice-author">“{source.quote}”</span>
+            <span className={withVoice("chat-thread-source-quote", source.voice ?? "author")}>“{source.quote}”</span>
           )}
         </TipNote>
       }
@@ -2499,6 +2501,7 @@ function EditQuestion({
             e.preventDefault();
             ask();
           }
+          if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
       {held && !canAsk && (
@@ -2878,6 +2881,9 @@ export function Composer({
             e.preventDefault();
             void submit();
           }
+          /* A handoff puts the caret here with the question already written.
+             The Enter that made it, still held, neither sends nor adds lines. */
+          if (isHeldSendEnter(e)) e.preventDefault();
           /* Escape, in three steps, most-urgent first.
 
              It has to be a ladder rather than one action because the composer

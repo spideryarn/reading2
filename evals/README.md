@@ -228,6 +228,14 @@ which chose the models and the run-at-once cut production uses. Paid, about $1. 
 why its prompts are imported from `src/command-pick.ts`:
 [command-pick/README.md](command-pick/README.md).
 
+## `command-suggest/` — does the bar suggest useful, safe things from why you are reading?
+
+Behind the command bar's *Suggest what to do here*. One run, **2026-10-05**: 17 made-up readers,
+three answers each, through production's own `suggestCommands`, checked for answers that parse, keys
+that were offered, the caps, and anything about the person in a search or the question for chat
+([261005b](../docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md)).
+Paid, about 1.5 cents. [command-suggest/README.md](command-suggest/README.md).
+
 ## `reorder-quality.ts` — did putting the article first change the writing?
 
 ```

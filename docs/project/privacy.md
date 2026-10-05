@@ -478,6 +478,38 @@ of the reader's own words to two models already on the page**, not a new subproc
 sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
 outcome's kind, counts and timings, never the sentence or the words.
 
+## The command bar's suggestions are made from the profile
+
+**Added 2026-10-05**, with
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) and
+[plan 261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md):
+when the owner of an article presses *Suggest what to do here*, the reader's profile and their
+reason for reading that article go to `gpt-5.6-luna`, with our own words for the bar's modes. It is
+not shown the article. **A new flow of the profile to a model already on the page**, so the
+`gpt-5.6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
+
+**The page also says what follows, because that is the part a reader could not guess.** The model
+writes up to three searches and one question for chat, and words them from what it was shown. One
+the reader presses follows the same path as words they typed: a quick search is sent to
+`jev-1.13` with the article's passages and is stored, and a stored search is shown to visitors
+when the article is shared. A pressed question waits in Chat's box; it is sent and stored only
+when the reader presses Send, and can then become a web search. So words that began in the
+profile can end up outside the conversation, on the reader's own press. This is the one exception to the profile's rule, and
+[reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
+owns the reasoning.
+
+**The page makes no promise that personal details are kept out, and must not gain one.** The prompt
+asks the model to build the searches and the question from the topic and leave the person out
+([`src/command-suggest-call.ts`](../../src/command-suggest-call.ts) § `SUGGEST_SYSTEM`). Nothing
+checks that it did. The page says so in those words and tells the reader to read a suggestion
+before pressing it. What was measured is in
+[261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md).
+
+The list is not stored on the server. The browser keeps it for the visit, in memory only. The call
+logs kinds, counts and timings, never the profile, the reason or a suggestion.
+`tests/privacy-page.test.ts` holds both sentences on the page, since naming the model alone would
+not notice the disclosure being deleted.
+
 ## The admin's sign-up and upgrade notices carry the address
 
 **Added 2026-10-01**, at Greg's request

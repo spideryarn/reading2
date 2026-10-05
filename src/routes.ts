@@ -281,6 +281,7 @@ import {
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
+  REASON_NOT_READ,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
   UPLOAD_STILL_ARRIVING,
@@ -387,6 +388,8 @@ import {
 } from "./transcribe.js";
 import { type PickAnswer, parsePickRequest } from "./command-pick.js";
 import { pickCommand } from "./command-pick-call.js";
+import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
+import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
 import type {
   Block,
   ChatAnchor,
@@ -434,7 +437,15 @@ import {
 } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, MAX_VISIBLE_BLOCKS, ORIGIN_MODES, sameOrigin, THREAD_KINDS } from "./types.js";
+import {
+  isLensOrigin,
+  isThreadKind,
+  MAX_LENS_CHARS,
+  MAX_VISIBLE_BLOCKS,
+  ORIGIN_MODES,
+  sameOrigin,
+  THREAD_KINDS,
+} from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -3128,10 +3139,15 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
   if (wanted) await checkAnchor(wanted, article.blocks);
-  /* The origin's block is one of this article's. The foreign key would say so
+  /* A claim's block is one of this article's. The foreign key would say so
      too, as a 500 out of a transaction. The quote is not compared with the
-     block: it is a snapshot of the item's words, kept for the list to show. */
-  if (wantedOrigin && !article.blocks.some((b) => b.id === wantedOrigin.blockId)) {
+     block: it is a snapshot of the item's words, kept for the list to show.
+     A lens has no block, so there is nothing of it to check here. */
+  if (
+    wantedOrigin &&
+    !isLensOrigin(wantedOrigin) &&
+    !article.blocks.some((b) => b.id === wantedOrigin.blockId)
+  ) {
     throw httpError(400, "origin.blockId is not a block of this article");
   }
 
@@ -4564,13 +4580,23 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
 function parseOrigin(origin: unknown): ThreadOrigin | undefined {
   if (origin === undefined || origin === null) return undefined;
   if (typeof origin !== "object") throw httpError(400, "origin must be an object");
-  const { mode, blockId, quote } = origin as Record<string, unknown>;
+  const { mode, blockId, quote, lens } = origin as Record<string, unknown>;
   const built = ORIGIN_MODES.find((m) => m === mode);
   if (built === undefined) {
     throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
   }
   switch (built) {
     case "debate": {
+      /* **Two shapes under one mode, told apart by the `lens` key** (plan
+         261005k, A): a lens, or a claim. A body carrying a lens and any part
+         of a claim is neither, and is refused, not read as whichever half
+         this code looked at first. */
+      if (lens !== undefined) {
+        if (blockId !== undefined || quote !== undefined) {
+          throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
+        }
+        return { mode: built, lens: parseLens(lens) };
+      }
       if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
         throw httpError(400, "origin.blockId must be a block id");
       }
@@ -4586,6 +4612,23 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     default:
       return built satisfies never;
   }
+}
+
+/**
+ * A lens origin's words, as they are stored: the reader's own, **trimmed**,
+ * and never empty. One over the cap is **refused, not cut**, since a cut lens
+ * is a different question from the one the reader asked. None of it reaches a
+ * thrown message: messages are logged, and these are the reader's words.
+ */
+function parseLens(lens: unknown): string {
+  if (typeof lens !== "string" || lens.trim() === "") {
+    throw httpError(400, "origin.lens must be a non-empty string");
+  }
+  const words = lens.trim();
+  if (words.length > MAX_LENS_CHARS) {
+    throw httpError(413, `An origin's lens may be at most ${MAX_LENS_CHARS} characters`);
+  }
+  return words;
 }
 
 /**
@@ -7073,6 +7116,61 @@ async function pickCommandForSentence(req: IncomingMessage, res: ServerResponse)
   }
 }
 
+/* ------------------------------------------------------ command suggest -- */
+
+/**
+ * **A short list of things to do, proposed from why the reader is reading.**
+ * `POST /api/command-suggest/:slug` — plan 261005k, Stage 2 (B);
+ * src/command-suggest-call.ts makes the one model call and
+ * src/command-suggest.ts owns the shapes.
+ *
+ * **The body is row keys and nothing else.** The profile is loaded here: a
+ * client that could supply profile text is a way to put an arbitrary string
+ * into a prompt (the reader route says the same of `useProfile`).
+ *
+ * **Ownership is checked here, by name, before anything is read** — not
+ * inferred from the shelf read inside `resolveProfileParts`, which swallows a
+ * not-found on purpose (it serves prompts, which go ahead on the global half).
+ * Somebody else's slug is the 404 every owner-scoped route gives.
+ *
+ * **A reason that could not be read is a failure the reader can retry, never
+ * "nothing to suggest"** (GPT Sol's F6). Only a read that succeeded and found
+ * no reason answers `nothing`, and that answer makes no model call.
+ *
+ * **No per-reader rate limit**, as for the pick, and for its reasons: signed
+ * in, the owner's own article, a body of keys, an input bounded by the
+ * profile's two caps and our own mode list, and the monthly cap behind it.
+ */
+async function suggestFromWhyReading(
+  slug: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<SuggestAnswer> {
+  await ownedArticleIdentity(slug);
+  const parsed = parseSuggestRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const parts = await resolveProfileParts(slug);
+  if (parts.purposeFailed) throw httpError(503, REASON_NOT_READ.message);
+  const profile = normaliseProfileText(parts.profile);
+  const purpose = normaliseProfileText(parts.purpose);
+  if (purpose === null) return { kind: "nothing", why: "no-reason" };
+  if (suggestableOptions(parsed.request.rows).length === 0) return { kind: "nothing", why: "no-rows" };
+  const rendered = renderProfile({ profile, purpose });
+  /* `purpose` is not null, so neither is this; the check is for the compiler. */
+  if (rendered === null) return { kind: "nothing", why: "no-reason" };
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const outcome = await suggestCommands({ rendered, rows: parsed.request.rows }, gone.signal);
+    if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
+    if (outcome.suggestions === null) return { kind: "nothing", why: "no-list" };
+    return { kind: "suggestions", readFrom: readFromHash({ profile, purpose }), ...outcome.suggestions };
+  } finally {
+    res.off("close", drop);
+  }
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -8781,6 +8879,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "none",
     handler: async ({ request: { req, res } }) => {
       send(res, 200, await pickCommandForSentence(req, res));
+    },
+  },
+
+  /* **The bar's short list from why you are reading** — asked only when the
+     owner presses the row that says so. The slug is in the path, so the spend
+     is attributed to the article by the table (`first-capture`); the model
+     never reads the article. src/command-suggest-call.ts, plan 261005k. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/command-suggest\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const answer = await suggestFromWhyReading(slugPart(captures, 1), req, res);
+      /* Words made from the reader's profile: never a shared cache's. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, answer);
     },
   },
 

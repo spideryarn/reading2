@@ -50,9 +50,12 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
 - **Claims**: what has been written about the claims the piece makes. One open disclosure per
   claim, in article order, headed by the article's own words; the relevance bar belongs here.
 
-Threads and key sources narrow whichever sub-mode is on screen. The reader cannot steer the search
-itself. Since 2026-10-05 the owner can look into any one claim in a chat
-([§ Check a claim in chat](#check-a-claim-in-chat)).
+Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
+steered**: its two searches choose their own queries, and what they keep is one result per article,
+the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a
+chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or from an
+angle of their own typed into the box at the top
+([§ Look at the debate from an angle](#look-at-the-debate-from-an-angle)).
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
@@ -87,8 +90,9 @@ What the reader gets:
 How it works, and what to know before changing it:
 
 - **The conversation remembers the claim; the claim stores nothing.** A thread has an *origin*:
-  four nullable columns on `chat_threads` (`origin_mode`, `origin_item_id`, `origin_block_id`,
-  `origin_quote`), set on insert and never again, like the anchor. `ThreadOrigin` in
+  five nullable columns on `chat_threads` (`origin_mode`, `origin_item_id`, `origin_block_id`,
+  `origin_quote`, and `origin_lens` for an angle, below), set on insert and never again, like the
+  anchor. `ThreadOrigin` in
   [`src/types.ts`](../../src/types.ts) is the shape, and
   [`src/thread-origin.ts`](../../src/thread-origin.ts) is the one mapping to and from the columns.
   It is not a new kind of thread (a claim check is an ordinary chat, with chat's prompt and web
@@ -106,15 +110,19 @@ How it works, and what to know before changing it:
   mark is pressed, and when a typed answer settles in either chat surface, including after its
   composer has unmounted. See the completion callback in
   [`chat/controller.ts`](../../src/web/chat/controller.ts): a departure refresh alone can run
-  before the thread exists.
+  before the thread exists. **An answer without a conversation is not a deletion** unless an
+  earlier answer had it: a row the reader's own Send put there stays until the server lists it
+  or the reader drops it, because the floating dialog is drawn from that row
+  ([261005q](../postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md)).
 - **Until the first typed Send lands, the origin waits beside the conversation's unsent words**
   ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a look at another mode and a
   first Send that fails. **Live is not offered on that conversation until then**: a spoken first
   turn creates the thread by another route, which would leave it with no origin for good.
 
 Not built yet, and in the plan: the same from a Summary paragraph, a glossary entry and a cited
-work; and a claim typed in your own words. Chat's list now shows Learn's conversations, with a
-filter ([chat-tools.md](chat-tools.md#chats-list-shows-every-conversation-about-the-article)).
+work. A claim typed in your own words is the angle box, next. Chat's list now shows Learn's
+conversations, with a filter
+([chat-tools.md](chat-tools.md#chats-list-shows-every-conversation-about-the-article)).
 
 Tests: [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts) (the route, the
 columns, the export), [`debate-claim-chat.test.tsx`](../../tests/debate-claim-chat.test.tsx) (the
@@ -124,6 +132,78 @@ lifetime, and Live), [`chat-anchors-refresh.test.tsx`](../../tests/chat-anchors-
 (asking for the summaries again), and
 [`debate-check-claim-in-chat.test.tsx`](../../tests/debate-check-claim-in-chat.test.tsx) (the whole
 journey, through the app).
+
+## Look at the debate from an angle
+
+Since 2026-10-05, for the owner. Plan
+[261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md),
+part A. Greg had wondered whether Debate could be steered:
+
+> … and so maybe debate then has a search box. An input text box. I know that might be overcomplicating
+> it, but it would be cool if the debate could be steered, maybe in multiple directions, a bit like
+> the way we can steer the search.
+>
+> — Greg, 2026-10-03
+
+What the reader gets:
+
+- **A box at the top of the panel**, *Look at the debate from an angle*, with an **Ask in chat**
+  button. Enter or the button goes to Chat and opens a fresh conversation. Its box holds the angle,
+  quoted, and a fixed question after it: *What do others say about the article from this angle?
+  Search the web, and say so plainly if you find little.* Nothing is sent, searched or paid for
+  until Send, and the reader can edit it first. Back returns to Debate.
+- **Your angles**, under the box: one line per chat started this way, newest first, three and then
+  all. A chat appears once its first question is sent; an unsent draft has no saved thread to list.
+  A line opens its conversation beside Debate, as a claim's mark does.
+- **Both are there before any search has run**, while one is loading and on a stale one. An angle
+  needs no stored debate.
+- **In Chat's list** the conversation has Debate's icon, with a card that quotes the angle.
+- **A visitor has neither.** With the [Experimental switch](experimental-features.md) off, Debate
+  is hidden and so is *Your angles*; the conversations are still in Chat's list.
+
+**Why the angle is a chat and not a steered search.** Telling the stored search to check one named
+claim was tried and worked, at about 20 cents and a minute and a half a run
+([261003o § Q-claims-picker](../plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md)).
+But the stored debate is one result per article, shown to visitors when the article is shared and
+replaced by each run. An angled run would either overwrite the plain one, and show a visitor the owner's
+angle, or need storage per angle, a merge, a spending rule and the angle in the freshness stamp. A
+chat costs nothing until Send, can be answered back, and can be pointed in several directions by
+starting another. It is also where Greg said this kind of digging belongs (the quote under
+[§ Check a claim in chat](#check-a-claim-in-chat)). **What it gives up:** the answer is prose in a
+conversation, not rows in Reception or Claims with checked quotations, and a visitor never sees it.
+
+What to know before changing it:
+
+- **An angle is the origin's second shape.** `ThreadOrigin` is a claim
+  (`{ mode: "debate", blockId, quote }`) or a lens (`{ mode: "debate", lens }`). Both say
+  `mode: "debate"`, so the mode does not tell them apart: ask `isLensOrigin` in
+  [`src/types.ts`](../../src/types.ts). A claim never equals a lens, whatever their words
+  (`sameOrigin`). In the database a debate origin is one shape or the other, never a mix
+  (`chat_threads_origin_debate`).
+- **The lens is the reader's own words**: trimmed, not empty, at most 600 characters
+  (`MAX_LENS_CHARS`, the cap on *why you're reading this*). The route refuses a longer one and does
+  not cut it, and refuses a body that carries a lens and any part of a claim. It never reaches an
+  error message or a log.
+- **The list is found in the thread summaries**, `lensThreads` in
+  [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts), so Debate stores nothing. Two chats from
+  the same words are two lines.
+- **The question is built by `askDebateThroughLens`** in
+  [`chat-handoff.ts`](../../src/web/chat-handoff.ts), with the angle between the same fences as a
+  claim. Chat's own prompt is unchanged: it already searches by default for *"what do others
+  say?"* ([chat-tools.md](chat-tools.md#asking-whether-a-claim-holds-up-is-a-question-about-the-world)),
+  and the question asks for a search in so many words. **Not yet checked with a paid call** that it
+  does search.
+- **One limit, shared with every handoff to Chat**: the handoff starts a fresh conversation, and if
+  the conversation it displaced held words that were never sent, those can become unreachable
+  after a later change of mode (the plan's review, answer 2). Not fixed here; the limit is pinned in
+  [`conversation-band-origin.test.tsx`](../../tests/conversation-band-origin.test.tsx).
+
+Tests: [`debate-lens.test.tsx`](../../tests/debate-lens.test.tsx) (the box, the list, no stored
+debate, a visitor), [`debate-lens-in-chat.test.tsx`](../../tests/debate-lens-in-chat.test.tsx) (the
+whole journey, through the app), [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts)
+(the route and the columns), [`thread-origin-way-back.test.ts`](../../tests/thread-origin-way-back.test.ts)
+(the two shapes, the mapping, the list) and [`chat-handoff.test.ts`](../../tests/chat-handoff.test.ts)
+(the question and its fence).
 
 ## Cited by: the papers that cite the piece
 

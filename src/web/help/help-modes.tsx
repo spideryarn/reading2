@@ -677,7 +677,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
   },
 
   debate: {
-    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar",
+    keywords: "critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar angle angles lens steer",
     whenToUse: (
       <p>
         For a well-known paper, a contested essay, or anything you are about to rely on; not for a
@@ -723,6 +723,16 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           conversation again beside Debate. If a later search words the claim differently the line
           goes, and the conversation is still in Chat’s list, marked with Debate’s icon. Only whoever
           added the article has this.
+        </li>
+        <li>
+          To look at the debate from an angle of your own, such as how the piece relates to another
+          paper, type it in the box at the top and press <strong>Ask in chat</strong>. It does not
+          change the search results shown here: it opens a new conversation in{" "}
+          <HelpRef to="mode-chat">Chat</HelpRef> with a question that asks for a web search from that
+          angle, and sends nothing until you press <strong>Send</strong>. You can do this before
+          searching at all. <strong>Your angles</strong>, under the box, lists the conversations you
+          started this way once you send their first question; press one to open it again beside
+          Debate. Only whoever added the article has this.
         </li>
         <li>
           Anything tagged <strong>AI</strong> is the AI’s reading, checked against nothing: the threads

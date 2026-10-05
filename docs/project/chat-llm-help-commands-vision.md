@@ -215,7 +215,10 @@ Three rules make that table safe rather than merely polite:
 
 - **The interface model never sees the article.** Its input is the reader's own words, the command
   list, where they are standing, and the Help. So a hostile article has no path to choosing a
-  command. That is the whole difference from the main Chat (below).
+  command. That is the whole difference from the main Chat (below). **This input list is the
+  pick's** (a sentence, turned into one command). The bar's other call, the short list from why you
+  are reading, does not see the article either, but it does see the reader's profile and reason for
+  reading, and it writes words of its own: § Where we are, the 261005k entry.
 - **A proposal is the bar's own row.** The reader confirms the same thing they would have pressed
   themselves, drawn the same way, rather than a model's description of it.
 - **Its output is parsed, not trusted.** A command id outside the list, or an argument that fails
@@ -267,6 +270,17 @@ the interface model.
   you did not know the verb.
   One departure from § The line's table: **`find` from a sentence is proposed, not run at once**,
   because the words a model pulled out carry no measured confidence.
+- **Built** (2026-10-05, [261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)):
+  **the bar proposes a short list from why you are reading.** A second call, not a wider pick:
+  `POST /api/command-suggest/:slug` ([`src/command-suggest-call.ts`](../../src/command-suggest-call.ts)),
+  made only when the owner presses the row that asks. **What this model sees is different from the
+  pick's**: the reader's profile and their reason for reading the article, loaded by the server,
+  and our words for the bar's modes. Not the article, and nothing the browser wrote. It answers
+  with up to three searches, two modes and one question for chat, each drawn as a row of the bar's
+  own that waits for its own press. It is the one place the profile becomes words that can leave
+  the conversation, and
+  [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
+  says why that is allowed and what it does not promise.
 - **Not built**: questions about the app answered from the Help; two commands from one sentence;
   the capable model when Jev is unsure (§ Jev first says what replaced it); the interface model
   in chat.

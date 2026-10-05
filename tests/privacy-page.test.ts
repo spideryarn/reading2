@@ -220,6 +220,28 @@ describe("the privacy page", () => {
     expect(schema).toContain('"quiz_attempts"');
   });
 
+  it("says the command bar's suggestions are made from the profile, and where a pressed one goes", () => {
+    /* Plan 261005k, GPT Sol's F5. `gpt-5.6-luna` was already on the page, so
+       the model-name check above cannot notice this disclosure being deleted:
+       the profile and the reason for reading go to it, and the searches and
+       the question it writes from them travel on once pressed. Held to the
+       job too: if the call goes, these claims should. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "when you ask the command bar to suggest what to do with an article, to write that short list, for which it is shown your profile and your reason for reading the article, with our list of commands",
+    );
+    expect(prose).toContain("The searches and the question the command bar suggests are worded from what you wrote");
+    expect(prose).toContain("Nothing is done with a suggestion until you press it");
+    expect(prose).toContain("a search is seen by visitors if you share the article");
+    expect(prose).toContain("The chat question waits in Chat’s box until you press Send");
+    expect(prose).toContain("Once sent, it is kept like a question you typed and can be searched for on the web");
+    /* It must not promise what a prompt cannot guarantee. */
+    expect(prose).toContain("we cannot promise that it always does");
+    expect(prose).not.toMatch(/never (contain|include)s? anything about you/);
+    const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
+    expect(models).toContain('{ job: "command-suggest", id: QUICK_MODEL_OPENROUTER');
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

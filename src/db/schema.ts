@@ -3792,14 +3792,20 @@ export const chatThreads = spideryarn.table(
      * thread that existed before the mode is a chat, and no backfill was needed.
      *
      * **The second value was `'review'` until 2026-09-01**, when the mode was
-     * renamed to Remember. `drizzle-kit generate` cannot see a check expression
-     * on its own, and it cannot see a data movement at all, so
-     * drizzle/0048_rename_review_thread_kind.sql was hand-completed: DROP the
-     * constraint, UPDATE the rows, then re-ADD it. Re-adding a narrowed CHECK
-     * validates it against the rows already there, so the order is the whole
-     * point — the other order passes on an empty container and fails wherever
-     * there is history.
+     * renamed to Remember. `drizzle-kit generate` cannot see a data movement,
+     * so drizzle/0048_rename_review_thread_kind.sql was hand-completed: DROP
+     * the constraint, UPDATE the rows, then re-ADD it. Re-adding a narrowed
+     * CHECK validates it against the rows already there, so the order is the
+     * whole point — the other order passes on an empty container and fails
+     * wherever there is history.
      * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md.
+     *
+     * **This note used to say `generate` cannot see a check expression. It
+     * does now.** The installed drizzle-kit wrote the drop and re-add of two
+     * changed CHECKs by itself in
+     * drizzle/20261005203554_chat_thread_origin_lens.sql. So a changed CHECK
+     * is generated and then read, never hand-written beside the generated
+     * one. What it still cannot write is the UPDATE between the two.
      *
      * **The third value, `'candidates'`, arrived on 2026-09-01** with Referee
      * mode's fourth sub-mode — drizzle/0050_candidates_thread_kind.sql. That one
@@ -3813,7 +3819,7 @@ export const chatThreads = spideryarn.table(
 
     /**
      * **Where the conversation was started from, when that was an item in
-     * another mode** — `ThreadOrigin` in src/types.ts, as four columns
+     * another mode** — `ThreadOrigin` in src/types.ts, as five columns
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
@@ -3824,6 +3830,9 @@ export const chatThreads = spideryarn.table(
      *   like `anchor_block_id`, so it survives a re-extraction.
      * - `origin_quote`: the item's own words when the chat started. Article
      *   prose or a model's: never logged.
+     * - `origin_lens`: the angle the reader typed to look at the debate from
+     *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
+     *   debate origin has this **or** a block and a quote, never both.
      *
      * Written **on insert only**, like the anchor and the kind:
      * `upsertThread`'s conflict clause does not name them.
@@ -3832,6 +3841,7 @@ export const chatThreads = spideryarn.table(
     originItemId: text("origin_item_id"),
     originBlockId: text("origin_block_id"),
     originQuote: text("origin_quote"),
+    originLens: text("origin_lens"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -3873,15 +3883,24 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_mode",
       sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations')`,
     ),
-    /* No mode, no origin: the other three columns mean nothing without it. */
+    /* No mode, no origin: the other four columns mean nothing without it. */
     check(
       "chat_threads_origin_none",
-      sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+      sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is null)`,
     ),
-    /* A claim is a block and its words, and has no id. */
+    /* A debate origin is one of two shapes and never a mix: a claim (a block
+       and its words, no lens) or a lens (no block, no words). Neither has an
+       id. The mapper reads anything else as no origin, so the database must
+       not hold it (plan 261005k's review, F7). */
     check(
       "chat_threads_origin_debate",
-      sql`${t.originMode} is distinct from 'debate' or (${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originItemId} is null)`,
+      sql`${t.originMode} is distinct from 'debate' or (${t.originItemId} is null and ((${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null) or (${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)))`,
+    ),
+    /* Only Debate takes a lens. The three modes the list above reserves have
+       no shape of their own yet, and must not get one by accident. */
+    check(
+      "chat_threads_origin_lens_debate_only",
+      sql`${t.originLens} is null or ${t.originMode} = 'debate'`,
     ),
     /* Only a chat is started from an item; the other kinds are about the
        whole article. */
