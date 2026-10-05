@@ -1197,6 +1197,7 @@ export function Metadata({
               disabled={purpose.saved === null}
               rows={2}
               save={purpose.state}
+              inFlight={purpose.inFlight}
             />
 
             {/* The global half, shown rather than edited. A reader looking at

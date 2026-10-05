@@ -313,6 +313,7 @@ export function ProfilePage() {
                profile you believe every glossary is written to is a string the
                server never got. */
             save={profile.state}
+            inFlight={profile.inFlight}
           />
           <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-ink-faint">
             Changing this can give existing personalised text the person-and-pencil icon. Nothing

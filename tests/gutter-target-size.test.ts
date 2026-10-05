@@ -33,7 +33,7 @@
  * fails when the two disagree. This is that something.
  */
 import { describe, expect, it } from "vitest";
-import { mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
+import { enclosing, mediaBlock, readerCssNoComments } from "./helpers/stylesheets.js";
 import { BLK_SLOT_MIN_PX, BLK_SLOT_REM, PROSE_ALONE_MAX_REM, proseAloneMaxPx } from "../src/web/layout.js";
 
 // The reading-view sheets as a set, comments stripped. Both files quote the
@@ -42,6 +42,19 @@ import { BLK_SLOT_MIN_PX, BLK_SLOT_REM, PROSE_ALONE_MAX_REM, proseAloneMaxPx } f
 // `tests/text-alone-centring.test.ts` documents. The *set* rather than
 // `src/web/styles.css`, which has held nothing but `@import`s since 2026-09-06.
 const css = readerCssNoComments();
+
+/* The rule against `grid-area` is the gutter's: its controls are placed by
+   source order. Search stacks its own spinner with it (search.css §
+   .srch-upgrading, since 261004l), and that one component is exempt by name.
+   An allowlist rather than a "selects a gutter element" test, because the
+   gutter's controls do not share one class prefix (`.block-chat` is one). */
+function exemptFromGutterRule(at: number): boolean {
+  const preludes = enclosing(css, at);
+  return (
+    (preludes[0] ?? "").includes(".srch-") &&
+    !preludes.some((x) => x.includes("blk-") || x.includes("block-"))
+  );
+}
 
 /** Every root a reader can actually land on: Chrome's font-size settings. */
 const ROOTS = [9, 12, 16, 20, 24];
@@ -405,6 +418,7 @@ describe("the column shows as many controls as the row has room for", () => {
     const oneSlotEnd = css.indexOf("\n}\n", oneSlot);
     for (const m of css.matchAll(/grid-area:/g)) {
       const p = m.index ?? -1;
+      if (exemptFromGutterRule(p)) continue;
       expect(
         oneSlot > -1 && p > oneSlot && p < oneSlotEnd,
         "a `grid-area` outside the one-slot mark block — auto-placement is the rule",
@@ -535,6 +549,7 @@ describe("the column shows as many controls as the row has room for", () => {
        control to the first cell. */
     for (const m of css.matchAll(/grid-area:\s*1\s*\/\s*1/g)) {
       const p = m.index ?? -1;
+      if (exemptFromGutterRule(p)) continue;
       expect(p > at && p < end, "a `grid-area: 1 / 1` outside the one-slot block").toBe(true);
     }
   });

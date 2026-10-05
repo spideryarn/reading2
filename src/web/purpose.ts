@@ -17,9 +17,9 @@ import { forgetSummaries } from "./link-facts.js";
  * typed. `null` clears it.
  *
  * **A caller that means "leave it alone" must not call this with `null`.** The
- * add page never does (plan 260930e F1): its box starts empty even on a re-add
- * of an article that already has a purpose, so an empty draft there is not a
- * request to erase a sentence the reader cannot see.
+ * add page sends it only once its box has read and shown what is stored
+ * (plan 260930e F1, kept by src/web/add-purpose.ts): before that an empty box
+ * is not a request to erase a sentence the reader cannot see.
  *
  * Rejects with the server's sentence on failure.
  */
@@ -47,7 +47,8 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
  * as every caller's `savePurpose` does. For `useAutosavedText`'s `leave`.
  *
  * One copy, for the box on Metadata, the first-open prompt and the profile
- * panel, which until 2026-10-02 each wrote this request out for themselves.
+ * panel, which until 2026-10-02 each wrote this request out for themselves,
+ * and since plan 261004l the add page's box.
  *
  * Forgets the link summaries as it sends and again when the write settles —
  * useProfile.ts § `leaveProfile` says why it takes both.
