@@ -160,6 +160,12 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/structure-whole-document/preflight.ts":
     "Reads GET /api/v1/models immediately before a paid run, to check that each arm's model really has the effort its arm asks for — OpenRouter maps an unsupported level onto the nearest one rather than refusing it, so the alternative is a results file labelled with an effort that never ran. Costs nothing and buys no inference.",
+  "evals/long-structure/calls.ts":
+    "The long-structure eval's metered call. Every paid call in it is `streamMessage(\"structure\", …)` inside a `collectSpend` scope of kind `eval`, so it is on the seam and in the ledger. What the scan sees is one GET /api/v1/models, read once a run for the model's context window, to refuse a top-level request whose input would not fit before it is paid for. Costs nothing and buys no inference.",
+  "evals/long-structure/key-room.ts":
+    "Reads GET /api/v1/key before a paid run and refuses to start when the key's remaining monthly limit is under the run's floor. Costs nothing and buys no inference — the same read as scripts/ai-cost.ts.",
+  "evals/long-structure/fake-model.ts":
+    "The dry run's stand-in for the provider. It replaces `fetch` under the gateway and sets a made-up OPENROUTER_API_KEY for its duration, restoring the real one after, so that nothing in a dry run can reach the real provider. Names the credential only to overwrite it; no transport of its own.",
   "evals/structure-whole-document/verify-zdr.ts":
     "Reads GET /api/v1/endpoints/zdr to check that a finished run's challenger calls were served by an upstream that retains nothing — the request asked for it, and this is the only thing that can say whether it was honoured. Costs nothing and buys no inference; same reason as verify-costs.ts for why it cannot live in the declared file.",
   "evals/declared-spend.ts":
