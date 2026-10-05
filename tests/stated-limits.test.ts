@@ -12,38 +12,54 @@
  * sentence in the dialog still true?"**
  *
  * Since 2026-10-05 it is, for structure: a document whose table of contents
- * will not fit one model answer is given a tree built from its own headings
- * instead of being refused (src/heading-tree.ts § `buildBoundedHeadingTree`,
+ * will not fit one model answer is asked about in slices
+ * (src/structure-slices.ts), and when those do not make a tree it is given one
+ * built from its own headings instead of being refused
+ * (src/heading-tree.ts § `buildBoundedHeadingTree`,
  * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
  * The two numbers below that used to be ceilings are now where the path
  * changes, and they stay pinned for that reason.
  *
- * No database, no network, no model: the documents are synthetic
- * (tests/helpers/synthetic-blocks.ts), the functions are the real ones, and
- * the model seam throws if anything reaches it.
+ * No database and no network: the documents are synthetic
+ * (tests/helpers/synthetic-blocks.ts) and the functions are the real ones. The
+ * model seam is a switch. Off, every call throws, which is a model that never
+ * answers; on, it answers each request over the blocks in it
+ * (tests/helpers/slice-model.ts).
  *
  * Each assertion was watched red once, by the perturbation named beside it.
  */
 import { getTableColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POSTGRES_MAX_PARAMETERS, inBatches, rowsPerStatement } from "../src/db/insert-batches.js";
 import { blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { BOUNDED_TREE_GENERATOR } from "../src/heading-tree.js";
 import { nullCheckpointStore } from "../src/store/checkpoints.js";
+import { generatorFor } from "../src/models.js";
 import { generateStructure, wholeDocumentRequest } from "../src/structure.js";
 import { TooLongForOnePass } from "../src/token-budget.js";
+import { checkTree } from "../src/tree-invariants.js";
 import type { Block } from "../src/types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES, uploadLimits } from "../src/uploads.js";
 import { expectBoundedTree, expectPlannable } from "./helpers/bounded-tree.js";
+import { askedIds, isRootCall, messageOf, ROOT_ANSWER, sectionsAnswer } from "./helpers/slice-model.js";
 import { DENSITIES, plainBlocks } from "./helpers/synthetic-blocks.js";
 
-/* The documents below are past what one answer holds, so no model may be asked. */
+/** Does the model answer? Off, every call to it throws. */
+let modelAnswers = false;
+/** How many blocks each call was shown: none of them may be the whole document. */
+let shown: number[] = [];
 vi.mock("../src/messages-stream.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/messages-stream.js")>()),
-  streamMessage: () => {
-    throw new Error("stated-limits: the structure step asked a model about a document too long for one answer");
+  streamMessage: (_task: string, params: Parameters<typeof askedIds>[0]) => {
+    if (!modelAnswers) throw new Error("stated-limits: the model does not answer");
+    const ids = askedIds(params);
+    shown.push(ids.length);
+    return {
+      onText: () => {},
+      finalMessage: async () => messageOf(isRootCall(params) ? ROOT_ANSWER : sectionsAnswer(ids)),
+    };
   },
 }));
 
@@ -81,6 +97,10 @@ describe("the limits the upload dialog states", () => {
     headingless = plainBlocks(MOST_HEADINGLESS_BLOCKS + 1, HEADINGLESS).blocks;
     dense = plainBlocks(Math.round(MAX_PAGES * DENSE.blocksPerPage), DENSE).blocks;
   }, 120_000);
+  beforeEach(() => {
+    modelAnswers = false;
+    shown = [];
+  });
 
   it("says the sentence these tests are about", () => {
     /* Red by changing MAX_PAGES to 251 in src/uploads.ts. */
@@ -89,19 +109,40 @@ describe("the limits the upload dialog states", () => {
     expect(MAX_UPLOAD_BYTES).toBe(50 * 1024 * 1024);
   });
 
-  /** The step as the pipeline calls it, with nowhere to keep a checkpoint and no model behind it. */
+  /** The step as the pipeline calls it, with nowhere to keep a checkpoint. */
   const structure = (blocks: Block[]) =>
     generateStructure({ blocks, slug: "stated-limits", checkpoints: nullCheckpointStore(), power: "standard" });
 
-  /** A tree from the document's own headings: sound, bounded, labellable, and nothing was bought. */
+  /**
+   * With a model that never answers: the slices were tried, every call threw,
+   * the throw was not passed on, and the tree is the document's own headings,
+   * sound, bounded and labellable. Nothing came back, so nothing is counted.
+   */
   const expectHeadingsRun = (blocks: Block[], run: Awaited<ReturnType<typeof structure>>): void => {
-    expect(run.source).toEqual({ by: "headings", reason: "answer-too-long" });
+    expect(run.source).toEqual({ by: "headings", reason: "answer-too-long", slicesFailed: "slice-failed" });
     expectBoundedTree(blocks, run.parts.tree);
     expectPlannable(blocks, run.parts.tree);
     expect(run.parts.tree.generator).toBe(BOUNDED_TREE_GENERATOR);
     expect(run.model).toBe(BOUNDED_TREE_GENERATOR);
     expect([run.wholeDocumentCalls, run.inputTokens, run.outputTokens]).toEqual([0, 0, 0]);
     expect([run.wholeDocumentResumed, run.deepen, run.deepenFailed]).toEqual([false, null, false]);
+  };
+
+  /**
+   * With a model that answers: a finished tree like any article's, made from
+   * slices, none of which was the whole document.
+   */
+  const expectSlicesRun = async (blocks: Block[]): Promise<void> => {
+    modelAnswers = true;
+    const run = await structure(blocks);
+    expect(run.source).toMatchObject({ by: "slices", reasked: 0 });
+    expect(checkTree(blocks, run.parts.tree).problems).toEqual([]);
+    expect(run.parts.tree.provisional).toBeUndefined();
+    expect(run.parts.tree.generator).toBe(generatorFor("standard"));
+    expectPlannable(blocks, run.parts.tree);
+    expect(shown.length).toBe(run.wholeDocumentCalls);
+    expect(Math.max(...shown)).toBeLessThan(blocks.length / 2);
+    expect(shown.reduce((a, b) => a + b, 0)).toBe(blocks.length);
   };
 
   it("one model answer holds 2,889 blocks of headingless prose and not 2,890", () => {
@@ -116,7 +157,9 @@ describe("the limits the upload dialog states", () => {
        `generateStructure`), and by stamping the model's name on the tree. */
     const blocks = headingless.slice(0, MOST_HEADINGLESS_BLOCKS + 1);
     expectHeadingsRun(blocks, await structure(blocks));
-  });
+    /* Red by returning the headings tree without trying the slices. */
+    await expectSlicesRun(blocks);
+  }, 60_000);
 
   it("a paper as dense as Kuhn's passes one answer at about 178 pages, and still becomes an article at the 250 stated", async () => {
     /* A PDF of 179 to 250 pages at this density (14.4 blocks and 1.8 headings
@@ -134,7 +177,8 @@ describe("the limits the upload dialog states", () => {
     expect(accepts(densePages(MAX_PAGES))).toBe(false);
     const blocks = densePages(MAX_PAGES);
     expectHeadingsRun(blocks, await structure(blocks));
-  });
+    await expectSlicesRun(blocks);
+  }, 60_000);
 
   it("the store is not the first thing to refuse a long document", () => {
     /* Until 2026-10-04 it was, for a web page: one insert, 17 parameters a

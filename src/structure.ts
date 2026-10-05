@@ -79,6 +79,8 @@ import {
   type ExpansionExecutor,
 } from "./structure-deepen.js";
 import { log } from "./log.js";
+/* Values flow one way: that file takes this one's helpers as `SliceDeps`. */
+import { runSlices, seamsHeld, type SliceDeps, slicesDeadline, type SlicesFailure } from "./structure-slices.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 
@@ -2213,14 +2215,20 @@ export interface StructureArtefacts {
 }
 
 /**
- * **Where a run's tree came from**: a model's answer, or the document's own
+ * **Where a run's tree came from**: one model answer, several answers over
+ * slices of a long document (src/structure-slices.ts), or the document's own
  * headings with no model (src/heading-tree.ts § `buildBoundedHeadingTree`).
  *
- * The second is a fallback, and a fallback that has quietly become the common
+ * The last is a fallback, and a fallback that has quietly become the common
  * case must show: the pipeline logs this at every value.
  *
- * - `answer-too-long`: the whole table of contents will not fit one model
- *   answer, so no model was asked.
+ * - `slices`: the whole table of contents would not fit one answer, so the
+ *   body was asked about in `slices` slices. `reasked` answers did not pass and
+ *   were asked for again; `refilled` sections came back undivided and were
+ *   divided by a call of their own.
+ * - `answer-too-long`: the same document, where the slices did not make a
+ *   tree; `slicesFailed` says which step gave out. What was asked for on the
+ *   way is in the run's counts.
  * - `labels-could-not-ask`: a model's tree was sound but held a section too
  *   long for one labels call, so the labels step would have refused it. That
  *   run's call was made and paid for; its counts say so.
@@ -2230,7 +2238,9 @@ export interface StructureArtefacts {
  */
 export type StructureSource =
   | { by: "model" }
-  | { by: "headings"; reason: "answer-too-long" | "labels-could-not-ask" };
+  | { by: "slices"; slices: number; refilled: number; reasked: number }
+  | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
+  | { by: "headings"; reason: "labels-could-not-ask" };
 
 export interface StructureRun {
   /** Which path produced `parts.tree`. */
@@ -2386,8 +2396,11 @@ export interface StructureRun {
    * ordinarily, 2 when the first answer could not become a tree and was asked
    * for again — `REASK_STRUCTURE`. Logged at every value, because a re-ask that
    * has quietly become the common case doubles the stage's bill and its wait.
+   *
+   * On the slices path it is every answer received: slices, re-asks, refills
+   * and the root, whether or not a tree came of them.
    */
-  wholeDocumentCalls: 0 | 1 | 2;
+  wholeDocumentCalls: number;
   /**
    * **What the deepening wave did**, or `null` where it was not run at all —
    * which is every reader today, because the flag is off
@@ -2533,6 +2546,12 @@ export async function generateStructure(opts: {
    * the wave runs to completion, which is what a command line and a test want.
    */
   deadlineAt?: number;
+  /**
+   * How long the queue allows this step (`STEP_BUDGET_MS.structure`, which
+   * lives in src/jobs.ts and cannot be imported here). Only the slices path
+   * reads it, to stop itself before the queue would.
+   */
+  stepBudgetMs?: number;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
 }): Promise<StructureRun> {
@@ -2554,8 +2573,9 @@ export async function generateStructure(opts: {
    * bought before it came to that, which is nothing unless a model was asked.
    */
   const fromHeadings = (
-    reason: Extract<StructureSource, { by: "headings" }>["reason"],
+    source: Extract<StructureSource, { by: "headings" }>,
     spent: StructureSpend,
+    tree: Tree = buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree,
   ): StructureRun =>
     finishStructureRun({
       blocks,
@@ -2563,10 +2583,10 @@ export async function generateStructure(opts: {
       power: opts.power,
       started,
       split,
-      structure: buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree,
+      structure: tree,
       /* Nothing was mended: the tree being returned was never a model's answer. */
-      built: { repairs: [], droppedChildren: [], rangelessChildren: [], droppedHeadings: [], collapsedRungs: [], droppedQuestions: [] },
-      source: { by: "headings", reason },
+      built: emptyBuildReport(),
+      source,
       ...spent,
     });
 
@@ -2582,16 +2602,64 @@ export async function generateStructure(opts: {
     request = wholeDocumentRequest(body);
   } catch (err) {
     if (!(err instanceof TooLongForOnePass)) throw err;
-    log("pipeline").warn(
+    log("pipeline").info(
       { slug, blocks: body.length, answerTokens },
-      "the table of contents will not fit one answer; building it from the document's headings",
+      "the table of contents will not fit one answer; asking for it in slices",
     );
-    return fromHeadings("answer-too-long", {
-      wholeDocumentResumed: false,
-      wholeDocumentCalls: 0,
-      wholeDocumentUsage: { input_tokens: 0, output_tokens: 0 },
+    /* The headings tree first: it is free, the slices are cut along it, and it
+       is what the reader gets if they fail. */
+    const bounded = buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree;
+    const sliced = await runSlices({
+      body,
+      slug,
+      bounded,
+      power: opts.power,
+      checkpoints: opts.checkpoints,
+      deps: SLICE_DEPS,
+      deadline: slicesDeadline(started, opts.stepBudgetMs, opts.deadlineAt),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+    });
+    /* The deepening wave is not run on this path. It is off for every reader. */
+    const spent: StructureSpend = {
+      wholeDocumentResumed: sliced.spend.calls === 0 && sliced.spend.resumed > 0,
+      wholeDocumentCalls: sliced.spend.calls,
+      wholeDocumentUsage: sliced.spend.usage,
       deepen: null,
       deepenFailed: false,
+    };
+    const giveUp = (slicesFailed: SlicesFailure, err?: unknown): StructureRun => {
+      log("pipeline").warn(
+        { slug, blocks: body.length, slicesFailed, slices: sliced.slices, calls: sliced.spend.calls, err },
+        "the slices did not make a table of contents; building it from the document's headings",
+      );
+      return fromHeadings({ by: "headings", reason: "answer-too-long", slicesFailed }, spent, bounded);
+    };
+    if (!sliced.ok) return giveUp(sliced.failure);
+    /* One build over the whole body, as for any answer, then the same checks. */
+    const built = emptyBuildReport();
+    let stitched: Tree;
+    try {
+      const bodyTree = buildTree(sliced.proposal, {}, body, slug, built);
+      if (!seamsHeld(bodyTree, sliced.sections, sliced.seams)) {
+        throw new Error("The final build dropped a slice's section or moved a slice seam.");
+      }
+      stitched = appendSupplement(bodyTree, groups);
+      assertTreeSound(blocks, stitched);
+    } catch (err) {
+      return giveUp("tree-unsound", err);
+    }
+    if (unaskableBatches(stitched, blocks).length > 0) return giveUp("labels-could-not-ask");
+    return finishStructureRun({
+      blocks,
+      slug,
+      power: opts.power,
+      started,
+      split,
+      structure: stitched,
+      built,
+      source: { by: "slices", slices: sliced.slices, refilled: sliced.refilled, reasked: sliced.reasked },
+      ...spent,
     });
   }
   const { maxTokens, params } = request;
@@ -2881,7 +2949,7 @@ export async function generateStructure(opts: {
    * A stored answer that will not build is a different case and is not counted
    * here: it is demoted to a miss above, and the call below is its first.
    */
-  let wholeDocumentCalls: 0 | 1 | 2 = 0;
+  let wholeDocumentCalls = 0;
   let wave1 = cached;
   if (wave1 === null) {
     const first = await askForWholeDocument();
@@ -3082,7 +3150,7 @@ export async function generateStructure(opts: {
       },
       "the model's table of contents has a section too long for one labels call; building it from the document's headings instead",
     );
-    return fromHeadings("labels-could-not-ask", spent);
+    return fromHeadings({ by: "headings", reason: "labels-could-not-ask" }, spent);
   }
 
   return finishStructureRun({
@@ -3098,10 +3166,32 @@ export async function generateStructure(opts: {
   });
 }
 
+const emptyBuildReport = (): BuildReport => ({
+  repairs: [],
+  droppedChildren: [],
+  rangelessChildren: [],
+  droppedHeadings: [],
+  collapsedRungs: [],
+  droppedQuestions: [],
+});
+
+/** What the slices path borrows from this file (src/structure-slices.ts § `SliceDeps`). */
+const SLICE_DEPS: SliceDeps = {
+  request: (blocks) => {
+    const { params, user, maxTokens } = wholeDocumentRequest(blocks);
+    return { params, user, maxTokens, answerTokens: estimateStructureTokens(blocks) };
+  },
+  headroom: STRUCTURE_HEADROOM,
+  parse: parseWholeDocumentAnswer,
+  build: buildTree,
+  canonical: canonicalWholeDocumentRequest,
+  question: questionFor,
+};
+
 /** What one attempt asked a model for, whichever tree it ended up returning. */
 interface StructureSpend {
   wholeDocumentResumed: boolean;
-  wholeDocumentCalls: 0 | 1 | 2;
+  wholeDocumentCalls: number;
   wholeDocumentUsage: { input_tokens: number; output_tokens: number };
   deepen: DeepenStats | null;
   deepenFailed: boolean;
@@ -3220,7 +3310,7 @@ function finishStructureRun(
        builder gave it. */
     tree: {
       ...mergeLabels(structure, pending.labels),
-      ...(source.by === "model" ? { generator: generatorFor(made.power) } : {}),
+      ...(source.by !== "headings" ? { generator: generatorFor(made.power) } : {}),
     },
   };
 
