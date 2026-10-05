@@ -212,3 +212,80 @@ above, the row wins.**
 | F5 (P2) | stage 2: decoding and then trimming sentence punctuation eats a real trailing bracket (`a%5B1%5D` becomes `a[1`) | trim the sentence's punctuation first, decode the address form second, validate without trimming again. Tests: encoded terminal brackets, a literal `%252F`, a malformed escape, each host form. The `a%2Fb` ambiguity `doiOfUrl` documents stays, and is said |
 | F6 (P3) | *influence unknown* is `Tooltip` plus `useTapReveal` in `UnknownInfluence`, not `ControlTip` | that component is the precedent |
 | F7 (P3) | nulling `fetched_at` would break `bibliographic_records_shape` | that alternative would not have worked as written; struck |
+
+### What landed
+
+Built by an Opus subagent, tests red first, in commit `83b247bc3`. Departures from the text above,
+each read and kept:
+
+- **The day is in the card, not on the line.** The line is `cited 357 times · Crossref`; with the
+  day it is about 300px and the band's narrowest is 288px. The day reads *4 October 2026*, through
+  the panel's existing `dayOf`, not a second formatter.
+- **A second CHECK**, `bibliographic_records_cited_by_count_read_at`: a read moment only on a found
+  Crossref row. Both CHECKs use `is not distinct from`, so a claim's null state cannot slip through.
+- **`fetched_at` is truncated to the millisecond**, as `claimed_until` already was, so the moment
+  `write` returns is exactly what a later read gives.
+- **`citedByCountReadAt` is on every Crossref record `lookupWork` returns**, count or not, mirroring
+  the column. `registryFor` needs both to attach `citedBy`.
+- **The band's (i) gains its own paragraph** (`CITED_BY_NOTE`) and `INFLUENCE_NOTE` is unchanged.
+- **Stage 2 puts the address in `doiUrl`'s spelling and calls `doiOfUrl`**, which is not widened;
+  `DOI_ORG` is exported for that. Two other readers of a doi.org address exist and already decode
+  (`identityOf` in `src/cited-in-spideryarn.ts`, and `src/web/link-preview.ts`); no other strip
+  that keeps escapes was found. **One visible change:** an encoded address whose DOI holds `<` or
+  `>` (an old Wiley SICI) now gives no DOI, where before it gave the escaped string that was later
+  encoded twice. The existing DOI shape refuses those characters.
+
+Mutations, each red and then restored: the reader without its Crossref-only condition (4 tests);
+the store without the read-at write (7); `freshSql` without `source = 'crossref'` (1).
+
+**The outage cost, accepted (F4):** until one refresh succeeds, a Crossref record cached before
+this is `unavailable` to import, Debate and *Dig deeper* as well as to Citations. Serving the old
+record when its refresh fails would remove that, at the price of `read` returning stale answers; not
+built, since a Crossref outage already makes every uncached lookup unavailable.
+
+**A deploy where the code arrives before the migration** makes every lookup `unavailable: store`
+(the read names columns that do not exist yet): rows lose registry enrichment and nothing fails.
+`npm run deploy` applies migrations first, so this is the window only if that order is broken.
+
+### GPT Sol's code review
+
+[The review](261005i-citations-crossref-count-code-review-sol.md) of `83b247bc3`: **land after
+fixes (F8)**; no P0 or P1; the six statements it was asked to check hold (the "never re-asked"
+one with the obvious qualification that the ordinary 180-day expiry still applies).
+
+| | finding | |
+|---|---|---|
+| F8 (P2) | chat's `article_citations` put the count and its day inside the article's untrusted fence, against item 6 above | fixed by Sol: the counts are listed outside the fence, tied to numbered rows; [postmortem](../postmortems/261005h-a-formatter-erases-trust-when-it-mixes-checked-facts-with-article-text.md) |
+| F9 (P2) | `tests/chat-tools.test.ts:765` does a real DNS lookup before its `fetch` stub | reported; not this work; passed to the Overseer |
+
+One round. Sol's fix was read and is covered by its own red-first test; no second round was run.
+
+### Browser check
+
+Sonnet subagent, Playwright, on commit `88d82abd2`, at 1440×900, 820×1180 (touch) and 390×844
+(touch). The shared local database did not have the migration (below), so no list could be made
+again; instead one stored list (Antikythera, 79 works) was given `citedBy` on five rows and put back
+afterwards, read back identical.
+
+Passed at all three widths: the four wordings (357; 12,480; *cited once*; *no citations recorded*)
+on the quiet line between the bars and the source, in the neighbouring text's face, size and colour,
+light and dark; no overflow and no sideways scroll; the card on hover, keyboard focus and tap, with
+the day and the caveat, not clipped; a DataCite row seeded with a count draws none; the bar hides by
+score and the five order buttons are unchanged; the (i) and `/help` say it; no console errors from
+this work. The day would not have fitted on the line: it adds about 120px to a band about 506px wide
+at desktop, where *Dig deeper* already wraps beside *influence unknown*.
+
+**Not seen in a browser:** a visitor's row (the seeded article is private, and making it public was
+outside what the check was allowed to change; `tests/public-dto.test.ts` covers the projection), and
+a count that arrived through a real Crossref answer rather than a seeded row.
+
+Screenshots: [desktop](261005i-shot-1-desktop-rows.png) · [phone](261005i-shot-2-phone-rows.png) ·
+[the card](261005i-shot-3-open-card.png) · [light](261005i-shot-4-light-rows.png).
+
+### The migration and the shared local database
+
+`npm run db:migrate` (`Target: postgresql://postgres@127.0.0.1:54362/postgres`) refused: the shared
+database's ledger holds `20261005150617_chat_thread_origin`, a migration from another worktree that
+is not on `dev` yet. Nothing was applied by hand. The Postgres tests ran against the private
+database the suite mints from this worktree's `drizzle/`. Both migrations are children of the same
+snapshot, so whichever lands second regenerates; the SQL does not change.
