@@ -1,6 +1,6 @@
 # Remember becomes Learn, and Explore also covers critiques of the piece
 
-Status: **plan, not built**. Queue entry `qi-hsv465b2`. Report `spya-mvmpks`
+Status: **built and on `dev`, except the two screenshots and the browser pass** (§ What landed). Queue entry `qi-hsv465b2`. Report `spya-mvmpks`
 (SPIDERYARN-READING2-DG), from Greg (admin, proved by `scripts/feedback-reporter.ts` exit 0), filed
 2026-10-05 07:48 UTC on `2605-20355v1-spya-ygtwkz`:
 
@@ -254,7 +254,7 @@ Changes to **Learn**:
 | `src/converse.ts` § `EXPLORE_SYSTEM` | *like the rest of Remember* |
 | `src/vocabulary.ts` § `SITE_TERMS` | `"remember mode"` stays (readers will go on saying it) and `"learn mode"` joins it |
 | `scripts/changelog/copy-prompt.md` | the mode list |
-| `src/web/changelog-pending.json` | two unreleased entries name Remember; they will be read after the rename, so they say Learn |
+| `src/web/changelog-pending.json` | **not edited after all**: it is replaced whole by each deploy's `prepare`, which reads the copy prompt above |
 | `README.md` | the mode's bullet |
 | `src/command-pick-catalogue.generated.json` | regenerated: `WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts` |
 
@@ -278,4 +278,35 @@ is the test that the alias in item 2 works.
 
 ## What landed
 
-*(per stage)*
+**Stage 1** (`7c6029641`, docs `88b9fe4d2`): as planned, with the plan review's changes. The
+reader-facing name is Learn in the label, the catalogue, the Help page, Features, the dictation
+vocabulary, the changelog copy prompt, the README and two prompt sentences; the evergreen docs
+follow. The sub-mode rows answer to *remember quiz* through `FORMER_PARENT_NAMES`, seen red without
+it. `?mode=learn` was not added. One thing the plan did not foresee: with the label changed, *r*
+and *re* in the command bar name Referee alone (`tests/command-match-mode-aliases.test.ts`).
+
+**Stage 2** (`616606382`, then `2fcbaf873` and `7043b50b2`): the fifth move, TESTING THE PIECE, the
+fourth starter, and the wider remit in the chip, the invitation and Help. The eval is
+[261005e](../investigations/261005e-explore-prompt-widened-to-critiques-of-the-piece.md): the
+first version made six whole-piece absence claims, three of them false; the shipped one makes none
+in the same runs. The headline is small, because the old prompt already answered a direct "what is
+wrong with this?" well. C4 as set was not met by the old prompt or the new.
+
+**The code review** ([261005l-code-review-sol.md](261005l-code-review-sol.md), then a narrow second
+round, [261005l-code-review-2-sol.md](261005l-code-review-2-sol.md)): CR-1 to CR-5 fixed by GPT Sol
+in the tree, read and committed in `2fcbaf873`. CR-6, on three sentences of mine added after round
+one, was a real P1: the missing-source rule named `article_citations`, which cannot show an
+absence. Fixed in `7043b50b2`, red first. That fix is the one thing in this plan no reviewer has
+read; it is the wording Sol proposed, shortened, and the eval's final arm ran on it.
+
+**Not done, and queued as `qi-qg6ydbp7`:** the two Features screenshots (item 4a) and the browser
+pass in both stages' done-checks. The worktree's dev server cannot sign in while the shared local
+database lacks the columns dev's newest migration adds (`npm run db:check`: 16 missing), and the
+browser subagent's `npm run db:migrate` was refused. Until the reshoot, `/features` shows a tile
+titled *Learn.* over a picture headed *Remembering*.
+
+**Deferred, and queued as `qi-dabpymjd`** (needs Greg): the identifier rename.
+
+**The full suite** (through `scripts/tmux-job.ts`, 2026-10-05): 13 files red of 1,682. Two were
+this work's and are fixed (`explore-kind` caught mid-edit; `command-match-mode-aliases`, above).
+The rest are in § The gate, below, with what each was re-run as after merging `origin/dev`.
