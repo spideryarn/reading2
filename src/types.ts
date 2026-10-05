@@ -191,8 +191,8 @@ export interface TreeNode {
   sourceHeading?: string;
   /**
    * Set when no model wrote `title` and no heading did either: it quotes the
-   * opening words of the node's first paragraph (src/heading-tree.ts §
-   * `buildBoundedHeadingTree`). The author's words, so the client draws them
+   * opening words of its first qualifying non-heading block (src/heading-tree.ts
+   * § `buildBoundedHeadingTree`). The author's words, so the client draws them
    * in the author's face; `sourceHeading` cannot say so, because it must name
    * a heading.
    */

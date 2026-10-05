@@ -39,7 +39,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
   };
 });
 
-const { generateStructure } = await import("../src/structure.js");
+const { buildTree, generateStructure, parseWholeDocumentAnswer } = await import("../src/structure.js");
 const { BOUNDED_TREE_GENERATOR, BOUNDED_TREE_VERSION } = await import("../src/heading-tree.js");
 const { labelCallBudget, planBatches } = await import("../src/labels.js");
 const { generatorFor } = await import("../src/models.js");
@@ -94,6 +94,9 @@ describe("a model tree with a section the labels step could not ask about", () =
     expect(out.parts.tree.generator).toBe(BOUNDED_TREE_GENERATOR);
     expect(out.model).toBe(BOUNDED_TREE_GENERATOR);
     expect(out.parts.labels.structureVersion).toBe(BOUNDED_TREE_VERSION);
+    const titles = Object.values(out.parts.tree.nodes).filter((n) => n.depth > 0 && n.children.length > 0);
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((n) => n.titleFrom === "opening-words")).toBe(true);
     /* The call was made and paid for, and the run does not pretend otherwise. */
     expect(modelCalls).toBe(1);
     expect(out.wholeDocumentCalls).toBe(1);
@@ -129,6 +132,27 @@ describe("an ordinary model tree", () => {
     expect(out.parts.tree.generator).toBe(generatorFor("standard"));
     expect(out.model).toBe(generatorFor("standard"));
     expect(bodyLeafSets(out.parts.tree).map((s) => s.leaves)).toEqual([1250, 1250]);
+  });
+
+  it("cannot claim opening-words provenance, even if the model sends it", async () => {
+    const proposed = JSON.parse(answer([1250, 1250]));
+    proposed.root.titleFrom = "opening-words";
+    for (const child of proposed.root.children) child.titleFrom = "opening-words";
+    modelAnswer = JSON.stringify(proposed);
+    const { root } = parseWholeDocumentAnswer(modelAnswer, BLOCKS);
+    expect(root).not.toHaveProperty("titleFrom");
+    expect(root.children!.every((n) => !("titleFrom" in n))).toBe(true);
+    /* Check the builder independently of the parser's field allowlist. */
+    Object.assign(root, { titleFrom: "opening-words" });
+    for (const child of root.children!) Object.assign(child, { titleFrom: "opening-words" });
+    expect(Object.values(buildTree(root, {}, BLOCKS, SLUG).nodes).every((n) => n.titleFrom === undefined)).toBe(true);
+    const checkpoints = memoryCheckpoints({ slug: SLUG, articleId: "model-provenance" });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const out = await run(checkpoints);
+      expect(out.source).toEqual({ by: "model" });
+      expect(Object.values(out.parts.tree.nodes).every((n) => n.titleFrom === undefined)).toBe(true);
+    }
+    expect(modelCalls).toBe(1);
   });
 });
 

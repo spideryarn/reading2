@@ -207,6 +207,28 @@ describe("no internal node is ever untitled", () => {
     expect(node(tree, tree.rootId).title).toBe("the-slug");
   });
 
+  it("furniture cannot supply the root's fallback title", () => {
+    for (const furniture of ["36", "* * *", "Running Title"]) {
+      const blocks = [
+        ...Array.from({ length: REPEATED_HEADING_MIN }, () => heading(furniture)),
+        heading("The Real First Heading"),
+        ...paragraphs(8),
+      ];
+      const { tree } = buildBoundedHeadingTree(blocks, "the-slug");
+      expectBoundedTree(blocks, tree);
+      expect(node(tree, tree.rootId).title).toBe("The Real First Heading");
+    }
+  });
+
+  it("a body of furniture headings alone falls back to the slug", () => {
+    for (const furniture of ["36", "* * *", "Running Title"]) {
+      const blocks = Array.from({ length: REPEATED_HEADING_MIN }, () => heading(furniture));
+      const { tree } = buildBoundedHeadingTree(blocks, "the-slug");
+      expectBoundedTree(blocks, tree);
+      expect(node(tree, tree.rootId).title).toBe("the-slug");
+    }
+  });
+
   it("a heading with no text titles neither a part nor a section", () => {
     const blocks = [
       heading(""),
@@ -314,13 +336,26 @@ describe("what a transcribed PDF leaves lying about does not name a section", ()
     expect(sectionStartingAt(tree, blocks[60]!).title).toBe("Paragraph 64 runs on for long enough to…");
   });
 
-  it("and falls back to the first block with any words when none has three", () => {
+  it("and uses the stock title when no block has three words containing a letter", () => {
     const blocks = headingless(240);
     for (let i = 120; i < 180; i++) blocks[i] = block(i === 120 ? "#" : "Oh.");
     const { tree } = buildBoundedHeadingTree(blocks, "bounded");
     expectBoundedTree(blocks, tree);
-    expect(sectionStartingAt(tree, blocks[120]!).title).toBe("#");
+    expect(sectionStartingAt(tree, blocks[120]!).title).toBe(UNTITLED_WINDOW_TITLE);
+    expect(sectionStartingAt(tree, blocks[120]!).titleFrom).toBeUndefined();
   });
+
+  for (const text of ["123 456 789", "# * +", "Oh.", "“35,” she said."]) {
+    it(`a whole document of ${JSON.stringify(text)} has stock passage titles`, () => {
+      const blocks = Array.from({ length: 240 }, () => block(text));
+      const { tree } = buildBoundedHeadingTree(blocks, "the-slug");
+      expectBoundedTree(blocks, tree);
+      expectPlannable(blocks, tree);
+      const internal = Object.values(tree.nodes).filter((n) => n.depth > 0 && n.children.length > 0);
+      expect(internal.every((n) => n.title === UNTITLED_WINDOW_TITLE && n.titleFrom === undefined)).toBe(true);
+      expect(internal.map(titleVoice)).toEqual(internal.map(() => "ui"));
+    });
+  }
 
   it("dot leaders are dropped from an opening-words title, and an ellipsis is not", () => {
     const blocks = headingless(240);

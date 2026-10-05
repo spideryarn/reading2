@@ -1133,17 +1133,22 @@ between are in
 the design and its review are in
 [261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 
-- **It has the shape a model's tree has**: root, parts, sections, and every paragraph at depth 3.
+- **It has the shape the model prompt asks for**: root, parts, sections, and every body block at depth 3.
   The reading view takes "the section level" to be one above the deepest paragraph, for the whole
   article (`sectionDepth`, [`src/web/position.ts`](../../src/web/position.ts)), so a tree whose
   branches end at different depths breaks section navigation. That is why this is not
   `buildHeadingTree`, which stays as it was for the structure eval.
-- **No section holds more than the labels step's batch size** (`MAX_BATCH`). The labels step never
+- **No body section holds more than the labels step's batch size** (`MAX_BATCH`). The labels step never
   cuts a section, so a run of 3,000 paragraphs under one heading was one call it refused. Longer
-  runs are cut into consecutive "windows", each titled by the opening words of its first
-  paragraph.
+  runs are cut into consecutive "windows". Without a usable heading, a window takes its title
+  from the opening words of its first non-heading block with at least three words containing a
+  letter, dropping dot leaders. With no qualifying block or usable heading, it wears the stock
+  title (`UNTITLED_WINDOW_TITLE`).
 - **A heading repeated five or more times is page furniture, not a section** (`REPEATED_HEADING_MIN`),
-  and so is the article's own title met twice. A PDF's running header is often transcribed as a
+  and so is the article's own title met twice, or a heading with no letter in it. Equality uses
+  `sameHeading`, which folds typographic punctuation and whitespace but preserves case,
+  trailing punctuation and numbering. These blocks remain leaves but neither cut nor supply
+  a fallback title. A PDF's running header is often transcribed as a
   heading on every page: on the first real book through this path, 58 of 76 parts were called
   *With a Little Help*. With the rule it is 13 parts, named for the stories.
 - **It has no gists**, and is marked `provisional: "headings"`, which is what excuses it from the

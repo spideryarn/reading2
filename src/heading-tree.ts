@@ -369,7 +369,7 @@ const WINDOW_TITLE_CHARS = 60;
 /** Words with a letter in them that a block needs before its opening titles a window. */
 const WINDOW_TITLE_MIN_WORDS = 3;
 
-/** A heading this many times over is a running page header, not a section. Five: no real book has that many "Exercises". A guess. */
+/** Repeated headings become furniture at this heuristic threshold, even genuine recurring labels such as "Exercises". */
 export const REPEATED_HEADING_MIN = 5;
 
 /** Root, two parts, two sections each, a leaf apiece: the least a depth-3 tree can be. */
@@ -448,8 +448,9 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
   };
 
   /**
-   * The heading it opens on, else the opening words of its first paragraph
-   * that has any, else a heading anywhere in it, else the stock title. `not`
+   * The heading it opens on, else the opening words of its first non-heading
+   * block with three letter-containing words, else a heading anywhere in it,
+   * else the stock title. `not`
    * is the heading the parent wears, so a part's first section does not repeat
    * the part.
    */
@@ -458,15 +459,13 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
     if (opens !== null) return quoting(opens);
     /* A paragraph of real words first: a scene break ("#"), a page number or a
        one-word line of dialogue opens many windows and names none. */
-    for (const enough of [WINDOW_TITLE_MIN_WORDS, 0]) {
-      for (let i = seg.lo; i <= seg.hi; i++) {
-        const b = body[i]!;
-        if (headingLevel(b) !== null || b.words === 0 || !hasText(b)) continue;
-        if ((b.text.match(/\S*\p{L}\S*/gu) ?? []).length < enough) continue;
-        const title = openingWords(b.text);
-        /* The author's words, and the node says so: src/types.ts § `TreeNode.titleFrom`. */
-        return title === UNTITLED_WINDOW_TITLE ? { title } : { title, titleFrom: "opening-words" };
-      }
+    for (let i = seg.lo; i <= seg.hi; i++) {
+      const b = body[i]!;
+      if (headingLevel(b) !== null || b.words === 0 || !hasText(b)) continue;
+      if ((b.text.match(/\S*\p{L}\S*/gu) ?? []).length < WINDOW_TITLE_MIN_WORDS) continue;
+      const title = openingWords(b.text);
+      /* The author's words, and the node says so: src/types.ts § `TreeNode.titleFrom`. */
+      return title === UNTITLED_WINDOW_TITLE ? { title } : { title, titleFrom: "opening-words" };
     }
     for (let i = seg.lo; i <= seg.hi; i++) if (isTitleHeading(i)) return quoting(i);
     return { title: UNTITLED_WINDOW_TITLE };
@@ -575,7 +574,8 @@ export function buildBoundedHeadingTree(
     );
   }
 
-  const { planned, flat } = planBoundedParts(demoteFurniture(body, articleTitle));
+  const headingBody = demoteFurniture(body, articleTitle);
+  const { planned, flat } = planBoundedParts(headingBody);
   const whole: Segment = { lo: 0, hi: body.length - 1 };
 
   const nodes: Record<NodeId, TreeNode> = {};
@@ -595,7 +595,7 @@ export function buildBoundedHeadingTree(
     return node;
   };
 
-  const rootTitle = [articleTitle ?? "", ...body.filter((b) => headingLevel(b) !== null).map((b) => b.text), slug]
+  const rootTitle = [articleTitle ?? "", ...headingBody.filter((b) => headingLevel(b) !== null).map((b) => b.text), slug]
     .map((t) => t.trim())
     .find((t) => t !== "");
   const root = add(null, whole, { title: rootTitle ?? slug });

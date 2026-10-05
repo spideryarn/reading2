@@ -6,13 +6,13 @@ The builder survived 9,815 valid adversarial sequences. All eight single-file ch
 
 Files changed:
 
-- [src/labels.ts](src/labels.ts)
-- [src/structure.ts](src/structure.ts)
-- [src/pipeline.ts](src/pipeline.ts)
-- [tests/bounded-heading-tree.test.ts](tests/bounded-heading-tree.test.ts)
-- [tests/structure-step-bounded-fallback.test.ts](tests/structure-step-bounded-fallback.test.ts)
-- [Stage D review report](docs/plans/261005a-long-documents-stage-d-review-sol.md)
-- [Root-cause postmortem](docs/postmortems/261005a-a-supplement-append-invalidates-a-labels-planner-assumption.md)
+- `src/labels.ts`
+- `src/structure.ts`
+- `src/pipeline.ts`
+- `tests/bounded-heading-tree.test.ts`
+- `tests/structure-step-bounded-fallback.test.ts`
+- `Stage D review report`
+- `Root-cause postmortem`
 
 A separate `docs/project/structure-step.md` edit was left untouched.
 
