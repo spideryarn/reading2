@@ -103,6 +103,20 @@ function sum(list: readonly CubeTotals[], pick: (t: CubeTotals) => number): numb
   return list.reduce((n, t) => n + pick(t), 0);
 }
 
+const TOTAL_FIELDS = [
+  "calls",
+  "creditsNanos",
+  "byokNanos",
+  "computedNanos",
+  "recordedNanos",
+  "unpricedCalls",
+  "pricedCalls",
+  "failedCalls",
+  "failedRecordedNanos",
+  "computedCalls",
+  "settledCalls",
+] as const satisfies readonly (keyof CubeTotals)[];
+
 describe("the money in a row", () => {
   it("adds the three pockets, and puts the fee on credits only", () => {
     const pockets = { creditsNanos: 1_000, byokNanos: 200, computedNanos: 30 };
@@ -126,6 +140,7 @@ describe("the money in a row", () => {
     expect(totals.recordedNanos).toBe(400 + 100 + 60 + 7);
     expect(totals.computedCalls).toBe(1);
     expect(totals.unpricedCalls).toBe(1);
+    expect(totals.settledCalls).toBe(4);
   });
 });
 
@@ -154,11 +169,12 @@ describe("which article a row is", () => {
     expect(articleKeyString(key)).toBe("article:art-1");
   });
 
-  it("is only a recorded name without one — own slug or the hash, per owner", () => {
-    const own = articleKeyOf(row({ articleSlug: "ann-deleted" }));
-    expect(own).toEqual({ kind: "recorded", ownerId: ANN, label: "ann-deleted" });
+  it("is only a recorded name without one — keyed by an opaque hash, per owner", () => {
+    const own = articleKeyOf(row({ articleSlug: "ann-deleted", recordedSlugHash: "own-opaque" }));
+    expect(own).toEqual({ kind: "recorded", ownerId: ANN, id: "own-opaque" });
+    expect(articleKeyString(own)).not.toContain("ann-deleted");
     const theirs = articleKeyOf(row({ ownerId: BEN, recordedSlugHash: "0a1b2c3d4e" }));
-    expect(theirs).toEqual({ kind: "recorded", ownerId: BEN, label: "0a1b2c3d4e" });
+    expect(theirs).toEqual({ kind: "recorded", ownerId: BEN, id: "0a1b2c3d4e" });
     /* The same recorded name under two owners is two keys. */
     const other = articleKeyOf(row({ ownerId: ANN, recordedSlugHash: "0a1b2c3d4e" }));
     expect(articleKeyString(other)).not.toBe(articleKeyString(theirs));
@@ -171,8 +187,16 @@ describe("which article a row is", () => {
 
   it("never merges an id with a recorded name of the same spelling", () => {
     const byId = dimensionValue(row({ articleId: "x", articleSlug: "same" }), "article");
-    const recorded = dimensionValue(row({ articleSlug: "same" }), "article");
+    const recorded = dimensionValue(row({ articleSlug: "same", recordedSlugHash: "opaque-same" }), "article");
     expect(byId.key).not.toBe(recorded.key);
+  });
+
+  it("gives a renamed article one key and one group", () => {
+    const before = row({ articleId: "art-renamed", articleSlug: "old-name", creditsNanos: 2 });
+    const after = row({ articleId: "art-renamed", articleSlug: "new-name", creditsNanos: 3 });
+    expect(dimensionValue(before, "article").key).toBe(dimensionValue(after, "article").key);
+    expect(groupRows([before, after], "article")).toHaveLength(1);
+    expect(groupRows([before, after], "article")[0]?.recordedNanos).toBe(5);
   });
 });
 
@@ -196,6 +220,13 @@ describe("dimensionValue", () => {
     const a = dimensionValue(row({ upstream: null }), "upstream");
     const b = dimensionValue(row({ upstream: "Vendor" }), "upstream");
     expect(a.key).not.toBe(b.key);
+  });
+
+  it("does not merge an absent upstream with that literal provider name", () => {
+    const absent = dimensionValue(row({ upstream: null }), "upstream");
+    const literal = dimensionValue(row({ upstream: "(not recorded)" }), "upstream");
+    expect(absent.key).not.toBe(literal.key);
+    expect(groupRows([row({ upstream: null }), row({ upstream: "(not recorded)" })], "upstream")).toHaveLength(2);
   });
 });
 
@@ -261,15 +292,16 @@ describe("pivotRows", () => {
   it("cells sum to their row total, their column total and the grand total", () => {
     for (const r of pivot.rows) {
       const cells = pivot.columns.flatMap((c) => pivot.cells.get(r.key)?.get(c.key) ?? []);
-      expect(sum(cells, (t) => t.recordedNanos)).toBe(r.recordedNanos);
-      expect(sum(cells, (t) => t.calls)).toBe(r.calls);
+      for (const field of TOTAL_FIELDS) expect(sum(cells, (t) => t[field]), `${r.key}.${field}`).toBe(r[field]);
     }
     for (const c of pivot.columns) {
       const cells = pivot.rows.flatMap((r) => pivot.cells.get(r.key)?.get(c.key) ?? []);
-      expect(sum(cells, (t) => t.recordedNanos)).toBe(c.recordedNanos);
+      for (const field of TOTAL_FIELDS) expect(sum(cells, (t) => t[field]), `${c.key}.${field}`).toBe(c[field]);
     }
-    expect(sum(pivot.rows, (t) => t.recordedNanos)).toBe(pivot.total.recordedNanos);
-    expect(sum(pivot.columns, (t) => t.recordedNanos)).toBe(pivot.total.recordedNanos);
+    for (const field of TOTAL_FIELDS) {
+      expect(sum(pivot.rows, (t) => t[field]), `rows.${field}`).toBe(pivot.total[field]);
+      expect(sum(pivot.columns, (t) => t[field]), `columns.${field}`).toBe(pivot.total[field]);
+    }
     expect(pivot.total).toEqual(totalsOf(ROWS));
   });
 

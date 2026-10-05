@@ -28,6 +28,7 @@ const BYSTANDER = "00000000-0000-4000-8000-0000c0b70a03";
 const seen = vi.hoisted(() => ({
   calls: [] as string[],
   tooLarge: false,
+  privacyKeyProvided: false,
 }));
 
 function group(over: Partial<CostCubeGroup>): CostCubeGroup {
@@ -65,8 +66,14 @@ vi.mock("../src/store/ai-calls-spend-pg.js", async () => {
   );
   return {
     ...actual,
-    spendCube: async (since: string | undefined, until: string | undefined, asker: string) => {
+    spendCube: async (
+      since: string | undefined,
+      until: string | undefined,
+      asker: string,
+      privacyKey?: string,
+    ) => {
       seen.calls.push(`spendCube(${since}, ${until}, ${asker})`);
+      seen.privacyKeyProvided = privacyKey === "not-a-key";
       if (seen.tooLarge) throw new actual.SpendCubeTooLarge(actual.SPEND_CUBE_MAX_GROUPS);
       return [
         group({}),
@@ -168,6 +175,7 @@ const UNTIL = "2033-06-01T00:00:00.000Z";
 beforeEach(() => {
   seen.calls.length = 0;
   seen.tooLarge = false;
+  seen.privacyKeyProvided = false;
 });
 
 describe("the cost cube, for the administrator", () => {
@@ -175,8 +183,10 @@ describe("the cost cube, for the administrator", () => {
     const sent = await request(`${PATH}?since=${SINCE}&until=${UNTIL}`);
     expect(sent.status).toBe(200);
     expect(sent.headers["cache-control"]).toBe("private, no-store");
+    expect(sent.body).not.toContain("not-a-key");
     /* Asked as the administrator — the argument the slug rule keys on. */
     expect(seen.calls).toContain(`spendCube(${SINCE}, ${UNTIL}, ${TEST_SUB})`);
+    expect(seen.privacyKeyProvided).toBe(true);
     const costs = JSON.parse(sent.body) as AdminCosts;
     expect(costs.since).toBe(SINCE);
     expect(costs.until).toBe(UNTIL);

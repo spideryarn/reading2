@@ -84,6 +84,8 @@
  * the asker's own id.
  */
 
+import { createHmac } from "node:crypto";
+
 import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { CostCubeGroup } from "../cost-cube.js";
@@ -349,24 +351,27 @@ export async function spendCube(
   since: string | undefined,
   until: string | undefined,
   adminOwnerId: string,
+  privacyKey: string,
   maxGroups: number = SPEND_CUBE_MAX_GROUPS,
 ): Promise<CostCubeGroup[]> {
+  if (privacyKey.length === 0) throw new Error("the cost cube needs a privacy key");
   const ownSlug = sql<string | null>`case when ${aiCalls.ownerId} = ${adminOwnerId}
     then ${aiCalls.articleSlug} end`;
-  /* 40 bits of md5 over owner and slug: enough to keep one owner's handful of
-     recorded slugs apart, and nothing a slug can be read back out of. */
-  const recordedSlugHash = sql<string | null>`case
+  /* The database groups on the real slug but lets only a one-way digest cross
+     the boundary. Node keys that digest with a server secret below: unlike the
+     old bare MD5, the value sent to the browser cannot be checked against a
+     dictionary of likely title-derived slugs. */
+  const recordedSlugDigest = sql<string | null>`case
     when ${aiCalls.articleId} is null
      and ${aiCalls.articleSlug} is not null
-     and ${aiCalls.ownerId} <> ${adminOwnerId}
-    then substr(md5(${aiCalls.ownerId}::text || ':' || ${aiCalls.articleSlug}), 1, 10) end`;
+    then encode(sha256(convert_to(${aiCalls.ownerId}::text || ':' || ${aiCalls.articleSlug}, 'UTF8')), 'hex') end`;
   const rows = await getDb()
     .select({
       day: UTC_DAY,
       ownerId: aiCalls.ownerId,
       articleId: aiCalls.articleId,
       articleSlug: ownSlug,
-      recordedSlugHash,
+      recordedSlugDigest,
       scopeKind: aiCalls.scopeKind,
       job: aiCalls.purpose,
       stepName: aiCalls.stepName,
@@ -408,7 +413,15 @@ export async function spendCube(
     /* One past the cap, so "exactly the cap" and "more than it" can be told apart. */
     .limit(maxGroups + 1);
   if (rows.length > maxGroups) throw new SpendCubeTooLarge(maxGroups);
-  return rows;
+  return rows.map(({ recordedSlugDigest: digest, ...row }) => ({
+    ...row,
+    recordedSlugHash:
+      digest === null
+        ? null
+        : createHmac("sha256", privacyKey)
+            .update(`spideryarn/admin-costs/recorded-slug\0${digest}`)
+            .digest("hex"),
+  }));
 }
 
 /** Which credentials paid for the window's rows, and how many each. */

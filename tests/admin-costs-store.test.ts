@@ -183,10 +183,14 @@ describe("the cost cube", () => {
     for (const fixture of FIXTURES) await pgCostStore.record(fixture);
   })();
 
-  async function cube(asker = ASKER, maxGroups?: number) {
+  async function cube(
+    asker = ASKER,
+    maxGroups?: number,
+    privacyKey = "cost-cube-test-privacy-key",
+  ) {
     await written;
     const { spendCube } = await import("../src/store/ai-calls-spend-pg.js");
-    return spendCube(SINCE, UNTIL, asker, maxGroups);
+    return spendCube(SINCE, UNTIL, asker, privacyKey, maxGroups);
   }
 
   it("adds up to the rows it was made from, pocket by pocket", async () => {
@@ -257,11 +261,17 @@ describe("the cost cube", () => {
     expect(recorded.map((g) => g.creditsNanos).sort()).toEqual([3_000_000, 4_000_000]);
     const hashes = recorded.map((g) => g.recordedSlugHash);
     expect(new Set(hashes).size).toBe(2);
-    for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{10}$/);
+    for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    const underAnotherKey = await cube(ASKER, undefined, "another-cost-cube-privacy-key");
+    const otherHashes = underAnotherKey
+      .filter((g) => g.ownerId === OTHER && g.recordedSlugHash !== null)
+      .map((g) => g.recordedSlugHash);
+    expect(otherHashes).not.toEqual(hashes);
     for (const g of recorded) expect(g.articleId).toBeNull();
-    /* The asker's own recorded slug is named, so it needs no hash. */
+    /* The asker's own recorded slug is named, but its address-bar key is still opaque. */
     const own = groups.find((g) => g.articleSlug === ASKER_GONE_SLUG);
-    expect(own).toMatchObject({ articleId: null, recordedSlugHash: null });
+    expect(own).toMatchObject({ articleId: null });
+    expect(own?.recordedSlugHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("keeps the model asked for beside the one that answered", async () => {

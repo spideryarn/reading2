@@ -46,8 +46,8 @@ export interface CostCubeGroup extends MoneyPockets {
   /** **The administrator's own articles only**; null on anybody else's row. */
   articleSlug: string | null;
   /**
-   * For another owner's row with a recorded slug and no id: a short hash that
-   * keeps two recorded slugs apart without saying what either is.
+   * For any row with a recorded slug and no id: a keyed hash that keeps two
+   * recorded slugs apart without putting a title-derived slug in filter state.
    */
   recordedSlugHash: string | null;
   scopeKind: string;
@@ -150,16 +150,17 @@ export function modelOf(row: { requestedModel: string; answeredModel: string | n
 /** Which article a row is, or only what it was recorded as. */
 export type ArticleKey =
   | { kind: "article"; id: string }
-  /** `label` is the administrator's own slug, or another owner's hash. */
-  | { kind: "recorded"; ownerId: string; label: string }
+  /** `id` is an opaque keyed hash; the recorded slug is display text, never identity. */
+  | { kind: "recorded"; ownerId: string; id: string }
   | { kind: "none" };
 
 export function articleKeyOf(
   row: Pick<CostCubeGroup, "ownerId" | "articleId" | "articleSlug" | "recordedSlugHash">,
 ): ArticleKey {
   if (row.articleId !== null) return { kind: "article", id: row.articleId };
-  const label = row.articleSlug ?? row.recordedSlugHash;
-  if (label !== null) return { kind: "recorded", ownerId: row.ownerId, label };
+  if (row.recordedSlugHash !== null) {
+    return { kind: "recorded", ownerId: row.ownerId, id: row.recordedSlugHash };
+  }
   return { kind: "none" };
 }
 
@@ -169,7 +170,7 @@ export function articleKeyString(key: ArticleKey): string {
     case "article":
       return `article:${key.id}`;
     case "recorded":
-      return `recorded:${key.ownerId}:${key.label}`;
+      return `recorded:${key.ownerId}:${key.id}`;
     case "none":
       return "none";
     default:
@@ -215,7 +216,7 @@ function articleLabel(row: CostCubeRow, key: ArticleKey): string {
     case "article":
       return row.articleSlug ?? `article ${shortId(key.id)}`;
     case "recorded":
-      return `recorded as ${key.label}`;
+      return row.articleSlug ?? `recorded article ${shortId(key.id)}`;
     case "none":
       return "no article";
     default:
@@ -226,6 +227,13 @@ function articleLabel(row: CostCubeRow, key: ArticleKey): string {
 function same(value: string | null): { key: string; label: string } {
   const key = value ?? NOT_RECORDED;
   return { key, label: key };
+}
+
+/** Null and the literal display text are different keys. */
+function optional(value: string | null): { key: string; label: string } {
+  return value === null
+    ? { key: "missing", label: NOT_RECORDED }
+    : { key: `value:${value}`, label: value };
 }
 
 /**
@@ -253,7 +261,7 @@ export function dimensionValue(
     case "requestedModel":
       return same(row.requestedModel);
     case "upstream":
-      return same(row.upstream);
+      return optional(row.upstream);
     case "scope":
       return same(row.scopeKind);
     case "outcome":

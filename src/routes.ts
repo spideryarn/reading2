@@ -8373,7 +8373,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       res.setHeader("Cache-Control", "private, no-store");
       const { url, key } = authAdminEndpoint();
       const [groups, accounts] = await Promise.all([
-        spendCube(asked.since ?? undefined, asked.until ?? undefined, user.id).catch((err) => {
+        spendCube(asked.since ?? undefined, asked.until ?? undefined, user.id, key).catch((err) => {
           if (err instanceof SpendCubeTooLarge) {
             throw httpError(
               400,
