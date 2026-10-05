@@ -2903,6 +2903,8 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* The schema pairs this timestamp with the secret. Send only the fact. */
+      privateLinkOn: found.article.shareTokenAt !== null,
       /* Off the same row, for the masthead's Archive button (plan 261002a). */
       archivedAt: found.article.archivedAt?.toISOString() ?? null,
       /* Named, for `assets`' reason: required on `Article`, so a projection
@@ -2996,6 +2998,7 @@ const rawPgArticleReader: ArticleReader = {
              TypeScript cannot see the guarantee for. `describeArticle` keeps
              the key only when it says `public`. */
           visibility: row.article.visibility as Visibility,
+          privateLinkOn: row.article.shareTokenAt !== null,
           /* Exactly the condition under which `stepIsDone(fetch)` can skip on
              the draft copied from this current revision: the raw manifest is
              readable and its completed run row is carried with it. */

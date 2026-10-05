@@ -1,0 +1,303 @@
+{
+  "arm": "high-none-new0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "levin-self-improvising-memory-spya-gj60pu",
+  "version": "simple-prompt/9",
+  "sourceSha256": "ea4e45d25a2fbd7530eb71c965ad2678410afc34564f404deb0865a37da0213d",
+  "at": "2026-10-05T16:32:45.929Z",
+  "bodyWords": 7557,
+  "band": "standard",
+  "bodyBlocks": 57,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "cac88ea2df4a81b8",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 35241,
+  "costUsd": 0.1907308,
+  "tokens": {
+    "input": 13817,
+    "output": 4633,
+    "reasoning": 2168
+  },
+  "briefReadyMs": 25433,
+  "fullerReadyMs": 35222,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 504,
+  "briefWords": 84,
+  "fuller": [
+    {
+      "text": "This is a perspective essay by biologist Michael Levin about what memory is for. Most memory research asks how information is stored and read back reliably. Levin asks instead how living things reinterpret and rewrite memories to fit a self and a world that keep changing. His central claim is that memory preserves salience, meaning what matters, rather than fidelity, meaning exact details.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-hunqm2"
+      ],
+      "sentences": [
+        {
+          "text": "This is a perspective essay by biologist Michael Levin about what memory is for.",
+          "id": null
+        },
+        {
+          "text": "Most memory research asks how information is stored and read back reliably.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "Levin asks instead how living things reinterpret and rewrite memories to fit a self and a world that keep changing.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "His central claim is that memory preserves salience, meaning what matters, rather than fidelity, meaning exact details.",
+          "id": "spya-uk4g45",
+          "key": "memory preserves salience"
+        }
+      ]
+    },
+    {
+      "text": "The essay starts from a puzzle: if a species never changes it dies out, but if it changes, the old species is gone. The same holds for a person who learns and grows. Levin says this puzzle faces agents at every scale, from cell parts to whole lineages, so it matters for AI and artificial life too. Living parts are also unreliable, prone to mutation, aging and cancer, and he argues this weakness is the very source of intelligence.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-aj2njd",
+        "spya-fndetu"
+      ],
+      "sentences": [
+        {
+          "text": "The essay starts from a puzzle: if a species never changes it dies out, but if it changes, the old species is gone.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "The same holds for a person who learns and grows.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Levin says this puzzle faces agents at every scale, from cell parts to whole lineages, so it matters for AI and artificial life too.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Living parts are also unreliable, prone to mutation, aging and cancer, and he argues this weakness is the very source of intelligence.",
+          "id": "spya-fndetu"
+        }
+      ]
+    },
+    {
+      "text": "The essay argues from published examples rather than new experiments, including these: Caterpillars rebuild their brains into butterflies, yet keep some learned memories, which must be remapped from leaves to nectar to stay useful. An odour molecule injected into a frog egg leads the grown animal to seek that odour when looking for food. The brain invents content, such as a green flash between a yellow and a blue light, to tell a coherent story.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-dvd0z2",
+        "spya-n869sd"
+      ],
+      "sentences": [
+        {
+          "text": "The essay argues from published examples rather than new experiments, including these:",
+          "id": null
+        },
+        {
+          "text": "Caterpillars rebuild their brains into butterflies, yet keep some learned memories, which must be remapped from leaves to nectar to stay useful.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "An odour molecule injected into a frog egg leads the grown animal to seek that odour when looking for food.",
+          "id": "spya-dvd0z2"
+        },
+        {
+          "text": "The brain invents content, such as a green flash between a yellow and a blue light, to tell a coherent story.",
+          "id": "spya-n869sd"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Levin pictures a mind as a series of Selflets: brief slices of self, each perhaps a few hundred milliseconds thick. A memory is then a message left by a past Selflet, which the present one must interpret. So confabulation, filling gaps with made-up but useful stories, is treated as a strength, not a bug.",
+      "ids": [
+        "spya-m982w2",
+        "spya-x74rfd",
+        "spya-y92f0q"
+      ],
+      "sentences": [
+        {
+          "text": "Levin pictures a mind as a series of Selflets: brief slices of self, each perhaps a few hundred milliseconds thick.",
+          "id": "spya-m982w2",
+          "key": "Selflets"
+        },
+        {
+          "text": "A memory is then a message left by a past Selflet, which the present one must interpret.",
+          "id": "spya-x74rfd"
+        },
+        {
+          "text": "So confabulation, filling gaps with made-up but useful stories, is treated as a strength, not a bug.",
+          "id": "spya-y92f0q"
+        }
+      ]
+    },
+    {
+      "text": "He extends this beyond brains with the bowtie: information is squeezed into a small core, then expanded again in a new setting. An egg is one such core, re-expanding into a body that may meet a different world. One voltage-changing drug triggers tails in tadpoles but legs in froglets, so the same signal is read by context. Newts with giant cells still build normal kidney tubes, sometimes from a single cell bending around itself.",
+      "ids": [
+        "spya-bc0zdy",
+        "spya-jvjkv7",
+        "spya-d0bcpv"
+      ],
+      "sentences": [
+        {
+          "text": "He extends this beyond brains with the bowtie: information is squeezed into a small core, then expanded again in a new setting.",
+          "id": "spya-bc0zdy",
+          "key": "bowtie"
+        },
+        {
+          "text": "An egg is one such core, re-expanding into a body that may meet a different world.",
+          "id": "spya-bc0zdy"
+        },
+        {
+          "text": "One voltage-changing drug triggers tails in tadpoles but legs in froglets, so the same signal is read by context.",
+          "id": "spya-jvjkv7"
+        },
+        {
+          "text": "Newts with giant cells still build normal kidney tubes, sometimes from a single cell bending around itself.",
+          "id": "spya-d0bcpv"
+        }
+      ]
+    },
+    {
+      "text": "Planarian flatworms have very noisy genomes yet resist aging, cancer and injury, a century-old puzzle. Levin proposes they are most willing to confabulate in body-building, overriding genetic details with large-scale pattern completion. Because good repair hides bad genes from selection, evolution invests in these skills, an intelligence ratchet.",
+      "ids": [
+        "spya-mbf6hs",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "Planarian flatworms have very noisy genomes yet resist aging, cancer and injury, a century-old puzzle.",
+          "id": "spya-fsxc8u"
+        },
+        {
+          "text": "Levin proposes they are most willing to confabulate in body-building, overriding genetic details with large-scale pattern completion.",
+          "id": "spya-mbf6hs"
+        },
+        {
+          "text": "Because good repair hides bad genes from selection, evolution invests in these skills, an intelligence ratchet.",
+          "id": "spya-fsxc8u",
+          "key": "intelligence ratchet"
+        }
+      ]
+    },
+    {
+      "text": "More speculatively, he asks whether memories themselves have a little agency, echoing William James: thoughts are thinkers. He suggests tests, such as training memories into gene networks to see if the whole system grows more unified. He admits he states the strongest version of these ideas, and a more moderate version may prove more useful.",
+      "ids": [
+        "spya-wutsk4",
+        "spya-hgts48",
+        "spya-grptcz"
+      ],
+      "sentences": [
+        {
+          "text": "More speculatively, he asks whether memories themselves have a little agency, echoing William James: thoughts are thinkers.",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "He suggests tests, such as training memories into gene networks to see if the whole system grows more unified.",
+          "id": "spya-hgts48"
+        },
+        {
+          "text": "He admits he states the strongest version of these ideas, and a more moderate version may prove more useful.",
+          "id": "spya-grptcz"
+        }
+      ]
+    },
+    {
+      "text": "His conclusion is that the Self is a construction: an adaptive story that holds parts together and must constantly be repaired. Organisms that cannot handle novelty in their own parts and memories are unlikely to persist. He closes by suggesting we treat each act as a message to a future self who will read it differently.",
+      "ids": [
+        "spya-em2h0d",
+        "spya-weeyq2"
+      ],
+      "sentences": [
+        {
+          "text": "His conclusion is that the Self is a construction: an adaptive story that holds parts together and must constantly be repaired.",
+          "id": "spya-em2h0d",
+          "key": "the Self is a construction"
+        },
+        {
+          "text": "Organisms that cannot handle novelty in their own parts and memories are unlikely to persist.",
+          "id": "spya-em2h0d"
+        },
+        {
+          "text": "He closes by suggesting we treat each act as a message to a future self who will read it differently.",
+          "id": "spya-weeyq2"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Michael Levin asks what memory is really for. It starts with an old puzzle: if you change, are you still you? Every living thing faces this, because its body and its world keep changing.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-hp8t7u"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Michael Levin asks what memory is really for.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "It starts with an old puzzle: if you change, are you still you?",
+          "id": "spya-hp8t7u",
+          "key": "if you change, are you still you?"
+        },
+        {
+          "text": "Every living thing faces this, because its body and its world keep changing.",
+          "id": "spya-hp8t7u"
+        }
+      ]
+    },
+    {
+      "text": "When a caterpillar becomes a butterfly, some memories survive but must be reread to fit the new body. Levin argues memory keeps salience, meaning what matters, rather than exact details. He suggests this constant rereading, seen in cells and bodies too, may be where intelligence comes from.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-uk4g45",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "When a caterpillar becomes a butterfly, some memories survive but must be reread to fit the new body.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Levin argues memory keeps salience, meaning what matters, rather than exact details.",
+          "id": "spya-uk4g45",
+          "key": "memory keeps salience"
+        },
+        {
+          "text": "He suggests this constant rereading, seen in cells and bodies too, may be where intelligence comes from.",
+          "id": "spya-fsxc8u"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

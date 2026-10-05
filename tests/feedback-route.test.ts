@@ -100,8 +100,14 @@ let notices: { id: string; ownerId: string; afterResponse: boolean; mirroredYet:
 /** Set by the fake response's `end`, read by the fake notice. */
 let responseEnded = false;
 
+/** The whole report each notice was handed, for the one case that renders the email from it. */
+let noticedReports: FeedbackReport[] = [];
+/** What each `captureFeedback` was given: the event's own fields, tags included. */
+let sentryCaptures: unknown[] = [];
+
 vi.mock("../src/feedback-notice.js", () => ({
   noticeFeedback: async (report: FeedbackReport, ownerId: string) => {
+    noticedReports.push(report);
     notices.push({ id: report.id, ownerId, afterResponse: responseEnded, mirroredYet: mirrored.length > 0 });
     return { kind: "sent" };
   },
@@ -188,7 +194,8 @@ vi.mock("@sentry/node-core/light", async (importActual) => {
      * whatever the transport says about it **later**. Anything that resolves
      * both at once would be a mock of the bug rather than of the SDK.
      */
-    captureFeedback: () => {
+    captureFeedback: (params: unknown) => {
+      sentryCaptures.push(params);
       const id = captureBehaviour();
       queueMicrotask(() => {
         for (const callback of hooks.get("afterSendEvent") ?? []) {
@@ -369,6 +376,8 @@ beforeEach(() => {
   captureBehaviour = () => "sentry-event-id";
   sendResponse = { statusCode: 200 };
   notices = [];
+  noticedReports = [];
+  sentryCaptures = [];
   responseEnded = false;
 });
 
@@ -841,6 +850,70 @@ describe("POST /api/feedback", () => {
          refusal here follows, so a log line cannot become the payload. */
       expect(String(reply.body.error)).not.toContain(url);
     }
+  });
+
+  /**
+   * **A report filed from a private link does not carry the link's key out.**
+   * Plan 261005e, and GPT Sol's F1 on it.
+   *
+   * The Feedback button records the page's whole address, and on
+   * `/read/<slug>?key=…` that address is the credential. Stage 1b removes it in
+   * the browser; this is the server's half, for a bundle that does not. The
+   * report's address goes to four places, and each is read here: the row, the
+   * Sentry event, the admin email, and our own log line.
+   *
+   * Everything else in the address stays, because where the reader was is the
+   * point of recording it.
+   */
+  it("takes a private link's key off the address before it is stored, mirrored, mailed or logged", async () => {
+    const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+    const sent = `https://www.spideryarn.com/read/an-article?mode=glossary&key=${KEY}&at=spya-k3m9qt`;
+    const kept = "https://www.spideryarn.com/read/an-article?mode=glossary&at=spya-k3m9qt";
+
+    let reply: Reply | undefined;
+    const written = await logLinesWhile(async () => {
+      reply = await call(minimal({ url: sent }));
+      /* The mirror and the notice run after the response; let both finish
+         inside the capture. */
+      await vi.waitFor(() => {
+        expect(sentryCaptures).toHaveLength(1);
+        expect(noticedReports).toHaveLength(1);
+      });
+    });
+    expect(reply?.status).toBe(201);
+
+    /* The row. */
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]?.url).toBe(kept);
+    expect(JSON.stringify(submitted[0])).not.toContain(KEY);
+
+    /* The Sentry event: the tag, and nothing else in it either. */
+    expect((sentryCaptures[0] as { tags: { url: string } }).tags.url).toBe(kept);
+    expect(JSON.stringify(sentryCaptures[0])).not.toContain(KEY);
+
+    /* The admin email, rendered by the real composer from the report the route
+       handed the notice. */
+    const { feedbackNoticeMessage } =
+      await vi.importActual<typeof import("../src/feedback-notice.js")>("../src/feedback-notice.js");
+    const mail = feedbackNoticeMessage(noticedReports[0] as FeedbackReport, "reader@example.test");
+    expect(JSON.stringify(mail)).toContain(kept);
+    expect(JSON.stringify(mail)).not.toContain(KEY);
+
+    /* Our own log. The control first: the accepted line is there, with the
+       address in it, so the absence below is about the key. */
+    expect(written).toContain("feedback report accepted");
+    expect(written).toContain("mode=glossary");
+    expect(written).not.toContain(KEY);
+
+    /* And the reply to the reader does not echo it back. */
+    expect(JSON.stringify(reply?.body)).not.toContain(KEY);
+  });
+
+  /** An address with no key is stored exactly as it was sent, as it always was. */
+  it("stores an address without a key byte for byte", async () => {
+    const url = "https://www.spideryarn.com/read/an-article?q=the monkey&find=a#spya-k3m9qt";
+    expect((await call(minimal({ url }))).status).toBe(201);
+    expect(submitted[0]?.url).toBe(url);
   });
 
   it("refuses an address past the cap, and takes one exactly at it", async () => {

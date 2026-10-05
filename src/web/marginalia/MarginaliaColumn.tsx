@@ -704,11 +704,19 @@ export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: nul
 export function OwnerMarginFeed({
   slug,
   shown,
+  awaitingStructure = false,
   onFeed,
 }: {
   slug: string;
   /** The column is on screen: switched on *and* the window has room for the notes. */
   shown: boolean;
+  /**
+   * The article is still showing the outline it opened with. The relations
+   * step comes after `structure`, so the server would refuse it; the column
+   * waits and asks when the real tree is in, as the arc does (useArc.ts).
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  awaitingStructure?: boolean;
   onFeed(feed: MarginFeed): void;
 }) {
   const ideasRead = useIdeasRead(slug);
@@ -719,7 +727,7 @@ export function OwnerMarginFeed({
      own, and this mount is what asks for them where none is stored — once per
      article per page load, whatever opened the column, and only while the
      notes are on screen (useRelations.ts). */
-  const relations = useRelations(slug, shown);
+  const relations = useRelations(slug, shown && !awaitingStructure);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's

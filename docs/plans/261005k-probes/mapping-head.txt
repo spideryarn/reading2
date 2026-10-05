@@ -1,0 +1,104 @@
+# The Overseer's auto-memory, ported to docs: the mapping
+
+Up: [investigations.md](../project/investigations.md) ·
+plan: [261005k](../plans/261005k-port-overseer-auto-memory-into-docs.md) · queue item `qi-8836whem`
+
+**What this is for.** The Overseer's Claude Code auto-memory is a folder on the box,
+`~/.claude/projects/-home-greg-code-spideryarn2/memory/`, and it is not in Git. Greg, 2026-10-05:
+*"I want to make sure that all our lessons are stored in Git, ideally in our docs.md files, so that
+if we were to start a new box, it would not have lost valuable insights."* This file says, for each
+of the {{N}} memory files, where its lessons now are, and whether the file can be deleted.
+
+**Where it stands (2026-10-05).** {{ELIGIBLE}} files are *eligible*: every lesson in them is in a
+doc, or was dropped for a stated reason. {{RETAIN}} are *retain*: at least one lesson is a rule, so
+it is one of the {{NPROPOSALS}} proposals below, and proposals need Greg's yes before they land.
+**Nothing was deleted.** The 25 direct edits are on `dev` in the same commit as this file.
+
+## How to use this before deleting anything
+
+1. Run `python3 docs/plans/261005k-probes/check-mapping.py` on this file. It fails if a memory file
+   has no row, two rows, or a content hash that has moved since the row was written. A moved hash
+   means the file gained something after it was read: read it again before deleting it.
+2. Delete only rows marked *eligible*.
+3. A *retain* row becomes eligible when its proposals have landed (or Greg has refused them, which
+   is also an answer). Until then the memory file is the only place that lesson lives.
+4. `MEMORY.md` is the index, not a memory; three files were never in it
+   (`peer-discovery-is-per-config-directory`, `taskoutput-on-a-running-agent-dumps-its-transcript`,
+   `use-opus-not-fable`). Cut its lines as the files go.
+
+## How it was made, and what that does and does not show
+
+Four Opus subagents each read about twenty files in full, split each into its lessons, and for
+every lesson grepped the docs and read the passage before calling it *already*. One writer then
+applied the edits in sequence. GPT Sol reviewed the plan before any of it and the result after.
+The batch reports, with each agent's doubts, are kept:
+[A](../plans/261005k-probes/report-A.md), [B](../plans/261005k-probes/report-B.md),
+[C](../plans/261005k-probes/report-C.md), [D](../plans/261005k-probes/report-D.md).
+
+- *already* means a named doc and section says the lesson and how to act on it; the row quotes a
+  phrase from it. Each was read by one agent, once.
+- *moved (XEn)* means edit *n* of batch *X* put it in a doc in this commit. These are facts and
+  traps only: descriptions of how something behaves.
+- *propose XPn* means it would tell an agent what it may or must do, so it was not edited. It is
+  proposal *n* below.
+- *dropped* is a stale claim (with what was checked), one finished job's detail, a duplicate of
+  another memory, or a note about the memory system.
+
+The dates and numbers inside the ported text are the memories' own. Where an agent could check one
+against the tree it did, and the reports' Doubts sections say which it could not.
+
+## Four of Greg's quotes could not be found in anything he typed
+
+A model wrote the memory files, so each quotation attributed to Greg was searched for in the
+session transcripts (`docs/plans/261005k-probes/check-quotes.py`, which looks for the string in a
+turn a person typed, and skips model output, peer messages and compaction summaries). Eight were
+found in his own turns. **Four were not**, and appear only in the Overseer's own summaries of what
+he said and in its messages to other sessions:
+
+| in proposal | the string as the memory has it | memory's date |
+|---|---|---|
+| AP1 | "You're allowed to run that command and similar yourself in future to free up memory." | 2026-09-29 |
+| AP2 | "You are allowed to remove worktrees where it's safe to do so (e.g. we've already pushed their contents, or we have explicitly agreed that we are throwing them away) And you are allowed to remove temp files where safe to do so" | 2026-10-05 |
+| AP5 | "if you see bugs, fix them without asking me." | 2026-10-04 |
+| AP5 | "if there are clear no-tradeoffs-improvements that won't add much complexity, you should always do them" | 2026-10-04 |
+
+That does not show he did not say them. A message that reached the Overseer some other way than a
+typed turn would not be found, and the search was run once. It does mean the wording rests on a
+model's record. **So AP1, AP2 and AP5 should go to Greg with the question "are these your words?"**
+and land as a quote only if he says yes; otherwise as a dated paraphrase.
+
+Found in his typed turns: the Codex-transcripts permission (AP3), the weekly-usage instruction
+(AP4), both halves of the `SUPABASE_ACCESS_TOKEN` rule (AP7), "when you wake up, pull the latest
+changes" (AP8), and the granularity-zoom blockquote (AP9).
+
+## Things the Overseer should know before putting the proposals to Greg
+
+- **AP4 reverses the runbook.** `overseer.md` § The tick rations Claude's seven-day window on Greg's
+  2026-09-09 words; the memory records him ending that on 2026-10-01, and that quote was found.
+- **AP6 names a cap the tree does not have.** No file says "pacer" or "cap of 6"; the proposal
+  states a measured capacity instead.
+- **BP12 and CP4 each loosen a rule in `AGENTS.md`** (`npm run check` before you commit; a green
+  suite before you push). BP6 and CP4 say nearly the same thing and should be one proposal.
+- **BP3, BP4 and BP7 overlap proposals F1 and K3** still pending from the 2026-10-01 sweep, in
+  `docs/plans/261001i-probes/proposals.md`. Retire one set so Greg is not asked twice.
+- **CE5 (a refused merge that reset six files) was seen once and never reproduced.** It is in
+  `version-control.md` in those words. CP3, the rule that follows from it, rests on that one sighting.
+- **Docs the agents found out of date and did not touch**, because no memory carried the fix:
+  `feedback-reports.md` still describes pool accounts; `typechecking.md` § The layout says "three
+  projects"; `long-waits.md` has no measurement later than 2026-09-02; `database.md`'s safe-read
+  example uses `psql`, which the box does not have.
+
+## The table
+
+Sorted by file name. The hash is the first twelve characters of the file's sha256 when it was read.
+
+{{TABLE}}
+
+## The proposals
+
+{{NPROPOSALS}} of them, as each batch wrote them. **Before** is the text in the doc today; **After**
+is what would replace or follow it. The link paths inside a proposal are written for the doc it
+targets, not for this file. Numbering: the letter is the batch (A permissions and Overseer practice,
+B box and waiting, C git and tooling, D review and reasoning).
+
+{{PROPOSALS}}

@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Article, Comment, Crossref, Visibility } from "../../types.js";
+import { awaitingStructure, type Article, type Comment, type Crossref, type Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
 import { LogoLoader } from "../LogoLoader.js";
@@ -36,19 +36,25 @@ import type { SavedSearch } from "../useSearch.js";
 import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
-import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
 import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
 import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
+import { type LateStructure, useLateStructure } from "./useLateStructure.js";
+import { type StepJob, useStepJob } from "../useStepJob.js";
+import {
+  STRUCTURE_BUILDING,
+  type StructureArrival,
+} from "../modes/structure/StructureArriving.js";
+import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
@@ -106,7 +112,10 @@ export function ArticlePage({
      article it made in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
-  const access = useArticleAccess(slug, readerId, attempt);
+  /* A private link's key, when the address has one (useShareKey.ts). A visitor's
+     requests carry it; an owner's never do. */
+  const shareKey = useShareKey();
+  const access = useArticleAccess(slug, readerId, attempt, shareKey);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -234,6 +243,7 @@ export function ArticlePage({
           crossrefs={access.crossrefs}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
+          sharedBy={access.sharedBy}
           view={view}
         />
       )}
@@ -322,6 +332,8 @@ function OwnedArticle({
     null,
   );
   const visibility = shared?.slug === slug ? shared.visibility : null;
+  const [linked, setLinked] = useState<{ slug: string; on: boolean | null } | null>(null);
+  const linkState = linked?.slug === slug ? linked.on : undefined;
 
   /**
    * **One archive controller across both views.** A request begun from the
@@ -354,7 +366,14 @@ function OwnedArticle({
       mine !== null
         ? { ...fetched, meta: { ...fetched.meta, title: mine.title }, titleOverridden: mine.overridden }
         : fetched;
-    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const guessedArticle = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    let guessedAt = guessedArticle;
+    if (linkState === null) {
+      const { privateLinkOn: _cleared, ...rest } = guessedArticle;
+      guessedAt = rest;
+    } else if (linkState !== undefined) {
+      guessedAt = { ...guessedArticle, privateLinkOn: linkState };
+    }
     if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -364,7 +383,7 @@ function OwnedArticle({
       return rest;
     }
     return { ...guessedAt, visibility };
-  }, [fetched, mine, guessed, visibility]);
+  }, [fetched, mine, guessed, visibility, linkState]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string, overridden: boolean) =>
@@ -386,6 +405,9 @@ function OwnedArticle({
     setShared((was) =>
       was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
     );
+  }, []);
+  const linkedTo = useCallback((forSlug: string, on: boolean | null) => {
+    setLinked((was) => was?.slug === forSlug && was.on === on ? was : { slug: forSlug, on });
   }, []);
 
   /**
@@ -428,11 +450,51 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        onPrivateLink={linkedTo}
         archive={archive}
       />
     );
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} archive={archive} />;
 }
+/** `useStepJob`'s completion callback, for a caller with nothing to re-read. Stable. */
+const NOTHING_TO_REFRESH = () => {};
+
+/**
+ * **What the Structure band is told**, from where the structure stands and the
+ * owner's job for it — `null` when there is nothing to say, which is nearly
+ * always. The owner's half of modes/structure/StructureArriving.tsx; a
+ * visitor's is `visitorArrival`, which has no job in it.
+ */
+function structureArrivalOf(
+  structure: LateStructure,
+  job: StepJob<"structure">,
+  retry: () => void,
+): StructureArrival | null {
+  switch (structure) {
+    case "final":
+      return null;
+    case "building":
+      return STRUCTURE_BUILDING;
+    case "stalled":
+      return {
+        state: "stalled",
+        build: {
+          press: () => void job.start(),
+          starting: job.starting,
+          failed: job.failed?.message ?? null,
+        },
+      };
+    case "mismatch":
+      return { state: "mismatch" };
+    case "unread":
+      return { state: "unread", retry };
+    default: {
+      const unreachable: never = structure;
+      throw new Error(`Unknown structure state: ${String(unreachable)}`);
+    }
+  }
+}
+
 /**
  * **Where the private hooks are mounted, and the only place they are.**
  *
@@ -451,7 +513,7 @@ function OwnedArticle({
  */
 function OwnedReader({
   slug,
-  article,
+  article: handed,
   onRenamed,
   archive,
 }: {
@@ -460,6 +522,37 @@ function OwnedReader({
   onRenamed: OnRenamed;
   archive: ArchiveControl;
 }) {
+  /**
+   * **The article, with the real structure laid over it once that exists.**
+   *
+   * A first import opens before its structure is built, on a stand-in tree;
+   * `useLateStructure` swaps the real one in live when its job has gone — the
+   * same article, the same `blocks` array, a new `tree`. Everything below reads
+   * `article`, so nothing below knows there were two.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   * § Stage 2.
+   *
+   * **Here and not in `OwnedArticle`**: it subscribes to the job engine, and
+   * the metadata page has no tree to draw. Coming back from that page mounts
+   * this afresh, which is fine — the check is a level, so it finds the tree
+   * again rather than needing to have been watching.
+   *
+   * Owner-only by being here. A visitor keeps the tree they were sent.
+   */
+  const late = useLateStructure(slug, handed);
+  const article = late.article;
+  /**
+   * **Build it** — the owner's way out when no structure job is coming and the
+   * tree is still the stand-in. `{ slug, steps: ["structure"] }`, unforced: the
+   * step itself answers *not done* while the stored tree is awaiting
+   * (src/pipeline.ts § `STEPS.structure.isDone`).
+   *
+   * Quiet, for the arc's reason below: it is mounted on every owned article
+   * and must not hold the engine's idle poll. Nothing to refresh on completion
+   * either — `useLateStructure` hears completions and checks the list itself.
+   */
+  const structureJob = useStepJob(slug, "structure", NOTHING_TO_REFRESH, "quiet");
+  const structureArrival = structureArrivalOf(late.structure, structureJob, late.retry);
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
   /**
@@ -541,22 +634,24 @@ function OwnedReader({
    * in useArc.ts keeps the job it starts, not the poll.
    * tests/public-network-trace.test.tsx § an owner's reading view, left alone.
    */
-  const arc = useArc(slug, article.arc);
+  /* **And not while the tree is a stand-in** — the third argument. The arc is a
+     sentence per part, and the parts are about to be replaced; once the real
+     tree is in this runs as it does on any open (useArc.ts § `structureAwaited`). */
+  const arc = useArc(slug, article.arc, awaitingStructure(article.tree));
   /**
-   * **Where the reader has spent time**, recorded and drawn only with
-   * experimental features on — both halves, as availability rather than
-   * consent: it is new code on every paying reader's article view and new data
-   * about a person, so it starts where the unfinished things are.
-   * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
-   * § Who, and behind what, which also records Fable's case for recording for
-   * everyone.
+   * **Where the reader has spent time**, recorded and drawn for every owner —
+   * since 2026-10-05, when Greg took both halves out from behind the
+   * experimental switch. While it was behind it, nothing was sampled with the
+   * switch off, so a stretch read then looked unread for ever. Owner-only by
+   * being here. **`true` is the whole gate**: there is no setting to turn it
+   * off yet, and when there is, this argument is where it goes.
+   * docs/project/reading-time.md § Who gets it.
    */
-  const experimental = useExperimental();
   const words = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.words] as const)),
     [article.blocks],
   );
-  const readingTime = useReadingTime(slug, words, experimental.on);
+  const readingTime = useReadingTime(slug, words, true);
 
   return (
     <>
@@ -573,6 +668,7 @@ function OwnedReader({
           quiz,
           crossrefs,
           arc,
+          structureArrival,
           readingTime,
         }}
         onRenamed={onRenamed}
@@ -607,10 +703,13 @@ function VisitorArticle({
   crossrefs,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
   view,
 }: {
   slug: string;
   article: Article;
+  /** Public, or by a private link. For the notice, on both views. */
+  sharedBy: PublicSharedBy;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -639,6 +738,7 @@ function VisitorArticle({
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}
+        sharedBy={sharedBy}
       />
     );
   return (
@@ -654,6 +754,7 @@ function VisitorArticle({
         crossrefs,
         signedIn,
         sessionUnconfirmed,
+        sharedBy,
       }}
     />
   );

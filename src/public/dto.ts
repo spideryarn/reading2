@@ -128,6 +128,7 @@ import type {
   PublicQuotes,
   PublicMeta,
   PublicSearchRun,
+  PublicSharedBy,
   PublicSketch,
   PublicSourceGuess,
   PublicTimeline,
@@ -1238,6 +1239,13 @@ function publicTweets(thread: TweetThread): PublicTweets {
  */
 export function publicArticle(row: {
   slug: string;
+  /**
+   * Which way the visitor was let in: `PublicArticle.sharedBy`. The reader
+   * works it out from the row the access predicate matched, never from whether
+   * the request carried a key. Required, so a caller that forgot is a type
+   * error rather than a private link wearing the public notice.
+   */
+  sharedBy: PublicSharedBy;
   title: string | null;
   byline: string | null;
   siteName: string | null;
@@ -1298,6 +1306,8 @@ export function publicArticle(row: {
       ? undefined
       : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
   return {
+    /* One of two words, and nothing about the key that was or was not sent. */
+    sharedBy: row.sharedBy,
     meta: publicMeta(row),
     blocks,
     tree: publicTree(row.tree),

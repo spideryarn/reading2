@@ -62,6 +62,7 @@ import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
+  hasDisallowAll,
   afterTheFactSummary,
   codeMayNotHaveShipped,
   deployBranchProblem,
@@ -1542,7 +1543,11 @@ async function verifyRobots(): Promise<void> {
   const problems: string[] = [];
   if (robots.status !== 200) problems.push(`answered ${robots.status}`);
   if (!type.includes("text/plain")) problems.push(`served as ${type} — the SPA catch-all has eaten it`);
-  if (!/disallow/i.test(robots.body)) problems.push("has no Disallow rule in it");
+  /* A `Disallow: /` **line**, not the word. This was `/disallow/i` over the
+     whole body until 2026-10-05, and the file's own comments say "Disallow"
+     several times: with both real directives deleted it still passed.
+     docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md. */
+  if (!hasDisallowAll(robots.body)) problems.push("has no `Disallow: /` line in it");
   record("GET /robots.txt is a real file with a rule in it", problems);
 }
 

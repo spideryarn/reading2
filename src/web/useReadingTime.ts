@@ -125,9 +125,10 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
  * Whether `levels` can be believed yet — which is not the same as whether it
  * is empty.
  *
- * `off`: not recording for this reader at all. `loading`: the opening read has
- * not answered for *this* run of the effect (a slug, or the switch turned off
- * and on again, is a new run). `failed`: it never will, so the levels hold only
+ * `off`: not recording for this reader at all — a visitor, since 2026-10-05,
+ * and nobody else until there is a setting to turn it off. `loading`: the
+ * opening read has not answered for *this* run of the effect (a slug, or
+ * `enabled` going off and on again, is a new run). `failed`: it never will, so the levels hold only
  * what this page has credited since. Only `loaded` means an empty map is "read
  * nothing". GPT Sol's findings 1 and 3 on
  * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md, which is what
@@ -192,6 +193,12 @@ export function readingTimePath(slug: string): string {
 /**
  * Records while `enabled`, and draws from what the server had plus what this
  * page has credited since.
+ *
+ * **Its one caller passes `true`** since 2026-10-05: every owner is recorded,
+ * whatever the experimental switch says (docs/project/reading-time.md § Who
+ * gets it). The parameter stays because a reader's own off switch, which is
+ * not built, would arrive through it, and the tests of turning it off are the
+ * tests that switch will need.
  *
  * `words` is each block's word count, which is what a level is measured
  * against; a block missing from it is measured as having none.

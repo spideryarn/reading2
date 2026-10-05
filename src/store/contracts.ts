@@ -1967,7 +1967,7 @@ export interface SourceStore {
 export type { Visibility } from "../types.js";
 /* Imported as well as re-exported, because the two contracts below *use* the
    name and a bare `export … from` does not bring it into this module's scope. */
-import type { Visibility, VisibilityState } from "../types.js";
+import type { ShareLinkState, Visibility, VisibilityState } from "../types.js";
 
 /**
  * What the switch answers with — **defined in [src/types.ts](../types.ts)**
@@ -2035,6 +2035,27 @@ export interface VisibilityStore {
    * confirm that somebody else's article exists.
    */
   set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState>;
+}
+
+/**
+ * **An article's private link**, for its owner — src/store/pg-share-link.ts.
+ *
+ * Every method throws 404 for a slug the caller does not own, never 403, as
+ * `VisibilityStore.set` does. Each answers the state the link is now in, and
+ * that state is the one value in the app that carries the key.
+ */
+export interface ShareLinkStore {
+  /** The link as it stands, so the card can show it again. Changes nothing. */
+  read(slug: string): Promise<ShareLinkState>;
+  /**
+   * Make a link, with a **new** key every time: a key that was on stops
+   * working in the same statement. Refuses a paper that has not been read
+   * through, as going public does. The route has already refused a request
+   * without `rightsConfirmed: true`; the audit row records that it was given.
+   */
+  create(slug: string): Promise<ShareLinkState>;
+  /** Turn it off. Already off changes nothing and records nothing. */
+  turnOff(slug: string): Promise<ShareLinkState>;
 }
 
 /* -------------------------------------------------------- the AI ledger -- */

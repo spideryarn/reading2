@@ -62,7 +62,7 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        unconfirmed arm adds a second paragraph inside this same box, so it is
        covered by the same rule and needs no assertion of its own here.
        src/web/PublicChrome.tsx § SharedNotice. */
-    const html = renderToStaticMarkup(<SharedNotice signedIn={false} sessionUnconfirmed={false} />);
+    const html = renderToStaticMarkup(<SharedNotice signedIn={false} sessionUnconfirmed={false} sharedBy="public" />);
     /* The class, not a substring of some Tailwind utility: `shared-notice`
        appears in `tw:` names nowhere, but asserting the attribute boundary is
        what stops that from becoming true later. */

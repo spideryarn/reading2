@@ -275,6 +275,11 @@ dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-re
 until `npm run build:fleet` runs, and say so. `worktree:setup` now names both builds rather than a
 count, and the deploy gate runs the ordinary `build` plus the extra `build:fleet` entry in
 `GATE_TOOLING_BUILDS` (`scripts/deploy-checks.ts`).
+The line vitest reports for the fleet ones is `process.exit unexpectedly called with "2"`, with a
+stack into `tools/fleet/server.ts`, which reads as a wiring failure; the sentence naming the build
+is on stderr above it (2026-09-09, in a docs-only diff). A third red in a loaded full run is no
+missing build at all: `tests/fetch.test.ts` holds a wall-clock budget of 400 ms, measured at about
+478 ms under load ~40 on 2026-09-08, and passes alone.
 The suite has grown 477 → 786 files in six days, which is why a bare count ages badly; what did not
 change is that `worktree:setup` is the difference between a suite that runs and one that cannot
 collect.
@@ -1137,6 +1142,13 @@ moment that flipped. Either spelling lands on `dev` today.
   over *when*: `refs/remotes/` lives in the common directory, so a **peer's** fetch moves `origin/dev`
   between two of your own commands while you sit still — and since 2026-09-02 every
   `npm run worktree:setup` fetches, so this now happens whenever anyone starts a worktree.
+- **A diff from a remembered fork point stops being yours once you merge the trunk.**
+  `git diff --name-only <fork-point> HEAD` then lists your changes plus everything the merge
+  brought in. On 2026-09-08 a session ran it to show a failing `tools/fleet` test could not be its
+  own and got fifty fleet files back, which reads as the opposite answer. Three dots against
+  `origin/dev` still works after a merge; for one commit,
+  `git show --name-only --format="" <commit>`. Whether a red is yours is whether the failing file,
+  or anything it imports, is in your commits.
 - **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.

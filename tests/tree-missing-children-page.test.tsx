@@ -173,6 +173,7 @@ const shared = (): PublicArticle => ({
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
 });
 
 function json(body: unknown, status = 200): Response {

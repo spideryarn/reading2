@@ -26,7 +26,9 @@ import type {
   PublicArtefactSet,
   PublicArtefacts,
   PublicArticle,
+  PublicSharedBy,
 } from "../../public-types.js";
+import type { ShareKey } from "../../share-key.js";
 import {
   artefactsIn,
   artefactsOf,
@@ -80,6 +82,13 @@ type ArticleAccess =
   | {
       kind: "public";
       article: Article;
+      /**
+       * **Which way in**: the article is public, or the address carried the
+       * key of its private link. The server's word (`PublicArticle.sharedBy`),
+       * lifted out here like the fields below, and read only by the notice.
+       * It grants nothing: a visitor is a visitor either way. Plan 261005e.
+       */
+      sharedBy: PublicSharedBy;
       /**
        * **The owner's comments, read-only**, lifted out of the payload here for
        * the same reason `artefacts` is: the reading view takes an `Article`,
@@ -192,6 +201,17 @@ export function useArticleAccess(
    * once *Read this* has finished, so the article it made is loaded in place.
    */
   attempt = 0,
+  /**
+   * **A private link's key, off the page's address**, or `null` (plan
+   * 261005e). It goes on the public request and the visitor's picture
+   * requests, and never on the owner's.
+   *
+   * It is part of what an answer is an answer *about*, with the slug and the
+   * reader: one slug can be closed with one key and open with another, so a
+   * new key is a new load, and an answer fetched under a different key is
+   * never shown.
+   */
+  shareKey: ShareKey | null = null,
 ): ArticleAccess {
   /**
    * The answer, **and both facts it is an answer about**: which article, and
@@ -223,6 +243,8 @@ export function useArticleAccess(
   const [answer, setAnswer] = useState<{
     slug: string;
     readerId: string | null;
+    /** The key it was fetched under. The third half, for the same reason. */
+    shareKey: ShareKey | null;
     access: ArticleAccess;
   } | null>(null);
 
@@ -242,10 +264,10 @@ export function useArticleAccess(
     const load = beginArticleLoad();
     let live = true;
     setAnswer(null);
-    void resolveAccess(slug, readerId, load)
+    void resolveAccess(slug, readerId, load, shareKey)
       .then(({ access, withImages }) => {
         if (!live) return;
-        setAnswer({ slug, readerId, access });
+        setAnswer({ slug, readerId, shareKey, access });
         /* **The second draw**, and the same `live` guard for the same reason:
            this one lands a second or so after the first, which is comfortably
            long enough for the reader to have clicked something else. Without the
@@ -256,12 +278,13 @@ export function useArticleAccess(
            annotations change, and would erase an imperative write while leaving
            the object URL behind it unrevoked. GPT Sol, 2026-09-06. */
         void withImages.then(
-          (drawn) => live && drawn && setAnswer({ slug, readerId, access: drawn }),
+          (drawn) => live && drawn && setAnswer({ slug, readerId, shareKey, access: drawn }),
         );
       })
       .catch(
         (e: Error) =>
-          live && setAnswer({ slug, readerId, access: { kind: "error", message: e.message } }),
+          live &&
+          setAnswer({ slug, readerId, shareKey, access: { kind: "error", message: e.message } }),
       );
     return () => {
       live = false;
@@ -273,7 +296,7 @@ export function useArticleAccess(
       load.release();
     };
     /* `attempt` is read only as a dependency: a new value is a new load. */
-  }, [slug, readerId, attempt]);
+  }, [slug, readerId, attempt, shareKey]);
 
   /**
    * **Both, and synchronously.**
@@ -285,7 +308,9 @@ export function useArticleAccess(
    * difference between "the wrong article is shown for one frame" and "the
    * wrong article is never shown".
    */
-  return answer?.slug === slug && answer.readerId === readerId ? answer.access : LOADING;
+  return answer?.slug === slug && answer.readerId === readerId && answer.shareKey === shareKey
+    ? answer.access
+    : LOADING;
 }
 /**
  * Which article this reader is entitled to, and on what footing.
@@ -335,8 +360,10 @@ export async function resolveAccess(
   /** The authenticated reader, or `null` signed out. */
   readerId: string | null,
   load: ArticleLoad,
+  /** A private link's key from the address, or `null`. Visitor requests only. */
+  shareKey: ShareKey | null = null,
 ): Promise<ResolvedAccess> {
-  const found = await findArticle(slug, readerId, load.signal);
+  const found = await findArticle(slug, readerId, load.signal, shareKey);
   if (found.kind === "not-shared" || found.kind === "reauth-required" || found.kind === "unread") {
     return { access: found, withImages: NO_SECOND_ANSWER };
   }
@@ -417,7 +444,14 @@ export async function resolveAccess(
   const rehosted = await rehostImages(
     presentable,
     slug,
-    found.kind === "owned" ? "owned" : "public",
+    /* A visitor's pictures are asked for the way the article was: with the
+       address's key when it has one. On a public article the server ignores
+       it; on a private one it is what opens the asset route. */
+    found.kind === "owned"
+      ? "owned"
+      : shareKey === null
+        ? "public"
+        : { kind: "link", key: shareKey },
     load,
   );
 
@@ -436,6 +470,10 @@ export async function resolveAccess(
       : {
           kind: "public",
           article,
+          /* The server's word, checked: anything but `"link"` draws the public
+             notice. A payload from a server older than the field is a public
+             article, since that server knew no other way in. */
+          sharedBy: found.article.sharedBy === "link" ? "link" : "public",
           artefacts: artefactsOf(found.article),
           available: artefactsIn(found.article),
           /* Derived here, once, on the raw payload — `visitorComments` supplies
@@ -488,6 +526,7 @@ async function findArticle(
   slug: string,
   readerId: string | null,
   signal: AbortSignal,
+  shareKey: ShareKey | null,
 ): Promise<
   | { kind: "not-shared" }
   | { kind: "reauth-required" }
@@ -540,7 +579,11 @@ async function findArticle(
      disappears, and
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md
      § Cluster B. */
-  const read = await loadPublicArticle(slug, signal);
+  /* **The key goes here and not above.** The owned route is asked first and
+     without it: an owner on their own article never needs one, and a signed-in
+     reader who is not the owner arrives here on the 404 and reads exactly as a
+     signed-out visitor does, key and all. Plan 261005e. */
+  const read = await loadPublicArticle(slug, signal, shareKey);
   /* **Both answers, and this is the line where they meet.** *Nobody shared it*
      is a complete answer to a reader we could identify; to one we could not it
      is only half of one, and the reader needs a way back in rather than a

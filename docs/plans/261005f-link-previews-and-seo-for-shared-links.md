@@ -180,6 +180,260 @@ Greg*, with the questions below. What the research says, shortly:
 
 Dispatched to session `seo-own-pages-and-cards`.
 
+## Stage 2: what Greg's five answers build
+
+Session `seo-own-pages-and-cards`, 2026-10-05. Q-tagline builds nothing.
+
+### One list of our own pages
+
+`src/site-pages.ts` is the allow list: each page's path, its tab title and one sentence of
+description. Nine pages: `/`, `/features`, `/features/public-readable-sharing`, `/pricing`,
+`/changelog`, `/help`, `/privacy`, `/contact` and `/opensource` (Greg: "and any other marketing
+page"; `/login` is the app's door and stays out). Everything below is read from that list or held
+to it by a test, so a page cannot be listed in one place and not another:
+
+| What | Where | How it follows the list |
+|---|---|---|
+| who may crawl | `public/robots.txt` | written by hand; a test holds it, path by path |
+| the sitemap | `dist/sitemap.xml` | written by the build from the list |
+| the `noindex` header | `vercel.json` | one rule for every path **not** on the list; a test holds it |
+| each page's head | `dist/_pages/<name>.html` | written by the build from the list |
+| the deploy's check | `scripts/check-public-shell.ts` | imports the list |
+
+### A head per page, written by the build
+
+A search engine needs a title, a description and a canonical that are about *this* page, in the
+HTML it is sent. Today every page that is not a shared article is one static file with one head.
+
+After `vite build`, `scripts/build-site-pages.ts` writes, from the built shell and the list:
+
+- `dist/shell.html`: the shell exactly as Vite built it, with the default head, which still says
+  `noindex, nofollow`. The catch-all rewrite in `vercel.json` now sends every app path here, and
+  this is the file compiled into the function for `/read/<slug>`.
+- `dist/_pages/<name>.html`: the same file with the managed head swapped for one page's: its title
+  (the string React sets a moment later, held equal by a test), its description, a canonical and an
+  `og:url` naming itself, the card tags, and no robots tag. `vercel.json` gains one rewrite per page,
+  ahead of the catch-all.
+- `dist/index.html`: the homepage's head. `/` is answered from the file system before any rewrite
+  is looked at, so the homepage's head has to be in this file.
+- `dist/sitemap.xml`.
+
+**Passed over: composing these heads in the serverless function**, as `/read/<slug>` does. It would
+put a cold start in front of the homepage. **Also passed over: leaving `index.html` as the default
+shell and dropping its `noindex`**, which needs no new file, but leaves the homepage with no
+canonical and the bare word *Spideryarn* as its title until JavaScript runs, and takes the
+fail-closed robots tag off every app page.
+
+**The cost, named**: `dist/index.html` stops being "the shell". Three things that read it change to
+`shell.html`: `scripts/client-shell.ts`, the hash comparison in the deploy check, and the catch-all
+rewrite. `npm run dev` is untouched and serves the default head at every path, as now.
+
+**A limit, named**: the body of every page is still drawn by React. Google runs it; a crawler that
+does not sees the head and an empty page. And what a page fetches from `/api/` (the changelog's
+entries, the shared articles on the homepage) is behind `Disallow`, so a crawler that renders will
+not see those parts. Server-rendering the pages is the fix, and is a different project.
+
+### `robots.txt`
+
+```
+User-agent: *
+Allow: /$                 one line per page on the list, each ending in $
+Allow: /features$
+...
+Allow: /assets/           the script and stylesheet, or a renderer sees nothing
+Allow: /sitemap.xml
+Allow: /read/             see below
+Disallow: /
+Sitemap: https://www.spideryarn.com/sitemap.xml
+```
+
+The preview robots' group gains the same page lines (Q-cards-for-other-pages) and
+`Allow: /api/public/asset/` for the lead picture.
+
+**`Allow: /read/` for every crawler is how "never listed" is made true, and it is a trade-off.**
+A `Disallow` stops a crawler *fetching* a page; it does not stop the address being *listed*. Once
+our homepage may be crawled, it links to shared articles, and Google lists a linked address it may
+not fetch as a bare URL ("indexed, though blocked by robots.txt"). The `noindex` we send on every
+`/read/` response, as a header and as a meta tag, is what keeps a page out, and a crawler has to be
+let in to read it. What it gives up: any crawler that obeys `robots.txt` may now fetch a shared
+article's page, where before only the seven preview robots could. What that page holds is the
+title, the one-sentence gist and the canonical; the article's text comes from `/api/public/`, which
+stays disallowed. The sentence we publish to authors changes to say so. **Passed over: leaving
+`/read/` disallowed**, which keeps today's sentence and risks the bare listing. It is one line to
+take back out, and it is flagged to Greg in the debrief.
+
+### The `noindex` header
+
+`vercel.json` had one rule putting `X-Robots-Tag: noindex, nofollow` on every path. It becomes a
+rule for every path **except** the nine, so a new address is `noindex` until somebody lists it. The
+referrer policy moves to a rule of its own and still covers everything. Fetched directly,
+`/index.html`, `/shell.html` and `/_pages/*.html` are not on the list, so they carry the header.
+
+The rule is a negative lookahead in a path pattern, and whether Vercel reads it as we do cannot be
+tested here. The deploy check asks: no `noindex` header on each listed page, one on a shared
+article, one on an app path.
+
+### The lead picture (Q-lead-image)
+
+A shared article's `og:image` is its own first picture when all of these hold, and our brand image
+otherwise:
+
+- we hold a copy: a `stored` entry in the revision's image manifest, so the address is our own
+  `/api/public/asset/<slug>/<hash>.<ext>`, which re-asks whether the article is shared on every
+  request. Never the publisher's URL;
+- it is the first such entry in the manifest's `entries`, which are the pictures in the article's
+  own HTML. A PDF's extracted figures are not used: a paper's first figure is a chart, not a lead
+  picture;
+- it is a PNG or a JPEG between 20 KB and 5 MB. The manifest records no width or height, so bytes
+  are the only way to pass over an icon or an avatar, and the card carries no `og:image:width`.
+
+**One switch**: `LEAD_IMAGE_ON_CARDS` in `src/public/page-head.ts`. `false` puts the brand image
+back on every card and nothing else changes.
+
+**Known and accepted**: the first picture may be an author's portrait or a chart; WhatsApp is
+reported to drop a picture over about 300 KB, and there is no per-platform fallback. And **a
+manifest that says `stored` over a bucket that has lost the object** gives a card whose picture
+answers 500, so the card has no picture and nothing reports it. That state is real on the local
+corpus (one seeded article, found again here on 2026-10-05:
+[article-images.md](../project/article-images.md) describes it). Asking the bucket on every head
+request would catch it and costs a storage round trip per shared link; not built. The deploy check
+fetches the picture of the one article it is given.
+
+### Checked against the real build, locally
+
+`npm run build`, then the built `dist/` and the real function behind a stand-in for Vercel's
+routing (`vercel.json` through `@vercel/routing-utils`, files first), fetched with
+`facebookexternalhit`'s and `Twitterbot`'s user agents, 2026-10-05:
+
+| Address | Served | `X-Robots-Tag` | Head |
+|---|---|---|---|
+| `/` | `index.html` | none | the homepage's title, description, canonical, `og:url`; no robots tag |
+| `/pricing`, `/features/public-readable-sharing` | `_pages/…` | none | each page's own |
+| `/login`, `/pricing/` | `shell.html` | `noindex, nofollow` | the default, with the robots tag |
+| `/index.html` asked for by name | `index.html` | `noindex, nofollow` | the homepage's |
+| `/read/<shared>` | the function | `noindex, nofollow` | the article's, with the robots tag |
+| `/read/<absent>` | the function, 404 | `noindex, nofollow` | the default |
+| `/sitemap.xml` | the file, as XML | `noindex, nofollow` | nine addresses |
+
+Of seven shared articles in the local library, two drew their own picture and five the brand
+image. One of the two pictures was served (200, `image/png`, 334 KB); the other is the lost object
+above. Another article's hash under a different slug answered 404.
+
+This is a stand-in and not Vercel. What only a deployment shows is in "What the plan review
+changed", below.
+
+### The deploy check
+
+`scripts/check-public-shell.ts` learns: the shell hash is of `/shell.html`; each listed page
+answers with its own title, canonical and `og:url` and no `noindex` anywhere; an app path still
+has both; `robots.txt`'s two groups, line by line; the sitemap is XML naming exactly the list; and
+an article's `og:image` is the brand image or an address under its own `/api/public/asset/<slug>/`
+that answers as an image.
+
+### Tests, written first
+
+`tests/site-pages.test.ts` (the list against the router and `pageTitle`; `robots.txt`;
+`vercel.json`'s header rule and rewrites, against every listed path and a set of paths that must
+stay out; the built heads; the sitemap), `tests/page-head.test.ts` (the lead picture and its
+switch), `tests/public-readable-sharing-page.test.tsx` (the sentence), and
+`check-public-shell --self-test`.
+
+### What the plan review changed
+
+GPT Sol, 2026-10-05, read-only: approve with changes, no P0
+([the review](261005f-link-previews-stage-2-plan-review-sol.md)). It confirmed the three Vercel
+assumptions from Vercel's documentation, the reasoning for `Allow: /read/`, and that the manifest is
+in document order.
+
+Taken:
+
+- **A link with a query string.** `Allow: /pricing$` refuses `/pricing?utm_source=x`, because a
+  `robots.txt` match is against the path and the query. Each page now has a second line,
+  `Allow: /pricing?`. The canonical names the address without the query.
+- **The shelf at `/read/public` is let in by `Allow: /read/` too**, and the plan had not said so. It
+  is: crawlable, and `noindex` like every other `/read/` address, and tested as that.
+- **The shell the function compiles in must be the default one.** `scripts/client-shell.ts` now
+  refuses a head with no `noindex`, or with a canonical: the homepage's `index.html` passes every
+  other check it had. A test builds a `dist/` holding both files and proves which is embedded.
+- **A test from the database to the head** for the lead picture, in
+  `tests/public-visibility-pg.test.ts`, which also pinned the head's exact keys.
+- **Our icons and card picture are allowed to every crawler**, so a search result can show one.
+- **The bytes floor is a stand-in and said to be.** A small photograph is passed over and a heavy
+  icon is not. Recording each picture's width and height at ingest (`imageDimensions` in
+  `src/assets.ts` already exists) is the fix, and is not built.
+- **Vercel's own converter, not only `new RegExp`.** `@vercel/routing-utils`' `getTransformedRoutes`
+  over our `vercel.json`, run once in a scratch directory: the header rule is absent on each of the
+  nine pages and present on 16 addresses that must stay out (`/pricing/`, `/pricingx`, `/Pricing`,
+  `/read/public`, `/shell.html`, `/_pages/pricing.html` among them), and each page's rewrite
+  reaches its file. Not added as a dependency for one check.
+- Three docs that still described a blanket exclusion: `deployment.md`,
+  `public-readable-sharing.md`, `page-titles.md`.
+
+Not taken, and why:
+
+- **Wiring the deploy check into `npm run deploy`.** `scripts/deploy.ts` does not run
+  `check-public-shell.ts`, and the page we publish to authors says, truthfully, that it does not.
+  Changing what a deploy runs is the Overseer's, who deploys. **So the first deploy of this needs
+  the check run by hand, with a shared article's slug**, and the debrief says so:
+  `npx tsx scripts/check-public-shell.ts --public-slug <slug>`.
+- **Redirecting `/pricing/` to `/pricing`.** A trailing slash is served the default shell, with
+  `noindex`, and is not let in by `robots.txt`. Nothing links to that form.
+- **`scripts/check-two-builds.ts`** builds with Vite directly and serves its own `index.html` as
+  the shell. It skips the new step, so its `index.html` still *is* the shell, and it is right as it
+  stands.
+
+**Tests-first, and where it was not**: the box refused every test run while the first tests were
+written (out of memory, then a fleet-wide pause), so the implementation was written before any of
+them had been seen red. They were mutation-tested afterwards instead, by the code reviewer, below.
+
+### In a browser
+
+A Sonnet subagent, headless Chrome at 1440 wide, signed out, against the same local build,
+2026-10-05. All nine pages drew from their new files, with the page's own title from the first byte
+and the same title after React mounted. No console error, no failed script or stylesheet. Clicking
+from the homepage to Pricing and back kept the titles right. `/login` and `/read/public` start at
+the bare word *Spideryarn* and change when React mounts, as before: they are served the default
+head. The rewritten section on `/features/public-readable-sharing` read cleanly.
+
+### What the code review changed
+
+GPT Sol, 2026-10-05, write-capable
+([the review](261005f-link-previews-stage-2-code-review-sol.md)): no P0 or P1, and a verdict of
+*reject* for two P2s it reported and did not fix. Both are now dealt with, so read the verdict as
+of the code it was given.
+
+It fixed, and each was read before it was kept:
+
+- **A manifest value that only looked like a hash.** A `jsonb` manifest can hold `["<hash>"]` or an
+  object where a string belongs, and a regular expression coerces before it tests. One such value
+  threw while a head was being composed; another hid a good picture behind it. `isLeadImage` in
+  `src/asset-delivery.ts` now checks the type and the shape, at the choosing and again at the
+  address. [Postmortem](../postmortems/261005i-coercive-validation-trusts-malformed-json-hashes.md).
+- **The deploy check could pass having checked no article**, accepted a shared article with no
+  robots tag, and refused one with no gist. It now requires `--public-slug`.
+- **Four sentences to authors that claimed more than the code does**: that every card has a
+  description, that every article links to its original, which picture is used, and what a deploy
+  checks.
+
+It reported, and what was done:
+
+- **`/login` could be listed as a bare address.** Every page of ours links to it, and it was shut
+  to crawlers, so its `noindex` could not be read. It is now let in, by two lines in `robots.txt`
+  (`CRAWLABLE_NOINDEX_ROBOTS_ALLOWS`), exactly as `/read/` is. `/profile`, the admin pages and the
+  API stay shut: nothing a crawler can reach links to them.
+- **A deploy's `robots.txt` check was satisfied by the file's own comments**, which say "Disallow".
+  It looks for the directive now (`hasDisallowAll`, `scripts/deploy-checks.ts`), with the case that
+  exposed it as a test. Older than this work.
+  [Postmortem](../postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md).
+
+Its five mutations each went red: a page removed from the list (4 tests), the header lookahead
+widened to let `/read/` through (5), the `$` dropped from an `Allow` (11), `leadImageOf` ignoring
+`status` (6), and a robots tag in a page's own head (10).
+
+**Gates**: `npm run typecheck`, and 17 test files (624 tests), the database one among them. **The
+full suite and `npm run check` were not run**: the Overseer asked every session not to, with the
+box at a load of 58, and said the readiness and deploy runs cover it.
+
 ## Reviews
 
 GPT Sol reviewed this plan on 2026-10-05, before the build: approve with changes. Taken: the

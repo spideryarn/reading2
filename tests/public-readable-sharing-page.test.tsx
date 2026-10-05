@@ -49,7 +49,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { SHARED_LINK_CARRIES, UNSHARING_COSTS_ALLOWANCE } from "../src/messages.js";
+import { SHARED_BY_PRIVATE_LINK, SHARED_LINK_CARRIES, UNSHARING_COSTS_ALLOWANCE } from "../src/messages.js";
+import { LEAD_IMAGE_ON_CARDS } from "../src/public/page-head.js";
+import { CRAWLABLE_NOINDEX_ROBOTS_ALLOWS, NOINDEX_HEADER_SOURCE, SITE_BRAND_FILES, SITE_PAGE_ROBOTS_ALLOWS, sitemapXml } from "../src/site-pages.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
 import { adminOnly, parseRoute, PUBLIC_SHARING_HREF } from "../src/web/router.js";
 
@@ -161,23 +163,80 @@ describe("the public-readable-sharing page", () => {
 
   /* ── the four claims about things outside the page ────────────────────── */
 
-  it("claims robots.txt disallows crawling, and it does", () => {
-    expect(PAGE).toMatch(/robots\.txt/);
-    expect(PAGE).toMatch(/disallow/i);
-    /* The `*` group, not one of the two card-fetcher groups below it — those
-       carry an `Allow: /read/` and a `Disallow: /` of their own, so a bare
-       search for "Disallow: /" would go on passing after the site-wide rule
-       was deleted. */
-    const universal = ROBOTS.split(/^User-agent:/m).find((g) => g.trimStart().startsWith("*"));
-    expect(universal).toBeDefined();
-    expect(universal).toMatch(/^\s*Disallow:\s*\/\s*$/m);
+  /** `robots.txt` as groups of `Allow`/`Disallow` lines, comments gone. */
+  const robotsGroups = (() => {
+    const groups: { agents: string[]; allow: string[]; disallow: string[] }[] = [];
+    let open: (typeof groups)[number] | null = null;
+    let ruled = false;
+    for (const raw of ROBOTS.split("\n")) {
+      const line = raw.replace(/#.*$/, "").trim();
+      const m = /^(User-agent|Allow|Disallow):\s*(.+)$/i.exec(line);
+      if (!m) continue;
+      const [, key = "", value = ""] = m;
+      if (key.toLowerCase() === "user-agent") {
+        if (open === null || ruled) {
+          open = { agents: [], allow: [], disallow: [] };
+          groups.push(open);
+          ruled = false;
+        }
+        open.agents.push(value.toLowerCase());
+      } else if (open !== null) {
+        ruled = true;
+        open[key.toLowerCase() as "allow" | "disallow"].push(value);
+      }
+    }
+    return groups;
+  })();
+  const everyone = robotsGroups.find((g) => g.agents.includes("*"));
+  const previews = robotsGroups.find((g) => !g.agents.includes("*"));
+
+  /**
+   * **What the page tells an author about crawlers, held to `robots.txt`.**
+   *
+   * Until 2026-10-05 the claim was "disallows crawling of the whole site". It
+   * is now three smaller ones, and each can go stale without anybody opening
+   * the page: crawlers are let in at `/read/` (so the page must say so, and say
+   * why); the article's text is at an address that is still shut; and the file
+   * still carries the `Disallow: /` the deploy looks for.
+   */
+  it("says crawlers may fetch /read/ and not the article's text, and robots.txt agrees", () => {
+    expect(everyone, "robots.txt has no `*` group").toBeDefined();
+    expect(everyone?.disallow).toEqual(["/"]);
+    expect(everyone?.allow).toContain("/read/");
+    expect(PAGE).toMatch(/lets a crawler fetch a page under.*\/read\//);
+    expect(PAGE).toMatch(/to read the noindex/);
+    expect(PAGE).toMatch(/a short description when we have one/);
+    expect(PAGE).toMatch(/a link to your original when we can safely republish its address/);
+    expect(PAGE).toMatch(/can show the title and any description we have/);
+    /* The text is served under /api/public/, and nothing in the `*` group
+       opens any part of /api/. */
+    expect(everyone?.allow.filter((p) => p.startsWith("/api"))).toEqual([]);
+    expect(PAGE).toMatch(/fetched separately, from an address.*robots\.txt.*disallows/);
+    /* The claim this replaced, refused by name: it is no longer true. */
+    expect(PAGE).not.toMatch(/disallows crawling of the whole site/);
+    expect(PAGE).not.toMatch(/We publish no sitemap/);
+  });
+
+  /* Every `Allow` for every crawler is one of our own pages, what draws them,
+     the sitemap, or `/read/`. A line that opened anything else would be a
+     thing this page does not tell an author. */
+  it("describes which pages we permit engines to list, without promising their indexing decisions", () => {
+    expect(PAGE).toMatch(/We let search engines list our own pages, and ask them not to list shared articles/);
+    expect(PAGE).not.toMatch(/Search engines may list our own pages, and only those/);
+    /* Our pages, the script and stylesheet that draw them, our own icons and
+       card picture, the sitemap, and `/read/`. */
+    expect(everyone?.allow.slice().sort()).toEqual(
+      [...SITE_PAGE_ROBOTS_ALLOWS, "/assets/", ...SITE_BRAND_FILES, "/sitemap.xml", "/read/", ...CRAWLABLE_NOINDEX_ROBOTS_ALLOWS].sort(),
+    );
+    expect(PAGE).toMatch(/sitemap names our own pages/);
+    expect(sitemapXml()).not.toMatch(/\/read\//);
   });
 
   /**
-   * **The page names the hole in `robots.txt` to authors, robot by robot and
-   * path by path**, and the file can grow a name or a path without anybody
-   * opening the page. Red when it does. The map is spelled out, so a robot
-   * nobody has put a platform's name to fails too.
+   * **The page names the preview robots to authors, robot by robot and path by
+   * path**, and the file can grow a name or a path without anybody opening the
+   * page. Red when it does. The map is spelled out, so a robot nobody has put
+   * a platform's name to fails too.
    */
   it("names every platform robots.txt lets in, and every path it lets them reach", () => {
     const PLATFORM: Record<string, string> = {
@@ -189,40 +248,59 @@ describe("the public-readable-sharing page", () => {
       discordbot: "Discord",
       slackbot: "Slack",
     };
-    const lines = ROBOTS.split("\n").map((l) => l.replace(/#.*$/, "").trim());
-    const named = lines
-      .map((l) => /^User-agent:\s*(.+)$/i.exec(l)?.[1]?.toLowerCase())
-      .filter((a): a is string => a !== undefined && a !== "*");
-    expect(named.length).toBeGreaterThan(0);
-    for (const agent of named) {
+    expect(previews, "robots.txt has no named group").toBeDefined();
+    expect(robotsGroups).toHaveLength(2);
+    for (const agent of previews?.agents ?? []) {
       const platform = PLATFORM[agent];
       expect(platform, `robots.txt names ${agent}, and this test has no platform for it`).toBeDefined();
       /* `X,` and not `X`: the page also says `X-Robots-Tag`. */
       expect(PAGE).toContain(platform);
     }
     const SAYS: Record<string, RegExp> = {
-      "/read/": /\/read\//,
+      "/read/": /are allowed at.*\/read\//,
       "/og-card.png": /picture of our own logo/,
-      "/$": /our homepage/,
+      "/api/public/asset/": /first suitable picture in the article that we hold our own copy of, fetched from us/,
     };
-    const allowed = [...new Set(lines.map((l) => /^Allow:\s*(.+)$/i.exec(l)?.[1]).filter((p) => p !== undefined))];
-    expect(allowed.length).toBeGreaterThan(0);
-    for (const allowPath of allowed) {
+    for (const allow of SITE_PAGE_ROBOTS_ALLOWS) SAYS[allow] = /and at our own pages/;
+    expect(previews?.allow.length).toBeGreaterThan(0);
+    for (const allowPath of previews?.allow ?? []) {
       const says = SAYS[allowPath];
-      expect(says, `robots.txt allows ${allowPath}, and the page does not say so`).toBeDefined();
+      expect(says, `robots.txt allows ${allowPath} to the preview robots, and the page does not say so`).toBeDefined();
       expect(PAGE).toMatch(says as RegExp);
     }
   });
 
-  it("claims a noindex header on every response, and vercel.json sets one", () => {
-    expect(PAGE).toMatch(/X-Robots-Tag/);
+  /* The picture claim, against the code: a card's picture is ours or a copy we
+     host, and the switch is still on. Turn it off and the sentence goes. */
+  it("claims the preview's picture is our copy or our logo, and page-head agrees", () => {
+    expect(LEAD_IMAGE_ON_CARDS).toBe(true);
+    expect(PAGE).toMatch(/not from your servers/);
+    expect(PAGE_HEAD).toMatch(/publicAssetPath\(head\.slug, sha256, ext\)/);
+  });
+
+  it("qualifies the picture filters and limits the preview robots' noindex to shared articles", () => {
+    expect(PAGE).toMatch(/a PNG or JPEG between 20 KB and 5 MB/);
+    expect(PAGE).toMatch(/Figures recovered from a PDF are not used on the card/);
+    expect(PAGE).toMatch(/On shared article pages, all of them still receive the noindex header/);
+    expect(PAGE).not.toMatch(/and all of them still receive the noindex header/);
+  });
+
+  it("claims a noindex header on every shared article, and vercel.json sets one", () => {
+    expect(PAGE).toMatch(/Every shared article Spideryarn serves carries an.*X-Robots-Tag/);
     expect(PAGE).toMatch(/noindex/);
+    /* The claim this replaced: "every response". Our own pages no longer
+       carry it, so the page must not go on saying they do. */
+    expect(PAGE).not.toMatch(/Every response Spideryarn serves/);
     const json = JSON.parse(VERCEL) as {
       headers?: { source: string; headers: { key: string; value: string }[] }[];
     };
-    const all = json.headers?.find((h) => h.source === "/(.*)");
-    expect(all, "vercel.json no longer has a site-wide header block").toBeDefined();
-    expect(all?.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex, nofollow" });
+    const rule = json.headers?.find((h) => h.headers.some((k) => k.key === "X-Robots-Tag"));
+    expect(rule, "vercel.json no longer has a noindex header rule").toBeDefined();
+    expect(rule?.headers).toContainEqual({ key: "X-Robots-Tag", value: "noindex, nofollow" });
+    expect(rule?.source).toBe(NOINDEX_HEADER_SOURCE);
+    for (const address of ["/read/an-article", "/read/an-article/metadata", "/read/public"]) {
+      expect(new RegExp(`^${rule?.source}$`).test(address), address).toBe(true);
+    }
     /* And the page says the *pages* carry the matching meta, which is the half
        that survives somebody serving the app from somewhere other than Vercel. */
     expect(PAGE_HEAD).toMatch(/meta\(\s*"name",\s*"robots",\s*"noindex, nofollow"\s*\)/);
@@ -338,6 +416,8 @@ describe("the public-readable-sharing page", () => {
     expect(deploy).not.toMatch(/check-public-shell/);
     expect(PAGE).not.toMatch(/first and the last/);
     expect(PAGE).toMatch(/reports the deploy as failed/);
+    expect(PAGE).toMatch(/answered successfully as plain text/);
+    expect(PAGE).not.toMatch(/still carries a disallow rule/);
   });
 
   /**
@@ -395,4 +475,67 @@ describe("the public-readable-sharing page", () => {
        instead. docs/plans/260906g-…§ Two of the five claims were not true. */
     expect(PAGE).not.toMatch(/legally and ethically/i);
   });
+
+  /* ── the private link ─────────────────────────────────────────────────── */
+
+  /**
+   * **A private link is the same republishing to fewer people**, so the page
+   * has to say it exists and that the offer covers it
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+   * Each claim is held to the code that makes it true, as the claims above are.
+   */
+  describe("what it says about a private link", () => {
+    it("says what one is: anyone who has it can read, and can pass it on", () => {
+      expect(PAGE).toMatch(/private link/);
+      expect(PAGE).toMatch(/[Aa]nyone who has (that|the) link can read/);
+      expect(PAGE).toMatch(/pass (it|the link) on/);
+      /* And the server really does let a key in on the article route. */
+      expect(read("src/store/public-access.ts")).toMatch(/or\(publicSlug\(slug\), linkSharedSlug\(slug, access\.key\)\)/);
+    });
+
+    it("says it is not listed, and the listing cannot see one", () => {
+      expect(PAGE).toMatch(/not on our shelf of shared articles/);
+      /* The shelf's query is built on `publicSlug`'s meaning of public and
+         never on the access value a key rides in. */
+      const library = read("src/store/public-library.ts");
+      expect(library).not.toMatch(/from "\.\/public-access\.js"|from "\.\/link-shared-slug\.js"/);
+    });
+
+    it("says the page tells its reader it is a private link, and the notice does", () => {
+      expect(PAGE).toMatch(/tells whoever opens it that it is a private link/);
+      expect(SHARED_BY_PRIVATE_LINK).toMatch(/private link/i);
+      expect(read("src/web/PublicChrome.tsx")).toMatch(/SHARED_BY_PRIVATE_LINK/);
+    });
+
+    it("says a pasted private link shows no preview of the piece, and the page handler sends none", () => {
+      expect(PAGE).toMatch(/Pasting a link to an article shared only this way into a chat shows no title or description/);
+      /* A link share is its own arm in the page handler, with no head. */
+      expect(read("src/public/page.ts")).toMatch(/found\.sharedBy === "public" \? \{ kind: "found", head: found\.head \} : \{ kind: "link" \}/);
+    });
+
+    it("says it can be turned off, and the owner's route can", () => {
+      expect(PAGE).toMatch(/turn (it|the link) off/);
+      expect(read("src/store/pg-share-link.ts")).toMatch(/turnOff/);
+    });
+
+    it("says the same tick-box and the same record stand behind it", () => {
+      expect(PAGE).toMatch(/same tick-box/);
+      expect(PAGE).toMatch(/who made it and when/);
+      expect(read("src/routes.ts")).toMatch(/rightsConfirmed !== true\) throw httpError\(400, "A private link needs rightsConfirmed: true"\)/);
+      expect(read("src/db/schema.ts")).toContain('"article_share_link_events"');
+    });
+
+    it("extends the takedown offer to it", () => {
+      expect(PAGE).toMatch(/behind (one|a private link)[^.]*write to/i);
+    });
+
+    it("does not call a private link secret or secure", () => {
+      /* It is a link, and a link can be forwarded. */
+      expect(PAGE).not.toMatch(/private link[^.]*\b(secret|secure|only you)\b/i);
+    });
+  });
+});
+
+it("qualifies Help's listing promise for an article that is only link-shared", () => {
+  expect(read("src/web/help/help-topics.tsx")).toMatch(/An article shared only this way is not listed anywhere/);
 });

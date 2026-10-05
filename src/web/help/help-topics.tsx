@@ -209,8 +209,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             </strong>{" "}
             The further across the strip it reaches, the longer you spent there. A quick glance
             may leave no shading. Use it to find where you had got to after jumping
-            around. Only whoever added the article sees it, and it
-            is <HelpRef to="experimental-features">experimental</HelpRef>.
+            around. Only whoever added the article sees it.
           </li>
           <li>
             <strong>One faint grey bar across the full width: where you jumped from.</strong> It
@@ -645,16 +644,47 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
   sharing: {
     title: "Sharing an article, and the public shelf",
     keywords:
-      "share public publish link send someone friend visitor see comments bookmarks chats profile private padlock globe shared articles unshare stop",
+      "share public publish link private link key send someone some people friend colleague visitor see comments bookmarks chats profile private padlock globe shared articles unshare stop turn off unlisted",
     body: (
       <>
         <p>
-          Every article starts <strong>private</strong>. The padlock beside the title means only you
-          can read it, even if you send someone the link: copying a link changes nothing about who can
-          open it.
+          Every article starts <strong>private</strong>. The padlock beside the title means it is
+          not public. Sending someone its ordinary address lets nobody in: copying an address
+          changes nothing about who can open it.
         </p>
         <p>
-          To share, press the padlock. It takes you to <strong>Access &amp; sharing</strong> on the
+          There are two ways to let other people read one, and both are under{" "}
+          <strong>Access &amp; sharing</strong> on the article’s Metadata page: a private link, for
+          the people you send it to, and making it public, for everyone.
+        </p>
+        <p>
+          <strong>A private link.</strong> Press <strong>Create a link</strong>, look at what
+          somebody with the link would get, tick that you have the right to share the text, and
+          press <strong>Create the link</strong>. Then copy the link and send it however you like.
+        </p>
+        <ul>
+          <li>
+            <strong>Anyone who has the link can read the article without an account</strong>, and
+            can pass the link on. We cannot tell you who has opened it.
+          </li>
+          <li>
+            <strong>An article shared only this way is not listed anywhere</strong>, and the page tells whoever opens it that it
+            is a private link. They get what a visitor to a public article gets, and like any
+            visitor they cannot write anything or start any AI work.
+          </li>
+          <li>
+            <strong>Turn off</strong> stops the link working from the next request. Creating a link
+            again makes a new one, and the old one stays dead.
+          </li>
+          <li>
+            A private link does not change what the article counts against your allowance. If the
+            article is also public, its ordinary address works without the link, and turning the
+            link off does not make it private.
+          </li>
+        </ul>
+        <p>
+          <strong>Making it public.</strong> Press the padlock. It takes you to{" "}
+          <strong>Access &amp; sharing</strong> on the
           article’s Metadata page, where you press <strong>Share with anyone…</strong>. Nothing goes
           out until you have seen exactly what a visitor would get, ticked that you have the right to
           share the text, and pressed <strong>Share it</strong>. The padlock then becomes a globe.
@@ -799,10 +829,6 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         <ul>
           <li>
             <strong>More modes</strong>: {listOf(EXPERIMENTAL_MODES)}.
-          </li>
-          <li>
-            <strong>Reading time on the spine</strong>: a tinted area that reaches further across
-            where you have spent longer. Only you see it.
           </li>
           <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.

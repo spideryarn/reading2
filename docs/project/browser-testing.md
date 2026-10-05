@@ -53,6 +53,11 @@ The same holds for `npx tsx server.ts &` followed by `kill $!`, which stops the 
 leaves the node child holding the port (confirmed 2026-09-09 on the fleet dashboard's port); the
 symptom is a stale bundle hash, which reads as a cache problem.
 
+A pattern cannot tell one worktree's server from another's, because each spells the path the same
+relative way: on 2026-09-08 a `kill` of pids matched by `ps | grep "[t]sx tools/fleet/server.ts"`
+took two belonging to another session. And an environment-variable prefix is not in the command
+line at all, so `pkill -f FLEET_PORT=8791` matches nothing and leaves the server running.
+
 So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), then check the port is
 actually free before starting another. And prove *which code* is being served before you trust a
 single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.

@@ -238,6 +238,27 @@ describe("the switch on, on a window with no room for the notes", () => {
   });
 });
 
+/* An article opened before its structure is built: the relations step comes
+   after `structure`, so the server refuses it on the stand-in outline, and a
+   refused job is a failure card for words nobody asked for. The column waits,
+   as the arc does (tests/arc-waits-for-structure.test.tsx), and asks once the
+   real tree is in — the same mount, with the wait over.
+   docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+describe("the column open on an article still showing its temporary outline", () => {
+  it("asks for nothing until the real structure is in, then asks once", async () => {
+    await act(async () => jobEngine.start("reader-1"));
+    const waiting = createElement(OwnerMarginFeed, { slug: SLUG, shown: true, awaitingStructure: true, onFeed });
+    await act(async () => root.render(waiting));
+    await settle();
+    expect(starts(), "a job the server would refuse was asked for").toBe(0);
+
+    const arrived = createElement(OwnerMarginFeed, { slug: SLUG, shown: true, awaitingStructure: false, onFeed });
+    await act(async () => root.render(arrived));
+    await settle();
+    expect(starts()).toBe(1);
+  });
+});
+
 describe("the column opening on an article that has them", () => {
   it("starts nothing", async () => {
     stored = "current";

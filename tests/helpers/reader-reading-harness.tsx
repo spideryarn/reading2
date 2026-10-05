@@ -78,6 +78,7 @@ export function readingHarnessOwner(): Extract<ReaderCapability, { kind: "owner"
     quiz: { ...emptyRead, quiz: null },
     crossrefs: null,
     arc: { arc: null },
+    structureArrival: null,
     readingTime: { levels: new Map([[block, 1]]), reach: new Map([[block, 4]]), status: "loaded", setCounting: noop, timeFor: () => null },
   } as unknown as Extract<ReaderCapability, { kind: "owner" }>;
 }

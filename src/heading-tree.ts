@@ -373,7 +373,7 @@ const WINDOW_TITLE_MIN_WORDS = 3;
 export const REPEATED_HEADING_MIN = 5;
 
 /** Root, two parts, two sections each, a leaf apiece: the least a depth-3 tree can be. */
-const MIN_BOUNDED_BODY = 4;
+export const MIN_BOUNDED_BODY = 4;
 
 const hasText = (b: Block): boolean => b.text.trim() !== "";
 

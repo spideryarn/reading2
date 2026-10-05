@@ -119,6 +119,7 @@ const NONE = {
   searches: [],
   sketch: null,
   navLabelStatus: "ready" as const,
+  sharedBy: "public" as const,
   sourceGuess: null,
 };
 

@@ -143,3 +143,67 @@ export function assetPath(slug: string, sha256: string, ext: AssetExt): string {
 export function publicAssetPath(slug: string, sha256: string, ext: AssetExt): string {
   return `/api/public/asset/${encodeURIComponent(slug)}/${sha256}.${ext}`;
 }
+
+/**
+ * The picture a link preview may show for a shared article: which stored
+ * object, and nothing else about it.
+ *
+ * **Two fields and no `url`.** The publisher's address is in the manifest entry
+ * beside these, and a type that cannot carry it is how it stays out of a
+ * published head.
+ */
+export interface LeadImage {
+  sha256: string;
+  ext: AssetExt;
+}
+
+/** JSON from a manifest must carry a string hash, not a value that coerces to one. */
+export function isLeadImage(value: unknown): value is LeadImage {
+  if (value === null || typeof value !== "object") return false;
+  const image = value as Partial<LeadImage>;
+  return typeof image.sha256 === "string" && /^[0-9a-f]{64}$/.test(image.sha256) &&
+    (image.ext === "jpeg" || image.ext === "png");
+}
+
+/**
+ * The lightest picture worth a card, and the heaviest a platform will take.
+ *
+ * **Bytes stand in for dimensions**, which the manifest does not record. An
+ * icon, an avatar and a tracking pixel are a few kilobytes; a photograph or a
+ * drawn figure is tens at least. The ceiling is X's limit for a card image,
+ * the lowest of the platforms that publish one.
+ */
+const LEAD_IMAGE_MIN_BYTES = 20_000;
+const LEAD_IMAGE_MAX_BYTES = 5_000_000;
+
+/**
+ * **The article's own first picture, if we hold a copy fit for a card**, or
+ * `null`.
+ *
+ * Greg, 2026-10-05, on using it: *"hmmm, not sure. go with the lead image for
+ * now"*. docs/plans/261005f-link-previews-and-seo-for-shared-links.md § The lead
+ * picture has what it passes over and why.
+ *
+ * - **Only `stored` entries**: bytes in our own bucket, served by the public
+ *   asset route, which re-asks whether the article is shared on every request.
+ *   A `failed` entry has only the publisher's URL, and that is never used.
+ * - **`entries`, in order**: the manifest lists the article's own `<img>`s in
+ *   document order (src/collect-assets.ts), so the first is the first.
+ * - **Not `pdfFigures`**: a paper's first extracted figure is a chart.
+ *
+ * `unknown`-tolerant on purpose. The manifest is a `jsonb` column read back
+ * with a cast, and this runs on the request that draws a stranger's card: a
+ * malformed one means no picture, not a 503.
+ */
+export function leadImageOf(assets: Assets | null | undefined): LeadImage | null {
+  const entries: unknown = assets?.entries;
+  if (!Array.isArray(entries)) return null;
+  for (const entry of entries as AssetEntry[]) {
+    if (entry?.status !== "stored") continue;
+    if (!isLeadImage(entry)) continue;
+    if (typeof entry.bytes !== "number" || !Number.isFinite(entry.bytes)) continue;
+    if (entry.bytes < LEAD_IMAGE_MIN_BYTES || entry.bytes > LEAD_IMAGE_MAX_BYTES) continue;
+    return { sha256: entry.sha256, ext: entry.ext };
+  }
+  return null;
+}

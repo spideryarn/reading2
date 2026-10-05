@@ -1,5 +1,5 @@
 {
-  "id": "1b9063d4-7aa1-4a97-819d-d9a2759ae1d4",
+  "id": "49500637-962f-402c-8525-b82bf8181da2",
   "prevId": "b0ed5654-abef-49fd-8fab-4ba034447980",
   "version": "7",
   "dialect": "postgresql",
@@ -839,36 +839,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "reading_language": {
-          "name": "reading_language",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_ideas": {
-          "name": "reading_ideas",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_reason": {
-          "name": "reading_difficulty_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_model": {
-          "name": "reading_difficulty_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_rated_at": {
-          "name": "reading_difficulty_rated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -964,18 +934,6 @@
           "name": "article_revisions_status",
           "value": "\"spideryarn\".\"article_revisions\".\"status\" in ('draft','published','failed')"
         },
-        "article_revisions_reading_language": {
-          "name": "article_revisions_reading_language",
-          "value": "\"spideryarn\".\"article_revisions\".\"reading_language\" between 1 and 5"
-        },
-        "article_revisions_reading_ideas": {
-          "name": "article_revisions_reading_ideas",
-          "value": "\"spideryarn\".\"article_revisions\".\"reading_ideas\" between 1 and 5"
-        },
-        "article_revisions_reading_difficulty_all_or_none": {
-          "name": "article_revisions_reading_difficulty_all_or_none",
-          "value": "num_nonnulls(\"spideryarn\".\"article_revisions\".\"reading_language\", \"spideryarn\".\"article_revisions\".\"reading_ideas\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_reason\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_model\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_rated_at\") in (0, 5)"
-        },
         "article_revisions_authors_array": {
           "name": "article_revisions_authors_array",
           "value": "jsonb_typeof(\"spideryarn\".\"article_revisions\".\"authors\") = 'array'"
@@ -995,6 +953,109 @@
         "article_revisions_raw_source_both": {
           "name": "article_revisions_raw_source_both",
           "value": "(\"spideryarn\".\"article_revisions\".\"raw_source_sha256\" is null) = (\"spideryarn\".\"article_revisions\".\"raw_source_kind\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.article_share_link_events": {
+      "name": "article_share_link_events",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_owner_id": {
+          "name": "actor_owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event": {
+          "name": "event",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rights_confirmed": {
+          "name": "rights_confirmed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "article_share_link_events_article_at": {
+          "name": "article_share_link_events_article_at",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "article_share_link_events_article_id_articles_id_fk": {
+          "name": "article_share_link_events_article_id_articles_id_fk",
+          "tableFrom": "article_share_link_events",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "article_share_link_events_event": {
+          "name": "article_share_link_events_event",
+          "value": "\"spideryarn\".\"article_share_link_events\".\"event\" in ('created','turned-off')"
+        },
+        "article_share_link_events_rights": {
+          "name": "article_share_link_events_rights",
+          "value": "(\"spideryarn\".\"article_share_link_events\".\"event\" = 'created') = \"spideryarn\".\"article_share_link_events\".\"rights_confirmed\""
         }
       },
       "isRLSEnabled": false
@@ -1265,6 +1326,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "share_token": {
+          "name": "share_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "share_token_at": {
+          "name": "share_token_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "high_power_since": {
           "name": "high_power_since",
           "type": "timestamp with time zone",
@@ -1325,6 +1398,13 @@
           "columns": [
             "short_id"
           ]
+        },
+        "articles_share_token_unique": {
+          "name": "articles_share_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "share_token"
+          ]
         }
       },
       "policies": {},
@@ -1336,6 +1416,14 @@
         "articles_visibility": {
           "name": "articles_visibility",
           "value": "\"spideryarn\".\"articles\".\"visibility\" in ('private','public')"
+        },
+        "articles_share_token_shape": {
+          "name": "articles_share_token_shape",
+          "value": "\"spideryarn\".\"articles\".\"share_token\" is null or \"spideryarn\".\"articles\".\"share_token\" ~ '^[A-Za-z0-9_-]{22}$'"
+        },
+        "articles_share_token_pair": {
+          "name": "articles_share_token_pair",
+          "value": "(\"spideryarn\".\"articles\".\"share_token\" is null) = (\"spideryarn\".\"articles\".\"share_token_at\" is null)"
         }
       },
       "isRLSEnabled": false

@@ -548,6 +548,9 @@ tools, same stop / retry / edit / recovery. Untouched: `converse`'s loop, the to
 > thread just for helping the user to remember from the article, with its own special UI (e.g. for
 > more Socratic responses, etc).
 
+(He reversed *"not visible from Chat"* on 2026-10-04, in report `spya-hyfqkq`: Chat lists these
+conversations since 2026-10-05. The rest stands. § On screen, below.)
+
 He chose, of two designs, to keep the shared machinery and separate only the screen; rebuilding
 Remember on its own storage was the option passed over. So the reuse above stands, and three things
 make it one thread:
@@ -648,9 +651,12 @@ only mode whose content comes from the reader.
 
 **Remember has no list; it opens its one conversation.** Until 2026-10-01 the list was shared — both
 modes showed every thread, a Remember row carried a `remember` tag, and opening one from chat moved
-`?mode=` with `?thread=`. Since `spya-peszam` (above) each mode lists only its own kind: chat shows
-chats, and Remember shows its single thread directly, with no list, no `+`, no rename and the header
-reading *Remember*. The thread is **derived during render** — the stored one if there is one, else
+`?mode=` with `?thread=`. Since `spya-peszam` (above) Remember shows its single thread directly,
+with no list, no `+`, no rename and the header reading *Remember*. **Chat's side of that rule
+changed on 2026-10-05** (report `spya-hyfqkq`): Recall's, Tutorial's and Explore's conversations
+are listed in Chat again, each as a row with Remember's icon that leads back here. Chat cannot open,
+rename or delete one —
+[chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article). The thread is **derived during render** — the stored one if there is one, else
 one begun locally — and `?thread=` is only synced to it afterwards, so neither a stale `?thread=`
 nor the first frame of a load ever shows a list. Delete stays, as **Start over**. An active Live
 conversation finishes writing its last exchange before the DELETE starts, and the fresh thread is

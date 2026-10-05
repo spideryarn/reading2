@@ -125,6 +125,10 @@ abstract and DOI off its first pages, in the two-step job `["fetch", "metadata"]
 file gets. It publishes a revision with no blocks and no tree, which only a `'minimal'` article may
 — [ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
 
+**A first import from the browser opens before `structure` runs**, on a temporary outline cut from
+the headings, and the real tree is swapped in live by a second job —
+[ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure).
+
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
 down to a paragraph level" *is* the granularity-zoom tree. Structure is that tree rendered as

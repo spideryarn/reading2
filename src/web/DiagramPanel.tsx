@@ -774,12 +774,23 @@ export function DiagramPanel({
      dependency and offers to remove it, and taking that fix would leave an
      effect that runs once and clears nothing on any later press. The same shape,
      and the same reason, as the `attempt` counter in useProjection.ts. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `kind` is the trigger, and the offered fix silently disables this
+  /* **And the stored root node, for the same reason one step further on**: the picture's
+     *tree* can be replaced under an unchanged `kind`. An article opened before
+     its structure is built swaps a stand-in tree for the real one live
+     (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+     GPT Sol's F1). No pointer-leave fires for a node replaced under the
+     pointer, so the held hover would stop the follow-scroll exactly as above —
+     and the builders' node ids are positional, so an id that *survives* the
+     swap can name a different passage, which is why this does not ask whether
+     the node is still drawn. The derived `root` is also rebuilt when images
+     arrive, but `root.node` is the same stored node in that redraw: a real
+     hover or keyboard focus should survive it. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `kind` and the stored root node are reset triggers.
   useEffect(() => {
     setHover(null);
     setRoving(null);
     setHasFocus(false);
-  }, [kind]);
+  }, [kind, root?.node]);
 
   const scroller = useRef<HTMLDivElement | null>(null);
 

@@ -127,7 +127,11 @@ Three things go with every report, and the reader is told all three on
   things, proceed."* [`src/db/schema.ts`](../../src/db/schema.ts) § `url` has the
   engineering half of the argument — a vocabulary that needs a migration per page
   is one whose escape hatch gets used, and an escape hatch in use is worse data
-  than no constraint.
+  than no constraint. **One parameter is taken off, since 2026-10-05: a private
+  link's `key`**, which is a credential and not view state. The browser removes
+  it before sending and the server removes it again before storing
+  (`withoutShareKey`, [`src/share-key.ts`](../../src/share-key.ts)), and the
+  page says so.
 - **The build commit and the article slug**, so a report names a deploy and a
   piece.
 
@@ -386,8 +390,9 @@ until that sentence moves. The same trap took three sentences down on 2026-09-02
 
 ## Reading time
 
-**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner with experimental features
-on, a running total of seconds per block of their own articles, drawn in the spine and the gutter.
+**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner, a running total of
+seconds per block of their own articles, drawn in the spine and the gutter. Only with experimental
+features on until 2026-10-05; for every owner since (below).
 The page's *What we keep* gained a bullet, because the list is only honest if it is complete, and
 "no advertising or analytics trackers" stays true: this is shown to the reader it is about and to
 nobody reading a shared link.
@@ -402,11 +407,15 @@ code has to keep true:
 - **"Not shown to anybody reading an article you have shared"**, not "to nobody else". An
   administrator can read stored data, which the page already says.
 
-**The experimental switch is availability, not consent**, and the bullet says "with experimental
-features on" as a fact about when it is kept, not as a permission. If recording ever moves out from
-behind the switch — Fable's recommendation in
-[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)
-— that clause goes, and `LAST_UPDATED` moves with it.
+**It is kept for every owner since 2026-10-05, and the bullet lost "with experimental features
+on".** That clause was a fact about when it was kept, never a permission: the switch was
+availability, not consent. Greg took reading time out from behind the switch
+([reading-time.md § Who gets it](reading-time.md#who-gets-it)), so the clause would have been false.
+`LAST_UPDATED` already read 5 October 2026 from another change that day, so it did not move.
+
+**The bullet promises no way to turn it off or erase it, because there is none yet.** It says the
+totals go when the article does, which is true. When an off switch or an erase is built, the bullet
+gains a sentence and the date moves.
 
 It goes with the article (a cascade through `block_identities`), and is in both exports.
 
@@ -572,7 +581,34 @@ What the code has to keep true for the page to stay honest:
 `tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
 there.
 
+## A private link
+
+Since 2026-10-05 an owner can make a private link to an article
+([261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md);
+[public-readable-sharing.md](public-readable-sharing.md) has the notice and the card). It is a third
+way somebody else reads a reader's article, so the page names it in four places:
+
+- **Who can see your shelf** counts three exceptions where it counted two. It says anyone who has
+  the link can read the article without signing in and can pass it on, that it is not listed, that
+  they get what a public reader gets, that we cannot tell who has read it, that the key is part of
+  the address and so stays in a browser's history, and what turning it off can and cannot do.
+- **If you send us a bug report** says a report from such a page records the address without the
+  key.
+- **Deleting things** says archiving leaves a private link working, as it leaves a public one, and
+  that the audit trail keeps when a link was made or turned off, never the link.
+- **If something here is yours** says taking a piece down also turns off any private link to it.
+  That is done by hand, as making an article private is: there is no administrator's control for
+  either.
+
+What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
+link again; and `article_share_link_events`, who made or turned off a link and when, without the
+key. We record nothing about who opens one.
+
 ## What is pinned by a test, and what is not
+
+**The private-link sentences are held to the code** by the last block of
+[`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts): the predicate, the listing's
+imports, the Feedback button's `withoutShareKey` and the audit table.
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
 `DISPLAY_NAME` in [`src/models.ts`](../../src/models.ts) and to `LIVE_MODEL` / `LIVE_TRANSCRIBER` in

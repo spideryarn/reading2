@@ -28,6 +28,7 @@ import { articles, uploadSourceGuesses } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { pgSourceGuessStore } from "../src/store/pg-source-guesses.js";
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -253,13 +254,13 @@ describe("the owner's payload, the visitor's, and the route", () => {
       .where(eq(uploadSourceGuesses.articleId, id));
 
     /* Private first: nothing, though the row is there. */
-    await expect(pgPublicReader.loadArticle(SCRATCH_SLUG)).rejects.toThrow();
+    await expect(pgPublicReader.loadArticle(SCRATCH_SLUG, PUBLIC_ONLY)).rejects.toThrow();
 
     await getDb()
       .update(articles)
       .set({ visibility: "public", publicAt: new Date() })
       .where(eq(articles.slug, SCRATCH_SLUG));
-    const shared = await pgPublicReader.loadArticle(SCRATCH_SLUG);
+    const shared = await pgPublicReader.loadArticle(SCRATCH_SLUG, PUBLIC_ONLY);
     expect(shared.sourceGuess).toEqual({
       url: FOUND.url,
       host: "doi.org",
@@ -277,13 +278,13 @@ describe("the owner's payload, the visitor's, and the route", () => {
       .update(uploadSourceGuesses)
       .set({ url: "https://example.org/paper?sig=SECRET" })
       .where(eq(uploadSourceGuesses.articleId, id));
-    expect("sourceGuess" in (await pgPublicReader.loadArticle(SCRATCH_SLUG))).toBe(false);
+    expect("sourceGuess" in (await pgPublicReader.loadArticle(SCRATCH_SLUG, PUBLIC_ONLY))).toBe(false);
 
     await getDb()
       .update(uploadSourceGuesses)
       .set({ status: "none", url: null, host: null, kind: null, matchedBy: null, why: "no match — private reasoning" })
       .where(eq(uploadSourceGuesses.articleId, id));
-    const unsettled = await pgPublicReader.loadArticle(SCRATCH_SLUG);
+    const unsettled = await pgPublicReader.loadArticle(SCRATCH_SLUG, PUBLIC_ONLY);
     expect("sourceGuess" in unsettled).toBe(false);
     expect(JSON.stringify(unsettled)).not.toContain("private reasoning");
   });

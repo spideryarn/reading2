@@ -258,6 +258,16 @@ land?" identically either way, which is what a worktree sweep asks
 **Most landings never conflict.** A plain non-fast-forward merges automatically, so the proposal rule
 fires on real textual conflicts only, not on every push.
 
+**A merge refused over a dirty tree has once taken the edits with it.** On 2026-10-01, in a
+worktree with six modified tracked files, `git merge --no-edit origin/dev` printed *"Please commit
+your changes or stash them … Aborting"* and *"Merge with strategy ort failed"*, and afterwards all
+six files were back at `HEAD`, sharing one mtime. No autostash setting was on. `git status` showed
+only untracked files, which looks like an ordinary state. The edits survived as an unreferenced
+commit named `WIP on <branch>: <sha> …`, with an `index on …` twin. They were found with
+`git fsck --no-reflogs --unreachable`, then `git log --no-walk` over the commit ids it lists,
+and written back one file at a time with `git show <sha>:<path> > <path>`. Seen once and not
+reproduced; the cause is not known.
+
 ### Commit your own files, by name, in one command
 
 ```bash
@@ -304,6 +314,17 @@ rewrites the index entries for the paths it commits, so any staleness in them is
 more than it sounds — see [the section below](#the-cause-was-the-recipes-own-last-line-not-a-stray-command-2026-08-29),
 where a whole day of phantom reverts survived precisely because every session was carefully
 avoiding the shared index.
+
+**Work that may have to wait gets its own commit, and it goes last.** A push sends ancestry, not
+files. On 2026-10-05 a session committed a prompt change together with its plan and research,
+then had to push the docs alone because the change could not yet be measured. `git push origin
+HEAD:dev` took the prompt commit with it, and a second commit had to put the three files back:
+`dev`'s tree was right, and its history and the first commit's message ("stays in the worktree")
+were not. With no rebase, no branch switching and one worktree a session, a commit cannot be
+lifted out afterwards. So when part of a change is gated, on a measurement or on Greg, commit
+the docs and the eval first and the gated code as a later commit of its own; then "push the
+docs" is pushing an earlier commit, and nothing has to be undone
+([261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md)).
 
 ### And the other half of that, which cost us twice on 2026-08-28
 
@@ -836,6 +857,15 @@ by a deploy, not by a test ([deployment.md](deployment.md)).
 
 `git status` before you commit, and read the untracked list rather than skimming past it. If
 something you import is in it, it is yours to add.
+
+**A tracked file left out of the pathspec does the same, and the untracked list cannot show it.**
+The recipe's list of paths is typed by hand. On 2026-09-07 a commit of fourteen files left out
+`src/web/visitor.ts`: `HEAD` had a new member of `Mode` and no row for it in the total
+`Record<Mode, VisitorPolicy>`, so every public reader crashed. `npm test`, `npm run typecheck` and
+`npm run check` were green throughout, because all three read the working tree, which had the
+row. GPT Sol found it by extracting the commit to a scratch directory and running the visitor
+tests against that. After the commit the omitted file is still there as a ` M` line in
+`git status --porcelain`.
 
 **And the variant where the import is not yours at all.** The recipe's trailing `--` pathspec commits
 a named file *from the working tree*, so naming a file a peer is halfway through commits their half

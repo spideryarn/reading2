@@ -138,6 +138,43 @@ One arm per kind of stand-in tree: the words are chosen by a `switch` on `Tree.p
 [`src/web/StructureNotice.tsx`](../../src/web/StructureNotice.tsx), so a second kind is a compile
 error there until it has words.
 
+## While the structure is still being built
+
+A first import from the browser opens on a temporary outline, and the real structure arrives a few
+seconds later from a second job
+([ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure)).
+The tree is marked `provisional: "awaiting-structure"`, which is not the case above: that one is
+final, this one is on its way.
+
+**The page takes the real tree in without a reload** (`useLateStructure`,
+[`src/web/article/useLateStructure.ts`](../../src/web/article/useLateStructure.ts)). It replaces
+only the tree and the labels status in the article it already holds. The prose, its images, the
+reader's place, a chat mid-answer and a half-typed comment are not touched.
+
+- **It decides on a level, not an event**: *the tree I hold is awaiting, and a jobs list read after
+  it arrived shows no structure job for this article*. A job that ended while the article was still
+  loading is covered by that, where a completion event would have been missed.
+- **It checks the tree was cut from the blocks on screen** (id, kind, tag, level, text and the
+  policy fields, in order). If not, it changes nothing and the band says to reload.
+- **The late tree is held beside the article**, so the images' second draw arriving afterwards
+  cannot put the outline back.
+- **Node ids are positional**, so what held one across the swap lets go: Diagram's hover and
+  roving, Outline's focused row, the arrow keys' depth.
+- **`useArc` does not ask for an arc, and Marginalia does not ask for its relation words**, until
+  the real tree is in. Both steps come after `structure`, so the server would refuse them.
+
+**The line** (`StructureArriving`, in the head row where the notice above goes; the band draws one
+or the other): *"This is a temporary outline. The full structure is not available yet."* It claims
+no more than the page knows, since a visitor's page cannot see whether a job is running. If no job
+is building it: *"The full structure is not available."* with **Build it**, for the owner only; a
+visitor gets the first line and no button. If the page could not read the article to check, it
+says so and offers to check again, which is a read and not another paid build.
+
+- **A read is thrown away if a structure job starts while it is in flight**, and the hook listens
+  for a job's completion as well as watching the list, because a job first seen already finished
+  never appears in the list as running. Both were found at code review
+  ([postmortem 261005o](../postmortems/261005o-a-one-shot-read-guard-must-follow-every-work-episode-boundary.md)).
+
 ## Where the code is
 
 Each file's header comment says what it owns.

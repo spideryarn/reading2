@@ -1129,6 +1129,25 @@ here:
 The research is
 [260929a](../research/260929a-paying-for-model-calls-with-the-reader-s-own-ai-subscription.md).
 
+## The box's key has a monthly limit, and it runs out
+
+The OpenRouter key in the box's `.env.local`, which every local call and every eval spends, has a
+monthly limit that Greg sets in OpenRouter's dashboard: $300 until 2026-10-05, $400 since. On
+2026-10-05 it was spent by the 5th of the month, and stayed at nothing for five hours until Greg
+raised it.
+
+**What it looks like**: every call fails in under a second with
+`Anthropic SDK request failed, status 403. [ai-refused]`. The real answer underneath is
+`Key limit exceeded (monthly limit)`. An eval probe exits 0 and writes one failed result file a
+slug, which have to be deleted before a re-run, since it will not overwrite them.
+
+**Before planning a paid eval, ask the key**: `GET https://openrouter.ai/api/v1/key` with the key
+as the bearer token answers `limit` and `limit_remaining`, free
+(`scripts/ai-cost.ts` § `reconcile` makes the same call). If nothing remains, only Greg can raise
+it: tell the Overseer, do the work that needs no model, and do not ship a prompt change
+unmeasured. Never reach for another key or another route to a model; the limit is the point.
+Production has its own key, and this says nothing about it.
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows

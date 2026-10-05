@@ -3118,6 +3118,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `activeSlugsFor` is over the owner's whole queue, and the owner is the
      shared dev one. No article, no GoTrue, no bucket. */
   "tests/one-article-for-one-address.test.ts": "private-postgres",
+  /* Plan 261005j: an import that opens before its structure is built, through
+     the real `enqueue`, claim, `structure` step and publication. */
+  "tests/open-before-structure-queue.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
      is what the conversion falsifies, and the lane follows from the two owners
@@ -3145,6 +3148,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      throughout — it publishes real revisions, claims a real job and inserts a
      real `ingest_events` row to prove the successor never settles one. */
   "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
+  /* Plan 261005j: what a publication queues when its tree is the stand-in a
+     first import opened with. The main-modes suite's harness. */
+  "tests/publication-of-an-awaiting-tree.test.ts": "private-postgres",
   /* Plan 261004h: an import's first full publication queues the main-mode
      jobs. The same harness as the labels-successor suite above — real
      revisions, real job rows, a real `reader_profiles` row for the opt-out. */
@@ -3156,6 +3162,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tests/setup/private-db.ts. */
   "tests/private-lane-survives-a-module-reset.test.ts": "private-postgres",
   "tests/public-visibility-pg.test.ts": "private-postgres",
+  /* The private link, plan 261005e: seven seeded articles, the owner's route
+     and the public reads with a key. The bucket is a temp directory, mocked at
+     the `blobStore()` selector as `asset-route` mocks it. */
+  "tests/share-link-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane is decided by the one case
      that publishes: *a revision landing between the two reads* is now a second
      real publication onto a seeded article, taken while a request is halfway
@@ -3737,6 +3747,16 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`OUTSIDER` reaches Postgres only through `setRequestOwner`, to show `ownedSlug` filters " +
         "on the owner and not on the slug. Every insert in the file belongs to " +
         "`currentOwnerId()`, which the private lane provides.",
+    },
+  },
+  "tests/share-link-pg.test.ts": {
+    "00000000-0000-4000-8000-0000005a11ec": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` for the three share-link routes, which must answer 404 for " +
+        "an article that is not the caller's. Each resolves the slug through `ownedSlug` before " +
+        "it writes, so the id matches no row and is never put in a column: the same reason as " +
+        "`public-visibility-pg`'s, and here there is not even a billing anchor to create.",
     },
   },
   "tests/asset-route.test.ts": {

@@ -639,6 +639,9 @@ describe("the top of the page: Archive, Share…, and what is shut", () => {
     history.replaceState(null, "", `/read/${SLUG}/metadata`);
     vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init });
+      /* The sharing card's own read of its private link (PrivateLink.tsx).
+         Answered apart, so it does not take a turn from `metaAnswers`. */
+      if (String(url).endsWith("/share-link")) return Promise.resolve(json({ on: false }));
       if (init?.method === "PATCH") {
         const next = patchAnswers.shift();
         if (next === "hang") return new Promise<Response>(() => {});

@@ -28,6 +28,7 @@ import {
   renderPrompt,
 } from "../src/simple-summary.js";
 import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
+import { PROFILE_RULES } from "../src/profile.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { whyUnusable } from "../src/store/artifacts.js";
@@ -298,12 +299,38 @@ describe("Brief's and Fuller's prompts", () => {
      an article of 2,500 to 14,999 words is asked exactly what `/8` asked.
      `/10` (plan 261005b § A slightly longer Brief) asks Brief for about 100
      words where it was about 80: **Brief's hash moved** (it was `d492501b…`
-     from `/7` to `/9`) and Fuller's did not. */
-  it("are the bytes `simple-prompt/10` shipped, for a piece of standard length", () => {
+     from `/7` to `/9`) and Fuller's did not.
+     `/11` (plan 261005h) is Fuller written for someone who has not read the
+     piece: **Fuller's hash moved** (it was `740415e3…` from `/8` to `/10`)
+     and Brief's did not. */
+  it("are the bytes `simple-prompt/11` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/11");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d31a28ecc8d6977dfc7f4711bf18540059833dc62d9dc6a9ef4de4df87a8b308");
-    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
+    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("4e926dfd865ec4f38113261df9b2311717cee65fd1cd5a3c767183acaaee06a7");
+  });
+
+  /* These hold the two things about `/11`'s Fuller that a reader of the prompt
+     could get wrong. Fuller's hash above is the Fuller prompt the eval's
+     two-bullet arm measured (evals/results/simple/high-about-new2a/, written
+     when Brief was still `/9`'s, so that arm's `systemsSha256` is of the pair
+     as it was then; plan 261005h). */
+  it("tells Fuller alone that a name the piece introduces is a term, and not to point at what it has not introduced", () => {
+    for (const rule of ["A name the piece introduces is a term like any other", "Do not refer to a part, result, model or label before this summary has"]) {
+      expect(SIMPLE_SYSTEMS.fuller).toContain(rule);
+      expect(SIMPLE_SYSTEMS.brief).not.toContain(rule);
+    }
+  });
+
+  it("gives each level its last word on the reader's background after the shared profile rules", () => {
+    for (const [level, heading] of [
+      ["brief", "FOR THIS VERSION, THE READER'S BACKGROUND DOES NOT CHANGE THE WORDS"],
+      ["fuller", "FOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES"],
+    ] as const) {
+      const system = SIMPLE_SYSTEMS[level];
+      expect(system.indexOf(heading)).toBeGreaterThan(system.indexOf(PROFILE_RULES));
+      expect(system.indexOf(PROFILE_RULES)).toBeGreaterThan(-1);
+    }
   });
 });
 
@@ -336,6 +363,16 @@ describe("an unforced Summary preserves usable words for the same article", () =
       store.plant("s", "simple", "simple", legacy);
       expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
     }
+  });
+  it("does not make a `/9` row stale: `/10` and `/11` changed the prompt and not what it is written from", async () => {
+    const { store, row } = storedRow();
+    const tree = { ...ARTICLE.tree, nodes: {} };
+    const banded = inputFingerprint(BLOCKS, tree, ARTICLE.meta, "simple-prompt/9");
+    expect(inputFingerprint(BLOCKS, tree, ARTICLE.meta)).toBe(banded);
+    const nine = { ...row, promptVersion: "simple-prompt/9", sourceHash: banded };
+    expect(isStale(nine, BLOCKS, tree, ARTICLE.meta)).toBe(false);
+    store.plant("s", "simple", "simple", nine);
+    expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
   });
   it("skips a stored summary from a different model generation", async () => {
     const { store, row } = storedRow();

@@ -44,7 +44,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isStructural } from "./block-policy.js";
 import { isSpideryarnId, nameValue } from "./ids.js";
-import { buildBoundedHeadingTree } from "./heading-tree.js";
+import { buildBoundedHeadingTree, MIN_BOUNDED_BODY } from "./heading-tree.js";
 import { COVERAGE_FLOOR, isHeading, mergeLabels, type PendingLabelsFile, unaskableBatches } from "./labels.js";
 import { checkpointKey, hashBlocks, structureHash } from "./source-hash.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
@@ -2225,22 +2225,28 @@ export interface StructureArtefacts {
  * - `slices`: the whole table of contents would not fit one answer, so the
  *   body was asked about in `slices` slices. `reasked` answers did not pass and
  *   were asked for again; `refilled` sections came back undivided and were
- *   divided by a call of their own.
+ *   divided by a call of their own; `secondPass` slices failed when first
+ *   asked and were asked for once more.
  * - `answer-too-long`: the same document, where the slices did not make a
  *   tree; `slicesFailed` says which step gave out. What was asked for on the
  *   way is in the run's counts.
  * - `labels-could-not-ask`: a model's tree was sound but held a section too
  *   long for one labels call, so the labels step would have refused it. That
  *   run's call was made and paid for; its counts say so.
+ * - `before-structure`: not a fallback. A first import asked to open before
+ *   its structure is built (`headingsOnly`), so no model was asked and the tree
+ *   is marked `provisional: "awaiting-structure"`; a second run of this step
+ *   replaces it.
  *
  * There is no `input-too-long`. Nothing in this codebase estimates whether the
  * whole-document call's *input* fits, and this was not the place to invent it.
  */
 export type StructureSource =
   | { by: "model" }
-  | { by: "slices"; slices: number; refilled: number; reasked: number }
+  | { by: "slices"; slices: number; refilled: number; reasked: number; secondPass: number }
   | { by: "headings"; reason: "answer-too-long"; slicesFailed: SlicesFailure }
-  | { by: "headings"; reason: "labels-could-not-ask" };
+  | { by: "headings"; reason: "labels-could-not-ask" }
+  | { by: "headings"; reason: "before-structure" };
 
 export interface StructureRun {
   /** Which path produced `parts.tree`. */
@@ -2554,6 +2560,15 @@ export async function generateStructure(opts: {
   stepBudgetMs?: number;
   /** Which capable model cuts it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
+  /**
+   * **Return the headings tree at once and ask no model**, marked
+   * `provisional: "awaiting-structure"`: a first import that opens before its
+   * structure is built. The pipeline step decides when (src/pipeline.ts §
+   * `STEPS.structure`). Ignored for a body the bounded builder cannot shape,
+   * which is short enough to ask about in the import.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  headingsOnly?: true;
 }): Promise<StructureRun> {
   const { blocks, slug } = opts;
   const started = Date.now();
@@ -2589,6 +2604,23 @@ export async function generateStructure(opts: {
       source,
       ...spent,
     });
+
+  /* The stand-in a first import opens with (`headingsOnly`). The same tree the
+     fallbacks below return, with the one field that says the real one is
+     coming; nothing was bought. */
+  if (opts.headingsOnly && body.length >= MIN_BOUNDED_BODY) {
+    return fromHeadings(
+      { by: "headings", reason: "before-structure" },
+      {
+        wholeDocumentResumed: false,
+        wholeDocumentCalls: 0,
+        wholeDocumentUsage: { input_tokens: 0, output_tokens: 0 },
+        deepen: null,
+        deepenFailed: false,
+      },
+      { ...buildBoundedHeadingTree(blocks, slug, opts.articleTitle).tree, provisional: "awaiting-structure" },
+    );
+  }
 
   /* Before the call, and before a minute of anyone's time is spent: an article
      whose table of contents cannot fit in one response is found here rather
@@ -2658,7 +2690,13 @@ export async function generateStructure(opts: {
       split,
       structure: stitched,
       built,
-      source: { by: "slices", slices: sliced.slices, refilled: sliced.refilled, reasked: sliced.reasked },
+      source: {
+        by: "slices",
+        slices: sliced.slices,
+        refilled: sliced.refilled,
+        reasked: sliced.reasked,
+        secondPass: sliced.secondPass,
+      },
       ...spent,
     });
   }

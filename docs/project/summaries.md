@@ -290,7 +290,8 @@ the paragraphs.
   reader. ⓤ is the owner's profile icon.
 - **The reader's profile and goal shape every level**, through the shared `PROFILE_RULES` and
   `profileSection` ([src/profile.ts](../../src/profile.ts)): the goal decides what leads, and in
-  Fuller what the reader says they know is not explained. **Brief ignores the claimed
+  Fuller what the reader says they know is not explained
+  ([but never a term the piece itself introduces](#written-for-someone-who-has-not-read-it-since-2026-10-05)). **Brief ignores the claimed
   background**: it is for a reader in a hurry from outside the field, with at most two technical
   terms, each explained, and one plain phrase of method. Greg, 2026-10-02 (`spya-rpqqxb`): *"assume
   it's for someone with less expertise or in more of a hurry"* — his own profiled Brief had more
@@ -416,6 +417,60 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 The plan, the option passed over and Sol's reviews are
 [261005b](../plans/261005b-summary-length-follows-the-length-of-the-piece.md).
 
+<<<<<<< HEAD
+### Written for someone who has not read it (since 2026-10-05)
+
+> The brief summary is quite good, but the fuller summary often is hard for me to understand. And I
+> think it's because, I mean, it's fine that it uses some jargon from the article, but you have to
+> write it as if it's for someone who has not yet read the article. So I guess if you're going to
+> use jargon, you have to define it.
+>
+> Realty though they key principle is to write the fuller summary for someone who hasn't read it yet
+> rather than for someone who has.
+>
+> — Greg, 2026-10-05 (`spya-rntjxu`)
+
+**Fuller is written for a reader who has not read the piece.** Its prompt (`simple-prompt/11`)
+gains two bullets, `NOT_READ` in [`simple-summary.ts`](../../src/simple-summary.ts), naming the
+two faults:
+
+- **A name the piece introduces is a term like any other**: a term it coins or uses in its own
+  sense, an abbreviation, its label for a method, a group or an experiment. It is said in
+  everyday words, in the same sentence, the first time it is used.
+- **Nothing is referred to before the summary has introduced it**: "the second experiment" only
+  after the experiments have been said.
+
+**The reader's stated background does not cover what the piece introduces.** Fuller still leaves
+the established terms of a reader's field unexplained, but a paragraph after the shared profile
+rules (`AFTER_PROFILE.fuller`) says a term this piece introduces is new unless the reader's own
+description names it. The report came from a reader whose profile claims the paper's field; that
+alone does not make the paper's own names familiar.
+
+**This did not alter Brief**: Greg finds it good, and its two terms and one phrase of method
+leave little to point at. Brief was `/9`'s, byte for byte, while this was measured; its own
+change the same day, [a slightly longer Brief](#a-slightly-longer-brief-since-2026-10-05), is
+`/10`, and both are in `/11`.
+
+- **A whole section was built first, measured, and not shipped**: a heading, an opening
+  paragraph, eight bullets and a closing check. On five papers, set directly against the two
+  bullets, it split 5 pairs to 5 with the same count of places a reader could not follow, so by
+  the rule the plan declared beforehand the smaller change shipped. The section also ran past
+  its length in four writes of twenty; the two bullets did in none of fifteen.
+- **What is measured for the two bullets, for a reader with a profile**: against the old Fuller
+  a blind judge found them easier to follow in 6 pairs of 10 and harder in 1, and preferred them
+  in 6 of 10. The places a reader could not follow were 0.6 and 0.8 a summary, against 1.3. Every
+  main finding they left out, an old summary of the same piece left out too
+  ([261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md)).
+- **Mixed for a reader with no profile; no improvement claimed.** For the two bullets nothing
+  moved either way. It is in the Overseer's queue to look at properly (`qi-4meqvjr4`).
+- **Nothing stored was rewritten**, and nothing is made stale: a stored summary is *outdated*,
+  which is silent, and *Write it again* or Metadata's Rerun writes the new one.
+
+The plan, the section's text and GPT Sol's reviews are
+[261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md);
+the research is
+[261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md).
+=======
 ### A slightly longer Brief (since 2026-10-05)
 
 > maybe Brief could be ever so slightly longer but not much
@@ -445,6 +500,7 @@ is the same for every piece, and nothing else in its prompt moved.
 
 The measurement is
 [261005a § A slightly longer Brief](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
+>>>>>>> origin/dev
 
 ### Bold and bullets (since 2026-10-04)
 

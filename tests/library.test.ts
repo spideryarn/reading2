@@ -79,6 +79,14 @@ describe("describeArticle", () => {
     return root as unknown as Record<string, unknown>;
   };
 
+  it("carries the private-link fact independently of public visibility", () => {
+    expect(describeArticle({ ...base, privateLinkOn: true })).toMatchObject({ privateLinkOn: true });
+    expect(describeArticle({ ...base, privateLinkOn: false })).toMatchObject({ privateLinkOn: false });
+    expect(describeArticle({ ...base, visibility: "public", privateLinkOn: true })).toMatchObject({
+      visibility: "public", privateLinkOn: true,
+    });
+  });
+
   it("prints the word count it was given, and turns it into minutes", () => {
     const entry = describeArticle(base);
     expect(entry.revisionId).toBe(base.revisionId);

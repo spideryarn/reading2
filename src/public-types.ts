@@ -216,6 +216,9 @@ export interface PublicBlock {
   context?: BlockContext;
 }
 
+/** How a visitor reached an article. `PublicArticle.sharedBy` says what each means. */
+export type PublicSharedBy = "public" | "link";
+
 /**
  * What `GET /api/public/article/:slug` returns.
  *
@@ -227,6 +230,24 @@ export interface PublicBlock {
  * field's sake.
  */
 export interface PublicArticle extends PublicArtefactSet {
+  /**
+   * **Which way this visitor was let in**: the article is public, or the
+   * request carried the key of its private link
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+   *
+   * It is here so the notice under the masthead can say the right thing. Greg,
+   * 2026-10-05: *"When they open a page with a private link, it should say
+   * that it's a private link, i.e. not visible to anyone without the link"*.
+   *
+   * **`"public"` whenever the article is public, whatever key came with the
+   * request.** Public wins, so a public article opened through an old private
+   * link shows the public notice. `"link"` means the article is private and
+   * the key was right.
+   *
+   * Required, so a projection that forgot it does not compile. It says nothing
+   * about a person, and the key itself is never in this payload.
+   */
+  sharedBy: PublicSharedBy;
   meta: PublicMeta;
   blocks: PublicBlock[];
   tree: Tree;

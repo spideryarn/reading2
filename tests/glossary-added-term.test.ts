@@ -48,6 +48,7 @@ const { pgArticleReader } = await import("../src/store/pg.js");
 const { pgGlossaryLookupStore } = await import("../src/store/pg-lookups.js");
 const { pgGlossaryHiddenStore } = await import("../src/store/pg-glossary-hidden.js");
 const { pgPublicReader } = await import("../src/store/public-reader.js");
+const { PUBLIC_ONLY } = await import("../src/store/public-access.js");
 
 let article: ScratchArticle | undefined;
 let strangers: ScratchArticle | undefined;
@@ -303,7 +304,7 @@ describe("what it will not do", () => {
     expect(added.length).toBeGreaterThan(0);
     await getDb().update(articles).set({ visibility: "public" }).where(eq(articles.id, article.articleId));
     try {
-      const shared = await pgPublicReader.loadArticle(SLUG);
+      const shared = await pgPublicReader.loadArticle(SLUG, PUBLIC_ONLY);
       const ids = (shared.glossary?.entries ?? []).map((e) => e.id);
       expect(ids).toContain(MODEL);
       for (const row of added) expect(ids).not.toContain(row.entryId);

@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { requireSlug } from "../src/store/require-slug.js";
 import { makeLookUpTerm } from "../src/term-lookup.js";
@@ -40,7 +41,7 @@ describe("a refusal does not echo the value it refused", () => {
   });
 
   it("the public reader's own copy says the same", async () => {
-    const refusal = pgPublicReader.loadHead(HOSTILE);
+    const refusal = pgPublicReader.loadHead(HOSTILE, PUBLIC_ONLY);
     await expect(refusal).rejects.toMatchObject({ message: "Not a slug", status: 400 });
   });
 

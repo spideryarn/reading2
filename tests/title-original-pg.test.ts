@@ -29,6 +29,7 @@ import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
 import { exportArticle } from "../src/store/export.js";
 import { loadArticle } from "../src/store/index.js";
 import { beginRevision } from "../src/store/pg-revisions.js";
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -107,7 +108,7 @@ describe("a tidied title's original", () => {
       .update(articles)
       .set({ visibility: "public", publicAt: new Date() })
       .where(eq(articles.slug, SLUG));
-    const shared = await pgPublicReader.loadArticle(SLUG);
+    const shared = await pgPublicReader.loadArticle(SLUG, PUBLIC_ONLY);
     expect(shared.meta.title).toBe(TITLE);
     expect(shared.meta).not.toHaveProperty("titleOriginal");
     expect(JSON.stringify(shared)).not.toContain(ORIGINAL);

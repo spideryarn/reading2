@@ -330,6 +330,12 @@ const SENTINEL = "spya-public-dispatch-reader-ran-4f2a91";
 /** The status `handleApi` gives an unexpected throw. Not evidence on its own. */
 const THREW = 500;
 
+/** What a reader is handed when no usable key came with the request. */
+const NO_KEY = { kind: "public" };
+/** A well-formed key, and what a reader is handed for it. Opens nothing here: no database. */
+const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+const WITH_KEY = { kind: "link", key: KEY };
+
 /**
  * **Replace one public route's reader with a sentinel throw, and hand back the
  * spy.**
@@ -372,7 +378,7 @@ describe("the closed public namespace", () => {
     /* **The reader, with the slug.** A 401 would mean the gate saw this and a
        404 that the pattern missed; both are ruled out by the reader having run
        at all, and the argument rules out a route that matched the wrong thing. */
-    expect(read).toHaveBeenCalledWith("example");
+    expect(read).toHaveBeenCalledWith("example", NO_KEY);
     expect(r.status).toBe(THREW);
     /* **Withheld, not echoed.** This used to assert the sentinel was *in* the
        body — the raw message of the reader's throw reaching a stranger. Since
@@ -667,7 +673,7 @@ describe("the closed public namespace", () => {
   it("while the exact spelling still reaches the public handler", async () => {
     const read = readerRan("article");
     const r = await call("GET", "/api/public/article/example");
-    expect(read).toHaveBeenCalledWith("example");
+    expect(read).toHaveBeenCalledWith("example", NO_KEY);
     expect(r.status).toBe(THREW);
   });
 
@@ -709,7 +715,7 @@ describe("the closed public namespace", () => {
     const hash = "a".repeat(64);
     const r = await call("GET", `/api/public/asset/example/${hash}.png`);
     expect(r.handled).toBe(true);
-    expect(read).toHaveBeenCalledWith("example", hash, "png");
+    expect(read).toHaveBeenCalledWith("example", hash, "png", NO_KEY);
     expect(r.status).toBe(THREW);
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
@@ -755,6 +761,137 @@ describe("the closed public namespace", () => {
     }
   });
 
+  /* ------------------------------------------------ a private link's key -- */
+
+  /**
+   * **`?key=` reaches the two readers that name an article, as an access value
+   * and as nothing else.** Plan 261005e.
+   *
+   * The witness is the reader's own arguments, for this file's usual reason: a
+   * status cannot tell "the key arrived" from "the key was dropped", since both
+   * are the sentinel 500 here and both would be a 404 against a database.
+   */
+  it("hands a well-formed key to the article reader, as a link access", async () => {
+    const read = readerRan("article");
+    const r = await call("GET", `/api/public/article/example?key=${KEY}`);
+    expect(read).toHaveBeenCalledWith("example", WITH_KEY);
+    expect(r.status).toBe(THREW);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("and to the asset reader, after its three captures", async () => {
+    const read = readerRan("asset");
+    const hash = "a".repeat(64);
+    const r = await call("GET", `/api/public/asset/example/${hash}.png?key=${KEY}`);
+    expect(read).toHaveBeenCalledWith("example", hash, "png", WITH_KEY);
+    expect(r.status).toBe(THREW);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  it("and a HEAD carries it exactly as a GET does", async () => {
+    const read = readerRan("article");
+    const r = await call("HEAD", `/api/public/article/example?key=${KEY}`);
+    expect(read).toHaveBeenCalledWith("example", WITH_KEY);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /**
+   * **The library is never handed one.** Its reader takes no arguments at all,
+   * so there is nothing for a key to be passed as; this is the assertion that
+   * the dispatcher has not found a way.
+   */
+  it("never hands a key to the library, which takes nothing", async () => {
+    const read = readerRan("library");
+    const r = await call("GET", `/api/public/library?key=${KEY}`);
+    expect(read).toHaveBeenCalledWith();
+    expect(read.mock.calls[0]).toEqual([]);
+    expect(r.status).toBe(THREW);
+  });
+
+  /**
+   * **A key that is not key-shaped is no key.** Empty, short, long, the wrong
+   * alphabet: each reads as a request without one, so none of them gets a 400
+   * of its own that a stranger could tell from a wrong key.
+   */
+  it("treats an empty or malformed key as no key at all", async () => {
+    for (const bad of [
+      "",
+      "short",
+      `${KEY}A`,
+      KEY.slice(1),
+      "AAAAAAAAAAAAAAAAAAAA+/",
+      "AAAAAAAAAAAAAAAAAAAAA%3D",
+      "%00".repeat(22),
+      "x".repeat(5000),
+    ]) {
+      const read = readerRan("article");
+      const r = await call("GET", `/api/public/article/example?key=${bad}`);
+      expect(read, bad.slice(0, 30)).toHaveBeenCalledWith("example", NO_KEY);
+      expect(r.status, bad.slice(0, 30)).toBe(THREW);
+      vi.restoreAllMocks();
+    }
+  });
+
+  /**
+   * **Only the parameter called `key`, and only its value.** Nothing else in
+   * the query reaches a reader, and a parameter with a similar name is not it.
+   */
+  it("reads the parameter named key and no other", async () => {
+    const read = readerRan("article");
+    await call("GET", `/api/public/article/example?at=spya-k3m9qt&keys=${KEY}&Key=${KEY}&k=${KEY}`);
+    expect(read).toHaveBeenCalledWith("example", NO_KEY);
+    expect(read.mock.calls[0]).toHaveLength(2);
+
+    vi.restoreAllMocks();
+    const again = readerRan("article");
+    await call("GET", `/api/public/article/example?mode=glossary&key=${KEY}&at=spya-k3m9qt`);
+    expect(again).toHaveBeenCalledWith("example", WITH_KEY);
+    expect(again.mock.calls[0]).toHaveLength(2);
+  });
+
+  /** A key cannot come in through the path: the patterns are what they were. */
+  it("does not read a key out of the path", async () => {
+    const r = await call("GET", `/api/public/article/example/${KEY}`);
+    expect(r.status).toBe(404);
+    expect(r.body.error).toMatch(/No public API route/);
+  });
+
+  /**
+   * **Through the deployed rewrite**, where the key is one more parameter
+   * beside `__spy_path` and has to survive `originalUrl`.
+   */
+  it("survives the rewrite the deployed site uses", async () => {
+    const restored = originalUrl(`/api/index?__spy_path=public%2Farticle%2Fexample&key=${KEY}`);
+    expect(restored).toBe(`/api/public/article/example?key=${KEY}`);
+    const read = readerRan("article");
+    await call("GET", restored ?? "");
+    expect(read).toHaveBeenCalledWith("example", WITH_KEY);
+  });
+
+  /**
+   * **A refusal with a key on it is the refusal without one**, `no-store`
+   * included: a write method, an unknown path, a malformed slug.
+   */
+  it("refuses with a key exactly as it refuses without", async () => {
+    for (const [method, path] of [
+      ["POST", "/api/public/article/example"],
+      ["DELETE", "/api/public/library"],
+      ["GET", "/api/public/nothing-here"],
+      ["GET", "/api/public/article/Not%20A%20Slug"],
+    ] as const) {
+      const bare = await call(method, path);
+      const keyed = await call(method, `${path}?key=${KEY}`);
+      expect({ path, status: keyed.status, body: keyed.body, headers: keyed.headers }).toEqual({
+        path,
+        status: bare.status,
+        body: bare.body,
+        headers: bare.headers,
+      });
+      expect(keyed.headers["Cache-Control"], path).toBe("no-store");
+      expect(JSON.stringify(keyed.body), path).not.toContain(KEY);
+    }
+  });
+
   /** And an authenticated route with no header is still 401, unchanged. */
   it("leaves the gate exactly where it was", async () => {
     const r = await call("GET", "/api/library");
@@ -783,7 +920,7 @@ describe("the closed public namespace", () => {
     expect(restored).toBe("/api/public/article/example");
     const read = readerRan("article");
     const r = await call("GET", restored ?? "");
-    expect(read).toHaveBeenCalledWith("example");
+    expect(read).toHaveBeenCalledWith("example", NO_KEY);
     expect(r.status).toBe(THREW);
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
@@ -812,7 +949,7 @@ describe("the closed public namespace", () => {
        `path` and `ARTICLE` stops matching, so the reader never runs — and if it
        matched too loosely it would run with `example?at=spya-k3m9qt&zoom=2`.
        A status could not tell those two apart; the argument can. */
-    expect(read).toHaveBeenCalledWith("example");
+    expect(read).toHaveBeenCalledWith("example", NO_KEY);
     expect(withState.status).toBe(THREW);
     const bare = await call("GET", "/api/public/article/example");
     expect(withState.status).toBe(bare.status);

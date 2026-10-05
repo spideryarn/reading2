@@ -83,7 +83,8 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   what Structure still uses.
 - **[reading-time.md](reading-time.md)** — an area chart down the spine of where you have spent longer, and a
   hairline beside each passage: how a second is shared out, what counts, and why a batch is never
-  sent twice. Owner only, behind the experimental switch.
+  sent twice. Owner only; for every owner since 2026-10-05, when it came out from behind the
+  experimental switch.
 - **[maths.md](maths.md)** — TeX in an article drawn as maths: which delimiters count and why a
   price never does, the limits on one formula, and what it costs a comment in that paragraph.
 - **Folding a section** — a chevron on each heading hides the paragraphs under it; ⌥-click, ⌘⌥T or
