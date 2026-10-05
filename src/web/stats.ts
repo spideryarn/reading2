@@ -24,6 +24,8 @@ export interface Stats {
    * each summed `b.words` and agreed by coincidence.
    */
   words: number;
+  /** The apparatus's words: on the page, and not in `words` or `minutes`. */
+  supplementWords: number;
   minutes: number;
   blocks: number;
   /** Depth-1 nodes: the article's top-level parts. */
@@ -39,7 +41,7 @@ export interface Stats {
 }
 
 export function articleStats(article: Article): Stats {
-  const words = articleWordCounts(article.blocks).body;
+  const { body: words, supplement: supplementWords } = articleWordCounts(article.blocks);
   const byDepth = new Map<number, number>();
   let deepest = 0;
   /* **The apparatus is not part of the argument's shape.** A supplement is a
@@ -63,6 +65,7 @@ export function articleStats(article: Article): Stats {
   }
   return {
     words,
+    supplementWords,
     // Borrowed, never restated. This module used to carry its own `WPM = 230`
     // and its own `Math.max(1, ...)` — a second copy of the one number
     // src/reading-time.ts exists to keep in one place. The two agreed, so

@@ -15,7 +15,20 @@ import type { BlockId } from "../types.js";
 /** How read a block looks: 0 draws nothing, 2 is "read once", 4 is "read slowly, or several times" — `readLevel`. */
 export type ReadLevel = 0 | 1 | 2 | 3 | 4;
 
-/** Words per minute a block's expected reading time is measured at. */
+/**
+ * Words per minute a block's expected reading time is measured at.
+ *
+ * **Not the masthead's `WPM` (src/reading-time.ts), and deliberately left
+ * behind when that moved to 238 on 2026-10-05.** This is the unit of a
+ * brightness scale whose thresholds Greg tuned by eye against it (`readLevel`,
+ * `readReach`), and which the quiz's "read" boundary shares; moving it 3%
+ * would reclassify time already recorded near each boundary.
+ *
+ * **It is said to the reader in one place**, the gutter line's card ("It takes
+ * about 1 min 18 s to read", BlockLinkCard.tsx), so the two rates can be seen
+ * side by side by somebody looking for it: 3% apart, on a figure that says
+ * "about". Known and left; unify them if either is ever retuned.
+ */
 export const READING_WPM = 230;
 
 /** The share of a block's reading time at which both the gutter and rail start to draw. */

@@ -392,6 +392,12 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin: 0 0.45rem;
   opacity: 0.6;
 }
+/* The minutes are an estimate with a card behind them (ReadTimeCard.tsx): a
+   dotted rule says so, as it does under a metadata tile's label. */
+.read-time-trigger {
+  border-bottom: 1px dotted var(--rule-strong);
+  cursor: help;
+}
 /* Each later fact stays whole — "9 / parts" split across a wrap once the author
    list made this line long enough to wrap (plan 260929d). The first item stays
    inline and is free to wrap; normally it is the long byline or author list.

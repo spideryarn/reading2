@@ -12,10 +12,36 @@
  * pull in anything node-side.
  */
 
-/** Words per minute. The middling end of the usual 200–250 range for prose. */
-export const WPM = 230;
+/**
+ * Words per minute: the average for an adult reading English non-fiction
+ * silently, from Brysbaert's 2019 meta-analysis of 190 studies (J. Memory and
+ * Language 109). It was 230, "the middling end of the usual 200–250 range",
+ * until 2026-10-05 — a fair folk number; this one has a source.
+ *
+ * **A flat rate, and it does not know how hard the piece is.** Why not, and
+ * what it would take: docs/research/261005a-reading-time-estimates-and-text-difficulty.md.
+ */
+export const WPM = 238;
+
+/**
+ * The ends of the range the same paper gives: "most adults fall in the range of
+ * 175 to 300 wpm" for non-fiction. The card that explains the estimate says
+ * this range out loud (src/web/ReadTimeCard.tsx), because the spread between
+ * readers is as large as anything the text itself does to the number.
+ */
+export const WPM_QUICK = 300;
+export const WPM_SLOW = 175;
+
+function minutesAt(words: number, wpm: number): number {
+  return Math.max(1, Math.round(Math.max(0, words) / wpm));
+}
 
 /** Never zero: a two-line article still takes a moment to read. */
 export function readingMinutes(words: number): number {
-  return Math.max(1, Math.round(words / WPM));
+  return minutesAt(words, WPM);
+}
+
+/** The minutes a quick and a slow reader would take: `quick` ≤ `readingMinutes` ≤ `slow`. */
+export function readingRange(words: number): { quick: number; slow: number } {
+  return { quick: minutesAt(words, WPM_QUICK), slow: minutesAt(words, WPM_SLOW) };
 }
