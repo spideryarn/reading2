@@ -38,8 +38,9 @@ below holds and a second `npm run setup` does not move the date.
 switch off, and the bar draws Timeline's button while the reader is in it, so the radiogroup still
 has exactly one checked thing. Since 2026-09-04 the same sentence covers `?diagram=trail`, and it is
 the same code saying it: [`experimental-visibility.ts`](../../src/web/experimental-visibility.ts) is
-one rule with two callers, `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx) and `visibleKinds`
-in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx). The switch is about clutter, not enforcement — an old bookmark keeps
+the rule shared by `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx), `visibleKinds`
+in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), and Remember's
+[visible parts](#the-two-things-gated-below-mode-level). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
 *bars* differ, which is the whole point: the default bar for one and every mode for the other, and
 one Diagram chip against five. A gate
@@ -68,7 +69,7 @@ The shelf's browser-only preference instead skips the server and uses `localStor
 | Contract | `readExperimental` / `writeExperimental` on `ReaderStore` — [`src/store/contracts.ts`](../../src/store/contracts.ts) |
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
-| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), and the four pages that mount a `Dock` — they call the hook and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental) |
+| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Remember's band and [information list](../../src/web/RememberAbout.tsx) |
 | Copy | [`experimental-copy.ts`](../../src/web/experimental-copy.ts) — the two sentences and the name, shared by both controls. **Not `src/messages.ts`**, which is the reader-facing *failure* copy and says so in its first line |
 
 **A date, not a boolean**, and [sql.md](sql.md#a-nullable-timestamp-says-more-than-a-boolean) has the
@@ -193,7 +194,9 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**The modes in the table below**, and **four of Diagram's five pictures** — which since Diagram itself went in on 2026-09-29 only matters to somebody who reaches the mode by URL with the switch off. Greg picked the first
+**The modes in the table below**, **four of Diagram's five pictures**, and **Remember's Explore**
+([§ The two things gated below mode level](#the-two-things-gated-below-mode-level)). Diagram's picture gates,
+since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came

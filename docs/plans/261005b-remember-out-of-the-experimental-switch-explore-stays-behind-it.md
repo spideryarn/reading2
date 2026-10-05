@@ -101,6 +101,28 @@ not that the approach was wrong.
 
 It confirmed `AUTO_MODE_STEPS` does not change, and that no server route is affected.
 
+## GPT Sol's code review, 2026-10-05
+
+Verdict: approve, after one fix of its own.
+
+- **P1, fixed by the reviewer.** The command bar treated a kept `remember=explore` as "Explore is
+  open" in any mode, so with the switch off it offered *Remember › Explore* from Summary or the
+  Metadata page. The row is now offered only when the address is on Remember. Two regression tests,
+  red before the fix.
+- **P2, fixed.** The helper test passed despite that bug, so it now goes through the bar's caller;
+  one pressed chip is checked in all eight view and switch combinations.
+- **P2, fixed.** Two passages in `remember-mode.md` and `experimental-features.md` still promised
+  four chips; `/help` now also says the chip stays while Explore is open.
+- **P2, fixed by me.** A stale comment in `tests/sub-mode-param-outlives-its-mode.test.tsx`.
+- **P2, accepted, not fixed.** The bar reads the Remember part from the address, which can lag a chip
+  press by about 50ms, where the reading view has parsed state. In that window the bar's rows could
+  disagree with the chips. Nobody opens the command bar within 50ms of pressing a chip, and closing
+  it means new wiring through Dock and Reader.
+
+## What landed
+
+Built as planned, in one stage. The browser check (desktop, iPad, phone) is in the debrief.
+
 ## Question for Greg
 
 **[Q-quiz-on-import]** Now that Remember is a main mode, should the Quiz questions be written when an

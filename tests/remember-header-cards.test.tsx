@@ -334,13 +334,14 @@ describe("Explore is behind the switch, and the other three are not", () => {
   });
 
   it("the chips", () => {
-    expect(chipLabels("recall", false)).toEqual(WITHOUT_EXPLORE);
-    expect(chipLabels("tutorial", false)).toEqual(WITHOUT_EXPLORE);
-    expect(chipLabels("recall", true)).toEqual(ALL_FOUR);
-    /* An old link or a last view: the chip row still has exactly one pressed. */
-    expect(chipLabels("explore", false)).toEqual(ALL_FOUR);
-    const pressed = [...host.querySelectorAll<HTMLElement>('.remember-submode-btn[aria-pressed="true"]')];
-    expect(pressed.map((c) => c.textContent)).toEqual(["Explore"]);
+    for (const on of [false, true]) {
+      for (const current of REMEMBER_VIEWS) {
+        expect(chipLabels(current, on)).toEqual(on || current === "explore" ? ALL_FOUR : WITHOUT_EXPLORE);
+        /* Every state has one pressed chip, including an old Explore link. */
+        const pressed = [...host.querySelectorAll<HTMLElement>('.remember-submode-btn[aria-pressed="true"]')];
+        expect(pressed.map((c) => c.textContent)).toEqual([REMEMBER_SUB_MODES[current].label]);
+      }
+    }
   });
 
   it("the (i) list", () => {
@@ -406,9 +407,15 @@ describe("Remember's (i)", () => {
     const about = host.querySelector<HTMLButtonElement>('.band-about[aria-label="About this mode"]');
     if (!about) throw new Error("no Remember (i)");
     act(() => about.click());
-    for (const kind of ["remember", "tutorial", "explore"] as const) {
-      act(() => root.render(createElement(ChatPanel, props(kind))));
-      expect(document.querySelectorAll(".band-about-list li"), kind).toHaveLength(REMEMBER_VIEWS.length);
+    for (const on of [false, true]) {
+      switchIs.on = on;
+      for (const kind of ["remember", "tutorial", "explore"] as const) {
+        act(() => root.render(createElement(ChatPanel, props(kind))));
+        const labels = [...document.querySelectorAll(".band-about-list li strong")].map((s) => s.textContent);
+        expect(labels, `${kind}, experimental=${on}`).toEqual(
+          on || kind === "explore" ? ["Recall", "Tutorial", "Explore", "Quiz"] : ["Recall", "Tutorial", "Quiz"],
+        );
+      }
     }
     act(() => root.render(createElement(ChatPanel, props("chat"))));
     expect(document.querySelectorAll(".band-about-list li")).toHaveLength(0);

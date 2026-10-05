@@ -501,7 +501,7 @@ export function ChatPanel({
       feature={`chat${remember ? " remember" : ""}`}
       /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
       mode={remember ? "remember" : "chat"}
-      /* …and then its four parts, a line each (spya-usyhwy). */
+      /* …and then its visible parts, a line each (spya-usyhwy). */
       about={
         remember ? (
           <RememberSubModesAbout

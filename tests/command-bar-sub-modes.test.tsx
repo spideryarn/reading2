@@ -306,6 +306,32 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).not.toContain("Diagram › Drift");
   });
 
+  it.each(["article", "metadata"] as const)(
+    "with the switch off, offers Explore only for the carried Remember mode on %s",
+    (view) => {
+      for (const [search, offered] of [
+        ["?mode=remember&remember=explore", true],
+        ["?mode=chat&remember=explore", false],
+        ["?remember=explore", false],
+        ["?mode=remember&remember=unknown", false],
+        ["?mode=remember&remember=quiz", false],
+      ] as const) {
+        if (view === "metadata") metadataPage({ experimental: EXPERIMENTAL_OFF }, search);
+        else {
+          history.replaceState(null, "", `/read/a-piece${search}`);
+          reading({ experimental: EXPERIMENTAL_OFF, mode: search.includes("mode=remember") ? "remember" : "chat" });
+        }
+        openBar();
+        const names = subRows().map(fullName);
+        expect(names.includes("Remember › Explore"), search).toBe(offered);
+        expect(names).toEqual(expect.arrayContaining([
+          "Remember › Recall", "Remember › Tutorial", "Remember › Quiz",
+        ]));
+        act(() => dialog().close());
+      }
+    },
+  );
+
   it("gives every row a distinct id", () => {
     reading();
     openBar();

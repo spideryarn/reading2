@@ -153,7 +153,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
 import { useDictationField } from "./useDictationField.js";
-import { type MetadataSection, type Mode, type RememberView, rememberInSearch, withSection } from "./params.js";
+import { type MetadataSection, type Mode, type RememberView, modeParam, rememberInSearch, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
 import { downloadExport } from "./export-download.js";
@@ -1147,17 +1147,19 @@ function onlyMovesTheReader(command: Command): boolean {
 /**
  * **The sub-mode rows to offer**: every sub-mode of every mode the Dock drew,
  * in Dock order and then chip order — and, inside a mode, only the chips that
- * mode would draw with the switch as it is (Diagram's pictures are the one
- * case: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
+ * mode would draw with the switch as it is (Diagram's pictures and Remember's
+ * Explore: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
  * and `visibleModes` in Dock.tsx share). A mode the Dock did not draw offers
  * no sub-mode at all, so the experimental switch is decided once, upstream.
  *
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
  * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
- * **And the part of Remember `?remember=` names**, since 2026-10-05, when
- * Explore became the second kind of sub-mode behind the switch: the chips' own
- * rule again (sub-modes.ts § `visibleRememberViews`).
+ * **And the part of Remember currently open**, since 2026-10-05, when Explore
+ * became the second kind of sub-mode behind the switch: the chips' own rule
+ * again (sub-modes.ts § `visibleRememberViews`). The caller passes `undefined`
+ * outside Remember; a retained `remember=explore` is a last view, not an open
+ * Explore. Metadata uses the mode in its carried address.
  *
  * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
  * command-pick eval measures against from the functions the bar itself calls.
@@ -1165,7 +1167,7 @@ function onlyMovesTheReader(command: Command): boolean {
 export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
-  current: { readonly diagram: DiagramKind; readonly remember: RememberView },
+  current: { readonly diagram: DiagramKind; readonly remember: RememberView | undefined },
 ): readonly Command[] {
   return modes.flatMap((mode) =>
     subModesOf(mode)
@@ -1228,7 +1230,7 @@ interface Props {
   activateSubMode(sub: SubMode): void;
   /**
    * **The reader's experimental switch** — `on` for the one decision `modes`
-   * cannot carry, which of Diagram's pictures to offer (`subModeRows`), and
+   * cannot carry, which experimental sub-modes to offer (`subModeRows`), and
    * the rest for the row that turns it on or off (`experimentalRows`, since
    * 2026-10-03).
    */
@@ -1434,7 +1436,12 @@ export function CommandBar({
       ...modes.map(modeCommand),
       /* After every mode and before every page: the mode rows stay exactly the
          Dock's, first, and a sub-mode loses a tie to its own mode. */
-      ...subModeRows(modes, experimental.on, { diagram, remember: rememberInSearch(article?.search ?? "") }),
+      ...subModeRows(modes, experimental.on, {
+        diagram,
+        remember: modeParam.parse(new URLSearchParams(article?.search ?? "").get("mode") ?? "") === "remember"
+          ? rememberInSearch(article?.search ?? "")
+          : undefined,
+      }),
       ...besideTheModes({ article, openComments, openFeedback, queue }),
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */
