@@ -122,6 +122,7 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
@@ -386,6 +387,18 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   });
   /** A pasted image is still being decoded and re-encoded. See `takeFile`. */
   const [preparing, setPreparing] = useState(false);
+
+  /* **Say when there is a draft here, to the one thing that needs to know.**
+     The draft is this component's state so that it survives being dismissed,
+     which also makes it invisible from outside — and `/changelog` reloads
+     itself for a new build, which would delete it without anybody seeing it
+     go. `open` is deliberately not part of this: the dismissed draft is the
+     one at risk. safe-to-reload.ts. */
+  const holdsDraft = body.trim() !== "" || shot !== null || preparing;
+  useEffect(() => {
+    noteFeedbackDraft(holdsDraft);
+    return () => noteFeedbackDraft(false);
+  }, [holdsDraft]);
 
   /**
    * **The latch, and `disabled` is not a substitute for it.**

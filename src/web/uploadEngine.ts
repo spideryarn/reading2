@@ -60,6 +60,7 @@
 import type { Job } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import {
   type Grant,
   type UploadProgress,
@@ -615,16 +616,7 @@ export const uploadEngine: UploadEngine = createUploadEngine({
     actionSucceeded: (epoch) => jobEngine.actionSucceeded(epoch),
     actionFailed: (message, status, epoch) => jobEngine.actionFailed(message, status, epoch),
   },
-  guardUnload() {
-    const warn = (e: BeforeUnloadEvent): void => {
-      /* `preventDefault` is the modern spelling and `returnValue` the one older
-         browsers still read. Both, because the cost of the dead one is a line
-         and the cost of missing the live one is a lost upload. The string is
-         never shown — browsers replaced it with their own wording years ago. */
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  },
+  /* Shared with the batch engine, and read by safe-to-reload.ts: "a transfer
+     has asked for the warning" is also when a page must not reload itself. */
+  guardUnload: warnBeforeUnload,
 });

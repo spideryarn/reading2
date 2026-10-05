@@ -119,9 +119,19 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
   "on" before the date — `src/web/Metadata.tsx` § `whenSaid`, which replaced that file's private
   `ago` on 2026-10-04.
 - **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
-  `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
-  home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
-  fetches on demand without it.
+  `/build.json` whether a different build is live and reloads once if so, because a copy opened from
+  a home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller;
+  `src/web/maths.ts` fetches on demand without it.
+- **`src/web/stale-shell.ts` § `watchForDeploy`, `onDeployNoticed`** — whether a different build has
+  gone live, when nothing has failed yet: asked when the page wakes and every fifteen minutes while
+  it is visible, production builds only, installed once from `src/web/main.tsx`. It records the
+  answer and reloads nothing. A page that wants to act on it uses
+  `src/web/useReloadForNewBuild.ts`, whose one caller is `src/web/ChangelogPage.tsx`. Both reloads
+  share one note of the builds this session has reloaded for (`claimReload`), so neither can loop.
+- **`src/web/safe-to-reload.ts` § `safeToReload`** — ask before replacing the page under the reader:
+  no while offline, while a Chat, Remember or Feedback draft is held, or while an upload is going
+  (`src/web/unload-guard.ts`, the same fact that warns on closing the tab). A new kind of unsent
+  work is one more line in its `VETOES`, not a second check somewhere else.
 - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
 - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the

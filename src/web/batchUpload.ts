@@ -46,6 +46,7 @@ import type { Job } from "../types.js";
 import { jobEngine, send, type TerminalOutcome } from "./jobEngine.js";
 import { apiFetch, detailsOf, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import { type Grant, type UploadProgress, putFile, requestGrant, sha256Hex } from "./upload.js";
 
 /** How many files are in flight at once. In flight lasts until the job has ended. */
@@ -710,12 +711,7 @@ export const batchUpload: BatchUpload = createBatchUpload({
     actionFailed: (message, status, epoch) => jobEngine.actionFailed(message, status, epoch),
     watchTerminal: (jobId, onEnd) => jobEngine.watchTerminal(jobId, onEnd),
   },
-  guardUnload() {
-    const warn = (e: BeforeUnloadEvent): void => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  },
+  /* The same warning uploadEngine.ts raises, and the fact safe-to-reload.ts
+     reads — unload-guard.ts. */
+  guardUnload: warnBeforeUnload,
 });

@@ -34,7 +34,22 @@
  * does not — the shell and `build.json` out of step, a stamp that lies — the
  * second failure finds its own note and the reader gets the message, not a
  * page that never stops blinking. The note is written *before* the reload, and
- * with nowhere to write it there is no reload at all.
+ * with nowhere to write it there is no reload at all. **The note is every
+ * build this session has reloaded for, not the last one**: holding only the
+ * last, a shell stuck on one build under a `build.json` that alternated
+ * between two others reloaded every time (`claimReload`).
+ *
+ * ## Two askers, one note
+ *
+ * - **`reloadIfStale`** — code fetched on demand did not arrive. It asks
+ *   because something has already failed. LazyPage.tsx.
+ * - **The watcher, `watchForDeploy`** — nothing has failed. It asks when the
+ *   page wakes and every fifteen minutes while it is being looked at, and only
+ *   records the answer. It reloads nothing itself: an unasked reload under an
+ *   article somebody is reading is not something anyone asked for. The one
+ *   page that acts on it is `/changelog`, through `reloadForNewBuild`, and only
+ *   when nothing unsent would be lost (safe-to-reload.ts).
+ *   docs/plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md.
  *
  * **Only for the page that failed.** The check takes a moment, and a reader
  * can leave the spinner in that moment; reloading whatever they went to
@@ -52,11 +67,22 @@
  */
 import { buildCommit, buildTime } from "./build-stamp.js";
 
-/** The `sessionStorage` key holding the live build this session last reloaded for. */
+/**
+ * The `sessionStorage` key holding every build this session has reloaded for,
+ * as a JSON array of identities. Until 2026-10-05 it held one bare identity;
+ * `reloadedFor` still reads that.
+ */
 export const RELOADED_FOR_KEY = "spy.reloaded-for-build";
 
 /** How long `/build.json` gets. It is a static file of a few hundred bytes. */
 const CHECK_TIMEOUT_MS = 4000;
+
+/**
+ * How often the watcher asks while the page is visible. Greg, 2026-10-04
+ * (spya-ym9dum): *"poll every 15 minutes or so"*. Approximate by nature: iOS
+ * suspends a sleeping app's timers, which is why waking asks as well.
+ */
+export const CHECK_EVERY_MS = 15 * 60_000;
 
 const SHA = /^[0-9a-f]{40}$/;
 
@@ -130,22 +156,74 @@ export async function serverBuild(
   }
 }
 
-function browserDeps(): StaleShellDeps {
-  let storage: StaleShellDeps["storage"] = null;
+/** `sessionStorage`, or `null` where the browser refuses even the accessor. */
+export function sessionNote(): StaleShellDeps["storage"] {
   try {
     /* The accessor itself throws where storage is blocked. */
-    storage = window.sessionStorage;
+    return window.sessionStorage;
   } catch {
-    storage = null;
+    return null;
   }
+}
+
+function browserDeps(): StaleShellDeps {
   return {
     mine: buildIdentity(buildCommit(), buildTime()),
     fetch: (input, init) => fetch(input, init),
-    storage,
+    storage: sessionNote(),
     reload: reloadPage,
     address: () => window.location.href,
     timeoutMs: CHECK_TIMEOUT_MS,
   };
+}
+
+/**
+ * The builds this session has already reloaded for, oldest first. Empty for
+ * no store, no note, or a note that cannot be read.
+ *
+ * **A note that is not a list is read as a list of one.** That is what a copy
+ * from before 2026-10-05 wrote, and a session can straddle the change: the old
+ * copy writes its bare identity and reloads, and this one reads it. Ignoring
+ * it would allow that session a second reload for the same build.
+ */
+export function reloadedFor(storage: StaleShellDeps["storage"]): string[] {
+  if (storage === null) return [];
+  let raw: string | null;
+  try {
+    raw = storage.getItem(RELOADED_FOR_KEY);
+  } catch {
+    return [];
+  }
+  if (raw === null || raw === "") return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((b): b is string => typeof b === "string");
+  } catch {
+    /* Not JSON: the old, bare form. */
+  }
+  return [raw];
+}
+
+/**
+ * Take this session's one reload for `build`: `true` only if it had not been
+ * taken and the note now says it has.
+ *
+ * The whole loop guard, and shared by both things that reload, so a build
+ * either of them reloaded for is never reloaded for again by the other. The
+ * list is not trimmed: an identity is 65 characters, a session sees a handful,
+ * and forgetting the oldest is how the alternating case came back.
+ */
+export function claimReload(storage: StaleShellDeps["storage"], build: string): boolean {
+  if (storage === null) return false;
+  try {
+    const already = reloadedFor(storage);
+    if (already.includes(build)) return false;
+    storage.setItem(RELOADED_FOR_KEY, JSON.stringify([...already, build]));
+    /* Read back: a store that accepts a write and keeps nothing is no guard. */
+    return reloadedFor(storage).includes(build);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -165,14 +243,7 @@ export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promi
      page the reader walked away from would spend the one reload on nothing. */
   if (deps.address() !== failedAt) return false;
 
-  try {
-    if (storage.getItem(RELOADED_FOR_KEY) === theirs) return false;
-    storage.setItem(RELOADED_FOR_KEY, theirs);
-    /* Read back: a store that accepts a write and keeps nothing is no guard. */
-    if (storage.getItem(RELOADED_FOR_KEY) !== theirs) return false;
-  } catch {
-    return false;
-  }
+  if (!claimReload(storage, theirs)) return false;
 
   deps.reload();
   return true;
@@ -181,4 +252,200 @@ export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promi
 /** The reload itself, named so the escape's button and the check share one. */
 export function reloadPage(): void {
   window.location.reload();
+}
+
+/* ------------------------------------------------------------------------ *
+ * The watcher
+ * ------------------------------------------------------------------------ */
+
+export interface DeployWatchDeps {
+  /**
+   * A production build, which is not the same as "has a stamp": the dev server
+   * defines the stamp too, and has no `/build.json` to compare it with.
+   */
+  production: boolean;
+  /** The build this copy is. */
+  mine: string | null;
+  fetch: typeof fetch;
+  timeoutMs: number;
+  /** The gap between checks while visible. */
+  everyMs: number;
+  visible: () => boolean;
+  /**
+   * Call `wake` whenever the page may have come back: `visibilitychange`, and
+   * `pageshow` for one restored from the back-forward cache. Neither means
+   * "visible" — `wake` asks. Returns the way to stop listening.
+   */
+  onWake: (wake: () => void) => () => void;
+  setTimer: (fn: () => void, ms: number) => unknown;
+  clearTimer: (id: unknown) => void;
+}
+
+export interface DeployWatch {
+  /** The different build last seen live, or `null` — none seen, or the server is back on this one. */
+  seen(): string | null;
+  /**
+   * Hear the answer: **once now, with whatever is already known**, and again
+   * after every check that got one — the same answer included, which is what
+   * lets a listener that had to refuse try again. Returns the way to stop.
+   */
+  subscribe(listener: (build: string | null) => void): () => void;
+  /** Begin watching. Once: a second call changes nothing. Returns the way to stop. */
+  start(deps: DeployWatchDeps): () => void;
+}
+
+/**
+ * A watcher that is not yet watching. `subscribe` and `seen` work from the
+ * start, so a page can listen whether or not anything was ever installed —
+ * which, off a production build, nothing is.
+ */
+export function createDeployWatch(): DeployWatch {
+  let seen: string | null = null;
+  const listeners = new Set<(build: string | null) => void>();
+  let stop: (() => void) | null = null;
+
+  const tell = (listener: (build: string | null) => void): void => {
+    try {
+      listener(seen);
+    } catch {
+      /* One listener's fault must not end the watching for the others. */
+    }
+  };
+
+  return {
+    seen: () => seen,
+
+    subscribe(listener) {
+      listeners.add(listener);
+      tell(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+
+    start(deps) {
+      if (stop !== null) return stop;
+      const { mine } = deps;
+      if (!deps.production || mine === null) {
+        stop = () => {};
+        return stop;
+      }
+
+      let asking = false;
+      let timer: unknown;
+      let stopped = false;
+
+      const disarm = (): void => {
+        if (timer === undefined) return;
+        deps.clearTimer(timer);
+        timer = undefined;
+      };
+
+      const check = async (): Promise<void> => {
+        /* Every way in passes this line: install, wake, and the timer. */
+        if (stopped || asking || !deps.visible()) return;
+        asking = true;
+        disarm();
+        const theirs = await serverBuild(deps.fetch, deps.timeoutMs);
+        asking = false;
+        if (stopped) return;
+        /* `null` is "could not ask", and changes nothing that was known. */
+        if (theirs !== null) {
+          /* *Different*, and it can stop being: a rollback to this build. */
+          seen = theirs === mine ? null : theirs;
+          for (const listener of [...listeners]) tell(listener);
+        }
+        /* Armed after the answer rather than on an interval, so a slow check
+           cannot stack a second behind it — and after a failed one too. Not
+           while hidden: waking asks, and that arms the next. And it goes on
+           after a mismatch: a reload can land on this same shell again, and a
+           later deploy still has to be noticed. */
+        if (deps.visible()) timer = deps.setTimer(() => void check(), deps.everyMs);
+      };
+
+      const unlisten = deps.onWake(() => {
+        if (deps.visible()) void check();
+        else disarm();
+      });
+      void check();
+
+      stop = () => {
+        stopped = true;
+        disarm();
+        unlisten();
+      };
+      return stop;
+    },
+  };
+}
+
+function browserWatchDeps(): DeployWatchDeps {
+  return {
+    production: import.meta.env.PROD,
+    mine: buildIdentity(buildCommit(), buildTime()),
+    fetch: (input, init) => fetch(input, init),
+    timeoutMs: CHECK_TIMEOUT_MS,
+    everyMs: CHECK_EVERY_MS,
+    visible: () => document.visibilityState === "visible",
+    onWake(wake) {
+      document.addEventListener("visibilitychange", wake);
+      window.addEventListener("pageshow", wake);
+      return () => {
+        document.removeEventListener("visibilitychange", wake);
+        window.removeEventListener("pageshow", wake);
+      };
+    },
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+  };
+}
+
+/** The page's one watcher. */
+const deployWatch = createDeployWatch();
+
+/** Start watching for a deploy. Called once, from main.tsx. */
+export function watchForDeploy(deps: DeployWatchDeps = browserWatchDeps()): () => void {
+  return deployWatch.start(deps);
+}
+
+/** The different build the watcher last saw live, or `null`. */
+export function differentBuildLive(): string | null {
+  return deployWatch.seen();
+}
+
+/** `DeployWatch.subscribe`, on the page's one watcher. */
+export function onDeployNoticed(listener: (build: string | null) => void): () => void {
+  return deployWatch.subscribe(listener);
+}
+
+/* ------------------------------------------------------------------------ *
+ * A page that reloads itself for a new build
+ * ------------------------------------------------------------------------ */
+
+export interface ReloadForNewBuildDeps {
+  visible: () => boolean;
+  /** The reader is still on the page that asked for this. */
+  onPage: () => boolean;
+  /** Nothing unsent would be lost — safe-to-reload.ts § `safeToReload`. */
+  safe: () => boolean;
+  storage: StaleShellDeps["storage"];
+  reload: () => void;
+}
+
+/**
+ * Reload for `build` if the page is being looked at, the reader is still on
+ * it, nothing would be lost, and this session has not reloaded for that build
+ * before. `true` means the reload was asked for.
+ *
+ * Called each time the watcher speaks, so a refusal is not final: it is asked
+ * again at the next check, which is fifteen minutes or the next wake away, not
+ * in a loop. **The note is taken last**, after every refusal, so a reload that
+ * was refused has not spent the one this build gets.
+ */
+export function reloadForNewBuild(build: string | null, deps: ReloadForNewBuildDeps): boolean {
+  if (build === null) return false;
+  if (!deps.visible() || !deps.onPage() || !deps.safe()) return false;
+  if (!claimReload(deps.storage, build)) return false;
+  deps.reload();
+  return true;
 }

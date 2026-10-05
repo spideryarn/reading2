@@ -63,9 +63,24 @@ them.
 Shipped: when on-demand code does not arrive, ask `/build.json` whether a newer build is live and
 reload once if so (`src/web/stale-shell.ts`); and a Reload button on the message for when it cannot.
 
-Right for the long term, and deferred with its own queue entry: **notice the deploy before the
-reader trips on it** — check on return to the foreground, and make the next navigation a full page
-load. That closes the window for the whole class rather than for lazy routes alone.
+Right for the long term, and deferred at the time with its own queue entry: **notice the deploy
+before the reader trips on it** — check on return to the foreground, and make the next navigation a
+full page load. That closes the window for the whole class rather than for lazy routes alone.
+
+**Half of that exists since 2026-10-05**
+([261005d](../plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md)). The check is
+built: the app asks `/build.json` when it wakes and every fifteen minutes while visible, and
+remembers a different build (`src/web/stale-shell.ts` § `watchForDeploy`). One page acts on it —
+`/changelog` reloads itself, when nothing unsent would be lost.
+
+**The full page load on the next navigation was not built.** GPT Sol's review of that plan showed
+it is not the small change it looks like: a page load throws away things this app keeps in memory
+on purpose so that they survive navigation — unsent Chat, Remember and Feedback text, an upload
+still sending its bytes — and swaps an ordered save for an unordered one. "The destination is a
+different page" cannot see any of those. Doing it safely needs the app to be able to answer *is it
+safe to unload right now?* everywhere, and `src/web/safe-to-reload.ts` is only the start of that.
+So the window for the class is narrower on one page and unchanged on the rest; whether the wider
+fix is wanted is a question for Greg, in that plan.
 
 ## What would have caught it, ranked by ease against value
 
@@ -73,7 +88,8 @@ load. That closes the window for the whole class rather than for lazy routes alo
    this in ten minutes, and it is the only check that puts a client in the state at all. Worth
    keeping as a script once the deferred work gives it a second thing to assert. Not built here:
    one assertion, already covered by the unit tests, does not earn a 20-second two-build harness in
-   the suite.
+   the suite. **Kept since 2026-10-05** as `scripts/check-two-builds.ts`, run by hand: it asserts
+   the `/changelog` reload lands on the second build, and has a control that must fail.
 2. **A rule for messages: advice must name a control the reader has.** *"Reload the page"* with no
    reload control is the shape; the Reload button is the fix for this instance. Cheap, and it would
    have been caught by reading the message on the iPad once.

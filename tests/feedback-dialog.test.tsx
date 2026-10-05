@@ -118,6 +118,7 @@ beforeEach(() => {
 
 const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
 const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
+const { reloadVeto } = await import("../src/web/safe-to-reload.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -2214,5 +2215,66 @@ describe("a prefill", () => {
     type(long);
     showWith(REPORT);
     expect(firstBox().value).toBe(long);
+  });
+});
+
+/**
+ * **The draft lives in this component's state and nowhere else**, mounted once
+ * so that it survives navigation and being dismissed — so a page that reloads
+ * itself (`/changelog`, for a new build) has to be told it is there, or the
+ * reload deletes it. safe-to-reload.ts; GPT Sol's F1 on plan 261005d.
+ */
+describe("saying it holds a draft, to anything about to reload the page", () => {
+  it("says nothing is held while the form is empty", () => {
+    mount();
+    expect(reloadVeto()).toBeNull();
+  });
+
+  it("holds once there are words, and goes on holding when the dialog is dismissed", () => {
+    mount();
+    type("Half a sentence so f");
+    expect(reloadVeto()).toBe("feedback-draft");
+    /* The dismissed draft is the one a reload would take without anybody
+       seeing it go. */
+    show(false);
+    expect(reloadVeto()).toBe("feedback-draft");
+  });
+
+  it("does not count spaces as words", () => {
+    mount();
+    type("   ");
+    expect(reloadVeto()).toBeNull();
+  });
+
+  it("holds for a screenshot with no words, from the moment it is being prepared", async () => {
+    mount();
+    const input = host.querySelector<HTMLInputElement>('.fb-shot-pick input[type="file"]');
+    if (!input) throw new Error("no file input");
+    const file = new File(["x"], "shot.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(reloadVeto(), "while it is being re-encoded").toBe("feedback-draft");
+    await act(async () => {
+      finishShot?.("aGVsbG8=");
+    });
+    expect(reloadVeto()).toBe("feedback-draft");
+  });
+
+  it("lets go once the report is filed", async () => {
+    mount();
+    type("Something happened.");
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(1);
+    expect(reloadVeto()).toBeNull();
+  });
+
+  it("lets go when the dialog is unmounted — signing out takes the draft with it", () => {
+    mount();
+    type("Half a sentence so f");
+    act(() => root.unmount());
+    expect(reloadVeto()).toBeNull();
+    /* `afterEach` unmounts again; give it something to unmount. */
+    root = createRoot(host);
   });
 });

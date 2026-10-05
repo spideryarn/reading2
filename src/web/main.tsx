@@ -9,6 +9,7 @@ import { watchConnection } from "./offline.js";
 import { watchUncaughtErrors } from "./log-buffer.js";
 import { sweepDictations } from "./dictation-keep.js";
 import { startAppearance } from "./appearance.js";
+import { watchForDeploy } from "./stale-shell.js";
 import { OfflineStrip } from "./OfflineStrip.js";
 import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
@@ -221,6 +222,15 @@ setTimeout(() => void sweepDictations(), 5000);
  * from the back-forward cache. appearance.ts.
  */
 startAppearance();
+
+/**
+ * Ask whether a different build has gone live: when the page wakes, and every
+ * fifteen minutes while somebody is looking at it. A copy opened from a
+ * home-screen icon is never reloaded and outlives several deploys a day. This
+ * only records the answer; the one page that acts on it is `/changelog`.
+ * Production builds only. stale-shell.ts § `watchForDeploy`.
+ */
+watchForDeploy();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
