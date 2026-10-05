@@ -467,12 +467,6 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  /* The transcript decides where it is itself (ChatPanel.tsx § A streamed
-     answer stays where it starts), and a browser's own scroll anchoring, where
-     there is one, is a second opinion it cannot see: in Chrome it moved a
-     just-placed question 31px up the moment the first words replaced
-     "thinking…". Safari has none, so this also makes the two agree. */
-  overflow-anchor: none;
   padding: 0.7rem;
   /* The band is narrow and the turns are prose, so they get the reading face
      rather than the UI one — an answer set in the interface font reads as a
@@ -481,11 +475,25 @@
   line-height: 1.5;
 }
 
+/* While a typed answer is arriving, Conversation owns the transcript's
+   position. Chrome's scroll anchoring moved a just-placed question 31px up
+   when the first words replaced "thinking…"; Safari did not. Keep that second
+   positioner out of the stream, then restore ordinary transcript anchoring so
+   a reader in history stays on the same line when something above it changes
+   height. The browser pass on d128b1d3d already covered the finishing frame
+   with anchoring on: its drift was 0px. */
+.chat-scroll.streaming { overflow-anchor: none; }
+
 /* The empty block that lets a just-asked question sit at the top of the panel
    while its answer arrives under it. Its height is set from JS and is zero the
    rest of the time (ChatPanel.tsx § A streamed answer stays where it starts).
    `flex: none` because a dialog's transcript may be laid out as a column. */
 .chat-room {
+  /* Never a browser's scroll anchor, streaming or not: it is the one box here
+     whose top moves and whose height shrinks as an answer grows, so a browser
+     that held on to it would move the view by exactly that growth (GPT Sol's
+     reading of the 31px, code review 2 of plan 261005f; inferred, not traced). */
+  overflow-anchor: none;
   flex: none;
   height: 0;
   pointer-events: none;

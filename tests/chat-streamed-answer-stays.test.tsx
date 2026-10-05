@@ -240,6 +240,10 @@ describe("a typed answer in a panel of fixed height", () => {
     paint(EARLIER);
     heights = [100, 800, 60, 30];
     paint(asked(""));
+    expect(
+      scroller().classList.contains("streaming"),
+      "Chrome's anchoring is off only for the typed stream",
+    ).toBe(true);
     heights = [100, 800, 60, 200];
     paint(asked("The first sentence."));
     expect(scroller().scrollTop).toBe(QUESTION_TOP);
@@ -251,6 +255,12 @@ describe("a typed answer in a panel of fixed height", () => {
     expect(scroller().scrollTop, "the answer outgrew the panel and the view stayed").toBe(QUESTION_TOP);
     expect(roomOf(scroller())).toBe(0);
     expect(pill(), "so there is more below, and a way to it").not.toBeNull();
+
+    paint(asked("The first sentence. And a great deal more.", "done"));
+    expect(
+      scroller().classList.contains("streaming"),
+      "ordinary transcript anchoring comes back after the stream",
+    ).toBe(false);
   });
 
   it("holds an answer whose first CommonMark block is rendered as a bare text node", () => {
@@ -293,6 +303,17 @@ describe("a typed answer in a panel of fixed height", () => {
     paint(asked("A long answer, and longer."));
     expect(scroller().scrollTop, "the next words did not drag the view").toBe(1860 - CLIENT);
     expect(pill(), "and the pill is back, because the end moved away").not.toBeNull();
+  });
+
+  it("does not mistake a fractional reader scroll from the bottom for a clamp", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 900];
+    paint(asked("A long answer."));
+    act(() => pill()?.click());
+    const bottom = 1860 - CLIENT;
+
+    readerScrollsTo(bottom - 0.6);
+    expect(scroller().scrollTop, "the reader's sub-pixel move is still theirs").toBe(bottom - 0.6);
   });
 
   it("leaves a reader who scrolled away where they went", () => {

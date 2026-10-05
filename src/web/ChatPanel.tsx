@@ -1240,6 +1240,9 @@ export function Conversation({
     /** The scroll position `settle` or the reader most recently chose. A later
      * scroll event at this same position came from our own write, not them. */
     top: number;
+    /** The largest reachable `scrollTop` when `top` was recorded. A clamp is
+     * only possible if this maximum has since fallen. */
+    max: number;
   } | null>(null);
   /**
    * What a hold keeps still: the answer's first words once there are any, and
@@ -1267,6 +1270,7 @@ export function Conversation({
     h.words = at.words;
     h.seenAt = at.node.getBoundingClientRect().top - el.getBoundingClientRect().top;
     h.top = el.scrollTop;
+    h.max = Math.max(0, el.scrollHeight - el.clientHeight);
   };
   const wasBusy = useRef(false);
   const sizedNow = useRef(sized);
@@ -1323,6 +1327,7 @@ export function Conversation({
     h.words = at.words;
     h.seenAt = seen + was - top;
     h.top = top;
+    h.max = Math.max(0, natural + want - client);
     if (want !== roomNow) gap.style.height = `${want}px`;
     if (was !== top) el.scrollTop = top;
     /* Nobody scrolled, so no scroll event will say the answer has grown past
@@ -1344,7 +1349,15 @@ export function Conversation({
       hold.current = null;
       if (room.current) room.current.style.height = "0px";
     } else if (busy && (!wasBusy.current || !h || h.count !== count)) {
-      hold.current = { count, placed: false, target: 0, words: false, seenAt: 0, top: el.scrollTop };
+      hold.current = {
+        count,
+        placed: false,
+        target: 0,
+        words: false,
+        seenAt: 0,
+        top: el.scrollTop,
+        max: Math.max(0, el.scrollHeight - el.clientHeight),
+      };
       /* A new typed attempt deliberately places the reader at the new latest
          turn. Its growing away from the bottom must not erase that follow
          intent: if Live speaks next, it still follows unless the reader has
@@ -1416,7 +1429,7 @@ export function Conversation({
   return (
     <>
       <div
-        className="chat-scroll"
+        className={`chat-scroll${busy ? " streaming" : ""}`}
         ref={scroller}
         /* The one event that can say the reader changed `stick` — see the note
            above. The browser fires it for our own scroll writes too, so a hold
@@ -1439,12 +1452,18 @@ export function Conversation({
              forced a layout first, this event arrives *before* the resize
              observer, and recording it as the reader's choice left a follow-up
              question 36px low (the second browser pass of plan 261005f). Its
-             signature cannot be a reader: above where the hold last was, and
-             exactly at the end of what there is to scroll. */
+             signature is a maximum that has actually fallen since the hold
+             was recorded, with the view clamped to that new end. Comparing the
+             maxima matters: a high-DPI wheel can move a reader 0.6px from the
+             ordinary bottom, which is both more than the movement tolerance
+             and less than the end tolerance. A Latest press records both its
+             position and maximum synchronously before this event arrives. */
+          const max = Math.max(0, el.scrollHeight - el.clientHeight);
           if (
             h?.placed &&
+            max < h.max &&
             el.scrollTop < h.top - 0.5 &&
-            el.scrollHeight - el.clientHeight - el.scrollTop < 1
+            max - el.scrollTop < 1
           ) {
             settle();
             return;
