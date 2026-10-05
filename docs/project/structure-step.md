@@ -1098,6 +1098,10 @@ Two failures, deliberately kept distinct, because they are not the same problem:
   that call actually cost. It is deliberately not an asymptotic claim; `buildTree` enforces neither
   the depth nor the fan-out the prompt asks for, so no bound here would be a bound the runtime keeps.
   [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+  **Since 2026-10-05 this is no longer the step failing.** `generateStructure` catches that one
+  throw and builds the tree with no model:
+  [§ When one answer will not fit](#when-one-answer-will-not-fit).
 - **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
   the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
   suggest retrying, because the Retry button makes the identical call.
@@ -1117,6 +1121,39 @@ JSON, and it is not — it now reads the answer with `parseJsonAnswer`
 sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
 an offset that could mean either thing.
 [260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md).
+
+## When one answer will not fit
+
+A document past the boundary above (a 250-page novel is about 3,100 blocks) used to be refused
+here, after its transcription had been paid for. Since 2026-10-05 it gets a tree anyway, built
+from its own headings with no model call: `buildBoundedHeadingTree` in
+[`src/heading-tree.ts`](../../src/heading-tree.ts). Greg's decision and the options he chose
+between are in
+[261004f § Decisions](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#decisions);
+the design and its review are in
+[261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
+
+- **It has the shape a model's tree has**: root, parts, sections, and every paragraph at depth 3.
+  The reading view takes "the section level" to be one above the deepest paragraph, for the whole
+  article (`sectionDepth`, [`src/web/position.ts`](../../src/web/position.ts)), so a tree whose
+  branches end at different depths breaks section navigation. That is why this is not
+  `buildHeadingTree`, which stays as it was for the structure eval.
+- **No section holds more than the labels step's batch size** (`MAX_BATCH`). The labels step never
+  cuts a section, so a run of 3,000 paragraphs under one heading was one call it refused. Longer
+  runs are cut into consecutive "windows", each titled by the opening words of its first
+  paragraph.
+- **A heading repeated five or more times is page furniture, not a section** (`REPEATED_HEADING_MIN`),
+  and so is the article's own title met twice. A PDF's running header is often transcribed as a
+  heading on every page: on the first real book through this path, 58 of 76 parts were called
+  *With a Little Help*. With the rule it is 13 parts, named for the stories.
+- **It has no gists**, and is marked `provisional: "headings"`, which is what excuses it from the
+  gist rule in `checkTree`. Nothing treats that mark as "still arriving".
+- **A model's tree takes the same path when the labels step could not start on it**: one holding a
+  section too long for one labels call (`unaskableBatches`, [`src/labels.ts`](../../src/labels.ts)).
+- **`StructureRun.source` says which path ran**, and the step logs it at every value and puts it in
+  its `detail`, so a fallback that became the common case would show.
+
+What it does not do yet: fill that tree in. That is stage E of 261005a.
 
 ## The generation prompt
 

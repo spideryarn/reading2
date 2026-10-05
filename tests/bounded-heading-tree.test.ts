@@ -24,14 +24,15 @@ import {
   buildHeadingTree,
   HEADING_TREE_GENERATOR,
   HEADING_TREE_VERSION,
+  REPEATED_HEADING_MIN,
   UNTITLED_WINDOW_TITLE,
 } from "../src/heading-tree.js";
-import { MAX_BATCH, mergeLabels, planBatches } from "../src/labels.js";
+import { labelCallBudget, MAX_BATCH, mergeLabels, planBatches } from "../src/labels.js";
 import { isSupplementNode } from "../src/supplement.js";
 import { checkTree } from "../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../src/types.js";
 import { buildSections } from "../src/web/position.js";
-import { buildGeometry } from "../src/web/tree.js";
+import { buildGeometry, titleVoice } from "../src/web/tree.js";
 import {
   block,
   bodyLeafSets,
@@ -258,6 +259,153 @@ describe("no internal node is ever untitled", () => {
   });
 });
 
+describe("whose words a bounded tree's titles are drawn as", () => {
+  it("never the model's, on a tree no model wrote", () => {
+    for (const [, make] of DOCUMENTS) {
+      const blocks = withNotes(make());
+      const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+      const voices = Object.values(tree.nodes)
+        .filter((n) => n.children.length > 0 && n.depth > 0)
+        .map((n) => titleVoice(n));
+      expect(voices.filter((v) => v === "ai")).toEqual([]);
+      expect(voices).toContain("author");
+    }
+  });
+
+  it("a window quoting its opening words says so, and one wearing a heading does not", () => {
+    const blocks = longBesideShort();
+    const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+    const windows = Object.values(tree.nodes).filter((n) => n.depth === 2);
+    expect(windows.every((n) => n.titleFrom === "opening-words" && n.sourceHeading === undefined)).toBe(true);
+    expect(parts(tree).every((n) => n.titleFrom === undefined && n.sourceHeading !== undefined)).toBe(true);
+  });
+});
+
+describe("what a transcribed PDF leaves lying about does not name a section", () => {
+  /* From the real 250-page book: scene breaks ("#", 109 paragraphs of it), stray
+     page numbers and a contents line with dot leaders were opening a window and
+     so titling it. */
+  it("a heading with no letters in it neither cuts nor titles", () => {
+    const blocks = [
+      heading("First Chapter"),
+      ...paragraphs(10),
+      heading("* * *"),
+      ...paragraphs(10),
+      heading("36"),
+      ...paragraphs(10),
+      heading("Second Chapter"),
+      ...paragraphs(10),
+    ];
+    const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, tree);
+    expect(parts(tree).map((p) => p.title)).toEqual(["First Chapter", "Second Chapter"]);
+    const titles = Object.values(tree.nodes).filter((n) => n.children.length > 0).map((n) => n.title);
+    expect(titles.filter((t) => t === "36" || t === "* * *")).toEqual([]);
+  });
+
+  it("a window is titled by its first block with three real words, not a scene break or a page number", () => {
+    const blocks = headingless(240);
+    blocks[60] = block("#");
+    blocks[61] = block("36");
+    blocks[62] = block("Oh.");
+    blocks[63] = block("“35,” she said.");
+    const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, tree);
+    expect(sectionStartingAt(tree, blocks[60]!).title).toBe("Paragraph 64 runs on for long enough to…");
+  });
+
+  it("and falls back to the first block with any words when none has three", () => {
+    const blocks = headingless(240);
+    for (let i = 120; i < 180; i++) blocks[i] = block(i === 120 ? "#" : "Oh.");
+    const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, tree);
+    expect(sectionStartingAt(tree, blocks[120]!).title).toBe("#");
+  });
+
+  it("dot leaders are dropped from an opening-words title, and an ellipsis is not", () => {
+    const blocks = headingless(240);
+    blocks[60] = block("The Constitutional Crisis . . . . . . . . . . . . 119");
+    blocks[120] = block("More Power Punctuation!......... 201");
+    blocks[180] = block("Well... I thought so.");
+    const { tree } = buildBoundedHeadingTree(blocks, "bounded");
+    expect(sectionStartingAt(tree, blocks[60]!).title).toBe("The Constitutional Crisis 119");
+    expect(sectionStartingAt(tree, blocks[120]!).title).toBe("More Power Punctuation! 201");
+    expect(sectionStartingAt(tree, blocks[180]!).title).toBe("Well... I thought so");
+  });
+});
+
+describe("a heading repeated down the document is page furniture, not a section", () => {
+  /* A PDF's running header is transcribed as a heading block on most pages. A
+     real 250-page book came out as 76 parts, 58 of them wearing the book's own
+     title, before this rule. */
+  const internalTitles = (tree: Tree): string[] =>
+    Object.values(tree.nodes).filter((n) => n.children.length > 0 && n.depth > 0).map((n) => n.title);
+
+  /** Twelve chapters of 72 paragraphs, with `running` as a heading every twelfth block. */
+  const book = (running: string): Block[] =>
+    Array.from({ length: 12 }, (_, c) => [
+      heading(`Chapter ${c} of the book`),
+      ...paragraphs(72).flatMap((p, i) => (i % 12 === 6 ? [heading(running), p] : [p])),
+    ]).flat();
+
+  it("a running title on every page cuts nothing and titles nothing", () => {
+    const blocks = book("Running Title");
+    expect(blocks.filter((b) => b.text === "Running Title").length).toBeGreaterThan(60);
+    const built = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, built.tree);
+    expectPlannable(blocks, built.tree);
+    expect(parts(built.tree).map((p) => p.title)).toEqual(
+      Array.from({ length: 12 }, (_, c) => `Chapter ${c} of the book`),
+    );
+    expect(internalTitles(built.tree).filter((t) => t.includes("Running"))).toEqual([]);
+    /* Its blocks are still there, as leaves. */
+    expect(Object.keys(built.tree.nodes).length).toBeGreaterThan(blocks.length);
+  });
+
+  it("the same when the typography differs, by the repo's own heading comparison", () => {
+    const blocks = book("Doctorow’s Book").map((b, i) =>
+      b.text === "Doctorow’s Book" && i % 2 ? { ...b, text: "Doctorow's  Book" } : b,
+    );
+    expect(parts(buildBoundedHeadingTree(blocks, "bounded").tree)).toHaveLength(12);
+  });
+
+  it("a heading repeated fewer times than the threshold still cuts", () => {
+    expect(REPEATED_HEADING_MIN).toBe(5);
+    const blocks = Array.from({ length: REPEATED_HEADING_MIN - 1 }, () => [heading("Exercises"), ...paragraphs(10)]).flat();
+    const built = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, built.tree);
+    expect(parts(built.tree).map((p) => p.title)).toEqual(Array(REPEATED_HEADING_MIN - 1).fill("Exercises"));
+  });
+
+  it("and at the threshold does not", () => {
+    const blocks = Array.from({ length: REPEATED_HEADING_MIN }, () => [heading("Exercises"), ...paragraphs(10)]).flat();
+    const built = buildBoundedHeadingTree(blocks, "bounded");
+    expectBoundedTree(blocks, built.tree);
+    expect(built.flat).toBe(true);
+    expect(internalTitles(built.tree)).not.toContain("Exercises");
+  });
+
+  it("the article's own title, twice as a heading, does not cut", () => {
+    const blocks = [
+      heading("The Book"),
+      ...paragraphs(10),
+      heading("One"),
+      ...paragraphs(10),
+      heading("The Book"),
+      ...paragraphs(10),
+      heading("Two"),
+      ...paragraphs(10),
+    ];
+    const titled = buildBoundedHeadingTree(blocks, "bounded", " The Book ");
+    expectBoundedTree(blocks, titled.tree);
+    expect(internalTitles(titled.tree)).not.toContain("The Book");
+    /* The prose before "One" is a part of its own, named by its opening words. */
+    expect(parts(titled.tree).map((p) => p.title)).toEqual([expect.stringMatching(/^Paragraph .*…$/), "One", "Two"]);
+    /* Without a title to match, twice is under the threshold and it cuts. */
+    expect(parts(buildBoundedHeadingTree(blocks, "bounded").tree).map((p) => p.title)).toContain("The Book");
+  });
+});
+
 describe("buildHeadingTree, the structure eval's control arm, is unchanged", () => {
   /* Digests of its output at fae022d34, the commit before the bounded builder
      shared its rules: no title, a title, and the stub threshold at 0 and 40.
@@ -282,5 +430,35 @@ describe("buildHeadingTree, the structure eval's control arm, is unchanged", () 
       ];
       expect(createHash("sha256").update(JSON.stringify(variants)).digest("hex").slice(0, 16)).toBe(digest);
     });
+  }
+});
+
+describe("adversarial body and supplement shapes", () => {
+  const cases: [string, () => Block[]][] = [
+    ["five body blocks", () => paragraphs(5)],
+    ["a final heading after prose", () => [...paragraphs(7), heading("Last", 6)]],
+    ["only headings at odd levels", () => Array.from({ length: 125 }, (_, i) => heading(`Heading ${i}`, [1, 6, 3, 5][i % 4]!))],
+    ["only empty and whitespace headings", () => Array.from({ length: 125 }, (_, i) => heading(i % 2 ? " \n " : "", 6))],
+    ["only figures", () => Array.from({ length: 125 }, () => block("", { tag: "figure", kind: "media", gistable: false }))],
+    ["only nonstructural text", () => paragraphs(125).map((b) => ({ ...b, gistable: false }))],
+    ["one-block parts beside a long part", () => [heading("First"), block("Small"), heading("Second"), block("Small"), heading("Long"), ...paragraphs(70)]],
+    ["a stranded supplement", () => [...paragraphs(2), note(0), ...paragraphs(5), note(1)]],
+    ["only supplements", () => Array.from({ length: 8 }, (_, i) => note(i))],
+  ];
+  for (const [name, make] of cases) {
+    for (const tail of [false, true]) {
+      it(`${name}${tail ? ", with several supplement groups" : ""}`, () => {
+        const body = make();
+        const blocks: Block[] = tail ? [...body, note(0), { ...note(1), role: "reference" },
+          { ...note(2), role: "credit" }, note(3)] : body;
+        const tree = mergeLabels(buildBoundedHeadingTree(blocks, "adversarial").tree, {});
+        expectBoundedTree(blocks, tree);
+        expectPlannable(blocks, tree);
+        for (const batch of planBatches(tree, blocks)) expect(() => labelCallBudget(batch.blocks.length)).not.toThrow();
+        const sections = buildSections(buildGeometry(tree, blocks), blocks);
+        expect(sections.length).toBeGreaterThan(0);
+        expect(sections.every((s) => s.title.trim() !== "" && tree.nodes[s.nodeId]!.children.length > 0)).toBe(true);
+      });
+    }
   }
 });

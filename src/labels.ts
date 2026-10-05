@@ -78,6 +78,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { log } from "./log.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
+import { isSupplementNode } from "./supplement.js";
 import { budgetFor, TooLongForOnePass, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 import { plainWords } from "./plain-words.js";
@@ -687,9 +688,14 @@ export function planBatches(
   const sets: SiblingSet[] = [];
   const walk = (id: NodeId, crumb: string[]): void => {
     const node = tree.nodes[id];
-    if (!node || node.children.length === 0) return;
+    if (!node || isSupplementNode(node) || node.children.length === 0) return;
     const here = node.title ? [...crumb, node.title] : crumb;
-    const children = node.children.map((c) => tree.nodes[c]).filter((c): c is TreeNode => !!c);
+    /* Appending apparatus to a root-only body tree puts supplement branches
+       beside its body leaves. They have no labels to buy and must not hide
+       that leaf sibling set from the all-leaves test. */
+    const children = node.children
+      .map((c) => tree.nodes[c])
+      .filter((c): c is TreeNode => !!c && !isSupplementNode(c));
     const allLeaves = children.every((c) => c.children.length === 0);
 
     if (allLeaves) {

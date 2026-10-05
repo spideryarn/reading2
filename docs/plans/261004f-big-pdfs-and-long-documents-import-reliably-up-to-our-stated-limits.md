@@ -267,7 +267,8 @@ database as `s3-doctorow-250p-spya-sw2jbz` (a failed draft) and `s3-gdl-45mb-spy
 ### Not built, and where each went
 
 - **The structure ceiling**, options A to E above. Greg's. `qi-kbkbw4rp`, and a line in
-  `awaiting-approval.md`. Recommended: D, then E.
+  `awaiting-approval.md`. Recommended: D, then E. Greg chose that (§ Decisions), and D is built
+  in [261005a](261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md).
 - **The 32 MB fetch cap.** Greg's; a listed defence. `qi-bv9nbj5z`. Since built, on his answer
   (§ Decisions): [261004k](261004k-one-size-limit-for-an-upload-and-an-address.md).
 - **The article response against 4.5 MB.** `qi-sbytr395`.

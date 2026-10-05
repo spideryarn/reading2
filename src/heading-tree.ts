@@ -61,7 +61,7 @@
  */
 
 import { isStructural } from "./block-policy.js";
-import { PREAMBLE_TITLE } from "./heading-text.js";
+import { PREAMBLE_TITLE, sameHeading, UNTITLED_WINDOW_TITLE } from "./heading-text.js";
 import { MAX_BATCH } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
@@ -360,12 +360,17 @@ export interface BoundedHeadingTreeResult {
 export const BOUNDED_TREE_VERSION = "headings-bounded/1";
 export const BOUNDED_TREE_GENERATOR = "deterministic-headings-bounded";
 
-/** What a window wears when no block in it has a word to quote. Ours. */
-export const UNTITLED_WINDOW_TITLE = "Untitled passage";
+/* Lives in src/heading-text.ts beside `PREAMBLE_TITLE`, so the browser can tell it is ours. */
+export { UNTITLED_WINDOW_TITLE };
 
 /** A window's title is at most this much of its opening block. */
 const WINDOW_TITLE_WORDS = 8;
 const WINDOW_TITLE_CHARS = 60;
+/** Words with a letter in them that a block needs before its opening titles a window. */
+const WINDOW_TITLE_MIN_WORDS = 3;
+
+/** A heading this many times over is a running page header, not a section. Five: no real book has that many "Exercises". A guess. */
+export const REPEATED_HEADING_MIN = 5;
 
 /** Root, two parts, two sections each, a leaf apiece: the least a depth-3 tree can be. */
 const MIN_BOUNDED_BODY = 4;
@@ -374,7 +379,8 @@ const hasText = (b: Block): boolean => b.text.trim() !== "";
 
 /** The opening words of `text`, cut at a word, with an ellipsis only when something was cut. */
 function openingWords(text: string): string {
-  const all = text.trim().split(/\s+/);
+  /* Four dots or more is a contents line's leader, not an ellipsis. */
+  const all = text.replace(/(?:\.\s*){4,}/g, " ").trim().split(/\s+/);
   const kept: string[] = [];
   for (const word of all.slice(0, WINDOW_TITLE_WORDS)) {
     if (kept.length > 0 && [...kept, word].join(" ").length > WINDOW_TITLE_CHARS) break;
@@ -387,17 +393,45 @@ function openingWords(text: string): string {
 }
 
 /** What a node will be called, and the heading it is quoting if it is. */
-interface Titled {
-  title: string;
-  sourceHeading?: string;
-}
+type Titled = Pick<TreeNode, "title" | "sourceHeading" | "titleFrom">;
 
 interface PlannedPart extends Titled {
   seg: Segment;
   sections: (Titled & { seg: Segment })[];
 }
 
-/** Where the parts and sections of a bounded tree fall, and what each is called. */
+/**
+ * `body` as the heading rules should see it: a heading repeated down the
+ * document is a PDF's running page header transcribed as one, so it is shown to
+ * them as ordinary text and cuts, counts for and titles nothing. So is the
+ * article's own title once it appears twice. Compared by `sameHeading`, so a
+ * curly apostrophe on some pages does not split the count.
+ */
+function demoteFurniture(body: Block[], articleTitle: string | undefined): Block[] {
+  const seen: { text: string; count: number }[] = [];
+  const kindOf = body.map((b) => {
+    if (headingLevel(b) === null) return null;
+    const kind = seen.find((k) => sameHeading(k.text, b.text)) ?? { text: b.text, count: 0 };
+    if (kind.count === 0) seen.push(kind);
+    kind.count++;
+    return kind;
+  });
+  const title = articleTitle?.trim();
+  /* And a "heading" with no letter in it: a scene break or a page number. */
+  const isFurniture = (kind: { text: string; count: number }): boolean =>
+    !/\p{L}/u.test(kind.text) ||
+    kind.count >= REPEATED_HEADING_MIN || (!!title && kind.count > 1 && sameHeading(kind.text, title));
+  return body.map((b, i) => {
+    const kind = kindOf[i];
+    /* No words either, so a window is not titled by its opening "words". */
+    return kind && isFurniture(kind) ? { ...b, kind: "text" as const, words: 0 } : b;
+  });
+}
+
+/**
+ * Where the parts and sections of a bounded tree fall, and what each is called.
+ * `body` is `demoteFurniture`'s, and indices into it are indices into the real one.
+ */
 function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolean } {
   const quoting = (i: number): Titled => ({ title: body[i]!.text, sourceHeading: body[i]!.text });
   /** A heading with words in it. One without titles nothing: checkTree refuses an empty title. */
@@ -422,9 +456,17 @@ function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolea
   const titleOf = (seg: Segment, not: number | null): Titled => {
     const opens = openingHeading(seg, not);
     if (opens !== null) return quoting(opens);
-    for (let i = seg.lo; i <= seg.hi; i++) {
-      const b = body[i]!;
-      if (headingLevel(b) === null && b.words > 0 && hasText(b)) return { title: openingWords(b.text) };
+    /* A paragraph of real words first: a scene break ("#"), a page number or a
+       one-word line of dialogue opens many windows and names none. */
+    for (const enough of [WINDOW_TITLE_MIN_WORDS, 0]) {
+      for (let i = seg.lo; i <= seg.hi; i++) {
+        const b = body[i]!;
+        if (headingLevel(b) !== null || b.words === 0 || !hasText(b)) continue;
+        if ((b.text.match(/\S*\p{L}\S*/gu) ?? []).length < enough) continue;
+        const title = openingWords(b.text);
+        /* The author's words, and the node says so: src/types.ts § `TreeNode.titleFrom`. */
+        return title === UNTITLED_WINDOW_TITLE ? { title } : { title, titleFrom: "opening-words" };
+      }
     }
     for (let i = seg.lo; i <= seg.hi; i++) if (isTitleHeading(i)) return quoting(i);
     return { title: UNTITLED_WINDOW_TITLE };
@@ -533,7 +575,7 @@ export function buildBoundedHeadingTree(
     );
   }
 
-  const { planned, flat } = planBoundedParts(body);
+  const { planned, flat } = planBoundedParts(demoteFurniture(body, articleTitle));
   const whole: Segment = { lo: 0, hi: body.length - 1 };
 
   const nodes: Record<NodeId, TreeNode> = {};

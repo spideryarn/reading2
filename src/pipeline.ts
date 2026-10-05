@@ -2844,8 +2844,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           generic: `No blocks for "${ctx.slug}" — run the blocks step first.`,
         });
       }
-      /* Only a tree built from the document's headings reads the title: its
-         root needs a name and no model is there to write one. */
+      /* Read the title for a possible headings fallback: its root needs a name
+         and no model is there to write one. The model path ignores it. */
       const meta = await store.read(ctx.slug, "extract", "meta");
       const run = await generateStructure({
         blocks: file.blocks,

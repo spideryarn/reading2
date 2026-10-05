@@ -3155,7 +3155,7 @@ function finishStructureRun(
    * - **`assertTreeSound` did not move**, and must not: a structure-only tree
    *   is still either sound or not, and this is the only place that asks.
    *
-   * `opts.checkpoints` is still used, by the whole-document call above — see
+   * `generateStructure` still uses checkpoints for its whole-document call — see
    * `wholeDocumentResumed`.
    * docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md.
    */
@@ -3189,17 +3189,9 @@ function finishStructureRun(
    * **The merge is `mergeLabels(structure, pending.labels)` since 2026-09-06,
    * and the map is empty — so this tree carries NO navigation labels at all.**
    *
-   * That is worth saying flatly, because the obvious guess is wrong and the
-   * stage-2 brief made it. `buildHeadingTree` (src/heading-tree.ts) does mint a
-   * label for every heading for free, and if this function used it a
-   * structure-only tree would arrive with the author's own headings already
-   * labelled. **It does not.** `generateStructure` builds its tree with
-   * `buildTree` in this file, which sets `navLabel` from the map it is handed
-   * and from nothing else (see its leaf loop), and `buildHeadingTree` has no
-   * caller outside `evals/`. Verified by reading both, 2026-09-06.
-   *
-   * So the call is not preserving anything, and it is still the right call: the
-   * invariant both writers of this column keep is
+   * The bounded headings builder supplies authored heading labels, but this
+   * merge deletes them to agree with the pending manifest. Both writers keep
+   * the invariant
    * `tree === mergeLabels(structure, labels.labels)`, and stating it the same
    * way in both places is what stops the tree and the manifest describing
    * different articles. `mergeLabels` *deletes* a leaf's `navLabel` where the

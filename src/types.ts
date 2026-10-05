@@ -190,6 +190,14 @@ export interface TreeNode {
   summary?: string;
   sourceHeading?: string;
   /**
+   * Set when no model wrote `title` and no heading did either: it quotes the
+   * opening words of the node's first paragraph (src/heading-tree.ts §
+   * `buildBoundedHeadingTree`). The author's words, so the client draws them
+   * in the author's face; `sourceHeading` cannot say so, because it must name
+   * a heading.
+   */
+  titleFrom?: "opening-words";
+  /**
    * **Apparatus rather than argument** — the footnotes, the bibliography.
    * Absent means the body, which is every node of every tree written before
    * 2026-08-28.

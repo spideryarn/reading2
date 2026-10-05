@@ -2,7 +2,8 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05: **plan, nothing built.** Queue item `qi-kbkbw4rp`.
+Status as of 2026-10-05: **stage D built (§ Result: stage D); stage E not started.** Queue item
+`qi-kbkbw4rp`.
 
 ## What this is for
 
@@ -233,6 +234,60 @@ several days, stop after a working stage and debrief.
   parse and build on a slice), then the detailed plan and its Sol review.
 - [ ] **E**: build, gates, Sol code review, the real book end to end, browser check, docs, push.
 - [ ] Debrief to the Overseer; remove the worktree after `worktree:check`.
+
+## Result: stage D
+
+Built 2026-10-05. `e9abf4aa6` is the stage as first built; the commit after it carries GPT Sol's
+review fixes and three things the real book showed.
+
+**What landed.** `buildBoundedHeadingTree` (`src/heading-tree.ts`); the catch and the labels check
+in `generateStructure`; `StructureRun.source`, logged and in the step's `detail`;
+`labelCallBudget` and `unaskableBatches` (`src/labels.ts`). The article title reaches the step
+from the extract's meta. `buildHeadingTree`'s output is unchanged, pinned by digests taken before
+the edit.
+
+**The code review.** [GPT Sol](261005a-long-documents-stage-d-review-sol.md): ship with the fixes
+it made.
+
+- **F8 (P1), fixed by the reviewer.** A model answer with a root and no sections, on an article
+  with endnotes, passed the tree checks and then made the new labels check throw, so a tiny
+  article that used to publish would have failed. The labels planner now leaves supplement
+  branches out. [The postmortem](../postmortems/261005a-a-supplement-append-invalidates-a-labels-planner-assumption.md).
+- **F9 (P1, wider, not built).** A document with more than 1,096 top-level headings makes the Arc
+  feature refuse (one sentence per part, in one answer). The article opens and reads. Reported.
+- **F10 (P3), fixed.** Comments that described only the model path.
+
+**Not done from the plan.** Review F3's structure half: nothing in the codebase estimates whether
+the whole-document call's *input* fits, and none was invented. The Postgres round trip as a test:
+the publish guard is private and the scaffolding was large; the real import below is that check.
+
+**The real book** (Doctorow, *With a Little Help*, 250 pages), re-imported on the local stack as
+`s3-doctorow-250p-spya-jg872v`: 3,053 blocks; structure 5 seconds, no model call, $0; labels 235
+seconds, 60 batches, 3,052 paragraphs, none dropped, $1.62; article response 2.3 MB. It showed
+three things no synthetic document had:
+
+- **The PDF's running header was transcribed as a heading on most pages**, so 58 of 76 parts were
+  titled *With a Little Help*. Now a heading repeated five or more times, or the article's own
+  title met twice, or a heading with no letters in it, neither cuts nor titles. 13 parts, named
+  for the stories.
+- **Windows were titled "#", "36" and "Oh"** (scene breaks, page numbers). An opening-words title
+  now comes from the first block with three real words, and dot leaders are dropped.
+- **Opening-words titles were drawn in the model's typeface.** They are the author's words. A node
+  now says where its title came from (`titleFrom: "opening-words"`), and `titleVoice` draws it in
+  the author's face ([fonts.md](../project/fonts.md)).
+
+Spend: $2.24 for the first import, and about $1.6 more to label the re-cut tree. The $4 cap was
+for one pass; the second was a choice, to check the final tree in a browser with its labels.
+
+**The browser check** (Sonnet, Playwright, 1440, 820 and 390 wide; screenshots
+`261005a-shot-*.png`): usable at all three, nothing broken or empty, breadcrumbs always a part and
+a section. What it shows that D cannot fix: the tree is only as good as the headings the
+transcription marked (several stories sit under one chapter whose heading came out a level too
+high). That is what E is for.
+
+**Seen and not ours:** after a click in Structure the "current" row sits one section behind the
+one clicked, and the fisheye's second column is slow to follow; a 500 from `/api/source-guess` on
+an uploaded file. Reported, not investigated.
 
 ## The simpler options passed over
 
