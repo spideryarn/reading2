@@ -420,6 +420,18 @@ export interface CommandExecutor {
    * — absent means no row, the rule `runners` follows.
    */
   readonly findMore?: FindMorePresses | undefined;
+  /**
+   * **Run a quick search for these words** — since 2026-10-05, plan 261005i:
+   * what the bar's *Quick search “X”* row presses, drawn in front of every
+   * *Find “X”* row. The bar's own, like `findMore`, and for the same reason
+   * not a proposal: chat's chips never see it, and a chat *Find “X”* chip
+   * stays the exact-words address.
+   *
+   * **Absent means not offered**: the reading view hands it over for the
+   * owner alone, the cut the bar's own quick-search box makes (Dock.tsx §
+   * `hasQuickSearch`), because only the owner's band can ask.
+   */
+  readonly quickSearch?: ((words: string) => ActionOutcome) | undefined;
 }
 
 /** One press per band that offers an append now; a band not named offers none. */

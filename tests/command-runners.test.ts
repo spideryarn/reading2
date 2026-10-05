@@ -29,6 +29,7 @@ import {
   takeGlossaryAsk,
 } from "../src/web/glossary-ask-handoff.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
+import { searchDraftFor } from "../src/web/search-draft.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -213,6 +214,35 @@ describe("the reading view's executor", () => {
     const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump });
     await executor.runners["jump-first"]?.({ id: "jump-first", words: "free energy" });
     expect(jump).toHaveBeenCalledWith("spya-aaabaz");
+  });
+
+  /* Plan 261005i: the bar's *Quick search “X”* row is the bar box's own Enter
+     — the words in the article's draft, an `enter` handoff sealed with them,
+     then Search mode — and it is the owner's, like the box (Dock.tsx §
+     `hasQuickSearch`). */
+  it("has a quick search only when it is handed Search's opener, and it does the bar box's Enter", () => {
+    const slug = "a-piece-quick-search";
+    const order: string[] = [];
+    const draft = searchDraftFor(slug);
+    const openQuickSearch = vi.fn(() => {
+      order.push(`open with ${JSON.stringify(draft.handoff())}`);
+    });
+    const executor = readingExecutor({ slug, blocks: BLOCKS, jump: vi.fn(), openQuickSearch });
+    expect(executor.quickSearch?.("the limits of free will")).toEqual({ kind: "close" });
+    expect(draft.text()).toBe("the limits of free will");
+    expect(draft.handoff()).toEqual({ type: "enter", text: "the limits of free will" });
+    // The handoff is left before the band is opened, so the band mounts onto it.
+    expect(order).toEqual(['open with {"type":"enter","text":"the limits of free will"}']);
+    expect(openQuickSearch).toHaveBeenCalledTimes(1);
+    draft.clearHandoffs();
+  });
+
+  it("gives a visitor no quick search, and chat's chips none either", () => {
+    const visitor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() });
+    expect(visitor.quickSearch).toBeUndefined();
+    const owner = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), openQuickSearch: vi.fn() });
+    const chat = chatExecutor({ reading: owner, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(chat.quickSearch).toBeUndefined();
   });
 });
 

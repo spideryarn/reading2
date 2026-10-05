@@ -38,3 +38,28 @@ export function modePress({
   if (toggle && next === current && !bandBack) return "close";
   return "open";
 }
+
+/**
+ * **Does arriving in this band bring a hidden rail back?** Search draws its
+ * hits down the rail and Ideas its lane, so opening either with `?spine=0` in
+ * the address would draw half the feature where the reader cannot see it.
+ *
+ * On the arrival only (`next !== current`), never while staying: a standing
+ * rule would make the Spine pill dead in exactly these two modes. The reasons,
+ * and the cost, are at the one place that acts on it for the Dock — Reader.tsx
+ * § the Dock's `onMode`. A function so that the command bar's *Quick search*
+ * row, which opens Search without the Dock (Reader.tsx § `openQuickSearch`,
+ * plan 261005i), asks the same question rather than a copy of it.
+ */
+export function arrivalBringsRailBack({
+  next,
+  current,
+  showSpine,
+}: {
+  next: BandMode;
+  current: BandMode;
+  /** `?spine=`: `false` is the reader having put the rail away. */
+  showSpine: boolean | null;
+}): boolean {
+  return (next === "search" || next === "ideas") && current !== next && showSpine === false;
+}
