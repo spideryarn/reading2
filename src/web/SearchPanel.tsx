@@ -20,7 +20,7 @@
  * pains to make obvious, is **what pressing the key does**. In `words` the
  * results are already there as you type: free, instant, no round trip. In
  * `meaning` nothing happens until you submit, because submitting spends a model
- * call and half a minute. A box that quietly billed you per keystroke would be
+ * call and about ten seconds, sometimes twenty or more. A box that quietly billed you per keystroke would be
  * the worst possible version of this feature.
  *
  * ## Why the results list is not a summary
@@ -909,7 +909,7 @@ function Thorough({
       title={
         running
           ? "Already running the thorough search for this"
-          : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
+          : "Run the thorough (meaning) search for these words: exact quotes and reasons, usually about ten seconds. It replaces this quick search."
       }
       onClick={() => {
         if (!running) onAsk();

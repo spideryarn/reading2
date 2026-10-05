@@ -308,32 +308,62 @@ function groupedNotes(
       });
     }
   }
-  /* **Only the events the piece dates** — a date, or its own words for when
-     ("a month later"). An untimed event is a label with nothing to say about
-     time, and a rejected date is our failure rather than the article's; both
-     stay in the band, which says what each means (timeline.md § The four
-     dating states).
+  /* **Only the events the piece dates** — a date, its own words for when
+     ("a month later"), or a date with no year ("On July 7"), which the band
+     also shows in the article's words (`datingWords`, TimelinePanel.tsx). An
+     untimed event is a label with nothing to say about time, and the other
+     rejected dates are our failure rather than the article's; those stay in
+     the band, which says what each means (timeline.md § The four dating
+     states).
 
      **Beside the passage the date was read from, not the first mention.** An
      event mentioned undated and later as "By 12 July…" would otherwise put
      "at or before 12 Jul" beside words that give no date (GPT Sol, P1 on plan
-     261003f). A date's passage is `when.at`; the article's own phrase is found
-     in the earliest mention whose block still says it. Either way the phrase
-     must still be in the block. */
+     261003f). A date's passage is `when.at`; the article's own phrase, which
+     is stored without a position, is found in the earliest mention whose
+     quote still holds it. Either way the phrase must still be in the block.
+
+     **Inside the mention's quote, not merely in its block.** The server keeps
+     a phrase only when it lies within an occurrence's quote (`locatePhrase`,
+     src/timeline.ts), so a block that says "On July 7" of another event and
+     quotes this one without it is not where this one is dated (GPT Sol, F4 on
+     plan 261005h). Keep word boundaries as that verifier does: the drawing
+     matcher's whitespace-deleting pass would accept "Injune" as "In June". */
+  const quoteHolds = (o: TimelineEvent["occurrences"][number], phrase: string): boolean => {
+    const at = index.get(o.blockId);
+    const text = at === undefined ? undefined : blocks[at]?.text;
+    if (text === undefined || o.quote.trim() === "" || phrase.trim() === "") return false;
+    const span = findQuote(text, o.quote, o.start);
+    return span !== null && findQuote(text.slice(span.start, span.end), phrase, undefined, "spaced") !== null;
+  };
+  const besidePhrase = (event: TimelineEvent, phrase: string) => {
+    const mention = earliest(
+      event.occurrences,
+      (o) => o.blockId,
+      (o) => quoteHolds(o, phrase),
+    );
+    if (mention) put(mention.blockId, "timeline", { event, quote: mention.quote });
+  };
   for (const event of more.timeline ?? []) {
     const { dating } = event;
-    if (dating.kind === "dated") {
-      const { blockId, start } = dating.when.at;
-      if (!holds(blockId, dating.when.phrase, start)) continue;
-      const mention = event.occurrences.find((o) => o.blockId === blockId && holds(o.blockId, o.quote, o.start));
-      if (mention) put(blockId, "timeline", { event, quote: mention.quote });
-    } else if (dating.kind === "words") {
-      const mention = earliest(
-        event.occurrences,
-        (o) => o.blockId,
-        (o) => holds(o.blockId, dating.phrase) && holds(o.blockId, o.quote, o.start),
-      );
-      if (mention) put(mention.blockId, "timeline", { event, quote: mention.quote });
+    switch (dating.kind) {
+      case "dated": {
+        const { blockId, start } = dating.when.at;
+        if (!holds(blockId, dating.when.phrase, start)) break;
+        const mention = event.occurrences.find((o) => o.blockId === blockId && holds(o.blockId, o.quote, o.start));
+        if (mention) put(blockId, "timeline", { event, quote: mention.quote });
+        break;
+      }
+      case "words":
+        besidePhrase(event, dating.phrase);
+        break;
+      case "rejected":
+        if (dating.reason === "noYearFrame" && dating.phrase !== null) besidePhrase(event, dating.phrase);
+        break;
+      case "untimed":
+        break;
+      default:
+        dating satisfies never;
     }
   }
   for (const row of more.claims ?? []) {

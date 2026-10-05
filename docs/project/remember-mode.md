@@ -323,6 +323,10 @@ The chips read **Recall · Tutorial · Explore · Quiz** (`?remember=explore`). 
 about what the author says; Explore is about what the reader thinks. It is where Tutorial's rationed
 own-view turns go (§ It is about the author first).
 
+With the Experimental switch on there are four chips, and the group tightens their side padding
+(`quiz.css`, `.remember-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the
+288px band on an iPad. With three chips the padding is unchanged.
+
 **What a turn does.** One move, in under about 150 words, with one question at most and last:
 
 ```

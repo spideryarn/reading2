@@ -900,6 +900,35 @@ describe("an article's topics on its card and its table row", () => {
     [...host.querySelectorAll("tbody tr")].find((tr) => tr.textContent?.includes(title));
   const OF_FIVE = ["Neuroscience", "Business", "›Memory", "+2"];
 
+  /* The minimum height of one line, per form, written out here and not
+     imported: a test that read the constant would still pass with the
+     constant emptied. Where each comes from is in ShelfRowTopics.tsx. */
+  const LINE_MIN = { card: "tw:min-h-[calc(1.25rem+2px)]", table: "tw:min-h-4" } as const;
+  type Form = keyof typeof LINE_MIN;
+  /** The line holds its one-line height whether or not it has pills. */
+  function expectLineHeightHeld(line: Element | null | undefined, form: Form) {
+    expect(line, "a topics line").toBeTruthy();
+    expect(line?.tagName).toBe("UL");
+    expect(line?.className.split(/\s+/)).toContain(LINE_MIN[form]);
+    expect(line?.hasAttribute("data-row-topics-plain")).toBe(form === "table");
+    /* The caller's spacing above the line is part of the room it takes. */
+    expect(line?.className.split(/\s+/)).toContain(form === "card" ? "tw:mt-1.5" : "tw:mt-1");
+  }
+  /** A line that holds its room and says nothing, to the eye or a screen reader. */
+  function expectBlankLine(within: Element | undefined, form: Form) {
+    const lines = within?.querySelectorAll("[data-row-topics]") ?? [];
+    expect(lines, "one topics line").toHaveLength(1);
+    const line = lines[0];
+    expectLineHeightHeld(line, form);
+    expect(line?.hasAttribute("data-row-topics-blank")).toBe(true);
+    expect(line?.getAttribute("aria-hidden")).toBe("true");
+    expect(line?.hasAttribute("aria-label")).toBe(false);
+    expect(line?.childElementCount).toBe(0);
+    expect(line?.textContent).toBe("");
+    expect(line?.querySelectorAll("button, a, [tabindex]")).toHaveLength(0);
+    expect(line?.className).not.toMatch(/animate|skeleton|shimmer|tw:bg-|tw:border/);
+  }
+
   beforeEach(() => {
     answer = async () => ROW_TERMS;
   });
@@ -911,10 +940,14 @@ describe("an article's topics on its card and its table row", () => {
     expect(pillsIn(card("Neurons firing"))).toEqual(["Neuroscience"]);
   });
 
-  it("draws no topics line for an article in no topic", async () => {
+  /* Until plan 261005h § C this was "draws no topics line for an article in no
+     topic". The line is now kept, blank, while the shelf has topics: taking
+     it away when the answer settles would move the card a second time. */
+  it("keeps a blank topics line, with no pills, for an article in no topic while the shelf has topics", async () => {
     await show("/");
     expect(card("Startups and founders")).toBeDefined();
-    expect(card("Startups and founders")?.querySelector("[data-row-topics]")).toBeNull();
+    expect(pillsIn(card("Startups and founders"))).toEqual([]);
+    expectBlankLine(card("Startups and founders"), "card");
   });
 
   it("says the +N in words to a screen reader, as part of the list named Topics", async () => {
@@ -970,7 +1003,9 @@ describe("an article's topics on its card and its table row", () => {
     expect(items).toHaveLength(4);
     expect(items.filter((li) => li.className.includes("tw:border") || li.className.includes("tw:rounded-full"))).toEqual([]);
     expect(tableRow("Startups and founders")).toBeDefined();
-    expect(tableRow("Startups and founders")?.querySelector("[data-row-topics]")).toBeNull();
+    /* In no topic: the blank line, in the table's own form (plan 261005h § C). */
+    expect(pillsIn(tableRow("Startups and founders"))).toEqual([]);
+    expectBlankLine(tableRow("Startups and founders"), "table");
   });
 
   it("keeps the topics in the table while its title is being renamed", async () => {
@@ -983,11 +1018,16 @@ describe("an article's topics on its card and its table row", () => {
     expect(pillsIn(row)).toEqual(OF_FIVE);
   });
 
-  it("draws none before the topics answer lands, and all of them after, without a reload", async () => {
+  /* Until plan 261005h § C this was "draws none before the topics answer
+     lands". That is now true only of a shelf too small to have topics: four
+     articles here, under MIN_WORKS. A larger shelf holds the line while it
+     waits (the next `describe`). */
+  it("draws none before the answer on a shelf too small for topics, and all of them after, without a reload", async () => {
     let land: (body: LibraryTermsResponse) => void = () => {};
     answer = () => new Promise((resolve) => (land = resolve));
     await show("/");
     expect(cards()).toHaveLength(4);
+    expect(cards().length).toBeLessThan(MIN_WORKS);
     expect(host.querySelector("[data-row-topics]")).toBeNull();
     await act(async () => land(ROW_TERMS));
     await settle();
@@ -1003,6 +1043,135 @@ describe("an article's topics on its card and its table row", () => {
     await act(async () => land(ROW_TERMS));
     await settle();
     expect(pillsIn(tableRow("Neurons firing"))).toEqual(["Neuroscience"]);
+  });
+
+  /**
+   * **The line's room is held while topics are expected** (queue item
+   * `qi-7vjf55me`, plan 261005h § C). The pills come from a second request, so
+   * without this every card with topics grew a line after it was drawn.
+   *
+   * jsdom lays nothing out, so what these pin is the markup that makes the
+   * height: the blank line and the filled line are one element with one set of
+   * classes, a minimum height among them. That the two then measure the same
+   * is the browser check's to show.
+   */
+  describe("the room held for them", () => {
+    /* Eight articles: enough that the shelf might have topics (MIN_WORKS).
+       The four of ROW_TERMS, and four more that are in no topic. */
+    const EIGHT: LibraryEntry[] = [
+      ...ACTIVE,
+      entry("extra-1", "A fifth piece"),
+      entry("extra-2", "A sixth piece"),
+      entry("extra-3", "A seventh piece"),
+      entry("extra-4", "An eighth piece"),
+    ];
+    const EIGHT_TERMS: LibraryTermsResponse = { ...ROW_TERMS, scope: { articles: 8, works: 8, skipped: 0 } };
+    const NO_TERMS: LibraryTermsResponse = { ...EIGHT_TERMS, terms: [] };
+    const VIEWS = [
+      { form: "card", path: "/", rows: () => cardItems() as Element[], row: card },
+      { form: "table", path: "/?view=table", rows: () => [...host.querySelectorAll("tbody tr")], row: tableRow },
+    ] as const;
+
+    /** Answer the topics request by hand, one answer at a time. */
+    function byHand() {
+      const waiting: ((body: LibraryTermsResponse) => void)[] = [];
+      answer = () => new Promise((resolve) => waiting.push(resolve));
+      return async (body: LibraryTermsResponse) => {
+        await waitFor(() => waiting.length > 0, "a topics request");
+        const land = waiting.shift();
+        await act(async () => land?.(body));
+        await settle();
+      };
+    }
+    const expectAllBlank = (view: (typeof VIEWS)[number]) => {
+      expect(view.rows()).toHaveLength(EIGHT.length);
+      for (const row of view.rows()) expectBlankLine(row, view.form);
+    };
+    const expectNoLines = (view: (typeof VIEWS)[number]) => {
+      expect(view.rows()).toHaveLength(EIGHT.length);
+      expect(host.querySelector("[data-row-topics]")).toBeNull();
+    };
+
+    beforeEach(() => {
+      expect(EIGHT.length).toBeGreaterThanOrEqual(MIN_WORKS);
+      activeArticles = EIGHT;
+      answer = async () => EIGHT_TERMS;
+    });
+
+    for (const view of VIEWS) {
+      describe(`in the ${view.form} view`, () => {
+        it("holds a blank line on every row while the first answer is awaited", async () => {
+          answer = () => new Promise(() => {});
+          await show(view.path);
+          expectAllBlank(view);
+        });
+
+        it("puts the pills in that same line when the answer lands, and leaves the line blank for an article in no topic", async () => {
+          const land = byHand();
+          await show(view.path);
+          const before = view.row("Memory and the brain")?.querySelector("[data-row-topics]");
+          const blankClasses = before?.className;
+          expect(before).not.toBeNull();
+          await land(EIGHT_TERMS);
+          const after = view.row("Memory and the brain")?.querySelector("[data-row-topics]");
+          expect(pillsIn(view.row("Memory and the brain"))).toEqual(OF_FIVE);
+          /* The same element, not a second one drawn in its place, and the
+             same classes: one line of pills adds nothing to the row. */
+          expect(after).toBe(before);
+          expect(after?.className).toBe(blankClasses);
+          expectLineHeightHeld(after, view.form);
+          /* A filled line is a list a screen reader hears. */
+          expect(after?.getAttribute("aria-label")).toBe("Topics");
+          expect(after?.hasAttribute("aria-hidden")).toBe(false);
+          expectBlankLine(view.row("Startups and founders"), view.form);
+          expectBlankLine(view.row("A fifth piece"), view.form);
+        });
+
+        /* GPT Sol's plan review, F2: `loading` ends at the first answer, but
+           the asking goes on while articles are pending or the model is
+           choosing. Dropping the line on an empty answer that is not the last
+           word, and putting it back when topics arrive, is two shifts. */
+        it("holds the line through an empty answer that is not the last word, until topics arrive", async () => {
+          const land = byHand();
+          await show(view.path);
+          expectAllBlank(view);
+          await land({ ...NO_TERMS, pending: 3 });
+          expectAllBlank(view);
+          await land(EIGHT_TERMS);
+          expect(pillsIn(view.row("Neurons firing"))).toEqual(["Neuroscience"]);
+          expectBlankLine(view.row("A fifth piece"), view.form);
+        });
+
+        it("holds the line through an empty answer while the model is still choosing", async () => {
+          const land = byHand();
+          await show(view.path);
+          await land({ ...NO_TERMS, refreshing: true });
+          expectAllBlank(view);
+        });
+
+        it("draws no line once a settled answer has no topics", async () => {
+          answer = async () => NO_TERMS;
+          await show(view.path);
+          expectNoLines(view);
+        });
+
+        it("draws no line when the request fails", async () => {
+          answer = async () => {
+            throw new Error("boom");
+          };
+          await show(view.path);
+          expectNoLines(view);
+        });
+
+        it("draws no line while waiting on a shelf too small to have topics", async () => {
+          activeArticles = EIGHT.slice(0, MIN_WORKS - 1);
+          answer = () => new Promise(() => {});
+          await show(view.path);
+          expect(view.rows()).toHaveLength(MIN_WORKS - 1);
+          expect(host.querySelector("[data-row-topics]")).toBeNull();
+        });
+      });
+    }
   });
 });
 

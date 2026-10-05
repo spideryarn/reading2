@@ -434,11 +434,34 @@ line (cards) or its byline line (table). Plan
   (`plain`). The Article column is about 250px wide, where bordered pills stacked one to a line and
   made a row taller than its card.
 - **Over every topic the server chose**, as the paper card's are, so a card's pills do not change
-  as the view narrows. Nothing is drawn before the first answer, after a failed one, or on a shelf
-  with no topics; nothing is asked of the server that the row did not already ask.
-- **The line follows the answer, so it can move more than once.** The pills appear when the answer
-  lands, and change if a later answer differs (articles still being read, a re-think landing, the
-  archive switched in). No place is held for them.
+  as the view narrows. Nothing is asked of the server that the row did not already ask.
+- **The line's height is held while topics are expected**, so the pills landing does not move the
+  shelf (plan
+  [261005h](../plans/261005h-five-small-ui-fixes-from-the-queue-search-copy-remember-chips-shelf-pills-shift-marginalia-yearless-date-shelf-facts-dot.md)
+  § C). While they are expected, every card and table row draws the line: with pills when the
+  article has topics, and blank when it has none or none yet. Topics are expected when
+  (`topicsExpected` in [`useShelfTerms.ts`](../../src/web/useShelfTerms.ts)):
+  - an answer has at least one topic; or
+  - there is no answer yet, or the answer has no topics and is not the last word (articles still
+    being read, or the model still choosing), and the shelf has at least eight article rows. That
+    is the test the placeholder row uses for its outline pills (`mightHaveTopics`).
+
+  They are not expected after a settled answer with no topics, after a failed request, or while
+  waiting on a shelf under eight rows. Then no line is drawn.
+- **An article in no topic keeps the blank line while the shelf has topics.** Taking it away when
+  the answer settles would move the card a second time. The cost is that such a card is one line
+  taller than it needs to be.
+- **The blank line is blank.** No outline pills and no shimmer: it claims nothing about an article
+  that may be in no topic. It is hidden from a screen reader.
+- **Each form holds its own height**, set as a minimum on the line itself, so a blank line and a
+  line of pills are one element with the same classes. A card's is one pill tall (the 1rem text
+  line, the pill's padding and its border); the table's is one 1rem line of running text. The
+  arithmetic is beside the pill's classes in
+  [`ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx).
+- **What can still move.** Pills that wrap to a second line grow the card by that line. Eight rows
+  that are copies of fewer works hold the line and then lose it when the answer settles with no
+  topics. A shelf under eight rows cannot have topics, so nothing is held for it. Switching the
+  archive in drops the line until the archived list has loaded.
 - **The `+N` cannot reveal the hidden topics on the card.** The rest are in More detail.
 - **Not on the Include public section's cards**, which are other people's articles and not in this
   reader's tree, and not on `/read/public`.

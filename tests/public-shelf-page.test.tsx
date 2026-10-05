@@ -300,6 +300,23 @@ describe("the shelf of shared articles", () => {
     /* The bare card is the control: absent, not "null" and not the slug. */
     expect(cards(page)[1]?.textContent).not.toContain("Feynman");
   });
+
+  /**
+   * **A separator belongs to the fact before it**, as on the owner's card
+   * (tests/shelf-card-published.test.tsx): each fact is one flex item, so a
+   * dot in front of a fact is a dot at the start of a wrapped line on a phone.
+   * Plan 261005h § E.
+   */
+  it("and puts each separator after its fact, never in front of one", async () => {
+    const page = await show();
+    const raw = [...(cards(page)[0]?.querySelectorAll("[data-shelf-fact]") ?? [])].map(
+      (el) => el.textContent ?? "",
+    );
+    expect(raw.length, "the populated card has several facts").toBeGreaterThan(1);
+    for (const fact of raw) expect(fact.startsWith("·"), fact).toBe(false);
+    for (const fact of raw.slice(0, -1)) expect(fact.endsWith("·"), fact).toBe(true);
+    expect(raw.at(-1)?.includes("·"), raw.at(-1)).toBe(false);
+  });
 });
 
 /**

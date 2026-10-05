@@ -106,6 +106,9 @@ None of that is hard, but it is behaviour Greg did not ask for, so it goes to hi
   shelf changes. Each of those can add, remove or re-wrap a card's line. Accepted for this version.
   Holding the pills back until the answer is settled would hide them for the minutes a re-think
   takes; a per-card placeholder would be a guess at which cards have topics.
+  **Since 2026-10-05 the line's height is held**, blank, on every card while topics are expected:
+  [261005h](261005h-five-small-ui-fixes-from-the-queue-search-copy-remember-chips-shelf-pills-shift-marginalia-yearless-date-shelf-facts-dot.md)
+  § C.
 - **A fresh arrival has no pills** until it is sorted in, which happens by itself.
 - **On touch there is no way to read the topics behind `+N`** from the card. They are in the
   Topics row's *More detail* view.

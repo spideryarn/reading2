@@ -117,7 +117,7 @@ letters or the meaning, until 2026-10-02; *quick* sits between them:
 |---|---|---|---|
 | what it matches | the characters you typed | paragraphs that mean what you described | passages that mean what you described |
 | where it runs | in the browser | one decision-model call (Jev) per chunk of the article | a model call over the whole article |
-| what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and 15–40 seconds |
+| what it costs | nothing | about $0.0004, and about a second | a few cents (a $0.06 mean per provider call in the [sample](#a-quick-search-starts-the-thorough-one-by-itself)), and usually about ten seconds (the 90th centile is about twenty) |
 | when it runs | every keystroke | as you pause typing (600 ms), and on **find** | when you press **find**, and [by itself](#a-quick-search-starts-the-thorough-one-by-itself) once a quick answer has settled |
 | what a result carries | a snippet, and where in the piece it falls | the same, plus Jev's probability as the confidence — the whole paragraph, no reasoning | the same, plus a confidence and one line of reasoning |
 | is it saved | no — it is `?find=` in the URL | yes, beside the article, tagged *quick* — one row per typing session | yes, beside the article |
@@ -861,7 +861,7 @@ The reason is the criticism the previous version earned in its own docs:
 > Theirs vanished on reload, which quietly makes the feature a toy — nothing you produce with it can
 > be returned to.
 
-A search costs a model call and half a minute. Re-opening one from the list repaints the whole
+A search costs a model call and about ten seconds (the 90th centile is about twenty). Re-opening one from the list repaints the whole
 article with **no model call and no wait**, because the answer is saved.
 
 Words-mode searches are **not** stored, and that is not an omission: a substring match is instant and
