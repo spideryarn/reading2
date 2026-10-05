@@ -50,7 +50,9 @@
  */
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
-import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
+import type { BlockId, Job, Quote, QuoteDrops, Quotes, QuoteStroke, QuoteTier } from "../types.js";
+import { quotesAppendOnOffer, quotesFindMoreOffered } from "./find-more.js";
+import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
@@ -825,6 +827,20 @@ export function QuotesPanel({
    * (docs/plans/260913a-drop-the-use-your-profile-checkbox.md, GPT Sol's
    * review).
    */
+  const pressFindMore = () => owner?.regenerate(owner.profiled) ?? Promise.resolve();
+  /* **The command bar's *Quotes › Find more*** (plan 261004k) opens this band
+     and leaves a press for it. It is made through `pressFindMore`, the
+     button's own function, only if a fresh Find more is what the foot is
+     offering now — and used up either way (useFindMoreHandOff.ts). */
+  useFindMoreHandOff({
+    slug: owner?.slug ?? null,
+    mode: "quotes",
+    /* The list and the job list must both have answered. Until the first job
+       poll, `job === null` means “not known”, not “none” (code review F10). */
+    settled: owner !== null && owner.status !== "loading" && owner.loaded,
+    offered: owner !== null && quotesFindMoreOffered(owner),
+    press: () => void pressFindMore(),
+  });
   const findMore = (
     <div className="quotes-run">
       <Progress
@@ -832,7 +848,7 @@ export function QuotesPanel({
         starting={owner?.starting ?? false}
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
-        onRun={() => owner?.regenerate(owner.profiled) ?? Promise.resolve()}
+        onRun={pressFindMore}
         onCancel={(id) => owner?.cancel(id)}
         label="Find more"
         runningLabel="Finding more…"
@@ -941,7 +957,16 @@ export function QuotesPanel({
             />
           )}
           {quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
-          <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
+          <Foot
+            list={owner.quotes}
+            loaded={owner.loaded}
+            running={owner.job !== null || owner.starting}
+            /* The one answer to *can this list be added to* — the gate on the
+               command bar's row too (find-more.ts). Under this guard it is
+               false only at the ceiling. */
+            addable={quotesAppendOnOffer(owner)}
+            findMore={findMore}
+          />
         ) : /* **Status only, on an outdated list.** Its banner went on
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
                was where a rewrite's progress, Stop and failure showed; a run
@@ -1564,12 +1589,22 @@ function QuoteStepper({
  */
 function Foot({
   list,
+  loaded,
   running,
+  addable,
   findMore,
 }: {
   list: Quotes;
+  /** False until the first job poll; neither a button nor the cap claim is true yet. */
+  loaded: boolean;
   /** A run is in flight, so the last one's answer is about to be superseded. */
   running: boolean;
+  /**
+   * The list can be added to — `quotesAppendOnOffer`. The caller draws this
+   * foot only for a current list, so `false` here is the ceiling
+   * (`MAX_QUOTES_TOTAL`).
+   */
+  addable: boolean;
   findMore: ReactElement;
 }) {
   /* **Said, because otherwise a Find more that found nothing looks exactly
@@ -1577,14 +1612,11 @@ function Foot({
      length, and nothing on screen changed. docs/reusable/silent-success.md.
      Absent on a first pass (`passes` 1, or a list from before the field). */
   const foundNothing = !running && (list.passes ?? 1) > 1 && list.lastAdded === 0;
-  const full = list.quotes.length >= MAX_QUOTES_TOTAL;
   return (
     <div className="quotes-foot">
       {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
-      {full ? (
+      {addable ? (loaded ? findMore : null) : (
         <p className="quotes-quiet">That is as many as we keep for one article.</p>
-      ) : (
-        findMore
       )}
     </div>
   );

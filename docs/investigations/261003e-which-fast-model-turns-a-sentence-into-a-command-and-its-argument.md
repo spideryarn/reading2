@@ -7,6 +7,10 @@ The numbers are in `evals/command-pick/results/261003/summary.md` (`summarise.ts
 answers are beside it, and how to rerun it is in
 [evals/command-pick/README.md](../../evals/command-pick/README.md).
 
+**Measured again on 2026-10-04**, production's arrangement only, after the list gained nicknames and
+the two *Find more* rows:
+[261004e](261004e-command-pick-re-measured-after-more-nicknames-and-find-more-rows.md).
+
 ## The question
 
 A reader types or dictates a sentence into the command bar and it matches none of the bar's rows.

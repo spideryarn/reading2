@@ -571,6 +571,14 @@ const FROM_THIS = ["from this paper", "from this article", "from this piece", "f
  *  - **`define again`**, for the same reason one step on: `define` is one of
  *    Glossary's nicknames (mode-catalog.ts), so *define again* is a *Run
  *    again* phrasing too. The verb stays and that one argument is excepted.
+ *    **`define find more`** likewise, since 2026-10-04: a *Glossary › Find
+ *    more* phrasing (find-more.ts).
+ *
+ * **And one collision is declared rather than avoided**: `find more` and
+ * `find more terms` are *Find more* rows' own words and also a `find` with
+ * words after it. The verb is not narrowed — a reader may be searching for the
+ * word *more* — so the bar draws the row and then the *Find “more …”* row
+ * under it. The matrix names those two rows as its exception.
  */
 const VERBS: readonly Verb[] = [
   { kind: "find", verb: "do they talk about" },
@@ -591,7 +599,7 @@ const VERBS: readonly Verb[] = [
   { kind: "jump-first", verb: "where does it first say" },
   { kind: "jump-first", verb: "where does it first mention" },
   { kind: "glossary", verb: "look up", endings: ["in the glossary"] },
-  { kind: "glossary", verb: "define", except: ["again"] },
+  { kind: "glossary", verb: "define", except: ["again", "find more"] },
   { kind: "glossary", verb: "what does", endings: ["mean"], needsEnding: true },
   { kind: "glossary", verb: "what is meant by" },
   { kind: "tag-add", verb: "add a tag of", endings: TO_THIS },

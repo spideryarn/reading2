@@ -70,31 +70,35 @@ const rankModes = (query: string, modes: readonly Mode[]): Mode[] =>
   });
 
 /**
- * **One mode per tier, for the query `"s"`**, and the whole point of the file.
+ * **One mode per tier, for the query `"re"`**, and the whole point of the file.
  * Each line says which field carries the hit, because that is the fact the
  * ordering is about:
  *
  *  | mode | tier | why |
  *  |---|---|---|
- *  | `search` | label-prefix | *Search* begins with it |
- *  | `diagram` | alias-prefix | its alias *sketch* begins with it |
- *  | `ideas` | label-substring | *Ideas* has an `s`, not at the front |
- *  | `timeline` | alias-substring | *Timeline* has no `s`; its alias *dates* does |
- *  | `remember` | description-substring | neither *Remember* nor *recall* has one; its sentence does |
+ *  | `referee` | label-prefix | *Referee* begins with it |
+ *  | `summary` | alias-prefix | its alias *recap* begins with it |
+ *  | `structure` | label-substring | *Structure* ends in it, and no alias begins with it |
+ *  | `skim` | alias-substring | *Skim* has none; its alias *skim read* does, not at the front |
+ *  | `timeline` | description-substring | neither *Timeline* nor any alias has one; *how sure* in its sentence does |
  *
- * `"s"` rather than a longer word because a single letter is the only query
- * that can reach all five tiers at once across five different modes.
+ * It was `"s"` until 2026-10-04, when the aliases went from two to four a mode
+ * to six to ten (plan 261004k) and no mode was left whose every nickname
+ * lacked an `s`. Two letters is the shortest query that still reaches all five
+ * tiers across five different modes; a new alias containing `re` on Timeline,
+ * or beginning with it on Structure or Skim, moves a row and this goes red —
+ * pick the five again rather than dropping the alias.
  */
-const ONE_PER_TIER: readonly Mode[] = ["search", "diagram", "ideas", "timeline", "remember"];
+const ONE_PER_TIER: readonly Mode[] = ["referee", "summary", "structure", "skim", "timeline"];
 
 describe("the ranking ranks by how a query hits a mode", () => {
   it("puts the five tiers in order: label-prefix, alias-prefix, label-, alias-, description-substring", () => {
-    expect(rankModes("s", ONE_PER_TIER)).toEqual([
-      "search",
-      "diagram",
-      "ideas",
+    expect(rankModes("re", ONE_PER_TIER)).toEqual([
+      "referee",
+      "summary",
+      "structure",
+      "skim",
       "timeline",
-      "remember",
     ]);
   });
 
@@ -104,12 +108,12 @@ describe("the ranking ranks by how a query hits a mode", () => {
    * no ranking at all would pass it.
    */
   it("reorders a list handed in worst-tier-first", () => {
-    expect(rankModes("s", [...ONE_PER_TIER].reverse())).toEqual([
-      "search",
-      "diagram",
-      "ideas",
+    expect(rankModes("re", [...ONE_PER_TIER].reverse())).toEqual([
+      "referee",
+      "summary",
+      "structure",
+      "skim",
       "timeline",
-      "remember",
     ]);
   });
 

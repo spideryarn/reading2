@@ -26,6 +26,7 @@ import { isSpideryarnId } from "../ids.js";
 import { normaliseTag } from "../tags.js";
 import type { BlockId, GlossaryEntry } from "../types.js";
 import { type ActionOutcome, type ArgumentQuery, canonical } from "./command-match.js";
+import type { FindMoreMode } from "./find-more.js";
 
 /**
  * **Everything a proposal can ask for.** Seven ids, and an argument each.
@@ -408,7 +409,21 @@ export function canRun(runners: ProposalRunners, id: ProposalId): boolean {
 export interface CommandExecutor {
   readonly runners: ProposalRunners;
   readonly sources: ArgumentSources;
+  /**
+   * **The bands whose *Find more* the bar may press, each with its press** —
+   * since 2026-10-04, plan 261004k. Not a proposal: it takes no argument, so
+   * it is a row of the bar's own (find-more.ts § `findMoreCommand`) and chat's
+   * chips never see it (command-runners.ts § `chatExecutor`).
+   *
+   * **A band is in here only while its list can be added to**, as the reading
+   * view's own read says (Reader.tsx, find-more.ts § `glossaryAppendOnOffer`)
+   * — absent means no row, the rule `runners` follows.
+   */
+  readonly findMore?: FindMorePresses | undefined;
 }
+
+/** One press per band that offers an append now; a band not named offers none. */
+export type FindMorePresses = { readonly [M in FindMoreMode]?: () => ActionOutcome };
 
 /**
  * **A refused row's words** — the label its proposal would have had, made from
