@@ -33,6 +33,38 @@ import { voiceClass } from "./voice.js";
 /** Each article's topics, for the cards and rows beneath the provider. */
 export const ArticleTopicsContext = createContext<ArticleTopics>(NO_ARTICLE_TOPICS);
 
+/**
+ * **Whether this shelf is expected to have topics**, so every card and row
+ * holds the line's room before the pills arrive, and an article in no topic
+ * keeps it blank. The pills come from a second request; without this each card
+ * with topics grew a line after it was drawn (plan 261005h § C). The page
+ * decides (useShelfTerms.ts § `topicsExpected`).
+ *
+ * A context of its own, beside the lookup above: a boolean is equal to itself
+ * from one render to the next, so nothing has to be memoised for the cards
+ * not to re-render, and the lookup keeps the one shape the Topics row shares.
+ * `false` off the shelf page, where nothing provides it.
+ */
+export const TopicsExpectedContext = createContext(false);
+
+/* The pill's own box, and the height one line of each form has. They are side
+   by side because the second is worked out from the first: change a pill's
+   padding, border or text size and the minimum has to follow.
+
+   Both forms are `text-xs`, whose line is 1rem tall (0.75rem type at
+   Tailwind's 1/0.75 leading).
+   - A card's line is as tall as one pill: that 1rem, `py-0.5` above and below
+     (2 × 0.125rem) and a 1px border above and below. calc(1.25rem + 2px),
+     22px at the default text size.
+   - The table's line is running text with no box round it: 1rem, `min-h-4`.
+
+   The minimum is on the line whether or not it has pills, so a blank line and
+   a line of pills are one element with one set of classes. Pills that wrap to
+   a second line still grow it. */
+const PILL = "tw:rounded-full tw:border tw:border-border tw:px-1.5 tw:py-0.5";
+const PILLS_LINE_MIN = "tw:min-h-[calc(1.25rem+2px)]";
+const PLAIN_LINE_MIN = "tw:min-h-4";
+
 export function ShelfRowTopics({
   slug,
   className = "",
@@ -49,15 +81,23 @@ export function ShelfRowTopics({
    */
   plain?: boolean;
 }) {
-  const topics = useContext(ArticleTopicsContext).bySlug.get(slug);
-  if (!topics?.length) return null;
+  const topics = useContext(ArticleTopicsContext).bySlug.get(slug) ?? [];
+  const expected = useContext(TopicsExpectedContext);
+  /* Blank: the line's room and nothing in it. No outline pills and no shimmer,
+     because a blank line claims nothing about an article that may be in no
+     topic at all. Hidden from a screen reader, which would otherwise announce
+     an empty list. */
+  const blank = topics.length === 0;
+  if (blank && !expected) return null;
   const { shown, more } = rowTopics(topics);
   return (
     <ul
-      aria-label="Topics"
+      aria-label={blank ? undefined : "Topics"}
+      aria-hidden={blank || undefined}
       data-row-topics
       data-row-topics-plain={plain || undefined}
-      className={`tw:m-0 tw:list-none tw:p-0 tw:text-xs tw:text-muted-foreground ${plain ? "tw:block tw:wrap-anywhere" : "tw:flex tw:flex-wrap tw:items-center tw:gap-1"} ${className}`}
+      data-row-topics-blank={blank || undefined}
+      className={`tw:m-0 tw:list-none tw:p-0 tw:text-xs tw:text-muted-foreground ${plain ? `tw:block tw:wrap-anywhere ${PLAIN_LINE_MIN}` : `tw:flex tw:flex-wrap tw:items-center tw:gap-1 ${PILLS_LINE_MIN}`} ${className}`}
     >
       {shown.map((t, i) => (
         /* Parallel branches may deliberately have the same label. */
@@ -69,7 +109,7 @@ export function ShelfRowTopics({
                    between topics: as `inline` a dot could end one line with
                    its label on the next. */
                 "tw:mr-2.5 tw:inline-block tw:max-w-full"
-              : "tw:inline-flex tw:max-w-full tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:px-1.5 tw:py-0.5"
+              : `tw:inline-flex tw:max-w-full tw:items-center tw:gap-1 ${PILL}`
           }
         >
           <TopicDot slot={t.slot} className={plain ? "tw:mr-1 tw:size-1.5 tw:align-middle" : "tw:size-1.5"} />

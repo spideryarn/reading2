@@ -80,11 +80,11 @@ import {
   sortDirParam,
 } from "./params.js";
 import { chosenTopics, isArchived, narrowShelf, tagFacets, topicCountsForVisible, topicMembers } from "./shelf-narrow.js";
-import { ArticleTopicsContext, ShelfRowTopics } from "./ShelfRowTopics.js";
-import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
+import { ArticleTopicsContext, ShelfRowTopics, TopicsExpectedContext } from "./ShelfRowTopics.js";
+import { mightHaveTopics, ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
 import { ShelfTagFilter } from "./ShelfTagFilter.js";
 import { articleTopics } from "./article-topics.js";
-import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
+import { shelfKeyOf, topicsExpected, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
@@ -476,6 +476,10 @@ export function Library({
      what survives the narrowing. The archived share of each is named in the
      "n of m" line when the archive is in scope. */
   const total = scope?.length ?? 0;
+  /* Whether each card and row holds a line for its topic pills, so the pills
+     landing does not move the shelf (plan 261005h § C). Over `total`, the
+     count the placeholder Topics row is given below. */
+  const expectTopics = topicsExpected(terms, mightHaveTopics(total));
   const showing = rows?.length ?? 0;
   const archivedShowing = useMemo(() => (rows ?? []).filter(isArchived).length, [rows]);
   // Said only when something is actually being hidden. "12 of 12" is noise.
@@ -870,6 +874,7 @@ export function Library({
           JSX can take. */}
       {sorted.length > 0 && (
         <ArticleTopicsContext.Provider value={topicsOfArticles}>
+        <TopicsExpectedContext.Provider value={expectTopics}>
           {view === "table" ? (
             /* **One `TooltipGroup` for the whole table**, so running the pointer
                down the titles opens each row card instantly after the first,
@@ -909,6 +914,7 @@ export function Library({
           {capped.revealTotal !== null && (
             <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
           )}
+        </TopicsExpectedContext.Provider>
         </ArticleTopicsContext.Provider>
       )}
 
