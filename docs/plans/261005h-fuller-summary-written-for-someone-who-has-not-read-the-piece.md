@@ -3,7 +3,7 @@
 Up: [plans.md](../project/plans.md) · the feature: [summaries.md](../project/summaries.md) · the
 research: [261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md)
 
-**Status, 2026-10-05: shipped to `dev` as `simple-prompt/10`, measured — and what shipped is the
+**Status, 2026-10-05: shipped to `dev` as `simple-prompt/11`, measured — and what shipped is the
 smaller option this plan passed over, not the section it proposed.** The section was built and
 measured, and passed its two tests for a reader with a profile. But this plan also said that if
 two bullets did as well as the section, the two bullets would ship; set side by side they tied.
@@ -12,6 +12,11 @@ The measurement is
 is in [summaries.md](../project/summaries.md#written-for-someone-who-has-not-read-it-since-2026-10-05).
 For a reader with no profile no improvement is claimed, and that is queued as `qi-4meqvjr4`. It
 waited five hours on the box's model key (§ What was blocking it).
+
+**Where this plan and the eval's files say `/10`, read `/11`.** This was to be `simple-prompt/10`
+and was measured under that name. A separate change to Brief's length landed first the same
+evening and took the number, so the Fuller bytes measured here ship unchanged in the combined
+`simple-prompt/11`; `/10` is the Brief change alone.
 
 **Read § What changes below as the proposal, not as the source.** The two bullets that shipped
 are its first and fifth; the paragraph after the profile rules shipped as written.
@@ -253,7 +258,7 @@ is not pushed.
 
 **Greg raised the limit to $400 at about 17:30 BST**, and the eval ran that evening as the steps
 below say, with two rounds added after the first was read (the investigation says which, and
-why). The `/10` edit then went to `dev` as its own commit.
+why). The measured prompt then went to `dev` as its own commit, as `/11`.
 
 **The steps, as they were written while it was blocked**, in that worktree:
 

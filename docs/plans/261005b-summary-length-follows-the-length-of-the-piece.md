@@ -6,6 +6,8 @@ Up: [plans.md](../project/plans.md) · the mode: [summaries.md](../project/summa
 taken) and the code. **What shipped is smaller than what was planned**: Fuller's length follows
 the piece, Brief's does not, because the measurement said a banded Brief was worse.
 [§ What changed between the plan and what shipped](#what-changed-between-the-plan-and-what-shipped).
+**Later the same day Brief went from about 80 words to about 100**, still for every piece:
+[§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05).
 
 ## What it is for
 
@@ -190,8 +192,8 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
   rather have the 80-word one. The recommendation is to leave Brief alone.
   **Decided: slightly longer** — Greg, 2026-10-05: "maybe Brief could be ever so slightly longer
   but not much". Dispatched to session `brief-slightly-longer`.
-  **Not built yet: blocked on the measurement.**
-  [§ A slightly longer Brief, blocked](#a-slightly-longer-brief-blocked-2026-10-05).
+  **Built**: about 100 words where it was about 80, for every piece.
+  [§ A slightly longer Brief](#a-slightly-longer-brief-2026-10-05).
 
 ## Ledger
 
@@ -235,16 +237,71 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
   other three were written to disk.
 - $6.96 of model calls across the 28 recorded writes, and the lost run on top.
 
-### A slightly longer Brief, blocked (2026-10-05)
+### A slightly longer Brief (2026-10-05)
 
-Session `brief-slightly-longer` was asked to make Brief a little longer and to decide by a small
-blind measurement whether that is for every piece or only the long and book bands. **Nothing was
-built or changed: Brief's prompt is still `/9` byte for byte.** The measurement needs paid writes,
-and the dev OpenRouter key had none left: `GET /api/v1/key` answered `limit: 300`,
-`limit_remaining: 0`, `usage_monthly: 300.007`, at about 17:10 on 2026-10-05. No call was made
-and nothing was spent. An unmeasured prompt change was not shipped, as briefed.
+Greg, 2026-10-05, answering [Q-brief-for-a-book]:
 
-What the files already here say, free, for whoever picks it up:
+> maybe Brief could be ever so slightly longer but not much
+
+**Built: Brief is asked for about 100 words and never more than 150, where it was about 80 and
+130, for every piece. The prompt version is `simple-prompt/10`.** One table changed,
+`BRIEF_LENGTH` in `src/simple-summary.ts`; Fuller's prompts are the same bytes in every band,
+and Brief's stored limit (240 words) did not move. As with `/9`, every stored summary becomes
+*outdated*, silently, and none is rewritten for it.
+
+| | asked for | written, mean (range) |
+|---|---|---|
+| before | about 80, never more than 130 | 97 words (88 to 113), eleven writes |
+| measured and left | about 90, never more than 140 | 103 words (90 to 141), twelve writes |
+| **shipped** | about 100, never more than 150 | 110 words (91 to 137), twelve writes |
+
+- **What the judge said:** it preferred the 100 to the old Brief in
+  six pairs of eleven and the old in four, and the 90 in three against eight. Two writes of the
+  old prompt, the control, split four to one. That control shows variation between writes;
+  it does not establish that 100 is no worse or that 90 is worse.
+- **The "not padded" bar has not been established.** The judge called the 100
+  the padded side in five pairs and the old one in two; it called one of two old writes padded
+  in two control pairs of five. This is adverse evidence for 100, not proof of harmless variation.
+- **Every piece, not the long ones alone.** For the book the judge preferred the old Brief in
+  all four pairs (two at each ask), as in both of round one's. The pieces under 15,000 words
+  leaned to the 100, five to two. These small subgroups do not establish a per-band policy;
+  they also do not establish that increasing Brief for every piece is harmless.
+- **The simpler option passed over** was to leave Brief alone, which is what the measurement
+  alone would support. Choosing 100 for every piece is a product judgment in response to the
+  request for slightly longer; the measurement does not show that it costs nothing a judge
+  can see. Treating the 90 result as noise cannot also justify ruling that arm out as worse.
+- **The 90 arm** and the tallies are in
+  [261005a § A slightly longer Brief](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
+  The arms are `high-none-brief90a|b` and `high-none-brief100a|b`; the pairs, key, judge's
+  instructions and answers are `*-brief*` in `evals/results/simple/length-bands-261005b/`.
+- **Cost**: about $4.50 for 24 writes (four unpriced by the provider, estimated from their
+  twins), and no judge cost beyond a subagent.
+- **Tests**: the pinned Brief hash and version in `tests/simple-two-levels.test.ts`, the ask in
+  `tests/simple-length-bands.test.ts` and `tests/simple-summary.test.ts`.
+
+**The review** (GPT Sol, write-capable, 2026-10-05), in two passes because the first could run
+nothing: [the prompt](261005b-brief-slightly-longer-review-prompt.md) and
+[its answer](261005b-brief-slightly-longer-review-sol.md), **do not ship**;
+[the second prompt](261005b-brief-slightly-longer-review-2-prompt.md) and
+[its answer](261005b-brief-slightly-longer-review-2-sol.md), **sound after fixes** on the code
+and the evidence.
+
+| ID | Finding | Disposition |
+|---|---|---|
+| F11 (P1) | the "not padded" bar is not established: the 100 was called padded in five pairs, the old in two, and a lopsided control does not make that chance | taken, fixed by Sol: the three docs and the source comment no longer say it is met |
+| F12 (P2) | 3 to 8 was called noise and then used to rule the 90 out | taken, fixed by Sol: both tallies are described, and 100 over 90 is called a product judgment |
+| F13 (P2) | a longer Brief for every piece is not supported: the book favoured the old one in four of four | the wording taken, fixed by Sol. **Its recommendation, to leave Brief at 80 and 130, is not taken**: Greg asked for slightly longer. It is reported to him and to the Overseer as the reviewer's dissent, and going back is two numbers in `BRIEF_LENGTH` |
+| F14 (P3) | summaries.md still called `/9` the version | fixed by Sol |
+
+The second pass checked every number in the docs against the result files, that all twelve
+`brief100` files were written with the prompts now in the tree (and that the twelve `brief90`
+ones were not), that Fuller's bytes are unchanged in every band, the judge's instructions for a
+lean, five verdicts by hand, and that the seed replays to 6 and 16, then 11 and 11.
+
+**It was blocked first.** At about 17:10 the dev OpenRouter key answered `limit: 300`,
+`limit_remaining: 0`, so no write could be made and an unmeasured prompt change was not shipped.
+Greg raised the limit to 400 and the measurement ran that evening. What the session wrote down
+while blocked, from the files already here:
 
 - **Today's Brief is not 80 words.** Asked for about 80 and never more than 130, the eleven
   `len0a|len0b` writes came back at 88 to 113 words, about 97 on average
@@ -253,7 +310,8 @@ What the files already here say, free, for whoever picks it up:
 - **The model runs over the ask at every size tried.** Asked for 60 it wrote 71 to 94; for 110
   (the long article) 139 and 112; for 140 (the book) 159 and 145, and those two were the ones
   judged padded. So an ask of 100 would likely write about 115 to 125, which is close to the
-  long band's banded Brief that the judge did not prefer.
+  long band's banded Brief that the judge did not prefer. (That guess was high: measured, it
+  wrote 110.)
 - **So the arms worth paying for are small**: an ask of about 90 and one of about 100 (each with
   its "never more than" moved by the same amount), on the same six pieces, two writes each,
   against `len0a|len0b` as the before side and `len0a` against `len0b` as the control. Same

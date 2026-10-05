@@ -1,0 +1,232 @@
+{
+  "arm": "high-none-brief100a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fh-spya-s3fq0d",
+  "version": "simple-prompt/9",
+  "sourceSha256": "b0a939a218811f37a9b2f934476a1ac1382de9813e5ac75cbb5ed80f02837d7c",
+  "at": "2026-10-05T16:56:02.668Z",
+  "bodyWords": 1398,
+  "band": "short",
+  "bodyBlocks": 33,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "d0d920580e8f12ce",
+  "systemsSha256": "4113178025e31604f219be66e9eb57ffc8ba7b4b751e2d01d160d1d4c98a9f60",
+  "power": "high",
+  "guard": true,
+  "wallMs": 30153,
+  "costUsd": 0.0730044,
+  "tokens": {
+    "input": 8791,
+    "output": 1815,
+    "reasoning": 143
+  },
+  "briefReadyMs": 29427,
+  "fullerReadyMs": 30143,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 296,
+  "briefWords": 96,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham about \"haters\": people who become obsessed with disliking someone famous. He wrote it first for startup founders, who are often surprised by the attention they get, but says it fits anyone who becomes famous. A hater is not a one-off critic but someone whose dislike becomes part of who they are, kept up over a long time.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-fgn6m7",
+        "spya-jbw53x"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham about \"haters\": people who become obsessed with disliking someone famous.",
+          "id": null,
+          "key": "haters"
+        },
+        {
+          "text": "He wrote it first for startup founders, who are often surprised by the attention they get, but says it fits anyone who becomes famous.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "A hater is not a one-off critic but someone whose dislike becomes part of who they are, kept up over a long time.",
+          "id": "spya-jbw53x"
+        }
+      ]
+    },
+    {
+      "text": "His central idea is that haters are just fanboys with the sign switched. A fanboy is an obsessive, uncritical fan who sees everything you do as good and wants everyone to know. He shows the match by describing both in two paragraphs that are word for word the same, except \"good\" and \"bad\" swap places.",
+      "ids": [
+        "spya-j02p09",
+        "spya-d0ec3b",
+        "spya-vnhntv"
+      ],
+      "sentences": [
+        {
+          "text": "His central idea is that haters are just fanboys with the sign switched.",
+          "id": "spya-j02p09",
+          "key": "fanboys with the sign switched"
+        },
+        {
+          "text": "A fanboy is an obsessive, uncritical fan who sees everything you do as good and wants everyone to know.",
+          "id": "spya-vnhntv"
+        },
+        {
+          "text": "He shows the match by describing both in two paragraphs that are word for word the same, except \"good\" and \"bad\" swap places.",
+          "id": "spya-d0ec3b"
+        }
+      ]
+    },
+    {
+      "text": "From watching haters over years, he draws out a few patterns, while admitting he is not sure of all of them. Fame feeds haters: hearing a name everywhere drives some people crazy where an unknown name would be forgotten. Their mark is calling the famous person a \"fraud\", the only way to square great fame with what they see as no talent. Haters have never achieved much, though some have frustrated talent, and he thinks they never will do great work.",
+      "ids": [
+        "spya-nf2q02",
+        "spya-j6y6p4",
+        "spya-hwxfgs"
+      ],
+      "sentences": [
+        {
+          "text": "From watching haters over years, he draws out a few patterns, while admitting he is not sure of all of them.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "Fame feeds haters: hearing a name everywhere drives some people crazy where an unknown name would be forgotten.",
+          "id": "spya-nf2q02"
+        },
+        {
+          "text": "Their mark is calling the famous person a \"fraud\", the only way to square great fame with what they see as no talent.",
+          "id": "spya-j6y6p4",
+          "key": "fraud"
+        },
+        {
+          "text": "Haters have never achieved much, though some have frustrated talent, and he thinks they never will do great work.",
+          "id": "spya-hwxfgs"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "He names limits in his notes. Some people really are frauds; thoughtful people rarely fall for them, so if some thoughtful people like someone, they are probably not one. He also excuses teenagers, who may grow out of being haters, but not anyone over 25.",
+      "ids": [
+        "spya-xjaj8b",
+        "spya-zb2je7"
+      ],
+      "sentences": [
+        {
+          "text": "He names limits in his notes.",
+          "id": null
+        },
+        {
+          "text": "Some people really are frauds; thoughtful people rarely fall for them, so if some thoughtful people like someone, they are probably not one.",
+          "id": "spya-xjaj8b"
+        },
+        {
+          "text": "He also excuses teenagers, who may grow out of being haters, but not anyone over 25.",
+          "id": "spya-zb2je7"
+        }
+      ]
+    },
+    {
+      "text": "The payoff is that haters need no separate theory, which makes them easier to deal with. The mistake is to treat a hater like someone you have a real dispute with and try to fix it. Instead, as with obsessive fans, barely think about them: \"It's not you, it's them.\"",
+      "ids": [
+        "spya-au77ew",
+        "spya-ry7vzc",
+        "spya-wwfm44"
+      ],
+      "sentences": [
+        {
+          "text": "The payoff is that haters need no separate theory, which makes them easier to deal with.",
+          "id": "spya-wwfm44"
+        },
+        {
+          "text": "The mistake is to treat a hater like someone you have a real dispute with and try to fix it.",
+          "id": "spya-au77ew"
+        },
+        {
+          "text": "Instead, as with obsessive fans, barely think about them: \"It's not you, it's them.\"",
+          "id": "spya-ry7vzc",
+          "key": "It's not you, it's them."
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This is an essay by Paul Graham about people who become famous, like startup founders. It looks at haters: people who dislike someone so much it becomes part of who they are. His big idea is that haters are just fanboys, or over-the-top fans, flipped around.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "This is an essay by Paul Graham about people who become famous, like startup founders.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "It looks at haters: people who dislike someone so much it becomes part of who they are.",
+          "id": "spya-jbw53x",
+          "key": "haters"
+        },
+        {
+          "text": "His big idea is that haters are just fanboys, or over-the-top fans, flipped around.",
+          "id": "spya-j02p09",
+          "key": "haters are just fanboys"
+        }
+      ]
+    },
+    {
+      "text": "Haters often call the famous person a fraud, meaning someone who tricked everyone. He notices they rarely have achieved much themselves, though he says he is not sure. His conclusion: don't spend time trying to understand or fix things with haters. As he puts it, it's not you, it's them.",
+      "ids": [
+        "spya-h30306",
+        "spya-hwxfgs",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "Haters often call the famous person a fraud, meaning someone who tricked everyone.",
+          "id": "spya-h30306"
+        },
+        {
+          "text": "He notices they rarely have achieved much themselves, though he says he is not sure.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "His conclusion: don't spend time trying to understand or fix things with haters.",
+          "id": "spya-ry7vzc",
+          "key": "don't spend time"
+        },
+        {
+          "text": "As he puts it, it's not you, it's them.",
+          "id": "spya-ry7vzc"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

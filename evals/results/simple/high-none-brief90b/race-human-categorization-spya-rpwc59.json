@@ -1,0 +1,341 @@
+{
+  "arm": "high-none-brief90b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "race-human-categorization-spya-rpwc59",
+  "version": "simple-prompt/9",
+  "sourceSha256": "2e8c225377af5fd75a998468fc4e0aa8f37c5338a0169a1f5ea55ce1326a15dc",
+  "at": "2026-10-05T17:03:44.191Z",
+  "bodyWords": 16744,
+  "band": "long",
+  "bodyBlocks": 435,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "6914f57fa85013cc",
+  "systemsSha256": "e1e3f0d3c3589da67524950523e7ae40f35764af5312376c996a80e4668e241a",
+  "power": "high",
+  "guard": true,
+  "wallMs": 75948,
+  "costUsd": 0.168148,
+  "tokens": {
+    "input": 12609,
+    "output": 6637,
+    "reasoning": 3579
+  },
+  "briefReadyMs": 22470,
+  "fullerReadyMs": 75697,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 685,
+  "briefWords": 91,
+  "fuller": [
+    {
+      "text": "This encyclopedia article explains race as a way of sorting people into groups, based on shared physical or social traits, that a society treats as distinct. Its central claim is that modern science treats race as a social construct: an identity given by rules a society makes, not something built into our biology. Different cultures draw different racial lines, and these lines shift over time. The article traces where the idea came from, tests it against genetic evidence, and shows how different fields and countries use it today.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-ru75x5"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article explains race as a way of sorting people into groups, based on shared physical or social traits, that a society treats as distinct.",
+          "id": "spya-fcwu4k",
+          "key": "a way of sorting people into groups"
+        },
+        {
+          "text": "Its central claim is that modern science treats race as a social construct: an identity given by rules a society makes, not something built into our biology.",
+          "id": "spya-fcwu4k",
+          "key": "social construct"
+        },
+        {
+          "text": "Different cultures draw different racial lines, and these lines shift over time.",
+          "id": "spya-ru75x5"
+        },
+        {
+          "text": "The article traces where the idea came from, tests it against genetic evidence, and shows how different fields and countries use it today.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The article says race matters because it is the foundation of racism, the belief that some races are superior to others. Even scholars who call race a construct agree it has real effects on people's lives, through preference and discrimination built into institutions. Racism, it notes, has led to tragedies including slavery and genocide.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-ss4m6e",
+        "spya-xubjsd"
+      ],
+      "sentences": [
+        {
+          "text": "The article says race matters because it is the foundation of racism, the belief that some races are superior to others.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "Even scholars who call race a construct agree it has real effects on people's lives, through preference and discrimination built into institutions.",
+          "id": "spya-ss4m6e",
+          "key": "real effects on people's lives"
+        },
+        {
+          "text": "Racism, it notes, has led to tragedies including slavery and genocide.",
+          "id": "spya-xubjsd"
+        }
+      ]
+    },
+    {
+      "text": "The modern idea of race grew out of European colonial expansion from the 16th to 18th centuries, which sorted people by skin colour and body differences. The Atlantic slave trade gave Europeans a further reason to sort human groups, to justify keeping Africans enslaved. Early schemes mixed science with prejudice: in 1735 Carl Linnaeus split humans into four continental varieties and described Africans as 'crafty, lazy, and careless'.",
+      "ids": [
+        "spya-dmm7ua",
+        "spya-wqge29",
+        "spya-bbrfcn"
+      ],
+      "sentences": [
+        {
+          "text": "The modern idea of race grew out of European colonial expansion from the 16th to 18th centuries, which sorted people by skin colour and body differences.",
+          "id": "spya-dmm7ua",
+          "key": "European colonial expansion"
+        },
+        {
+          "text": "The Atlantic slave trade gave Europeans a further reason to sort human groups, to justify keeping Africans enslaved.",
+          "id": "spya-wqge29"
+        },
+        {
+          "text": "Early schemes mixed science with prejudice: in 1735 Carl Linnaeus split humans into four continental varieties and described Africans as 'crafty, lazy, and careless'.",
+          "id": "spya-bbrfcn"
+        }
+      ]
+    },
+    {
+      "text": "Several lines of genetic and physical evidence, the article reports, do not fit the idea of separate biological races. Most variation lies within groups: on average 85% is within local populations, about 7% between populations on one continent, and about 8% between continents. Traits change gradually across geography, in patterns called clines; skin colour shades from Europe down into Africa with no boundary anywhere. Traits also do not vary together, so the more traits anthropologists measured, the more categories they needed, until they concluded there were no discrete races.",
+      "ids": [
+        "spya-g25cx7",
+        "spya-wt0wvn",
+        "spya-x6hdk9"
+      ],
+      "sentences": [
+        {
+          "text": "Several lines of genetic and physical evidence, the article reports, do not fit the idea of separate biological races.",
+          "id": null
+        },
+        {
+          "text": "Most variation lies within groups: on average 85% is within local populations, about 7% between populations on one continent, and about 8% between continents.",
+          "id": "spya-g25cx7",
+          "key": "85% is within local populations"
+        },
+        {
+          "text": "Traits change gradually across geography, in patterns called clines; skin colour shades from Europe down into Africa with no boundary anywhere.",
+          "id": "spya-wt0wvn"
+        },
+        {
+          "text": "Traits also do not vary together, so the more traits anthropologists measured, the more categories they needed, until they concluded there were no discrete races.",
+          "id": "spya-x6hdk9"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The strongest counterpoint comes from cluster analysis, which uses many genetic markers at once to sort people into groups. A. W. F. Edwards argued in 2003 that such clusters can be found, and later studies found groups that roughly match traditional continental races. Critics reply that the clusters depend on which populations researchers choose to sample: sample only Icelanders, Mayans and Maoris, and three clusters appear. Witherspoon and colleagues found that even with hundreds of markers, people are often more genetically similar to members of other populations than to their own.",
+      "ids": [
+        "spya-ek5t8p",
+        "spya-e535uf",
+        "spya-hjqwhr"
+      ],
+      "sentences": [
+        {
+          "text": "The strongest counterpoint comes from cluster analysis, which uses many genetic markers at once to sort people into groups.",
+          "id": "spya-ek5t8p",
+          "key": "cluster analysis"
+        },
+        {
+          "text": "A. W. F. Edwards argued in 2003 that such clusters can be found, and later studies found groups that roughly match traditional continental races.",
+          "id": "spya-ek5t8p"
+        },
+        {
+          "text": "Critics reply that the clusters depend on which populations researchers choose to sample: sample only Icelanders, Mayans and Maoris, and three clusters appear.",
+          "id": "spya-e535uf"
+        },
+        {
+          "text": "Witherspoon and colleagues found that even with hundreds of markers, people are often more genetically similar to members of other populations than to their own.",
+          "id": "spya-hjqwhr",
+          "key": "more genetically similar to members of other populations"
+        }
+      ]
+    },
+    {
+      "text": "The article is clear that scientists still disagree about how much of race is biology and how much is social. Geneticist David Reich holds that ancestry differences matching some racial categories are real; 67 scientists replied that his idea of race was flawed. Among US physical anthropologists, those rejecting biological races rose from 41% in 1985 to 69% in 1999. Rejection is highest in the United States and Canada, moderate in Europe, and lowest in Russia and China.",
+      "ids": [
+        "spya-dcb487",
+        "spya-nwwyx8",
+        "spya-d9pdz6"
+      ],
+      "sentences": [
+        {
+          "text": "The article is clear that scientists still disagree about how much of race is biology and how much is social.",
+          "id": null
+        },
+        {
+          "text": "Geneticist David Reich holds that ancestry differences matching some racial categories are real; 67 scientists replied that his idea of race was flawed.",
+          "id": "spya-dcb487"
+        },
+        {
+          "text": "Among US physical anthropologists, those rejecting biological races rose from 41% in 1985 to 69% in 1999.",
+          "id": "spya-nwwyx8",
+          "key": "41% in 1985 to 69% in 1999"
+        },
+        {
+          "text": "Rejection is highest in the United States and Canada, moderate in Europe, and lowest in Russia and China.",
+          "id": "spya-d9pdz6"
+        }
+      ]
+    },
+    {
+      "text": "Forensic anthropology, which studies human remains to identify the dead, is one field where race labels stayed in use. Norman Sauer asked in 1992 why, if races do not exist, forensic experts are so good at identifying them. His answer: a skeleton predicts the social category a person was given in life, not a race that exists in nature. Such methods also travel poorly; one method's accuracy fell from 85% to 33% when retested on Native Americans.",
+      "ids": [
+        "spya-rxh4hu",
+        "spya-xuq2q6",
+        "spya-ag0cj4"
+      ],
+      "sentences": [
+        {
+          "text": "Forensic anthropology, which studies human remains to identify the dead, is one field where race labels stayed in use.",
+          "id": "spya-rxh4hu"
+        },
+        {
+          "text": "Norman Sauer asked in 1992 why, if races do not exist, forensic experts are so good at identifying them.",
+          "id": "spya-rxh4hu"
+        },
+        {
+          "text": "His answer: a skeleton predicts the social category a person was given in life, not a race that exists in nature.",
+          "id": "spya-xuq2q6",
+          "key": "the social category a person was given"
+        },
+        {
+          "text": "Such methods also travel poorly; one method's accuracy fell from 85% to 33% when retested on Native Americans.",
+          "id": "spya-ag0cj4",
+          "key": "85% to 33%"
+        }
+      ]
+    },
+    {
+      "text": "In medicine, some researchers see race as a useful clue, while others warn that a disease gap between social groups need not have a genetic cause. Worldwide data show living conditions, more than race, make the biggest difference in health outcomes. In one leading genetics journal, 'race' appeared in 22% of papers in its first decade but only 5% in its last. In 2023 the US National Academies told researchers not to use race as a stand-in for describing human genetic variation.",
+      "ids": [
+        "spya-zeaj5c",
+        "spya-uqgtg4",
+        "spya-ahca2f"
+      ],
+      "sentences": [
+        {
+          "text": "In medicine, some researchers see race as a useful clue, while others warn that a disease gap between social groups need not have a genetic cause.",
+          "id": "spya-zeaj5c"
+        },
+        {
+          "text": "Worldwide data show living conditions, more than race, make the biggest difference in health outcomes.",
+          "id": "spya-zeaj5c"
+        },
+        {
+          "text": "In one leading genetics journal, 'race' appeared in 22% of papers in its first decade but only 5% in its last.",
+          "id": "spya-uqgtg4"
+        },
+        {
+          "text": "In 2023 the US National Academies told researchers not to use race as a stand-in for describing human genetic variation.",
+          "id": "spya-ahca2f",
+          "key": "not to use race as a stand-in"
+        }
+      ]
+    },
+    {
+      "text": "The article's conclusion is that race does not accurately describe how human biology varies. The American Association of Physical Anthropologists says humans are not divided into distinct continental types, and that race grew out of colonialism and discrimination. Yet race remains a powerful social reality, with real material effects through how institutions favour some groups and disadvantage others.",
+      "ids": [
+        "spya-ujat5x",
+        "spya-ss4m6e"
+      ],
+      "sentences": [
+        {
+          "text": "The article's conclusion is that race does not accurately describe how human biology varies.",
+          "id": "spya-ujat5x"
+        },
+        {
+          "text": "The American Association of Physical Anthropologists says humans are not divided into distinct continental types, and that race grew out of colonialism and discrimination.",
+          "id": "spya-ujat5x",
+          "key": "not divided into distinct continental types"
+        },
+        {
+          "text": "Yet race remains a powerful social reality, with real material effects through how institutions favour some groups and disadvantage others.",
+          "id": "spya-ss4m6e"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article explains race: sorting people into groups by looks or shared social traits. It traces how the idea began, how it changed, and how scientists see it today. It matters because race has been used to rank groups and treat some as lesser.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-vzsu92"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article explains race: sorting people into groups by looks or shared social traits.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "It traces how the idea began, how it changed, and how scientists see it today.",
+          "id": null
+        },
+        {
+          "text": "It matters because race has been used to rank groups and treat some as lesser.",
+          "id": "spya-vzsu92"
+        }
+      ]
+    },
+    {
+      "text": "Studies of genes show about 85% of human variety lies within local groups, not between them. Modern science sees race as a social construct: a label made by society, not by nature. Still, most scholars agree race has real effects on people's lives through unfair treatment.",
+      "ids": [
+        "spya-g25cx7",
+        "spya-fcwu4k",
+        "spya-ss4m6e"
+      ],
+      "sentences": [
+        {
+          "text": "Studies of genes show about 85% of human variety lies within local groups, not between them.",
+          "id": "spya-g25cx7",
+          "key": "about 85% of human variety"
+        },
+        {
+          "text": "Modern science sees race as a social construct: a label made by society, not by nature.",
+          "id": "spya-fcwu4k",
+          "key": "race as a social construct"
+        },
+        {
+          "text": "Still, most scholars agree race has real effects on people's lives through unfair treatment.",
+          "id": "spya-ss4m6e"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

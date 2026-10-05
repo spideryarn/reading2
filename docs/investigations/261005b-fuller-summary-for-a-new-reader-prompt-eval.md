@@ -18,7 +18,8 @@ a report from Greg:
 
 ## What was decided, in one paragraph
 
-Fuller's prompt gains two bullets and a paragraph (`simple-prompt/10`): a name the piece
+Fuller's prompt gains two bullets and a paragraph (`simple-prompt/11`; the result files say
+`/10`, the number it was measured under before a separate Brief change took it): a name the piece
 introduces is a term and is said in everyday words where it first appears; nothing is referred to
 before the summary has introduced it; and the reader's stated background does not cover a term
 merely because it claims the piece's field. **A larger change was built first and is not what
@@ -285,9 +286,13 @@ entry (`qi-4meqvjr4`).
   seven fewer places across ten summaries.
 - **One round-one judge against the piece listed nine main findings**, where its brief said five
   to eight. Its only omission finding was made again by the round-two judge.
-- **The measured arm is the shipped prompt, to the byte.** `npx tsx evals/simple/prompt-hashes.ts`
-  prints `c5fa0839…` for the source's standard pair, which is the `systemsSha256` in every
-  `high-*-new2*` result file.
+- **Fuller's prompt as shipped is the measured arm's, to the byte; Brief's is not.** When the
+  two-bullet arm was written, `npx tsx evals/simple/prompt-hashes.ts` printed `c5fa0839…` for the
+  source's standard pair, the `systemsSha256` in every `high-*-new2*` result file. Brief's own
+  length change then landed, so the pair's hash has moved and that check can no longer be made
+  on the pair. Fuller's alone is `4e926dfd…` then and now, and
+  `tests/simple-two-levels.test.ts` pins it. Every Fuller here was written beside an 80-word
+  Brief, in its own call; Brief's prompt is not in Fuller's.
 
 ## Reading them
 

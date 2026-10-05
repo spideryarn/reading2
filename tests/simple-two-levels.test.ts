@@ -296,20 +296,25 @@ describe("Brief's and Fuller's prompts", () => {
      one `/7` shipped**, which is what "Brief unchanged" means.
      `/9` (plan 261005b) made the length follow the piece's, in four bands;
      `SIMPLE_SYSTEMS` is the standard band's pair, and **neither hash moved**:
-     an article of 2,500 to 14,999 words is asked exactly what `/8` asked. */
-  it("are Brief as `simple-prompt/8` shipped it and Fuller as `/10` did, for a piece of standard length", () => {
+     an article of 2,500 to 14,999 words is asked exactly what `/8` asked.
+     `/10` (plan 261005b § A slightly longer Brief) asks Brief for about 100
+     words where it was about 80: **Brief's hash moved** (it was `d492501b…`
+     from `/7` to `/9`) and Fuller's did not.
+     `/11` (plan 261005h) is Fuller written for someone who has not read the
+     piece: **Fuller's hash moved** (it was `740415e3…` from `/8` to `/10`)
+     and Brief's did not. */
+  it("are the bytes `simple-prompt/11` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
-    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/11");
+    expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d31a28ecc8d6977dfc7f4711bf18540059833dc62d9dc6a9ef4de4df87a8b308");
     expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("4e926dfd865ec4f38113261df9b2311717cee65fd1cd5a3c767183acaaee06a7");
   });
 
-  /* `/10` (plan 261005h): Fuller is written for someone who has not read the
-     piece. Brief's bytes did not move, which the hash above holds; these hold
-     the two things about Fuller's that a reader of the prompt could get wrong.
-     Fuller's hash above is the prompt the eval's two-bullet arm measured:
-     `npx tsx evals/simple/prompt-hashes.ts` prints the pair's hash, which is
-     the `systemsSha256` in evals/results/simple/high-about-new2a/. */
+  /* These hold the two things about `/11`'s Fuller that a reader of the prompt
+     could get wrong. Fuller's hash above is the Fuller prompt the eval's
+     two-bullet arm measured (evals/results/simple/high-about-new2a/, written
+     when Brief was still `/9`'s, so that arm's `systemsSha256` is of the pair
+     as it was then; plan 261005h). */
   it("tells Fuller alone that a name the piece introduces is a term, and not to point at what it has not introduced", () => {
     for (const rule of ["A name the piece introduces is a term like any other", "Do not refer to a part, result, model or label before this summary has"]) {
       expect(SIMPLE_SYSTEMS.fuller).toContain(rule);
@@ -359,7 +364,7 @@ describe("an unforced Summary preserves usable words for the same article", () =
       expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
     }
   });
-  it("does not make a `/9` row stale: `/10` changed the prompt and not what it is written from", async () => {
+  it("does not make a `/9` row stale: `/10` and `/11` changed the prompt and not what it is written from", async () => {
     const { store, row } = storedRow();
     const tree = { ...ARTICLE.tree, nodes: {} };
     const banded = inputFingerprint(BLOCKS, tree, ARTICLE.meta, "simple-prompt/9");
