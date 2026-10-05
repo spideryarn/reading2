@@ -26,7 +26,7 @@ with nothing but the address they gave us?
 Three sources of evidence, in descending order of how much weight they bear.
 
 1. **Measured through our own fetcher and extractor** (first-hand, 2026-10-05). 92 real papers
-   across 45 sources, 174 addresses: each landing page, and the address of the paper as best it can
+   across 45 sources, 174 fetch cases over 157 distinct addresses: each landing page, and the address of the paper as best it can
    be built from the landing address. Every address went through `fetchDocument` with its default
    options, and every HTML page through our own stage-2 extraction. No model was called and nothing
    was written to a database. The script is `evals/paper-sources/landing-vs-paper.ts`, the cases
@@ -131,7 +131,13 @@ often our readers will paste it, how much of the paper the landing page loses, a
 permitted the fix is. "Permitted" means a plain request through our existing fetcher works: no key,
 no login, no wall to get round.
 
-### Worth code now
+### Worth code
+
+Ranked. **The plan builds rows 1 to 6 first.** Rows 7 to 10 each turned out, at the plan's review,
+to need something the first six do not: bioRxiv a choice between its free HTML and its paid PDF;
+OSF and the DOI link a way to find an article by the address it was asked for, because where their
+fetch ends up is not an address anyone would paste; NBER a look at what a subscriber-only paper
+answers. The plan's § Deferred has each, with its queue entry.
 
 | # | Source | Why here |
 |---|---|---|
@@ -152,7 +158,7 @@ no login, no wall to get round.
 |---|---|
 | **OpenReview** (ICLR, TMLR, NeurIPS reviews) | Would rank second on frequency. The rule is trivial (`/forum?id=X` → `/pdf?id=X`), but both addresses met a challenge from this box. Needs one test from production's network before any code; if production is challenged too, nothing permitted helps |
 | **bioRxiv's full-text HTML** instead of its PDF | Free and seconds against a paid PDF read, exactly arXiv's trade-off. Needs the same eval part 1 ran for arXiv: is the HTML extraction correct? Only word counts were measured here |
-| **medRxiv** | Same rule as bioRxiv, same operator; refused us with 403. Costs nothing to include beside bioRxiv, and fails as it does today when refused |
+| **medRxiv** | Same rule as bioRxiv, same operator; refused us with 403 on all six requests. Goes with bioRxiv only if a later check gets in |
 | **PubMed and PMC** | The most common biomedical link by far. PMC *is* the full text and PubMed links to it, but PMC answered our browser-like request with a challenge and a plain `curl` with the article. Getting through means changing how we announce ourselves to one site, which is a call about a bot wall and so Greg's. PubMed → PMC also needs a lookup, not string work |
 | **Any landing page that names its PDF** in a `citation_pdf_url` tag | The general answer for the long tail: university repositories, small journals, Zenodo, IACR, AAAI, and every site in the table above carry the tag. It is a second mechanism (read the fetched page, decide it is a stub, follow a link the page chose), it turns some free imports into paid PDF reads, and deciding "this page is a stub" is a judgement. Named in the plan as the deferred half |
 
