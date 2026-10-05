@@ -4660,9 +4660,12 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  */
 /**
  * **A 409 for a paper not yet read through, before a route writes anything** —
- * for the two streamed routes that record a row before they read the article
- * (`search`, `runRefereeCriterion`). Every other caller of `loadArticle`
- * reads it first and gets `NotProcessed` from there. One indexed read.
+ * for the two streamed routes that used to record a row before they read the
+ * article (`search`, `runRefereeCriterion`). Since plan 261005i § D they read
+ * it first, and `loadArticle` would refuse the same paper; this stays ahead of
+ * it because that refusal also carries the paper (`NotProcessed.paper`), which
+ * is a different 409 body from the one these two have always sent. Every other
+ * caller of `loadArticle` gets `NotProcessed` from there. One indexed read.
  */
 async function refuseAPaperNotReadYet(slug: string): Promise<void> {
   if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
@@ -4700,11 +4703,16 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
 
   /* Before `begin`, which writes the run and opens the stream: a paper not yet
      read through is refused as an answer, not stored as a failed search and
-     reported as a fault. `loadArticle` below would refuse it too, inside the
-     stream. Plan 261001m. */
+     reported as a fault. Plan 261001m. */
   await refuseAPaperNotReadYet(slug);
+  /* Read before the row is written, and the same `article` goes to the model:
+     the run is stamped with the hash of the blocks it is answered over, not of
+     whatever is current when `begin` runs (plan 261005i § D, as
+     `runRefereeClaims`). A failed read is an HTTP error with no row. */
+  const article = await loadArticle(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
+    hashBlocks(article.blocks),
     criterion.trim(),
     kind,
     typeof id === "string" ? id : undefined,
@@ -4718,7 +4726,6 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
 
     let patch: SearchFinish;
     try {
-      const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
       let model = "";
       /* **The stored run's kind, not the request's.** They agree today —
@@ -4999,9 +5006,17 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
-  /* Before `begin`, for `search`'s reason. */
+  /* Before `begin`, for `search`'s reason — and the article is read before it
+     too, so the row carries the hash of the blocks the model is sent. */
   await refuseAPaperNotReadYet(slug);
-  const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
+  const article = await loadArticle(slug);
+  const { row, attempt } = await refereeCriteriaStore.begin(
+    slug,
+    hashBlocks(article.blocks),
+    criterion,
+    config,
+    id,
+  );
   const release = refereeing.hold(`${slug}/${row.id}`);
   try {
     const { frame } = sse(res);
@@ -5009,7 +5024,6 @@ async function runRefereeCriterion(
 
     let patch: CriterionFinish;
     try {
-      const article = await loadArticle(slug);
       let results: RefereeResult[] = [];
       let model = "";
       for await (const event of runCriterionStream({

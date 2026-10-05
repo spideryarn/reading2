@@ -1304,9 +1304,16 @@ export interface SearchStore {
    * attempt. Anything else mints, always under a **new** id — an absent id
    * is a row deleted elsewhere, and must not be recreated. `withRun` in
    * src/searches.ts decides.
+   *
+   * **`sourceHash` is the caller's**: `hashBlocks` of the blocks it is about
+   * to send the model, loaded before this call. The store does not read the
+   * article's fingerprint itself, so the row cannot be stamped with a
+   * different revision from the one answered (plan 261005i § D). Stored on a
+   * mint, a retry and a revision alike.
    */
   begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     kind: SearchKind,
     wantedId?: string,
@@ -1397,9 +1404,13 @@ export interface RefereeCriteriaStore {
    * poles were nonsense is exactly the row a referee fixes and runs again.
    * `withCriterion` in src/referee-criteria-store.ts holds the decision, and
    * both stores call it.
+   *
+   * `sourceHash` is the caller's, of the blocks it is sending —
+   * `SearchStore.begin`.
    */
   begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     config: RefereeCriterionConfig,
     wantedId?: string,

@@ -77,8 +77,10 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb } from "../src/db/client.js";
-import { refereeClaims, refereeCriteria } from "../src/db/schema.js";
+import { refereeClaims, refereeCriteria, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { hashBlocks } from "../src/source-hash.js";
+import type { Block } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -140,7 +142,13 @@ const gates = vi.hoisted(() => {
       },
     };
   }
-  return { criterion: makeGate(), claims: makeGate(), mirror: makeGate() };
+  return {
+    criterion: makeGate(),
+    claims: makeGate(),
+    mirror: makeGate(),
+    /** The blocks each criterion run was handed, at the model boundary. */
+    criterionSaw: [] as unknown[],
+  };
 });
 
 /* Each factory keeps everything else the real module exports — these modules
@@ -149,7 +157,8 @@ const gates = vi.hoisted(() => {
    *throws*), so a bare object would break the import rather than the test. */
 vi.mock("../src/referee-criteria-run.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/referee-criteria-run.js")>()),
-  async *runCriterionStream() {
+  async *runCriterionStream(request: { blocks: unknown }) {
+    gates.criterionSaw.push(request.blocks);
     yield { type: "result", result: { kind: "single", quote: "held off site", blockId: "b" } };
     gates.criterion.arrive();
     await gates.criterion.hold();
@@ -389,7 +398,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
   describe("POST /api/referee/criteria/:slug", () => {
     it("keeps carried writable fields on either terminal status", async () => {
       await asTestOwner(async () => {
-        const failed = await refereeCriteriaStore.begin(SLUG, "Methods?", { kind: "single" });
+        const failed = await refereeCriteriaStore.begin(SLUG, "feedfacefeedface", "Methods?", { kind: "single" });
         const failure = {
           status: "error" as const,
           error: "failed",
@@ -406,7 +415,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         expect(error?.model).toBe("failure-model");
         expect(error?.results).toEqual(failure.results);
 
-        const begun = await refereeCriteriaStore.begin(SLUG, "Controls?", { kind: "single" });
+        const begun = await refereeCriteriaStore.begin(SLUG, "feedfacefeedface", "Controls?", { kind: "single" });
         const answer = { status: "done" as const, results: [], error: "carried error" };
         const done = await refereeCriteriaStore.finish(SLUG, begun.row.id, answer, begun.attempt);
         expect(done?.error).toBe("carried error");
@@ -560,6 +569,54 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
         releaseOlder();
         gates.criterion.release();
         await Promise.all([older.promise, newer?.promise]);
+      }
+    });
+
+    it("stamps the row with the hash of the blocks the model was sent, across a re-extraction", async () => {
+      /* Plan 261005i § D, and tests/routes.test.ts has Search's twin. The
+         wrapped `begin` commits, a block is rewritten in the table, and only
+         then does `begin` answer. */
+      const original = article.blocks[0];
+      if (!original) throw new Error("the fixture has no block to rewrite");
+      const thisBlock = and(
+        eq(revisionBlocks.articleId, article.articleId),
+        eq(revisionBlocks.blockId, original.id),
+      );
+      const real = refereeCriteriaStore.begin.bind(refereeCriteriaStore);
+      const spy = vi
+        .spyOn(refereeCriteriaStore, "begin")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          const begun = await real(...args);
+          await getDb()
+            .update(revisionBlocks)
+            .set({ text: `${original.text} Re-extracted.` })
+            .where(thisBlock);
+          return begun;
+        });
+      gates.criterionSaw.length = 0;
+      try {
+        const call = begin("POST", `/api/referee/criteria/${SLUG}`, {
+          criterion: "Are the methods reproducible?",
+          kind: "single",
+        });
+        await reachedOrSettled(gates.criterion, call, "POST /api/referee/criteria/:slug");
+        gates.criterion.release();
+        await call.promise;
+
+        expect(spy, "the wrapped begin never ran, so nothing was tested").toHaveBeenCalledTimes(1);
+        expect(gates.criterionSaw).toHaveLength(1);
+        const sent = gates.criterionSaw[0] as Block[];
+        const [stored] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        expect(stored?.sourceHash, "the row's hash is not of the blocks the model was sent").toBe(
+          hashBlocks(sent),
+        );
+        /* And the article really did change under the request. */
+        expect(await asTestOwner(() => refereeCriteriaStore.sourceHash(SLUG))).not.toBe(
+          stored?.sourceHash,
+        );
+      } finally {
+        spy.mockRestore();
+        await getDb().update(revisionBlocks).set({ text: original.text }).where(thisBlock);
       }
     });
 

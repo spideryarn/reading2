@@ -341,7 +341,7 @@ describe("Referee's mirror route", { timeout: 60_000 }, () => {
 
     beforeEach(async () => {
       const { row } = await asTestOwner(() =>
-        refereeCriteriaStore.begin(SLUG, CRITERION, {
+        refereeCriteriaStore.begin(SLUG, "feedfacefeedface", CRITERION, {
           kind: "diverging",
           poles: { against: "the evidence is thin", favour: "the evidence is strong" },
           scale: "rg",
