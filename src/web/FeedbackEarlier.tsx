@@ -56,6 +56,7 @@ import {
   type FeedbackKind,
 } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 
 export type EarlierState =
@@ -67,6 +68,19 @@ export type EarlierState =
 type EarlierStates = Record<EarlierFeedbackShow, EarlierState>;
 
 const IDLE: EarlierStates = { all: { kind: "idle" }, shipped: { kind: "idle" }, unshipped: { kind: "idle" } };
+
+/**
+ * **A path on this site, and nothing a browser could read as leaving it** —
+ * the page label is an `href` since spya-tqk7au. One leading slash, then no
+ * second slash or backslash (`//host` and `/\host` are both another origin to
+ * a browser), and no backslash, whitespace or control character anywhere. The
+ * server only ever sends such a path (src/feedback-page.ts); this is the
+ * second line, so a wrong value fails the answer instead of becoming a link.
+ */
+function isSitePath(value: unknown): value is string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing them is the point
+  return typeof value === "string" && /^\/(?![/\\])[^\\\s\u0000-\u001f\u007f]*$/.test(value);
+}
 
 /**
  * A 200 is only success when it carries the wire shape the panel can render —
@@ -94,7 +108,7 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
       !Number.isNaN(Date.parse(report.createdAt)) &&
       (report.kind === null || FEEDBACK_KINDS.some((kind) => kind === report.kind)) &&
       typeof report.body === "string" &&
-      (report.page === null || typeof report.page === "string") &&
+      (report.page === null || isSitePath(report.page)) &&
       typeof report.shipped === "boolean"
     );
   })) return false;
@@ -353,11 +367,27 @@ export function EarlierList({
                   {/* Where it was filed (spya-y4upzw): the address has always
                       gone with a report, and this is the one place the reader
                       sees that it did. The server's label, not the address
-                      (src/feedback-page.ts), so text and not a link. */}
+                      (src/feedback-page.ts): the path of a page this app
+                      has, so it is its own link (spya-tqk7au, "Make it a
+                      link") — to the page, not to the paragraph or mode the
+                      report was filed in, which went with the query. */}
                   {report.page === null ? null : (
                     <>
                       {" · on "}
-                      <span className="fb-earlier-page">{report.page}</span>
+                      <Link
+                        className="fb-earlier-page"
+                        href={report.page}
+                        onClick={(event) => {
+                          if (event.defaultPrevented || event.button !== 0 || event.metaKey ||
+                            event.ctrlKey || event.shiftKey || event.altKey) return;
+                          /* Native close reaches the dialog's existing onClose.
+                             Route inside the app so the hidden Write draft survives;
+                             opening another tab leaves this dialog alone. */
+                          event.currentTarget.closest("dialog")?.close();
+                        }}
+                      >
+                        {report.page}
+                      </Link>
                     </>
                   )}
                   {report.shipped ? (
