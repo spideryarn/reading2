@@ -238,3 +238,30 @@ Where this section and the text above disagree, this section wins.
   afterwards. The plan for (d) has to cover acquisition, check what the server-side timeout does
   through the production transaction pooler, and say what a caller does about a write whose
   outcome is unknown.
+
+## What landed
+
+- **(e)** `10dd95505`. Both sentences, the reader's and the developer's.
+- **(g)** the breadcrumb stops at a stored block leaf. Checked in a browser at 1440, 820 and 390 on
+  a local article with two section-less chapters
+  ([1440](261005c-shot-1440-crumb-no-sections.png), [820](261005c-shot-820-crumb-no-sections.png),
+  [390](261005c-shot-390-crumb-no-sections.png)). The crumb click was checked at the two wider
+  widths only.
+- **(h)** `pass0` has `firstPages`; source-guess reads two pages of an upload of any length. One
+  behaviour change: an upload of 151 to 250 pages now gets the one paid search a shorter one gets,
+  under the same per-owner limit. Before, it got none by accident.
+- **(f)** both wrappers keep a report the run wrote to `--output`. Not separately tested:
+  `run-claude` under `--launch-dir`, codex `--launch-dir` with a credential fallback, `--stream`.
+- **GPT Sol's code review**
+  ([261005c-long-document-follow-ups-code-review-sol.md](261005c-long-document-follow-ups-code-review-sol.md)):
+  ship with the fixes made. It fixed H1 (an earlier attempt's report could be overwritten before it
+  was saved), H2 (`--activity-log` could alias a new sidecar) and H3 (a tree of only block leaves
+  pinned an empty breadcrumb bar). H4 is the `buildSections` finding below.
+
+## Found and not fixed
+
+- **`buildSections` on a ragged tree** (`src/web/position.ts`): a chapter with no sections yields
+  one-paragraph "sections" with empty titles, which `?at=` and Structure's arrow keys step through.
+  The fix moves what a section address means, so it wants its own plan.
+- **Uploads that already stored `none / provider-failed`** because of (h) keep it. A backfill is a
+  write to readers' data and would need Greg's yes.
