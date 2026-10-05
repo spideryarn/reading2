@@ -24,6 +24,11 @@ describe("tidyTitle: a title wholly in capitals becomes title case", () => {
     ["J.R.R. TOLKIEN AND THE GREAT WAR", "J.R.R. Tolkien and the Great War"],
     ["J. R. R. TOLKIEN AND THE GREAT WAR", "J. R. R. Tolkien and the Great War"],
     ["THE PAPERS OF J. A. SMITH", "The Papers of J. A. Smith"],
+    ["A GUIDE TO THE PH.D.", "A Guide to the PH.D."],
+    ["THE ECONOMICS OF U.S. HEALTHCARE, VOL. 2", "The Economics of U.S. Healthcare, Vol. 2"],
+    ["THE FUTURE OF A.I. RESEARCH", "The Future of A.I. Research"],
+    ["THE FUTURE OF A.I.-ASSISTED RESEARCH", "The Future of A.I.-Assisted Research"],
+    ["THE FUTURE:U.S. HEALTHCARE", "The Future:U.S. Healthcare"],
     ["ROVELLI'S ORDER OF TIME", "Rovelli's Order of Time"],
     ["O'BRIEN AND D’ARTAGNAN DON'T AGREE", "O'Brien and D’Artagnan Don't Agree"],
   ])("keeps what a rule can recognise: %s", (given, wanted) => {
@@ -32,6 +37,16 @@ describe("tidyTitle: a title wholly in capitals becomes title case", () => {
 
   it("a small word is capitalised first, last, and after a colon", () => {
     expect(tidyTitle("OF MICE AND MEN: A STORY TO LIVE BY")).toBe("Of Mice and Men: A Story to Live By");
+  });
+
+  it.each([
+    ["THE ORIGINS OF THE INTERNET—A HISTORY", "The Origins of the Internet—A History"],
+    ["THE QUESTION:AN ANSWER", "The Question:An Answer"],
+    ["THE QUESTION : AN ANSWER", "The Question : An Answer"],
+    ["THE ORDER OF TIME [AN INTRODUCTION]", "The Order of Time [An Introduction]"],
+    ["THE ORDER OF TIME (AN INTRODUCTION)", "The Order of Time (An Introduction)"],
+  ])("recases words across punctuation: %s", (given, wanted) => {
+    expect(tidyTitle(given)).toBe(wanted);
   });
 });
 
@@ -87,6 +102,17 @@ describe("tidyTitle: an acronym is recognised from the article's own body", () =
   it("the title repeated in the body, as a heading or a running head, does not count", () => {
     const heads = Array.from({ length: 12 }, () => "THE ORDER OF TIME\nTime passes, and its order with it.").join("\n");
     expect(tidyTitle("THE ORDER OF TIME", { body: heads })).toBe("The Order of Time");
+  });
+
+  it("wrapped title repetitions are not acronym evidence either", () => {
+    const body = ("THE FUTURE\nOF NASA\nA quiet paragraph about the agency.\n").repeat(1000);
+    expect(tidyTitle("THE FUTURE OF NASA", { body })).toBe("The Future of Nasa");
+  });
+
+  it("handles a thousand pages of prose and regex-special title punctuation", () => {
+    const body = ("A quiet ordinary paragraph about the agency. NASA is an agency. ").repeat(100000);
+    expect(tidyTitle("THE FUTURE OF NASA (A.I.) [VOL. 2]+?", { body })).toBe("The Future of NASA (A.I.) [Vol. 2]+?");
+    expect(tidyTitle("", { body })).toBe("");
   });
 
   it("a body printed in capitals is evidence of nothing", () => {

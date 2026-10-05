@@ -38,7 +38,8 @@ It makes two changes and no others:
      word after a colon, a dash, a question mark or an exclamation mark.
    - Kept as written: a word with a digit in it (`CO2`); a roman numeral made of two or more of I,
      V and X (`II`, `VIII`; no English word is spelt that way, where `MIX` and `CIVIL` are words);
-     initials, joined or spaced (`J.R.R.`, `J. A. Smith`).
+     initials, joined or spaced (`J.R.R.`, `J. A. Smith`), and dotted abbreviations
+     (`U.S.`, `A.I.`, `PH.D.`). Their existing capitals are preserved.
    - Apostrophes: `ROVELLI'S` gives `Rovelli's`, `DON'T` gives `Don't`, `O'BRIEN` gives `O'Brien`,
      straight or curly.
    - Each half of a hyphenated word is recased (`SELF-ESTEEM` gives `Self-Esteem`,
@@ -52,6 +53,8 @@ It makes two changes and no others:
    - **English only.** A page that declares a language other than English is not recased. With no
      language declared, which is every PDF, a title with an accented capital is not recased either,
      as the cheapest sign of another language.
+   - Literal entity syntax left by a doubly encoded import is not recased: an entity's name is
+     case-sensitive, so `&AMP;` becoming `&Amp;` would change more than the display case.
 2. **Trailing footnote markers come off**: `*`, `†`, `‡` after a word of three letters or more.
    `Attention Is All You Need*` becomes `Attention Is All You Need`; `A*` and `C*` stay.
 
@@ -86,6 +89,10 @@ rules.
 - A title of more than 300 characters is tidied and its original kept, but "Use that title" is
   refused by the rename's length limit, and the page says so.
 - A title that is only short words (`LIFE OF PI`) is left in capitals.
+- Capitals used for emphasis, or shortened running heads whose words never occur in ordinary
+  case in the prose, can look like acronyms (`FUTURE` repeated above unrelated paragraphs).
+- A quoted subtitle can have a lower-case final small word (`THE SCIENCE OF “WHAT FOR” AND WHY`
+  becomes `The Science of “What for” and Why`).
 
 Each is a case for the rename, and the first three are the case for a model, below.
 

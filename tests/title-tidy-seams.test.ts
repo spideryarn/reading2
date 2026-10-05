@@ -50,6 +50,13 @@ describe("an HTML page's title, at import", () => {
     expect(meta.title).toBe("DIE ORDNUNG DER ZEIT");
     expect(meta).not.toHaveProperty("titleOriginal");
   });
+
+  it("does not recase entity syntax left by a doubly encoded title", async () => {
+    const { meta } = await extract(page("THE &amp;amp;AMP; HISTORY OF SCIENCE"));
+    expect(meta.title).toBe("THE &AMP; HISTORY OF SCIENCE");
+    expect(meta).not.toHaveProperty("titleOriginal");
+    expect(metaColumns(meta).title).toBe("THE &AMP; HISTORY OF SCIENCE");
+  });
 });
 
 describe("the column", () => {

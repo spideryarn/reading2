@@ -19,7 +19,7 @@
  * docs/research/261005c-title-capitalisation-and-light-tidying-at-import.md.
  *
  * The caller keeps the original beside the result (`tidiedTitle`,
- * `Meta.titleOriginal`), so every change here can be undone.
+ * `Meta.titleOriginal`), so the pre-tidying title is not lost.
  */
 
 export interface TidyContext {
@@ -58,6 +58,9 @@ export function tidyTitle(title: string, context: TidyContext = {}): string {
  * the original is kept beside it.
  */
 function mayRecase(title: string, lang: string | null | undefined): boolean {
+  /* A doubly encoded import can still contain entity syntax after plainTitle.
+     Entity names are case-sensitive; recasing one would change its meaning. */
+  if (/&(?:#\d+|#x[\da-f]+|[a-z][\da-z]*);/i.test(title)) return false;
   if (lang?.trim()) return /^en\b/i.test(lang.trim());
   return ![...title].some((ch) => hasCase(ch) && ch > "\u007f");
 }
@@ -78,8 +81,8 @@ const SMALL = new Set(
 
 /** A numeral of two or more of I, V and X: no English word is spelt that way. */
 const ROMAN = /^(?=[IVX]{2,}$)X{0,3}(IX|IV|V?I{0,3})$/;
-/** `J.R.R` — the token's last full stop is trimmed off as punctuation before this is asked. */
-const INITIALS = /^\p{L}(\.\p{L})+$/u;
+/** Dotted initials and abbreviations (`J.R.R`, `U.S`, `PH.D`), without the final stop. */
+const INITIALS = /^\p{L}{1,3}(\.\p{L}{1,3})+$/u;
 const WORD = /[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu;
 
 /**
@@ -112,11 +115,13 @@ function acronymsIn(body: string | null | undefined, title: string): ReadonlySet
   /* A small word is never an acronym here: a running head has `OF` in it too. */
   const wanted = new Set((title.match(WORD) ?? []).filter((w) => w.length > 1 && !SMALL.has(w.toLowerCase())));
   if (!wanted.size) return found;
-  const prose = body.split(title).join(" ");
-  const cased = [...prose].filter(hasCase);
-  if (cased.filter(isUpper).length * 2 > cased.length) return found;
+  /* PDF headings can wrap differently from the joined title. Whitespace is
+     not evidence of an acronym. Literal splitting also keeps regex-special
+     characters in a title harmless. */
+  const prose = body.replace(/\s+/g, " ").split(title.replace(/\s+/g, " ")).join(" ");
+  if (mostlyCapitals(prose)) return found;
   const counts = new Map<string, { upper: number; other: number }>();
-  for (const word of prose.match(WORD) ?? []) {
+  for (const [word] of prose.matchAll(WORD)) {
     const key = word.toUpperCase();
     if (!wanted.has(key)) continue;
     const count = counts.get(key) ?? { upper: 0, other: 0 };
@@ -128,17 +133,40 @@ function acronymsIn(body: string | null | undefined, title: string): ReadonlySet
   return found;
 }
 
+function mostlyCapitals(prose: string): boolean {
+  /* Count in place: a thousand-page PDF must not allocate arrays of every
+     letter (and then a second array of every upper-case letter). */
+  let cased = 0;
+  let upper = 0;
+  for (const ch of prose) {
+    const code = ch.charCodeAt(0);
+    if (code <= 127) {
+      if (code >= 65 && code <= 90) {
+        cased += 1;
+        upper += 1;
+      }
+      else if (code >= 97 && code <= 122) cased += 1;
+      continue;
+    }
+    if (!hasCase(ch)) continue;
+    cased += 1;
+    if (isUpper(ch)) upper += 1;
+  }
+  return upper * 2 > cased;
+}
+
 function titleCase(title: string, acronyms: ReadonlySet<string>): string {
   const tokens = title.split(/(\s+)/);
   const wordAt = tokens.map((t, i) => (/[\p{L}\p{N}]/u.test(t) ? i : -1)).filter((i) => i >= 0);
   const first = wordAt[0];
   const last = wordAt[wordAt.length - 1];
+  const wordIndices = new Set(wordAt);
   /* The first word of a subtitle is a first word. */
   let opens = true;
   return tokens
     .map((token, i) => {
-      if (!wordAt.includes(i)) {
-        if (/[-–—]/.test(token)) opens = true;
+      if (!wordIndices.has(i)) {
+        if (/[-–—:?!]/.test(token)) opens = true;
         return token;
       }
       const edge = opens || i === first || i === last;
@@ -154,18 +182,21 @@ function recase(token: string, edge: boolean, acronyms: ReadonlySet<string>): st
   const [lead, core, trail] = [shape?.[1] ?? "", shape?.[2] ?? token, shape?.[3] ?? ""];
   /* `J.R.R.`, and the spaced `J. A. Smith`, whose `A.` is not the article. */
   if (INITIALS.test(core) || ([...core].length === 1 && trail.startsWith("."))) return token;
-  const parts = core.split(/([-/])/);
+  const parts = core.split(/([-/–—:?!()[\]“”"])/);
   const recased = parts.map((part, i) => {
     if (i % 2) return part;
     /* A small word is a capital at the title's edge and at a compound's end. */
-    const capitalSmall = (edge && i === 0) || (parts.length > 1 && i === parts.length - 1);
+    const before = i === 0 ? lead : parts[i - 1] ?? "";
+    const capitalSmall = (edge && i === 0)
+      || /[:?!–—([“"]/.test(before)
+      || (parts.length > 1 && i === parts.length - 1 && /^[-/]$/.test(before));
     return recaseWord(part, capitalSmall, acronyms);
   });
   return lead + recased.join("") + trail;
 }
 
 function recaseWord(word: string, capitalSmall: boolean, acronyms: ReadonlySet<string>): string {
-  if (!word || /\p{N}/u.test(word) || ROMAN.test(word)) return word;
+  if (!word || /\p{N}/u.test(word) || ROMAN.test(word) || INITIALS.test(word.replace(/\.$/, ""))) return word;
   /* `ROVELLI'S`, `DON'T`, `O'BRIEN`: the part before the apostrophe is the word. */
   const [, head = word, mark = "", tail = ""] = /^([^'’]*)(['’]?)(.*)$/su.exec(word) ?? [];
   const lower = head.toLowerCase();

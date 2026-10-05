@@ -109,6 +109,7 @@ describe("a tidied title's original", () => {
       .where(eq(articles.slug, SLUG));
     const shared = await pgPublicReader.loadArticle(SLUG);
     expect(shared.meta.title).toBe(TITLE);
+    expect(shared.meta).not.toHaveProperty("titleOriginal");
     expect(JSON.stringify(shared)).not.toContain(ORIGINAL);
   });
 });

@@ -2185,6 +2185,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
       "directory of its own. Re-run witness 2 to confirm.",
   },
+  "tests/title-original-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for `article_revisions.title_original` " +
+      "(docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md): the owner's read, the " +
+      "carry-forward, the export and the visitor's read. It seeds through `scratchArticleInPg`, " +
+      "which loads a corpus article into Postgres and reads no `data/` directory of its own; the " +
+      "export it runs writes to a temporary directory it removes. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
