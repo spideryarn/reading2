@@ -13,7 +13,12 @@
  * src/cited-in-spideryarn.ts.
  */
 
-const DOI_ORG = "https://doi.org/";
+/**
+ * The one spelling of the resolver `doiUrl` writes and `doiOfUrl` reads.
+ * Exported so a caller holding another spelling (`http://dx.doi.org/…`) can
+ * put it in this one and ask `doiOfUrl`, rather than decode a path itself.
+ */
+export const DOI_ORG = "https://doi.org/";
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 

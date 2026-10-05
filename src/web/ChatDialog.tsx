@@ -166,6 +166,13 @@ interface Props {
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
   /**
+   * An answer in this panel has just stopped arriving: finished, failed or
+   * stopped. Whoever holds the thread summaries asks for them again, so a mark
+   * that shows a conversation's latest line (a Debate claim's) follows a
+   * follow-up asked here. Once per answer, never per token. Plan 261005i, F1.
+   */
+  onSettled?(): void;
+  /**
    * **The room the panel has over the marginalia column, in px — or `null` to
    * float in the corner as it always has.** layout.ts § `chatDock` decides;
    * `Reader` passes it.
@@ -278,6 +285,7 @@ export function ChatDialog({
   onNewConversation,
   onCreated,
   onDropped,
+  onSettled,
   dockRoom = null,
   card = null,
   reopen = 0,
@@ -294,7 +302,7 @@ export function ChatDialog({
     cancelAndDiscard,
     remove,
     error,
-  } = useChat(slug);
+  } = useChat(slug, onSettled);
 
   const thread = target.kind === "thread" ? threads.find((t) => t.id === target.threadId) : undefined;
 

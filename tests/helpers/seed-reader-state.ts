@@ -93,6 +93,7 @@ import { isSpideryarnId } from "../../src/ids.js";
 import { currentOwnerId } from "../../src/owner.js";
 import { loadRuns } from "../../src/searches.js";
 import { loadShelf } from "../../src/shelf.js";
+import { originColumns } from "../../src/thread-origin.js";
 import { isThreadKind } from "../../src/types.js";
 
 /**
@@ -261,7 +262,16 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
   await db.delete(chatMessages).where(eq(chatMessages.articleId, articleId));
   await db.delete(chatThreads).where(eq(chatThreads.articleId, articleId));
 
-  const anchors = [...new Set(threads.flatMap((t) => (t.anchor ? [t.anchor.blockId] : [])))];
+  /* An origin's block points at an identity through the same kind of foreign
+     key (`chat_threads_origin_identity_fk`), so it is minted here too. */
+  const anchors = [
+    ...new Set(
+      threads.flatMap((t) => [
+        ...(t.anchor ? [t.anchor.blockId] : []),
+        ...(t.origin ? [t.origin.blockId] : []),
+      ]),
+    ),
+  ];
   if (anchors.length) {
     await db
       .insert(blockIdentities)
@@ -288,6 +298,9 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
          is `not null`. `"chat"` is the default `normaliseKind` applies in
          src/chat.ts and the one the column declares. */
       kind: isThreadKind(thread.kind) ? thread.kind : "chat",
+      /* Where it was started from. Named here or the restore drops it
+         (tests/chat-origin-route.test.ts). */
+      ...originColumns(thread.origin),
     });
     for (const [ordinal, message] of thread.messages.entries()) {
       await db.insert(chatMessages).values({

@@ -139,13 +139,16 @@ function owner(debate: Debate): UseDebate {
 let host: HTMLDivElement;
 let root: Root;
 
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+
 /* Reception (rows about the piece) unless a test says Claims — the two
    sub-modes each draw one search's rows since 2026-10-03 (plan 261003o). */
 function paint(o: UseDebate, view: DebateView = "reception", order: DebateOrder = "prioritised") {
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o, citers: { result: { kind: "no-doi" }, retry: () => {} } },
+        access: { kind: "owner", owner: o, citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
         onJump: () => {},
         view,
         onView: () => {},

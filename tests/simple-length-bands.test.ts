@@ -127,7 +127,8 @@ describe("Brief", () => {
   it("is asked the same of every piece, whatever its length", () => {
     expect(new Set(SIMPLE_BANDS.map((band) => SIMPLE_SYSTEMS_BY_BAND[band].brief)).size).toBe(1);
     for (const band of SIMPLE_BANDS) {
-      expect(flat(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toContain("About 80 words in all, and never more than 130.");
+      /* About 80 and 130 until `simple-prompt/10` (Greg, 2026-10-05: "ever so slightly longer"). */
+      expect(flat(SIMPLE_SYSTEMS_BY_BAND[band].brief)).toContain("About 100 words in all, and never more than 150.");
     }
   });
 });

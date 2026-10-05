@@ -137,6 +137,8 @@ import {
   ExternalLink,
   Globe,
   LoaderCircle,
+  MessageSquare,
+  MessagesSquare,
   type LucideIcon,
   RotateCcw,
   Star,
@@ -184,6 +186,8 @@ import {
   type DebateLean,
   type IdentificationLevel,
   type RegistrySource,
+  type ThreadOrigin,
+  type ThreadSummary,
   distinctSources,
   identificationLevel,
   identifiesOf,
@@ -231,7 +235,8 @@ import { AboutMade } from "./BandAbout.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
-import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseCiters } from "./useCiters.js";
@@ -806,12 +811,41 @@ export type DebateAccess =
      (src/web/useCiters.ts). Beside `owner` rather than on it, because it is
      not the stored debate's and has no job: it can be on screen with no debate
      at all. A visitor has none (plan 261004h). */
-  | { kind: "owner"; owner: DebateOwner; citers: UseCiters }
+  /* `claimChats` is the owner's too (plan 261005i): a visitor has no chat, so
+     their arm has no handler to be handed and the claims draw neither the
+     button nor the mark. Required here, so `Reader` cannot leave it out and
+     still type-check. */
+  | { kind: "owner"; owner: DebateOwner; citers: UseCiters; claimChats: DebateClaimChats }
   /* **The visitor's arm, since 2026-09-29** (plan 260929c stage 4): the stored
      debate off the public payload and nothing else — no read status (it came
      with the page), no job, no verb, so nothing on a visitor's panel can start
      a search. */
   | { kind: "visitor"; debate: PublicDebate; owner?: never };
+
+/**
+ * **A claim's chat: starting one, and the way back to one already started.**
+ * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
+ *
+ * Called a *chat* throughout, never a thread: `?debatethread=` and
+ * debate-threads.ts already use that word here for a synthesis theme.
+ *
+ * Nothing is stored on the claim. The conversation records the claim it was
+ * started from (`ThreadOrigin`: the block and the words), and the mark is found
+ * by matching the claim against `summaries` — the reading view's list, which
+ * `Reader` owns and keeps current.
+ */
+export interface DebateClaimChats {
+  summaries: readonly ThreadSummary[];
+  /** Start a fresh chat about this claim. Goes to Chat with the question unsent; spends nothing. */
+  onCheck(origin: ThreadOrigin): void;
+  /** Open the conversation already started from a claim, beside Debate. */
+  onOpen(threadId: string): void;
+}
+
+/** The button on a claim's heading: its tooltip and its accessible name. */
+export const DEBATE_CHECK_CLAIM = "Check this claim in chat";
+/** The mark on a claim a chat was started from. */
+export const DEBATE_OPEN_CLAIM_CHAT = "Open the chat about this claim";
 
 interface Props {
   access: DebateAccess;
@@ -1268,7 +1302,12 @@ export function DebatePanel({
                   ))}
               </>
             ) : (
-              <ClaimsList groups={claimGroups} onJump={onJump} keyRows={keyRows} />
+              <ClaimsList
+                groups={claimGroups}
+                onJump={onJump}
+                keyRows={keyRows}
+                chats={access.kind === "owner" ? access.claimChats : null}
+              />
             )}
 
             {/* Both searches' numbers (`footLines`) and the extracts-only
@@ -1902,36 +1941,99 @@ function ReceptionList({
  * The rows carry no *On "…"* line of their own, because the heading says it:
  * the repeated *Answering* blocks were half of what made the old list look
  * like duplicates.
+ *
+ * **The owner's heading also starts a chat about the claim, and shows the way
+ * back to one** (`chats`; `null` for a visitor, who gets neither). The button
+ * wears Chat's icon from the bar, because it takes the reader into Chat
+ * (docs/project/icons.md). The mark wears the floating chat's, because it
+ * opens the conversation beside Debate; it sits on a line of its own under
+ * the claim, so the latest answer's opening has room.
  */
 function ClaimsList({
   groups,
   onJump,
   keyRows,
+  chats,
 }: {
   groups: readonly ClaimGroup<ClaimRow>[];
   onJump(id: BlockId): void;
   keyRows: ReadonlyMap<string, DebateKeySource>;
+  chats: DebateClaimChats | null;
 }) {
   return (
     <>
-      {groups.map((group) => (
-        /* The claim's identity is `(blockId, claimQuote)` — debate-order.ts. */
-        <details key={`${group.blockId} ${group.claimQuote}`} className="dbt-group dbt-claim-group" open>
-          <summary className="dbt-group-head dbt-group-claim">
-            <span className="dbt-group-quote">“{group.claimQuote}”</span>
-            <BlockRef id={group.blockId} onJump={onJump} />
-            <span
-              className="dbt-group-count"
-              title={`${group.rows.length} ${group.rows.length === 1 ? "source" : "sources"} on this claim`}
-            >
-              {group.rows.length}
-            </span>
-          </summary>
-          <Rows rows={group.rows} keyRows={keyRows} />
-        </details>
-      ))}
+      {groups.map((group) => {
+        /* The claim's identity is `(blockId, claimQuote)` — debate-order.ts —
+           and that pair is the whole of what its chat remembers. */
+        const origin: ThreadOrigin = { mode: "debate", blockId: group.blockId, quote: group.claimQuote };
+        const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
+        return (
+          <details key={`${group.blockId} ${group.claimQuote}`} className="dbt-group dbt-claim-group" open>
+            <summary className="dbt-group-head dbt-group-claim">
+              <span className="dbt-group-quote">“{group.claimQuote}”</span>
+              <BlockRef id={group.blockId} onJump={onJump} />
+              {chats && (
+                <Tooltip placement="top" content={<TipNote>{DEBATE_CHECK_CLAIM}</TipNote>}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="dbt-claim-check tw:pointer-coarse:size-10"
+                    aria-label={DEBATE_CHECK_CLAIM}
+                    /* A button in a `<summary>`: the press is ours, and must
+                       not also fold the claim. */
+                    onClick={(e) => {
+                      e.preventDefault();
+                      chats.onCheck(origin);
+                    }}
+                  >
+                    <MessagesSquare size={12} aria-hidden="true" />
+                  </Button>
+                </Tooltip>
+              )}
+              <span
+                className="dbt-group-count"
+                title={`${group.rows.length} ${group.rows.length === 1 ? "source" : "sources"} on this claim`}
+              >
+                {group.rows.length}
+              </span>
+              {chats && chat && (
+                <Tooltip placement="bottom" content={<TipNote>{claimChatTip(chat.turns, Boolean(chat.lastLine))}</TipNote>}>
+                  <button
+                    type="button"
+                    className="dbt-claim-chat"
+                    aria-label={DEBATE_OPEN_CLAIM_CHAT}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      chats.onOpen(chat.id);
+                    }}
+                  >
+                    <MessageSquare size={12} aria-hidden="true" />
+                    <span className="dbt-claim-chat-count">{chat.turns}</span>
+                    {/* The chat's own latest answer, clipped: a model's words,
+                        so in the model's face (docs/project/fonts.md). Absent
+                        while the newest question is unanswered. */}
+                    {chat.lastLine ? (
+                      <span className="dbt-claim-chat-line voice-ai">{chat.lastLine}</span>
+                    ) : (
+                      <span className="dbt-claim-chat-waiting">No answer yet</span>
+                    )}
+                  </button>
+                </Tooltip>
+              )}
+            </summary>
+            <Rows rows={group.rows} keyRows={keyRows} />
+          </details>
+        );
+      })}
     </>
   );
+}
+
+/** The mark's tooltip: what a press does, what the number is, and what the words are. */
+function claimChatTip(turns: number, answered: boolean): string {
+  const asked = `${turns} ${turns === 1 ? "question" : "questions"} so far.`;
+  return `${DEBATE_OPEN_CLAIM_CHAT}. ${asked}${answered ? " The words are how its latest answer begins." : ""}`;
 }
 
 /**
