@@ -57,10 +57,19 @@ Siblings found by grepping `src/web` for the shape:
   jump down (or revealed it for a jump up) — the thing the window was first written to prevent
   (2026-08-27). Red-first test, fixed in the same change.
 - **`DiagramPanel.tsx` § `CHAIN_MS`**: "the glide plus a margin" decides that the last ↑/↓ press's
-  aim still stands. Same shape. Left: a press arriving late is delayed by the same blocked thread
-  that delays the glide, so the two stay in step, and its comment records that the handle
-  (`glideTarget()`) was tried first and had its own gap. Named here so the next report against it
-  is recognised.
+  aim still stands. Same shape, left outside this change. Its timer (`setTimeout`) and the glide's
+  frames (`requestAnimationFrame`) are separate callbacks: a blocked thread does not guarantee
+  that the glide finishes before the chain expires or the next press runs. Its comment records
+  that the handle (`glideTarget()`) was tried first and had its own gap; that does not establish
+  the timer's safety either. GPT Sol's code review reproduced it in a controlled test (C3: a glide
+  still pending when the chain expires, and a second Next repeats the first target); how often a
+  browser gets there is unmeasured. `keynav.ts` keeps the same timer for ↑ / ↓. Reported to the
+  Overseer as its own item rather than fixed here.
+- **A neighbour of a different class, found by the same browser check:** the row Structure marks as
+  current (`useColumnContext`) never asked the anchor at all, so on a long article it marked the
+  row before the one clicked from the moment of landing. The report read as one symptom ("`?at=`
+  is rewritten and the highlight follows it"); it was two defects that happened to agree. Fixed in
+  the same plan, with its own red test.
 - **`follow.ts` § `HANDS_OFF_MS`** is a clock, and is *not* this class: its signal is `wheel` and
   `touchmove`, which only a hand fires. Its own comment says so.
 

@@ -142,4 +142,43 @@ than folded in.
   test failed against the tolerance. It found nothing in the frame ordering, instant moves or
   clamping, and agreed the larger option is not needed.
 - 2026-10-05: stages 1 and 2 built. The two late-event tests were red before the fix (anchor `null`;
-  `data-bars` `hidden`) and are green; `quietUntil` and `markOurScroll` are deleted.
+  `data-bars` `hidden`) and are green; `quietUntil` and `markOurScroll` are deleted. Commit
+  `7624d4c46`.
+- 2026-10-05: **GPT Sol's code review of `7624d4c46`: approve with changes**
+  ([answer](261005c-a-late-scroll-event-code-review.md)). No runtime finding in the change. It ran
+  the seven test files (107 passed), put a clock and a tolerance back into each guard in turn and
+  saw all four mutations caught, and fixed two prose findings itself: C1, two comments that still
+  described a destination measured once (`scroll.ts`, `tests/mobile-chrome.test.ts`) and one that
+  named the window expiring; C2, the postmortem's claim that Diagram's chain timer and the glide
+  "stay in step", which nothing guarantees. Both read and kept. **C3 (P1, wider, not fixed):** it
+  reproduced, in a controlled test, the Diagram ↑ / ↓ chain timer expiring while a glide is still
+  pending, so a second Next repeats the first target. Same class, different feature, frequency in a
+  browser unmeasured; `keynav.ts` has the same timer. Not folded in — it is a change to how stepping
+  chains in two files, not to this fix — and reported to the Overseer as its own item.
+- 2026-10-05: **the browser check** (Sonnet, Playwright, against `7624d4c46`). `?at=` four seconds
+  after a Structure click, with no `replaceState` after the push:
+
+  | width | article | kept |
+  |---|---|---|
+  | 1440×900 | 1,025 blocks | 7 of 7 |
+  | 1440×900, 4× CPU, 8 s wait | 1,025 blocks | 3 of 3 |
+  | 1440×900 | 49 blocks | 4 of 4 |
+  | 820×1180 (the list) | 1,025 blocks | 4 of 4 |
+  | 390×844 (the band steps aside) | 1,025 blocks | 3 of 3 |
+
+  A real wheel of 3,000 px ends the hold and `?at=` follows; a wheel up reveals the bar; the bar's
+  attribute did not change on a jump down or up; a reload lands the section top-aligned. **Its first
+  run lost two clicks**, with the row off-centre. That run overlapped the code reviewer saving
+  `scroll.ts` (06:12:52) under the same dev server, and a hot reload replaces the module that holds
+  the anchor. Re-run by me on a still tree with a cold server and an emptied Vite cache: 6 of 6,
+  twice. Believed to be the reload; not proved beyond that.
+- 2026-10-05: **the other half of the report was a second defect, and "Not this plan" above was
+  wrong to leave it.** The check found Structure marking the row *before* the clicked one on the
+  long article, from the moment of landing and still at four seconds (click "3 Notation", "2
+  Preface" is marked). That is the "highlighted row follows it to the previous section" of the queue
+  item, and it never read `?at=`: `useColumnContext` measures at 40% of the window and a short
+  centred heading sits at about 45%. Fixed the way every other position reader is: while a centred
+  arrival holds, the line is the arrived row's own top. Red first in
+  `tests/structure-focus-row.test.tsx` (`'0'` where `'5'` was expected). In a browser afterwards, six
+  clicks on the long article: the marked part is the clicked one at 500 ms and at 4 s, and `?at=`
+  held all six.

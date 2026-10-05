@@ -648,16 +648,16 @@ let aiming: number | null = null;
  * When the page is being moved by us rather than by the reader.
  *
  * **The bar must not react to our own scrolling, and this is a correctness
- * problem rather than a tidiness one.** Every jump in this file computes its
- * destination once, from `stickyOffset()`, and then travels. If the travel
- * itself can hide the controls bar — and a jump down the article is a downward
- * scroll, so it can — the clearance the destination was calculated with is no
- * longer the clearance that exists when it arrives, and the row lands a bar's height
- * under the header it was supposed to clear. An upward jump has the mirror
- * fault: it reveals the bar and lands behind it.
+ * problem rather than a tidiness one.** A jump must not hide or reveal the
+ * controls as though the reader had scrolled. When this guard was introduced,
+ * the destination was measured once, so reacting to the jump also changed the
+ * clearance underneath that fixed target. Caught by GPT Sol reviewing the
+ * plan, 2026-08-27, before it was ever run.
  *
- * Neither shows up as an error, and both look exactly like a jump that worked.
- * Caught by GPT Sol reviewing the plan, 2026-08-27, before it was ever run.
+ * The target is now re-measured every frame by `aimAt`, using
+ * `stickyDestination()` to reserve the bar's eventual coverage. That corrects
+ * the destination when layout changes; this guard keeps the bar's visibility
+ * from changing in response to our own movement.
  *
  * **A scroll event that reports the pixel we last moved the page to is ours,
  * whenever it arrives; one at any other pixel is the reader's.** Every path in

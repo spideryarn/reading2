@@ -24,7 +24,8 @@
  */
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
-import { rowsForBlockIds } from "./rows.js";
+import { blockRow, rowsForBlockIds } from "./rows.js";
+import { arrivalAnchor } from "./scroll.js";
 import { isFolded } from "./fold.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
@@ -67,7 +68,18 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
 
     const measure = () => {
       frame = 0;
-      const focusLine = window.innerHeight * FOCUS_LINE;
+      /* **A centred arrival is where the reader is** (scroll.ts § `anchor`),
+         and its top sits a little *below* the focus line — a short heading
+         lands at about 45% of the window — so the line alone names the section
+         before the one just clicked. While the arrival holds, the line is the
+         arrived row's own top: the last section starting at or above it is the
+         one that contains it. No listener of its own: the reader scrolling
+         or the layout changing ends the hold and re-runs this. A mode change
+         ends it without either, and the arrived section then stays marked
+         until the next scroll — the page has not moved, so it is still true. */
+      const arrived = arrivalAnchor();
+      const arrivedTop = arrived ? blockRow(arrived.id)?.getBoundingClientRect().top : undefined;
+      const focusLine = arrivedTop !== undefined ? arrivedTop + 1 : window.innerHeight * FOCUS_LINE;
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );

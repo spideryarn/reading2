@@ -417,7 +417,7 @@ describe("a centred jump", () => {
       flush(251);
       expect(document.documentElement.dataset.bars).toBeUndefined();
 
-      /* The reader moves more than BAR_HIDE_AFTER before the window expires. */
+      /* The reader moves more than BAR_HIDE_AFTER just after landing. */
       Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
       window.dispatchEvent(new Event("scroll"));
       flush(252);
