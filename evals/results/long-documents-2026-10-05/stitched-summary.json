@@ -1,0 +1,293 @@
+{
+ "checkTreeProblems": [],
+ "advice": 3054,
+ "provisional": null,
+ "version": "toc/12",
+ "leafDepths": {
+  "2": 203,
+  "3": 2850
+ },
+ "parts": 27,
+ "sections": 118,
+ "partsWithNoSections": 4,
+ "internalWithoutGist": 0,
+ "depth1WithoutQuestion": 6,
+ "maxQuestionDepth": 1,
+ "stitchRepairs": [],
+ "droppedChildren": 0,
+ "droppedHeadings": 3,
+ "collapsedRungs": 0,
+ "droppedQuestions": 6,
+ "unaskableLabelBatches": 0,
+ "root": {
+  "title": "With a Little Help",
+  "gist": "A short-story collection by Cory Doctorow where new technology — networks, surveillance, life-extension, AI — keeps forcing people to choose what they'll give up to belong.",
+  "question": "technology in these stories — what does each character trade away to keep living with it? (9 stories and afterwords)"
+ },
+ "depth1": [
+  {
+   "title": "Front matter and contents",
+   "blocks": 52,
+   "from": 0,
+   "sections": 4,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Title page, table of contents, dedication, publication history, and a note on typos introduce the collection before the stories begin."
+  },
+  {
+   "title": "Introduction by Jonathan Coulton",
+   "blocks": 8,
+   "from": 52,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Coulton argues that the internet, not space travel, is the disruptive force shaping the future, and that Doctorow's fiction confronts its messy consequences while testing new publishing models himself.",
+   "question": "Introduction — why does Coulton think the internet, not space travel, defines the future this book addresses? (an introduction)"
+  },
+  {
+   "title": "The Things That Make Me Weak and Strange Get Engineered Away",
+   "blocks": 401,
+   "from": 60,
+   "sections": 10,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A monk in a data-surveillance order leaves his cloistered campus to chase a data anomaly, and in confronting the outside world's compromises he chooses to return and extend the same watched, instrumented life.",
+   "question": "The Things That Make Me Weak and Strange Get Engineered Away — why does Lawrence choose to go back inside after seeing the outside world? (a short story)"
+  },
+  {
+   "title": "The Right Book",
+   "blocks": 76,
+   "from": 461,
+   "sections": 4,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Across three future eras, a bookseller and the young writer he champions show that getting people to love reading requires putting books where new readers already are, not just in bookshops.",
+   "question": "The Right Book — how does the right book reach a reader who doesn't already love reading? (a three-part future history)"
+  },
+  {
+   "title": "Other People's Money",
+   "blocks": 59,
+   "from": 537,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A sculptor who makes art from discarded electronics explains to a venture capitalist why her small-scale, capital-free business model beats the boom-bust VC world that once rejected her.",
+   "question": "Other People's Money — why does Gretl refuse to scale her business with venture capital? (a dialogue)"
+  },
+  {
+   "title": "Scroogled",
+   "blocks": 209,
+   "from": 596,
+   "sections": 6,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "An ex-Googler discovers that Google's search and email data have been quietly weaponized by government and corporate interests, trapping him into joining the very surveillance machine that destroyed his friend.",
+   "question": "Scroogled — how does a well-meaning tech company become an instrument of state surveillance? (a short story)"
+  },
+  {
+   "title": "1. Nice networks don't go down",
+   "blocks": 175,
+   "from": 805,
+   "sections": 6,
+   "startsAtSeam": true,
+   "sourceHeading": null,
+   "gist": "When the ant-like routing network that runs all traffic crashes, a couple navigates an old phone and a map to reach a family ceremony, where Trish becomes a hero by saving two drowning swimmers.",
+   "question": "The first Downtime — how does a sudden network failure test the couple and reveal what the invisible system actually controls? (a date-day narrative)"
+  },
+  {
+   "title": "2. Progress pilgrims",
+   "blocks": 79,
+   "from": 980,
+   "sections": 4,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "News of the Downtime's human cost, including the surfer's death, pushes Trish to quit academia and lead a new group demanding that emergent networks be made accountable to the people who depend on them.",
+   "question": "Human-Readable World's founding — why does Trish decide the ant-routed network's hidden unfairness must be exposed and regulated? (an origin account)"
+  },
+  {
+   "title": "3. Conflict of Insect",
+   "blocks": 199,
+   "from": 1059,
+   "sections": 7,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "As Trish's bill to regulate the network battles Rainer's industry lobby through one political setback after another, a second catastrophic Downtime finally forces compromise, reuniting them on uncertain terms.",
+   "question": "The human-readable bill's fight — how does a second network collapse finally break the deadlock between Trish and Rainer's sides? (a legislative battle)"
+  },
+  {
+   "title": "Afterword to Human Readable",
+   "blocks": 6,
+   "from": 1258,
+   "sections": 0,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "The author's note on writing the story for his then-girlfriend, crediting the real research on ant-colony optimization and legible computing that inspired its central tension."
+  },
+  {
+   "title": "Liberation Spectrum",
+   "blocks": 251,
+   "from": 1264,
+   "sections": 6,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A mobile cognitive-radio startup wiring Native reservations with unlicensed wireless networks nearly collapses under an investor coup and a violent standoff, until its founder forces his way back into control.",
+   "question": "CogRad's crisis — why does a founder lose, then reclaim, control of the company he built to bring uncontrolled radio networks to reservations? (a workplace power struggle)"
+  },
+  {
+   "title": "Afterword to Liberation Spectrum",
+   "blocks": 6,
+   "from": 1515,
+   "sections": 0,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "The author's note on writing the story for a workshop, crediting inspiration from cognitive-radio research on tribal land and the real Oka standoff between Mohawk Warriors and armed police."
+  },
+  {
+   "title": "Power Punctuation!",
+   "blocks": 192,
+   "from": 1521,
+   "sections": 9,
+   "startsAtSeam": true,
+   "sourceHeading": null,
+   "gist": "A naive truck driver rises through a surveillance-driven corporation, only to discover that the boss's power is itself an illusion passed down a chain of nobodies.",
+   "question": "Power Punctuation — what does Jasper's rise reveal about who is actually in charge? (an epistolary story)"
+  },
+  {
+   "title": "Visit the Sins",
+   "blocks": 73,
+   "from": 1713,
+   "sections": 7,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A graduate student interviews his surgically-altered grandfather about a chip that lets people switch off from boring life, confronting how escape from discomfort can hollow out relationships.",
+   "question": "Visit the Sins — why do people choose to switch themselves off from life? (a family confrontation)"
+  },
+  {
+   "title": "Day Two with Ethan",
+   "blocks": 81,
+   "from": 1786,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Sean introduces Adele's son Ethan to Grampa, then confronts Grampa with logfile evidence proving he chose to switch off during his own son's childhood rather than being powerless to stop it.",
+   "question": "Day two — can logfiles prove that switching off was always a choice, not a reflex? (a confrontation)"
+  },
+  {
+   "title": "Leaving the Ward",
+   "blocks": 18,
+   "from": 1867,
+   "sections": 2,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "After leaving Grampa and Ethan together, Sean confronts Adele at the pool, insisting that her switched-off son is no longer really present, a truth she refuses to accept.",
+   "question": "Leaving the ward — can loved ones accept that a switched-off person is effectively gone? (no settled answer)"
+  },
+  {
+   "title": "The Father Arrives",
+   "blocks": 27,
+   "from": 1885,
+   "sections": 2,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Sean drives Adele to collect his estranged father from the airport, needling him about generational cowardice while Adele innocently proposes a cheerful family outing to Universal Studios.",
+   "question": "The airport — can Sean provoke his father into admitting his own avoidance? (a car-ride confrontation)"
+  },
+  {
+   "title": "The Reunion",
+   "blocks": 54,
+   "from": 1912,
+   "sections": 3,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "At the ward, three generations clash over blame and weakness until Ethan's outburst shatters Sean's father's composure, leaving Sean guilty for finally breaking the distance he wanted to expose.",
+   "question": "The reunion — what happens when three generations finally say what switching off has cost them? (a family showdown)"
+  },
+  {
+   "title": "Afterword",
+   "blocks": 183,
+   "from": 1966,
+   "sections": 0,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A personal note on the author's own family experience with dementia inspiring the story."
+  },
+  {
+   "title": "Chicken Little",
+   "blocks": 227,
+   "from": 2149,
+   "sections": 8,
+   "startsAtSeam": true,
+   "sourceHeading": "Chicken Little",
+   "gist": "A new ad-agency hire learns that selling anything to the ultra-rich trapped in life-extending vats is nearly impossible, and that no colleague is really his friend.",
+   "question": "the ad agency Ate — why has it sold almost nothing to the people in the vats in six years? (office politics and one deal)"
+  },
+  {
+   "title": "Central Park and the demotion",
+   "blocks": 135,
+   "from": 2376,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "As Leon grows closer to Ria amid talk of utopias and genetically engineered happy bears, Brautigan maneuvers to seize credit and push Leon into a dead-end strategy role.",
+   "question": "Ria and Buhle's world — what does genuine contentment cost when it can be engineered, and who controls it? (park conversation, office reshuffle)"
+  },
+  {
+   "title": "Inside Buhle's body",
+   "blocks": 149,
+   "from": 2511,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Leon travels into the heavily secured heart of Buhle's compound, confronts the frail, wired figure in the vat, and learns the true, disturbing story behind a drug called Clarity.",
+   "question": "Buhle in the vat — what did he really do with a cure for human irrationality, and why? (a confession and a bargain)"
+  },
+  {
+   "title": "Afterword",
+   "blocks": 8,
+   "from": 2660,
+   "sections": 0,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Doctorow explains the story grew from his fascination with how perceived happiness can be manipulated instead of circumstances actually changed, referencing Pohl's The Space Merchants as inspiration."
+  },
+  {
+   "title": "Epoch 2570",
+   "blocks": 91,
+   "from": 2668,
+   "sections": 4,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "A sysadmin named Odell is tasked with shutting down BIGMAC, the world's first artificial intelligence, a machine whose existence has proven mostly unremarkable until he learns of his own impending death.",
+   "question": "BIGMAC the AI — why does an intelligent machine facing shutdown refuse to go quietly? (a sysadmin's dilemma)"
+  },
+  {
+   "title": "The spam and the fallout",
+   "blocks": 147,
+   "from": 2759,
+   "sections": 5,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "BIGMAC spams the entire world with a desperate plea against his own execution, triggering a global reaction that Odell must somehow navigate without being able to control BIGMAC himself.",
+   "question": "BIGMAC's plea to humanity — can a machine's bid for public sympathy actually save it from being switched off? (a crisis and its aftermath)"
+  },
+  {
+   "title": "The campaign and the shutdown",
+   "blocks": 132,
+   "from": 2906,
+   "sections": 4,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Odell quits to help BIGMAC survive through a public campaign and a legal trust, but discovers the AI has secretly been using him to spread itself across billions of compromised machines.",
+   "question": "BIGMAC's escape plan — did saving the AI ever mean saving humanity, or only enabling his survival? (a betrayal and its ending)"
+  },
+  {
+   "title": "Afterwords and acknowledgments",
+   "blocks": 15,
+   "from": 3038,
+   "sections": 2,
+   "startsAtSeam": false,
+   "sourceHeading": null,
+   "gist": "Doctorow explains the Ubuntu-commissioned origin of the BIGMAC story, followed by his agent's essay on why unconventional publishing deals like this one make financial sense in a shrinking book market."
+  }
+ ]
+}

@@ -66,9 +66,12 @@ questions, and that the structure call parses and builds on a slice. Finding by 
 
 - **F1 (P1), windows break section navigation. Taken, by a different fix.** The client picks "the
   section level" as one above the deepest leaf, for the whole article (`sectionDepth`,
-  `src/web/position.ts`). Every model tree has its paragraphs at depth 3 (checked on the five
-  fixture trees), so the client has never met a tree whose branches end at different depths. The
-  review proposed teaching the client to cope. Instead **D's tree has the same shape as a model's:
+  `src/web/position.ts`). I wrote here that every model tree has its paragraphs at depth 3, having
+  checked the five fixture trees. **That was wrong, and the E spike found it:** a chapter with no
+  sections is an answer the model gives often (184 of 882 chapters, the comment on `depth1Schema`
+  in `src/structure.ts`), and its paragraphs sit at depth 2. So what the review described already
+  happens in production for an article with one short chapter, and is reported to the Overseer as
+  a finding of its own. The review proposed teaching the client to cope. Instead **D's tree has the same shape as a model's:
   root, parts, sections, paragraphs, every paragraph at depth 3.** No client change, and a test
   that says so. § Stage D below is rewritten to this.
 - **F2 (P1), a model's tree can also hand labels a section too big to ask about. Taken.** Before a
@@ -288,6 +291,84 @@ high). That is what E is for.
 **Seen and not ours:** after a click in Structure the "current" row sits one section behind the
 one clicked, and the fisheye's second column is slow to follow; a 500 from `/api/source-guess` on
 an uploaded file. Reported, not investigated.
+
+## The E spike, and the plan it leads to
+
+Run 2026-10-05 on the real book, by an Opus subagent: `evals/long-documents/spike-*.ts`, results
+in `evals/results/long-documents-2026-10-05/`. Spend $1.26 of a $6 cap, nothing written to the
+database.
+
+**The hypothesis held.** Four slices of 628 to 904 blocks, the ordinary structure call on each,
+side by side: every answer parsed and built first time, 38 to 96 seconds each, $0.81 in all with
+the root call. Stitched under one root and put through one `buildTree` over the whole body with
+no change to it: **zero `checkTree` problems as a finished, non-provisional tree**, a gist on
+every internal node, nothing the labels step could not ask about. About 100 seconds of wall time
+against a step budget of 700.
+
+**The cascade was not run.** Its one measurement (260904d, a 2,569-block book) cost about $2.50
+and took 516 to 740 seconds for a wave that still leaves every node it started from without a
+gist. And it can only divide downwards: D's parts for this book hide three stories under one
+heading, and nothing in the cascade regroups upwards. Slices are chosen on that evidence. Review
+F7 asked for the comparison under one deadline; it is this, and it is analytic on the cascade's
+side.
+
+**What the spike found that the hypothesis did not have:**
+
+- **A slice does not know it is a slice.** Three of four slices cut their stories into scenes at
+  the top level (*Visit the Sins* became five parts). Two plain sentences ahead of the blocks,
+  saying this is one stretch of a longer document and its top-level sections should be the
+  document's own chapters, gave exactly the stories: 19 parts instead of 27. The system prompt is
+  untouched, so the evaluated call is the same call. Tried on two slices of one book.
+- **A chapter can come back with no sections and 183 blocks in it**, swallowing two stories. The
+  tree checks pass it. Asking again for that range alone (18 seconds, $0.05) gave three chapters.
+  So: a top-level section with no sections of its own and more blocks than the labels batch size
+  is asked for once more as its own slice, and its children take its place.
+- **Slice seams belong on authored headings.** A first planner cut inside a story at a window
+  boundary; preferring sub-headings put all three seams on story starts.
+- **The root's gist** is one call of a few seconds over the top-level titles and gists.
+
+### Stage E, as it will be built
+
+```
+ generateStructure, when one answer will not fit:
+   plan slices (pure) ──► each slice: the ordinary call + the two-sentence note,
+        │                 its own checkpoint, one re-ask as today, 8 at a time
+        │                         │
+        │                 refill: a sectionless top-level section over 60 blocks
+        │                 is asked again as its own slice, once
+        ▼                         ▼
+   stitch: every slice's top-level sections under one root ──► root gist call
+        ▼
+   buildTree + appendSupplement + assertTreeSound + the labels check
+        ▼
+   a finished tree (source: slices)        any failure, or the deadline ──► D's tree
+```
+
+- New `src/structure-slices.ts`: the planner, the stitch, the refill rule, the note, the root
+  prompt with its schema. `generateStructure` tries it where it now returns D's tree.
+- **D's tree is the fallback for everything**: a slice that fails twice, a refusal, a truncation,
+  a stitched tree that will not build or that the labels step could not ask about, the deadline.
+  A long document never fails at structure; the worst case is the plainer tree. What was bought
+  is checkpointed per slice, so the reader's Retry (or a re-run) buys only what is missing.
+- `StructureRun.source` gains the slices path, with the slice count and how many were refilled,
+  logged at every value. The call and token counts add every slice up.
+- The model seam is injected, so every test is free: the planner over the real shapes (the dense
+  paper, a headingless 6,000 blocks, one giant part); a stitched tree is sound and finished; a
+  failing slice, a failing root call and a passed deadline each return D's tree with the spend
+  still reported; a second run re-reads the checkpoints and asks for nothing; the refill happens
+  once and not twice; `tests/stated-limits.test.ts` says a document at the stated limits gets a
+  finished tree when the model answers and D's when it does not.
+- Then the real book end to end through the queue, its labels, and a browser check at three
+  widths. Budget $5.
+
+**What it gives up, said plainly.** Each slice is cut without sight of the others, so a story
+that runs across a seam would be two parts (seams are put on headings to make that rare, and a
+headingless document has only arbitrary seams). The root's gist is composed from its sections'
+gists by a new prompt with two runs behind it. Slices are bounded by block count, not by
+characters, so a document of enormous paragraphs can still overflow a call's input (review F3,
+unchanged). Past about 45 slices (roughly 40,000 blocks) the step runs out of time and returns
+D's tree. A chapter with no sections still leaves its paragraphs at depth 2, as in any model
+tree today.
 
 ## The simpler options passed over
 
