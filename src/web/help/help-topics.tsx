@@ -369,7 +369,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
           <li>
             The command bar also takes a few whole requests. <em>where does it first mention entropy</em>{" "}
-            jumps to the first place the article says it, and <em>find entropy</em> shows every place.{" "}
+            jumps to the first place the article says it. <em>search for entropy</em> or{" "}
+            <em>find entropy</em> offers a quick search for it first, on your own articles, and
+            every place the exact word appears second.{" "}
             <em>look up entropy</em> opens a matching term already visible in the glossary, or, once
             the article has a glossary, offers to look it up and add it.{" "}
             <em>tag as methods</em> and <em>untag methods</em> change your own tags, and{" "}

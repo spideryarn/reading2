@@ -156,7 +156,7 @@ Then the residue, which is why this page exists:
   count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
 - **A second way into a mode from the bar is a view of the mode's state, never a copy of it.** One
-  mode has one so far: Search's quick-search box (a ⚡ on touch screens), beside its button since
+  mode has one so far: Search's quick-search box (not drawn on touch screens), beside its button since
   2026-10-02. It shares the panel's draft through a small per-article store and hands its words to
   the band, which does all the asking — so there is still one request, one list and one set of
   marks. Its gate is `hasQuickSearch` in [`Dock.tsx`](../../src/web/Dock.tsx): only where the band

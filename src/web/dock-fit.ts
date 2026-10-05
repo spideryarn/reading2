@@ -83,8 +83,9 @@ import { onFontsChanged } from "./fonts.js";
  *    keep 0.6rem of icon padding. The old `max-width: 1100px` rule.
  *  - `dock-fit-3`: *every* button loses its label and closes to 0.55rem. What
  *    § a narrow window did at 731px. The quick-search box stays, compact.
- *  - `dock-fit-4`: rung 3, plus the quick-search box becomes the ⚡ button
- *    (styles/dock-quick-search.css). **Added at the bottom on 2026-10-02, so
+ *  - `dock-fit-4`: rung 3, less the quick-search box — the whole control
+ *    goes, and since 2026-10-05 no ⚡ is drawn in its place (plan 261005h;
+ *    styles/dock-quick-search.css). **Added at the bottom on 2026-10-02, so
  *    nothing renumbered**: an owner's reading view is already on rung 3 at
  *    1440×900, and while rung 3 drew the ⚡ a laptop never saw the search bar
  *    Greg asked for (docs/plans/261002h-quick-search-bar-in-the-dock.md).

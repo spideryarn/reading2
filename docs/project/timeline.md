@@ -95,6 +95,8 @@ cause and the numbers:
   day and the month are known and only the year is not. The head of the list says once that some
   dates have no year. This is the panel's doing (`datingWords`), so it applies to every stored
   timeline without a re-run. The short label survives only where no phrase was located.
+  [Marginalia](marginalia.md) draws the same words in its note for the row, and places it as it
+  places a `words` row.
 - **With no publication date, the stage assumes the one year the piece itself states** —
   `pieceYear` in [`src/timeline-time.ts`](../../src/timeline-time.ts): exactly one distinct year,
   written beside a month, across the body, **and only when that year is the year we fetched the

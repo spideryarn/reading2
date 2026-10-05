@@ -223,7 +223,12 @@ describe("an empty conversation on a short band", () => {
     expect(host.querySelector(".chat-to-bottom")).not.toBeNull();
   });
 
-  it("follows the pending first answer and its streamed text after the reader scrolled through the suggestions", () => {
+  /* Until 261005f this asserted the opposite: that the first answer was
+     followed to the bottom, word by word. An answer is now held where it
+     starts. This file gives turns no positions, so only the holding is
+     checked here; where the question is put is
+     tests/chat-streamed-answer-stays.test.tsx. */
+  it("holds the pending first answer still as its text streams, after the reader scrolled through the suggestions", () => {
     paint(thread([]));
     const el = scroller();
     act(() => {
@@ -236,16 +241,18 @@ describe("an empty conversation on a short band", () => {
         message("spya-m3a001", "assistant", "", "pending"),
       ]),
     );
-    expect(scroller().scrollTop).toBe(SCROLL_HEIGHT - CLIENT_HEIGHT);
+    const placed = scroller().scrollTop;
 
-    measuredScrollHeight += 60;
+    measuredScrollHeight += 600;
     paint(
       thread([
         message("spya-m3u001", "user", "q"),
         message("spya-m3a001", "assistant", "The answer is arriving.", "pending"),
       ]),
     );
-    expect(scroller().scrollTop).toBe(measuredScrollHeight - CLIENT_HEIGHT);
+    expect(scroller().scrollTop).toBe(placed);
+    expect(scroller().scrollTop).not.toBe(measuredScrollHeight - CLIENT_HEIGHT);
+    expect(host.querySelector(".chat-to-bottom"), "and the pill says it runs on below").not.toBeNull();
   });
 
   it("reads an empty Remember invitation from the top without offering Latest", () => {

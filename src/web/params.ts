@@ -735,7 +735,7 @@ export const faqBarParam = createParser<number>({
  * **`quick` sits between them** (2026-10-02, docs/plans/261002e-quick-search-v1.md):
  * the same saved, ticked, coloured runs as `meaning`, asked of a fast model
  * that scores every paragraph in about a second instead of quoting and
- * reasoning in half a minute. Wherever the panel talks about the draft or the
+ * reasoning in about ten seconds. Wherever the panel talks about the draft or the
  * saved list, `quick` behaves as `meaning` does — `asksTheServer` below — and
  * it differs only in the `kind` it asks with.
  */

@@ -21,6 +21,7 @@ import type {
 import { FIND_MORE_MODES, type FindMoreMode } from "./find-more.js";
 import { handOffFindMore } from "./find-more-handoff.js";
 import { handOffGlossaryAsk } from "./glossary-ask-handoff.js";
+import { searchDraftFor } from "./search-draft.js";
 import { findLiteral, MIN_FIND_CHARS } from "./search-hits.js";
 
 type Runner<K extends CommandProposal["id"]> = (proposal: Extract<CommandProposal, { id: K }>) => Outcome;
@@ -175,6 +176,29 @@ export function findMoreRunners(slug: string, open: FindMoreOpeners): FindMorePr
 }
 
 /**
+ * **The bar's *Quick search “X”* press** (plan 261005i) — the Enter of the
+ * bar's own quick-search box (DockQuickSearch.tsx), without the box: the words
+ * into the article's shared draft, an `enter` handoff sealed with them, then
+ * Search mode. The band takes the handoff, turns itself to *quick* and asks
+ * (modes/search/SearchMode.tsx § `useBarHandoff`), so there is still exactly
+ * one place that asks, and a quick search already being typed is revised
+ * rather than joined by a second.
+ *
+ * The handoff is left **before** `open`, so a band that mounts for this finds
+ * it there. `open` is the reading view's own opener for Search, which also
+ * brings back a rail the reader had hidden (Reader.tsx § `openQuickSearch`).
+ */
+export function quickSearchPress(slug: string, open: () => void): (words: string) => ActionOutcome {
+  return (words) => {
+    const draft = searchDraftFor(slug);
+    draft.set(words);
+    draft.handOff("enter");
+    open();
+    return CLOSE;
+  };
+}
+
+/**
  * **The reading view's executor, built once** — what Reader.tsx hands the Dock
  * (command-proposal.ts § `CommandExecutor`), from the controllers it already
  * owns. A function rather than an object literal in Reader so that *what is
@@ -188,7 +212,10 @@ export function findMoreRunners(slug: string, open: FindMoreOpeners): FindMorePr
  *  - **the bookmark exists only when the page hands one in**, which it does
  *    once the opening comments read has landed without error (F6);
  *  - **a Find more exists only for a band the page names**, which it does for
- *    the owner while that band's list can be added to (`findMoreRunners`).
+ *    the owner while that band's list can be added to (`findMoreRunners`);
+ *  - **a quick search exists only when the page hands in Search's opener**,
+ *    which it does for the owner: a visitor's band cannot ask
+ *    (`quickSearchPress`).
  */
 export function readingExecutor({
   slug,
@@ -197,6 +224,7 @@ export function readingExecutor({
   glossary,
   bookmark,
   findMore,
+  openQuickSearch,
 }: {
   slug: string;
   blocks: Block[];
@@ -205,6 +233,8 @@ export function readingExecutor({
   glossary?: (GlossaryLookupSource & { openTerm(termId: BlockId): void; openGlossary(): void }) | undefined;
   bookmark?: ((blockId: BlockId) => Promise<boolean>) | undefined;
   findMore?: FindMoreOpeners | undefined;
+  /** Open Search mode, for the *Quick search “X”* row — Reader.tsx § `openQuickSearch`. */
+  openQuickSearch?: (() => void) | undefined;
 }): CommandExecutor {
   return {
     runners: {
@@ -214,6 +244,7 @@ export function readingExecutor({
     },
     sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
+    ...(openQuickSearch === undefined ? {} : { quickSearch: quickSearchPress(slug, openQuickSearch) }),
   };
 }
 
@@ -230,8 +261,9 @@ export function readingExecutor({
  *  - **the jump of the surface the chat is drawn in** — the band's, which
  *    steps a covering band aside on a phone, or the dialog's plain one.
  *
- * **Not the reading view's `findMore`**: that is a row of the bar's, not a
- * proposal, and no chip token names it.
+ * **Not the reading view's `findMore`, nor its `quickSearch`**: each is a row
+ * of the bar's, not a proposal, and no chip token names it. A chat *Find “X”*
+ * chip goes on opening the exact-words search.
  *
  * Chat is the owner's, so this is only ever built for one.
  */

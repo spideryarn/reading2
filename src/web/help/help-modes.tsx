@@ -258,7 +258,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           again after that, or after a break, starts a new one. Its paragraphs are marked with a
           bar down the side and a mark in the spine, not a highlight over the words. Use it for a
           first look; <strong>thorough</strong> on a quick search runs the full meaning search on
-          the same words, in about half a minute, and replaces the quick one. You do not have to
+          the same words, usually in about ten seconds, and replaces the quick one. You do not have to
           press it: once you stop typing and the quick answer has settled for two seconds, the
           thorough search starts by itself (at once if you pressed Enter). The quick search shows a spinner in place of its{" "}
           <strong>thorough</strong> button while it runs. On success its results take the quick ones' place; if it fails, the quick
@@ -266,9 +266,14 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
-          <strong>Quick search</strong> box in the bottom bar, tap the <strong>⚡</strong> button when
-          it is shown instead, or press <strong>/</strong>. The box keeps your words after a search,
-          so you can add to them; the <strong>×</strong> at its right-hand end empties it.
+          <strong>Quick search</strong> box in the bottom bar, press the <strong>⚡</strong> button
+          that takes its place while Search is open, or press <strong>/</strong>. A phone or a
+          narrow window has no room for the box: open <strong>Search</strong> and choose{" "}
+          <strong>quick</strong>. Typing <em>search for …</em> in the command bar does it too, at
+          any width: the first row it offers is the quick search, and the second finds the exact
+          words. The box keeps your words after a search, so you can add to them; the{" "}
+          <strong>×</strong> at its right-hand end empties it, and the box in the Search panel has
+          one as well.
         </p>
       </>
     ),

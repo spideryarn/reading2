@@ -400,14 +400,19 @@ describe("collapsed and expanded", () => {
     expect(shown(".chat-scroll")).toHaveLength(1);
   });
 
-  it("follows an answer to its new bottom when it finishes while collapsed", () => {
+  /* It used to be followed to its new bottom. Since 261005f an answer is read
+     from its start: the reopened card puts the question back at the top, and
+     the pill says the answer runs on below. This file gives turns no
+     positions, so "the question's top" is 0 here; the placement arithmetic is
+     tests/chat-streamed-answer-stays.test.tsx. */
+  it("opens an answer that finished while collapsed at its start, not its end", () => {
     const geometry = transcriptGeometry();
     try {
       threads = [ANSWERING];
       draw(THREAD, inCard());
       const transcript = panel().querySelector<HTMLElement>(".chat-scroll");
       if (!transcript) throw new Error("no transcript");
-      expect(transcript.scrollTop).toBe(800);
+      expect(transcript.scrollTop, "an arriving answer is opened at its question").toBe(0);
       act(() => button("Collapse")?.click());
       expect(transcript.scrollHeight).toBe(0);
       geometry.grow();
@@ -417,8 +422,8 @@ describe("collapsed and expanded", () => {
       ] }];
       draw(THREAD, inCard());
       act(() => shown(".chat-card-shut")[0]?.click());
-      expect(transcript.scrollTop).toBe(1400);
-      expect(shown(".chat-to-bottom")).toHaveLength(0);
+      expect(transcript.scrollTop).toBe(0);
+      expect(shown(".chat-to-bottom")).toHaveLength(1);
     } finally {
       geometry.restore();
     }

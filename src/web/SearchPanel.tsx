@@ -20,7 +20,7 @@
  * pains to make obvious, is **what pressing the key does**. In `words` the
  * results are already there as you type: free, instant, no round trip. In
  * `meaning` nothing happens until you submit, because submitting spends a model
- * call and half a minute. A box that quietly billed you per keystroke would be
+ * call and about ten seconds, sometimes twenty or more. A box that quietly billed you per keystroke would be
  * the worst possible version of this feature.
  *
  * ## Why the results list is not a summary
@@ -97,6 +97,7 @@ import {
   Sparkles,
   Trash2,
   Type,
+  X,
   Zap,
 } from "lucide-react";
 import { worthRetrying } from "../messages.js";
@@ -118,6 +119,7 @@ import { useRenderCount } from "./perf.js";
 import { useSlow } from "./useSlow.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
+import { media } from "./media.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
 /**
@@ -328,8 +330,17 @@ export function SearchPanel({
   const setDraft = store.set;
   const box = useRef<HTMLInputElement>(null);
   /* Sol F2: opened from the bar's box, the panel leaves focus where the reader
-     is typing. Read once, at mount, which is the only moment it matters. */
-  const [quietMount] = useState(() => store.barFocused());
+     is typing. Read once, at mount, which is the only moment it matters.
+
+     **Nor on a touch screen, when it mounts for a search already sent** — an
+     `enter` handoff, which there is the command bar's *Quick search “X”* row
+     (plan 261005i, Sol's F4). There is nothing left to type, and focus would
+     raise the keyboard over the hits; `putKeyboardAway` is what the box's own
+     Enter does for the same reason. The ⚡ (`quick`) asks for the box and
+     still gets it, and at a desk the caret is here as it always was. */
+  const [quietMount] = useState(
+    () => store.barFocused() || (store.handoff()?.type === "enter" && media("(pointer: coarse)")),
+  );
   /* The ⚡ in the bar focuses this box inside its own tap, when it is here. */
   useEffect(() => store.registerBox(() => box.current?.focus({ preventScroll: true })), [store]);
 
@@ -593,6 +604,19 @@ const Box = forwardRef<
        so the hits can be read. A refused search keeps the caret. */
     putKeyboardAway(box.current);
   };
+  /**
+   * **Empty the box, and nothing else** — Escape's body, and the cross's
+   * (plan 261005i). It used to also close the open search, back when there was
+   * one; now the ticks own what is showing, and a clear that silently unticked
+   * them would undo work the reader can see they did.
+   */
+  const clear = () => {
+    if (matcher === "words") onFind(null);
+    else {
+      setDraft("");
+      session?.edit("");
+    }
+  };
 
   /**
    * Change matcher, taking whatever is in the box along with it.
@@ -618,7 +642,7 @@ const Box = forwardRef<
 
   return (
     <div className="srch-box">
-      <div className="srch-field">
+      <div className={`srch-field${value === "" ? "" : " srch-field--filled"}${busy ? " srch-field--busy" : ""}`}>
         <input
           ref={box}
           className="srch-input"
@@ -676,19 +700,32 @@ const Box = forwardRef<
                nobody trusts. */
             if (e.key === "Escape") {
               e.preventDefault();
-              /* It empties the box and nothing else. It used to also close the
-                 open search, back when there was one; now the ticks own what is
-                 showing, and a key that silently unticked them would undo work
-                 the reader can see they did. */
-              if (matcher === "words") onFind(null);
-              else {
-                setDraft("");
-                session?.edit("");
-              }
+              clear();
             }
           }}
         />
         {busy && <LoaderCircle size={14} className="srch-spin" aria-label="Searching" />}
+        {value !== "" && (
+          /* **The cross that empties the box** (plan 261005i; Greg,
+             2026-10-04: *"Q-panel-box-cross yes"*) — Escape's clear for a
+             screen with no Escape, and for a hand already on the mouse. The
+             cursor goes to the box, since the only reason to wipe is to type
+             the next words; mousedown keeps it there if it already was, so a
+             quick session does not see a blur in between. The bar's box has
+             the same cross (DockQuickSearch.tsx § `dock-qs-clear`). */
+          <button
+            type="button"
+            className="srch-clear"
+            aria-label="Clear the search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              clear();
+              box.current?.focus({ preventScroll: true });
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
+        )}
       </div>
 
       <div className="srch-modes">
@@ -909,7 +946,7 @@ function Thorough({
       title={
         running
           ? "Already running the thorough search for this"
-          : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
+          : "Run the thorough (meaning) search for these words: exact quotes and reasons, usually about ten seconds. It replaces this quick search."
       }
       onClick={() => {
         if (!running) onAsk();

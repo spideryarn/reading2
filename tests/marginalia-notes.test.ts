@@ -505,8 +505,9 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
 });
 
 /* Timeline events in the margin — plan 261003f stage 1. Only events the piece
-   dates (`dated` or its own `words`), beside the earliest occurrence whose
-   quoted words are still in their block. */
+   dates (`dated`, its own `words`, or since plan 261005h a date with no year),
+   beside the passage that dates them, whose quoted words are still in their
+   block. */
 function event(
   id: string,
   dating: TimelineEvent["dating"],
@@ -568,6 +569,89 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
     expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
     const here = notes.get("spya-aaaaa4") ?? [];
     expect(here[0]?.kind === "timeline" && here[0].items.map((i) => i.event.id)).toEqual(["e2"]);
+  });
+
+  /* Plan 261005h D: the panel shows a date with no year in the article's own
+     words (`datingWords`), so the margin places it like a `words` event. */
+  const yearless = (phrase: string | null, reason = "noYearFrame") =>
+    ({ kind: "rejected", reason, phrase }) as TimelineEvent["dating"];
+
+  it("puts a date with no year beside the earliest mention whose block says its phrase", () => {
+    const e = event("e9", yearless("topic 3"), [
+      { blockId: "spya-aaaaa2", quote: say(1) },
+      { blockId: "spya-aaaaa4", quote: say(3) },
+    ]);
+    const notes = marginaliaNotes(null, quoted, null, { timeline: [e] });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
+    expect(notes.get("spya-aaaaa4")).toEqual([{ kind: "timeline", items: [{ event: e, quote: say(3) }] }]);
+  });
+
+  it.each(["unparseablePhrase", "phraseNotInOccurrence"])("draws nothing for a date rejected as %s", (reason) => {
+    const e = event("e10", yearless("topic 3", reason), [{ blockId: "spya-aaaaa4", quote: say(3) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
+  });
+
+  it("draws nothing for a date with no year whose phrase is in no block, or whose quote has gone", () => {
+    const lost = event("e11", yearless("On July 7"), [{ blockId: "spya-aaaaa4", quote: say(3) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [lost] }).size).toBe(0);
+    const unquoted = event("e12", yearless("topic 3"), [{ blockId: "spya-aaaaa4", quote: "Acme launched on topic 3" }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [unquoted] }).size).toBe(0);
+  });
+
+  /* GPT Sol, F4 on plan 261005h: the server only keeps a phrase it found
+     INSIDE an occurrence's quote (`locatePhrase`, src/timeline.ts), for `words`
+     and for a rejected date alike. An earlier block that says the phrase about
+     something else, and quotes the event without it, is not where it is dated. */
+  describe("the phrase must be inside the mention's own quote", () => {
+    it.each([
+      ["words", { kind: "words", phrase: "Later on" } as TimelineEvent["dating"],
+        "Acme discussed the late Ron and its launch.", "Later on, Acme launched."],
+      ["yearless", yearless("In June"),
+        "Acme discussed its launch in Injune.", "In June, Acme launched."],
+    ])("does not remove word boundaries to place a %s phrase in an earlier quote", (_, dating, earlier, later) => {
+      const blocks = [earlier, later].map((text, i) => ({
+        id: i === 0 ? "spya-aaaaa2" : "spya-aaaaa3", text, html: "", kind: "text", gistable: true, words: 40,
+      })) as unknown as Block[];
+      const e = event("word-boundaries", dating, blocks.map((b) => ({ blockId: b.id, quote: b.text })));
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa3"]);
+    });
+
+    it("keeps original slice offsets while matching repeated whitespace and folded quotation marks", () => {
+      const text = "İstanbul: Acme said “On  May\n1, we launch”.";
+      const blocks = [{ id: "spya-aaaaa2", text, html: "", kind: "text", gistable: true, words: 40 }] as unknown as Block[];
+      const e = event("normalised", yearless("On May 1"), [
+        { blockId: "spya-aaaaa2", quote: 'Acme said "On May 1, we launch"' },
+      ]);
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa2"]);
+    });
+
+    const two = [
+      { id: "spya-aaaaa2", text: "On July 7, another company launched. Acme discussed its launch." },
+      { id: "spya-aaaaa3", text: "On July 7, Acme launched." },
+    ].map((b) => ({ ...b, html: "", kind: "text", gistable: true, words: 40 })) as unknown as Block[];
+    const mentions = [
+      { blockId: "spya-aaaaa2", quote: "Acme discussed its launch" },
+      { blockId: "spya-aaaaa3", quote: "On July 7, Acme launched" },
+    ];
+
+    it.each([
+      ["a date with no year", yearless("On July 7")],
+      ["the article's own words", { kind: "words", phrase: "On July 7" } as TimelineEvent["dating"]],
+    ])("%s goes beside the mention that says it, not an earlier block that says it of something else", (_, dating) => {
+      const e = event("e13", dating, mentions);
+      const notes = marginaliaNotes(null, two, null, { timeline: [e] });
+      expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
+      expect(notes.get("spya-aaaaa3")).toEqual([
+        { kind: "timeline", items: [{ event: e, quote: "On July 7, Acme launched" }] },
+      ]);
+    });
+
+    it("draws nothing when no mention's quote holds the phrase, or the phrase is null", () => {
+      const outside = event("e14", yearless("On July 7"), [mentions[0]!]);
+      expect(marginaliaNotes(null, two, null, { timeline: [outside] }).size).toBe(0);
+      const none = event("e15", yearless(null), mentions);
+      expect(marginaliaNotes(null, two, null, { timeline: [none] }).size).toBe(0);
+    });
   });
 
   it("puts the Timeline line after FAQ and before Debate on one block", () => {

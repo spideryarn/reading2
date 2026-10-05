@@ -363,10 +363,12 @@
   cursor: pointer;
 }
 .chat-thread-open:hover { color: var(--ink); }
-/* Two lines, then cut. A title is up to sixty characters (`titleFrom` in
-   src/chat.ts) and the panel fits rather fewer than that on a line, so one line
-   was throwing away the end of the sentence that says what the question was
-   about; two lines shows all of it. `line-clamp` needs the prefixed pair to
+/* Two lines, then cut. A stored title is up to sixty characters (`titleFrom`
+   in src/chat-title.ts) and the panel fits rather fewer than that on a line, so one
+   line was throwing away the end of the sentence that says what the question
+   was about. Since 2026-10-05 the row draws the whole first question where the
+   title was only its start (chat-list-row.ts), so this clamp is now what cuts
+   a long one. `line-clamp` needs the prefixed pair to
    work anywhere; both are still required in 2026. */
 .chat-thread-title {
   min-width: 0;
@@ -388,6 +390,27 @@
   white-space: nowrap;
   color: var(--ink-faint);
   font-size: 0.88rem;
+}
+/* **A narrow window gives each row more of itself** (plan 261005h; Greg on an
+   iPhone, 2026-10-05: the list "truncates both the thread title and the first
+   response a little bit too aggressively, so it's quite hard to tell what each
+   chat's really about"). Measured at 390px the title has 302px, and one line of
+   preview held about 35 characters. Three lines of title — which since the
+   same day is the whole first question where the stored title was only its
+   start (chat-list-row.ts) — and two of preview. A short question still takes
+   one line. A wide window is left as it was. */
+@media (max-width: 731px) {
+  .chat-thread-title {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+  .chat-thread-last {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+  }
 }
 .chat-thread-meta {
   display: flex;
@@ -475,6 +498,30 @@
   line-height: 1.5;
 }
 
+/* While a typed answer is arriving, Conversation owns the transcript's
+   position. Chrome's scroll anchoring moved a just-placed question 31px up
+   when the first words replaced "thinking…"; Safari did not. Keep that second
+   positioner out of the stream, then restore ordinary transcript anchoring so
+   a reader in history stays on the same line when something above it changes
+   height. The browser pass on d128b1d3d already covered the finishing frame
+   with anchoring on: its drift was 0px. */
+.chat-scroll.streaming { overflow-anchor: none; }
+
+/* The empty block that lets a just-asked question sit at the top of the panel
+   while its answer arrives under it. Its height is set from JS and is zero the
+   rest of the time (ChatPanel.tsx § A streamed answer stays where it starts).
+   `flex: none` because a dialog's transcript may be laid out as a column. */
+.chat-room {
+  /* Never a browser's scroll anchor, streaming or not: it is the one box here
+     whose top moves and whose height shrinks as an answer grows, so a browser
+     that held on to it would move the view by exactly that growth (GPT Sol's
+     reading of the 31px, code review 2 of plan 261005f; inferred, not traced). */
+  overflow-anchor: none;
+  flex: none;
+  height: 0;
+  pointer-events: none;
+}
+
 .chat-turn { margin: 0 0 0.85rem; }
 .chat-turn.you {
   padding: 0.45rem 0.6rem;
@@ -500,6 +547,15 @@
 }
 .chat-turn.model p:last-child { margin-bottom: 0; }
 .chat-turn.model.failed { color: var(--ink-faint); }
+
+/* A geometry marker immediately before the answer's first character. It is an
+   element because unsupported CommonMark roots are deliberately bare text
+   nodes, which DOM selectors cannot address (ChatPanel.tsx § anchorIn). */
+.chat-answer-anchor {
+  display: block;
+  height: 0;
+  pointer-events: none;
+}
 
 /* ---- the shapes a model writes ----
    Lists, headings, quotes, rules and code in an answer. Drawn by Cited.tsx from
@@ -544,6 +600,8 @@
 }
 /* No gap above the first thing in an answer. */
 .chat-turn.model .fmt-h:first-child { margin-top: 0; }
+/* Without a tool strip, the geometry marker above is the first child. */
+.chat-turn.model > .chat-answer-anchor:first-child + .fmt-h { margin-top: 0; }
 
 .chat-turn.model .fmt-quote {
   margin: 0 0 0.6rem;

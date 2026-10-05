@@ -273,11 +273,21 @@ export function ShelfCard({
       >
         {facts.map((f, i) => (
           /* Keyed by position as well as text: an author called "2011" and a
-             paper of 2011 are two facts, and two equal keys would drop one. */
+             paper of 2011 are two facts, and two equal keys would drop one.
+
+             **The dot follows its fact, inside the fact's span.** Each span is
+             one flex item, so a line that wraps starts with whatever the next
+             span starts with: a dot in front of each fact began the second
+             line with "·" on a phone (plan 261005h § E). After the fact, the
+             upper line ends with the dot and the lower one starts with a fact.
+             The spacing of an unwrapped line is unchanged: the dot's 8px
+             margin (`ml-2`) is before it and the row's 8px `gap-x-2` after
+             it, where it used to be the gap before and an `mr-2` after. The
+             last fact has no dot, so the chips that follow sit as they did. */
           // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
           <span key={`${i}:${f}`} data-shelf-fact="" className="tw:min-w-0 tw:max-w-full tw:break-words">
-            {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
             {f}
+            {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
           </span>
         ))}
         {/* First of the chips: it is the one that says why this card is here

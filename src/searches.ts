@@ -21,7 +21,7 @@
  * >
  * > — docs/project/original-version/highlighting.md
  *
- * A meaning-search costs a model call and half a minute. Throwing the result
+ * A meaning-search costs a model call and about ten seconds, sometimes twenty or more. Throwing the result
  * away when the reader closes the panel means the second time they want it they
  * pay again. Greg's call, 2026-08-25: saved beside the article, listed when you
  * come back, and re-opening one repaints the page with no model call at all.

@@ -912,6 +912,9 @@ export function Metadata({
             {meta.title}
           </h1>
         </EditableTitle>
+        {hasShelfRow && !rename.editing && (
+          <ImportedTitle original={meta.titleOriginal} showing={meta.title} onUse={rename.done} />
+        )}
         {/* Only the facts this article actually has, filtered once and counted
             from the filtered list — same reasoning as the library card. A chain
             of `&&`s, or a separate test of the same fields, is how a line ends
@@ -2147,6 +2150,42 @@ function Questions({
           the bar is called Comments (docs/project/comments.md). */}
       {count} comment{count === 1 ? "" : "s"}
     </Link>
+  );
+}
+
+/**
+ * **The title as it arrived, when import tidied it, and the way back.**
+ *
+ * Import makes a title printed in capitals title case and keeps the original
+ * (`Meta.titleOriginal`, src/title-tidy.ts). Greg asked that the tidying could
+ * be undone, and this line is the undo: the button writes the original as the
+ * reader's own title through the page's one rename, so it survives the article
+ * being imported again. Nothing is drawn when import changed nothing, or when
+ * the title showing already is the original.
+ * docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md
+ */
+export function ImportedTitle({
+  original,
+  showing,
+  onUse,
+}: {
+  original: string | undefined;
+  showing: string;
+  onUse: (title: string) => void;
+}) {
+  if (!original || original === showing) return null;
+  return (
+    <p
+      data-imported-title
+      className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground"
+    >
+      <span className="tw:min-w-0">
+        Imported as “<span className={voiceClass("author")}>{original}</span>”.
+      </span>
+      <Button type="button" variant="outline" size="sm" onClick={() => onUse(original)}>
+        Use that title
+      </Button>
+    </p>
   );
 }
 

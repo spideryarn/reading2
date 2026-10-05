@@ -45,6 +45,17 @@ export const COLLAPSED_CHIPS = 12;
 /** Below this many distinct works the server chooses no topics at all. */
 export const MIN_WORKS = 8;
 
+/**
+ * **Whether a shelf of this many article rows might have topics**, asked
+ * before the answer says. Rows are only an upper bound on distinct works
+ * (`ShelfTermsLoading` below says why), so `true` is "might", and `false` is
+ * "certainly not". One copy, for the placeholder row and for the room each
+ * card holds for its pills (useShelfTerms.ts § `topicsExpected`).
+ */
+export function mightHaveTopics(articleCount: number): boolean {
+  return articleCount >= MIN_WORKS;
+}
+
 const QUIET_BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
 const TERMS_ROW = "tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2";
@@ -135,7 +146,7 @@ function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
  * collapse after the answer if they are copies or no useful topics survive.
  */
 export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
-  const mightHaveTopics = articleCount >= MIN_WORKS;
+  const ghostPills = mightHaveTopics(articleCount);
   /* The chooser returns at most one topic per distinct work. More than twelve
      article rows is therefore necessary — though not sufficient — for the
      real row's conditional "All N topics" button. */
@@ -151,7 +162,7 @@ export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
         <LoaderCircle className="cmt-spinner" size={13} />
         Loading topics…
       </span>
-      {mightHaveTopics && (
+      {ghostPills && (
         <>
           {GHOST_PILL_REM.map((rem, i) => (
             <span

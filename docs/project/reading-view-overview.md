@@ -368,11 +368,14 @@ row to act on — not on the fixture. Words in
 [`src/web/article-commands.ts`](../../src/web/article-commands.ts).
 
 **`find <words>` searches the article** — also `search`, `search for`, `does it mention` and Greg's
-own *"do they talk about X?"*. It offers one row, *Find “X” in this article*, which opens Search in
+own *"do they talk about X?"*. It offers *Find “X” in this article*, which opens Search in
 words mode with the words lit up: free, instant, and only when the query starts with one of those
 verbs. So it is not the search fallback Greg refused below — the reader typed the verb — and a query
 that names nothing still says `No command matches.`
 [261002c](../plans/261002c-commands-do-more-and-an-interface-model-vision.md).
+**Since 2026-10-05 the owner's reading view draws *Quick search “X”* in front of it**, marked
+`generates`, so Enter runs a quick search and the exact words are one arrow-key down —
+[search.md § From the command bar](search.md#from-the-command-bar).
 
 **Four more requests take an argument since 2026-10-03, and a command with its argument is now a
 value** — Greg, `spya-wh2xys`: *"in an ideal world, it would sort of take parameters … a tool I would

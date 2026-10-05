@@ -71,6 +71,30 @@ export interface ShelfTermsState {
 }
 
 /**
+ * **Whether the shelf's cards and rows should hold a line for topic pills**
+ * (ShelfRowTopics.tsx § `TopicsExpectedContext`; plan 261005h § C).
+ *
+ * - An answer with at least one topic: yes.
+ * - No answer yet (`loading`), or an answer with no topics that is not the
+ *   last word (articles still pending, or the model still choosing): yes when
+ *   the shelf `mightHaveTopics`, which the caller works out from its article
+ *   count (ShelfTerms.tsx § `mightHaveTopics`).
+ * - A settled answer with no topics, a failed request, or no question asked
+ *   yet: no.
+ *
+ * The middle case is one rule for both of its halves on purpose. `loading`
+ * ends at the first answer while the asking goes on, so a rule that held the
+ * line only while `loading` would drop it on an empty first answer and put it
+ * back when topics arrived: two shifts where there was one (GPT Sol's plan
+ * review, F2).
+ */
+export function topicsExpected(state: ShelfTermsState, mightHaveTopics: boolean): boolean {
+  if (state.data && state.data.terms.length > 0) return true;
+  const awaited = state.loading || (state.data !== null && !state.settled);
+  return awaited && mightHaveTopics;
+}
+
+/**
  * What identifies the shelf the topics were chosen over: every article's slug
  * and current revision, sorted, and the archived list's too when it is in
  * scope. The title and gist ride beside it because either can change without a
