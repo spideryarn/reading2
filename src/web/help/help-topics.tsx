@@ -339,9 +339,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         </p>
         <p>
           Opening an article from your shelf returns you to where you left it on that device, but a
-          link always wins: if someone sends you a passage, it opens at their passage. An article
-          you have not opened on that device before opens in Summary, where the window has room
-          for it beside the text.
+          link always wins: if someone sends you a passage, it opens at their passage. When signed
+          in, an article you have not opened in this browser before can open in Summary, where the
+          window has room for it beside the text.
         </p>
         <p>
           The person you send it to can open it only if they can see the article — see{" "}

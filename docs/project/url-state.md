@@ -720,15 +720,16 @@ it.
   removed, so going back to Plain at the top and reopening stays Plain. Only *no key* is a first
   open.
 - **"First open" means first open in this browser.** An article read on another device gets the
-  default once here. And the key is written on every open, so a visit while signed out, or on a
+  default once here. A bare Metadata visit does not use up the article's first open. The key is
+  written on every open of the reading view, so a visit while signed out, or on a
   window too narrow for a band, uses the first open up: the default is not held over for a wider
   window or a later sign-in. An article already in this browser that was last left in Plain at the
   top had no key before this shipped, so it gets the default once.
 - **Marginalia joins only with the experimental switch on**, because it is behind that switch
   ([experimental-features.md](experimental-features.md)). So the default waits for the switch's
-  answer. Coming from the shelf it is already known and the address is settled before anything
-  paints; on a cold load of a bare address the band appears a moment after the article. A switch
-  that never answers means no default.
+  answer. If settings are already loaded, the address is settled before paint; otherwise the
+  default waits for them, whether the article payload has arrived yet or not. The shelf does not
+  load this setting itself. A switch that never answers means no default.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.

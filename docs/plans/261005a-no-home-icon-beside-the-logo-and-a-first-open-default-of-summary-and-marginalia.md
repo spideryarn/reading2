@@ -151,6 +151,8 @@ Plain; a pasted `?at=` link is left exactly as sent.
 - **Q-first-open-visitors** — should signed-out readers of a public article get the default too?
 - **Q-first-open-across-devices** — is "first open in this browser" enough, or should it be first
   open ever (server-side)?
+- **Q-marginalia-switch** — Marginalia is behind the experimental switch, so a reader with the
+  switch off gets Summary only. Take Marginalia out from behind the switch, or leave it?
 
 ## Log
 
@@ -182,3 +184,21 @@ Plain; a pasted `?at=` link is left exactly as sent.
   rendered in `tests/first-open-default-wiring.test.tsx` (written after the code; one mutation seen
   red). The tests that boot the whole app never meet the default, because their jsdom has no
   `localStorage`. Nothing has been checked in a browser.
+- 2026-10-05 — committed as `815a2608e`, then GPT Sol's code review
+  ([261005a-home-icon-and-first-open-code-review-sol.md](261005a-home-icon-and-first-open-code-review-sol.md)),
+  which fixed what it found: **F5 (P1)** a bare visit to an article's Metadata page wrote the
+  first-open marker and got no default, so the article's own first open was used up; the claim, the
+  default and the save are now scoped to the view as well as the slug (`useLastView(slug, view)`),
+  with a postmortem,
+  [261005a](../postmortems/261005a-a-downstream-guard-cannot-protect-an-upstream-first-open-marker.md).
+  **F6 (P3)** the docs and Help overstated when the default appears; reworded. Its fixes were read,
+  the gates re-run, and one mutation (dropping the view check on the claim) seen red.
+- 2026-10-05 — browser check, Sonnet with Playwright on the box, local dev, on `815a2608e` (before
+  F5's fix, which changes nothing it looked at). Signed in at 390, 820 and 1280: no link home above
+  the heading on the five pages, `/profile` or `/admin`; the heading 12px clear of the corner logo
+  (4px on `/admin`); *Back to Admin* kept. Signed out: the house is there on all five. First open:
+  1440 with the switch on gives Summary and Marginalia, with it off Summary alone; 1024 both; 820
+  Summary alone; 390 the article alone; Plain then reopen stays Plain with `""` stored; a `?at=`
+  link is left as sent; a signed-out reader of a public article gets nothing added. No pop-in was
+  seen on a cold load. With no summary written the band says nobody has asked for one yet. Shots:
+  `261005a-shot-*.png`. Not checked: a real iPad or phone, Safari, the light appearance.

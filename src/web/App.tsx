@@ -170,11 +170,12 @@ export function App() {
    * § the store listens for it itself.
    *
    * **And nothing here wakes it, either.** The store starts listening on its
-   * first subscriber and asks the server for nobody until then. Since stage 2
-   * the subscribers are the components that mount a `Dock` — `Reader`
-   * below, `Metadata`, `VisitorDock` in PublicPages.tsx (and `Tweets`, until it became a mode on 2026-09-29) — each
-   * calling `useExperimental()` and handing the answer down as a prop, because
-   * the bar is told rather than going and getting it (Dock.tsx § experimental).
+   * first subscriber and asks the server for nobody until then. `ArticlePage`
+   * subscribes through `useLastView`, before its article fetch finishes. The
+   * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
+   * in PublicPages.tsx — also call `useExperimental()` and hand the answer
+   * down as a prop, because the bar is told rather than going and getting it
+   * (Dock.tsx § experimental).
    * A stranger still asks for nothing: the store issues no request for a
    * signed-out reader, who is off because we decided.
    *

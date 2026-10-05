@@ -11,7 +11,7 @@
  * jsdom lays nothing out, so the window is its default 1024px wide: room for
  * Summary and for the notes. The widths themselves are the other file's.
  */
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,11 +23,13 @@ vi.mock("../src/web/useExperimental.js", () => ({
 }));
 
 const { useLastView } = await import("../src/web/last-view.js");
+const { navigate, parseRoute } = await import("../src/web/router.js");
 
 const KEY = "spya.lastView.x";
 
 function Page({ slug }: { slug: string }) {
-  useLastView(slug);
+  const route = parseRoute(location.pathname);
+  useLastView(slug, route.kind === "read" ? route.view : "article");
   return null;
 }
 
@@ -62,6 +64,27 @@ afterEach(() => {
 const open = () => act(() => root.render(<Page slug="x" />));
 
 describe("opening an article this browser has no key for", () => {
+  it("applies the default once under StrictMode and does not reapply on a switch change", () => {
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
+    act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
+    expect(location.search).toBe("?mode=summary&margin=1");
+    history.replaceState(null, "", "/read/x");
+    setting.on = false;
+    act(() => root.render(<StrictMode><Page slug="x" /></StrictMode>));
+    expect(location.search).toBe("");
+  });
+
+  it("claims each new slug and does not apply a pending default to the previous one", () => {
+    Object.assign(setting, { signedIn: true });
+    open();
+    history.replaceState(null, "", "/read/y");
+    act(() => root.render(<Page slug="y" />));
+    Object.assign(setting, { on: true, loaded: true });
+    act(() => root.render(<Page slug="y" />));
+    expect(location.pathname + location.search).toBe("/read/y?mode=summary&margin=1");
+    expect(window.localStorage.getItem(KEY)).toBe("");
+  });
+
   it("arrives in Summary with the notes, for a reader whose switch is on", () => {
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
@@ -107,6 +130,46 @@ describe("opening an article this browser has no key for", () => {
 });
 
 describe("opening one it has seen", () => {
+  it.each([false, true])("a metadata visit does not use up the article's first open (remount: %s)", (remount) => {
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
+    history.replaceState(null, "", "/read/x/metadata");
+    open();
+    expect(location.search).toBe("");
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+    if (remount) {
+      act(() => root.unmount());
+      root = createRoot(host);
+    }
+    navigate("/read/x");
+    open();
+    expect(location.search).toBe("?mode=summary&margin=1");
+  });
+
+  it("keeps the existing restoration on metadata and does not restore again on a view change", () => {
+    window.localStorage.setItem(KEY, "?mode=quotes");
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
+    history.replaceState(null, "", "/read/x/metadata");
+    open();
+    expect(location.search).toBe("?mode=quotes");
+    navigate("/read/x");
+    open();
+    expect(location.search).toBe("");
+  });
+
+  it("does not apply a pending article default after switching to metadata", () => {
+    Object.assign(setting, { signedIn: true });
+    open();
+    navigate("/read/x/metadata");
+    open();
+    Object.assign(setting, { loaded: true, on: true });
+    open();
+    expect(location.search).toBe("");
+    navigate("/read/x");
+    open();
+    // The initial article arrival already wrote its marker; this is a later open.
+    expect(location.search).toBe("");
+  });
+
   it("stays Plain when Plain is what was left", () => {
     window.localStorage.setItem(KEY, "");
     Object.assign(setting, { on: true, loaded: true, signedIn: true });
