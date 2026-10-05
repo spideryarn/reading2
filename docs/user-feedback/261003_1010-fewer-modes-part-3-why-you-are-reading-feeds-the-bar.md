@@ -1,6 +1,6 @@
 ---
 reports: spya-thpsnd
-ending: awaiting
+ending: shipped
 parts: 3
 ---
 
@@ -27,7 +27,17 @@ Summary) have their own sessions and notes.
 > in one big feedback report. So at least make progress on some of them, and we can discuss the
 > others.
 
-**Awaiting Greg — noted, nothing built**, as the Overseer's brief asked. The bar that takes a
+**Shipped on `dev`, 2026-10-05**, after Greg's *"Q-bar-4 yes"* of 2026-10-04
+([plan 261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)):
+on an article with a reason for reading, the bar offers *Suggest what to do here* and, on a press,
+lists a few quick searches, a mode or two and one question about what the web says, each waiting
+for a press of its own; and Debate has a box that takes an angle and starts a chat from it, listed
+under *Your angles*. **One part of the idea is not built and is a question for Greg**
+(`[Q-suggest-together]`): confirming several suggestions with one press. The plan says why, and
+names the small version (the searches only) it would recommend.
+
+What this note said before, kept for the record: **Awaiting Greg — noted, nothing built**, as the
+Overseer's brief asked. The bar that takes a
 sentence now exists
 ([the note](261003_1005-the-command-bar-takes-a-sentence.md)); what this part adds on top is in
 [261003k § Noted, not built](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md#noted-not-built):
