@@ -643,6 +643,12 @@ that matter: a credit granted once makes share-then-unshare free slots for ever 
 which is the ledger growing a second kind of row; and charging half at add time misses the article
 you decide to share three weeks later, which is most of them.
 
+**An article shared only by a private link counts at the private rate.** Greg, 2026-10-05, on
+Q-share-price in
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md): *"private,
+full rate"*. A link-shared article's `visibility` is still `'private'`, so nothing here reads the
+link and nothing changed.
+
 **The arithmetic is in points, 200 to an article, and that is not a stylistic preference.** A
 private ingest costs **200**, a currently-public one **100**, a minimal paper **2**, and a tier's
 budget is its article allowance times 200. No fraction goes near money, and `usageOf`'s

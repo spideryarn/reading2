@@ -559,6 +559,19 @@ export function useArrowNav(
   const chain = useRef<Chain | null>(null);
 
   useEffect(() => {
+    /* **With no pointer, the aim is the fallback of the plan in force — not of
+       the plan this hook first saw.** The ref above is initialised once, and
+       with a pointer on the page that never matters: `currentAim` hit-tests
+       afresh at every press and resolves against this plan. A keyboard-only
+       reader, or a finger, has only the ref, and it went on naming the leaf
+       depth of the tree the page opened with after that tree was replaced —
+       an article opened before its structure is built swaps a stand-in whose
+       leaves are at depth three for a real tree that can be deeper, and ↓ kept
+       the stand-in's stride. GPT Sol's F9,
+       docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+       tests/keynav-aim-after-tree-replaced.test.ts. */
+    if (pointer.current === null) aim.current = fallbackDepth;
+
     const resolve = (el: Element | null | undefined): number => {
       const zone = el?.closest?.(`[${NAV_DEPTH_ATTR}]`);
       const d = Number(zone?.getAttribute(NAV_DEPTH_ATTR));

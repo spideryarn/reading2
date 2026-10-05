@@ -34,6 +34,47 @@ import {
   restoredHref,
   writeLastView,
 } from "../src/web/last-view.js";
+import { SHARE_KEY_PARAM } from "../src/share-key.js";
+
+/**
+ * **A private link's key is a credential, and this store is not where one is
+ * kept.** Plan 261005e. The store writes an allowlist, so the key is left out
+ * by not being on it; these hold that, and that a restore keeps the key the
+ * address arrived with.
+ */
+describe("a private link's key and the remembered view", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStUv";
+
+  it("is on neither list, so it is never written", () => {
+    expect(REMEMBERED as readonly string[]).not.toContain(SHARE_KEY_PARAM);
+    expect(ARTICLE_PARAMS).not.toContain(SHARE_KEY_PARAM);
+  });
+
+  it("is dropped from what is remembered, wherever it sits in the address", () => {
+    expect(rememberableSearch(`?key=${KEY}&mode=summary&at=spya-k3m9qt`)).toBe("?mode=summary&at=spya-k3m9qt");
+    expect(rememberableSearch(`?mode=summary&key=${KEY}`)).toBe("?mode=summary");
+    expect(rememberableSearch(`?key=${KEY}`)).toBe("");
+  });
+
+  it("is not in what a visit writes to the store", () => {
+    const held = new Map<string, string>();
+    const storage = () =>
+      ({
+        getItem: (k: string) => held.get(k) ?? null,
+        setItem: (k: string, v: string) => void held.set(k, v),
+      }) as unknown as Storage;
+    expect(writeLastView("a-piece", rememberableSearch(`?key=${KEY}&mode=glossary`), storage)).toBe(true);
+    expect(held.size, "the control: something was written").toBe(1);
+    expect(JSON.stringify([...held])).not.toContain(KEY);
+    expect(JSON.stringify([...held])).toContain("mode=glossary");
+  });
+
+  it("stays on the address when a remembered view is put back", () => {
+    expect(restoredHref("/read/a-piece", `?key=${KEY}`, "?mode=summary")).toBe(
+      `/read/a-piece?key=${KEY}&mode=summary`,
+    );
+  });
+});
 
 describe("rememberableSearch", () => {
   it("keeps the parameters that say how you are looking at the article", () => {

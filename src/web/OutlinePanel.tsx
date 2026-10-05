@@ -470,6 +470,26 @@ export function OutlinePanel({
     if (focusedId !== null && kept < 0) setFocusedId(null);
   }, [focusedId, kept]);
 
+  /**
+   * **And forget it when the tree is a new one**, whether or not a row with
+   * that id is still drawn.
+   *
+   * Node ids are positional, so an id that survives a replacement can name a
+   * different passage — the check above would keep it, and the mark would sit
+   * on a row the reader never chose. An article opened before its structure is
+   * built has its stand-in tree replaced live
+   * (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+   * GPT Sol's F1). The stored `root.node` is the trigger. The derived `root`
+   * also rebuilds when images arrive, while its stored node stays the same;
+   * a row the reader held should survive that redraw.
+   *
+   * Clears only, like the effect above, and so cannot yank focus either.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the stored root node is the reset trigger.
+  useLayoutEffect(() => {
+    setFocusedId(null);
+  }, [root?.node]);
+
   const jump = useCallback(
     (row: OutlineRow | undefined) => {
       if (row) onJump(row.blockId);

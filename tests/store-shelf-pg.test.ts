@@ -48,6 +48,7 @@ import {
   aiCalls,
   articleRevisions,
   articleTags,
+  articleShareLinkEvents,
   articleVisibilityChanges,
   articles,
   blockIdentities,
@@ -978,6 +979,16 @@ describe("destroying an article", () => {
           costSource: "none",
         }),
       article_revisions: () => Promise.resolve(),
+      /* The private link's audit (plan 261005e): `set null`, like the
+         visibility log beside it and for its reason. */
+      article_share_link_events: () =>
+        db.insert(articleShareLinkEvents).values({
+          slug: GONE_SLUG,
+          articleId: GONE_ARTICLE,
+          actorOwnerId: owner,
+          event: "created",
+          rightsConfirmed: true,
+        }),
       article_visibility_changes: () =>
         db.insert(articleVisibilityChanges).values({
           slug: GONE_SLUG,
@@ -1139,6 +1150,7 @@ describe("destroying an article", () => {
     await db
       .delete(articleVisibilityChanges)
       .where(eq(articleVisibilityChanges.slug, GONE_SLUG));
+    await db.delete(articleShareLinkEvents).where(eq(articleShareLinkEvents.slug, GONE_SLUG));
     await db.delete(ingestEvents).where(eq(ingestEvents.slug, GONE_SLUG));
     /* And then the one statement, which is the whole of what the Stage A spike
        measured: tidying the cascade's children by hand first is what fails. */
@@ -1200,8 +1212,15 @@ describe("destroying an article", () => {
     expect(found.map((fk) => fk.name)).toEqual(Object.keys(childSeeds()).sort());
     expect(
       found.filter((fk) => fk.survives).map((fk) => fk.name),
-      "the four deliberate survivors, docs/plans/260906h § What survives a delete",
-    ).toEqual(["ai_calls", "article_visibility_changes", "ingest_events", "realtime_sessions"]);
+      "the deliberate survivors, docs/plans/260906h § What survives a delete; " +
+        "the private link's audit joined them on 2026-10-05 (plan 261005e)",
+    ).toEqual([
+      "ai_calls",
+      "article_share_link_events",
+      "article_visibility_changes",
+      "ingest_events",
+      "realtime_sessions",
+    ]);
   });
 
   it("takes the article and everything the cascade owns", async () => {

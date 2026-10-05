@@ -1,5 +1,5 @@
 /**
- * **The second way to name an article, and the only ownerless one.**
+ * **The second way to name an article, and the first ownerless one.**
  *
  *     slug = ? AND visibility = 'public'
  *
@@ -7,11 +7,16 @@
  * widening of it. The worst available version of public reading is
  * `or(eq(articles.visibility, "public"))` bolted onto the owner predicate: one
  * edit, in the one place every read in the app goes through, quietly making
- * every one of them match somebody else's row. So there are two predicates and
- * a static guard that names both — see
+ * every one of them match somebody else's row. So the predicates are separate
+ * and a static guard names each — see
  * [owner-isolation.test.ts](../../tests/owner-isolation.test.ts), which greps
- * `src/store/` for `eq(articles.slug, …)` and now inspects the three sanctioned
- * lookups rather than trusting three whole files.
+ * `src/store/` for `eq(articles.slug, …)` and inspects the four sanctioned
+ * lookups rather than trusting four whole files.
+ *
+ * The fourth, since 2026-10-05, is this file's own sibling:
+ * [`linkSharedSlug`](link-shared-slug.ts), for somebody holding a private
+ * link's key. It is the second ownerless one, it is a separate leaf for the
+ * reason above, and the two meet only in [public-access.ts](public-access.ts).
  *
  * ## Why its own file, rather than beside `ownedSlug`
  *

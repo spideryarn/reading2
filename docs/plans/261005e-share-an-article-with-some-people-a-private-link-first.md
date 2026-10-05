@@ -1,10 +1,11 @@
 # Share an article with some people: a private link first
 
-**Status as of 2026-10-05: all three questions answered by Greg; stage 1 approved, not yet built.**
-Nothing in `src/` has changed. Evidence: no hit for `share_token` or `linkSharedSlug` outside this
-plan and its review. GPT Sol reviewed it on 2026-10-05 (*sound with the listed changes*); the
-changes are made, § Review, and stage 1 has not changed since except for the wording of the notice
-Greg asked for. Stages 2 and 3 are written up below for a later session and are not being built.
+**Status as of 2026-10-05: stage 1 is built and on `dev`, not deployed. Stages 2 and 3 are written
+up below and not built.** Evidence: `src/store/link-shared-slug.ts`, `src/store/pg-share-link.ts`,
+`src/web/PrivateLink.tsx` and `drizzle/20261005184047_article_share_link.sql` exist. GPT Sol
+reviewed the plan (*sound with the listed changes*, § Review) and then the code (§ What was built,
+and its review). **Not done: the full suite and a real browser**, both for reasons of the box on
+the day, said in § What was built.
 Reports `spya-hwdefp` and `spya-v322fd`, both Greg's (admin, proved by `feedback-reporter.ts`).
 Queue item `qi-98933vdd`.
 
@@ -267,6 +268,51 @@ feedback change, one owner route (read, create and turn off), the card, the noti
 the tests above. Roughly the size of one stage of the original public sharing. It edits four files on the defences list
 (`src/public/routes.ts`, `src/store/public-slug.ts`'s sibling, `src/store/public-reader.ts`,
 `src/asset-delivery.ts`'s caller), which is why it waits for Greg.
+
+## What was built, and its review
+
+Stage 1 as designed above, in two halves, 2026-10-05. Where the build differs from the design:
+
+- **The owner's route is `GET`, `POST` and `DELETE /api/article/:slug/share-link`.** `POST` and not
+  `PUT`, because every create makes a new key and is not idempotent.
+- **The payload fact is `sharedBy: "public" | "link"`** on the public article.
+- **The owner's own payload and shelf carry `privateLinkOn`, a boolean and never the key**, so the
+  masthead mark and the shelf badge stop saying *Only you can read this* over an article with a
+  link on. The plan had not seen that those marks read `visibility` alone.
+- **Three leaks the plan did not anticipate, each closed with a test:** the reader's export wrote
+  the whole `articles` row, token included; the offline store would have kept the owner's link
+  (`NEVER_KEPT` in `src/web/lib/api.ts`); and the Feedback address, which the plan did name.
+- **`publicBlocksQuery` does not repeat the key.** It reads by the revision id that the guarded
+  query in the same loader has just returned, as it did before this work. Sol's review marks
+  "every query compares the key" as not literally accurate for that reason and found no caller
+  that passes an id from anywhere else.
+- **Left as it is:** a visitor whose key was *refused* and who then presses sign-in carries the
+  dead `?key=` into the ten-minute, one-tab sign-in return. A working key never takes that path.
+
+**The code review.** GPT Sol, write-capable, security first:
+[the prompt](261005e-share-private-link-code-review-prompt.md),
+[the review](261005e-share-private-link-code-review-sol.md). It found no way past the key and no
+place the key leaks. One round.
+
+| | Finding | What was done |
+|---|---|---|
+| C1 | P1. The owner's masthead and shelf said *Only you can read this* with a link on | Sol fixed it (`privateLinkOn`), tests red first |
+| C2 | P1. Creating a link on an already-public article promised *not listed anywhere* | Sol fixed it: the confirmation warns first, and the pages say "shared only by a private link" |
+| C3 | P1, older than this work. The inventory said a visitor's browser fetches every image from the publisher | Fixed here: it now names our stored copy first |
+
+Sol also wrote
+[the postmortem](../postmortems/261005n-adding-an-access-path-does-not-replace-the-old-one.md) for
+the class C1 and C2 share: a second way in was added, and sentences that described the first as the
+only one were left standing.
+
+**What was checked, and what was not.** Typecheck on all four projects. The targeted test files,
+the database ones included, run one batch at a time. Mutations of the finished server code (the
+predicate ignoring the key, the export keeping the token, feedback keeping the key) turned 17
+tests red. **The full suite was not run**: the box was overloaded and the Overseer barred full
+suites that day. **A real browser was not driven**: the shared local database refused every
+migration over another session's renumbered one, so no dev server could serve the new columns.
+The browser check, as owner and as a signed-out visitor with the link and after turning it off, is
+still owed before this is deployed.
 
 ## Stage 2: signed-in people with the link can comment and highlight (written up, not built)
 

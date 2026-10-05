@@ -199,6 +199,7 @@ const ARTICLE: PublicArticle = {
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
 };
 
 const OWNED: Article = {

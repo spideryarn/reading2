@@ -424,6 +424,55 @@ describe("what the list says", () => {
     expect(list.getAttribute("aria-activedescendant")).toBe(nowId());
   });
 
+  it("lets go of a held row when the tree is replaced", () => {
+    /* An article opened before its structure is built has its tree replaced
+       live (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+       GPT Sol's F1). Node ids are positional, so the id Home held can survive
+       the replacement and name a different passage: "is it still drawn" is not
+       the test, the tree being a new one is. */
+    const draw = (tree: typeof root, focusRow: number) =>
+      act(() => {
+        reactRoot.render(
+          <OutlinePanel
+            root={tree}
+            supplementOf={geometry.supplementOf}
+            arcByRow={null}
+            focusRow={focusRow}
+            proseBeside
+            paragraphLabels
+            onJump={() => {}}
+          />,
+        );
+      });
+    const panel = render(10_000, 0);
+    const list = panel.querySelector<HTMLElement>('.outln-list:not([data-rung])')!;
+    const nowId = () => panel.querySelector('.outln-list:not([data-rung]) .outln-row.now')?.id;
+    act(() => {
+      list.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+    });
+    const held = list.getAttribute("aria-activedescendant");
+    const lastRow = (geometry.cells[1] ?? []).reduce((n, c) => n + c.rowSpan, 0) - 1;
+
+    /* The control: the same tree, the reader elsewhere — the row stays held. */
+    draw(root, lastRow);
+    expect(list.getAttribute("aria-activedescendant")).toBe(held);
+    expect(nowId()).not.toBe(held);
+
+    /* Images redraw the blocks, and hence the derived root, without replacing
+       the stored tree. The row the reader held still means the same thing. */
+    const redrawnBlocks = blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(tree, redrawnBlocks, geometry.leafDepth);
+    expect(redrawnRoot).not.toBe(root);
+    draw(redrawnRoot, lastRow);
+    expect(list.getAttribute("aria-activedescendant"), "an image redraw dropped the held row").toBe(held);
+
+    /* A genuinely new stored tree with the same ids in it. */
+    draw(buildSummaryTree(structuredClone(tree), blocks, geometry.leafDepth), lastRow);
+    expect(list.getAttribute("aria-activedescendant"), "the old tree's row is still held").toBe(
+      nowId(),
+    );
+  });
+
 
   it("does not count the panel's padding as room the list can use", () => {
     /* `clientHeight` includes padding; the list starts below it. Granting the

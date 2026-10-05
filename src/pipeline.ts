@@ -217,7 +217,7 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { checkCoverage, generateStructure } from "./structure.js";
+import { checkCoverage, generateStructure, type StructureSource } from "./structure.js";
 import { SLICES_FAILED_WORDS } from "./structure-slices.js";
 import { LABELS_PROMPT_VERSION, generateLabels, mergeLabels } from "./labels.js";
 import {
@@ -226,7 +226,7 @@ import {
   PROMPT_VERSION as TWEETS_PROMPT_VERSION,
   TWEETS_OUTPUT_SCHEMA,
 } from "./tweets.js";
-import type { Block, JobUpload, Meta, StepName, StepPreview } from "./types.js";
+import { awaitingStructure, type Block, type JobUpload, type Meta, type StepName, type StepPreview } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { ownedSlug } from "./store/owned-slug.js";
@@ -743,6 +743,15 @@ export interface StepContext {
    * *remaining* steps. Plan 260930f decisions 3–5.
    */
   power: ModelPower;
+  /**
+   * **This job asked to open the article before its structure is built** —
+   * `JobStep.headingsFirst` (src/types.ts), handed on by `runStep` and present
+   * on the `structure` step of a first import alone. Only `STEPS.structure`
+   * reads it, and it does not take it on trust: it also asks the store whether
+   * the article has ever been published.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  headingsFirst?: true;
 }
 
 /**
@@ -980,6 +989,66 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
      precisely the state this exists to refuse to call finished. */
   const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
   return blocksAreWhatTheirHtmlProduces(extracted, stamped, file?.blocks);
+}
+
+/**
+ * The `structure` step's `isDone`: **a published stand-in tree still needs
+ * replacing.** A first import that opened early published a tree cut from the
+ * headings, with a finished run row and the right blocks hash — both real, and
+ * both copied into the draft of the job that is meant to replace it. Without
+ * this that job finds its artefacts present and current, skips, and the real
+ * tree never arrives, under a green tick (docs/reusable/silent-success.md).
+ * A marked import that has not published yet has finished its structure work:
+ * retaining that stand-in lets a handed-back claim resume at assets instead
+ * of rebuilding the same tree and consuming its next step's window again.
+ *
+ * It narrows presence and never widens it (`stepIsDone` asks `has` first). The
+ * Metadata page does not ask this function and goes on calling the stand-in
+ * current for those seconds, which the plan accepts.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+async function structureIsNotAStandIn(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
+  if (!awaitingStructure(await store.read(ctx.slug, "structure", "tree"))) return true;
+  return ctx.headingsFirst === true && !(await store.hasEarlierBlocks(ctx.slug));
+}
+
+/**
+ * **Does this step read the article's structure**, so that it must not run on
+ * a stand-in tree? By position: every step after `structure` in `STEP_ORDER`,
+ * other than `assets`, which reads the blocks alone. A rule rather than a
+ * list, so a step added after `structure` is covered without anyone
+ * remembering to add it. `runStep` (src/jobs.ts) is what refuses.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+export function needsRealStructure(step: StepName): boolean {
+  return step !== "assets" && STEP_ORDER.indexOf(step) > STEP_ORDER.indexOf("structure");
+}
+
+/**
+ * The clause the `structure` step's `detail` carries about where its tree came
+ * from, shown on the reader's progress card. Empty for one model answer.
+ *
+ * Exhaustive over `StructureSource`, and that is the point of it being a
+ * function: until 2026-10-05 it was a ternary whose last arm was *every other
+ * headings reason*, so a new reason would have told the reader that a section
+ * was too long to label when nothing of the kind had happened (GPT Sol, F7 of
+ * docs/plans/261005j-open-before-structure-plan-review-sol.md).
+ */
+export function structureSourceDetail(source: StructureSource): string {
+  if (source.by === "model") return "";
+  if (source.by === "slices") return `, read in ${source.slices} parts`;
+  switch (source.reason) {
+    case "answer-too-long":
+      return `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[source.slicesFailed]})`;
+    case "labels-could-not-ask":
+      return ", from its headings (a section was too long to label)";
+    case "before-structure":
+      return ", a first outline (the full structure follows)";
+    default: {
+      const unreachable: never = source;
+      throw new Error(`unhandled structure source: ${JSON.stringify(unreachable)}`);
+    }
+  }
 }
 
 /*
@@ -2741,7 +2810,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * `reasonsNotToPublish` compares `structure.input_hash` against the stored blocks
      * and refuses the publication when they differ — so a `structure` left carrying
      * `NO_INPUT_HASH` would make every article unpublishable.
+     *
+     * **The `isDone` below is not that stamp.** It asks nothing about the
+     * blocks: only whether the stored tree is the stand-in a first import
+     * opened with, which this step has still to replace.
      */
+    isDone: (ctx, store) => structureIsNotAStandIn(ctx, store),
     async run(ctx, store, checkpoints) {
       /* **Stage 3's copy, through the store**, which is the same artefact
          `blocksPathFor` used to open by path — `output/<slug>.blocks.json`, not
@@ -2757,9 +2831,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       /* Read the title for a possible headings fallback: its root needs a name
          and no model is there to write one. The model path ignores it. */
       const meta = await store.read(ctx.slug, "extract", "meta");
+      /* **The mark is a request; this is what honours it.** Only an article
+         that has never been published opens early: on anything else a reader is
+         already looking at a real tree, and replacing it with a stand-in is how
+         the earlier attempts lost it. Asked of the store here as well as being
+         decided at `enqueue`, so the job that builds the real tree — which runs
+         after the first publication, whatever mark it carries — always reaches
+         the model.
+         docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+      const headingsOnly = ctx.headingsFirst === true && !(await store.hasEarlierBlocks(ctx.slug));
       const run = await generateStructure({
         blocks: file.blocks,
         slug: ctx.slug,
+        ...(headingsOnly ? { headingsOnly: true as const } : {}),
         ...(meta?.title ? { articleTitle: meta.title } : {}),
         /* Where the **label batches** are kept as they land, one row each, so a
            run that dies eight batches into a book costs one batch rather than
@@ -2957,14 +3041,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          be a sentence about a pass this step did not make, and at this point in
          an ingest **every** paragraph is unlabelled, which is not news. */
       /* The job record is where somebody asks why this article has no gists. */
-      const fromHeadings =
-        run.source.by === "model"
-          ? ""
-          : run.source.by === "slices"
-            ? `, read in ${run.source.slices} parts`
-            : run.source.reason === "answer-too-long"
-              ? `, from its headings (too long for one answer; ${SLICES_FAILED_WORDS[run.source.slicesFailed]})`
-              : ", from its headings (a section was too long to label)";
+      const fromHeadings = structureSourceDetail(run.source);
       return {
         parts: run.parts,
         stamp: { inputHash: run.inputHash },

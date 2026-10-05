@@ -31,6 +31,7 @@
  */
 import type { PublicLibrary } from "../public-library-types.js";
 import type { PublicArticle } from "../public-types.js";
+import { type ShareKey, withShareKey } from "../share-key.js";
 import { readJson } from "./lib/api.js";
 
 /**
@@ -95,7 +96,11 @@ export async function publicFetch(path: string, signal?: AbortSignal): Promise<R
    */
   const url = new URL(path, SAME_ORIGIN);
   if (url.origin !== SAME_ORIGIN || !url.pathname.startsWith("/api/public/")) {
-    throw new Error(`publicFetch is for the public namespace only, and this is not: ${path}`);
+    /* Without its query string: on a private link that is where the key is,
+       and a key goes in no error message (src/share-key.ts). */
+    throw new Error(
+      `publicFetch is for the public namespace only, and this is not: ${path.split("?")[0]}`,
+    );
   }
   /* Spread rather than `signal` straight in: `exactOptionalPropertyTypes` is on
      (docs/project/typechecking.md), so an explicit `signal: undefined` is not
@@ -122,12 +127,22 @@ const SAME_ORIGIN = "https://spideryarn.invalid";
  * article nobody is looking at. Nothing visible was wrong, because the `live`
  * guard already refused the stale render; this is the resource half. GPT Sol,
  * reviewing the built code.
+ *
+ * **`key` is a private link's**, off the page's own address, and it goes out
+ * as `?key=` (plan 261005e). A `ShareKey`, so nothing that `parseShareKey`
+ * refused can be sent. The request is otherwise the same one: no token, no
+ * cookies. A key the server does not accept is the same 404 as an article
+ * that is not there, so it comes back as `not-shared` like any other.
  */
 export async function loadPublicArticle(
   slug: string,
   signal?: AbortSignal,
+  key: ShareKey | null = null,
 ): Promise<PublicRead<PublicArticle>> {
-  return read<PublicArticle>(`/api/public/article/${encodeURIComponent(slug)}`, signal);
+  return read<PublicArticle>(
+    withShareKey(`/api/public/article/${encodeURIComponent(slug)}`, key),
+    signal,
+  );
 }
 
 /**

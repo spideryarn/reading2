@@ -179,6 +179,7 @@ const ARTICLE: PublicArticle = {
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   simpleSummary: { levels: LEVELS },
 };
 

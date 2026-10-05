@@ -375,6 +375,23 @@ export const ARTICLE_TABLE_COVERAGE = {
         "another column.",
     },
   },
+  article_share_link_events: {
+    rollback: {
+      exported: false,
+      why:
+        "An append-only audit of who made a private link for an article and who " +
+        "turned it off (src/store/pg-share-link.ts). The filesystem store has no " +
+        "sharing of any kind, so a rollback to data/ has nothing that could read it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "An append-only audit of the private link, kept for takedown evidence, " +
+        "like the visibility log below. That a link is on, and since when, is in " +
+        "article.json as `shareTokenAt`; the link's key is deliberately in no file, " +
+        "because a zip gets forwarded and the key opens the article.",
+    },
+  },
   article_visibility_changes: {
     rollback: {
       exported: false,

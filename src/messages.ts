@@ -460,6 +460,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
+  /* A step that reads the structure, on an article still showing the stand-in
+     outline it opened with. See `STRUCTURE_NOT_BUILT`. */
+  "jb-no-structure": "blocked",
+  "structure-check": "retry",
   /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
      See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
@@ -1542,6 +1546,25 @@ export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
     "the painting would be made for an earlier reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
+};
+
+/**
+ * **A step that reads the article's structure was asked to run before the
+ * structure exists.** An article that opened early is published with a
+ * stand-in outline cut from its headings, and the job that builds the real
+ * structure failed or has not run; `runStep` (src/jobs.ts) refuses every step
+ * after `structure` but `assets` until it has.
+ *
+ * `blocked`, so no Retry is offered, and so the sentence has to carry the way
+ * out itself: the Structure band is where the structure is built.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md § Review record, F4.
+ */
+export const STRUCTURE_NOT_BUILT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The structure of this article has not been built yet, and this is made from the structure. " +
+    "Open Structure and build it there, then run this again. Until it is built, this will come " +
+    "back the same way. [jb-no-structure]",
 };
 
 /* ----------------------------------------------------- asking the web (debate) -- */
@@ -3165,6 +3188,19 @@ export const SHARED_WITH_YOU =
   "This article was shared publicly. The whole piece is here to read, at every zoom level.";
 
 /**
+ * **The same place, for somebody who came by a private link**, in place of the
+ * sentence above. Greg asked for it when he approved the link (plan 261005e
+ * § What Greg decided): the page says it is a private link, not visible to
+ * anyone without it.
+ *
+ * Drawn when the server says `sharedBy: "link"`, which it says only of an
+ * article that is not public. A public article opened with a key gets the
+ * sentence above, because public wins.
+ */
+export const SHARED_BY_PRIVATE_LINK =
+  "This is a private link. This article isn't listed anywhere, and nobody can see it without the link.";
+
+/**
  * The ask, and it is to join rather than to unlock this page.
  *
  * The New York Times' own reported figure is that free registration lifted paid
@@ -3843,6 +3879,20 @@ export const BANNER_TRAINING_LINK = "privacy policy";
 export const SHARING_OFF = "Only you can read this.";
 
 /**
+ * **The switch, off, while the article has a private link** (plan 261005e).
+ * The sentence above would be false then, on the card whose job is to say who
+ * can read the article. The card draws this one in its place.
+ */
+export const SHARING_OFF_WITH_LINK =
+  "This is not public. You can read it, and so can anyone who has the private link.";
+
+/**
+ * **The switch, off, when the card could not read whether there is a private
+ * link.** It says what it knows and makes no claim about who else can read.
+ */
+export const SHARING_OFF_LINK_UNKNOWN = "This is not public.";
+
+/**
  * **The switch, on — and the promise it makes changed on 2026-09-04.**
  *
  * It used to say *"Anyone with the link can read this, without signing in."*,
@@ -4403,6 +4453,77 @@ export function sharingInFlight(to: "private" | "public"): string {
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
 
+/* ------------------------------------------------------ the private link --
+   The owner's other control on the same card: a link that lets anyone who has
+   it read the article, without listing it. Plan 261005e. Drawn by
+   src/web/PrivateLink.tsx.
+
+   The rights tick-box above and the inventory below are the public switch's
+   own and are reused as they are: a private link republishes the same text,
+   to fewer people. What is written here is only what differs. */
+
+/** The control's heading. */
+export const PRIVATE_LINK_HEADING = "Private link";
+
+export const SHARING_MARK_NAME_LINK = "Private link — manage sharing";
+export const SHARING_MARK_PRESS_LINK =
+  "Press to go to this article's Metadata page, where you can turn off its private link.";
+
+/** What a private link is, said under the control in both states. */
+export const PRIVATE_LINK_WHAT =
+  "Anyone who has the link can read this without signing in, and can pass it on. A private link " +
+  "does not list the article anywhere.";
+
+/**
+ * **Both are on.** Public wins: the article is readable with any key or none,
+ * so the owner must not think turning the link off closes it.
+ */
+export const PRIVATE_LINK_ALSO_PUBLIC =
+  "This article is also public, so its ordinary address works without the link. Turning the " +
+  "link off will not make the article private.";
+
+export const PRIVATE_LINK_CONFIRM_TITLE = "Share the full text of this article by a private link?";
+
+/** The confirmation's first sentence. `sharingConfirmBody` is its public twin. */
+export function privateLinkConfirmBody(title: string): string {
+  return (
+    `This puts the whole extracted text of “${title}” where anyone who has the link can read ` +
+    "it without signing in. Making this link does not list the article anywhere, but anyone you send the link to can pass it on."
+  );
+}
+
+/** What turning the link off can and cannot do. `SHARING_CANNOT_UNRING` is its public twin. */
+export const PRIVATE_LINK_CANNOT_UNRING =
+  "Turning the link off refuses the next request made with it, and making a link again makes a " +
+  "new one. It cannot take back a page somebody's browser already has, or anything they copied " +
+  "out of it.";
+
+/** A write is in flight. */
+export function privateLinkInFlight(to: "on" | "off"): string {
+  return to === "on" ? "Creating the link…" : "Turning the link off…";
+}
+
+/** The read failed, so nothing was asked of the server and nothing changed. */
+export const PRIVATE_LINK_UNKNOWN =
+  "We could not check whether this article has a private link, so nothing is offered here — " +
+  "reload the page to try again. Nothing has been changed.";
+
+/** A write did not come back. It may have taken effect: `SHARING_WRITE_UNCERTAIN` says why. */
+export const PRIVATE_LINK_WRITE_UNCERTAIN =
+  "That did not come back, so we cannot say whether it took effect — it may have. Reload the " +
+  "page to see whether the link is on.";
+
+/** The three tooltips on the three controls. */
+export const PRIVATE_LINK_OPEN_TIP =
+  "Nothing goes out yet. This opens a list of exactly what somebody with the link would get, " +
+  "and asks you to confirm before a link is made.";
+export const PRIVATE_LINK_STOP_TIP =
+  "The link stops working, so the next request made with it is refused. What somebody has " +
+  "already read or copied stays with them.";
+export const PRIVATE_LINK_COPY_TIP =
+  "Puts the link on your clipboard. Anyone you send it to can read the article, and can send " +
+  "it on.";
+
 /* ------------------------------------------------- the sharing inventory --
    The owner's list of what a shared link carries. Greg, 2026-09-02: *"Better
    still, dynamically generate a list of what will be shared … And maybe even a
@@ -4519,16 +4640,15 @@ export const ALWAYS_SHARED = [
   {
     key: "pictures",
     label: "Its pictures",
-    /* **Not "served from our copy", which the first draft said and which is not
-       true today.** The `assets` step stores the bytes and the manifest crosses
-       in the payload, but nothing in `src/web/` reads it yet: every `<img>` in
-       `block.html` still points at the publisher, for a visitor exactly as for
-       the owner (docs/plans/260829b-hosting-the-articles-images.md). The sentence
-       says what a visitor gets — the pictures, and the record — and stays true
-       whichever server ends up sending the bytes. */
+    /* **Which server sends the bytes has changed once already, so the sentence
+       names both.** Until the images were rehosted every `<img>` pointed at the
+       publisher and this row said so; since then a visitor's browser asks our
+       public asset route first (src/web/rehost.ts) and falls back to the
+       publisher only for a picture we hold no copy of. GPT Sol's C3 on plan
+       261005e found the old sentence still here. */
     detail:
-      "Every image in the article. A visitor's browser fetches them from the publisher, exactly " +
-      "as yours does.",
+      "Every image in the article. A visitor's browser gets them from the copy we keep, or from " +
+      "the publisher where we have no copy.",
   },
   {
     key: "provenance",
@@ -6024,3 +6144,44 @@ const PAPER_UNREADABLE: Record<PaperUnreadableReason, string> = {
 export function paperUnreadableSentence(why: PaperUnreadableReason): string {
   return PAPER_UNREADABLE[why];
 }
+
+/* ------------------------------------------------------------------------ *
+ * The line at the top of the Structure band while the real structure is on
+ * its way — src/web/modes/structure/StructureArriving.tsx,
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The band is showing a stand-in outline, and the real one is being built.
+ *
+ * **It does not say the rows are the article's own headings**, which the first
+ * draft did. Where an article has no usable headings the stand-in cuts windows
+ * and names them from their opening words (src/heading-tree.ts), and even a
+ * headed article can gain subdivisions the author never wrote. GPT Sol's plan
+ * review, F6. A visitor is shown this one too.
+ */
+export const STRUCTURE_ARRIVING = "This is a temporary outline. The full structure is not available yet.";
+
+/**
+ * No job is building it and the tree is still the stand-in: the job failed, or
+ * was stopped, or never ran. Not a `ReaderFacingFailure` — the job's own
+ * failure is on its own record with its own code; this is the band saying what
+ * it can see, beside the button that starts another.
+ */
+export const STRUCTURE_STALLED = "The full structure is not available.";
+
+/** The owner's way out of `STRUCTURE_STALLED`. Never drawn for a visitor. */
+export const STRUCTURE_BUILD = "Build it";
+
+/** The live tree read failed; this offers a read retry, not another paid build. */
+export const STRUCTURE_CHECK_FAILED =
+  "The structure could not be checked. Try again in a few seconds. [structure-check]";
+
+/**
+ * The structure was built, and from blocks that are not the ones on screen —
+ * a Rebuild in another tab while this one was open. Swapping the tree in would
+ * point its rows at the wrong paragraphs, so the page asks for the one thing
+ * that puts both right. Nothing reloads by itself: a reload drops a typed draft
+ * and a streaming answer.
+ */
+export const STRUCTURE_READY_RELOAD = "The structure is ready. Reload the page to see it.";
