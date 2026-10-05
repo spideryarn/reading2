@@ -2,7 +2,9 @@
 
 Up: [plans.md](../project/plans.md)
 
-**Status: plan, 2026-10-05.** Not built yet.
+**Status: built, 2026-10-05.** All five landed, one commit each.
+[§ What was built](#what-was-built) says where each differs from the plan below, what the browser
+check measured, and what is left.
 
 > If you're confident, address all of the Q-queue-yeses
 >
@@ -130,3 +132,63 @@ but the last ends with one, and the last has none.
 One stage of five commits, built in parallel by subagents whose files do not overlap (C and E
 share the shelf and go to one). Then a browser check at desktop, iPad and phone widths, GPT Sol's
 code review, `/help` and the docs in the same commits, and a push to `dev`.
+
+## What was built
+
+GPT Sol reviewed the plan ([review](261005h-five-small-ui-fixes-plan-review-sol.md), *build with
+changes*, F1 to F4) and then the code ([review](261005h-five-small-ui-fixes-code-review-sol.md),
+*land with the fixes I made*, F5 to F8). Every finding was taken.
+
+| Item | Commit | What differs from the plan |
+|---|---|---|
+| A | `002da2f63` | Also the comparison table in search.md, which said 15 to 40 seconds (plan review). |
+| B | `765095e41` | The (i) is positioned outside the row and cannot wrap (F1), so the fix is the chips' padding, and only when there are four. |
+| C | `640c61069` | "Expected" is not `loading`: an empty answer that is not the last word still holds the line (F2). The card and the table reserve different heights, 22px and 16px (F3). |
+| D | `3ec64f141`, then the review's fix | The phrase must lie inside the mention's quote, as the server requires (F4), with word boundaries kept (F5, [postmortem](../postmortems/261005g-drawing-normalization-reused-as-evidence-validation.md)). Both apply to `words` events too. |
+| E | `8352c62b8` | The public shelf's card had the same line and got the same fix; its facts are now keyed by position too (F8). |
+
+### B: the numbers
+
+Measured with Playwright from this worktree, switch on, in Recall, Tutorial, Explore and Quiz, at
+1280, 1024, 820, 768 and 390. At 768 and 820 the band is a fixed 288px.
+
+| | Row content | Four chips | Bin and gap | Left over |
+|---|---|---|---|---|
+| Before, mouse pointer | 234px | 220px | 30px | 16px short; Quiz wrapped |
+| After, mouse pointer | 234px | 188px | 30px | 16px |
+| After, touch screen | 226px | 188px | 30px | 8px |
+
+Quiz has no bin and never wrapped. With the switch off (three chips) nothing changes. **The bin in
+these runs was injected** with the app's own markup and class: a real one needs a stored
+conversation, which needs a model call, and the box had no key. The chips are 25px tall on a touch
+screen, as the three were; touch.md asks no minimum of a control inside a band.
+
+### The browser check of A, C and E
+
+At 1280, 820 (touch) and 390 (touch), against the local shelf (18 real topics, nothing stubbed),
+with the topics request delayed three seconds.
+
+- **A**: the tooltip and `/help` read as written, at all three.
+- **E**: 20 cards; no visual line starts with a dot at any width; 8 lines wrap on the phone, each
+  ending its first line with the dot. Fact to dot and dot to fact are 8px each, as before.
+- **C, cards**: the blank line is 22px. At desktop and iPad no card of the first ten changed
+  height when the pills landed. On the phone two of ten grew 26px, because their pills wrapped to a
+  second line.
+- **C, table**: the blank line is 16px, the same as a filled one. Three or four rows of the first
+  ten still grew 16 or 32px at every width, because their topics wrapped to two or three lines.
+  The table's column is narrow, so wrapping is common there.
+- **D was not seen in a browser.** The one local article with a yearless date belongs to another
+  local user. It rests on its unit tests.
+
+### What is left
+
+- **The shelf still moves when topics arrive, from above the cards.** The Topics row's loading
+  placeholder is shorter than the row that replaces it, so every card moves down: 36px at desktop
+  and iPad, 144 to 196px on a phone. Not part of this item; it is the larger shift now.
+- **Table rows whose topics wrap** still grow, as above.
+- **The archive switch** drops the reserved line while the archived list loads
+  ([shelf-terms.md](../project/shelf-terms.md) names it).
+- **The table row's byline** joins its parts with a plain " · " and can also wrap before a dot. A
+  different mechanism from the card's, not fixed here.
+- **A topicless card on a shelf with topics is 22px taller** than it needs to be. One of the first
+  twenty local cards. It reads as a slightly generous gap.

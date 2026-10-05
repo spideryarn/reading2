@@ -333,8 +333,12 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
         <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
           {facts.map((f, i) => (
             /* The dot follows its fact, so a wrapped line starts with a fact:
-               ShelfEntry.tsx § `ShelfCard`, where the spacing is worked out. */
-            <span key={f} data-shelf-fact="">
+               ShelfEntry.tsx § `ShelfCard`, where the spacing is worked out.
+               Keyed by position as well as text, as there: an author and a
+               site of the same name are two facts (GPT Sol, F8 on plan
+               261005h). */
+            // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
+            <span key={`${i}:${f}`} data-shelf-fact="">
               {f}
               {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
             </span>

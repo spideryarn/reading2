@@ -327,13 +327,14 @@ function groupedNotes(
      a phrase only when it lies within an occurrence's quote (`locatePhrase`,
      src/timeline.ts), so a block that says "On July 7" of another event and
      quotes this one without it is not where this one is dated (GPT Sol, F4 on
-     plan 261005h). */
+     plan 261005h). Keep word boundaries as that verifier does: the drawing
+     matcher's whitespace-deleting pass would accept "Injune" as "In June". */
   const quoteHolds = (o: TimelineEvent["occurrences"][number], phrase: string): boolean => {
     const at = index.get(o.blockId);
     const text = at === undefined ? undefined : blocks[at]?.text;
     if (text === undefined || o.quote.trim() === "" || phrase.trim() === "") return false;
     const span = findQuote(text, o.quote, o.start);
-    return span !== null && findQuote(text.slice(span.start, span.end), phrase) !== null;
+    return span !== null && findQuote(text.slice(span.start, span.end), phrase, undefined, "spaced") !== null;
   };
   const besidePhrase = (event: TimelineEvent, phrase: string) => {
     const mention = earliest(

@@ -603,6 +603,28 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
      and for a rejected date alike. An earlier block that says the phrase about
      something else, and quotes the event without it, is not where it is dated. */
   describe("the phrase must be inside the mention's own quote", () => {
+    it.each([
+      ["words", { kind: "words", phrase: "Later on" } as TimelineEvent["dating"],
+        "Acme discussed the late Ron and its launch.", "Later on, Acme launched."],
+      ["yearless", yearless("In June"),
+        "Acme discussed its launch in Injune.", "In June, Acme launched."],
+    ])("does not remove word boundaries to place a %s phrase in an earlier quote", (_, dating, earlier, later) => {
+      const blocks = [earlier, later].map((text, i) => ({
+        id: i === 0 ? "spya-aaaaa2" : "spya-aaaaa3", text, html: "", kind: "text", gistable: true, words: 40,
+      })) as unknown as Block[];
+      const e = event("word-boundaries", dating, blocks.map((b) => ({ blockId: b.id, quote: b.text })));
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa3"]);
+    });
+
+    it("keeps original slice offsets while matching repeated whitespace and folded quotation marks", () => {
+      const text = "İstanbul: Acme said “On  May\n1, we launch”.";
+      const blocks = [{ id: "spya-aaaaa2", text, html: "", kind: "text", gistable: true, words: 40 }] as unknown as Block[];
+      const e = event("normalised", yearless("On May 1"), [
+        { blockId: "spya-aaaaa2", quote: 'Acme said "On May 1, we launch"' },
+      ]);
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa2"]);
+    });
+
     const two = [
       { id: "spya-aaaaa2", text: "On July 7, another company launched. Acme discussed its launch." },
       { id: "spya-aaaaa3", text: "On July 7, Acme launched." },
