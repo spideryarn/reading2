@@ -46,7 +46,6 @@ import {
   ADMIN_USERS_HREF,
   ADMIN_VOUCHERS_HREF,
   DESIGN_HREF,
-  LIBRARY_HREF,
 } from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
@@ -72,11 +71,16 @@ const idOf = (u: AdminUser) => u.id;
  * The page shell every admin page wears: the back-link, the heading, the width.
  * Exported for AdminVouchersPage.tsx, which is a file of its own because it is
  * the one admin page with forms in it.
+ *
+ * **`back` is for a page under the index, and the index passes none.** It
+ * defaulted to an arrow to the library until 2026-10-05; `App.tsx` draws
+ * `HomeLogo` in the corner beside every admin page, which goes there already
+ * (BackLink.tsx § `HomeLink`). *Back to Admin* is not a way home, so it stays.
  */
 export function Shell({
   title,
   children,
-  back = { href: LIBRARY_HREF, label: "Back to your library" },
+  back,
 }: {
   title: string;
   children: ReactNode;
@@ -86,9 +90,12 @@ export function Shell({
     /* Wider than the shelf's `max-w-4xl`: this page's content is a table with
        eleven columns, and a narrower page would spend its whole life scrolling
        sideways inside `DataTable`'s own overflow box. */
-    <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:py-10 tw:font-sans">
+    /* `--safe-top` in the top padding since 2026-10-05: with no arrow above
+       it the index's heading is the first thing on the page, 4px below the
+       corner logo's box, and a notch would have pushed the logo down over it. */
+    <main className="tw:mx-auto tw:max-w-6xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:pb-10 tw:font-sans">
       <header className="tw:mb-8">
-        <BackLink href={back.href} label={back.label} />
+        {back && <BackLink href={back.href} label={back.label} />}
         <h1 className="tw:mt-2 tw:font-prose tw:text-3xl tw:text-foreground">{title}</h1>
       </header>
       {children}

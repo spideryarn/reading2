@@ -120,7 +120,11 @@ a hero and the `--site-*` token scope, which exist to sell something over a long
 sentences, so it takes the policy page's Home link, `h1` and `SiteFooter`. (That link said
 *Back* until 2026-09-08 — it goes to `/` rather than `history.back()`, and most people who open this
 page were sent to it. Since 2026-09-29 it is a house icon with a "Home" tooltip rather than the words
-— [260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md).)
+— [260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md).
+Since 2026-10-05 it is drawn only for a signed-out reader, here and on `/privacy`, `/changelog`,
+`/opensource` and `/help`: signed in, the corner logo beside the page goes to the same place —
+`HomeLink` in [`BackLink.tsx`](../../src/web/BackLink.tsx),
+[261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md).)
 
 **Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
 what that array is for. That puts it on every page that carries the row and nowhere under

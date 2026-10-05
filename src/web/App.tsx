@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
+import { SignedInShell } from "./BackLink.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
 import { LazyPage, type PageLoader } from "./LazyPage.js";
@@ -353,7 +354,11 @@ export function App() {
      shelf sideways. */
   return (
     <FeedbackHost>
-      <SignedIn route={route} user={user} />
+      {/* What tells a page's `HomeLink` that the corner logo is beside it, so
+          it draws no second way home — BackLink.tsx § `SignedInShell`. */}
+      <SignedInShell.Provider value={true}>
+        <SignedIn route={route} user={user} />
+      </SignedInShell.Provider>
       {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
     </FeedbackHost>
   );
