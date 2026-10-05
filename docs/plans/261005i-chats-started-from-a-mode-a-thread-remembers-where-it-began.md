@@ -417,7 +417,7 @@ them. You said this kind of digging should be a chat.
 **What would decide it.** Whether the structured result (especially the citation check) is worth
 keeping as its own thing. A lets you find that out before anything is removed.
 
-**Decided: add an "Ask in chat" button beside Dig deeper, first.** Greg, 2026-10-06: "let's start with adding the \"Ask in chat\" button". Queued.
+**Decided: add an "Ask in chat" button beside Dig deeper, first.** Greg, 2026-10-06: "let's start with adding the "Ask in chat" button". Queued.
 
 ### [Q-thread-summary] Should the mode show a written summary of the chat, or its latest line?
 
