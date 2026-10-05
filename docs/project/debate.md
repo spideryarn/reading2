@@ -106,7 +106,10 @@ How it works, and what to know before changing it:
   mark is pressed, and when a typed answer settles in either chat surface, including after its
   composer has unmounted. See the completion callback in
   [`chat/controller.ts`](../../src/web/chat/controller.ts): a departure refresh alone can run
-  before the thread exists.
+  before the thread exists. **An answer without a conversation is not a deletion** unless an
+  earlier answer had it: a row the reader's own Send put there stays until the server lists it
+  or the reader drops it, because the floating dialog is drawn from that row
+  ([261005q](../postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md)).
 - **Until the first typed Send lands, the origin waits beside the conversation's unsent words**
   ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a look at another mode and a
   first Send that fails. **Live is not offered on that conversation until then**: a spoken first

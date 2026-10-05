@@ -340,13 +340,25 @@ export function threadForOrigin(
  * answer. A row the reader did not touch takes the server's newer copy, and a
  * row the server no longer has goes. For the first fetch nothing changes: the
  * array starts empty, so every row in it was written.
+ *
+ * **"The server no longer has it" needs the server to have had it.** A row
+ * `add` put here that no answer has ever contained (`unseen`) is not one the
+ * server dropped: its first question was refused, or the list was read before
+ * the insert. It stays, whenever it was added, until an answer names it or
+ * `drop` takes it. The first version removed it, and the floating dialog is
+ * drawn from this row, so a refused first question closed the dialog over its
+ * own reason.
+ * docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md
  */
 function foldInLocalWrites(
   fetched: ThreadSummary[],
   local: ThreadSummary[],
   flight: Flight,
+  unseen: ReadonlySet<string>,
 ): ThreadSummary[] {
-  const mine = new Map(local.filter((s) => flight.written.has(s.id)).map((s) => [s.id, s]));
+  const mine = new Map(
+    local.filter((s) => flight.written.has(s.id) || unseen.has(s.id)).map((s) => [s.id, s]),
+  );
   const out = fetched.filter((s) => !flight.dropped.has(s.id)).map((s) => mine.get(s.id) ?? s);
   const seen = new Set(out.map((s) => s.id));
   for (const s of mine.values()) if (!seen.has(s.id)) out.push(s);
@@ -374,6 +386,14 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
    * the new snapshot too, or as good as.
    */
   const flight = useRef<Flight | null>(null);
+  /**
+   * Conversations `add` put here that no answer from the server has contained
+   * yet (`foldInLocalWrites`). Bounded by what this tab started and the server
+   * never took; an answer that names one, or a `drop`, takes it out.
+   */
+  const unseen = useRef(new Set<string>());
+  /** Server-confirmed ids for this article. `add` must not make one unseen again. */
+  const confirmed = useRef(new Set<string>());
   /** The newest request. An older one's answer is not allowed to land. */
   const request = useRef(0);
   /** Whether any answer has landed for this article, so a failed *refresh* stays quiet. */
@@ -393,7 +413,17 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
         if (body.error) {
           if (!landed.current) setError(body.error);
         } else {
-          setSummaries((local) => foldInLocalWrites(body.threads ?? [], local, during));
+          const fetched = body.threads ?? [];
+          /* Only an answer that lands confirms a row. Prune before taking
+             the snapshot: an optimistic row written before this flight must
+             take the server's first copy too. Keep ref mutations outside the
+             updater, which React may run twice. */
+          for (const s of fetched) {
+            confirmed.current.add(s.id);
+            unseen.current.delete(s.id);
+          }
+          const waiting = new Set(unseen.current);
+          setSummaries((local) => foldInLocalWrites(fetched, local, during, waiting));
         }
         landed.current = true;
         setLoaded(true);
@@ -418,6 +448,8 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     activeSlug.current = slug;
     /* Another article: nothing done to the last one's list applies. */
     flight.current = null;
+    unseen.current = new Set();
+    confirmed.current = new Set();
     landed.current = false;
     setSummaries([]);
     setLoaded(false);
@@ -441,6 +473,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   const add = useCallback((summary: ThreadSummary) => {
     flight.current?.written.add(summary.id);
     flight.current?.dropped.delete(summary.id);
+    if (!confirmed.current.has(summary.id)) unseen.current.add(summary.id);
     setSummaries((prev) =>
       prev.some((s) => s.id === summary.id)
         ? prev.map((s) => (s.id === summary.id ? summary : s))
@@ -455,6 +488,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
        back. See `foldInLocalWrites`. */
     flight.current?.dropped.add(threadId);
     flight.current?.written.delete(threadId);
+    unseen.current.delete(threadId);
     setSummaries((prev) => prev.filter((s) => s.id !== threadId));
   }, []);
 
