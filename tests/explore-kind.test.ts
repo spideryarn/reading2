@@ -183,6 +183,15 @@ describe("Explore's prompt", () => {
     expect(testing).not.toContain("each with its block id");
     /* An absence is said of a passage, never of the whole piece. */
     expect(explore).toContain("ABSENCE IS A NARROW CLAIM");
+    /* A missing source is checked with the tool that reads the blocks' own links.
+       `article_citations` reads an optional artefact and cannot show an absence
+       (GPT Sol, code review round 2, CR-6). */
+    const missing = explore.slice(explore.indexOf("A MISSING SOURCE IS CHECKED"), explore.indexOf("SAY WHOSE VIEW IT IS"));
+    expect(missing).toMatch(/call article_links/);
+    expect(missing).not.toMatch(/call article_citations/);
+    expect(toolsFor("explore").find((t) => t.function.name === "article_links")?.function.description).toMatch(
+      /no linked source/,
+    );
     /* No verdict on the piece as a whole, and requested comparisons stay
        prose rather than becoming the list FORMAT forbids. */
     expect(explore).toMatch(/no verdict on\s+(it|the piece) as a whole/i);

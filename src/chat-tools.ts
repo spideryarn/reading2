@@ -395,7 +395,8 @@ export const CHAT_TOOLS: FunctionTool[] = [
         "were given is its text, not its markup — so this is the only way to learn what a link " +
         "in the piece actually points at, and you must never invent one from link text. Use it " +
         "only when the reader refers to a link, or asks where a citation in this piece leads, " +
-        "and you do not already have the address. Do NOT use it for a question this article " +
+        "and you do not already have the address; or to check before you say that a claim in " +
+        "the piece has no linked source. Do NOT use it for a question this article " +
         "answers, for a general fact, or when a web search has already found the page. Listing " +
         "a link is not a reason to fetch it: fetch only what the reader actually asked about.",
       parameters: {
