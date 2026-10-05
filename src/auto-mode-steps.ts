@@ -26,7 +26,10 @@ import type { StepName } from "./types.js";
  *
  * `tweets` and `simple` are Summary's two artefacts (its thread and its
  * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
- * modes'; `crossrefs` belongs to no mode — the links from a phrase in one
+ * modes'; `relations` is Marginalia's relation words (so, but, vs), on the
+ * list since the mode left the experimental switch on 2026-10-05
+ * (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md);
+ * `crossrefs` belongs to no mode — the links from a phrase in one
  * passage to the passage that backs it sit in the prose in every mode
  * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 3).
  */
@@ -35,6 +38,7 @@ export const AUTO_MODE_STEPS: readonly StepName[] = [
   "glossary",
   "quotes",
   "ideas",
+  "relations",
   "simple",
   "skim",
   "crossrefs",

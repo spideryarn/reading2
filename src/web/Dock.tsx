@@ -1042,7 +1042,7 @@ const MODES_UI = [
      outside the radiogroup, after it, so the bar and the command bar list it in
      the same place. It had sat in the shape run beside Summary, for what it
      draws: each part's question and where the argument has got to. Behind the
-     switch. `PanelRight`: the column on the right.
+     experimental switch until 2026-10-05 (plan 261005d). `PanelRight`: the column on the right.
      docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   {
@@ -1694,8 +1694,8 @@ function useActivateMode(
       /* **Nor does a Marginalia press while the column is on**, from either
          door: the bar's press turns it off, with its feed still mounted for
          that instant, and naming it in the command bar leaves it where it is.
-         Only the press that turns the column on asks for its relation words
-         (plan 261003f). */
+         Only the press that turns the column on can ask from the browser for
+         relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
       if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary });
       onMode(next, undefined, toggles);
@@ -2870,8 +2870,8 @@ function DockModes({
      Greg: *"move the Plain and Marginalia modes into their own icon-groups"*
      (spya-ba8kqp). Plain is still a radio in the same radiogroup (exactly one
      of Plain and the bands is on), so the radiogroup holds two frames.
-     Marginalia's third frame is absent when Experimental is off and the notes
-     are closed. The lines between runs (`groupStarts`) are drawn inside the
+     Marginalia's third frame was absent with Experimental off and the notes
+     closed until 2026-10-05, when the mode left the switch. The lines between runs (`groupStarts`) are drawn inside the
      bands' frame only: a frame's edge already separates the other two.
      docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
   const radios = modes.filter((m) => m.mode !== "marginalia");

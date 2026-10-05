@@ -112,7 +112,7 @@ Then the residue, which is why this page exists:
   > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
   > [261002a](../plans/261002a-summary-generates-on-open.md))
 
-  Modes with nothing to generate (Plain, Structure and Marginalia) open without a run. So do
+  Modes with nothing to generate (Plain and Structure) open without a run. So do
   surfaces that need the reader's words first (Search, Chat, Referee's Criteria and Mirror,
   Remember's Recall). So a new
   artefact-backed mode wants a name in
@@ -348,6 +348,10 @@ Three edits, and the second is the point:
 1. **The `experimental` flag on its `MODE_CATALOG` entry**, [`src/mode-catalog.ts`](../../src/mode-catalog.ts)
    — it was on the `MODES_UI` row until 2026-09-07. That is the whole of the behaviour — the route,
    the band and the URL do not change, and a hidden mode was always reachable by `?mode=…` anyway.
+   **With one exception since 2026-09-30: a mode whose press makes something** joins or leaves the
+   steps queued on import, and `tests/auto-modes.test.tsx` is red until
+   [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts) follows — a per-import cost, so say it
+   in the plan (Marginalia, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)).
 2. **Its name in `BEHIND_THE_SWITCH`**, [`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx).
    An independent copy of the policy on purpose, so that nobody moves a mode in or out of every
    reader's bar by editing one boolean: change the flag alone and six of that file's tests go red,

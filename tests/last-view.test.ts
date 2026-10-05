@@ -342,19 +342,20 @@ describe("the first-open default", () => {
 
   describe("firstOpenSearch: what the window has room for", () => {
     it("is the article alone just below 700 usable px, and Summary from 700", () => {
-      expect(firstOpenSearch(699, 16, true)).toBe("");
-      expect(firstOpenSearch(700, 16, true)).toBe("?mode=summary");
+      expect(firstOpenSearch(699, 16)).toBe("");
+      expect(firstOpenSearch(700, 16)).toBe("?mode=summary");
     });
 
     it("adds the notes from 900, and not at 899", () => {
-      expect(firstOpenSearch(899, 16, true)).toBe("?mode=summary");
-      expect(firstOpenSearch(900, 16, true)).toBe("?mode=summary&margin=1");
+      expect(firstOpenSearch(899, 16)).toBe("?mode=summary");
+      expect(firstOpenSearch(900, 16)).toBe("?mode=summary&margin=1");
     });
 
-    it("leaves the notes out at any width for a reader whose experimental switch is off", () => {
-      expect(firstOpenSearch(900, 16, false)).toBe("?mode=summary");
-      expect(firstOpenSearch(2400, 16, false)).toBe("?mode=summary");
-      expect(firstOpenSearch(699, 16, false)).toBe("");
+    it("does not ask about the experimental switch: Marginalia left it on 2026-10-05", () => {
+      /* It took a third argument, the reader's switch, and left the notes out
+         when that was off (spya-vv54j2, plan 261005d). */
+      expect(firstOpenSearch.length).toBe(2);
+      expect(firstOpenSearch(2400, 16)).toBe("?mode=summary&margin=1");
     });
   });
 

@@ -199,7 +199,7 @@ is a column rather than something in the browser's `localStorage`.
 since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
 out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
@@ -218,7 +218,6 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
-| [Marginalia](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (called Annotations until 2026-10-01) | A first experiment with a column to the *right* of the prose, which Greg asked to "play with" (SPIDERYARN-READING2-7K, 2026-10-01). It generates nothing — the parts' questions, the arc and any ideas already made — but whether notes beside the text help reading or become a second article down the margin is exactly what has not been tried. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
 **One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
@@ -367,6 +366,23 @@ who said them** ([quotes.md](quotes.md)) — but it is now a thing a reader meet
 rather than a reason to hide the mode. Pressing the button starts a paid run, the same as Glossary
 and Ideas, so this is a third default-visible mode that spends on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
+
+**Marginalia left the table on 2026-10-05.** It was called Annotations when Greg wrote this:
+
+> Let's take the annotations mode out of experimental features, i.e. make it a mainstream feature
+> available to everybody.
+>
+> — Greg, 2026-10-04 (spya-vv54j2)
+
+It had been behind the switch since it was built on 2026-10-01, as a first experiment with a column
+to the right of the prose. Its toggle is now at the end of the modes in every reader's bar, a
+visitor's included, where it draws what the public payload carries and starts nothing. Two things
+followed from the flag. **Its relation words are queued when an article is imported**, because the
+add page's list is every mode outside the switch that makes something
+([ingest-queue.md](ingest-queue.md)): one more model call per import, measured once at $0.045.
+**And the first-open default includes it for every signed-in reader with room**, no longer only
+for a reader with the switch on ([url-state.md](url-state.md)).
+[261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md).
 
 **Remember left the table on 2026-10-05, without its Explore part.** Greg:
 
