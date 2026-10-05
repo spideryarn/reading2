@@ -28,7 +28,6 @@ import {
   renderPrompt,
 } from "../src/simple-summary.js";
 import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
-import { PROFILE_RULES } from "../src/profile.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { whyUnusable } from "../src/store/artifacts.js";
@@ -297,30 +296,11 @@ describe("Brief's and Fuller's prompts", () => {
      `/9` (plan 261005b) made the length follow the piece's, in four bands;
      `SIMPLE_SYSTEMS` is the standard band's pair, and **neither hash moved**:
      an article of 2,500 to 14,999 words is asked exactly what `/8` asked. */
-  it("are Brief as `simple-prompt/8` shipped it and Fuller as `/10` did, for a piece of standard length", () => {
+  it("are the bytes `simple-prompt/8` shipped, for a piece of standard length", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
-    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
+    expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/9");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
-    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("d38d5742812892c510f7e1d6e70df7ae2b0fb4b3e12e26f57564258605296868");
-  });
-
-  /* `/10` (plan 261005h): Fuller is written for someone who has not read the
-     piece. Brief's bytes did not move, which the hash above holds; these hold
-     the two things about Fuller's that a reader of the prompt could get wrong. */
-  it("tells Fuller alone that the reader has not read the piece", () => {
-    expect(SIMPLE_SYSTEMS.fuller).toContain("WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE");
-    expect(SIMPLE_SYSTEMS.brief).not.toContain("WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE");
-  });
-
-  it("gives each level its last word on the reader's background after the shared profile rules", () => {
-    for (const [level, heading] of [
-      ["brief", "FOR THIS VERSION, THE READER'S BACKGROUND DOES NOT CHANGE THE WORDS"],
-      ["fuller", "FOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES"],
-    ] as const) {
-      const system = SIMPLE_SYSTEMS[level];
-      expect(system.indexOf(heading)).toBeGreaterThan(system.indexOf(PROFILE_RULES));
-      expect(system.indexOf(PROFILE_RULES)).toBeGreaterThan(-1);
-    }
+    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("740415e381ea4524317fef9ba6a83e514bafedfb3d13fae9c269f1b57636e2ba");
   });
 });
 
@@ -353,16 +333,6 @@ describe("an unforced Summary preserves usable words for the same article", () =
       store.plant("s", "simple", "simple", legacy);
       expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
     }
-  });
-  it("does not make a `/9` row stale: `/10` changed the prompt and not what it is written from", async () => {
-    const { store, row } = storedRow();
-    const tree = { ...ARTICLE.tree, nodes: {} };
-    const banded = inputFingerprint(BLOCKS, tree, ARTICLE.meta, "simple-prompt/9");
-    expect(inputFingerprint(BLOCKS, tree, ARTICLE.meta)).toBe(banded);
-    const nine = { ...row, promptVersion: "simple-prompt/9", sourceHash: banded };
-    expect(isStale(nine, BLOCKS, tree, ARTICLE.meta)).toBe(false);
-    store.plant("s", "simple", "simple", nine);
-    expect(await stepIsDone(STEPS.simple, ctx, store)).toBe(true);
   });
   it("skips a stored summary from a different model generation", async () => {
     const { store, row } = storedRow();

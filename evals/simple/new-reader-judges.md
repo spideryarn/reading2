@@ -31,7 +31,9 @@ wrote what, not what the change is, not what is hoped for. The file it reads is 
 > know. Do not list something the summary explains, even briefly, where it first appears. Do not
 > list matters of style.
 >
-> Write `audit-judge.md` in the same directory. For every section, in the same order and under the
+> Write `audit-judge.md` in the same directory. Copy the `blind-id:` line from the input unchanged
+> as the first line of your answer: it identifies the particular shuffled file you judged, and an
+> answer carrying any other id is refused. Then, for every section, in the same order and under the
 > same heading (`## S01`), one line for each place, starting with `- `, quoting the words and
 > saying in a few words what was missing; then a line `count: N`, where N is the number of `- `
 > lines in that section. A section with nothing to list has only `count: 0`. Use `- ` at the start
@@ -56,7 +58,9 @@ wrote what, not what the change is, not what is hoped for. The file it reads is 
 >   `both` or `neither`)
 > - `prefer:` which would you rather be given before reading the piece? (`A`, `B` or `same`)
 >
-> Write `pairs-judge.md` in the same directory: for every pair, in the same order and under the
+> Write `pairs-judge.md` in the same directory. Copy the `blind-id:` line from the input unchanged
+> as the first line of your answer: it identifies the particular shuffled file you judged, and an
+> answer carrying any other id is refused. Then, for every pair, in the same order and under the
 > same heading (`## P01`), those five lines, each starting with the question's word and a colon.
 
 ## 3. Against the piece
@@ -85,8 +89,10 @@ One subagent a piece, each given one file, `grounded-<slug>.md`, and writing
 > A detail left out is not a fault; a summary cannot hold everything. Hold every summary to the
 > same list of main findings.
 >
-> Write `grounded-judge-<slug>.md` in the same directory. Begin with your list of main findings,
-> as a numbered list. Then, for every summary, in the same order and under the same heading
+> Write `grounded-judge-<slug>.md` in the same directory. Copy the `blind-id:` line from the input
+> unchanged as the first line of your answer: it identifies the particular shuffled file you
+> judged, and an answer carrying any other id is refused. Next, your list of main findings, as a
+> numbered list. Then, for every summary, in the same order and under the same heading
 > (`## G01`), one line a fault, starting with `- omitted:`, `- bent:` or `- known:` and saying
 > which finding or which words; then a line `faults: N`, where N is the number of `- ` lines in
 > that section. A summary with no fault has only `faults: 0`. Use `- ` at the start of a line for

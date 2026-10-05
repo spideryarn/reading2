@@ -3,9 +3,10 @@
 Up: [plans.md](../project/plans.md) · the feature: [summaries.md](../project/summaries.md) · the
 research: [261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md)
 
-**Status, 2026-10-05: the prompt is written and its eval is built, but nothing is measured and
-nothing is shipped.** The box's model key ran out of its monthly budget before the first write
-(§ What is blocking it).
+**Status, 2026-10-05: awaiting Greg. The prompt is written and its eval is built, but nothing is
+measured and no prompt has changed on `dev`.** The box's model key ran out of its monthly budget
+before the first write, and only Greg can raise it (§ What is blocking it, which also says how to
+pick this up).
 
 ## What Greg asked for
 
@@ -225,6 +226,36 @@ has been told and has told him.
 `fbrntjxu-fuller-summary-for-new-reader` and is not on `dev`.** A prompt change nobody has
 measured is not pushed.
 
+**Still at its limit at 14:38 BST, three hours on**, checked at 13:21, 13:56 and 14:38. So, as the
+Overseer asked: the docs, the eval script and the judges' briefs are on `dev`, and
+`src/simple-summary.ts` and its two tests on `dev` are `simple-prompt/9`, byte for byte.
+
+**`dev`'s history does hold the edit, and the commit that took it back out.** The `/10` edit was
+first committed together with these docs (`dd71128c5`), so pushing the docs pushed that commit too;
+the commit after it puts the three files back to `dev`'s bytes, and that is the tree `dev` has. A
+clean second worktree holding only the docs would have kept the edit out of the history as well
+(GPT Sol's code review, F1), and was passed over: this session can work in one worktree only, and
+what a reader gets is decided by the tree, which is unchanged. The `/10` edit is applied again as
+the last commit of the branch `worktree-fbrntjxu-fuller-summary-for-new-reader`, and that commit
+is not pushed.
+
+**To pick it up once the key has room**, in that worktree:
+
+1. `git merge origin/dev`, and check `src/simple-summary.ts` still carries `NOT_READ`.
+2. The old arms. For this run use `src/simple-summary.ts` exactly as it was at the pinned commit
+   `d1eec9994` (`git show d1eec9994:src/simple-summary.ts`, saved over it, with the edited file
+   kept aside), and not whatever `origin/dev` holds by then: another Summary prompt change may
+   have landed. Write `high-about-new0a`, `high-about-new0b` and `high-none-new0a` with
+   `npx tsx evals/simple/probe.ts run --arm <arm> --power high <the five slugs>`, then put the
+   edited file back.
+3. The new arms on the edited file: `high-about-new1a`, `high-about-new1b`, `high-none-new1a`.
+4. The two-bullet arm, `high-about-new2a`: `NOT_READ.fuller` cut down to its first and fifth
+   bullets with no heading, no opening paragraph and no closing check; then the file restored.
+5. `npx tsx evals/simple/new-reader.ts table`, then `audit`, `pairs` and `grounded`; the three
+   briefs in [`evals/simple/new-reader-judges.md`](../../evals/simple/new-reader-judges.md), each
+   to a fresh subagent; then `score`.
+6. Stages 3 and 4 below.
+
 ## Stages
 
 1. The research doc, this plan, GPT Sol's review of the plan. *No model key needed.*
@@ -249,6 +280,31 @@ changes above*, no P0, nine findings, all taken.
 | F7 | the eval-only environment variable | gone; arms are separated in time |
 | F8 | the research doc claimed more than its sources | its table now marks what is ours and what was only a search summary |
 | F9 | which tests change, and three new assertions | `tests/simple-two-levels.test.ts` |
+
+## GPT Sol's review of the code
+
+[The review](261005h-fuller-summary-code-review-sol.md), 2026-10-05, read-only, of what was about
+to be pushed and of the held-back prompt ([the diff](261005h-fuller-summary-code-review.diff)):
+*push Part 1 with the changes above*. It found no defect in the prompt itself. Seven findings; five
+taken, one answered in prose, one declined.
+
+| | finding | what was done |
+|---|---|---|
+| F1 | the prompt edit is in this branch's history, so pushing the docs pushes it | **answered, not fixed in git**: § What is blocking it now says so plainly. `dev`'s tree is `/9` |
+| F2 | `score` accepted a repeated or extra section, a repeated answer line, an answer the brief forbids, and a judge file written for an older shuffle | exact section lists, one line a question, each question's own choices, and a `blind-id:` the judge copies and `score` checks |
+| F3 | a partial experiment could print PASSES | a missing run throws when a judge file is built, and `score` wants every piece under every arm |
+| F4 | "Awaiting Greg" is defined as "nothing built", and here things are built | **declined**: the report needs something only Greg can give, and of the three endings that is this one. Leaving it with no ending means the next feedback sweep hands it to a new session |
+| F5 | the pickup steps took the old prompt from `origin/dev`, which moves | pinned to `d1eec9994` |
+| F6 | the two-bullet arm was still called "sentence" in the script | renamed |
+| F7 | the side balance was printed for all test pairs, and the criterion counts ten of them | printed per kind and reader |
+
+Each new refusal in `score` was watched refusing, on made-up files: a missing run, a judge file
+for another shuffle, a repeated section, a forbidden answer and a repeated answer line; and both
+PASSES lines were watched printing FAILS.
+
+**The full suite**, on the tree that was pushed: 35,294 passed, 4 failed in 5 files, all of them
+tests that want a build this worktree has not run (`has a build to inspect`, and the fleet
+dashboard's server wiring). None touches Summary.
 
 ## Ledger
 
