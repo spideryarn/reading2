@@ -95,6 +95,17 @@ typed turn would not be found, and the search was run once. It does mean the wor
 model's record. **So AP1, AP2 and AP5 should go to Greg with the question "are these your words?"**
 and land as a quote only if he says yes; otherwise as a dated paraphrase.
 
+**Greg confirmed all four on 2026-10-06**, two with a condition that must travel with the quote:
+
+> 1 yes
+> 2 yes, as long as you're confident and there aren't tradeoffs
+> 3 yes (though complexity counts as a tradeoff)
+> 4 yes
+
+His numbering was the Overseer's: 1 = AP1, 2 = "fix bugs without asking" (AP5), 3 = "no-tradeoffs
+improvements" (AP5), 4 = AP2. So AP5 lands with both conditions: a bug is fixed unasked only when
+the agent is confident and the fix has no trade-off, and added complexity counts as a trade-off.
+
 Found in his typed turns: the Codex-transcripts permission (AP3), the weekly-usage instruction
 (AP4), both halves of the `SUPABASE_ACCESS_TOKEN` rule (AP7), "when you wake up, pull the latest
 changes" (AP8), and the granularity-zoom blockquote (AP9).
