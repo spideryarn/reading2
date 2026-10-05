@@ -146,6 +146,7 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
   async begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     config: RefereeCriterionConfig,
     wantedId?: string,
@@ -158,9 +159,9 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
     const row = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
-      /* Inside the lock, so the fingerprint and the row are written against one
-         state of the article — pg-searches.ts § begin. */
-      const sourceHash = await sourceHashFor(articleId, tx);
+      /* The fingerprint is the caller's, of the blocks it is sending; the lock
+         orders the read of existing rows against the write — pg-searches.ts
+         § begin. */
       const existing = await criteriaFor(articleId, tx, slug);
       const { row: decided, kind } = withCriterion(
         existing,

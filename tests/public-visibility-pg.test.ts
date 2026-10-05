@@ -2080,23 +2080,24 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
-   * **Two publishes at once produce one event, and that is the row lock's job.**
+   * **Two publishes at once produce one event — and it is the billing lock that
+   * queues them, not the article's.**
    *
-   * Sol's finding 6, and it caught a real gap: removing `.for("update")` from
-   * pg-visibility.ts left the whole suite green, so the lock this feature's
-   * comment makes a point of explaining was untested.
+   * Only the owner can change an article's visibility, so two `set` calls on one
+   * article always share one `billing_accounts` row, and `set` takes that lock
+   * first. The second publish waits there, reads `public` once the first has
+   * committed, and no-ops. This test stays green with `.for("update")` deleted
+   * from `lockedArticleQuery` (checked by doing it, 2026-10-05), and until that
+   * day it was named and commented as the row lock's test. What the row lock is
+   * for is the next case.
    *
-   * Both requests are started before either is awaited, so they are genuinely
-   * in flight together rather than one after the other — the mistake that makes
-   * most "concurrent" tests sequential and green on broken code
-   * (docs/reusable/silent-success.md, and the note on async test mocks).
-   *
-   * Both must answer 200: the loser of the race is not an error, it is somebody
-   * asking for a state that by then already holds, which is the idempotent case.
-   * What must be exactly one is the **event**, because the log is a history and
-   * "Alice pressed the button twice" is not a fact about the document.
+   * What it does show: the two are serialised, and the second is the idempotent
+   * case. Both must answer 200 — the loser is not an error, it is somebody asking
+   * for a state that by then already holds. What must be exactly one is the
+   * **event**, because the log is a history and "Alice pressed the button twice"
+   * is not a fact about the document.
    */
-  it("writes one event when two publishes race", async () => {
+  it("writes one event when two publishes race, queued on the owner's billing row", async () => {
     /* From private, so there is a real transition for the two to contend over. */
     await call("PUT", `/api/article/${SLUG}/visibility`, {
       body: { visibility: "private" },
@@ -2110,27 +2111,19 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /**
      * **The window is forced open from outside, rather than hoped for.**
      *
-     * The first version of this test just fired both `PUT`s with `Promise.all`
-     * and asserted one event. It passed — and it passed with `.for("update")`
-     * deleted, which is the mutation it was written to catch. Measured on this
-     * laptop: two requests over a local socket do not overlap, the first
-     * transaction finishes before the second reads, and the concurrency the
-     * test is named for never happens. A concurrency test that has to be lucky
-     * is the shape docs/reusable/silent-success.md keeps describing, and the
-     * note on async test mocks names this exact variant.
+     * Two `PUT`s fired with `Promise.all` over a local socket do not overlap:
+     * the first transaction finishes before the second begins, and the test is
+     * sequential (docs/reusable/silent-success.md, and the note on async test
+     * mocks). So a third connection holds the article row, and both requests
+     * are in flight before it lets go:
      *
-     * So a third connection takes the row's write lock first and holds it. Both
-     * requests then reach their own read with the row already locked, and what
-     * happens next is precisely the difference the code is making:
+     * - the first takes the billing row and stops at the article — on its
+     *   locked read, or on its `update` if that read were unlocked;
+     * - the second stops at the billing row, behind the first.
      *
-     * - **with `for update`** — both block on the *read*. Releasing lets one
-     *   through; it sees `private`, writes, commits. The other then reads
-     *   `public` and no-ops. One event.
-     * - **without it** — neither read blocks, so both see `private` before the
-     *   release, and both then write and both insert. Two events.
-     *
-     * Deterministic rather than timing-dependent, and it is the lock's own
-     * semantics doing the work rather than a `setTimeout`.
+     * Releasing lets the first through; it writes and commits. Only then does
+     * the second read, and it reads `public`. One event either way, which is
+     * why this cannot tell whether the article read is locked.
      */
     const { Pool } = await import("pg");
     const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
@@ -2152,15 +2145,11 @@ describe("sharing one article", { timeout: 60_000 }, () => {
 
       /* **Both requests are queued behind this transaction, on Postgres's word.**
          If either had *not* got that far, the release below would simply let
-         them run one after the other — which is the old, useless version of
-         this test, so the wait is what makes it the new one. It slept 300 ms
-         here until 2026-10-04, and that passed with the lock above taken on a
-         row nobody wanted *and* `for update` deleted from the store.
+         them run one after the other. It slept 300 ms here until 2026-10-04.
 
          Two distinct backends whose chains *reach* the holder, not two that
-         name it. Measured: the second request waits on the first — on the
-         billing row, which a visibility change locks before the article — and
-         only the first waits on this connection. */
+         name it: the second request waits on the first, on the billing row,
+         and only the first waits on this connection. */
       await waitUntilBlockedBy(holderPid, { waiters: 2, what: "the two publishes" });
       await client.query("commit");
     } finally {
@@ -2185,6 +2174,93 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And both callers were told the same `public_at`, rather than one of them
        being handed a stamp that was overwritten a millisecond later. */
     expect(first.body.publicAt).toBe(second.body.publicAt);
+  });
+
+  /**
+   * **A share waits for a *Read this* that is landing, and that is the row
+   * lock's job.**
+   *
+   * `set` reads `processing` to refuse sharing a paper not yet read through.
+   * The writer of that column is publication — `publishRevisionIn`
+   * (src/store/pg-revisions.ts) flips `minimal` to `full` under the article
+   * lock and takes **no** billing lock (src/store/pg-jobs.ts says none may be).
+   * So the billing lock cannot order a share against it; only `for update` on
+   * the article read can.
+   *
+   * A second connection does what that publication does to the row — the
+   * `update`, uncommitted — and the share is started behind it:
+   *
+   * - **with `for update`** — the share's read blocks, sees `full` once the
+   *   holder commits, and goes through.
+   * - **without it** — the read does not block, sees the committed `minimal`,
+   *   and refuses a paper that was a moment from being shareable.
+   *
+   * Red with `.for("update")` deleted: the share answers 409 while the row is
+   * still held.
+   */
+  it("waits for a Read this that is landing, rather than refusing on a stale minimal", async () => {
+    const db = getDb();
+    await call("PUT", `/api/article/${SLUG}/visibility`, {
+      body: { visibility: "private" },
+      as: OWNER,
+    });
+    await db.delete(articleVisibilityChanges).where(eq(articleVisibilityChanges.articleId, ARTICLE_ID));
+    await db.update(articles).set({ processing: "minimal" }).where(eq(articles.id, ARTICLE_ID));
+
+    const { Pool } = await import("pg");
+    const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    const client = await holder.connect();
+    try {
+      /* **The control**: committed `minimal` really is refused, so the 200
+         below is the holder's `full` being seen and not a share that never
+         looks at the column. */
+      const refused = await call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "public", rightsConfirmed: true },
+        as: OWNER,
+      });
+      expect(refused.status).toBe(409);
+      expect((await articleRow())?.visibility).toBe("private");
+
+      await client.query("begin isolation level read committed");
+      const backend = await client.query<{ pid: number | string }>("select pg_backend_pid() as pid");
+      const holderPid = Number(backend.rows[0]?.pid);
+      await client.query("update spideryarn.articles set processing = 'full' where id = $1", [ARTICLE_ID]);
+
+      const share = call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "public", rightsConfirmed: true },
+        as: OWNER,
+      });
+
+      /* Whichever comes first: Postgres saying the share is queued behind the
+         holder, or the share answering. An answer here is the bug — it was
+         given while the row it depends on was still being written. */
+      const blocked = waitUntilBlockedBy(holderPid, { what: "the share" }).then(() => null);
+      let early: Reply | null;
+      try {
+        early = await Promise.race([share, blocked]);
+      } finally {
+        /* Let the poll finish before the holder is released, so a red run
+           does not leave it querying behind the next case. */
+        await blocked.catch(() => {});
+      }
+      expect(
+        early && { status: early.status, error: early.body.error },
+        "the share answered without waiting for the article row",
+      ).toBeNull();
+
+      await client.query("commit");
+      const answer = await share;
+      expect(answer.status).toBe(200);
+      expect(answer.body.visibility).toBe("public");
+      expect(await events()).toHaveLength(1);
+    } finally {
+      /* A failed assertion must not hand the connection back holding the row,
+         or leave the fixture minimal for every case after this one. */
+      await client.query("rollback").catch(() => {});
+      client.release();
+      await holder.end();
+      await db.update(articles).set({ processing: "full" }).where(eq(articles.id, ARTICLE_ID));
+    }
   });
 
   /**

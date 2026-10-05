@@ -302,7 +302,7 @@ describe("one criterion's life in the Postgres store", () => {
     const store = pgRefereeCriteriaStore;
     const now = () => "2026-09-01T00:00:00.000Z";
 
-    const first = await store.begin(PSLUG, "Are the controls adequate?", DIVERGING, undefined, now);
+    const first = await store.begin(PSLUG, "feedfacefeedface", "Are the controls adequate?", DIVERGING, undefined, now);
     expect(first.row.status).toBe("pending");
 
     await store.finish(PSLUG, first.row.id, { status: "error", error: "boom" }, first.attempt);
@@ -315,6 +315,7 @@ describe("one criterion's life in the Postgres store", () => {
        it. docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md. */
     const again = await store.begin(
       PSLUG,
+      "feedfacefeedface",
       "Are the controls adequate?",
       DIVERGING,
       first.row.id,
@@ -352,9 +353,32 @@ describe("one criterion's life in the Postgres store", () => {
     expect(await store.remove(PSLUG, again.row.id)).toEqual([]);
   });
 
+  it("stores exactly the hash its caller hands begin, on a mint and on a retry", async () => {
+    /* Plan 261005i § D. The store used to read the article's fingerprint
+       itself; the hash is now the caller's, of the blocks it is sending. A
+       different one each time, so a retry that kept the failed attempt's shows. */
+    const store = pgRefereeCriteriaStore;
+    const minted = await store.begin(PSLUG, "hash-of-the-mint", "Controls?", DIVERGING);
+    expect(minted.row.sourceHash).toBe("hash-of-the-mint");
+    expect((await store.load(PSLUG))[0]?.sourceHash).toBe("hash-of-the-mint");
+
+    await store.finish(PSLUG, minted.row.id, { status: "error", error: "boom" }, minted.attempt);
+    const retried = await store.begin(
+      PSLUG,
+      "hash-of-the-retry",
+      "Controls?",
+      DIVERGING,
+      minted.row.id,
+    );
+    expect(retried.row.id).toBe(minted.row.id);
+    expect(retried.row.sourceHash).toBe("hash-of-the-retry");
+    expect((await store.load(PSLUG))[0]?.sourceHash).toBe("hash-of-the-retry");
+    await store.remove(PSLUG, minted.row.id);
+  });
+
   it("hands back a valence of −80 rather than 0", async () => {
     const store = pgRefereeCriteriaStore;
-    const begun = await store.begin(PSLUG, "Controls?", DIVERGING);
+    const begun = await store.begin(PSLUG, "feedfacefeedface", "Controls?", DIVERGING);
     await store.finish(PSLUG, begun.row.id, { status: "done", results: [NEGATIVE] }, begun.attempt);
     const back = await store.load(PSLUG);
     const stored = back.find((c) => c.id === begun.row.id)?.results[0];

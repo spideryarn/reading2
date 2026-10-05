@@ -153,6 +153,7 @@ import { ratedDifficultyOf } from "../reading-time.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
+import { blocksAreWhatTheirHtmlProduces } from "../blocks.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import {
   articleFingerprint,
@@ -1575,10 +1576,19 @@ export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisi
     .orderBy(asc(revisionBlocks.ordinal));
 }
 
-async function blocksFor(revisionId: string): Promise<Block[]> {
+/**
+ * The block rows **as stored**, HTML uncleaned — the same blocks the pipeline's
+ * artefact read returns (`readBlocks`, src/store/artifacts-pg.ts).
+ *
+ * Nothing renders these. They exist for the one question that is about the
+ * stored rows rather than about what a reader is shown: would stage 3 write
+ * them again (`isCurrent` § `case "blocks"`). Cleaned blocks answer that
+ * differently from the queue whenever a row holds markup the sanitiser removes.
+ */
+async function storedBlocksFor(revisionId: string): Promise<Block[]> {
   const rows = await blocksQuery(getDb(), revisionId);
 
-  const blocks = rows.map((row) => ({
+  return rows.map((row) => ({
     id: row.blockId,
     tag: row.tag,
     kind: row.kind,
@@ -1597,7 +1607,14 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
       ? {}
       : { context: { id: row.contextId, type: row.contextType as "callout" } }),
   }));
+}
 
+async function blocksFor(revisionId: string): Promise<Block[]> {
+  return cleanedForReading(await storedBlocksFor(revisionId));
+}
+
+/** Stored blocks, made safe to render. Every read but one wants this. */
+function cleanedForReading(blocks: Block[]): Block[] {
   /* The same guard src/api.ts put on the filesystem reader, because there were
      two `loadArticle`s and guarding one of them passes every test — the fs half
      is genuinely protected, the suite is green, and the store that is in the
@@ -3039,13 +3056,18 @@ const rawPgArticleReader: ArticleReader = {
    * `inputFingerprint`), so it is checked against the artefact like `tweets` and
    * `glossary`, and in full, because its `PROMPT_VERSION` is exported.
    *
-   * `fetch`, `extract` and `blocks` have no currency rule in **either** store —
+   * `fetch`, `metadata` and `extract` have no currency rule on either side —
    * nothing they write records what it was made from — so they are the step row
-   * alone, exactly as on the filesystem. **`assets` is not one of
-   * them**, and the `default` arm below is why it needed a case: its manifest
-   * does record what it was made from, so falling through would have this page
-   * call a stale one current while the filesystem store said otherwise about
-   * the same article.
+   * alone. **`assets` is not one of them**, and the `default` arm below is why
+   * it needed a case: its manifest does record what it was made from, so falling
+   * through would have this page call a stale one current while the pipeline
+   * said otherwise about the same article.
+   *
+   * **Nor is `blocks`, since 2026-10-05.** It records nothing either, but the
+   * queue decides it by replaying stage 3 (`STEPS.blocks.isDone`), and for as
+   * long as this page left it to `default: true` the two answered differently
+   * whenever stage 2's HTML had moved. It asks the same function now, on the
+   * same inputs — `blocksCurrent` below.
    */
   async articleMetadata(slug: string): Promise<ArticleMetadata> {
     requireSlug(slug);
@@ -3062,9 +3084,41 @@ const rawPgArticleReader: ArticleReader = {
     /* Read once, outside the loop: four of the eight checks need the blocks,
        and asking for a 360-row table four times to answer one page is the kind
        of thing that only shows up in production. */
-    const blocks = await blocksFor(found.revision.id);
+    const storedBlocks = await storedBlocksFor(found.revision.id);
+    const blocks = cleanedForReading(storedBlocks);
     const blocksHash = blocks.length ? hashBlocks(blocks) : null;
     const { revision } = found;
+    /* **Would stage 3 write these blocks again from stage 2's HTML?** The
+       queue's own question, asked with the queue's own function, so the two
+       cannot disagree (tests/freshness-deciders-agree.test.ts).
+
+       Computed here rather than in the switch because it needs a read and
+       `isCurrent` is synchronous. The read is **a second query of two columns,
+       not two more columns on the `metadata` projection**: they are the whole
+       article twice, and tests/store-revision-columns.test.ts holds that
+       projection to never taking them. Bound to this revision's id, so a
+       pointer that moves between the two queries cannot mix revisions, and
+       made only when the run row says `done` — nothing else reads the answer.
+
+       **`storedBlocks`, not `blocks`.** The pipeline's read returns block HTML
+       as stored; the cleaned copy answers differently when a row holds markup
+       the sanitiser removes. GPT Sol, 2026-10-05.
+
+       The cost is a jsdom re-split per load of this page — up to about a second
+       on the largest article (src/blocks.ts § What it costs). Accepted: the
+       page is opened on purpose and by few. */
+    let blocksCurrent = false;
+    if (byStep.get("blocks")?.status === "done") {
+      const [html] = await db
+        .select({
+          extracted: articleRevisions.extractedHtml,
+          stamped: articleRevisions.stampedHtml,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, revision.id))
+        .limit(1);
+      blocksCurrent = blocksAreWhatTheirHtmlProduces(html?.extracted, html?.stamped, storedBlocks);
+    }
     /* Read once, beside the blocks and for the same reason. Six of the eight
        checks below are about an artefact whose prompt read the tree and the
        metadata head as well as the paragraphs — src/source-hash.ts §
@@ -3089,6 +3143,9 @@ const rawPgArticleReader: ArticleReader = {
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
+        /* Answered above, where the read it needs could be awaited. */
+        case "blocks":
+          return blocksCurrent;
         case "structure": {
           /* No tree and no blocks are this function's own preconditions, not
              `structureCurrency`'s: it answers "is this run the one that
@@ -3455,8 +3512,8 @@ const rawPgArticleReader: ArticleReader = {
           return !arcIsStale(arc, blocks, tree, metaFingerprint);
         }
         default:
-          // fetch, extract, blocks — nothing to compare, in either store.
-          // `assets` and `arc` are NOT here; each has its own case above.
+          // fetch, metadata, extract — nothing to compare, on either side.
+          // `blocks`, `assets` and `arc` are NOT here; each has its own case above.
           return true;
       }
     };
