@@ -75,9 +75,16 @@ const UNKNOWN: ReasonRead = { state: "unknown" };
  * F3): the bar must stop offering a list written from words the reader has
  * since changed.
  *
- * On mount as well as on opening, so the row is already there when the bar
- * first opens rather than arriving under the reader's Enter. The last answer
- * stands while a newer read is out.
+ * On mount as well as on opening, so the row is already there, and first,
+ * when the bar first opens rather than arriving under the reader's Enter. The
+ * last answer stands while a newer read is out.
+ *
+ * **What that costs, on purpose**: one more small request on every load of
+ * the owner's reading view, which is why it is in the request traces
+ * tests/the-ideas-extraction-changed-no-requests.test.tsx pins. Reading only
+ * on opening was tried on 2026-10-05 and put back: the row then arrives after
+ * the bar is open, the bar rightly keeps Enter on the row the reader already
+ * had (GPT Sol's CR8), and so the row was never the one Enter runs.
  *
  * `saves` is this tab's save count, handed back so the bar can tell that a
  * save happened while its own request was out.
