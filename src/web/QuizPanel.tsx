@@ -410,8 +410,8 @@ export function QuizPanel({
    * Deliberately not in the URL: the rule `?at=` and `?thread=` serve is that a
    * shared link lands you where the link-maker was, and a quiz is the owner's
    * alone. (Until 2026-10-05 the reason given was that the answer did not
-   * survive a reload; it does now, and the walk still opens at the first
-   * question — plan 261005b § Open questions, Q-quiz-resume.)
+   * survive a reload. It does now, and where the walk opens is worked out from
+   * the kept answers instead — `resumedBatch`, below.)
    * docs/plans/260831al-review-quiz-sub-mode.md § Which question is open.
    */
   const [at, setAt] = useState(0);
@@ -549,10 +549,61 @@ export function QuizPanel({
   }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
 
   /**
+   * **Open at the first question not yet answered.** Greg, 2026-10-05, on the
+   * plan's Q-quiz-resume: *"yes, first unanswered question"*. Until then a
+   * reader who came back was put on question one with their answer showing,
+   * and pressed Next past everything they had done.
+   *
+   * **Once for a batch, before any question of it is drawn** — `resuming`
+   * below holds the question back until this has run. That is what keeps it
+   * from being a second thing that moves the reader: nothing is on screen to
+   * be moved from, no draft or mark exists to lose, and the restoring effect
+   * further down sees no question and so cannot fill the box of the one being
+   * left (postmortem 261005d is that mistake, made by an arrival). Answers
+   * that arrive later — another device, *Try again* after a read that could
+   * not say — fill the box of the question open and move nothing.
+   *
+   * - **Among the steps the reader may land on**, so it waits for the reading
+   *   levels as the walk does, and an unread question is not "the first
+   *   unanswered".
+   * - **Every one answered opens at the first.** There is no next thing to do,
+   *   so the start of the path, with its answer showing, is the least
+   *   surprising place; the last question would look like a quiz left half way.
+   * - **A question asked for by name wins** — the arrival effect below is the
+   *   later writer, and when the arrival is seen here first (the levels still
+   *   loading) the batch is counted as opened rather than chosen again once
+   *   they load. An arrival for another batch, or for no question, is not one.
+   * - Not an arrival by Next, so the step shows its premise.
+   *
+   * After the batch reset and the filter effect, whose `setAt` this overrides.
+   */
+  const [resumedBatch, setResumedBatch] = useState<string | undefined>(undefined);
+  const resuming = quiz != null && resumedBatch !== quiz.batchId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per batch, when the walk can say where the reader may land; the kept answers and the filter are read as they stand
+  useEffect(() => {
+    if (!quiz || !resuming) return;
+    const named =
+      arrival?.batchId === quiz.batchId && questions.some((q) => q.id === arrival.questionId);
+    if (!named && waitingForReading) return;
+    setResumedBatch(quiz.batchId);
+    if (named) return;
+    const to =
+      includedAt.find((i) => {
+        const q = questions[i];
+        return q !== undefined && !owner.kept.has(q.id);
+      }) ?? includedAt[0];
+    if (to === undefined) return;
+    /* Not `move`: there is no draft or mark to take away — the batch reset has
+       just cleared them, and nothing has been drawn since. */
+    setAt(to);
+    setArrivedByNext(false);
+  }, [quiz?.batchId, resuming, waitingForReading]);
+
+  /**
    * **Land on a question pressed in the prose** — `QuizArrival`.
    *
-   * **Declared after the batch reset and the filter effect, on purpose**: all
-   * three can run in one commit — the band mounting with an arrival, or a new
+   * **Declared after the batch reset, the filter and the opening effect, on
+   * purpose**: all four can run in one commit — the band mounting with an arrival, or a new
    * batch — and the last `setAt` is the one that lands. It is idempotent, so
    * StrictMode running it twice lands in the same place; only the hand-back is
    * repeated, and the owner clears an arrival only if it is still the one it
@@ -596,9 +647,10 @@ export function QuizPanel({
     onArrivalTaken?.(arrival);
   }, [arrival, quiz?.batchId]);
 
-  /** Undefined while the step at `at` is filtered out — see the effect above. */
+  /** Undefined while the step at `at` is filtered out, and until the batch has
+      been opened somewhere — see the effects above. */
   const question: QuizQuestion | undefined =
-    changingBatch || waitingForReading || included[at] === false ? undefined : questions[at];
+    changingBatch || resuming || waitingForReading || included[at] === false ? undefined : questions[at];
   /* The reader's place, counted among the steps they may land on. */
   const position = includedAt.indexOf(at) + 1;
   const nextAt = includedAt.find((i) => i > at);

@@ -355,21 +355,26 @@ describe("an answer is still there when you come back", () => {
     expect(box()).toBeNull();
     showBand = true;
     await paint();
+    /* It opens at two, the first not answered; one is a step back. */
+    await press("Previous question");
 
     expect(box()?.value).toBe("My answer to one.");
     expect(mark()).toBe("A mark of “My answer to one.”.");
     expect(heading()).toContain("— answered");
   });
 
-  it("after a reload, from the server — and the question that opens is still the first", async () => {
+  it("after a reload, from the server", async () => {
     server.attempts = [kept(Q2, "What I said to two."), kept(Q1, "What I said to one.")];
     await paint();
+    expect([...owner.answered].sort()).toEqual([Q1, Q2]);
+    /* Where it opens is the last describe in this file; here, the answers. */
+    await press("Previous question");
+    await press("Previous question");
 
     expect(heading()).toContain("Question 1 of 3");
     expect(box()?.value).toBe("What I said to one.");
     expect(mark()).toBe("A mark of “What I said to one.”.");
     expect(heading()).toContain("— answered");
-    expect([...owner.answered].sort()).toEqual([Q1, Q2]);
 
     await press("Next question");
     expect(box()?.value).toBe("What I said to two.");
@@ -388,6 +393,9 @@ describe("an answer is still there when you come back", () => {
 
     server.offline = true;
     await reload();
+    /* The offline copy knows one is answered, so the walk opens at two. */
+    expect(asked()).toBe("Question number 2?");
+    await press("Previous question");
     expect(asked()).toBe("Question number 1?");
     expect(box()?.value).toBe("My answer to one.");
     expect(mark()).toBe("A mark of “My answer to one.”.");
@@ -399,10 +407,12 @@ describe("an answer is still there when you come back", () => {
     server.attempts = null;
     await act(async () => owner.refresh());
     await settle();
+    await press("Previous question");
     expect(box()?.value).toBe("What I said to one.");
 
     server.offline = true;
     await reload();
+    await press("Previous question");
     expect(box()?.value).toBe("What I said to one.");
     expect(mark()).toBe("A mark of “What I said to one.”.");
   });
@@ -443,8 +453,6 @@ describe("an answer is still there when you come back", () => {
        is the control that says the panel does not do that by itself. */
     server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
     await paint();
-    await press("Next question");
-    await press("Next question");
     expect(asked()).toBe("Question number 3?");
 
     server.mark = "fails";
@@ -459,6 +467,7 @@ describe("what a restored answer must not do", () => {
   it("says the mark is about your previous answer once the box is edited", async () => {
     server.attempts = [kept(Q1, "What I said to one.")];
     await paint();
+    await press("Previous question");
     type("Something else entirely.");
     expect(host.textContent).toContain("This mark is about your previous answer");
     expect(heading()).not.toContain("— answered");
@@ -592,8 +601,8 @@ describe("kept answers that could not be read are not “none” (F5)", () => {
     await settle();
 
     expect(host.textContent).not.toContain(NOT_LOADED);
+    await press("Previous question");
     expect(heading()).toContain("— answered");
-    await press("Next question");
     expect(box()?.value).toBe("What I said to two.");
   });
 
@@ -632,6 +641,7 @@ describe("a mark that finished and could not be saved (F7)", () => {
     /* The saved one is stamped by the server, far ahead of this clock. */
     server.attempts = [kept(Q1, "An older, saved answer.", "2099-01-01T00:00:00.000Z")];
     await paint();
+    await press("Previous question");
     expect(box()?.value).toBe("An older, saved answer.");
     expect(host.textContent).not.toContain(NOT_SAVED);
 
@@ -678,7 +688,8 @@ describe("the box is filled once the question on screen has settled (F3)", () =>
     { batchId: "spya-anoldbatch", questionId: Q2 },
     { batchId: "spya-batch2", questionId: "spya-qm9qt5" },
   ])("still restores question one for an ignored arrival %j", async (ignored) => {
-    server.attempts = [kept(Q1, "What I said to one.")];
+    /* Every one answered, so the walk opens at one. */
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two."), kept(Q3, "What I said to three.")];
     showBand = false;
     await paint();
     arrival = ignored;
@@ -715,7 +726,8 @@ describe("the box is filled once the question on screen has settled (F3)", () =>
   });
 
   it("under the filter alone, with the answer of the question it lands on", async () => {
-    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
+    /* Every one answered, so it opens at the first it may land on: two. */
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two."), kept(Q3, "What I said to three.")];
     readSoFar = reading();
     await paint();
     expect(asked()).toBe("Question number 2?");
@@ -723,7 +735,7 @@ describe("the box is filled once the question on screen has settled (F3)", () =>
   });
 
   it("leaves a draft alone when the arrival is for the question already open", async () => {
-    server.attempts = [kept(Q1, "What I said to one.")];
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two."), kept(Q3, "What I said to three.")];
     await paint();
     type("A draft over my old answer.");
     arrival = { batchId: server.batchId, questionId: Q1 };
@@ -735,7 +747,7 @@ describe("the box is filled once the question on screen has settled (F3)", () =>
 
   it("the same in StrictMode, where every effect runs twice", async () => {
     strict = true;
-    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two."), kept(Q3, "What I said to three.")];
     await paint();
     expect(box()?.value).toBe("What I said to one.");
     expect(mark()).toBe("A mark of “What I said to one.”.");
@@ -743,5 +755,148 @@ describe("the box is filled once the question on screen has settled (F3)", () =>
     expect(box()?.value).toBe("What I said to two.");
     await press("Previous question");
     expect(box()?.value).toBe("What I said to one.");
+  });
+});
+
+/**
+ * Greg, 2026-10-05, answering the plan's Q-quiz-resume: *"yes, first unanswered
+ * question"*. The decision is taken once for a batch, before any question is
+ * drawn, and nothing after it moves the reader.
+ */
+describe("coming back opens at the first question not yet answered", () => {
+  const reading = (status: ReadSoFar["status"] = "loaded"): ReadSoFar => ({
+    /* One is about a passage not read yet; two and three are read. */
+    levels: (status === "loaded" ? new Map([[READ, 3]]) : new Map()) as ReadSoFar["levels"],
+    status,
+    bodyWords: new Map([[UNREAD, 3], [READ, 3]]),
+  });
+
+  it("after a reload, and Previous walks back to the answers", async () => {
+    server.attempts = [kept(Q2, "What I said to two."), kept(Q1, "What I said to one.")];
+    await paint();
+
+    expect(asked()).toBe("Question number 3?");
+    expect(heading()).toContain("Question 3 of 3");
+    expect(heading()).not.toContain("— answered");
+    expect(box()?.value).toBe("");
+    expect(mark()).toBeNull();
+    expect(owner.attempt).toBeNull();
+
+    await press("Previous question");
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("What I said to two.");
+    expect(mark()).toBe("A mark of “What I said to two.”.");
+    await press("Previous question");
+    expect(box()?.value).toBe("What I said to one.");
+  });
+
+  it("the first gap, not the question after the last answer", async () => {
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q3, "What I said to three.")];
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+  });
+
+  it("after leaving Quiz for another mode and coming back", async () => {
+    server.answersNothingKept = true;
+    await paint();
+    await answer("My answer to one.");
+    /* Answering does not move the reader: Next is theirs to press. */
+    expect(asked()).toBe("Question number 1?");
+
+    showBand = false;
+    await paint();
+    showBand = true;
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+    expect(mark()).toBeNull();
+  });
+
+  it("at question one when every question is answered", async () => {
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two."), kept(Q3, "What I said to three.")];
+    await paint();
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("What I said to one.");
+    expect(mark()).toBe("A mark of “What I said to one.”.");
+  });
+
+  it("does not move a reader already on a question when answers arrive late", async () => {
+    await paint();
+    server.attempts = [kept(Q1, "What I said to one."), kept(Q2, "What I said to two.")];
+    await act(async () => owner.refresh());
+    await settle();
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("What I said to one.");
+  });
+
+  it("gives way to a question asked for by name, whichever effect sees it first", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    showBand = false;
+    await paint();
+    /* Asked for while the reading levels are still loading: the arrival turns
+       the tick-box off and lands, and the walk then stops waiting — which must
+       not be taken for a fresh opening. */
+    readSoFar = reading("loading");
+    arrival = { batchId: server.batchId, questionId: Q3 };
+    showBand = true;
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+    readSoFar = reading();
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+  });
+
+  it("but not to an arrival that names another batch", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    showBand = false;
+    await paint();
+    arrival = { batchId: "spya-anoldbatch", questionId: Q3 };
+    showBand = true;
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+  });
+
+  it("counts only questions the reading filter lets the reader land on", async () => {
+    /* One is unread and unanswered, two is answered: three is where to go on. */
+    server.attempts = [kept(Q2, "What I said to two.")];
+    readSoFar = reading();
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+    expect(heading()).toContain("Question 2 of 2");
+    expect(box()?.value).toBe("");
+  });
+
+  it("waits for the reading levels before it chooses", async () => {
+    server.attempts = [kept(Q2, "What I said to two.")];
+    readSoFar = reading("loading");
+    await paint();
+    expect(asked()).toBeNull();
+    readSoFar = reading();
+    await paint();
+    expect(asked()).toBe("Question number 3?");
+  });
+
+  it("the same in StrictMode", async () => {
+    strict = true;
+    server.attempts = [kept(Q1, "What I said to one.")];
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+    expect(box()?.value).toBe("");
+    expect(owner.attempt).toBeNull();
+    await press("Previous question");
+    expect(box()?.value).toBe("What I said to one.");
+  });
+
+  it("and a new batch opens at its own first question", async () => {
+    server.attempts = [kept(Q1, "What I said to one.")];
+    await paint();
+    expect(asked()).toBe("Question number 2?");
+    server.batchId = "spya-batch3";
+    server.attempts = [];
+    await act(async () => owner.refresh());
+    await settle();
+    expect(asked()).toBe("Question number 1?");
+    expect(box()?.value).toBe("");
   });
 });

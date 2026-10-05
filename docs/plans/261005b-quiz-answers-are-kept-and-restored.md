@@ -178,6 +178,12 @@ findings accepted; where this section and the text above disagree, this section 
   to the first question you have not answered? Recommended: the jump, as a follow-up, once the first
   version has been used.
 
+  **Decided** — Greg, 2026-10-05:
+
+  > yes, first unanswered question
+
+  Built the same day: [§ Opening at the first unanswered question](#opening-at-the-first-unanswered-question).
+
 ## What landed
 
 Built 2026-10-05, in one stage, as the section above describes. Where things are:
@@ -215,8 +221,8 @@ Five things were decided while building, none of them a change of design:
   mark, which also serves F2 (it trails a read already out). The exemption in `lib/api.ts` is
   unchanged and its comment now says why it survives.
 
-Not built, as planned: no stored verdict, no change to which question opens, no change to either
-prompt. `/help` says nothing about quiz answers being forgotten, so it did not change.
+Not built, as planned: no stored verdict, no change to which question opens (changed later the
+same day, below), no change to either prompt. `/help` says nothing about quiz answers being forgotten, so it did not change.
 
 ### GPT Sol's code review, and the browser check
 
@@ -247,3 +253,39 @@ later attempts did not repeat it. The reviewer was editing `QuizPanel.tsx` under
 the time, and a hot reload resets the panel to question 1, which is the likely cause but was not
 proven. `tests/quiz-kept-answers.test.tsx` now has the control: a failed mark on question 3 leaves
 the reader on question 3 with their words.
+
+## Opening at the first unanswered question
+
+Greg's answer to Q-quiz-resume, 2026-10-05: *"yes, first unanswered question"*. A reader who comes
+back to a batch with kept answers now lands on the first question they have not answered, and
+Previous walks back through the answered ones with their answers and marks showing.
+
+- **One decision per batch, taken before any question of it is drawn.** `QuizPanel` holds the
+  question back (`resuming`) until an effect has chosen where to open, so there is never a draft, a
+  mark or a question on screen to be moved from, and the restoring effect cannot fill the box of a
+  question being left ([postmortem 261005d](../postmortems/261005d-later-effects-still-read-the-render-before-earlier-state-writes.md)
+  is that mistake). The simpler option passed over was moving inside the restoring effect, when it
+  finds the opening question already answered: it would move a reader who was already on question 1
+  when answers arrived late.
+- **Nothing moves the reader afterwards.** Answers that arrive late — another device, *Try again*
+  after a read that could not say — fill the box of the question open. Answering a question does
+  not advance; Next is still the reader's to press.
+- **Every question answered: it opens at question 1.** There is no next thing to do, so the start
+  of the path with its answer showing is the least surprising place; the last question would look
+  like a quiz left half way through.
+- **The batch reset**: a new batch is opened by the same rule, and has no kept answers, so it opens
+  at its first question as before.
+- **The filter**: "first unanswered" is counted among the questions *Only what I've read* lets the
+  reader land on, and the choice waits for the reading levels as the walk already does. If every
+  question they may land on is answered, it opens at the first of those.
+- **A question asked for by name wins.** Which question is open is not in the URL
+  ([url-state.md](../project/url-state.md) has `?remember=quiz` and nothing finer), so the only
+  thing that names a question is a press on its line in the prose (`QuizArrival`). That still
+  lands on the question pressed, answered or not; an arrival for another batch is ignored as
+  before and the opening rule applies.
+- **A read that could not load the kept answers** opens at question 1, as if there were none, with
+  the existing *"Your earlier answers could not be loaded"* line.
+
+Tests: `tests/quiz-kept-answers.test.tsx` § *coming back opens at the first question not yet
+answered*, red before the change; the older cases in that file that assumed question 1 now step
+back with Previous.
