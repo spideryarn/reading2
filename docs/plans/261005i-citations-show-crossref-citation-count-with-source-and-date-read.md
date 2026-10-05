@@ -282,6 +282,20 @@ a count that arrived through a real Crossref answer rather than a seeded row.
 Screenshots: [desktop](261005i-shot-1-desktop-rows.png) · [phone](261005i-shot-2-phone-rows.png) ·
 [the card](261005i-shot-3-open-card.png) · [light](261005i-shot-4-light-rows.png).
 
+### Gates
+
+On the merged tree (`b51d2ce74`): `npm run typecheck` green; twelve touched or structural test files,
+509 tests, green (`bibliographic`, `citation-registry`, `registry-client`, `public-dto`,
+`citations-panel`, `chat-citations-tool`, `chat-tools`, `backfill-registry-facts`, `paper-metadata`,
+`doc-links`, `client-imports`, `fixture-ids`); `db:chain` fine. Before the merges, the implementer's
+35 files and 913 tests, which included `bibliographic-pg` against Postgres (24) and the schema and
+migration tests.
+
+**The full `npm test` did not finish, and no full-suite pass is claimed.** The first run was
+stopped at the Overseer's request when the box was overloaded (load about 195), with no failure in
+its log after 75 minutes; the second sat for 30 minutes in a queue of about thirty on the shared
+lock and was withdrawn. Pushed on the targeted gates.
+
 ### The migration and the shared local database
 
 `npm run db:migrate` (`Target: postgresql://postgres@127.0.0.1:54362/postgres`) refused: the shared
