@@ -39,6 +39,7 @@ import { describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
 import {
   type Command,
@@ -98,6 +99,7 @@ function rows(archived: boolean): readonly Command[] {
       saving: false,
       set: async () => ({ kind: "saved" }) as const,
     }),
+    ...appearanceRows("dark", () => true),
   ];
 }
 

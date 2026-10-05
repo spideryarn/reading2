@@ -2107,6 +2107,77 @@
   ]
  },
  {
+  "id": "action:appearance-dark",
+  "label": "Appearance: Dark",
+  "description": "Light text on a dark page.",
+  "aliases": [
+   "dark mode",
+   "dark theme",
+   "night mode",
+   "theme",
+   "colour scheme",
+   "color scheme"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:appearance-light",
+  "label": "Appearance: Light",
+  "description": "Dark text on a light page.",
+  "aliases": [
+   "light mode",
+   "light theme",
+   "day mode",
+   "theme",
+   "colour scheme",
+   "color scheme"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
+  "id": "action:appearance-system",
+  "label": "Appearance: System",
+  "description": "Follow this device's light or dark setting.",
+  "aliases": [
+   "system mode",
+   "system theme",
+   "auto theme",
+   "os theme",
+   "match device",
+   "theme",
+   "colour scheme",
+   "color scheme"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata",
+   "no-article"
+  ]
+ },
+ {
   "id": "action:experimental",
   "label": "Turn experimental features on",
   "description": "Show the modes and features still being built, too.",

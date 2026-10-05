@@ -93,6 +93,19 @@ interface CommandWords {
    * the default can be the ordinary case without the hole `generates` closed.
    */
   readonly typedOnly?: true;
+  /**
+   * **A muted word after the sentence that is about the reader's state, not
+   * the row's meaning** — `current` on the appearance in force
+   * (appearance-commands.ts), since 2026-10-05.
+   *
+   * It is a field of its own, and not a clause on `description`, because the
+   * description is what a model is shown and what the checked-in catalogue
+   * holds once per (id, label) (`pickOption`; tests/command-pick-catalogue.test.ts):
+   * a sentence that changed with the reader's setting would either collide
+   * there or be frozen into the server's copy for everybody (GPT Sol's F2 on
+   * plan 261005d). Drawn, never matched on and never sent.
+   */
+  readonly marker?: string;
 }
 
 /**

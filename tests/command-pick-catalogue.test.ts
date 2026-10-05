@@ -35,6 +35,7 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, subModeGenerates } from "../src/web/activation.js";
+import { appearanceRows } from "../src/web/appearance-commands.js";
 import { besideTheModes, experimentalRows, subModeRows } from "../src/web/CommandBar.js";
 import { PICK_SLUG } from "../src/command-pick.js";
 import {
@@ -133,6 +134,9 @@ function rowsIn(context: Context): readonly Command[] {
       queue: { run: async () => null, lastFailure: () => null },
     }),
     ...experimentalRows(experimental),
+    /* One state is every state: the mark on the appearance in force is the
+       row's `marker`, which `pickOption` does not read (plan 261005d, F2). */
+    ...appearanceRows("dark", () => true),
   ];
 }
 
