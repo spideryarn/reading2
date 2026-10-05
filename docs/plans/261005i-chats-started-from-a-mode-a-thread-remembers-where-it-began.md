@@ -544,5 +544,24 @@ wide window you get the second column only when Marginalia is already on.
   including the migration chain and the origin route suite, which had not run since the merge.
 - **Not run: the full suite and `npm run check`**, on the Overseer's instruction while the box is
   loaded; the deploy and readiness runs cover them.
+- 2026-10-05 — browser check of both stages (Sonnet, Playwright, commit `71bd8ff58`, article
+  `the-mythology-of-conscious-ai`, two paid chat sends) at 1440, 820 and 390 wide: every check
+  passed. The button on each claim does not fold it; the seeded box, caret at the end, no POST,
+  no Live; Back returns to Debate; the mark appears and updates without a reload and survives
+  one; the panel floats at every width and docks only at 1440 with Marginalia on; Chat's list
+  shows the claim check (globe), plain chats (no icon, titles aligned) and Recall (brain); the
+  filter narrows and survives a reload; a Recall row goes to Remember and Back returns; a pasted
+  `?thread=` of a Recall conversation shows the list and is cleared; no horizontal scroll.
+  Screenshots: `261005i-shot-chats-*.png`. What it found:
+  - **A claim check was titled by its seed**, *"Check this claim from the article (quoted, not…"*,
+    the same for every one. **Fixed**, red first: a conversation with an origin is named from the
+    item, *Claim: RNA can transfer a memory* (`titleFromOrigin`, `src/chat-title.ts`). Not seen
+    in a browser.
+  - **The mark's line is the answer's raw first line**, so a markdown link or a `[spya-…]` id
+    shows as typed. Hidden by the ellipsis at today's widths. Not fixed.
+  - **The docked panel at 1440 is about 280px wide**, the block chat's existing size. Not changed.
+  - **Not checked**: real touch (the button measured 24px under a mouse; its coarse-pointer rule
+    did not apply), Enter and Space separately, an *About a passage* row, and a signed-out
+    visitor on an article that has claims (the tests cover the visitor; the browser did not).
 - The feedback note is
   [261004_1133](../user-feedback/261004_1133-every-conversation-shows-in-chat-with-where-it-came-from.md).
