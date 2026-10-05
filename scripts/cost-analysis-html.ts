@@ -27,7 +27,7 @@ import { chmodSync, closeSync, mkdirSync, openSync, renameSync, rmSync, writeFil
 import path from "node:path";
 
 import { formatCostNanos } from "../src/admin.js";
-import type { Cell, CostAnalysis, EvidenceTable, Lead, Slice } from "../src/cost-analysis.js";
+import { type Cell, type CostAnalysis, type EvidenceTable, type Lead, P95_MIN_CALLS, type Slice } from "../src/cost-analysis.js";
 import { OPENROUTER_CREDIT_FEE } from "../src/cost-cube.js";
 
 /* --------------------------------------------------------------- escaping -- */
@@ -422,7 +422,7 @@ function articles(a: CostAnalysis): Safe {
 function tasks(a: CostAnalysis): Safe {
   const largest = a.tasks[0]?.recordedNanos ?? 0;
   return html`<h2>Why is this mode costing so much</h2>
-  <p class="dim">Every mode or task. The three per-call figures are the median, the 95th percentile and the largest single priced call, from the calls themselves.</p>
+  <p class="dim">Every mode or task. The three per-call figures are the median, the 95th percentile and the largest single priced call, from the calls themselves. A p95 is shown only from ${P95_MIN_CALLS} priced calls; with fewer it is just the largest call again.</p>
   <div class="scroll"><table data-section="tasks">
     <thead><tr><th>Mode or task</th><th>Category</th><th class="n">Recorded</th><th class="n">Share</th><th class="n">Calls</th><th class="n">Articles</th><th class="n">Median call</th><th class="n">p95</th><th class="n">Largest</th></tr></thead>
     <tbody>${a.tasks.map(
@@ -432,7 +432,7 @@ function tasks(a: CostAnalysis): Safe {
         <td class="n">${whole(t.calls)}${t.unpricedCalls > 0 ? html` <span class="dim">(${whole(t.unpricedCalls)} no money)</span>` : ""}</td>
         <td class="n">${whole(t.articles)}</td>
         <td class="n">${t.perCall ? money(t.perCall.medianNanos) : "—"}</td>
-        <td class="n">${t.perCall ? money(t.perCall.p95Nanos) : "—"}</td>
+        <td class="n">${t.perCall && t.perCall.calls >= P95_MIN_CALLS ? money(t.perCall.p95Nanos) : "—"}</td>
         <td class="n">${t.perCall ? money(t.perCall.maxNanos) : "—"}</td>
       </tr>
       <tr><td class="why" colspan="9"><details><summary>Why: the models that answered</summary>
@@ -483,11 +483,11 @@ function overTime(a: CostAnalysis, chart: Safe | null): Safe {
 function cacheUse(a: CostAnalysis): Safe {
   if (a.cacheUse.length === 0) return html``;
   return html`<details><summary>Cache use by mode or task, one wire at a time</summary>
-  <p class="dim">The share of a task's prompt tokens that were read from cache. Each row is one wire: the two wires count input tokens differently, so their shares are never added or averaged together.</p>
+  <p class="dim">The share of a task's prompt tokens that were read from cache. Each row is one wire: the two wires count input tokens differently, so their shares are never added or averaged together. Calls per job is the median number of the task's calls in one job (one run, for request work): reuse inside a job needs several, so only those are flagged.</p>
   <div class="scroll"><table data-section="cache">
-    <thead><tr><th>Mode or task</th><th>Wire</th><th class="n">Calls</th><th class="n">Articles</th><th class="n">Recorded</th><th class="n">Read from cache</th></tr></thead>
+    <thead><tr><th>Mode or task</th><th>Wire</th><th class="n">Calls</th><th class="n">Calls per job (median)</th><th class="n">Articles</th><th class="n">Recorded</th><th class="n">Read from cache</th></tr></thead>
     <tbody>${a.cacheUse.map(
-      (c) => html`<tr><td>${c.task}</td><td>${c.wire}</td><td class="n">${whole(c.calls)}</td><td class="n">${whole(c.articles)}</td>
+      (c) => html`<tr><td>${c.task}</td><td>${c.wire}</td><td class="n">${whole(c.calls)}</td><td class="n">${whole(c.medianCallsPerJob)}</td><td class="n">${whole(c.articles)}</td>
         <td class="n">${money(c.recordedNanos)}</td><td class="n">${percent(c.cacheReadShare)}${c.flagged ? " (flagged)" : ""}</td></tr>`,
     )}</tbody>
   </table></div></details>`;
@@ -507,6 +507,7 @@ function howToRead(a: CostAnalysis): Safe {
     <li><strong>It is a floor</strong> when any call reports no money (${whole(a.totals.unpricedCalls)} here). A call that wrote no ledger row at all is in no figure on this page.</li>
     <li><strong>Every date is UTC</strong>, and a period's end is not included.</li>
     <li><strong>Other readers' articles are opaque ids by design.</strong> Only the administrator's own articles are named; another reader's is <code>article 3f9a2c1e</code>, or <code>recorded article …</code> when the ledger kept a name and no id. No article text, prompt or answer is in the ledger or in this file.</li>
+    <li><strong>A task's p95 is shown only from ${P95_MIN_CALLS} priced calls.</strong> With fewer, the 95th percentile is the largest call over again, so the cell holds a dash; the number is still in the JSON, beside how many calls it rests on.</li>
     <li><strong>A user's share, an article's and a task's</strong> are all of the recorded amount in the period this report covers.</li>
     <li><strong>This file is private</strong>: it is written readable by its owner only, and is not uploaded or served anywhere.</li>
     <li>The definitions live in <code>src/cost-cube.ts</code> (the money and the grouping), <code>src/cost-analysis.ts</code> (the leads and their thresholds), <code>src/cost-categories.ts</code> (the categories) and <code>docs/project/cost-tracking.md</code>. The same figures, live, are on <code>/admin/costs</code>.</li>

@@ -331,7 +331,10 @@ run `npm run test:paid` after touching the gateway.
 
 One thing that is not a tracking defect but came out of the same queries: 51 of 394 article-steps
 in production were bought more than once, and those 51 hold $23.27. That is a lead for the cost
-analysis.
+analysis. `npm run cost:analyse` reports the same thing as 60 of 405, holding $27.81, on the same
+day: it also counts rows that have a recorded slug and no article id, merges a renamed step with
+its new name, and counts a job whatever its outcome, where this query took rows with an article id,
+raw step names and only jobs with an `ok` call.
 
 ## The scripts
 

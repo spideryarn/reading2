@@ -33,7 +33,7 @@ import {
   writePrivateFile,
 } from "../scripts/cost-analysis-html.js";
 import { PRODUCTION_USERS_NOTE } from "../scripts/cost-analysis.js";
-import { type CostAnalysisInput, analyseCosts } from "../src/cost-analysis.js";
+import { type CostAnalysisInput, P95_MIN_CALLS, analyseCosts } from "../src/cost-analysis.js";
 import type { CostCubeGroup } from "../src/cost-cube.js";
 import type { SpendDetailRow } from "../src/store/ai-calls-spend-pg.js";
 import { formatCostNanos } from "../src/web/admin-costs-view.js";
@@ -430,6 +430,57 @@ describe("the report: its figures are the analysis's", () => {
       expect(block.textContent, lead?.id).toMatch(/does not show/);
       if (lead && lead.amountNanos > 0) expect(block.querySelector(".amount")?.textContent).toBe(formatCostNanos(lead.amountNanos));
     }
+  });
+
+  it("withholds a p95 that rests on fewer than twenty priced calls, and shows one that does not", () => {
+    const task = (label: string, calls: number) => ({
+      ...(ANALYSIS.tasks[0] as (typeof ANALYSIS.tasks)[number]),
+      key: label,
+      label,
+      perCall: { medianNanos: 2 * CENT, p95Nanos: 77 * CENT, maxNanos: 88 * CENT, calls },
+    });
+    const doc = parse(
+      renderCostReport(
+        { ...ANALYSIS, tasks: [task("few-calls", P95_MIN_CALLS - 1), task("enough-calls", P95_MIN_CALLS)] },
+        { commentary: null, chart: null, commit: null },
+      ),
+    );
+    const cells = (label: string) =>
+      [...doc.querySelectorAll('[data-section="tasks"] > tbody > tr.has-why')]
+        .find((row) => row.textContent?.includes(label))
+        ?.querySelectorAll("td");
+    /* Median, p95, largest are the last three cells. */
+    expect([...(cells("few-calls") ?? [])].slice(-3).map((c) => c.textContent)).toEqual(["$0.02", "—", "$0.88"]);
+    expect([...(cells("enough-calls") ?? [])].slice(-3).map((c) => c.textContent)).toEqual(["$0.02", "$0.77", "$0.88"]);
+    expect(doc.body.textContent).toMatch(/p95 is shown only from 20 priced calls/);
+  });
+
+  it("shows calls per job for every pair in the cache table, flagged or not", () => {
+    const use = (task: string, medianCallsPerJob: number, flagged: boolean) => ({
+      task,
+      wire: "messages",
+      calls: 40,
+      medianCallsPerJob,
+      articles: 5,
+      recordedNanos: 300 * CENT,
+      cacheReadShare: 0.02,
+      flagged,
+    });
+    const doc = parse(
+      renderCostReport(
+        { ...ANALYSIS, cacheUse: [use("several-per-job", 4, true), use("one-per-job", 1, false)] },
+        { commentary: null, chart: null, commit: null },
+      ),
+    );
+    const headers = [...doc.querySelectorAll('[data-section="cache"] th')].map((th) => th.textContent);
+    expect(headers).toContain("Calls per job (median)");
+    const rows = [...doc.querySelectorAll('[data-section="cache"] tbody tr')].map((row) =>
+      [...row.querySelectorAll("td")].map((td) => td.textContent?.trim()),
+    );
+    expect(rows).toEqual([
+      ["several-per-job", "messages", "40", "4", "5", "$3.00", "2% (flagged)"],
+      ["one-per-job", "messages", "40", "1", "5", "$3.00", "2%"],
+    ]);
   });
 
   it("explains how to read it", () => {

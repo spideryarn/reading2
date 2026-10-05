@@ -69,6 +69,19 @@ export const CACHE_MIN_CALLS = 20;
 export const CACHE_MIN_NANOS = 1_000_000_000;
 /** … and flagged when less than this share of its prompt tokens were cache reads. */
 export const CACHE_LOW_SHARE = 0.1;
+/**
+ * … and only when a job of it typically makes at least this many calls. A task
+ * that makes one call per job has nothing to reuse inside the job, and is left
+ * unmarked on purpose (docs/project/prompt-caching.md): flagging those was
+ * eight false alarms out of eight on production, 2026-10-05.
+ */
+export const CACHE_MIN_CALLS_PER_JOB = 2;
+/**
+ * A task's p95 call is shown from this many priced calls. With fewer, the
+ * nearest-rank p95 is simply the largest call, shown twice. The number stays
+ * in the data, beside how many calls it rests on.
+ */
+export const P95_MIN_CALLS = 20;
 
 /** How many examples a lead's table lists before the rest are only counted. */
 const MOST_EXAMPLES = 15;
@@ -135,8 +148,12 @@ export interface TaskRank extends Slice {
   unpricedCalls: number;
   /** Distinct articles among its calls; "no article" is not one. */
   articles: number;
-  /** Recorded amount per **priced** call, from detail rows. Null when none was priced. */
-  perCall: { medianNanos: number; p95Nanos: number; maxNanos: number } | null;
+  /**
+   * Recorded amount per **priced** call, from detail rows. Null when none was
+   * priced. `calls` is how many priced calls the three figures rest on; a
+   * renderer shows `p95Nanos` only from `P95_MIN_CALLS` of them.
+   */
+  perCall: { medianNanos: number; p95Nanos: number; maxNanos: number; calls: number } | null;
   /** The models that answered, each with its share of the task. */
   models: Slice[];
 }
@@ -151,6 +168,11 @@ export interface CacheUse {
   /** `messages` or `chat`. */
   wire: string;
   calls: number;
+  /**
+   * The median number of this task's calls on this wire in one job — or, for
+   * request work with no job id, in one run. Reuse inside a job needs several.
+   */
+  medianCallsPerJob: number;
   articles: number;
   recordedNanos: number;
   /** Cache reads over the wire's own prompt-token total; null when that is zero. */
@@ -482,11 +504,14 @@ interface Call {
   model: string;
   articleKey: string;
   articleLabel: string;
+  /** The article's opaque label whoever owns it: two identities under one slug differ here. */
+  articleOpaque: string;
 }
 
 function callOf(row: SpendDetailRow): Call {
   const key = articleKeyOf(row);
   return {
+    articleOpaque: articleLabel(key, null),
     row,
     nanos: detailRecordedNanos(row),
     unpriced: detailIsUnpriced(row),
@@ -540,14 +565,29 @@ function leadSeveralJobs(calls: readonly Call[]): Lead | null {
   );
   /* NUL between the parts, so no article key or step name can merge two groups. */
   const byArticleStep = groupBy(steps, (c) => `${c.articleKey}\u0000${c.task}`);
-  const repeated: { article: string; step: string; jobs: number; total: number; extra: number }[] = [];
+  const repeated: {
+    article: string;
+    key: string;
+    step: string;
+    jobs: number;
+    firstDay: string;
+    lastDay: string;
+    total: number;
+    extra: number;
+  }[] = [];
   for (const group of byArticleStep.values()) {
     const perJob = [...groupBy(group, (c) => c.row.jobId as string).values()].map(sumNanos);
     if (perJob.length < 2) continue;
     const total = perJob.reduce((a, b) => a + b, 0);
     const first = group[0] as Call;
+    /* The UTC days of the group's calls: an afternoon of development and a
+       reader coming back three weeks later are the same count of jobs. */
+    const days = group.map((c) => c.row.startedAt.slice(0, 10)).sort();
     repeated.push({
       article: first.articleLabel,
+      key: first.articleOpaque,
+      firstDay: days[0] as string,
+      lastDay: days[days.length - 1] as string,
       step: first.task,
       jobs: perJob.length,
       total,
@@ -566,7 +606,8 @@ function leadSeveralJobs(calls: readonly Call[]): Lead | null {
       `Measured: ${plural(repeated.length, "article-step")} of ${byArticleStep.size.toLocaleString("en-US")} ` +
       `${repeated.length === 1 ? "was" : "were"} bought in more than one job, ${plural(extraJobs, "extra job")} in all; ` +
       `those article-steps recorded ${usd(total)}, and all but the most expensive job of each recorded ${usd(extra)}. ` +
-      "It does not show why: the ledger cannot tell a reader asking for a step again from a retry after a failure or an article that changed, so none of this is shown to be avoidable.",
+      "It does not show why: the ledger cannot tell a reader asking for a step again from a retry after a failure or an article that changed, so none of this is shown to be avoidable. " +
+      "Each row has the article's opaque key, because two articles can carry one slug, and the first and last day of its jobs.",
     evidence: {
       facts: [
         { label: "Article-steps bought in more than one job", value: count(repeated.length) },
@@ -576,8 +617,26 @@ function leadSeveralJobs(calls: readonly Call[]): Lead | null {
         { label: "Recorded on all but the most expensive job of each", value: money(extra) },
       ],
       table: table(
-        ["Article", "Step", "Jobs", "Every job", "All but the most expensive"],
-        repeated.map((r) => [text(r.article), text(r.step), count(r.jobs), money(r.total), money(r.extra)]),
+        [
+          "Article",
+          "Article key",
+          "Step",
+          "Jobs",
+          "First job (UTC day)",
+          "Last job (UTC day)",
+          "Every job",
+          "All but the most expensive",
+        ],
+        repeated.map((r) => [
+          text(r.article),
+          text(r.key),
+          text(r.step),
+          count(r.jobs),
+          text(r.firstDay),
+          text(r.lastDay),
+          money(r.total),
+          money(r.extra),
+        ]),
       ),
     },
     amountNanos: extra,
@@ -861,15 +920,25 @@ export function cacheUseOf(detail: readonly SpendDetailRow[]): CacheUse[] {
     }
     const recordedNanos = sumNanos(list);
     const cacheReadShare = prompt > 0 ? cacheRead / prompt : null;
+    /* One job, else one run (request work has no job id), else the call alone.
+       The kind is in the key, so a job and a run spelled alike stay apart. */
+    const perJob = [
+      ...groupBy(list, ({ row }) =>
+        row.jobId !== null ? `job:${row.jobId}` : row.runId ? `run:${row.runId}` : `call:${row.id}`,
+      ).values(),
+    ].map((group) => group.length);
+    const medianCallsPerJob = spread(perJob).median;
     out.push({
       task: first.task,
       wire: first.row.wire,
       calls: list.length,
+      medianCallsPerJob,
       articles: new Set(list.map((c) => c.articleKey).filter((k) => k !== NO_ARTICLE)).size,
       recordedNanos,
       cacheReadShare,
       flagged:
         list.length >= CACHE_MIN_CALLS &&
+        medianCallsPerJob >= CACHE_MIN_CALLS_PER_JOB &&
         recordedNanos >= CACHE_MIN_NANOS &&
         cacheReadShare !== null &&
         cacheReadShare < CACHE_LOW_SHARE,
@@ -878,33 +947,53 @@ export function cacheUseOf(detail: readonly SpendDetailRow[]): CacheUse[] {
   return out.sort((a, b) => b.recordedNanos - a.recordedNanos || (a.task < b.task ? -1 : 1));
 }
 
-/** **Lead 6: a task with many calls and little cache reuse**, inside one wire. */
+/**
+ * **Lead 6: several calls per job, little cache reuse**, inside one wire.
+ *
+ * The lead flags; its table lists **every** pair of task and wire, so a pair
+ * under a threshold is seen to be under it rather than missing.
+ */
 function leadCacheUse(cacheUse: readonly CacheUse[]): Lead | null {
   const flagged = cacheUse.filter((c) => c.flagged);
   if (flagged.length === 0) return null;
   const amount = flagged.reduce((n, c) => n + c.recordedNanos, 0);
+  const listed = [...flagged, ...cacheUse.filter((c) => !c.flagged)];
   return {
     id: "low-cache-reuse",
-    title: "Many calls, little cache reuse",
+    title: "Several calls per job, little cache reuse",
     detail:
-      `Suggestive: ${plural(flagged.length, "mode or task", "modes or tasks")} made at least ${CACHE_MIN_CALLS} calls on one wire, recorded at least ${usd(CACHE_MIN_NANOS)}, and read less than ${Math.round(CACHE_LOW_SHARE * 100)}% of ${flagged.length === 1 ? "its" : "their"} prompt tokens from cache. ` +
-      `The amount is everything those calls recorded (${usd(amount)}), not what caching would save. ` +
-      "It does not show that the prompts share a prefix that could be cached, or that the model and route support caching; each share is within one wire, because the two wires count input tokens differently.",
+      `Suggestive: ${plural(flagged.length, "mode or task", "modes or tasks")} made at least ${CACHE_MIN_CALLS} calls on one wire, typically several calls in one job (a median of at least ${CACHE_MIN_CALLS_PER_JOB}), recorded at least ${usd(CACHE_MIN_NANOS)}, and read less than ${Math.round(CACHE_LOW_SHARE * 100)}% of ${flagged.length === 1 ? "its" : "their"} prompt tokens from cache. ` +
+      `A job that makes several calls over one article is where a low share is worth a look; a task that makes one call per job has nothing to reuse inside the job and is not flagged. ` +
+      `The amount is everything the flagged calls recorded (${usd(amount)}), not what caching would save. ` +
+      "It does not show that the calls of one job share a prefix that could be cached, or that the model and route support caching; each share is within one wire, because the two wires count input tokens differently.",
     evidence: {
       facts: [
         { label: "Flagged", value: count(flagged.length) },
         { label: "Recorded on them", value: money(amount) },
+        { label: "Pairs of mode or task and wire, all listed", value: count(cacheUse.length) },
       ],
       table: table(
-        ["Mode or task", "Wire", "Calls", "Articles", "Recorded", "Cache-read share of prompt tokens"],
-        flagged.map((c) => [
+        [
+          "Mode or task",
+          "Wire",
+          "Calls",
+          "Calls per job (median)",
+          "Articles",
+          "Recorded",
+          "Cache-read share of prompt tokens",
+          "Flagged",
+        ],
+        listed.map((c) => [
           text(c.task),
           text(c.wire),
           count(c.calls),
+          count(c.medianCallsPerJob),
           count(c.articles),
           money(c.recordedNanos),
           share(c.cacheReadShare),
+          text(c.flagged ? "flagged" : ""),
         ]),
+        listed.length,
       ),
     },
     amountNanos: amount,
@@ -934,7 +1023,7 @@ function leadModelUse(rows: readonly CostCubeRow[]): Lead | null {
           count(m.totals.calls),
           money(m.totals.recordedNanos),
           share(task.recordedNanos > 0 ? m.totals.recordedNanos / task.recordedNanos : null),
-          text(m === top ? "its most expensive model" : ""),
+          text(m === top ? "largest share of this task" : ""),
         ],
       });
     }
@@ -944,7 +1033,7 @@ function leadModelUse(rows: readonly CostCubeRow[]): Lead | null {
     id: "model-by-task",
     title: "Where each model is used",
     detail:
-      `Measured: recorded amount for each of the ${plural(lines.length, "pair")} of mode or task and answering model, largest first, with the share of its task each model carries. ` +
+      `Measured: recorded amount for each of the ${plural(lines.length, "pair")} of mode or task and answering model, largest first, with the share of its task each model carries. The last column marks, for each task, the model carrying the largest share of that task's recorded amount; it says nothing about which model has the highest price. ` +
       "No amount is at stake by this table alone: it does not show whether a cheaper model would do the job as well, which only an eval of that task can.",
     evidence: {
       facts: [
@@ -952,7 +1041,7 @@ function leadModelUse(rows: readonly CostCubeRow[]): Lead | null {
         { label: "Answering models", value: count(pivot.columns.length) },
       ],
       table: table(
-        ["Mode or task", "Model", "Calls", "Recorded", "Share of the task", ""],
+        ["Mode or task", "Model", "Calls", "Recorded", "Share of the task", "Carries most of the task"],
         lines.map((l) => l.cells),
         40,
       ),
@@ -1061,7 +1150,9 @@ export function analyseCosts(input: CostAnalysisInput): CostAnalysis {
       unpricedCalls: g.unpricedCalls,
       articles: new Set(mine.map((r) => dimensionValue(r, "article").key).filter((k) => k !== NO_ARTICLE)).size,
       perCall:
-        priced.length > 0 ? { medianNanos: stats.median, p95Nanos: stats.p95, maxNanos: stats.max } : null,
+        priced.length > 0
+          ? { medianNanos: stats.median, p95Nanos: stats.p95, maxNanos: stats.max, calls: priced.length }
+          : null,
       models: slices(groupRows(mine, "model"), g.recordedNanos),
     };
   });

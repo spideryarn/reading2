@@ -375,6 +375,25 @@ describe("the terminal summary", () => {
     expect(text).toContain("It does not show anything else.");
   });
 
+  it("prints a p95 only when it rests on twenty priced calls", () => {
+    const task = (label: string, calls: number) => ({
+      key: label,
+      label,
+      recordedNanos: 1e9,
+      share: 0.5,
+      calls,
+      categories: ["on-demand enrichment"],
+      pricedCalls: calls,
+      unpricedCalls: 0,
+      articles: 1,
+      perCall: { medianNanos: 20_000_000, p95Nanos: 770_000_000, maxNanos: 880_000_000, calls },
+      models: [],
+    });
+    const text = summaryLines({ ...analysis, tasks: [task("few-calls", 19), task("enough-calls", 20)] }).join("\n");
+    expect(text).toMatch(/few-calls.*per call: median \$0\.02, p95 —, max \$0\.88/);
+    expect(text).toMatch(/enough-calls.*per call: median \$0\.02, p95 \$0\.77, max \$0\.88/);
+  });
+
   it("says so when there is nothing", () => {
     expect(summaryLines(analysis).join("\n")).toContain("Leads: none");
   });

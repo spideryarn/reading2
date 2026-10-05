@@ -16,6 +16,7 @@ import {
   type CostAnalysis,
   type CostAnalysisInput,
   CostReadsDisagree,
+  P95_MIN_CALLS,
   type Lead,
   type UnpricedLookup,
   analyseCosts,
@@ -161,6 +162,16 @@ function fact(found: Lead | undefined, label: string): unknown {
 
 function many(n: number, over: Partial<SpendDetailRow> = {}): SpendDetailRow[] {
   return Array.from({ length: n }, () => call(over));
+}
+
+let batch = 0;
+
+/** `n` calls, `perJob` of them to each job: a step that makes several calls over one article. */
+function inJobs(n: number, perJob: number, over: Partial<SpendDetailRow> = {}): SpendDetailRow[] {
+  batch++;
+  return Array.from({ length: n }, (_, i) =>
+    call({ jobId: `batch-${batch}-job-${Math.floor(i / perJob)}`, ...over }),
+  );
 }
 
 describe("the totals", () => {
@@ -379,7 +390,15 @@ describe("amount per priced call", () => {
     const glossary = analyse(detail).tasks[0];
     expect(glossary).toMatchObject({ calls: 21, pricedCalls: 20, unpricedCalls: 1 });
     /* Nearest rank: the 10th, the 19th and the 20th of twenty. */
-    expect(glossary?.perCall).toEqual({ medianNanos: 10 * CENT, p95Nanos: 19 * CENT, maxNanos: 20 * CENT });
+    expect(glossary?.perCall).toEqual({ medianNanos: 10 * CENT, p95Nanos: 19 * CENT, maxNanos: 20 * CENT, calls: 20 });
+  });
+
+  it("says how many priced calls the figures rest on, so a p95 of a few calls can be withheld", () => {
+    const few = analyse(many(P95_MIN_CALLS - 1)).tasks[0]?.perCall;
+    expect(few?.calls).toBe(P95_MIN_CALLS - 1);
+    /* The number stays in the data. */
+    expect(few?.p95Nanos).toBe(CENT);
+    expect(P95_MIN_CALLS).toBe(20);
   });
 
   it("is absent when no call was priced", () => {
@@ -451,6 +470,43 @@ describe("lead: a step bought in more than one job for one article", () => {
       call({ ...two, articleId: null, articleSlug: null }),
     ];
     expect(lead(analyse(detail), "step-in-several-jobs")).toBeUndefined();
+  });
+
+  it("tells two articles under one slug apart: the opaque key, and the first and last day of the jobs", () => {
+    const afternoon = { articleSlug: "same-slug", creditsUsedNanos: 10 * CENT };
+    const detail = [
+      /* The live article: two jobs an hour apart. */
+      call({ ...afternoon, jobId: "job-A", startedAt: "2031-03-10T10:00:00.000Z" }),
+      call({ ...afternoon, jobId: "job-B", startedAt: "2031-03-10T11:00:00.000Z" }),
+      /* A recorded name with no id, same slug: two jobs three weeks apart. */
+      call({ ...afternoon, articleId: null, recordedSlugHash: "b7c1".repeat(16), jobId: "job-C", startedAt: "2031-02-01T23:59:00.000Z" }),
+      call({ ...afternoon, articleId: null, recordedSlugHash: "b7c1".repeat(16), jobId: "job-D", startedAt: "2031-02-22T00:00:00.000Z", creditsUsedNanos: 20 * CENT }),
+    ];
+    const found = lead(analyse(detail), "step-in-several-jobs");
+    expect(found?.evidence.table?.columns).toEqual([
+      "Article",
+      "Article key",
+      "Step",
+      "Jobs",
+      "First job (UTC day)",
+      "Last job (UTC day)",
+      "Every job",
+      "All but the most expensive",
+    ]);
+    const rows = found?.evidence.table?.rows.map((r) => r.slice(0, 6).map((c) => (c.kind === "text" ? c.text : c.kind === "count" ? c.count : c)));
+    expect(rows).toEqual([
+      ["same-slug", "recorded article b7c1b7c1", "glossary", 2, "2031-02-01", "2031-02-22"],
+      ["same-slug", "article c057a11c", "glossary", 2, "2031-03-10", "2031-03-10"],
+    ]);
+  });
+
+  it("gives somebody else's article its opaque key in both columns", () => {
+    const detail = [theirs(7, { jobId: "job-A" }), theirs(7, { jobId: "job-B" })];
+    const row = lead(analyse(detail), "step-in-several-jobs")?.evidence.table?.rows[0];
+    expect(row?.slice(0, 2)).toEqual([
+      { kind: "text", text: "article 00000007" },
+      { kind: "text", text: "article 00000007" },
+    ]);
   });
 
   it("keeps two owners' recorded articles apart", () => {
@@ -666,7 +722,7 @@ describe("lead: cache use, inside one wire", () => {
   });
 
   it("flags twenty calls, a dollar and under a tenth read from cache, as suggestive", () => {
-    const detail = many(CACHE_MIN_CALLS, { ...dear, reportedInputTokens: 950, cacheReadTokens: 50 });
+    const detail = inJobs(CACHE_MIN_CALLS, 4, { ...dear, reportedInputTokens: 950, cacheReadTokens: 50 });
     const found = lead(analyse(detail), "low-cache-reuse");
     expect(found?.confidence).toBe("suggestive");
     expect(found?.amountNanos).toBe(200 * CENT);
@@ -679,18 +735,73 @@ describe("lead: cache use, inside one wire", () => {
   });
 
   it("stays silent at a tenth, at nineteen calls, and under a dollar", () => {
-    const reused = many(CACHE_MIN_CALLS, { ...dear, reportedInputTokens: 900, cacheReadTokens: 100 });
+    const reused = inJobs(CACHE_MIN_CALLS, 4, { ...dear, reportedInputTokens: 900, cacheReadTokens: 100 });
     expect(lead(analyse(reused), "low-cache-reuse")).toBeUndefined();
-    const few = many(CACHE_MIN_CALLS - 1, { ...dear, reportedInputTokens: 1000, cacheReadTokens: 0 });
+    const few = inJobs(CACHE_MIN_CALLS - 1, 4, { ...dear, reportedInputTokens: 1000, cacheReadTokens: 0 });
     expect(lead(analyse(few), "low-cache-reuse")).toBeUndefined();
-    const cheap = many(CACHE_MIN_CALLS, { creditsUsedNanos: 5 * CENT - 1, reportedInputTokens: 1000, cacheReadTokens: 0 });
+    const cheap = inJobs(CACHE_MIN_CALLS, 4, { creditsUsedNanos: 5 * CENT - 1, reportedInputTokens: 1000, cacheReadTokens: 0 });
     expect(lead(analyse(cheap), "low-cache-reuse")).toBeUndefined();
+  });
+
+  it("does not flag a task that makes one call per job, however little it reads from cache", () => {
+    /* Twenty jobs of one call each: nothing inside a job to reuse. */
+    const single = many(CACHE_MIN_CALLS, { ...dear, reportedInputTokens: 1000, cacheReadTokens: 0 });
+    const analysis = analyse(single);
+    expect(analysis.cacheUse).toEqual([
+      expect.objectContaining({ task: "glossary", calls: 20, medianCallsPerJob: 1, cacheReadShare: 0, flagged: false }),
+    ]);
+    expect(lead(analysis, "low-cache-reuse")).toBeUndefined();
+  });
+
+  it("flags one that makes several calls per job, and its table carries every pair, flagged or not", () => {
+    const detail = [
+      ...inJobs(CACHE_MIN_CALLS, 4, { ...dear, reportedInputTokens: 1000, cacheReadTokens: 0 }),
+      ...many(CACHE_MIN_CALLS, { ...dear, job: "structure", stepName: "structure", reportedInputTokens: 1000, cacheReadTokens: 0 }),
+      /* Three calls only: under every threshold, and still listed. */
+      ...many(3, { job: "arc", stepName: "arc", reportedInputTokens: 1000, cacheReadTokens: 500 }),
+    ];
+    const analysis = analyse(detail);
+    const found = lead(analysis, "low-cache-reuse");
+    expect(fact(found, "Flagged")).toBe(1);
+    expect(fact(found, "Pairs of mode or task and wire, all listed")).toBe(3);
+    expect(found?.amountNanos).toBe(200 * CENT);
+    expect(found?.evidence.table?.columns).toEqual([
+      "Mode or task",
+      "Wire",
+      "Calls",
+      "Calls per job (median)",
+      "Articles",
+      "Recorded",
+      "Cache-read share of prompt tokens",
+      "Flagged",
+    ]);
+    expect(found?.evidence.table?.omitted).toBe(0);
+    expect(found?.evidence.table?.rows.map((r) => [r[0], r[3], r[7]])).toEqual([
+      [{ kind: "text", text: "glossary" }, { kind: "count", count: 4 }, { kind: "text", text: "flagged" }],
+      [{ kind: "text", text: "structure" }, { kind: "count", count: 1 }, { kind: "text", text: "" }],
+      [{ kind: "text", text: "arc" }, { kind: "count", count: 1 }, { kind: "text", text: "" }],
+    ]);
+    expect(found?.detail).toMatch(/several calls/);
+    expect(found?.detail).toMatch(/one call per job has nothing to reuse/);
+  });
+
+  it("counts calls per job by job id, by run for request work with none, and alone with neither", () => {
+    const uses = cacheUseOf([
+      /* Jobs of 3 and 1; runs of 2 and 2: sizes 1, 2, 2, 3. Nearest-rank median 2. */
+      ...inJobs(3, 3),
+      call(),
+      ...["run-a", "run-a", "run-b", "run-b"].map((runId) => call({ jobId: null, runId })),
+    ]);
+    expect(uses[0]?.medianCallsPerJob).toBe(2);
+    /* A job id and a run id that happen to be spelled alike are two groups. */
+    expect(cacheUseOf([call({ jobId: "same" }), call({ jobId: null, runId: "same" })])[0]?.medianCallsPerJob).toBe(1);
+    expect(cacheUseOf([call({ jobId: null, runId: "" }), call({ jobId: null, runId: "" })])[0]?.medianCallsPerJob).toBe(1);
   });
 
   it("does not let one wire's reuse hide the other's lack of it", () => {
     const detail = [
-      ...many(CACHE_MIN_CALLS, { ...dear, wire: "messages", reportedInputTokens: 1000, cacheReadTokens: 0 }),
-      ...many(CACHE_MIN_CALLS, { ...dear, wire: "chat", reportedInputTokens: 1000, cacheReadTokens: 990 }),
+      ...inJobs(CACHE_MIN_CALLS, 4, { ...dear, wire: "messages", reportedInputTokens: 1000, cacheReadTokens: 0 }),
+      ...inJobs(CACHE_MIN_CALLS, 4, { ...dear, wire: "chat", reportedInputTokens: 1000, cacheReadTokens: 990 }),
     ];
     const analysis = analyse(detail);
     expect(analysis.cacheUse.map((u) => [u.wire, u.flagged]).sort()).toEqual([
@@ -717,7 +828,7 @@ describe("lead: where each model is used", () => {
         { kind: "count", count: 1 },
         { kind: "money", nanos: 30 * CENT },
         { kind: "share", share: 0.75 },
-        { kind: "text", text: "its most expensive model" },
+        { kind: "text", text: "largest share of this task" },
       ],
       [
         { kind: "text", text: "glossary" },
@@ -733,7 +844,7 @@ describe("lead: where each model is used", () => {
         { kind: "count", count: 1 },
         { kind: "money", nanos: 5 * CENT },
         { kind: "share", share: 1 },
-        { kind: "text", text: "its most expensive model" },
+        { kind: "text", text: "largest share of this task" },
       ],
     ]);
     expect(found?.detail).toMatch(/does not show/);

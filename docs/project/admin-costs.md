@@ -91,7 +91,8 @@ agent needs to know:
 - **It answers Greg's three questions already**: users ranked, the costliest articles with their
   breakdown by task and model, every task with its per-call spread and models.
 - **Leads are where to look, not conclusions.** Each says what was measured and what that does not
-  show. The cache lead's amount is everything the flagged tasks spent, not a saving.
+  show. The cache lead flags only a task that makes several calls per job, since one call has nothing to
+  reuse; its amount is everything the flagged tasks spent, not a saving.
 - **`--lookup-unpriced`** asks OpenRouter about a bounded set of the most recent unpriced calls that
   carry a generation id (free). What its usable records establish is the known shortfall —
   [the audit](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md) says why

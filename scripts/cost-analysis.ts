@@ -54,6 +54,7 @@ import { ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD, formatCostNanos } from "../src
 import {
   type CostAnalysis,
   CostReadsDisagree,
+  P95_MIN_CALLS,
   type Lead,
   type UnpricedLookup,
   analyseCosts,
@@ -549,7 +550,10 @@ export function summaryLines(a: CostAnalysis): string[] {
     ),
     ...ranking("Modes or tasks", a.tasks, (i) => {
       const per = a.tasks[i]?.perCall;
-      return per ? `  per call: median ${money(per.medianNanos)}, p95 ${money(per.p95Nanos)}, max ${money(per.maxNanos)}` : "";
+      if (!per) return "";
+      /* A p95 of a handful of calls is the largest call again: a dash. */
+      const p95 = per.calls >= P95_MIN_CALLS ? money(per.p95Nanos) : "—";
+      return `  per call: median ${money(per.medianNanos)}, p95 ${p95}, max ${money(per.maxNanos)}`;
     }),
     ...ranking("Answering models", a.models),
     "",

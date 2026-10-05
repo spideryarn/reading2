@@ -235,13 +235,20 @@ with a GPT Sol code review, and is committed.
 
 ## Deferred, each to get a queue entry
 
-- Article size and kind beside its cost (words, PDF or web, high-power) — the first thing that
-  explains an expensive article. Needs a join this v1 leaves out.
-- A coarser cube for a ledger too large for one response.
-- `answered_model` and upstream as page dimensions.
-- CSV export from the page.
-- Voice sessions that connected and reported nothing, on this page (they are on `npm run cost`).
-- Anything the audit finds that is wider than this area.
+As queued on 2026-10-05 (`npx tsx scripts/overseer-queue.ts show <id>`):
+
+| Queue entry | What |
+|---|---|
+| `qi-bhed82j7` (waits on Greg) | Name other readers' articles by slug, and show an article's size and kind beside its cost — [Q-1]; and a third named file for the cross-owner query — [Q-4] |
+| `qi-vb2ztvf9` | The page's follow-ups: an index leading on `started_at` and a coarser cube for long windows, CSV export, silent voice sessions, splitting the 950-line page component, the label of a renamed own article |
+| `qi-pn7rvh73` | Price dictation's transcription calls (audit, defect 1) |
+| `qi-f9agbaeh` | Record what a stopped or failed call cost (audit, defect 2) |
+| `qi-92pbaaxf` | Reconcile production's ledger against production's key, on the page (audit, defect 3) |
+| `qi-d5wbrhet` | Harden the tripwires: the spend scan's allow list, unknown providers, a new AI SDK, no-row warnings to Sentry, stale price tables (audit, defects 6, 7, 8, 11) |
+| `qi-35c6kngf` | Paid probes for the wires `test:paid` does not call, and a quiet-key balance check (audit, defects 5, 10, 13) |
+| `qi-9nfgnn49` | Record why a job ran, and whether a generated mode was ever opened (from the cost analysis) |
+
+`answered_model` and upstream were on this list and are built: they became dimensions in stage 1.
 
 ## Questions for Greg — none of them blocks the build
 
@@ -272,6 +279,19 @@ say yes, it is a move of one function and one line in the test.
 our own SVG, which also lets the HTML report be a single file with no script. If you expect to want
 line charts, zooming or richer hover detail on this page soon, Recharts is the library to add, and
 I would add it then rather than now. Recommendation: stay with our own until a chart needs more.
+
+**[Q-5] Should a production report name users by email?** A production report shows `user 001bb7a0`
+rather than an address. Getting addresses means calling production's Auth service from the box with
+the service-role key, which is outside what an unattended run may do (its production access is
+reads inside a read-only database transaction). **One such call was made** during the build, before
+I stopped it: a single read of the account list, on 2026-10-05 at about 01:38 UTC; the report it
+produced was deleted and the code removed. With two accounts the ids are easy to tell apart. If you
+want addresses in the report, say so and it is a few lines. Recommendation: leave it.
+
+**[Q-6] Should the command bar's model call be billed to the article it was typed in?**
+`POST /api/command-pick` declares that it has no article, so its spend shows under "no article".
+The audit noticed; there are no production rows yet. Attributing it is one word in the route table.
+Recommendation: yes, when somebody is next in that route.
 
 **[Q-3] Where should the report live when it holds production figures?** v1 writes it to
 `logs/cost-report-<date>.html` on the box, uncommitted, and you copy it down with one `scp`. An
