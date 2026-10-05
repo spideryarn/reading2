@@ -102,6 +102,7 @@ function mount(target: Target) {
         onOpenFull={() => {}}
         onCreated={() => {}}
         onDropped={() => {}}
+        onRenamed={() => {}}
       />,
     ),
   );

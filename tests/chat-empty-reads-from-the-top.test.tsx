@@ -165,6 +165,7 @@ function paintDialog(threadId: string): void {
         onOpenFull: () => {},
         onCreated: () => {},
         onDropped: () => {},
+        onRenamed: () => {},
       }),
     );
   });

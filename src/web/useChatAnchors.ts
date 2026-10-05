@@ -85,6 +85,20 @@ export interface ChatAnchorsApi {
   /** A thread went away — deleted, or cancelled before its first answer landed. */
   drop(threadId: string): void;
   /**
+   * The server stored a new thread under another id than the one `add` was
+   * given: the tab guesses a new conversation's id, and the server overrules a
+   * guess that is already a *message's* id in the article (src/chat.ts,
+   * `taken`; a guess that is a conversation's id is that conversation). About
+   * one send in a million. The row moves to the server's id, in place.
+   *
+   * No answer will ever name the guess, so left alone its row stays beside the
+   * real one and the paragraph counts one conversation twice. One operation
+   * rather than `drop` then `add`, so the row keeps its place and the
+   * bookkeeping for a request in the air moves in one step.
+   * docs/plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md
+   */
+  rename(from: string, to: string): void;
+  /**
    * A thread's title or newest answer changed.
    *
    * Only the fields a hover shows. Deliberately **not** called per token: the
@@ -530,5 +544,31 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     );
   }, []);
 
-  return { summaries, loaded, add, drop, touch, refresh, error };
+  const rename = useCallback((from: string, to: string) => {
+    if (from === to) return;
+    /* Called from a turn's acknowledgement, which outlives its dialog
+       (ChatDialog.tsx § `onConfirmed`), so it can arrive for an article this
+       hook has left. `refresh`'s guard, for the same reason. */
+    if (activeSlug.current !== slug) return;
+    /* `to` takes `from`'s place in both records, so a request in the air
+       cannot remove the row under its new name: `written` always gets `to`,
+       whether or not `from` was written during this flight. `from` needs no
+       entry in `dropped`: no answer lists it, because on the server it is a
+       message's id and not a conversation's. */
+    if (flight.current) {
+      flight.current.written.delete(from);
+      flight.current.written.add(to);
+      flight.current.dropped.delete(to);
+    }
+    unseen.current.delete(from);
+    if (!confirmed.current.has(to)) unseen.current.add(to);
+    setSummaries((prev) => {
+      if (!prev.some((s) => s.id === from)) return prev;
+      /* A refetch may have named the real one first; then the guess just goes. */
+      if (prev.some((s) => s.id === to)) return prev.filter((s) => s.id !== from);
+      return prev.map((s) => (s.id === from ? { ...s, id: to } : s));
+    });
+  }, [slug]);
+
+  return { summaries, loaded, add, drop, rename, touch, refresh, error };
 }

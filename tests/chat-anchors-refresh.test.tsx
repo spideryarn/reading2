@@ -343,3 +343,109 @@ describe("asking for the summaries again", () => {
     expect(asked).toHaveLength(count);
   });
 });
+
+/* **The server stored a new conversation under another id than the tab
+   guessed.** The row `add` put here is under the guess, which no answer will
+   ever name as this conversation, so without `rename` it stays beside the real
+   row and the paragraph counts one conversation twice. `G` is the guess and
+   `R` the id the server chose.
+   docs/plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md */
+describe("a conversation the server stored under another id", () => {
+  const G = "spya-ggg222";
+  const R = "spya-rrr222";
+
+  it("is one row, under the server's id, where the guess was", async () => {
+    await mount();
+    await answer(0, [summary(A)]);
+    await act(async () => api().add(summary(G, { title: "the question" })));
+    await act(async () => api().add(summary(B)));
+    await act(async () => api().rename(G, R));
+    expect(ids()).toEqual([A, R, B]);
+    expect(api().summaries[1]?.title).toBe("the question");
+  });
+
+  it("stays one row when the list is asked for again", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    await act(async () => api().refresh());
+    await answer(1, [summary(R, { title: "the server's" })]);
+    expect(api().summaries).toEqual([summary(R, { title: "the server's" })]);
+  });
+
+  it("is kept under the server's id through an answer that was read before it was stored", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids(), "never listed yet, so not the server's to drop").toEqual([R]);
+  });
+
+  it("is one row when the name arrives while a request is in the air", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await act(async () => api().rename(G, R));
+    await answer(1, [summary(R)]);
+    expect(ids()).toEqual([R]);
+
+    /* And it is the server's from then on: a later answer without it drops it. */
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("is one row when a refetch named the real one before the dialog heard", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await answer(1, [summary(R, { title: "the server's" })]);
+    expect(ids(), "the control: this is the double count").toEqual([R, G]);
+    await act(async () => api().rename(G, R));
+    expect(api().summaries).toEqual([summary(R, { title: "the server's" })]);
+  });
+
+  /* The row was added before this request went out, so the guess is not in
+     the flight's `written`, and an id an older answer once listed is not
+     `unseen` either. The rename itself has to count as a write. GPT Sol's
+     plan review, finding 6. */
+  it("survives a request in the air even under an id an older answer once listed", async () => {
+    await mount();
+    await answer(0, [summary(R)]);
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids(), "the control: the server dropped the old one").toEqual([]);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().refresh());
+    await act(async () => api().rename(G, R));
+    await answer(2, []);
+    expect(ids()).toEqual([R]);
+  });
+
+  /* The acknowledgement that calls this outlives the dialog that sent the
+     turn, so it can arrive after the reader has moved to another article. */
+  it("ignores a name that arrives for an article the reader has left", async () => {
+    await mount("a-piece");
+    await answer(0, []);
+    const late = api().rename;
+    await mount("another-piece");
+    await answer(1, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => late(G, R));
+    expect(ids()).toEqual([G]);
+  });
+
+  it("does nothing when the server kept the guess", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    const before = api().summaries;
+    await act(async () => api().rename(G, G));
+    expect(api().summaries).toBe(before);
+  });
+});
