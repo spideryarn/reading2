@@ -78,7 +78,7 @@ pass it:
 
 | Caller | Why it opts out | What changes in the caller instead |
 | --- | --- | --- |
-| `pdf` (`src/pdf-read.ts`) | Its loop already retries a dropped connection, through a width gate the gateway cannot see. | Its loop also retries a refusal that `worthAskingAgain`. That closes its 5xx gap without re-buying a priced one. Its handling of other thrown errors is left as it is: it asks again after any non-abort throw, which includes a `200` whose body broke. That is narrower than the gateway's rule, it is older than this plan, and it is said here rather than changed. |
+| `pdf` (`src/pdf-read.ts`) | Its loop already retries a dropped connection, through a width gate the gateway cannot see. | Its loop also retries a refusal that `worthAskingAgain`. That closes its 5xx gap without re-buying a priced one. Its handling of other thrown errors is left as it is: it asks again after any non-abort throw, which includes a `200` whose body broke. That is wider than the gateway's rule, it is older than this plan, and it is said here rather than changed. |
 | `embeddings` | Its loop already retries 5xx and 429, five goes, honouring `Retry-After`. | Its loop also retries a never-answered failure (by `worthAskingAgain`, not by the error's class). And it stops retrying a 5xx that was priced. |
 | `shelf-topics`, every call in `model-topics.ts` | Both of its outer retries already ask once more on any failure. | Nothing. |
 | `pdf-figure-locate` | `MAX_LOCATE_CALLS` promises at most eight model calls an article, and the counter counts asks. A hidden retry would make it twenty-four. | Nothing. A blip leaves the figure refused, as today. |
@@ -156,8 +156,8 @@ progress section lists which.
 - [x] GPT Sol review of this plan
 - [x] Stage 1 red tests (45 of 98 red before the fix: [the list](261005j-red-first.txt)), then the retry
 - [x] Stage 2 docs
-- [ ] GPT Sol code review
-- [ ] Mutations, and the affected suites on the final tree (held: see Gates)
+- [x] GPT Sol code review
+- [x] Mutations, and the affected suites on the final tree
 
 ## GPT Sol's plan review
 
@@ -186,7 +186,7 @@ all accepted and written into the plan above:
   `200` and says `true`: the provider accepted that work, and it keeps a 5xx-in-a-200 the
   verdict it has always been there.
 - **Embeddings asks again after a dropped connection with its existing backoff** (2 s,
-  doubling, five goes), not the gateway's short one. That is up to 30 s of waiting inside its
+  doubling, five goes), not the gateway's short one. That is about 30 s of waiting inside its
   240 s budget, the same as it already spends on a 5xx.
 
 Existing tests that changed, and what each became:
@@ -200,7 +200,49 @@ Existing tests that changed, and what each became:
 | `embeddings.test.ts`, two tests on a `TypeError` from `fetch` | failed at once | same assertions on a fake clock, because the batch is now asked five times. |
 | six test files that build a `ProviderRefused` | three arguments | four. |
 
+## GPT Sol's code review
+
+[The review](261005j-the-other-ai-wires-code-review-sol.md) of `949fa80ba`, verdict *land after
+the listed fixes*. It could run no test (the machine was refusing test runs for memory), so I ran
+its tests and its fixes afterwards; the results are under Gates.
+
+1. F7 (P1), fixed by the reviewer and kept: a Stop that landed just after a backoff resolved, or
+   inside the stream's second `onActivity`, could open another meter for a request an aborted
+   `fetch` never sends. That is a spend row for nothing, not a charge. Both loops now check the
+   signal before a retry creates its meter. Six tests, and
+   [a postmortem](../postmortems/261005i-cancellation-checked-before-an-await-does-not-authorize-the-next-attempt.md)
+   naming the class.
+2. F8 (P3), fixed by the reviewer and kept: four sentences that claimed more than the code or
+   the evidence did.
+3. F9 (P1), reported by the reviewer as wider than the stage: the Messages wire's loop, built in
+   261003m, has the same gap after its wait. I added the same check there
+   (`src/messages-stream.ts`). It has no test of its own: the window is between a timer firing
+   and the next line, and the existing "an abort during the backoff" test does not reach it.
+
+The reviewer also noted, and I left alone, that three seams (`openRouterJson`,
+`openRouterImage`, `openRouterStream`) still write a row for a call whose signal was aborted
+before the first attempt. That is older than this plan and `tests/ai-call-images.test.ts`
+characterises it.
+
 ## Gates
 
-- `npm run typecheck` on the final tree: green.
-- `tests/ai-call-transport-retry.test.ts`: 98 of 98 green after the fix (the build's own run).
+- `npm run typecheck` on the stage commit: green.
+- The 22 affected suites on the stage commit plus the reviewer's edits: 964 of 965 green. The
+  one red was my own edit landing on the wrong test in `tests/ai-call-images.test.ts` (it put
+  `retryTransport: false` on the test of a `200` whose body breaks, which must pass without
+  it). Moved to the right test.
+- **Mutations**, each against `tests/ai-call-transport-retry.test.ts` (104 tests), source put
+  back after each, unmutated run green at the end:
+
+  | Guard removed | Tests that went red |
+  | --- | --- |
+  | the `priced` check in `worthAskingAgain` | 7 |
+  | the abort check in `mayAskAgain` | 5 |
+  | the never-answered mark (any `TypeError` retried) | 6 |
+  | a failed stream attempt finishing its own meter | 18 |
+  | the cancellation check at retry entry, whole-call seams | 4 |
+  | the opt-out | 16 |
+  | the cancellation check at retry entry, stream | 2 |
+
+  The reviewer's six tests were written before its fix and never seen red by it; the fifth and
+  seventh rows are them going red.

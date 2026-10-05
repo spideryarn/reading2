@@ -8,9 +8,9 @@
  * answered but wrote one row, or wrote two rows but re-bought a billed call,
  * passes any one of them alone.
  *
- * Every test here was red before the retry existed, or went red under one of
- * the four mutations the plan's "As built" section lists
- * (docs/plans/261005j-red-first.txt has the first run).
+ * docs/plans/261005j-red-first.txt lists the tests that were red before the
+ * retry existed. The plan's Gates section lists seven guards that were each
+ * removed in turn, and how many tests here went red for each.
  *
  * The backoff is real code on a fake clock: `setTimeout` is faked and `drive`
  * advances it, so three attempts cost no wall time.
@@ -333,6 +333,27 @@ describe.each(SEAMS)("$name — a transport blip is retried, and every attempt i
     expect(sent).toBe(1);
     expect(run.outcomes).toEqual(["error"]);
   });
+
+  it("opens no attempt when the signal aborts as the backoff finishes", async () => {
+    const stop = new AbortController();
+    const reason = new DOMException("deadline expired", "TimeoutError");
+    const t = script(dropped(), seam.good);
+    const schedule = globalThis.setTimeout;
+    /* Resolve the wait, then abort before its continuation runs. */
+    vi.spyOn(globalThis, "setTimeout").mockImplementationOnce(((callback: () => void, ms: number) =>
+      schedule(() => {
+        callback();
+        stop.abort(reason);
+      }, ms)) as typeof setTimeout);
+    try {
+      const run = await drive(() => seam.ask({ signal: stop.signal }));
+      expect(errorOf(run.outcome)).toBe(reason);
+      expect(t.sent()).toBe(1);
+      expect(run.outcomes).toEqual(["error"]);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 /* ------------------------------------------------------- a 200 is the line -- */
@@ -537,6 +558,25 @@ describe("openRouterStream — nothing is retried once a 200 is in hand", () => 
     await running;
     expect(outcome).toBeInstanceOf(ProviderRefused);
     expect(log).toEqual(["request", "activity", "activity", "request"]);
+  });
+
+  it("opens no retry if the activity callback aborts after the wait", async () => {
+    const stop = new AbortController();
+    const reason = new Error("stopped after the wait");
+    const t = script(dropped(), streamed(WORD, DONE));
+    let activities = 0;
+    const run = await drive(async () => {
+      for await (const chunk of openRouterStream("chat", { model: "m", messages: [] }, {
+        signal: stop.signal,
+        end: { terminated: false },
+        onActivity: () => {
+          if (++activities === 2) stop.abort(reason);
+        },
+      })) void chunk;
+    });
+    expect(errorOf(run.outcome)).toBe(reason);
+    expect(t.sent()).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
   });
 
   it("leaves nothing pending and no timer running when the consumer stops during the backoff", async () => {

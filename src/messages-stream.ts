@@ -709,6 +709,9 @@ export function streamMessage(
           }
           try {
             await waitOrStop(backoffMs(attempt), options.signal);
+            /* A Stop can land after the wait resolves. Checked again here, so
+               it cannot open an attempt, and a row, for a request never sent. */
+            options.signal?.throwIfAborted();
           } catch {
             stoppedWhileWaiting = true;
             throw new Anthropic.APIUserAbortError();

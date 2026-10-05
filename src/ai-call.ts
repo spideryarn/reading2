@@ -1725,8 +1725,8 @@ async function send(
 const neverAnswered = new WeakSet<object>();
 
 /**
- * **Could the identical request come out differently a second later, without
- * buying anything twice?** The one rule for this wire, used by the retry below
+ * **Is this failure eligible for another identical request?** The one rule for
+ * this wire, used by the retry below
  * and by the callers that keep a loop of their own (src/pdf-read.ts,
  * src/embeddings.ts), so an opt-out cannot bypass it.
  *
@@ -1797,6 +1797,9 @@ async function backOff(attempt: number, signal: AbortSignal | undefined): Promis
  */
 async function asTransportAttempts<T>(options: RetryOptions | undefined, attempt: () => Promise<T>): Promise<T> {
   for (let n = 1; ; n++) {
+    /* Cancellation can arrive after the wait resolves. Check before the retry
+       creates a meter: an already-aborted fetch sends no network request. */
+    if (n > 1) options?.signal?.throwIfAborted();
     try {
       return await attempt();
     } catch (err) {
@@ -1956,6 +1959,9 @@ async function acceptedStream(
   options: StreamOptions,
 ): Promise<{ stream: ReadableStream<Uint8Array>; meter: Meter }> {
   for (let attempt = 1; ; attempt++) {
+    /* The wait and the activity callback can both precede an abort. Neither
+       authorizes a new meter after the caller has stopped. */
+    if (attempt > 1) options.signal.throwIfAborted();
     /* **Reset, so a reused `end` cannot carry a stale verdict into a new
        attempt.** `converse` runs up to four requests in a turn; it builds a
        fresh object for each, so nothing depends on this today — which is exactly
