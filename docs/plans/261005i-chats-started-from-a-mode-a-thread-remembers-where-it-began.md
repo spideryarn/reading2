@@ -139,10 +139,13 @@ CHECK constraints hold the same shapes in SQL (all four null when `origin_mode` 
   also let Chat's list say what the thread was about after the item itself has gone.
 
 **D2. The way back is derived, never stored twice.** A caller finds its thread by matching its own
-item against the origins in the thread summaries the reading view already fetches once per article
-(`useChatAnchors`, `?summary=1`): for a claim, same `blockId` and same `quote`; the newest wins if
-there are several. No link column on the item's side and no second write. `ThreadSummary` gains
-`origin`.
+item against the origins in the thread summaries the reading view already holds (`useChatAnchors`,
+`?summary=1`): for a claim, same `blockId` and same `quote`; the newest wins if there are several.
+No link column on the item's side and no second write. `ThreadSummary` gains `origin`.
+
+- **That list is fetched once per article today, so it has to be kept current** (plan review F1):
+  Chat's band tells it nothing, so without this the mark would not appear until a reload and its
+  line would go stale.
 
 - **When the item changes, the mark goes and the thread stays.** A new Debate search that words the
   claim differently no longer matches. The conversation is still in Chat's list, with Debate's icon
@@ -153,11 +156,21 @@ there are several. No link column on the item's side and no second write. `Threa
 existing handoff unchanged in feel: Chat's band, a fresh conversation, the seed text in the box,
 **nothing sent** until the reader presses Send (Greg, 2026-09-11, *"fresh"*; a press spends
 nothing), and the browser's Back returns to the mode. Once the thread exists, the mark on the item
-sets `?thread=<id>` and stays in the mode, so `ChatDialog` draws it docked beside the band when the
-window is wide and floating over it when not, with its existing "open in full chat".
+sets `?thread=<id>` and stays in the mode, so `ChatDialog` draws it there, with its existing "open
+in full chat".
 
+- **Docked or floating is the block chat's existing rule, unchanged** (plan review F2, measured):
+  it docks in the right-hand column only when that column is open (`?margin=1`) and the window is
+  wide enough (docked at 1440 with Marginalia on); otherwise it floats over the mode. So a wide
+  window alone does not dock it.
+- *Passed over:* the mark also switching Marginalia on, so that it always docks when wide (Sol's
+  proposed fix). It would put the margin's notes on screen as a side effect of opening a chat and
+  leave them there afterwards. A column that opens for a chat alone belongs with
+  `[Q-start-beside]`.
 - This is the smallest route that works at every width, because both halves exist. Starting the
   chat beside the mode too (no trip to Chat) is `[Q-start-beside]` below.
+- **Live is not offered on a handed-over conversation until its first typed Send** (F4). A spoken
+  first turn creates the thread by another path, which would leave it with no origin for good.
 
 **D4. The "little summary" in the caller is the chat's own latest answer, clipped.** The mark shows
 the count of exchanges and the first line of the most recent finished answer (`ThreadSummary`'s
@@ -180,8 +193,15 @@ of the thread is `[Q-thread-summary]`.
 - **No rename or delete on a Remember row.** Remember has one conversation per sub-mode and its
   delete is *Start over*, which lives there.
 - **A filter above the list**: *All* (the default), *Chats*, then one per source that is present.
-  Drawn only when more than one source is present. Kept in the page's memory for the visit, not in
-  the URL.
+  Drawn only when more than one source is present. The choice is a query parameter of its own
+  (`?chatfrom=`, absent meaning All), because [url-state.md](../project/url-state.md) puts how you
+  are looking at an article in the URL (F6; the first draft kept it in memory). A choice whose
+  source is no longer present is replaced with All.
+- **What Chat lists and what Chat may open are two different sets** (F3). The list gets every kind
+  but Candidates; the open conversation and the drafts are resolved only among `chat`-kind
+  threads. A `?thread=` naming another kind (carried over from Remember, or pasted) is cleared and
+  the list shown. An article whose only conversations are Remember's shows those rows and does
+  not start a blank chat over them.
 
   *Why not open a Recall conversation in Chat's band:* the band sends the blocks on screen (a 400
   on a non-chat thread), offers Live (Tutorial and Explore refuse a spoken turn), keys drafts
@@ -233,13 +253,16 @@ it first.
 ## Stages
 
 ### Stage: plan review
-- [ ] GPT Sol, read-only, on this doc. Findings into the Log; revise.
+- [x] GPT Sol, read-only, on this doc. Findings into the Log; revised.
 
 ### Stage: a thread records its origin, and Debate's claims are the first caller
 Schema, server and client, end to end. Built by an Opus subagent, tests red first.
 
-- [ ] **Migration** (`npm run db:generate`, additive): the four columns, the CHECKs, the FK. Read
-      the generated SQL; hand-check the CHECK expressions (drizzle-kit does not diff them).
+- [ ] **Migration** (`npm run db:generate`, additive): the four columns, the CHECKs, and the
+      composite FK `(article_id, origin_block_id)` like the anchor's. Read the generated SQL;
+      hand-check the CHECK expressions (drizzle-kit does not diff them). Apply it locally with
+      `npm run db:migrate`, read its `Target:` line, and run the round-trip and constraint tests
+      before any browser check (F7). Production is the Overseer's deploy.
 - [ ] **Types**: `ThreadOrigin`; `origin?` on `ChatThread` and `ThreadSummary`, written by
       conditional spread.
 - [ ] **Store**: `upsertThread` insert, `threadsFor` read, `summarise`, export
@@ -251,11 +274,24 @@ Schema, server and client, end to end. Built by an Opus subagent, tests red firs
       `MAX_ANCHOR_CHARS`; only on a turn that creates a thread, only for kind `chat`, never on a
       retry or edit; a different origin on an existing thread is a 409, the same one resent is
       fine. A mode the route has not been taught is a 400.
-- [ ] **Client, carrying it**: `ChatHandoff` gains `origin?`; it rides from `handToChat` to the
-      first Send (`SendOptions.origin`) and survives the arrival rule that can move a draft to a
-      newly begun thread. A Reader-level test beside `tests/glossary-ask-in-chat.test.tsx`: press
-      on a claim → Chat, fresh conversation, the seed in the box, nothing POSTed; Send, and the
-      POST body carries exactly that origin.
+- [ ] **Client, carrying it** (F5): `ChatHandoff` gains `origin?`. The pending origin is kept
+      beside the thread's draft in the article's draft store (`src/web/chat-draft.ts`), keyed by
+      thread id: set when the handoff is taken, moved by `moveThread`, removed by `dropThread`,
+      untouched by typing. Send reads it for the open thread (`SendOptions.origin`) and it is
+      kept until the server confirms the thread, so a failed first Send can be retried with it.
+      Tests: a Reader-level one beside `tests/glossary-ask-in-chat.test.tsx` (press on a claim →
+      Chat, fresh conversation, the seed in the box, nothing POSTed; Send, and the POST body
+      carries exactly that origin); leaving Chat and coming back; a moved draft; two handoffs do
+      not share an origin; a discarded draft; a failed first Send.
+- [ ] **Live waits for the first typed Send** (F4): while a conversation has a pending origin,
+      Live is not offered and its start is refused. Test that a claim handoff cannot create a
+      thread with no origin by voice.
+- [ ] **The caller's summaries stay current** (F1): `useChatAnchors` is told when a chat thread is
+      created, finishes a turn, is edited, retried or deleted in Chat's band (its existing
+      `add`/`touch`/`drop`, or a refetch on returning to a caller mode, whichever is smaller),
+      keeping its guards against a stale fetch overwriting a local write. Test, with no reload:
+      check a claim → Send → the answer finishes → Back → the mark and its line are there →
+      reopen; then a follow-up changes the line, and a delete removes the mark.
 - [ ] **Client, the button and the mark**: `askToCheckClaim(quote)` in `chat-handoff.ts`; the
       button and the mark in `DebatePanel.tsx`'s claim heading (owner only; a visitor's band gets
       no handler and draws neither); `threadForOrigin(summaries, origin)` beside `threadFor`,
@@ -270,8 +306,9 @@ Schema, server and client, end to end. Built by an Opus subagent, tests red firs
       once in tmux. Mutate two guards (the 409, the owner-only button) and watch the tests go red.
 - [ ] GPT Sol code review, write-capable, two rounds at most. Grep its doc edits for "Greg".
 - [ ] Browser check by a Sonnet subagent at 1440, 820 and 390 wide: the button on a claim, the
-      handoff, Back, one sent turn (the one paid call), the mark and its line, the thread docked
-      beside Debate when wide and floating when narrow, a visitor sees neither.
+      handoff, Back, one sent turn (the one paid call), the mark and its line, the thread reopened
+      from the mark with Marginalia off and on at each width (docked only at 1440 with it on),
+      a visitor sees neither.
 - [ ] Docs: `debate.md`, `chat-tools.md` or a new short section where the glossary handoff is
       documented, `url-state.md` if anything about `?thread=` changed, `database.md` if it lists
       the columns, `/help`'s Debate entry.
@@ -281,10 +318,14 @@ No schema. Answers `spya-hyfqkq`.
 
 - [ ] Tests first: Recall, Tutorial and Explore threads are listed in Chat with their source;
       Candidates is not; a Remember row has no rename or delete and a press goes to
-      `mode=remember` on that sub-mode; the filter narrows and defaults to All; it is absent with
-      one source. `tests/remember-own-thread.test.tsx` pins the old rule and is rewritten to the
+      `mode=remember` on that sub-mode, with `mode`, `remember` and `thread` set in one
+      navigation; the filter narrows, defaults to All, survives a reload and Back, and is absent
+      with one source; arriving in Chat from Remember, or with a pasted non-chat `?thread=`,
+      shows the list and clears the parameter; an article with only Remember conversations shows
+      their rows. `tests/remember-own-thread.test.tsx` pins the old rule and is rewritten to the
       new one, not deleted.
-- [ ] `ConversationModes.tsx` hands Chat's panel every listable thread; `ThreadList` draws the
+- [ ] `ConversationModes.tsx` hands `ThreadList` every listable thread and keeps the open
+      conversation and drafts on `chat`-kind threads only (F3); `ThreadList` draws the
       icon, the tooltip and the filter; the mode icons come out of `Dock.tsx`'s `MODES_UI` into
       something `ChatPanel` can import without importing the Dock.
 - [ ] Remember is unchanged: it still shows only its own one conversation.
@@ -332,14 +373,15 @@ instead of delete.
   Back returns to Chat's list. It costs a change of mode, so the list of your other chats is no
   longer beside it.
 - **B. It opens inside Chat, like any other row.**
-  The conversation appears in Chat's own panel, list on the left. What it costs: Chat's panel
-  sends things a Recall conversation refuses (what is on screen), offers a Live button that
-  Tutorial and Explore cannot use, and its delete would wipe Remember's only conversation without
-  saying so. Each needs its own fix and test; about two days, and two places to keep in step from
-  then on.
+  The conversation takes the place of Chat's list, as an ordinary chat does today, and going back
+  to the list lets you pick another. What it costs: Chat's panel sends things a Recall
+  conversation refuses (what is on screen), offers a Live button that Tutorial and Explore cannot
+  use, and its delete would wipe Remember's only conversation without saying so. Each needs its
+  own fix and test; about two days, and two places to keep in step from then on.
 
-**What would decide it.** If you mostly want to *find* and *reread* those conversations from Chat,
-A is enough. If you want to *carry them on* with your other chats in view, B.
+**What would decide it.** A if these conversations should keep Remember's own controls around
+them. B if you want to carry them on without leaving Chat. Neither keeps your other conversations
+in view beside the one you are reading; Chat does not do that for any conversation today.
 
 ### [Q-dig-deeper] What should happen to Dig deeper in Glossary and Citations?
 
@@ -377,13 +419,15 @@ line of the chat's most recent answer. That is free and always current, but a fi
 sometimes a preamble and not a conclusion.
 
 - **A. Leave it as the latest answer's first line (built).**
-- **B. A one-sentence summary written by a fast model when the chat goes quiet (recommended only
-  if A reads badly in use).**
+- **B. A "Summarise" button on the mark writes one sentence with a fast model (recommended only if
+  A reads badly in use).**
   ```
   💬 3 · Mostly not: the 2018 result did not replicate, though one lab still defends it.
   ```
-  Costs a small model call per conversation, a new instruction to that model, and a rule for when
-  to refresh it. About two days.
+  Each press is one small paid call, and the sentence can fall behind the conversation until it
+  is pressed again. It needs a new instruction to that model and somewhere to store the sentence.
+  About two days. Writing it without a press, whenever the chat goes quiet, would spend without
+  you asking, which nothing here does today; that would be a separate decision.
 
 **What would decide it.** Use A for a week on real claims. If the line usually tells you what the
 chat concluded, stop there.
@@ -391,14 +435,17 @@ chat concluded, stop there.
 ### [Q-start-beside] Should "check this claim" open the chat beside Debate from the first press?
 
 **Background.** Built now: the first press takes you to Chat with the question ready to send, and
-Back returns you to Debate. After that, the mark on the claim opens the conversation *beside*
-Debate when the window is wide. So the first visit and later visits differ.
+Back returns you to Debate. After that, the mark on the claim opens the conversation without
+leaving Debate: in the right-hand column if you have Marginalia open and the window is wide, and
+otherwise as a panel floating over Debate. So the first visit and later visits differ, and on a
+wide window you get the second column only when Marginalia is already on.
 
 - **A. As built.** Works at every width, including a phone, and uses only what exists.
 - **B. Always beside the mode (recommended later, on wide windows).** The chat opens in the
-  right-hand column at once and Debate stays where it is. On a narrow window it would float over
-  Debate. It needs the side panel to take a question that is not about a passage, which it cannot
-  today. About a day.
+  right-hand column at once, whether or not Marginalia is on, and Debate stays where it is. On a
+  narrow window it would float over Debate. It needs the right-hand column to open for a chat
+  alone, and the side panel to take a question that is not about a passage; it can do neither
+  today. About two days.
 
 **What would decide it.** Whether the trip to Chat and back gets in your way.
 
@@ -407,3 +454,15 @@ Debate when the window is wide. So the first visit and later visits differ.
 - 2026-10-05 — plan written from a read-only survey of the code at `8646b09ad`. Prior-work check:
   no note, plan or commit names `hyfqkq`; nothing in `docs/` plans an origin on a thread except
   261004a's deferred option 1, which this takes up.
+- 2026-10-05 — GPT Sol plan review
+  ([answer](261005i-chats-started-from-a-mode-plan-review-sol.md)): not ready as written, F1–F9;
+  the design itself it called sensible and found nothing smaller that does both requests. Eight
+  taken as written: F1 the caller's summaries must be kept current, F3 what Chat lists and what
+  it may open are separate sets, F4 Live waits for the first typed Send, F5 the pending origin
+  lives beside the draft, F6 the filter is a URL parameter, F7 the migration is applied as well
+  as generated, F8 and F9 the wording of two questions. **F2 taken in part**: its measurement is
+  right (a wide window alone does not dock the chat; Marginalia has to be on) and D3 now says
+  so; its fix, switching Marginalia on from the mark, is passed over for the side effect, and
+  the column opening for a chat alone is in `[Q-start-beside]`. It also checked four of my
+  doubts and cleared them: an anchorless thread draws in `ChatDialog`, the composite FK is
+  right, `MAX_ANCHOR_CHARS` (20,000) is ample, and `reader_notes` needs nothing.
