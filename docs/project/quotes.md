@@ -471,8 +471,9 @@ unscored — to **1.00** at 1.0, linearly, and travels as `--quote-a` in the inl
 `annotateHtml` already writes for `--hit-a`. **The fill's strength is the tier's base times that.**
 The bases are per appearance (`--quote-fill-light` and `--quote-fill-heavy`, beside `--quote-rgb` in
 `styles/tokens.css`): 0.20 and 0.32 on the light page, so light runs 0.14 to 0.18 (a light quote's
-priority stops below 0.80) and heavy 0.28 to 0.32; 0.28 and 0.36 on the dark page, so 0.20 to 0.25
-and 0.32 to 0.36 (§ [Stronger on the dark page](#stronger-on-the-dark-page-since-2026-10-05)). Tier
+priority stops below 0.80) and heavy 0.28 to 0.32; 0.48 and 0.60 on the dark page, so 0.34 to 0.42
+and 0.53 to 0.60, of a darker colour than the light page's
+(§ [A deeper purple in the dark prose](#a-deeper-purple-in-the-dark-prose-since-2026-10-05)). Tier
 and fade **move the same way**, so a heavier quote is always also a brighter one and the two can never
 cancel. It spends the finding of 260907c's acceptance pass, that priority *"does help skimming — but
 through brightness more than thickness"*: with a fill, brightness is all there is.
@@ -488,38 +489,83 @@ requires: the article's ink and its soft ink clear 4.5:1 on the strongest fill t
 inside a quote clears 3:1 on it (**the weakest pairing, and what set the strengths**: a link is only
 5.7:1 on the bare light page, and at the first build's 0.42 it was 2.9:1); the faintest fill still
 differs from the page; the heavy tier is stronger than the light where they meet; and the spine
-strip, a thin line in the same colour at `QUOTE_ALPHA_FLOOR`, clears 3:1.
+strip, a thin line in `--quote-rgb` at `QUOTE_ALPHA_FLOOR`, clears 3:1.
 
 #### Stronger on the dark page, since 2026-10-05
+
+**This was the first of two changes that day, and the second replaced its numbers** — the colour
+and both strengths are in the next section. What is still true from this one is that the strengths
+are per appearance, and why the old contrast check missed the complaint.
 
 Greg, two days after the fill shipped (`spya-s0gppw`):
 
 > The quote highlighting color is not very visible against the black background in dark mode. Take a
 > screenshot and see if you can slightly tweak it.
 
-The dark page's quote colour is a pale lavender, `204 151 243`, and it was drawn at the light page's
-two strengths. At 14% over near-black that is a dark grey with a little purple in it. **The dark
-page's strengths are now 0.28 and 0.36**, up from 0.20 and 0.32, so a light quote is about 40%
+The dark page's quote colour was a pale lavender, `204 151 243`, drawn at the light page's two
+strengths. At 14% over near-black that is a dark grey with a little purple in it. **The dark
+page's strengths went to 0.28 and 0.36**, up from 0.20 and 0.32, so a light quote was about 40%
 stronger and a heavy one about 12%
 ([261005f](../plans/261005f-dark-quote-fill-stronger.md)). The light page's are what they were, and
 the test pins them.
 
-**What stops it going further.** A search hit over a quote draws its outline on the fill, and the
-blue automatic search colour (`--cat-4`) is 3.03:1 on the strongest dark fill; at 0.38 it is under
-3. The light tier's 0.28 clears the OKLab floor; at 0.30 the two tiers are nearly one.
+**What stopped the lavender going further.** A search hit over a quote draws its outline on the
+fill, and the blue automatic search colour (`--cat-4`) was 3.03:1 on the strongest fill; at 0.38 it
+was under 3.
 
-**The colour did not move**, though a more saturated purple looked better in the prose. The spine
-strip shares it and is drawn on the rail's panel, a lighter ground than the page, where a darker
-purple fell from 3.3:1 to 2.2:1 (GPT Sol's plan review).
+**The colour did not move in that change**, though a more saturated purple looked better in the
+prose. The spine strip shared it and is drawn on the rail's panel, a lighter ground than the page,
+where a darker purple fell from 3.3:1 to 2.2:1 (GPT Sol's plan review). So the question went to
+Greg.
 
 **The old contrast check did not catch the complaint**: the faintest fill passed its
 "differs from the page" floor at 1.22. That ratio measures luminance only, while OKLab distance also
-counts chroma. So on the dark page the test asks for both (the old fill was 0.107 from the page, the
-new one 0.146, and the OKLab floor is 0.14).
+counts chroma. So on the dark page the test asks for both.
 
-**Known gap**: the test sums every foreground over the page, and a quote can also sit on `--muted`
-(a code block) or under a glossary or cross-reference rule. Those pairings were under their floors
-before this and are a little further under now; 261005f § Found, not fixed here has the numbers.
+#### A deeper purple in the dark prose, since 2026-10-05
+
+Greg, the same day, having looked at the stronger lavender on an iPad:
+
+> the purple Quote-highlights in dark mode on an iPad screen were a little hard to see. I don't mind
+> if they're slightly different from the Spine
+
+**So on the dark page the fill in the prose and the strip on the spine are two colours of one
+hue.** That releases, for the dark prose fill only, his rule of 2026-09-10 (*"use the same colour we
+use for their outline-border"*, § In the spine, above). The fill is `--quote-prose-rgb`,
+`151 48 208`: the strip's hue (310), darker with about 1.7 times its OKLab chroma. The strip keeps
+`--quote-rgb`, `204 151 243`. On the light page the two tokens hold one colour and nothing moved.
+Plan: [261005j](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md).
+
+**A darker colour is the more visible one here**, because it can be drawn more strongly. The
+lavender is light, so little of it can go over the page before the words on it lose contrast, and a
+little of a pale colour over near-black is a dark grey. The deeper purple is drawn at **0.48 and
+0.60** and what reaches the page is purple: the faintest quote's chroma went from 0.035 to 0.099,
+and its OKLab distance from the page from 0.146 to 0.171 (the test's floors are 0.08 and 0.16).
+
+**The words on it are as readable as they were, or more so.** Ink 8.90 to 9.56, soft ink 4.85 to
+5.21, a link 4.2 to 4.6, the opaque blue search band or full-confidence outline 3.03 to 3.25. The soft ink in a block drawn on
+`--muted` (a code block), which the lavender left at 3.88, is 4.61 and now has a floor in the test.
+The step between the tiers grows slightly in OKLab distance (0.047 to 0.048), while its
+luminance contrast falls from 1.188 to 1.158 and remains above the test's 1.12 floor.
+
+**Why the strip did not follow.** In the prose colour a 2px strip would be about 2.2:1 on the page
+and less on the rail's panel. The test holds that as a control.
+
+**What it did not fix**: a glossary's dotted rule and a cross-reference's rule under a heavy quote
+are 2.58 and 2.56, under 3:1. The glossary improves from 2.51; the cross-reference falls very
+slightly, from 2.5635 to 2.5562. The test holds minimum floors of 2.50 and 2.55, respectively. Lifting them is a change to those rules (queue entry `qi-9wyymfdy`). Caption ink in a
+block on `--muted` under a heavy quote is 2.64, up from 2.22, and has no floor.
+
+**Some overlapping signals lose contrast.** Low-confidence search outlines are translucent; the
+opaque-band check above does not cover them. On the strongest fill, a bluish-green outline at
+`--hit-a: 0.45` falls from 2.550 to 2.504. The page-coloured gap between abutting quotes falls
+from 2.040 to 1.898 against the strongest fill. The reader's four washes become more distinct in
+OKLab beside a quote, but lose luminance contrast with it. These are small, on signals already
+under 3:1, and accepted as the price of the more visible quote; adjusting the
+outline is the next step if a search hit over a heavy quote proves hard to see. The sums are in
+[261005j § Independent review](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md#independent-review-overlaps-and-grounds).
+
+**Change `--quote-prose-rgb` and the two strengths have to be summed again**: they are a set.
 
 **Purple, because the reader has fills of their own.** Since 2026-10-03 a reader's highlight is a
 wash in yellow, green, blue or pink. The quote colour was a green at hue about 163, which as a wash

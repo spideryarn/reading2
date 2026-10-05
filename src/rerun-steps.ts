@@ -30,6 +30,14 @@
  *    `structure` call it names, and the labels would be gone for the eleven
  *    minutes in between. A control whose whole design is *how many metered
  *    calls does one press buy* may not have a second one hiding behind it.
+ *
+ *    **It is offered in one other place since 2026-10-05, and that is the same
+ *    rule rather than an exception**: Structure mode's *Try again*, only on a
+ *    tree built from the author's headings because the model's could not be
+ *    made (src/web/StructureNotice.tsx). The objection above is to stripping
+ *    good labels from every article; that tree's labels were written against
+ *    sections its replacement does away with, so the label pass is owed anyway.
+ *    docs/project/structure.md § When it is only the headings.
  *  - **`illustrated` is out.** It refuses without a usable Sketch and does not
  *    pull the prerequisite in, and a run whose every plate failed returns
  *    *successfully* — so it can replace a good picture with an empty one.

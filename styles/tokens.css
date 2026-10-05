@@ -96,7 +96,7 @@
        closer than that.
 
        **Not the teal the plan first chose** (hue 205, the wider gap): the same
-       colour is the spine strip's (spine.css § .spine-quote), and the spine's
+       purple hue is the spine strip's (spine.css § .spine-quote), and the spine's
        reading-time area is a cyan at hue 200 (`--read-time`).
 
        **Not the orange**: `mark.cmt` and `mark.term` wear it, and a comment's
@@ -107,24 +107,35 @@
        channel: a search is a line round the words and a quote is a wash behind
        them.
 
-       Held as three numbers because the fill is drawn at partial alpha. */
+       Held as three numbers because the spine strip is drawn at partial alpha. */
     --quote-rgb: 204 151 243;
     /* The alias every triplet here needs — see `--hit-wash` above for the
        invalid-declaration trap that makes it worth writing out. */
     --quote-color: rgb(var(--quote-rgb));
+    /* **The fill in the prose has a colour of its own on the dark page**, since
+       2026-10-05. `--quote-rgb` above is a pale lavender, right for a 2px strip
+       on the spine's panel and grey-purple as a faint wash over near-black.
+       Greg, on an iPad: "the purple Quote-highlights in dark mode on an iPad
+       screen were a little hard to see. I don't mind if they're slightly
+       different from the Spine". So the prose fill is this deeper, more
+       saturated purple at the same hue (310), and the spine strip keeps
+       `--quote-rgb`. On the light page the two are one colour.
+
+       Darker than the lavender, so it is drawn at a higher strength, and at
+       that strength the ink, soft ink, links and opaque search bands are more
+       readable. Some translucent search outlines and the cross-reference rule
+       lose contrast; the independent review records those trade-offs. docs/project/quotes.md § A deeper purple in the dark prose;
+       docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md. */
+    --quote-prose-rgb: 151 48 208;
     /* **How strong the fill is, per tier** (annotations.css § quote fills
-       multiplies these by the fade). Per theme since the dark-fill visibility
-       report of 2026-10-05 (`spya-s0gppw`): these were 0.2 and 0.32, as the
-       light page's still are. The colour did not move, because the spine strip
-       shares it and sits on a lighter ground than the page. What holds the
-       heavy one at 0.36 is the blue search colour (`--cat-4`), whose outline
-       over a quote is 3.03:1 there. The OKLab visibility floor puts the light
-       one above about 0.27; 0.28 is the slight increase that clears it, while
-       the step between tiers keeps it from approaching the heavy one.
-       tests/quote-fill.test.ts has both sums;
-       docs/plans/261005f-dark-quote-fill-stronger.md. */
-    --quote-fill-light: 0.28;
-    --quote-fill-heavy: 0.36;
+       multiplies these by the fade). Per theme since 2026-10-05, and these
+       belong to `--quote-prose-rgb`: change the colour and they have to be
+       summed again. The blue search colour (`--cat-4`), whose outline over a
+       quote clears 3:1 at full confidence, and the soft ink in a block drawn on `--muted`
+       hold the heavy one near 0.60; the step between the tiers holds the
+       light one under it. tests/quote-fill.test.ts has the sums. */
+    --quote-fill-light: 0.48;
+    --quote-fill-heavy: 0.6;
 
     /* The sheet an article's pictures are printed on, deliberately light in
        either appearance.
@@ -377,6 +388,7 @@
     --hit-rgb: 0 114 178;
     --hit-wash-rgb: 112 122 134;
     --quote-rgb: 127 66 166;
+    --quote-prose-rgb: 127 66 166;
     --quote-fill-light: 0.2;
     --quote-fill-heavy: 0.32;
 

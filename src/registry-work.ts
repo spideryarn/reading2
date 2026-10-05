@@ -11,7 +11,7 @@
  * What is kept is bounded here, once: a registry may list a hundred authors of
  * two hundred characters each, and eighty rows of that is not a row's worth.
  */
-import type { CitationRegistry, RegistrySource, RegistryWork } from "./types.js";
+import type { CitationRegistry, RegistryCitedBy, RegistrySource, RegistryWork } from "./types.js";
 
 /**
  * The part of stage 1's `WorkRecord` (src/bibliographic.ts) a row keeps —
@@ -34,6 +34,30 @@ const VENUE_CAP = 200;
 
 /** What a reader is told the record came from. A `Record`, so a third registry is a compile error here. */
 export const REGISTRY_NAME: Record<RegistrySource, string> = { crossref: "Crossref", datacite: "DataCite" };
+
+/** The most a citation count may be: Postgres `integer`'s ceiling, which is the column's (`cited_by_count`). */
+export const MAX_CITED_BY_COUNT = 2_147_483_647;
+
+/**
+ * **A citation count we will keep**: a whole number from 0 to
+ * `MAX_CITED_BY_COUNT`. One test for the parser of Crossref's answer
+ * (src/bibliographic.ts) and for the reader of a stored row below, so what is
+ * written and what is read back cannot disagree about the range.
+ */
+export function isCitedByCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_CITED_BY_COUNT;
+}
+
+/**
+ * A citation count in words, for the Citations row and for chat's row alike.
+ * **Zero is *no citations recorded*, not *cited 0 times***: Crossref counts
+ * only citations from works whose publishers deposit their reference lists,
+ * so zero is a statement about its records.
+ */
+export function citedByWords(count: number): string {
+  if (count === 0) return "no citations recorded";
+  return count === 1 ? "cited once" : `cited ${count.toLocaleString("en-GB")} times`;
+}
 
 function cap(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
@@ -95,14 +119,35 @@ export function readRegistryWork(value: unknown): RegistryWork | null {
   };
 }
 
-/** Citations' field read back: `found` through `readRegistryWork`, `conflict` with its source, else null. */
+/**
+ * **A stored `citedBy`, or null** (plan 261005i): a count `isCitedByCount`
+ * accepts and a moment that parses, rebuilt as exactly those two fields.
+ */
+function readCitedBy(value: unknown): RegistryCitedBy | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const { count, readAt } = value as { count?: unknown; readAt?: unknown };
+  if (!isCitedByCount(count) || typeof readAt !== "string" || Number.isNaN(Date.parse(readAt))) return null;
+  return { count, readAt };
+}
+
+/**
+ * Citations' field read back: `found` through `readRegistryWork`, `conflict` with its source, else null.
+ *
+ * **A count is kept only beside a Crossref record.** The step writes no other
+ * shape, but nothing revalidates a stored row, and every reader labels the
+ * number as Crossref's: a well-formed count under a DataCite record would be
+ * drawn under the wrong name (GPT Sol's F2 on plan 261005i). A malformed one
+ * is dropped and the record still reads.
+ */
 export function readCitationRegistry(value: unknown): CitationRegistry | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const v = value as { kind?: unknown; source?: unknown };
+  const v = value as { kind?: unknown; source?: unknown; citedBy?: unknown };
   if (v.kind === "conflict") return isSource(v.source) ? { kind: "conflict", source: v.source } : null;
   if (v.kind !== "found") return null;
   const work = readRegistryWork(value);
-  return work === null ? null : { kind: "found", ...work };
+  if (work === null) return null;
+  const citedBy = work.source === "crossref" ? readCitedBy(v.citedBy) : null;
+  return { kind: "found", ...work, ...(citedBy !== null ? { citedBy } : {}) };
 }
 
 /** One author as a by-line names them: `Ashish Vaswani`, or an organisation's name alone. */

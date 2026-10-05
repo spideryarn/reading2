@@ -1607,9 +1607,12 @@ function mountVisitorTweets(): ReactNode {
   });
 }
 
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} } },
+    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",

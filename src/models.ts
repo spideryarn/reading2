@@ -445,6 +445,20 @@ export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
 export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What lightly tidies an imported title** — its capitals, a site's name
+ * stuck on the end, stray spacing (src/title-tidy-model.ts). Greg, 2026-10-05:
+ * *"yes, a small model (e.g. GPT Luna or DeepSeek)"*. The same cheap model as
+ * `PAPER_METADATA_MODEL` above, on a copy of its zero-retention route
+ * (`title-tidy` in src/ai-call.ts), so a model put here must be one Fireworks,
+ * DeepInfra or Together serves. Measured against the rule and against Luna:
+ * docs/investigations/261005b-title-tidying-rule-against-a-small-model.md.
+ *
+ * Its own constant, though the string is the same: the two jobs were chosen
+ * separately, and moving one to another model must not move the other.
+ */
+export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
  * model that answers typed questions with probabilities rather than writing
  * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
@@ -871,6 +885,9 @@ export type NonTaskAiJob =
   /* **A batch-added paper's title, authors and abstract** —
      src/paper-metadata.ts, on `PAPER_METADATA_MODEL` below. */
   | "paper-metadata"
+  /* **An imported title, lightly tidied** — src/title-tidy-model.ts, on
+     `TITLE_TIDY_MODEL` below. */
+  | "title-tidy"
   /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
      (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
      is not a tier decision and must not be overridable. It is always the
@@ -1392,6 +1409,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "shelf-topics": "chat",
   /* A strict JSON schema back, on chat/completions. src/paper-metadata.ts. */
   "paper-metadata": "chat",
+  /* A strict JSON schema back, on chat/completions. src/title-tidy-model.ts. */
+  "title-tidy": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
@@ -1669,6 +1688,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
+  { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
