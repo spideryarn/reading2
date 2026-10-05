@@ -10,18 +10,23 @@ Run 2026-10-05, for report `spya-ayettj` and plan
 
 ## The answer
 
-**Prefer arXiv's HTML, and fall back to the PDF when arXiv has no HTML for the paper.** The HTML
-path is free and takes seconds where the PDF path costs about ten cents and two minutes, and on
-four of the five papers judged it was also the more correct article: real tables with their header
-rows, real figure images, the full reference list, and maths taken from the author's own TeX.
+**Prefer arXiv's HTML, and fall back to the PDF when arXiv has no HTML for the paper — once seven
+faults in our own web extractor are fixed.** On this small, hand-picked sample the HTML path was
+decisively cheaper and quicker: free and seconds, where the PDF path cost about ten cents and two
+minutes. On correctness the judges preferred the HTML article on three papers and the PDF article
+on two. The HTML article had the author's own tables with their header rows, the whole reference
+list, and maths taken from the author's TeX. Both PDF preferences rest on faults that are ours:
+aligned equations arrive in fragments, plots embedded as SVG objects arrive as captions with no
+picture, the byline names the wrong person. The plan fixes them and re-runs the comparison before
+HTML is switched on.
 
-**But the HTML path is only the better one after four fixes to our own web extractor**, which the
-eval found and the plan builds. Without them it loses content a reader would miss: aligned
-equations arrive in fragments, plots embedded as SVG objects arrive as captions with no picture,
-code listings arrive one line per paragraph, and small tables inside list items vanish.
+**What this did not measure.** The judges read each PDF's text layer, not its page images, and the
+stage that recovers a PDF's pictures was not run, so figures were compared by presence and
+caption, not by picture. The run measured the extractor as it is today, not as fixed. Six papers
+chosen to stress particular things are not a sample of arXiv.
 
-One loss is arXiv's and not ours to fix: its converter sometimes drops a figure (one of the 18
-figures in the five papers). Nothing in the HTML says so.
+One loss is arXiv's and not ours to fix: its converter dropped a figure (one of the 18 figures in
+the five papers). Nothing in the HTML says so.
 
 ## What was asked
 
@@ -63,7 +68,7 @@ images, so none of them looked at a picture. I checked each surprising claim aga
 before recording it here.
 
 **How often is there no HTML?** A probe of 36 recent papers across `econ.GN`, `q-bio.NC` and
-`cs.CY` found 4 with none (about one in nine). Old papers have it too: `1706.03762` and
+`cs.CY` found 4 with none. That describes those three listings on one day, not arXiv. Old papers have it too: `1706.03762` and
 `hep-th/9901001` both answer 200.
 
 ## Cost and time
@@ -97,7 +102,14 @@ Scores are the judges', 0 to 5. "n/a" is a dimension the paper does not have.
 | | PDF | 4 | 3 | n/a | (flattened) | 1 | 3 | |
 | `2610.03261v1` | HTML | 4 | 5 | 5 | 5 | 5 | 4 | **HTML** |
 | | PDF | 5 | 4 | 3 | 3 | n/a | 3 | |
-| `2610.01988v1` | *(judgement pending when this was first written; see below)* | | | | | | | |
+| `2610.01988v1` | HTML | 5 | 3 | 2 | 5 | 4 | 3 | |
+| | PDF | 5 | 4 | 4 | 3 | n/a | 4 | **PDF** |
+
+Three for the HTML arm, two for the PDF arm. **Both PDF preferences rest on faults in the list
+below that are ours** (fragmented equations in both, the lost plots and the wrong byline in the
+second), plus the one figure arXiv dropped. And the PDF arm's worst defect on the paper it won was
+silent: in Table II of `2610.01988v1` it turned five per-column header values into a per-row
+column, so the numbers in that column are wrong and nothing shows it.
 
 **Text** is a draw. Every sampled paragraph was present, complete and in order in both arms of
 every paper, with nothing invented. Against the PDF's text layer the HTML arm held 89–96% of the
@@ -112,7 +124,7 @@ turned a superscript into a subscript. The HTML arm's fault is layout, and it is
 PDF arm dropped the column headers of the two main results tables in Greg's paper, put several
 tables in the wrong section, and wrote one table as a single cell per row.
 
-**Figures.** The HTML arm has real `<img>` elements at absolute `arxiv.org` addresses, multi-panel
+**Figures** (by presence and caption only, as above). The HTML arm has real `<img>` elements at absolute `arxiv.org` addresses, multi-panel
 figures kept together (107 images in seven figures). The PDF arm has a caption and a marker for a
 later stage to fill from the PDF ([article-images.md](../project/article-images.md)); that stage
 was not run here, so how many pictures it would recover for these papers is not measured.
@@ -136,11 +148,18 @@ the paper. The PDF arm prints the heading only, by design: Citations reads them 
 4. **A small table inside a list item is deleted.** The four summary tables in the introduction of
    `2610.01658v1` are in arXiv's HTML and absent from our article: Readability's clean-up removes
    them. Tables inside a `<figure>` survive.
+5. **The byline is wrong on every paper.** A LaTeXML page declares no author meta tags, so the
+   byline is Readability's guess: one author of twelve with his affiliation (`2608.13566`), the
+   word "and" (`2610.01658v1`), and on `2610.01988v1` "L. F. Abbott", who wrote the first entry in
+   the reference list, not the paper.
+6. **Some cross-references lose their number.** `2610.01988v1` reads "constructed … in , 28 and
+   29" and "Substituting eqs. 30 and into eq. 33". Cause not yet traced; the plan traces it.
+7. **A boxed passage loses its words.** The `tcolorbox` in §3 of `2608.13566` is drawn as SVG with
+   its text inside; 58 words of the paper are missing and an empty block stands where they were.
 
 **Ours, cosmetic, not built here:** the author block arrives as one long paragraph of names and
 affiliations; theorem and proof labels become one-word headings; each reference entry carries
-arXiv's "Cited by: §…" back-link text; a boxed passage drawn as SVG (`tcolorbox`) loses its 58
-words in `2608.13566`.
+arXiv's "Cited by: §…" back-link text.
 
 **arXiv's:** Figure 1 of `2605.20355v1` is not in arXiv's HTML at all (its figures are numbered
 2, 3, 4). Nothing marks the gap.
@@ -154,7 +173,8 @@ proposition statements swallowed into headings; a notation misread throughout on
 
 ## What was decided
 
-- **HTML first, PDF when there is no HTML** — built in plan 261005l, with the four extractor fixes.
+- **HTML first, PDF when there is no HTML** — built in plan 261005l, which ships the PDF alone
+  first and switches HTML on only with the seven fixes and a re-run of this comparison.
 - **No completeness cross-check against the PDF yet.** Fetching the PDF as well and comparing its
   figure count or word count with the HTML would catch the arXiv-dropped figure. It would cost a
   second download and a PDF parse on every arXiv import to catch one figure in 18, and what to do

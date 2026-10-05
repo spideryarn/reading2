@@ -4,12 +4,13 @@
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2608.13566",
-      "fetchMs": 68,
+      "fetchMs": 80,
       "bytes": 614176,
-      "extractMs": 10121,
+      "extractMs": 9666,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Don’t Claim Benchmark-Oriented Optimization Improves General Coding Capability — Diverse Evaluation Is Required",
+      "byline": "Timur Galimzyanov Affiliation: Code Modelling Research, JetBrains Research, Munich, Germany",
       "counts": {
         "words": 11719,
         "blocks": 420,
@@ -55,7 +56,7 @@
       "pdfRecall": 0.975,
       "pages": 22
     },
-    "ranAt": "2026-10-05T20:38:06.145Z"
+    "ranAt": "2026-10-05T20:59:51.048Z"
   },
   "2609.28681v1": {
     "id": "2609.28681v1",
@@ -99,12 +100,13 @@
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2605.20355v1",
-      "fetchMs": 53,
+      "fetchMs": 59,
       "bytes": 217556,
-      "extractMs": 3168,
+      "extractMs": 3134,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Proximal State Nudging: Reducing Skill Atrophy from AI Assistance",
+      "byline": "Megha Srivastava Affiliation: Stanford University, Stanford, CA, USA. meghas@stanford.edu",
       "counts": {
         "words": 6539,
         "blocks": 153,
@@ -150,19 +152,20 @@
       "pdfRecall": 0.95,
       "pages": 9
     },
-    "ranAt": "2026-10-05T20:40:38.336Z"
+    "ranAt": "2026-10-05T20:59:59.554Z"
   },
   "2610.01658v1": {
     "id": "2610.01658v1",
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2610.01658v1",
-      "fetchMs": 65,
+      "fetchMs": 62,
       "bytes": 777949,
-      "extractMs": 40651,
+      "extractMs": 45631,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Are random random walks normal?",
+      "byline": "and",
       "counts": {
         "words": 8402,
         "blocks": 452,
@@ -208,7 +211,7 @@
       "pdfRecall": 0.931,
       "pages": 27
     },
-    "ranAt": "2026-10-05T20:43:56.584Z"
+    "ranAt": "2026-10-05T21:00:50.325Z"
   },
   "2610.03261v1": {
     "id": "2610.03261v1",
@@ -217,7 +220,7 @@
       "finalUrl": "https://arxiv.org/html/2610.03261v1",
       "fetchMs": 51,
       "bytes": 394631,
-      "extractMs": 12835,
+      "extractMs": 11662,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Consecutive Posterior Fusion for Diffusive Recovery of Unobservable Image Structures",
@@ -266,19 +269,20 @@
       "pdfRecall": 0.982,
       "pages": 21
     },
-    "ranAt": "2026-10-05T20:46:58.208Z"
+    "ranAt": "2026-10-05T21:01:05.968Z"
   },
   "2610.01988v1": {
     "id": "2610.01988v1",
     "html": {
       "ok": true,
       "finalUrl": "https://arxiv.org/html/2610.01988v1",
-      "fetchMs": 57,
+      "fetchMs": 64,
       "bytes": 652790,
-      "extractMs": 16491,
+      "extractMs": 14791,
       "costUsd": 0,
       "modelCalls": 0,
       "title": "Effective field theory of scalar glueballs: Form factors and interaction radii",
+      "byline": "L. F. Abbott",
       "counts": {
         "words": 9941,
         "blocks": 279,
@@ -324,6 +328,6 @@
       "pdfRecall": 0.878,
       "pages": 16
     },
-    "ranAt": "2026-10-05T20:49:43.386Z"
+    "ranAt": "2026-10-05T21:01:25.428Z"
   }
 }

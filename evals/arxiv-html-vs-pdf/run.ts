@@ -77,6 +77,8 @@ interface ArmResult {
   costUsd?: number;
   modelCalls?: number;
   title?: string;
+  /** What the masthead would print under the title. */
+  byline?: string;
   counts?: ArmCounts;
   /** The PDF extractor's own per-page recall, for the PDF arm. */
   pdfRecall?: number | null;
@@ -189,6 +191,7 @@ async function onePaper(id: string, htmlOnly: boolean): Promise<{ id: string; ht
         costUsd: 0,
         modelCalls: 0,
         title: out.meta.title,
+        byline: out.meta.byline,
         counts: countsOf(out.extractedHtml, blocks, textLayer),
       };
     } catch (err) {
@@ -237,6 +240,7 @@ async function onePaper(id: string, htmlOnly: boolean): Promise<{ id: string; ht
         costUsd: Math.round((nanos / 1e9) * 10000) / 10000,
         modelCalls: report.calls.length,
         title: out.meta.title,
+        byline: out.meta.byline,
         counts: countsOf(out.extractedHtml, blocks, textLayer),
         pdfRecall: out.recall,
         pages: out.pages,
