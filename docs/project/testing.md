@@ -114,8 +114,7 @@ and you are certain, delete the file or set a smaller reserve.
 
 The message begins `REFUSING TO START`. Inside `npm run check` it arrives as `✗ test FAILED` and
 `EXIT=1` after about three minutes rather than twenty-five (measured 2026-09-08), so a check that
-went red that fast is usually this and not the change: grep the log for the string before reading
-the red.
+went red that fast is usually this and not the change. The string is in the log.
 
 A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
 `env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the
@@ -742,10 +741,10 @@ Do not fix it by copying the primary's corpus in. `cp -rn` skips existing files,
 work and changes nothing; copying the whole corpus brings articles the manifest does not describe,
 some with incomplete artefact sets, and that reddens `store-roundtrip`, `store-parity`,
 `store-shelf-reads` and `admin-store` — which is why `worktree:check` compares `data/` with the
-fixtures. Run evals in the primary, or from the worktree against the primary's directories by
-absolute path: `entryForDir` (`evals/structure-whole-document/corpus.ts`) matches on the slug as
-well as the path, so the manifest hash check still applies. Or make the cut deliberate and say so
-in the write-up.
+fixtures. Run evals in the primary, or make the cut deliberate and say so in the write-up.
+(`entryForDir` in `evals/structure-whole-document/corpus.ts` matches on the slug as well as the
+path, so a run pointed at the primary's directories by absolute path still gets the manifest hash
+check.)
 
 ## A known limit, pinned by a test
 
@@ -904,13 +903,14 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
 
 An escape sequence typed as *content* — a backslash-u NUL, a backslash-x zero — through the Write
 tool, the Edit tool or a heredoc can land in the file as the control byte itself. The code still
-compiles and its tests still pass. What breaks is every later `grep` of that file: this box's
-`grep` treats it as binary and prints nothing, exit 1, the same as no match. Eight times between
-2026-09-05 and 2026-09-08, in two sessions.
+compiles and its tests still pass. What broke, eight times between 2026-09-05 and 2026-09-08 in
+two sessions, was every later `grep` of that file: the `grep` those sessions had treated it as
+binary and printed nothing, exit 1, the same as no match. Which `grep` answers decides this. GNU
+grep 3.11, read on the box on 2026-10-05, prints a binary-match notice and exits 0 instead, and the
+header of the test below tells the two apart.
 
-The signature is greps against one file all returning nothing while `sed` shows the text. `file
-<path>` settles it in one command: a source file that reports `data` has one. `git grep` and `rg`
-read such a file correctly.
+The signature then was greps against one file all returning nothing while `sed` showed the text,
+and `file <path>` reporting `data` for a source file.
 
 [`tests/no-raw-nul-bytes.test.ts`](../../tests/no-raw-nul-bytes.test.ts) catches it at the gate. It
 checks every file git tracks, and every untracked file that is not ignored, against a denylist of
@@ -920,7 +920,7 @@ NUL byte in commit log message not allowed"* and writes nothing.
 
 Retyping the escape to repair it puts the byte back. An `Edit` could not find its `old_string`,
 because the file held bytes; a Python repair script written with Write arrived with a NUL in its
-own docstring. A zero-width space behaves the same way: it is invisible, and `grep` cannot show it.
+own docstring.
 
 ### A script outside the repo cannot import the repo's packages
 
@@ -928,9 +928,9 @@ Reproducing a test's behaviour outside vitest is how a real failure is told from
 the script for it usually sits in a session scratchpad under `/tmp`. Run with `npx tsx` from the
 repo root, it still fails with `ERR_MODULE_NOT_FOUND: Cannot find package …`, because Node resolves
 a bare import by walking up from the **script's own directory**, not from the working directory.
-Import by absolute path into the repo's `node_modules`, or build a `createRequire` rooted at the
-repo's `package.json` and require through that. Moving the script into the tree also works, and
-puts it in every agent's `git status`.
+Two things do resolve from there: an absolute path into the repo's `node_modules`, and a
+`createRequire` rooted at the repo's `package.json`. A script moved into the tree resolves too, and
+is then in every agent's `git status`.
 
 ### `.env.local` is loaded into tests
 
