@@ -251,8 +251,26 @@ export interface Tree {
    * (src/public/dto.ts), because a client that cannot tell a provisional tree
    * from a finished one draws empty cells where it should say the structure is
    * still arriving.
+   *
+   * **Two values, because "headings" is not always temporary.** `"headings"` is
+   * what `structure` falls back to when the model's answer cannot be used, and
+   * it is final: nothing is coming to replace it. `"awaiting-structure"` is the
+   * same kind of tree published on purpose by a first import from the browser,
+   * so the article opens before the model call, with a `["structure"]` job
+   * queued by that publication to replace it (`awaitingStructure` below).
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
-  provisional?: "headings";
+  provisional?: "headings" | "awaiting-structure";
+}
+
+/**
+ * Is this the stand-in a first import publishes, with the real tree still to
+ * come? The one question every reader of that state asks: the publication's
+ * successors, `structure`'s freshness, the gate on the steps that read the
+ * tree, and the open page.
+ */
+export function awaitingStructure(tree: Pick<Tree, "provisional"> | null | undefined): boolean {
+  return tree?.provisional === "awaiting-structure";
 }
 
 /**
@@ -3429,6 +3447,14 @@ export interface JobStep {
   finishedAt?: string;
   /** Run even if the artefact is already there — this is what a refresh is. */
   force?: boolean;
+  /**
+   * On a `structure` step only: write the headings tree and return, so the
+   * import publishes before the model call. Set by `enqueue` for a first import
+   * the browser asked to open early, and honoured only while the article has
+   * never been published (src/pipeline.ts § `STEPS.structure`). In the job's
+   * own `steps` JSON, so it needs no column.
+   */
+  headingsFirst?: true;
   /**
    * **Part of what the step is making, shown before the step is over.** On the
    * job row only while the step is `running`: the runner deletes it when the
