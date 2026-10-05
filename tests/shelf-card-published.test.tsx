@@ -112,4 +112,26 @@ describe("the publication date on a shelf card", () => {
     const paper = { ...BARE, processing: "minimal", publishedYear: 2011 } as LibraryEntry;
     expect(factsOf(paper)).toEqual(["Rich Sutton", "incompleteideas.net", "2011"]);
   });
+
+  it("keeps equal author, site and year facts without duplicate keys", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const entry = { ...BARE, byline: "2011", siteName: "2011", publishedYear: 2011 };
+      expect(factsOf(entry)).toEqual(["2011", "2011", "2011", "~11 min", "60 blocks"]);
+      expect(factsOf({ ...entry, publishedYear: 2012 })).toEqual([
+        "2011", "2011", "2012", "~11 min", "60 blocks",
+      ]);
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("has no leading separator when only a publication date is known", () => {
+    const paper: LibraryEntry = { ...BARE, processing: "minimal", publishedYear: 2011 };
+    delete paper.byline;
+    delete paper.siteName;
+    expect(factsOf(paper)).toEqual(["2011"]);
+    expect(host.querySelector("[data-shelf-fact]")?.textContent).toBe("2011");
+  });
 });

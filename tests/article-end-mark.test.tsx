@@ -33,6 +33,7 @@ vi.mock("../src/web/Tooltip.js", () => ({
 import { TableView } from "../src/web/TableView.js";
 import { buildGeometry } from "../src/web/tree.js";
 import { fitView } from "../src/web/layout.js";
+import { FOLD_STYLE_ATTR, foldableHeadings, isFolded, toggleFold } from "../src/web/fold.js";
 import { readArticleFromDir } from "./helpers/article-from-dir.js";
 import type { Article } from "../src/types.js";
 
@@ -127,6 +128,21 @@ describe("the end of the article", () => {
   it("is not drawn for an article with no blocks", async () => {
     await draw({ ...article, blocks: [], tree: { ...article.tree, children: [] } as never });
     expect(marks()).toHaveLength(0);
+  });
+
+  it("keeps the mark visible when the final section is folded", async () => {
+    await draw(article);
+    const heading = [...foldableHeadings(article.blocks)].at(-1);
+    if (!heading) throw new Error("the fixture has no foldable heading");
+    act(() => toggleFold(heading));
+    expect(isFolded(article.blocks.at(-1)!.id)).toBe(true);
+    expect(marks()).toHaveLength(1);
+    const folded = document.head.querySelector<HTMLStyleElement>(`style[${FOLD_STYLE_ATTR}]`);
+    if (!folded?.sheet) throw new Error("folding did not install its stylesheet");
+    for (const rule of folded.sheet.cssRules) {
+      const selector = (rule as CSSStyleRule).selectorText;
+      expect(marks()[0]?.matches(selector), "folding must not hide the mark's cell").toBe(false);
+    }
   });
 });
 
