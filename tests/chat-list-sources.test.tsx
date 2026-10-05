@@ -139,6 +139,15 @@ const press = (el: Element | null | undefined): void => {
 };
 
 describe("a row's source icon", () => {
+  it("wears the source's glyph: Brain for Remember, Globe for Debate and Pilcrow for a passage", () => {
+    paint(EVERY);
+    for (const t of [REMEMBER, TUTORIAL, EXPLORE]) {
+      expect(mark(t)?.querySelector("svg.lucide-brain"), t.id).not.toBeNull();
+    }
+    expect(mark(CLAIM)?.querySelector("svg.lucide-globe")).not.toBeNull();
+    expect(mark(PASSAGE)?.querySelector("svg.lucide-pilcrow")).not.toBeNull();
+  });
+
   it("is drawn on every row from elsewhere, named for where it came from, and not on a plain chat", () => {
     paint(EVERY);
     expect(rows()).toHaveLength(EVERY.length);
@@ -266,6 +275,13 @@ describe("the filter above the list", () => {
       "All",
     ]);
     expect(rows()).toHaveLength(EVERY.length);
+  });
+
+  it("does not hide an explicitly opened chat when the list's filter is Remember", () => {
+    paint(EVERY, { from: "remember", threadId: CHAT.id });
+    expect(host.querySelector(".chat-head-title")).not.toBeNull();
+    expect(rows()).toHaveLength(0);
+    expect(host.querySelector("textarea.chat-input")).not.toBeNull();
   });
 
   it("narrows the rows to the chosen source", () => {

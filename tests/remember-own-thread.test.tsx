@@ -24,6 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread } from "../src/types.js";
+import { threadParam } from "../src/web/params.js";
 
 /** Every set of props the band handed the panel, in order. */
 const renders: Record<string, unknown>[] = [];
@@ -126,8 +127,8 @@ function thread(
   };
 }
 
-const CHAT = thread("spya-chat01", "chat");
-const REMEMBER = thread("spya-rem001", "remember");
+const CHAT = thread("spya-chat02", "chat");
+const REMEMBER = thread("spya-rem002", "remember");
 const TUTORIAL = thread("spya-tut002", "tutorial");
 const EXPLORE = thread("spya-exp002", "explore");
 
@@ -216,6 +217,13 @@ function prop<T>(name: string): T {
 
 const listed = (props = last()): ChatThread[] => (props?.listed as ChatThread[] | undefined) ?? [];
 
+it("uses URL-parseable conversation ids for its navigation cases", () => {
+  for (const t of [CHAT, REMEMBER, TUTORIAL, EXPLORE]) {
+    expect(threadParam.parse(t.id), t.id).toBe(t.id);
+  }
+  expect(threadParam.parse("spya-gqne02")).toBe("spya-gqne02");
+});
+
 describe("Chat lists Remember's conversations, and opens only its own kind", () => {
   it("lists a Remember conversation in Chat, and never hands it over as one Chat may open", async () => {
     stored = [CHAT, REMEMBER];
@@ -263,7 +271,7 @@ describe("Remember opens its one conversation and never a list", () => {
 
   it("overrides a stale `?thread=` too", async () => {
     stored = [REMEMBER];
-    await mount("remember", "?mode=remember&thread=spya-gone01");
+    await mount("remember", "?mode=remember&thread=spya-gqne02");
     for (const props of renders) expect(drawsList(props)).toBe(false);
     expect(last()?.threadId).toBe(REMEMBER.id);
   });

@@ -12,27 +12,31 @@
  * which the server refuses on any other kind, so a Recall conversation must
  * never become the open one here, whatever `?thread=` says.
  *
- * The real band and the real `useChat`, with `ChatPanel` stubbed to record the
- * props it is handed: tests/conversation-band-handoff.test.tsx's harness. What
- * the panel draws from them is tests/chat-list-sources.test.tsx.
+ * The real band and the real `useChat`, recording the panel's props. The Send
+ * case also draws the real panel and presses its composer. The rest of what
+ * the panel draws is tests/chat-list-sources.test.tsx.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread, ThreadKind } from "../src/types.js";
-import { forgetChatDrafts } from "../src/web/chat-draft.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 
 /** Every set of props the band handed the panel, in order. */
 const renders: Record<string, unknown>[] = [];
 const last = (): Record<string, unknown> | undefined => renders.at(-1);
+let drawPanel = false;
 
-vi.mock("../src/web/ChatPanel.js", () => ({
-  ChatPanel: (props: Record<string, unknown>) => {
-    renders.push(props);
-    return null;
-  },
-}));
+vi.mock("../src/web/ChatPanel.js", async () => {
+  const { ChatPanel } = await vi.importActual<typeof import("../src/web/ChatPanel.js")>("../src/web/ChatPanel.js");
+  return {
+    ChatPanel: (props: Record<string, unknown>) => {
+      renders.push(props);
+      return drawPanel ? createElement(ChatPanel, props as unknown as Parameters<typeof ChatPanel>[0]) : null;
+    },
+  };
+});
 
 const posts: Record<string, unknown>[] = [];
 /** What the list GET answers with. */
@@ -64,8 +68,18 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-vi.mock("../src/web/live/useLiveConversation.js", () => ({
-  useLiveConversation: () => ({ phase: "idle", threadId: null, stop: vi.fn(), start: vi.fn() }),
+vi.mock("../src/web/live/useLive.js", () => ({
+  useLive: () => ({
+    phase: "idle", threadId: null, error: null, lines: [], pointers: [], tools: [],
+    hearing: false, speaking: false, thinking: false, seen: {}, pendingTools: [],
+    placement: null, deviceLabel: null, inputLevel: { current: 0 },
+    measuringInput: false, quietInput: false, playbackBlocked: false,
+    notice: null, hasUnsavedLines: false, stall: null, step: null,
+    reconnecting: false, talkMode: "hands-free",
+    stop: vi.fn(() => Promise.resolve()), start: vi.fn(), say: vi.fn(),
+    enableAudio: vi.fn(() => Promise.resolve()), reconnect: vi.fn(),
+    enterTapToTalk: vi.fn(), talk: vi.fn(), doneTalking: vi.fn(),
+  }),
 }));
 
 const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
@@ -105,6 +119,7 @@ enableHistorySync();
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   renders.length = 0;
+  drawPanel = false;
   posts.length = 0;
   stored = [];
   forgetChatDrafts();
@@ -227,11 +242,62 @@ describe("what Chat may open is only its own kind (F3)", () => {
     expect(last()?.threadId).toBe(CHAT.id);
   });
 
+  it("shows the list for a non-chat URL even when an older chat has unsent words", async () => {
+    stored = [CHAT, REMEMBER];
+    const drafts = chatDraftsFor(SLUG);
+    drafts.setDestination(CHAT.id);
+    drafts.setThread(CHAT.id, "A follow-up I have not sent");
+    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    await written();
+    expect(param("thread")).toBeNull();
+    expect(last()?.threadId ?? null).toBeNull();
+    expect(drafts.thread(CHAT.id)).toBe("A follow-up I have not sent");
+  });
+
+  it.each([false, true])("keeps a missing origin draft on the list when a non-chat URL wins (submitted: %s)", async (submitted) => {
+    stored = [REMEMBER];
+    const drafts = chatDraftsFor(SLUG);
+    const was = "spya-draft2";
+    const origin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "A claim to check" };
+    drafts.setDestination(was);
+    drafts.setThread(was, "Check this claim");
+    drafts.setOrigin(was, origin);
+    drafts.markFresh(was);
+    if (submitted) drafts.submitted(was);
+    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    await written();
+    expect(param("thread")).toBeNull();
+    expect(last()?.threadId ?? null).toBeNull();
+    const recovered = prop<ChatThread[]>("threads")[0];
+    if (!recovered) throw new Error("the held draft has no row");
+    expect(recovered.kind).toBe("chat");
+    const id = recovered.id;
+    expect(drafts.thread(id)).toBe("Check this claim");
+    expect(drafts.origin(id)).toEqual(origin);
+    if (submitted) expect(id).toBe(was);
+    await act(async () => prop<(id: string) => void>("onThread")(id));
+    await settle();
+    expect(last()?.onStartLive).toBeTypeOf("function");
+    expect(last()?.live).toBeUndefined();
+    await act(async () => prop<(q: string) => void>("onSend")("Check this claim"));
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.threadId).toBe(id);
+    expect(posts[0]?.origin).toEqual(origin);
+  });
+
   it("never sends a question into a conversation of another kind", async () => {
+    drawPanel = true;
     stored = [CHAT, REMEMBER];
     await mount(`?mode=chat&thread=${REMEMBER.id}`);
-    /* The box under the list, pressed before the address has been corrected. */
-    await act(async () => prop<(q: string) => void>("onSendNew")("A new question"));
+    /* Exercise the actual composer's wiring, rather than calling onSendNew
+       directly: that callback mints regardless of what the panel opened. */
+    const box = host.querySelector<HTMLTextAreaElement>("textarea.chat-input");
+    expect(box).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, "A new question");
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => box?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     await settle();
     expect(posts).toHaveLength(1);
     expect(posts[0]?.threadId).not.toBe(REMEMBER.id);
@@ -274,6 +340,16 @@ describe("an article whose only conversations are Remember's", () => {
 });
 
 describe("pressing a Remember row goes to Remember", () => {
+  it("keeps the row's id when pressed before a rejected URL has flushed", async () => {
+    stored = [CHAT, REMEMBER, TUTORIAL];
+    await mount(`?mode=chat&thread=${REMEMBER.id}`);
+    await act(async () => prop<(view: string, id: string) => void>("onOpenRemember")("tutorial", TUTORIAL.id));
+    await written();
+    expect(param("mode")).toBe("remember");
+    expect(param("remember")).toBe("tutorial");
+    expect(param("thread")).toBe(TUTORIAL.id);
+  });
+
   it("sets mode, sub-mode and thread in one navigation", async () => {
     stored = [CHAT, REMEMBER, TUTORIAL];
     await mount("?mode=chat");

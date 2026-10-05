@@ -464,6 +464,9 @@ From 2026-10-01 it showed chats only.
   drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
   cleared by replace once the list has loaded. An article whose only conversations are Remember's
   shows those rows and does not begin a blank chat; the box under the list and the + start one.
+  A known non-chat URL takes precedence over reopening an older chat draft: its unsent words
+  stay available on that chat's row. A missing local draft gets a row too, preserving its pending
+  origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
   Remember's three sub-modes as one. It is drawn only when there is more than one source. The
   choice is `?chatfrom=` ([url-state.md](url-state.md)).

@@ -74,10 +74,8 @@ import { chatDraftsFor } from "../../chat-draft.js";
  *    *replace* — a push would put the broken combination one Back press away
  *    from the reader we have just rescued from it.
  *
- * There was a third — opening a Remember conversation from chat's list set
- * `remember=recall` with it — and it went on 2026-10-01 with the shared list:
- * chat no longer lists Remember conversations, so nothing outside this band
- * opens one (plan 261001m).
+ * Opening a Remember row from Chat sets mode, sub-mode and thread together
+ * in `ConversationBand` below; that navigation does not belong to this toggle.
  *
  * ## And the live conversation is hung up before the panel goes
  *
@@ -572,6 +570,10 @@ export function ConversationBand({
    * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
   const drafts = chatDraftsFor(slug);
+  /* A draft recovered onto a forced list must survive another mode change
+     before its row is opened. Empty local rows go with this band; keeping its
+     destination lets the next visit recover the words and pending origin. */
+  const heldOnList = useRef<string | null>(null);
   useEffect(() => {
     for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
   }, [threads, named, drafts]);
@@ -708,6 +710,7 @@ export function ConversationBand({
    */
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
+    heldOnList.current = null;
     setPendingLive(null);
     const id = begin(kind);
     /* Begun here, in this tab, and nothing submitted to it: the one kind of
@@ -779,6 +782,7 @@ export function ConversationBand({
   useEffect(() => {
     started.current = false;
     arrived.current = false;
+    heldOnList.current = null;
   }, [slug, kind]);
 
   /**
@@ -836,7 +840,9 @@ export function ConversationBand({
    * only when the list has answered.
    *
    * 1. A handed-over question wins (the effect above has spent the latch).
-   * 2. **The reader left words or a pending origin, and is put back with them.** Only the
+   * 2. **A known non-chat URL shows the list.** Unsent chat words remain on
+   *    their row; missing fresh drafts and pending origins get a local row.
+   * 3. **Otherwise, the reader left words or a pending origin, and is put back with them.** Only the
    *    place they were in is ever recovered (`drafts.destination`), so an older
    *    conversation with words in it cannot take over the list or another
    *    conversation:
@@ -858,11 +864,11 @@ export function ConversationBand({
    *      first question's write has not landed, or another tab deleted it;
    *      beginning another would send a follow-up without its history. The
    *      words stay in the store, under its id.
-   * 3. Otherwise the rule above: no conversations of any listed kind, so start one.
+   * 4. Otherwise the rule above: no conversations of any listed kind, so start one.
    *
-   * **Step 2 is not taken on a failed load.** `loaded` means "we have asked",
+   * **Steps 2 and 3 are not taken on a failed load.** `loaded` means "we have asked",
    * and a list that failed to arrive has no conversations in it whatever the
-   * server holds, so "not listed" would be a claim about nothing. Step 3 is
+   * server holds, so "not listed" would be a claim about nothing. Step 4 is
    * left as it was on a failed load.
    *
    * One effect rather than two, because two arrival rules are two answers to
@@ -912,7 +918,22 @@ export function ConversationBand({
     if (!arrived.current) {
       arrived.current = true;
       const was = drafts.destination();
-      if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
+      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+        /* A known non-chat URL means the list, even if this tab left words in
+           another chat. Stored chats already have a selectable row. Recover
+           a missing draft as a row too, without selecting it or sending it. */
+        if (was && !threads.some((t) => t.id === was)
+          && ((drafts.thread(was) ?? "").trim() !== "" || drafts.origin(was))
+          && (drafts.isFresh(was) || drafts.origin(was))) {
+          const id = drafts.isFresh(was) ? begin(kind) : begin(kind, was);
+          if (id !== was) {
+            drafts.markFresh(id);
+            drafts.moveThread(was, id);
+          }
+          drafts.setDestination(id);
+          heldOnList.current = id;
+        }
+      } else if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
         && !threads.some((t) => t.id === thread)
         && (!drafts.isFresh(was) || loadFailed)) {
         /* A submitted first turn may have landed without acknowledgement.
@@ -966,8 +987,10 @@ export function ConversationBand({
    */
   useEffect(() => {
     if (kind !== "chat" || !loaded) return;
-    if (threads.some((t) => t.id === thread)) drafts.setDestination(thread);
-    else if (!loadFailed) drafts.setDestination(null);
+    if (threads.some((t) => t.id === thread)) {
+      heldOnList.current = null;
+      drafts.setDestination(thread);
+    } else if (!loadFailed && heldOnList.current === null) drafts.setDestination(null);
   }, [kind, loaded, loadFailed, threads, thread, drafts]);
 
   /**
@@ -1034,6 +1057,8 @@ export function ConversationBand({
          only, since Remember has neither. The panel calls this for a chat's
          row and `onOpenRemember` for a Remember row. */
       onThread={(id) => {
+        heldOnList.current = null;
+        drafts.setDestination(id);
         setPendingLive(null);
         void setThread(id);
       }}
@@ -1115,6 +1140,7 @@ export function ConversationBand({
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question) => {
         if (resettingNow.current) return;
+        heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {

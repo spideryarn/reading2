@@ -11,6 +11,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  AlignLeft, BadgeQuestionMark, BookA, BookText, Brain, ClipboardCheck, Clock,
+  Columns2, Globe, Layers, Lightbulb, MessagesSquare, Network, PanelRight,
+  Quote, Route, Search,
+} from "lucide-react";
 
 import { MODES } from "../src/modes.js";
 import { MODE_ICON } from "../src/web/mode-icons.js";
@@ -18,6 +23,16 @@ import { MODE_ICON } from "../src/web/mode-icons.js";
 const read = (file: string): string => readFileSync(path.join(process.cwd(), "src/web", file), "utf8");
 
 describe("the icon each mode wears", () => {
+  it("keeps every glyph the Dock drew before the map was extracted", () => {
+    expect(MODE_ICON).toEqual({
+      plain: AlignLeft, structure: Columns2, summary: Layers, diagram: Network,
+      skim: Route, quotes: Quote, glossary: BookA, faq: BadgeQuestionMark,
+      ideas: Lightbulb, timeline: Clock, citations: BookText, referee: ClipboardCheck,
+      debate: Globe, search: Search, chat: MessagesSquare, remember: Brain,
+      marginalia: PanelRight,
+    });
+  });
+
   it("is given for every mode, and for nothing that is not one", () => {
     expect(Object.keys(MODE_ICON).sort()).toEqual([...MODES].sort());
     for (const mode of MODES) expect(MODE_ICON[mode], mode).toBeTruthy();

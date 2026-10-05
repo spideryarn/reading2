@@ -3,8 +3,9 @@
 Up: [plans.md](../project/plans.md) · reports: Greg's answer to `[Q-claims-picker]` (relayed by
 the Overseer) and `spya-hyfqkq` (an admin's row, checked with `feedback-reporter.ts`, exit 0)
 
-**Status as of 2026-10-05: planned, not built** — evidence: no `origin_` column on `chat_threads`
-in `src/db/schema.ts`.
+**Status as of 2026-10-05: both build stages are on `dev`, not deployed; the later stages are not
+built** — evidence: `origin_mode` on `chatThreads` in `src/db/schema.ts`, `threadSource` in
+`src/web/thread-source.ts`. No browser has drawn the second stage; see the Log.
 
 ## What Greg asked for
 
@@ -522,5 +523,26 @@ wide window you get the second column only when Marginalia is already on.
   one row, in one transaction under the migration lock, then an ordinary `db:migrate` applies
   `…151925` and `…181010` in order) and the auto-mode classifier refused it as a change to a
   shared resource, dry run included. It is with the Overseer and Greg to decide.
-- **Not started**: the second build stage (Chat lists every conversation, with its source and a
-  filter) and the feedback note for `spya-hyfqkq`.
+- 2026-10-05 — the second build stage, by an Opus subagent; committed as `94822496f`. **Its tests
+  were not seen red before the code**: vitest refused for memory while it was being written, so
+  red was shown afterwards by mutation. What it decided that the plan had not:
+  - **The source icon leads the row**, in a fixed slot so plain chats' titles line up, and it is
+    a button so a finger can open its tooltip.
+  - **A Remember row is titled by its sub-mode** (Recall, Tutorial, Explore), not its stored
+    title. *About a passage* uses a pilcrow, since a passage is not a mode.
+  - **`?chatfrom=`** takes `chats`, `debate`, `remember` or `passage`, and comes back with an
+    article's last view (`last-view.ts`).
+  - The bar's icons moved to `src/web/mode-icons.ts`; the Dock reads the same map.
+- 2026-10-05 — GPT Sol code review of `94822496f`
+  ([answer](261005i-chats-started-from-a-mode-stage-2-code-review-sol.md)): land. CR-7, the one
+  P1, fixed by the reviewer red first: arriving in Chat with `?thread=` naming a Remember
+  conversation reopened an unsent chat draft instead of showing the list. CR-8 to CR-10 were weak
+  tests, each now failing under the mutation it should catch (fixture ids that did not parse as a
+  `?thread=`, icon checks that any glyph passed, and a "never sends" test that could not fail).
+  **One round only on this stage**: the fix is small and came with its test, and the box is
+  short of memory. Checked by me afterwards: typecheck clean; 23 test files, 402 tests green,
+  including the migration chain and the origin route suite, which had not run since the merge.
+- **Not run: the full suite and `npm run check`**, on the Overseer's instruction while the box is
+  loaded; the deploy and readiness runs cover them.
+- The feedback note is
+  [261004_1133](../user-feedback/261004_1133-every-conversation-shows-in-chat-with-where-it-came-from.md).
