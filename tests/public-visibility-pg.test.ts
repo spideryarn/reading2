@@ -1011,7 +1011,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     };
     try {
       await db.update(articleRevisions).set({ assets: manifest as never }).where(eq(articleRevisions.id, REVISION_ID));
-      const head = await pgPublicReader.loadHead(SLUG);
+      const head = await publicHeadOf(SLUG);
       expect(head.image).toEqual({ sha256: sha, ext: "jpeg" });
       expect(JSON.stringify(head)).not.toContain("publisher.example");
       const html = composeShell(
@@ -1026,7 +1026,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         .update(articleRevisions)
         .set({ assets: { ...manifest, entries: [{ url: publisher, status: "failed", reason: "blocked", at: "2026-10-05T00:00:00.000Z" }] } as never })
         .where(eq(articleRevisions.id, REVISION_ID));
-      expect((await pgPublicReader.loadHead(SLUG)).image).toBeNull();
+      expect((await publicHeadOf(SLUG)).image).toBeNull();
     } finally {
       await db.update(articleRevisions).set({ assets: null }).where(eq(articleRevisions.id, REVISION_ID));
     }
