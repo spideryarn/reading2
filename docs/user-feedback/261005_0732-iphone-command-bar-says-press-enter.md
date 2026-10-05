@@ -22,7 +22,7 @@ a bug: the action could not be reached at all.
 - **Built**: the empty line's offer is a button, **Ask what you meant**, that does what Enter did.
   *or press Enter* stays beside it at a desk and is hidden on a phone. After *Couldn't tell what you
   meant* the same button says **Try again**; Enter was the only retry there too.
-- **Also**: a test that lists every on-screen sentence saying *press Enter*, so the next one is
-  looked at.
+- **Also**: a test that lists product-control strings outside Help saying *press Enter*, so the next
+  one is looked at.
 - **Not tried on a real iPhone.** jsdom tests, and a look in a touch-emulated browser on the box.
 - Nothing deferred, so no further queue entry.

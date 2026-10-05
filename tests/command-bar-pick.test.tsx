@@ -77,7 +77,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { Dock } = await import("../src/web/Dock.js");
-const { ASK_AGAIN_LABEL, ASK_LABEL, ASK_OR_ENTER, NO_MATCH } = await import("../src/web/CommandBar.js");
+const { ASK_AGAIN_LABEL, ASK_LABEL, ASK_OR_ENTER, ASK_TOO_LONG, NO_MATCH } = await import("../src/web/CommandBar.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { jumpFirstRunner, glossaryRunners } = await import("../src/web/command-runners.js");
 
@@ -758,7 +758,11 @@ describe("the button that asks", () => {
     reading();
     openBar();
     type(SENTENCE);
-    tap();
+    act(() => {
+      /* The ref, not the next render's aria-disabled, has to lock this pair. */
+      button()?.click();
+      button()?.click();
+    });
     await settle();
     expect(refused()).toBe(true);
     tap();
@@ -771,6 +775,8 @@ describe("the button that asks", () => {
     openBar();
     type(SENTENCE);
     expect(refused()).toBe(false);
+    expect(button()?.disabled).toBe(false);
+    expect(button()?.tabIndex).toBe(0);
   });
 
   it.each(["armed", "transcribing"] as const)("says it is refused while the microphone is %s, and posts nothing", async (state) => {
@@ -779,6 +785,10 @@ describe("the button that asks", () => {
     openBar();
     type(SENTENCE);
     expect(refused()).toBe(true);
+    /* `aria-disabled`, deliberately: it stays in the Tab order and its
+       mousedown can still preserve the box's focus. */
+    expect(button()?.disabled).toBe(false);
+    expect(button()?.tabIndex).toBe(0);
     tap();
     await settle();
     expect(asked).toEqual([]);
@@ -807,7 +817,9 @@ describe("the button that asks", () => {
     tap();
     await settle();
     expect(asked).toEqual([]);
-    expect(status()).toBe(COULD_NOT_TELL);
+    expect(status()).toBe(ASK_TOO_LONG);
+    expect(ASK_TOO_LONG).toBe("That sentence is too long. Shorten it and try again.");
+    expect(button(), "trying the unchanged sentence again cannot help").toBeNull();
   });
 
   it("carries the finger's size and hides the desk's words from a finger", () => {
@@ -829,6 +841,22 @@ describe("the button that asks", () => {
       button()?.dispatchEvent(down);
     });
     expect(down.defaultPrevented).toBe(true);
+  });
+
+  it("returns keyboard activation to the box, ready for the rows that may replace the button", async () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    button()?.focus();
+    expect(document.activeElement).toBe(button());
+    act(() => {
+      /* Enter and Space activate a focused button with a click whose detail is
+         zero. A pointer's click has a non-zero detail. */
+      button()?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
+    await settle();
+    expect(asked).toHaveLength(1);
+    expect(document.activeElement).toBe(input());
   });
 
   it("is not drawn when nobody is signed in", () => {

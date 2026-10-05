@@ -278,7 +278,7 @@ empty state preferred to a helpful guess.
 When nothing matches, the empty line adds an **Ask what you meant** button, and it or Enter sends the
 sentence to a fast model that picks among the bar's own rows — *what's changed on this site*, *is
 consciousness mentioned anywhere*. Nothing is guessed until that press. It is a button, and *Try
-again* after a failure, because a phone has no Enter once a sentence has been dictated
+again* after a retryable failure, because the reported phone had no on-screen Enter after dictation
 ([261005f](../plans/261005f-command-bar-ask-button-a-finger-can-press.md)). A pick the model is sure of,
 of a row that only moves the reader, runs at once. Everything else — a less sure pick, anything that
 writes, spends or generates, and every command that takes words — is drawn as the bar's ordinary

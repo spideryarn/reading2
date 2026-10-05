@@ -386,7 +386,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             <strong>Ask what you meant</strong> or <kbd>Enter</kbd>. A fast AI model reads your sentence and the list
             of commands, never the article. If it is sure and the command only takes you somewhere,
             you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
-            you press <kbd>Enter</kbd> on the one you want. You need to be signed in.
+            you press the one you want, or <kbd>Enter</kbd>. You need to be signed in.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the

@@ -64,7 +64,8 @@
  *     row goes to a fast model, which answers with one of this bar's own rows
  *     or with nothing. Still no guess — nothing is asked or drawn until that
  *     Enter, or a press on the button that says so (2026-10-05, `ASK_LABEL`:
- *     a phone has no Enter). `ask` below, and src/command-pick.ts.
+ *     a phone may have no on-screen Enter after dictation). `ask` below, and
+ *     src/command-pick.ts.
  *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
  *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
  *     since the rest are the bar's own. The surviving half is still true *by
@@ -1213,8 +1214,9 @@ export const NO_MATCH = "No command matches.";
  * **A button, with Enter as its other route, since 2026-10-05** (spya-qem46c,
  * plan 261005f). It was a sentence, *Press Enter to ask what you meant.*, and
  * Greg dictated a question on an iPhone: *"there was no way to kick off that
- * action on an iPhone because I don't have an enter key."* A dictation never
- * raises the keyboard, so the offer has to be something a finger can press.
+ * action on an iPhone because I don't have an enter key."* A dictation can
+ * finish with no phone keyboard on screen, so the offer has to be something a
+ * finger can press.
  */
 export const ASK_LABEL = "Ask what you meant";
 /** Beside the button where the main pointer is not a finger. Enter works either way. */
@@ -1225,6 +1227,8 @@ export const ASK_OR_ENTER = "or press Enter";
  * or a dropped connection, and Enter was its only retry.
  */
 export const ASK_AGAIN_LABEL = "Try again";
+/** A local, deterministic refusal: retrying unchanged cannot help. */
+export const ASK_TOO_LONG = "That sentence is too long. Shorten it and try again.";
 
 /** The line under the box while the sentence is with the model. */
 const ASKING = "Working out what you meant…";
@@ -1548,7 +1552,11 @@ export function CommandBar({
    * still asks again — a timeout deserves a second try — it is only the
    * invitation that waits for a changed sentence.
    */
-  const offerToAsk = canAsk && !(said?.kind === "message" && said.text === COULD_NOT_TELL);  const index = Math.min(selected, Math.max(0, results.length - 1));
+  const askMessage = said?.kind === "message" ? said.text : null;
+  const offerToAsk = canAsk && askMessage !== COULD_NOT_TELL && askMessage !== ASK_TOO_LONG;
+  /* A timeout may recover; an unchanged over-limit sentence cannot. */
+  const showAskButton = canAsk && askMessage !== ASK_TOO_LONG;
+  const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
   /* Lightbox.tsx § closingOurselves, and the same trap: `close()` fires the
@@ -1825,7 +1833,7 @@ export function CommandBar({
     const sentence = draft.trim();
     /* The route would refuse it; a paragraph is not a command. */
     if (sentence.length > MAX_SENTENCE) {
-      setSaid({ kind: "message", text: COULD_NOT_TELL });
+      setSaid({ kind: "message", text: ASK_TOO_LONG });
       return;
     }
     const request: PickRequest = { sentence, rows: keys, argumentKinds: argumentKindsHere(article) };
@@ -2003,7 +2011,7 @@ export function CommandBar({
              nothing until they press it, or Enter. */
           <p className="cmdbar-empty tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
             {NO_MATCH}
-            {canAsk && (
+            {showAskButton && (
               <>
                 {" "}
                 <Button
@@ -2021,7 +2029,15 @@ export function CommandBar({
                      the keyboard stays as it was, up or down. The click still
                      fires. */
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={ask}
+                  onClick={(e) => {
+                    /* Enter and Space activate a focused button with a
+                       zero-detail click. Put focus back on the combobox before
+                       suggestions replace this button; a finger tap must not
+                       summon the phone keyboard. */
+                    const fromKeyboard = e.detail === 0 && document.activeElement === e.currentTarget;
+                    ask();
+                    if (fromKeyboard && !askRefused) inputRef.current?.focus({ preventScroll: true });
+                  }}
                 >
                   {offerToAsk ? ASK_LABEL : ASK_AGAIN_LABEL}
                 </Button>

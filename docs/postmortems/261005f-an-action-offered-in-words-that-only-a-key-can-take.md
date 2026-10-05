@@ -26,10 +26,11 @@ Two things made that easy to miss:
 - **The bar is described as a keyboard instrument**, in its own header and in keyboard.md, and it
   was first built for ⌘K. Its hints were written from that seat.
 - **The microphone arrived the same day as the ask** (261003f and 261003k, both 2026-10-03), in
-  separate plans. Dictation is what removes the keyboard: the reader taps the microphone, speaks,
-  and never focuses the box with a finger, so iOS never raises a keyboard and its Go key never
-  exists. Each plan was right alone. The test for the pair, *takes a dictated sentence down the
-  same path*, put the words in the box and then called `press("Enter")`, which a test can always do.
+  separate plans. Dictation exposed the missing route: the microphone button takes focus from the
+  box, and `useDictationField` asks for it back on the next animation frame. That scripted refocus
+  did not leave a keyboard on screen in the reported iPhone run, so its Go key was absent. Each plan
+  was right alone. The test for the pair, *takes a dictated sentence down the same path*, put the
+  words in the box and then called `press("Enter")`, which a test can always do.
 
 ## The class
 
@@ -62,18 +63,17 @@ is the admission that nothing matched.
 
 ## What would have caught it, ranked by ease against value
 
-1. **A sweep for on-screen words that say *press Enter*, each listed with what a finger presses
-   instead.** Done: `tests/words-that-name-a-key-have-something-to-press.test.ts`. Two lines in the
-   client say it today. It is aimed at the part of the class that announces itself, and it fails on
-   the next hint written from a desk.
+1. **A sweep for product-control strings that say *press Enter*, each listed with what a finger
+   presses instead.** Done: `tests/words-that-name-a-key-have-something-to-press.test.ts`. Two such
+   strings outside the Help prose exist today. It is aimed at the part of the class that announces
+   itself, and it fails on the next contiguous hint written from a desk.
 2. **The habit, for a plan review of anything in a box with a microphone: what does a reader who
    only spoke press next?** Free. Written into
    [dictation.md](../project/dictation.md), where the next box to gain a microphone is read.
 3. **A test that dictates and then presses nothing but what is on screen.** Done for this bar
    (`tests/command-bar-pick.test.tsx` § the button that asks). As a general rule it is the same as 2.
 4. Trying every new feature on a real iPhone before it lands. Rejected as a gate: agents on the box
-   have no phone, and Playwright's touch emulation does not reproduce iOS's refusal to raise the
-   keyboard for a scripted focus, which is the whole of this bug.
+   have no phone, and Playwright's touch emulation does not reproduce the reported keyboard state.
 5. A lint rule that every `onKeyDown` branch has a matching `onClick`. Rejected: most key handlers
    here are arrows and Escape, whose finger route is a different gesture, and the rule would be all
    exceptions.

@@ -17,9 +17,10 @@ and from nowhere else, and the empty line is plain text, *No command matches. Pr
 you meant.*
 
 On a phone that key is the on-screen keyboard's Go key, and it exists only while the keyboard is up.
-A reader who dictates never needs the keyboard, and iOS does not raise it for a focus the page asks
-for rather than the finger. So the sentence is in the box, the bar says to press a key, and there is
-no key. The rows of the bar never had this problem, because a row is pressed with a finger.
+A reader can dictate without touching the box. In the reported iPhone run, the hook's attempt to
+restore the box's focus after the microphone press did not leave a keyboard on screen. So the
+sentence was in the box, the bar said to press a key, and there was no key. The rows of the bar never
+had this problem, because a row is pressed with a finger.
 
 The class: **an action with only a keyboard route**, in a bar that has had a microphone since the
 day the action arrived.
@@ -92,9 +93,8 @@ The existing assertions on the empty line's words move to the new constants
 ## Not checked on a real iPhone
 
 The check is jsdom tests and a Playwright look at a phone-sized window on the box. Whether iOS keeps
-the keyboard down after a dictation, which is what makes the Go key unreachable, is inferred from
-Greg's report and from iOS's rule about script focus, not observed. The button does not depend on
-the answer.
+the keyboard down after `useDictationField`'s delayed scripted refocus is inferred from Greg's
+report, not observed directly. The button does not depend on the answer.
 
 ## Stages
 
@@ -109,19 +109,40 @@ No P0 or P1; *changes needed*. All five taken, so parts of the plan above are su
   which does not contradict the refusal the way the offer did. This replaces "No retry button" under
   § What it does not do.
 - **More guard tests** (P2): the microphone transcribing as well as armed, another row's run
-  starting, and a sentence over `MAX_SENTENCE`, which is refused out loud and not silently. Added.
+  starting, and a sentence over `MAX_SENTENCE`, which is refused out loud and not silently. Added;
+  the code review then gave that deterministic refusal its own explanation and no *Try again*.
 - **The note in `docs/user-feedback/`** (P2) was missing from the docs list. It is
   `261005_0732-iphone-command-bar-says-press-enter.md`.
 - **A postmortem** (P3), since the class has a name:
   [261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md), with a
-  sweep test for on-screen words that say *press Enter*.
+  sweep test for contiguous product-control strings outside Help that say *press Enter*.
 - **44px, not 40** (P3): `pointer-coarse:min-h-11`, the current finger floor. And the tests now
   assert the two `pointer-coarse` classes, since jsdom cannot evaluate them.
 
-It confirmed that preventing default on `mousedown` keeps the focus on current iOS Safari without
-suppressing the click, and that `pointer: coarse` is an acceptable proxy since the button is there
-either way.
+The review found that preventing default on `mousedown` keeps focus without suppressing the click,
+and that `pointer: coarse` is an acceptable proxy since the button is there either way. That was not
+observed on a real iPhone.
 
 **One change of my own while building**: the button is `aria-disabled`, not `disabled`. A disabled
 button receives no `mousedown`, so a press on it would have pulled the focus out of the box, which is
 the thing the handler is there to prevent. `ask()` stays the lock, as it is for the rows.
+
+## GPT Sol's review of the code, 2026-10-05
+
+No P0 or P1; *approve*, with six things it fixed in the stage and I read and kept:
+
+- Enter or Space on the focused button left the focus on a button that goes away when suggestions
+  arrive. A keyboard press now hands the focus back to the box; a finger does not, so the phone
+  keyboard is not raised.
+- An over-long sentence got *Try again*, which could only repeat the refusal. It now has its own
+  sentence, *That sentence is too long. Shorten it and try again.*, and no button until the box
+  changes. **A new reader-facing sentence, for Greg to reword if he wants.**
+- The sweep test parsed comments by hand and could swallow code. It now walks the Babel AST.
+- The docs said a dictation *never* raises the keyboard. `useDictationField` does try a delayed
+  refocus, so they now say a dictation can finish with no keyboard on screen, which is what the
+  report establishes.
+- Help said Enter was the only way to choose a *Did you mean* row.
+- Two declarations I had joined onto one line.
+
+A Sonnet subagent looked at it in Chrome on the box with an iPhone 13 device profile: the button is
+44px high, *or press Enter* is hidden, a tap posts once and the box keeps the focus.
