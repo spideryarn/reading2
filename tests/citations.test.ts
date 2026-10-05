@@ -696,6 +696,50 @@ describe("one row per work, and ids that survive a re-run", () => {
     const fresh = second.citations.find((c) => c.title === "Elements of Episodic Memory")!;
     expect(fresh.id).not.toBe(first.citations[0]!.id);
   });
+
+  it("a mirror citation stored under its old URL key keeps its id when its metadata changes", () => {
+    const body = block("spya-b00006", "The revised name is the work used here.", {
+      html: '<p><a href="https://huggingface.co/papers/1706.03762">The revised name</a> is the work used here.</p>',
+    });
+    const raw = {
+      title: "The revised name",
+      why: "The work used here.",
+      ...scored,
+      mentions: [{ block: body.id, quote: "The revised name" }],
+    };
+    const first = build([raw], [body]).citations;
+    const row = first.citations[0]!;
+    expect(row.key).toBe("arxiv:1706.03762");
+
+    /* This is the artefact the build before plan 261005m wrote: the mirror was
+       an ordinary article URL. The model changing the title on the same re-run
+       must not orphan Find/Investigate rows attached to this id. */
+    const previous = {
+      ...first,
+      citations: [
+        {
+          ...row,
+          title: "The earlier name",
+          key: "url:huggingface.co/papers/1706.03762",
+        },
+      ],
+    };
+    const inherit = idsByKey(previous, { blocks: [body], referenceList: null });
+    const second = buildCitations(
+      { works: [raw] },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: [body],
+        sourceHash: "moved",
+        elapsedMs: 1,
+        inherit,
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+      },
+    );
+    expect(second.citations[0]?.id).toBe(row.id);
+  });
 });
 
 /* ------------------------------------------------------------- scores -- */

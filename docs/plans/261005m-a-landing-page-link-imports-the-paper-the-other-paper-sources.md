@@ -1,8 +1,11 @@
 # A landing-page link imports the paper: the other paper sources
 
-Status as of 2026-10-06: **plan, revised after GPT Sol's two reviews, nothing built** — evidence:
-no source but arXiv in `src/paper-sources.ts`, which is itself not on `dev` yet (see § What this
-waits on).
+Status as of 2026-10-06: **stage A built, reviewed and committed, but not on `dev`** — evidence:
+`acl`, `pmlr`, `neurips`, `cvf` and `jmlr` in `src/paper-sources.ts` on the branch
+`worktree-fbayettj-other-paper-sources` (commit `00edb215e` and the review fix after it), and no
+`src/paper-sources.ts` on `origin/dev`. It is held because it is built on part 1's commit
+`0f63486a2`, which is not on `dev` and has open review findings of its own (see § What this waits
+on). The research, this plan and the deferred work's queue entries are on `dev`.
 
 Report `spya-ayettj` (Sentry SPIDERYARN-READING2-DH), from Greg, 2026-10-05. This plan is **part 2
 of 2**, queue entry `qi-5m89dnxa`. Part 1 is arXiv: plan
@@ -217,7 +220,7 @@ No new dependency, no key, no outside service, no login, no changed header.
 
 Waits on part 1's stage 1 being on `dev`.
 
-- [ ] Tests first, red, in `tests/paper-sources.test.ts`:
+- [x] Tests first, red, in `tests/paper-sources.test.ts`:
       - the two mirrors resolve to a value deep-equal to arXiv's for the same id, with and without
         a version; `huggingface.co/papers` alone, `huggingface.co/papers/<not an arXiv id>`,
         `huggingface.co/<user>/<model>` and `alphaxiv.org/` do not resolve;
@@ -234,12 +237,12 @@ Waits on part 1's stage 1 being on `dev`.
       - the 90-character CVF name from the measurement resolves, with a slug that passes `isSlug`
         and a key that holds the whole name; two CVF names that share their first 60 characters
         have different keys.
-- [ ] A property test over all sources: for a spread of hostile inputs (`..`, `%2f`, `@`, `\`,
+- [x] A property test over all sources: for a spread of hostile inputs (`..`, `%2f`, `@`, `\`,
       a second `//`, upper case, a query, a fragment) a resolved paper's every candidate is
       `https:`, on that source's own host, and its path holds no character outside
       `[A-Za-z0-9._/-]`.
-- [ ] Build it. Display names in `PAPER_SOURCE_LABEL`.
-- [ ] Live check, free: `evals/paper-sources/resolve-live.ts` resolves each landing address and runs
+- [x] Build it. Display names in `PAPER_SOURCE_LABEL`.
+- [x] Live check, free: `evals/paper-sources/resolve-live.ts` resolves each landing address and runs
       the step's own loop with the real `fetchDocument`. For every source: both papers measured in
       261005e end on a PDF, and **`urlKey` of the address the fetch ended on equals the paper's
       key**. New cases added for what the first measurement did not cover (Sol's G9): a NeurIPS
@@ -247,16 +250,48 @@ Waits on part 1's stage 1 being on `dev`.
       each layout over `https`, an old-style ACL id through its DOI, alphaXiv's `/overview/`. A
       shape that does not fetch is taken out of the pattern, not left in on trust. Output under
       `docs/plans/261005m-evidence/`.
-- [ ] Mutate: loosen one id class, swap two hosts, drop the slug cut, make a mirror its own source;
+- [x] Mutate: loosen one id class, swap two hosts, drop the slug cut, make a mirror its own source;
       each must turn a test red.
-- [ ] Docs: `fetching.md` (the sources table, beside part 1's section), `ingest-queue.md`,
+- [x] Docs: `fetching.md` (the sources table, beside part 1's section), `ingest-queue.md`,
       `/help` if it says what pasting a link does.
-- [ ] `npm run typecheck`, the touched tests, `npm run lint` on touched files. GPT Sol code review
-      (write-capable, fixes inside the stage). Commit, push.
+- [x] `npm run typecheck`, the touched tests, `npm run lint` on touched files. GPT Sol code review
+      (write-capable, fixes inside the stage). Committed.
+- [ ] **Push. Held until part 1's stage 1 is on `dev`**: merge `origin/dev`, settle any conflict in
+      `src/paper-sources.ts` (part 1's F16 fix touches the arXiv object), re-run the gates below,
+      and `git push origin HEAD:dev`. Pushing sooner would land part 1's unfinished commit with it.
+
+**What landed, and what changed from the plan** (2026-10-06):
+
+- The five sources stay in `src/paper-sources.ts`; one helper, `paperAt`, builds each paper. **A
+  paper's key is what `urlKey` gave its landing page before the source existed**
+  (`aclanthology.org/N19-1423`, `proceedings.mlr.press/v37/ioffe15.html`). So an article imported
+  from a landing page before this is the same article afterwards: pasting the link again finds
+  the stub, and a refresh replaces it with the paper. No backfill, as part 1 decided for arXiv.
+- A name keeps the case its address spelled it in, in the key and the candidate, because these
+  servers are case-sensitive. ACL's old-style ids are the exception: `n19-1423` is re-cased to
+  `N19-1423`, since a DOI is case-insensitive.
+- `arxivPdfUrl` asks the registry which paper, but still rewrites only a page *about* a paper
+  (arXiv's `abs/`, alphaXiv's, Hugging Face's). A `pdf/` or `html/` address and arXiv's DOI are
+  still fetched as themselves, as its callers rely on.
+- The failure and the log line are a wrapper, `fetchFromPaperSource` in `src/pipeline.ts`;
+  `fetchFirstCandidate` is untouched. The sentence was reworded from the plan's first draft (see
+  § What a wrong rule costs).
+- Live check: 23 real links, all ending on a PDF whose address resolves to the paper's key
+  (`261005m-evidence/resolve-live.txt`). JMLR's `www.` host was added; alphaXiv's `/overview/`
+  kept.
+- Mutations, each seen red: a loosened CVF name class, PMLR's and JMLR's hosts swapped, the slug
+  cut dropped, Hugging Face as a source of its own, the absent flag never reset, `keysOf` ignoring
+  mirrors.
+- The help page says nothing about what pasting a link does, so it is unchanged.
+- **Known and left:** CVF workshop paths and names with a dot in them are not recognised and
+  import as before. `www.aclanthology.org` is not recognised. Nothing was driven in a browser: no
+  screen changed but the job card's detail (`312 KB, ACL Anthology PDF`), and a full import
+  through the queue was not run, for the reason part 1 gives (the shared local database's
+  migration ledger).
 
 ### Stage B: bookkeeping
 
-- [ ] The deferred items below each have a queue entry (ids recorded here) **before** the note says
+- [x] The deferred items below each have a queue entry (ids recorded here) **before** the note says
       shipped.
 - [ ] `docs/user-feedback/261005_1912-…-part-2.md` (`reports: spya-ayettj`, `parts: 2`),
       `npx tsx scripts/feedback-endings.ts`, `overseer-queue.ts done qi-5m89dnxa`.
@@ -332,4 +367,12 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
   | G14 (P2) | `requested_url` holds the derived candidate, not the pasted address | **Accepted**: the deferred entry says the job's address needs a column of its own |
 
   Discovery on the plan is closed at two rounds.
-- Code review, GPT Sol: *(pending)*
+- **Code review, GPT Sol** (`261005m-other-paper-sources-code-review-sol.md`, on commit
+  `00edb215e`, write-capable): *ship with the fixes I made*. G11, G12 and G13 confirmed closed as
+  built. One finding, fixed by the reviewer and read by me:
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | H1 (P1) | A citation stored under its old `url:huggingface…` key could lose its id on a re-run if the model also changed its title, author or year, orphaning its Find and Investigate state. (The implementer had said the id survived, and marked that as inferred, not tested.) | **Fixed by Sol**: `idsByKey` records the new `arxiv:` key as an alias of the old row; a test seen red first. Ambiguous aliases are still refused |
+
+  One round: the verdict was ship, and the one fix is small and tested.
