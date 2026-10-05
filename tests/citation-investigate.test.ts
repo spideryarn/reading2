@@ -899,7 +899,7 @@ describe("step 1, the lookup — what it hands on", () => {
 
 describe("step 1, the lookup — when it fails (P-5)", () => {
   it.each([
-    ["a refused call", new ProviderRefused(429, "busy", new Headers())],
+    ["a refused call", new ProviderRefused(429, "busy", new Headers(), false)],
     ["the network", new TypeError("fetch failed")],
     ["a body cut off mid-read", new TypeError("terminated")],
     ["an answer that did not finish", lookupAnswer({ finish: "length" })],
@@ -1367,7 +1367,7 @@ describe("the paper itself (plan 261001a stage 3)", () => {
   });
 
   it("goes on when the passages call fails, and stores the paper with no passages rather than none found", async () => {
-    const h = harness({ deltas: ["An answer."], paper: paperRead(), passagesReply: new ProviderRefused(500, "", new Headers()) });
+    const h = harness({ deltas: ["An answer."], paper: paperRead(), passagesReply: new ProviderRefused(500, "", new Headers(), false) });
     const { events, error } = await drain((await h.investigate(SLUG, ID, null)).stream());
     expect(error).toBeNull();
     expect(events.at(-1)?.type).toBe("done");
@@ -1502,7 +1502,7 @@ describe("the work's influence, from the press's own search (plan 261003m stage 
     ["quotes words that are not on the page", influenceOf({ influence: 0.9, source: 2, quote: "It is the most cited paper of the decade" })],
     ["answers out of range", influenceOf({ influence: 8000, source: 2, quote: STANDING })],
     ["answers something unreadable", jsonAnswer("It is famous.")],
-    ["is refused", new ProviderRefused(429, "", new Headers())],
+    ["is refused", new ProviderRefused(429, "", new Headers(), false)],
     ["fails in transport", new TypeError("fetch failed")],
   ])("keeps the answer and stores no influence when the call %s", async (_name, influenceReply) => {
     const h = harness({ deltas: ["An answer."], search: FOUND, influenceReply });

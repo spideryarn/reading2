@@ -135,7 +135,10 @@ export async function pickCommand(request: PickRequest, signal?: AbortSignal): P
     const call: DecisionCall = await openRouterDecisions(
       "command-pick",
       { model: COMMAND_PICK_MODEL, state: ask.state, questions: ask.questions },
-      { signal: composite },
+      /* `retryTransport: false`, here and on the words call: the two share one
+         deadline of `COMMAND_PICK_TIMEOUT_MS`, and a failure already falls back
+         to the bar's own list, which beats two seconds of backoff. */
+      { signal: composite, retryTransport: false },
     );
     const raw = call.choice.command;
     if (raw === undefined) throw new UnreadableAnswer("the pick had no choice in it");
@@ -205,7 +208,7 @@ async function askForWords(sentence: string, argument: ArgumentKind, signal: Abo
       response_format: { type: "json_object" },
       messages: wordsMessages(sentence, argument),
     },
-    { signal },
+    { signal, retryTransport: false },
   );
   const body = call.json as { choices?: { message?: { content?: unknown } }[] } | null;
   /* An answer that is not the JSON asked for, or names words the reader did

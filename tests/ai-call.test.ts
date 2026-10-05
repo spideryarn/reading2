@@ -541,15 +541,17 @@ describe("one record per call, however the call ends", () => {
   });
 
   it("still refuses on the status when the refusal's body is not JSON, or is JSON with no usage", async () => {
-    for (const body of ["<html>502 Bad Gateway</html>", "null", "[]", '"text"', '{"error":{"code":502}}']) {
+    /* A 403 since 2026-10-05, where this was a 502: a 502 is now asked again
+       (tests/ai-call-transport-retry.test.ts), and this test is about the body. */
+    for (const body of ["<html>403 Forbidden</html>", "null", "[]", '"text"', '{"error":{"code":403}}']) {
       const { thrown, report } = await refusedStream({
         ok: false,
-        status: 502,
+        status: 403,
         headers: new Headers(),
         text: async () => body,
       } as unknown as Response);
       expect(thrown, body).toBeInstanceOf(ProviderRefused);
-      expect((thrown as ProviderRefused).status, body).toBe(502);
+      expect((thrown as ProviderRefused).status, body).toBe(403);
       expect(report.calls, body).toHaveLength(1);
       expect(report.calls[0]?.outcome, body).toBe("error");
       expect(report.calls[0]?.cost, body).toEqual({ source: "none" });
@@ -557,6 +559,9 @@ describe("one record per call, however the call ends", () => {
   });
 
   it("records a fetch that never connected", async () => {
+    /* `retryTransport: false`, so this stays the one-attempt test it was. What
+       the gateway does with a dropped connection when it may ask again, a row
+       per attempt, is tests/ai-call-transport-retry.test.ts. */
     const { report } = await collectSpend(async () => {
       vi.stubGlobal("fetch", async () => {
         throw new TypeError("fetch failed");
@@ -570,6 +575,7 @@ describe("one record per call, however the call ends", () => {
               signal: new AbortController().signal,
               onActivity: noop,
               end: end(),
+              retryTransport: false,
             },
           )) {
             void _;
@@ -1143,8 +1149,9 @@ describe("a `StreamEnd` handed to a second stream", () => {
           }),
         } as unknown as Response;
       }
-      // The second attempt is refused before there is anything to stream.
-      return { ok: false, status: 503, headers: new Headers(), body: null } as unknown as Response;
+      // The second attempt is refused before there is anything to stream. A
+      // 403, which is refused once; a 503 would be asked again, twice more.
+      return { ok: false, status: 403, headers: new Headers(), body: null } as unknown as Response;
     });
 
     await collectSpend(async () => {
@@ -1817,7 +1824,8 @@ describe("the decisions wire", () => {
     let report: Awaited<ReturnType<typeof collectSpend>>["report"] | undefined;
     await collectSpend(async () => {
       try {
-        await openRouterDecisions("search-quick", ASK);
+        /* One attempt; the retry has its own file. */
+        await openRouterDecisions("search-quick", ASK, { retryTransport: false });
       } catch {
         /* expected */
       }

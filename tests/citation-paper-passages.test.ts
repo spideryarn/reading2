@@ -176,7 +176,7 @@ describe("findPaperPassages — never throws for the provider", () => {
   const paper = paperRead();
 
   it.each([
-    ["refused", () => Promise.reject(new ProviderRefused(429, "", new Headers())), "refused"],
+    ["refused", () => Promise.reject(new ProviderRefused(429, "", new Headers(), false)), "refused"],
     ["unreadable", () => Promise.resolve({ json: jsonAnswer("nope"), answeredBy: null, generationId: null }), "unreadable"],
     ["a transport failure", () => Promise.reject(new TypeError("fetch failed")), "error"],
   ] as const)("is `failed` when the call is %s", async (_name, call, why) => {

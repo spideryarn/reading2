@@ -55,7 +55,8 @@ import { duplicateOnShelfSql, isMinimalJob } from "../src/minimal-paper.js";
 import { NotProcessed } from "../src/not-processed.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import type { PaperMetadata } from "../src/paper-metadata.js";
-import { DEFAULT_INGEST_STEPS, STEPS, articleRegistryDeps, metadataReaders, type PipelineStep } from "../src/pipeline.js";
+import { DEFAULT_INGEST_STEPS, STEPS, articleRegistryDeps, metadataReaders, titleTidiers, type PipelineStep } from "../src/pipeline.js";
+import { ruleTitleTidier } from "../src/title-tidy.js";
 import { handleApi } from "../src/routes.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { stagingKey } from "../src/source.js";
@@ -224,6 +225,8 @@ beforeEach(() => {
   /* No network, ever: both readers answer from the fixture. */
   vi.spyOn(metadataReaders, "pdf").mockResolvedValue(found());
   vi.spyOn(metadataReaders, "html").mockResolvedValue(found({ title: null, abstract: null, doi: null }));
+  /* Nor the title's tidy, which in the real step is a model's (plan 261005j). */
+  vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
   /* Nor the registry: the fetch guard refuses Crossref, so the steps are handed
      an answer. It is the fixture paper's own record, by title and author. */
   vi.spyOn(articleRegistryDeps, "lookup").mockImplementation(async (id) => ({
@@ -413,6 +416,12 @@ describe("a minimal paper, added", () => {
       .from(articleRevisions)
       .where(eq(articleRevisions.id, article.currentRevisionId ?? randomUUID()));
     expect(revision).toEqual({ journal: "Entropy", publishedAt: "2022-07-06" });
+
+    /* The step asked import's tidier for the title, with the abstract as the
+       rule's evidence (plan 261005j). */
+    expect(vi.mocked(titleTidiers.import).mock.calls.map(([title, context]) => [title, context?.body])).toEqual([
+      ["A Paper About Entropy", "We measure something and find it is entropy."],
+    ]);
 
     const rows = await ledgerOf(article.id);
     expect(rows.map((r) => [r.kind, r.succeededAt !== null])).toEqual([["minimal", true]]);

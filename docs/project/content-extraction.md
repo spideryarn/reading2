@@ -783,19 +783,34 @@ escaped like any other text wherever it becomes markup. The class is in
 >
 > — Greg, 2026-10-04, report `spya-fyj3m4`
 
-After `plainTitle`, both extractors pass the title through `tidiedTitle` in
-[`src/title-tidy.ts`](../../src/title-tidy.ts). It makes two changes: a title **wholly** in
-capitals becomes title case, and trailing footnote markers (`*`, `†`, `‡`) come off. A title already
-in mixed case is never recased. There is no model in it; a word stays in capitals when the
-article's own body writes it that way, which is how `NASA` survives.
+After `plainTitle`, the title is tidied by a `TitleTidier`. **At import that is a small model**
+(Greg, 2026-10-05: *"yes, a small model (e.g. GPT Luna or DeepSeek)"*): one call as job `title-tidy`
+in [`src/title-tidy-model.ts`](../../src/title-tidy-model.ts), shown the title, the site's name and
+the declared language and none of the body. It may fix a title printed wholly in capitals, take the
+site's name, `Microsoft Word - ` or a file extension off an end, and tidy spacing. Code then checks
+the answer did only that (`isLightEdit`): the only thing cut at a separator is exactly the site's
+name the page declared, capitals changed only where there was no lower-case letter, every other
+character the same. So a title already in mixed case is never recased, and a page that declares no
+site's name keeps whatever follows its dash.
+
+**The rule is the fallback**, and what a seam handed no tidier uses: `tidiedTitle` in
+[`src/title-tidy.ts`](../../src/title-tidy.ts), which makes a title **wholly** in capitals title
+case and takes trailing footnote markers (`*`, `†`, `‡`) off. It has no model; a word stays in
+capitals when the article's own body writes it that way. A failed call, a slow one (8 seconds) or
+an answer that fails the check all get the rule's title, so the tidy cannot fail an import.
+
+**A re-extraction keeps the title it tidied last time** when the title arriving is the same
+(`stepTitleTidier`, src/pipeline.ts): a model does not answer identically every time, and `title` is
+in every generated mode's fingerprint. The plan and what was measured:
+[../plans/261005j-a-small-model-tidies-an-imported-title.md](../plans/261005j-a-small-model-tidies-an-imported-title.md),
+[../investigations/261005b-title-tidying-rule-against-a-small-model.md](../investigations/261005b-title-tidying-rule-against-a-small-model.md).
 
 Only `meta.title` is tidied. The page's `<h1>`, which becomes a block of the prose, keeps the
 author's capitals. When tidying changed the title, the original goes in `Meta.titleOriginal`
 (`article_revisions.title_original`), and the Metadata page shows it with a button that puts it back
 as the reader's own title. Articles imported before 2026-10-05 are not touched.
 
-The rules, what was left out and why, and the two questions still open (a model for the recasing;
-a backfill) are in
+The rule's details, what it leaves out and why, and Greg's answer on a backfill (none) are in
 [../plans/261005g-tidy-an-imported-title-and-keep-the-original.md](../plans/261005g-tidy-an-imported-title-and-keep-the-original.md);
 the style guides behind them are in
 [../research/261005c-title-capitalisation-and-light-tidying-at-import.md](../research/261005c-title-capitalisation-and-light-tidying-at-import.md).
