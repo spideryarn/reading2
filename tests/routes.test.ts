@@ -46,11 +46,17 @@ vi.mock("../src/monitoring.js", async (importOriginal) => {
   return { ...actual, captureFailure: vi.fn(actual.captureFailure) };
 });
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, articleTags, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
+import {
+  articles,
+  articleTags,
+  comments as commentsTable,
+  readerProfiles,
+  searchRuns,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
@@ -2225,6 +2231,77 @@ describe("POST /api/search/:slug is a stream too", () => {
       expect(stored.map((s) => [s.id, s.criterion, s.status])).toEqual([
         [id, "the prize the essay won", "done"],
       ]);
+    });
+
+    it("an older attempt whose begin answers late does not take the revision's hold with it", async () => {
+      /* Plan 261005i § C. The older request's `begin` commits and its return
+         is then delayed, so it registers its hold *after* the revision that
+         superseded it. With one holder per key the older took the key over and
+         deleted it on the way out. */
+      const held: { release: () => void }[] = [];
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        const h = heldCall(init);
+        held.push({ release: h.release });
+        return h.reply;
+      });
+      const real = searchStore.begin.bind(searchStore);
+      let olderCommitted!: () => void;
+      const committed = new Promise<void>((r) => (olderCommitted = r));
+      let letOlderReturn!: () => void;
+      const delayed = new Promise<void>((r) => (letOlderReturn = r));
+      const spy = vi
+        .spyOn(searchStore, "begin")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          const begun = await real(...args);
+          olderCommitted();
+          await delayed;
+          return begun;
+        });
+      const id = mintId();
+      let older: ReturnType<typeof callStreaming> | undefined;
+      let newer: ReturnType<typeof callStreaming> | undefined;
+      try {
+        older = callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+          id,
+          criterion: "the prize",
+          kind: "quick",
+        });
+        await committed;
+        newer = callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+          id,
+          criterion: "the prize the essay won",
+          kind: "quick",
+          revises: true,
+        });
+        await until(() => held.length === 1);
+
+        letOlderReturn();
+        await until(() => held.length === 2);
+        held[1]!.release();
+        const olderReply = parseFrames((await older).frames);
+        // Fenced: the older attempt's answer was written nowhere.
+        expect(olderReply.some((f) => f.event === "done")).toBe(false);
+
+        /* Aged past the grace, so only the hold can spare the revision. */
+        await getDb()
+          .update(searchRuns)
+          .set({ attemptStartedAt: new Date(Date.now() - 10 * 60_000) })
+          .where(and(eq(searchRuns.articleId, searchArticle!.articleId), eq(searchRuns.id, id)));
+        const mid = await call("GET", `/api/search/${SEARCH_SLUG}`);
+        expect(
+          (mid.body.runs as { criterion: string; status: string }[]).map((r) => [r.criterion, r.status]),
+          "the older attempt took the revision's hold with it",
+        ).toEqual([["the prize the essay won", "pending"]]);
+
+        held[0]!.release();
+        expect(parseFrames((await newer).frames).map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+        expect(liveRuns(SEARCH_SLUG).has(id)).toBe(false);
+      } finally {
+        spy.mockRestore();
+        letOlderReturn();
+        for (const h of held) h.release();
+        await Promise.allSettled([older, newer]);
+      }
     });
   });
 });

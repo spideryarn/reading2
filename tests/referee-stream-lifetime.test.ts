@@ -307,6 +307,30 @@ async function reachedOrSettled(
 }
 
 /**
+ * Wrap a store's real `begin` once so that it **commits and then waits** before
+ * answering its caller: the request it belongs to registers its live marker
+ * late, after a newer request has registered its own. Plan 261005i § C.
+ */
+function beginAnswersLate<A extends unknown[], R>(store: { begin: (...args: A) => Promise<R> }): {
+  committed: Promise<void>;
+  answer: () => void;
+  restore: () => void;
+} {
+  const real = store.begin.bind(store);
+  let committedNow!: () => void;
+  const committed = new Promise<void>((r) => (committedNow = r));
+  let answer!: () => void;
+  const waiting = new Promise<void>((r) => (answer = r));
+  const spy = vi.spyOn(store, "begin").mockImplementationOnce(async (...args: A) => {
+    const begun = await real(...args);
+    committedNow();
+    await waiting;
+    return begun;
+  });
+  return { committed, answer, restore: () => spy.mockRestore() };
+}
+
+/**
  * Make every `pending` criterion on this article older than the grace.
  *
  * The precedent is tests/store-searches-pg.test.ts, which backdates
@@ -539,6 +563,49 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       }
     });
 
+    it("a deleted run whose begin answers late does not release its replacement's lock", async () => {
+      /* The case above, in the other order: the older request's `begin` has
+         committed but not yet answered when the replacement registers, so the
+         older registers *second*. One holder per key let it take the key over
+         and delete it on the way out. */
+      const body = { criterion: "Are the methods reproducible?", kind: "single" };
+      const late = beginAnswersLate(refereeCriteriaStore);
+      const older = begin("POST", `/api/referee/criteria/${SLUG}`, body);
+      let newer: ReturnType<typeof begin> | undefined;
+      let releaseNewer = (): void => {};
+      try {
+        await late.committed;
+        const [row] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        if (!row) throw new Error("the older request never wrote its pending row");
+        await begin("DELETE", `/api/referee/criteria/${SLUG}/${row.id}`).promise;
+
+        newer = begin("POST", `/api/referee/criteria/${SLUG}`, { ...body, id: row.id });
+        await reachedOrSettled(gates.criterion, newer, "POST /api/referee/criteria/:slug (newer)");
+        const [replacement] = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+        expect(replacement?.id, "the requests did not share a marker key").toBe(row.id);
+        releaseNewer = gates.criterion.handOver();
+
+        late.answer();
+        await reachedOrSettled(gates.criterion, older, "POST /api/referee/criteria/:slug (older)");
+        gates.criterion.release();
+        await older.promise;
+        expect(newer.settled(), "the replacement finished too, so nothing was tested").toBe(false);
+
+        await ageTheCriteria(article.articleId);
+        const mid = await get(`/api/referee/criteria/${SLUG}`);
+        expect(
+          (mid.criteria as { status: string }[])[0]?.status,
+          "the late-registered older run took its replacement's lock with it",
+        ).toBe("pending");
+      } finally {
+        late.restore();
+        late.answer();
+        releaseNewer();
+        gates.criterion.release();
+        await Promise.all([older.promise, newer?.promise]);
+      }
+    });
+
     it("does not keep the lock when the stream could not be opened", async () => {
       /* The other half of the same repair: the key was added *before*
          `sse(res)` and released only inside what came after it, so a response
@@ -667,8 +734,8 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     it("an older run finishing does not release the newer run's lock", async () => {
       /* **Two tabs, one article, one key.** The key is the slug, so both runs
          hold the same one, and with a `Set` the first to finish deleted it out
-         from under the second. Each request now releases the key only if it is
-         still the holder — `searching` in src/routes.ts, plan 261002h. */
+         from under the second. Each request now releases only its own hold on
+         the key — src/live-keys.ts, plans 261002h and 261005i § C. */
       const older = begin("POST", `/api/referee/claims/${SLUG}`);
       await reachedOrSettled(gates.claims, older, "POST /api/referee/claims/:slug (older)");
       const releaseOlder = gates.claims.handOver();
@@ -686,6 +753,41 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
       gates.claims.release();
       await newer.promise;
+    });
+
+    it("an older run whose begin answers late does not release the newer run's lock", async () => {
+      /* The case above with the registrations the other way round: the older
+         run's `begin` commits, the newer run begins and registers, and only
+         then does the older's `begin` answer. */
+      const late = beginAnswersLate(refereeClaimsStore);
+      const older = begin("POST", `/api/referee/claims/${SLUG}`);
+      let newer: ReturnType<typeof begin> | undefined;
+      let releaseNewer = (): void => {};
+      try {
+        await late.committed;
+        newer = begin("POST", `/api/referee/claims/${SLUG}`);
+        await reachedOrSettled(gates.claims, newer, "POST /api/referee/claims/:slug (newer)");
+        releaseNewer = gates.claims.handOver();
+
+        late.answer();
+        await reachedOrSettled(gates.claims, older, "POST /api/referee/claims/:slug (older)");
+        gates.claims.release();
+        await older.promise;
+        expect(newer.settled(), "the newer run finished too, so nothing was tested").toBe(false);
+
+        await ageTheClaimsRun(article.articleId);
+        const mid = await get(`/api/referee/claims/${SLUG}`);
+        const run = mid.run as { status: string } | null;
+        expect(run?.status, "the late-registered older run took the newer run's lock with it").toBe(
+          "pending",
+        );
+      } finally {
+        late.restore();
+        late.answer();
+        releaseNewer();
+        gates.claims.release();
+        await Promise.all([older.promise, newer?.promise]);
+      }
     });
 
     it("does not keep its lock when the stream could not be opened", async () => {

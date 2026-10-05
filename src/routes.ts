@@ -234,6 +234,7 @@ import type { CitersResult } from "./types.js";
 /* The other half of the same card, and the half we wrote — a model call with a
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
+import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -1105,11 +1106,6 @@ function readingTimeBatch(body: unknown): Record<string, number> {
  * for both, and for the dead one it spins for ever.
  *
  * Only the running process can tell them apart, so it keeps the list.
- */
-const answering = new Map<string, number>();
-
-/**
- * Mark a comment as being answered right now, and hand back the release.
  *
  * **A count rather than a flag, and that is not defensive padding.** It was a
  * `Set` while the only way to re-answer a comment was the "Try again" link on a
@@ -1123,19 +1119,10 @@ const answering = new Map<string, number>();
  *
  * Chat needed `Live` and `settleThread` for the same problem. This is the small
  * version: nothing here can stop or supersede anything, it only stops the sweep
- * from lying.
+ * from lying. The count itself is src/live-keys.ts, shared with `searching`,
+ * `refereeing` and `pullingClaims` below.
  */
-function beganAnswering(key: string): () => void {
-  answering.set(key, (answering.get(key) ?? 0) + 1);
-  let released = false;
-  return () => {
-    if (released) return; // a double release must not decrement someone else's
-    released = true;
-    const left = (answering.get(key) ?? 1) - 1;
-    if (left > 0) answering.set(key, left);
-    else answering.delete(key);
-  };
-}
+const answering = liveKeys();
 
 /**
  * What this process is answering *in this article*, as bare comment ids.
@@ -1765,7 +1752,7 @@ async function answer(
   const { blockId } = comment;
   const quote: string = comment.quote;
   const key = `${slug}/${comment.id}`;
-  const release = beganAnswering(key);
+  const release = answering.hold(key);
 
   const { frame } = sse(res);
   frame("begin", comment);
@@ -4589,13 +4576,15 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
  * running process can tell a search in flight from one that died with the
  * process that was writing it.
  */
-/* **A map to the attempt holding the key, not a set** (plan 261002h, Sol F7).
-   A revision re-asks the same run id while the superseded attempt may still be
+/* **A count per key, not a set and not one holder** (src/live-keys.ts). A
+   revision re-asks the same run id while the superseded attempt may still be
    unwinding, so two requests can hold one key at once. With a set, the old
    attempt's `finally` deleted the key out from under the newer one, and a sweep
-   could then bury a run this process is still answering. Each request releases
-   the key only if it is still the holder. */
-const searching = new Map<string, symbol>();
+   could then bury a run this process is still answering (plan 261002h, Sol F7).
+   With one holder, an older attempt whose `begin` answered late took the key
+   over and did the same (plan 261005i § C). Each request releases its own
+   hold, and the key is live while any remain. */
+const searching = liveKeys();
 
 /**
  * What this process is searching *in this article*, as bare run ids.
@@ -4722,9 +4711,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     undefined,
     { revises },
   );
-  const key = `${slug}/${run.id}`;
-  const holder = Symbol(run.id);
-  searching.set(key, holder);
+  const release = searching.hold(`${slug}/${run.id}`);
   try {
     const { frame, gone } = sse(res);
     frame("begin", run);
@@ -4804,9 +4791,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     /* Held from the moment the pending row exists until the answer is stored.
        Releasing it straight after the model call let a GET sweep the row before
        `finish`; registering it outside this finally let a failed SSE setup pin
-       it for the life of the process. Only by the holder: a revision may have
-       taken the key since (see `searching`). */
-    if (searching.get(key) === holder) searching.delete(key);
+       it for the life of the process. Only this request's own hold: a revision
+       may hold the same key (see `searching`). */
+    release();
   }
 }
 
@@ -4833,12 +4820,12 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
  * store does not mean "an answer is coming", because it is written *before* the
  * model call precisely so a crash leaves evidence.
  *
- * A map to the request holding the key, as `searching` is and for its reason.
- * A retry needs an `error` row, but deleting a pending criterion and posting
- * its id again can overlap two requests in this process. The deleted run's
- * answer cannot be stored, and it must not release the replacement's marker.
+ * A count per key, as `searching` is and for its reason. A retry needs an
+ * `error` row, but deleting a pending criterion and posting its id again can
+ * overlap two requests in this process. The deleted run's answer cannot be
+ * stored, and it must not release the replacement's marker.
  */
-const refereeing = new Map<string, symbol>();
+const refereeing = liveKeys();
 
 /** What this process is running *in this article*, as bare ids — `liveRuns`. */
 function liveCriteria(slug: string): Set<string> {
@@ -5015,9 +5002,7 @@ async function runRefereeCriterion(
   /* Before `begin`, for `search`'s reason. */
   await refuseAPaperNotReadYet(slug);
   const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
-  const key = `${slug}/${row.id}`;
-  const holder = Symbol(row.id);
-  refereeing.set(key, holder);
+  const release = refereeing.hold(`${slug}/${row.id}`);
   try {
     const { frame } = sse(res);
     frame("begin", row);
@@ -5067,9 +5052,9 @@ async function runRefereeCriterion(
       res.end();
     }
   } finally {
-    /* Held from the pending row to the stored answer, and released only by its
-       holder — `search`'s `finally` above says why, for both halves. */
-    if (refereeing.get(key) === holder) refereeing.delete(key);
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
@@ -5093,12 +5078,13 @@ async function runRefereeCriterion(
  * written *before* the model call precisely so a crash leaves evidence. A slug
  * rather than a `slug/id` because there is only ever one run per article.
  *
- * **A map to the request holding the slug, not a set.** One run per article is
+ * **A count per slug, not a set and not one holder.** One run per article is
  * what the *store* keeps; two tabs can each have a request in flight, and both
  * hold this one key. With a set the first to finish deleted it, and a sweep
- * could then bury the newer run while this process was still answering it.
+ * could then bury the newer run while this process was still answering it;
+ * with one holder, so did an older run whose `begin` answered late.
  */
-const pullingClaims = new Map<string, symbol>();
+const pullingClaims = liveKeys();
 
 /**
  * The run a request should ask for, and a 400 saying why not.
@@ -5176,8 +5162,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
      store that read the revision itself could stamp a newer one than the model
      was shown, if the article was re-extracted since the line above. */
   const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
-  const holder = Symbol(slug);
-  pullingClaims.set(slug, holder);
+  const release = pullingClaims.hold(slug);
   try {
     const { frame } = sse(res);
     frame("begin", row);
@@ -5244,9 +5229,9 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
       res.end();
     }
   } finally {
-    /* Held from the pending row to the stored answer, and released only by its
-       holder — `search`'s `finally` above says why, for both halves. */
-    if (pullingClaims.get(slug) === holder) pullingClaims.delete(slug);
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
