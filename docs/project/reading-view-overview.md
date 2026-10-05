@@ -400,6 +400,29 @@ tags and nothing else. The rows are typed-only and follow the ranked ones, as fi
   whose label follows the state, the rule Archive set.
   [experimental-features.md § The three controls](experimental-features.md#the-three-controls).
 
+**Light, Dark and System are three rows since 2026-10-05** — *Appearance: Dark*, *Appearance:
+Light*, *Appearance: System*
+([261005d](../plans/261005d-theme-commands-in-the-command-bar.md)):
+
+> Add a command in the command bar to be able to switch between dark and light mode, and I guess
+> system mode as well.
+>
+> — Greg, 2026-10-04 (spya-c5wdn7)
+
+A second door to the setting /profile has, not a second setting: Enter calls the same
+`setAppearance` ([web-client.md § Appearance](web-client.md#appearance-light-dark-and-system)), so
+the choice is kept on the device and applied at once. Typed-only; `theme`, `appearance` and `colour
+scheme` list all three, and `dark mode`, `light mode`, `night mode`, `system` put theirs first.
+**All three are always there and the one in force is marked `current`**, which is not the rule
+Archive and the experimental switch follow (one row whose label follows the state): those are
+toggles, this is a choice among three, and a reader in Dark who types `dark mode` should get a row
+rather than `No command matches.` The mark is a field of its own (`marker`) and not part of the
+description, because the description is what the sentence-picking model is shown, held once per row
+in a checked-in file. A row the model picks waits for Enter, as every row that changes something
+does. If the device refuses to keep the choice the colours still change and the bar stays open to
+say it will last only until the page is closed. Words in
+[`src/web/appearance-commands.ts`](../../src/web/appearance-commands.ts).
+
 **The box takes dictation**, which is Greg's *"type (or even talk)"* from the bar's first day: the
 microphone every other box has, and nothing can be pressed while it is listening —
 [dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box).

@@ -31,6 +31,7 @@ import {
   markFor,
   orderEvents,
   parseWhen,
+  pieceYear,
   readWhen,
   type TimelineModality,
   type WhenDirection,
@@ -778,5 +779,95 @@ describe("markFor", () => {
     const rejected = markFor(null, true);
     expect(rejected.body).toBe("rejected");
     expect(rejected).not.toEqual(markFor(null));
+  });
+});
+
+/**
+ * **No publication date, and the piece states one year** — spya-fyjac4. The
+ * production copy of the test article has no `publishedAt`, writes the year
+ * once (`2026-07-19`), and every other date without it.
+ */
+describe("the one year the piece itself states", () => {
+  const july7 = BLOCKS["spya-pfkdk4"] ?? "";
+
+  it("is the year, when exactly one is written beside a month", () => {
+    expect(pieceYear(["On July 7, agents launched.", "2026-07-19…credentials [are] used"])).toBe(2026);
+    expect(pieceYear(["In May 2026 it began.", "By July 4, 2026 it was over."])).toBe(2026);
+  });
+
+  it("is nothing when the piece states two years, or none", () => {
+    expect(pieceYear(["In May 2025 it began.", "On July 7, 2026 it ended."])).toBeNull();
+    expect(pieceYear(["On July 7 it began.", "By July 11 it ended."])).toBeNull();
+  });
+
+  it("does not take a bare year for a date", () => {
+    // A year on its own is as likely a book, a model number or a count.
+    expect(pieceYear(["Orwell's 1984 is cited.", "On July 7 it began."])).toBeNull();
+  });
+
+  it("does not take an impossible calendar date as the piece's year", () => {
+    expect(pieceYear(["The log says 2026-02-30. On July 7 it began."])).toBeNull();
+    expect(pieceYear(["On February 29, 2026 it began."])).toBeNull();
+    expect(pieceYear(["On February 29, 2024 it began."])).toBe(2024);
+  });
+
+  it("refuses a range whose assumed year makes its bounds run backwards", () => {
+    const text = "From December 30 through January 2, 2026 it ran.";
+    expect(readWhen({ text, phrase: text, blockId: "spya-pfkdk4" as never,
+      frame: null, assumedYear: 2026 })).toEqual({ ok: false, reason: "unparseablePhrase" });
+  });
+
+  it("keeps a stated range end and marks the supplied year on the other end", () => {
+    const text = "From July 13 through July 19, 2026 it ran.";
+    expect(parseWhen({ text, phrase: text, blockId: "spya-pfkdk4" as never,
+      frame: null, assumedYear: 2026 })).toMatchObject({ earliest: "2026-07-13",
+      latest: "2026-07-19", yearFilled: true, yearFrom: "piece" });
+  });
+
+  it("does not move February 29 to a different year to make the assumption fit", () => {
+    const text = "On February 29 it began.";
+    expect(readWhen({ text, phrase: text, blockId: "spya-pfkdk4" as never,
+      frame: null, assumedYear: 2026 })).toEqual({ ok: false, reason: "unparseablePhrase" });
+  });
+
+  it("uses the assumed year as stated for predictions too", () => {
+    const text = "In December we expect it to end.";
+    expect(parseWhen({ text, phrase: "In December", blockId: "spya-pfkdk4" as never,
+      frame: null, assumedYear: 2026, direction: "future" })).toMatchObject({
+      earliest: "2026-12-01", latest: "2026-12-31", yearFrom: "piece" });
+  });
+
+  it("dates a year-less expression in that year when there is no frame", () => {
+    const when = parseWhen({
+      text: july7,
+      phrase: "On July 7",
+      blockId: "spya-pfkdk4" as never,
+      frame: null,
+      assumedYear: 2026,
+    });
+    expect(when).toMatchObject({ earliest: "2026-07-07", latest: "2026-07-07", yearFilled: true });
+  });
+
+  it("still refuses when there is neither a frame nor a stated year", () => {
+    const out = readWhen({
+      text: july7,
+      phrase: "On July 7",
+      blockId: "spya-pfkdk4" as never,
+      frame: null,
+      assumedYear: null,
+    });
+    expect(out).toEqual({ ok: false, reason: "noYearFrame" });
+  });
+
+  it("lets a publication date win over it", () => {
+    // Published January 2027: "On July 7" is the July before, whatever year the piece states.
+    const when = parseWhen({
+      text: july7,
+      phrase: "On July 7",
+      blockId: "spya-pfkdk4" as never,
+      frame: "2027-01-10",
+      assumedYear: 2031,
+    });
+    expect(when?.earliest).toBe("2026-07-07");
   });
 });

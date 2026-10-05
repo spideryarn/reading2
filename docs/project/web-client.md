@@ -525,8 +525,11 @@ What is true of the dark palette, and still worth knowing before touching it:
 
 - **No cross-device sync.** Set it on each device; a profile column would need a migration and still
   a local copy to avoid the flash.
-- **The only picker is on /profile.** Signed-out pages obey a choice saved on that device, but offer
-  none.
+- **There are two pickers, and both need the reader to be at home**: /profile, and since 2026-10-05
+  the command bar's three *Appearance* rows
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), which
+  call the same `setAppearance`. Signed-out pages, and a visitor on somebody else's article, obey a
+  choice saved on that device but offer none.
 - **The installed iPhone app's status bar stays `black-translucent`** — white clock text over the
   page, which on a light page is pale on pale. iOS reads the meta at launch, so it cannot follow a
   runtime switch, and nothing on the box can show it. A known gap.

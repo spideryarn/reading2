@@ -321,28 +321,93 @@ describe("a centred jump", () => {
     expect(outcomes).toEqual(["settled"]);
     expect(window.scrollY).toBe(3560);
     expect(arrivalAnchor()).toEqual({ id: "spya-far", passage: undefined });
-    /* The glide's own trailing scroll event is inside its quiet window. */
+    /* The glide's own trailing scroll event reports the pixel it reached. */
     window.dispatchEvent(new Event("scroll"));
     expect(arrivalAnchor(), "our own last frame is not the reader leaving").not.toBeNull();
     /* The reader scrolling, afterwards, ends it. */
     now = started + 1000;
-    window.dispatchEvent(new Event("scroll"));
-    expect(arrivalAnchor()).toBeNull();
-  });
-
-  it("gives the anchor up when the reader scrolls during the glide's trailing quiet window", () => {
-    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
-    flush(250);
-    expect(arrivalAnchor()).not.toBeNull();
-
-    /* Still inside the 150ms retained for the glide's delayed scroll event —
-       but this event arrived at a different pixel, so it is the reader. */
     Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
     window.dispatchEvent(new Event("scroll"));
     expect(arrivalAnchor()).toBeNull();
   });
 
-  it("lets the controls bar answer a reader scroll during that quiet window", () => {
+  /* qi-d7pxe8z7. A click that jumps also re-renders the reading view, and the
+     glide's own scroll event waits behind that render: 745 to 1,243 ms on a
+     1,025-block article. It reports the pixel the glide reached, so it is ours
+     however late it is — docs/postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md. */
+  it("keeps the anchor when the glide's own scroll event arrives late, at the pixel it reached", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    expect(window.scrollY).toBe(3560);
+    now = started + 1500;
+    window.dispatchEvent(new Event("scroll"));
+    expect(arrivalAnchor(), "the page has not moved").toEqual({ id: "spya-far", passage: undefined });
+  });
+
+  /* Plan review F1 (GPT Sol). With no clock, "the same pixel" has to mean the
+     same number: `scrollY` is fractional, and a quarter of a pixel is the
+     reader moving — which a tolerance would now ignore for good. */
+  it("gives the anchor up, and reveals a hidden bar, when the reader moves a quarter of a pixel", () => {
+    const stopWatching = watchBarVisibility();
+    try {
+      scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+      flush(250);
+      window.dispatchEvent(new Event("scroll"));
+      flush(251);
+      /* The reader reads on, and the bar leaves. */
+      now = started + 1000;
+      Object.defineProperty(window, "scrollY", { value: 3660, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(1001);
+      expect(document.documentElement.dataset.bars).toBe("hidden");
+      /* A second centred arrival, and then a quarter-pixel nudge upwards. */
+      started = now;
+      docTop.set("spya-far", 4200);
+      scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+      flush(250);
+      expect(window.scrollY).toBe(3760);
+      window.dispatchEvent(new Event("scroll"));
+      flush(251);
+      expect(arrivalAnchor()).not.toBeNull();
+      expect(document.documentElement.dataset.bars).toBe("hidden");
+      now = started + 1500;
+      Object.defineProperty(window, "scrollY", { value: 3759.75, writable: true, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+      flush(1501);
+      expect(arrivalAnchor(), "a quarter of a pixel is a movement").toBeNull();
+      expect(document.documentElement.dataset.bars, "any upward movement reveals the bar").toBeUndefined();
+    } finally {
+      stopWatching();
+    }
+  });
+
+  it("does not let that late event of our own hide the controls bar", () => {
+    const stopWatching = watchBarVisibility();
+    try {
+      scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+      flush(250);
+      now = started + 1500;
+      window.dispatchEvent(new Event("scroll"));
+      flush(1501);
+      expect(document.documentElement.dataset.bars, "a jump down is not the reader reading on").toBeUndefined();
+    } finally {
+      stopWatching();
+    }
+  });
+
+  it("gives the anchor up when the reader scrolls straight after the glide lands", () => {
+    scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
+    flush(250);
+    expect(arrivalAnchor()).not.toBeNull();
+
+    /* Milliseconds after landing, when the glide's own delayed event is also
+       due — but this one arrived at a different pixel, so it is the reader. */
+    Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
+    window.dispatchEvent(new Event("scroll"));
+    expect(arrivalAnchor()).toBeNull();
+  });
+
+  it("lets the controls bar answer a reader scroll straight after the glide lands", () => {
     const stopWatching = watchBarVisibility();
     try {
       scrollToBlock("spya-far", "smooth", undefined, { align: "centre" });
@@ -352,7 +417,7 @@ describe("a centred jump", () => {
       flush(251);
       expect(document.documentElement.dataset.bars).toBeUndefined();
 
-      /* The reader moves more than BAR_HIDE_AFTER before the window expires. */
+      /* The reader moves more than BAR_HIDE_AFTER just after landing. */
       Object.defineProperty(window, "scrollY", { value: 3610, writable: true, configurable: true });
       window.dispatchEvent(new Event("scroll"));
       flush(252);

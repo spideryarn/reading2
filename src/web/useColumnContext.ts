@@ -24,7 +24,8 @@
  */
 import { useEffect, useState } from "react";
 import { activeSectionIndex, type Section } from "./position.js";
-import { rowsForBlockIds } from "./rows.js";
+import { blockRow, rowsForBlockIds } from "./rows.js";
+import { arrivalAnchor, subscribeArrivalAnchor } from "./scroll.js";
 import { isFolded } from "./fold.js";
 
 /** Where the reader's eye is assumed to be, as a fraction of the viewport. */
@@ -67,7 +68,17 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
 
     const measure = () => {
       frame = 0;
-      const focusLine = window.innerHeight * FOCUS_LINE;
+      /* **A centred arrival is where the reader is** (scroll.ts § `anchor`),
+         and its top sits a little *below* the focus line — a short heading
+         lands at about 45% of the window — so the line alone names the section
+         before the one just clicked. While the arrival holds, the line is the
+         arrived row's own top: the last section starting at or above it is the
+         one that contains it. Anchor creation and clearing can happen without
+         a scroll or layout change (an already-centred jump, a mode change),
+         so the subscription below re-measures on those transitions too. */
+      const arrived = arrivalAnchor();
+      const arrivedTop = arrived ? blockRow(arrived.id)?.getBoundingClientRect().top : undefined;
+      const focusLine = arrivedTop !== undefined ? arrivedTop + 1 : window.innerHeight * FOCUS_LINE;
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
@@ -88,6 +99,7 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
+    const unsubscribeAnchor = subscribeArrivalAnchor(schedule);
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     // Scroll and resize are not the only ways the answer changes. A late image
@@ -99,6 +111,7 @@ export function useColumnContext({ sections, enabled, layoutKey }: Options): Liv
     if (table && ro) ro.observe(table);
     measure();
     return () => {
+      unsubscribeAnchor();
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       ro?.disconnect();

@@ -4809,8 +4809,8 @@ export const DATE_REJECTED_SHORT: Record<DateRejection, string> = {
  */
 export const DATE_REJECTED_WHY: Record<DateRejection, string> = {
   noYearFrame:
-    "The piece gives a day and a month here but never the year, and we have no publication date " +
-    "for it to take the year from. Re-adding the article will usually fix it.",
+    "The piece gives no year for all or part of this date, and we have no publication date to " +
+    "take one from. We have not worked out a date from these words.",
   phraseNotInOccurrence:
     "The date this event was placed by is not in the passage below, so we did not use it. The " +
     "event and the passage are the article's; the date was not.",
