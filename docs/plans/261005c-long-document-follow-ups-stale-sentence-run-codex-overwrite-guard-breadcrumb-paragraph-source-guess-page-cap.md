@@ -108,6 +108,7 @@ taken (red today: rejects).
 
 Uploads that already stored `none / provider-failed` for this reason stay as they are. Not
 backfilled: it is a missing link, never a wrong one, and a backfill is a write to readers' data.
+**Decided: no backfill** — Greg, 2026-10-05: "I only really care about fixing this going forwards".
 
 ## The write-ups
 
