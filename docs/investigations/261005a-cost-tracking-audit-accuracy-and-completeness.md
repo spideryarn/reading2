@@ -52,7 +52,7 @@ a read-only transaction that was rolled back. Nothing was written anywhere.
 combination of wire, model, BYOK flag and ok/not-ok, the two most expensive rows and two picked by
 hash, plus the oldest row on each wire. Each was looked up with
 `GET https://openrouter.ai/api/v1/generation?id=…` (free, read-only).
-Script: `audit-accuracy-sample.ts`; per-row results: `audit-accuracy-result.json`.
+Script: [`accuracy-sample.ts`](../../evals/cost/audit-261005/accuracy-sample.ts); its per-row results were not kept (they hold production ids).
 
 | | rows |
 |---|---:|
@@ -76,7 +76,7 @@ Script: `audit-accuracy-sample.ts`; per-row results: `audit-accuracy-result.json
   this way.
 
 **A census of the two odd shapes** (every such production row, not a sample).
-Script: `audit-unpriced-census.ts`; results: `audit-unpriced-census-result.json`.
+Script: [`unpriced-census.ts`](../../evals/cost/audit-261005/unpriced-census.ts); its results were not kept (they hold production ids).
 
 | Shape | rows | ledger says | OpenRouter says |
 |---|---:|---:|---:|
@@ -114,10 +114,10 @@ right. That the sample's agreement extends to embeddings. And the generation end
 in-band `usage.cost` both come from OpenRouter, so this is a check of our recording, not of
 OpenRouter's billing.
 
-**Computed prices** (the coordinator's addition). Every production row with
+**Computed prices** (added after GPT Sol's review of the plan). Every production row with
 `cost_source = 'computed'` (59 rows, $1.0284, all live conversation) was recomputed from its own
 token and seconds columns with the functions in `src/pricing.ts`. Script:
-`audit-computed-recompute.ts`.
+[`computed-recompute.ts`](../../evals/cost/audit-261005/computed-recompute.ts).
 
 | event kind, model | rows | agree | stored | price version |
 |---|---:|---:|---:|---|
@@ -129,8 +129,8 @@ token and seconds columns with the functions in `src/pricing.ts`. Script:
 This shows the arithmetic is stable, not that the prices are current: the tables say they were
 last checked on 2026-09-02, and the counts are the reader's browser's.
 
-**Raw rows against grouped totals** (the coordinator's addition). Script: `audit-prod-read.ts`
-with `audit-06-sol.sql`. Production, raw: 2,245 calls, credits 84,793,839,211 nanos, BYOK
+**Raw rows against grouped totals** (added after GPT Sol's review of the plan). Script: [`prod-read.ts`](../../evals/cost/audit-261005/prod-read.ts)
+with [`06-sol.sql`](../../evals/cost/audit-261005/06-sol.sql). Production, raw: 2,245 calls, credits 84,793,839,211 nanos, BYOK
 4,982,297,420, computed 1,028,351,620. The same over a `GROUP BY` of owner, article id, slug,
 scope, job, step, wire, requested model, answered model, upstream, outcome and UTC day: 682 groups,
 and the identical four sums.
@@ -141,8 +141,8 @@ with the same run id and the same nano-dollar figure.
 
 ## 2. The two owners
 
-**Method.** `audit-02-owners.sql`, `audit-03-completeness.sql` and `audit-06-sol.sql` through
-`audit-prod-read.ts`. Accounts are compared by **expected paid events since the ledger began**, not
+**Method.** [`02-owners.sql`](../../evals/cost/audit-261005/02-owners.sql), [`03-completeness.sql`](../../evals/cost/audit-261005/03-completeness.sql) and [`06-sol.sql`](../../evals/cost/audit-261005/06-sol.sql) through
+[`prod-read.ts`](../../evals/cost/audit-261005/prod-read.ts). Accounts are compared by **expected paid events since the ledger began**, not
 by owning articles.
 
 | Independent trace (production) | owner `001bb7a0` | owner `aa8b0dd2` | anyone else |
@@ -200,11 +200,11 @@ account as local development, which is part of the local gap in check 1.
 
 `npm run test:paid`, run once against the **local** database: all eleven checks passed, three rows
 (Messages, chat, embeddings), $0.000081. It does not cover transcription, images, decisions or
-realtime, which is where the defects in check 1 are. The coordinator has deferred a probe per wire.
+realtime, which is where the defects in check 1 are. A probe per wire is deferred, with a queue entry.
 
 ### (c) Production counts
 
-Scripts: `audit-03-completeness.sql`, `audit-04-joins.sql`, `audit-categories.ts`.
+Scripts: [`03-completeness.sql`](../../evals/cost/audit-261005/03-completeness.sql), [`04-joins.sql`](../../evals/cost/audit-261005/04-joins.sql), [`categories.ts`](../../evals/cost/audit-261005/categories.ts).
 
 - **Unpriced rows: 301** (the `UNPRICED_CALLS` condition). 264 are dictation transcription with
   outcome ok; the other 37 are stopped or failed calls across twelve jobs. What they really cost is
@@ -230,7 +230,7 @@ Scripts: `audit-03-completeness.sql`, `audit-04-joins.sql`, `audit-categories.ts
 
 ## 4. Completeness of attribution
 
-Product rows with no article, production, by job (`audit-03-completeness.sql`):
+Product rows with no article, production, by job ([`03-completeness.sql`](../../evals/cost/audit-261005/03-completeness.sql)):
 
 | Job | rows without a slug | Verdict |
 |---|---:|---|
@@ -259,8 +259,8 @@ Product rows with no article, production, by job (`audit-03-completeness.sql`):
 | `runStep` | attributes every pipeline step with no action from the step |
 | `tests/setup/no-provider-calls.ts` | a test that would really call a provider |
 
-**The scan was tried, not just read.** `audit-break-the-scan.ts` copies the test's matcher into the
-scratchpad and hands it ten made-up files:
+**The scan was tried, not just read.** [`break-the-scan.ts`](../../evals/cost/audit-261005/break-the-scan.ts) copies the test's matcher into a
+temporary file and hands it ten made-up files:
 
 | Made-up file | Result |
 |---|---|
@@ -312,16 +312,16 @@ run `npm run test:paid` after touching the gateway.
    *reasoned* that some have happened. *Smallest addition:* send the four warnings in
    `src/ai-spend.ts` to Sentry as events, so they are counted and alert.
 9. **`reported_input_tokens` means two things.** *Established* by the sample. A "tokens in" column
-   or a cache-read share summed across wires mixes them. *Smallest addition:* one function that
-   returns a row's total prompt tokens by wire, with a test, used by the cost cube.
+   or a cache-read share summed across wires mixes them. *What was done:* the cost cube carries no
+   token figure at all, and `npm run cost:analyse` computes cache use inside one wire only.
 10. **The paid check covers three of seven wires**, and both defects above are on the others.
-    *Established.* Deferred by the coordinator, with a queue entry.
+    *Established.* Deferred, with a queue entry.
 11. **Price tables have a "last checked" date nobody is asked to renew.** *Reasoned.* *Smallest
     addition:* a test that fails when the date is older than a chosen number of days.
 12. **`/api/command-pick` attributes nothing to the article it was typed in.** *Reasoned*; no
     production rows yet. A decision rather than a fix.
 13. **A controlled balance check on a quiet key** is the only thing that would prove completeness.
-    Deferred by the coordinator, with a queue entry.
+    Deferred, with a queue entry.
 
 One thing that is not a tracking defect but came out of the same queries: 51 of 394 article-steps
 in production were bought more than once, and those 51 hold $23.27. That is a lead for the cost
@@ -329,15 +329,14 @@ analysis.
 
 ## The scripts
 
-All in the session scratchpad
-(`/tmp/claude-1000/-home-greg-code-spideryarn2/0326b1f6-4b21-4d17-bcdc-302741834235/scratchpad/`),
-none committed. The `.ts` files read `OPENROUTER_API_KEY` from `.env.local` and never print it; the
-result files hold ids, models and amounts.
+All in [`evals/cost/audit-261005/`](../../evals/cost/audit-261005/README.md). The `.ts` files that
+call OpenRouter read `OPENROUTER_API_KEY` from `.env.local` and never print it. The result files
+were not kept, because they hold production ids.
 
-- `audit-prod-read.ts` — runs a `.sql` file against production, read-only.
-- `audit-01-schema.sql` … `audit-06-sol.sql` — the queries, in the order above.
-- `audit-accuracy-sample.ts`, `audit-accuracy-result.json` — check 1's sample.
-- `audit-unpriced-census.ts`, `audit-unpriced-census-result.json` — check 1's census.
-- `audit-computed-recompute.ts` — the computed-price recomputation.
-- `audit-categories.ts` — categories over the production ledger.
-- `audit-break-the-scan.ts`, `audit-scan-copy.ts` — check 5's attempt on the scan.
+- [`prod-read.ts`](../../evals/cost/audit-261005/prod-read.ts) — runs a `.sql` file against production, read-only.
+- [`01-schema.sql`](../../evals/cost/audit-261005/01-schema.sql) … [`06-sol.sql`](../../evals/cost/audit-261005/06-sol.sql) — the queries, in the order above.
+- [`accuracy-sample.ts`](../../evals/cost/audit-261005/accuracy-sample.ts) — check 1's sample.
+- [`unpriced-census.ts`](../../evals/cost/audit-261005/unpriced-census.ts) — check 1's census.
+- [`computed-recompute.ts`](../../evals/cost/audit-261005/computed-recompute.ts) — the computed-price recomputation.
+- [`categories.ts`](../../evals/cost/audit-261005/categories.ts) — categories over the production ledger.
+- [`break-the-scan.ts`](../../evals/cost/audit-261005/break-the-scan.ts) — check 5's attempt on the scan.

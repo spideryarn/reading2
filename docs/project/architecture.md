@@ -48,6 +48,9 @@ then where the data lives.
   that fail without saying so.
 - **[cost-tracking.md](cost-tracking.md)** — a new piece of AI work, to get its cost recorded
   without extra plumbing; or a figure on the metadata or admin page looks wrong.
+- **[admin-costs.md](admin-costs.md)** — Greg asks where the money went, or you are adding a
+  breakdown to `/admin/costs`: the one cube both the page and `npm run cost:analyse` read, and the
+  rules its figures keep.
 - **[prompt-caching.md](prompt-caching.md)** — a stage's bill went up, or you are changing what
   comes before the article in a prompt: the caches that stop us paying for the article twice.
 - **[prompting-guide.md](prompting-guide.md)** — writing or changing a prompt that puts words in

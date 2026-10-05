@@ -38,6 +38,7 @@ listed here; the names under each are files in `docs/project/`.
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
   `cost-tracking.md` (what a call cost, and how new AI work gets tracked for free) ·
+  `admin-costs.md` (`/admin/costs`, and the cost analysis an agent runs when Greg asks) ·
   `email.md` (Resend, for auth mail and anything after it) ·
   `prompt-caching.md` ·
   `prompting-guide.md` (the plain-words rule every prompt shares, and how to measure a prompt change) ·

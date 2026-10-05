@@ -59,6 +59,9 @@ so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
 |---|---|
 | What has this article cost, in total and by mode? | the **What it cost** section of the article's metadata page — the administrator, on their own articles |
 | What has each account cost this month? | `/admin/users`, the spend column — [admin.md](admin.md#the-spend-column-and-the-two-things-that-keep-it-honest) |
+| Which user, article, mode or model is the money going on, and when? | `/admin/costs` — [admin-costs.md](admin-costs.md) |
+| Where are the inefficiencies, with a report Greg can read? | `npm run cost:analyse` — [admin-costs.md § Running an analysis](admin-costs.md#running-an-analysis) |
+| Is what the ledger records right, and what is it missing? | the 2026-10-05 audit — [261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md) |
 | Where did the money go, and how much of it can we see? | `npm run cost`, `npm run cost -- --owners` — [ai-gateway.md](ai-gateway.md), § *The pricing report* |
 | What does a fresh ingest or a mode cost, cold? | `npm run eval:cost` — [evals/cost/run.ts](../../evals/cost/run.ts) |
 | Does the recording itself still work, end to end? | `npm run test:paid` — [below](#the-paid-check-npm-run-testpaid) |
@@ -121,6 +124,23 @@ uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
   only, since the fee is on buying credits; BYOK and our own arithmetic are not uplifted. The page
   shows the credits figure separately for that reason
   ([ai-gateway.md § What it cost](ai-gateway.md#what-it-cost)).
+
+## What the ledger is known to get wrong
+
+Audited 2026-10-05 against OpenRouter's own records
+([261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md)). What it
+records, it records exactly: 49 of 49 sampled production rows matched to the nano-dollar. Three
+things it does not:
+
+- **Dictation's transcription calls are recorded with no money.** The provider's reply says the
+  call cost nothing, and the gateway refuses to record that as free.
+- **A call that was stopped or that failed is recorded with no money**, though it was usually
+  charged. A stopped chat answer is the common case.
+- **The scan for calls that go round the gateway is a tripwire, not a wall.** It knows four
+  provider hosts; a provider it has never heard of passes it.
+
+`npm run cost:analyse -- --lookup-unpriced` asks OpenRouter what the first two really cost and
+prints the shortfall ($2.11 of $90.80 on the day of the audit). Each fix has a queue entry.
 
 ## Spend that keeps going
 

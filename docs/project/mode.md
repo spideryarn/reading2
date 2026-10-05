@@ -491,7 +491,10 @@ Two things to check:
   or its spend is shown in the `unknown` category. The compiler asks for this one too.
 
 Then generate the mode once on a local article and open the metadata page: the mode's line should
-be there.
+be there. `/admin/costs` grouped by *mode or task* should show it too, under the name you expect
+([admin-costs.md](admin-costs.md)). What these checks cannot catch — a call that goes round the
+gateway to a provider the scan has never heard of — is in
+[the 2026-10-05 audit § 5](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md#5-will-new-work-be-tracked-without-anyone-remembering).
 
 **Its cache group.** If the mode's marked article block is byte-identical to the shared `articleText`
 or `articleWithIds` prefix, add it to `ArticleStage`, then give it a row in `STAGE_EFFORT` and

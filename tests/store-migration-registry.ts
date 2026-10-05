@@ -2813,6 +2813,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      is the asymmetry `lateCalls` exists to report and cannot be shown against a
      store nothing selects. It was written against `fsCostStore` for a day and
      the import-graph guard is what said so. */
+  /* The cost analysis's two reads, 261005a stage 3: ledger rows in July 2033
+     under two seeded owners, like tests/admin-costs-store.test.ts. */
+  "tests/cost-detail-store.test.ts": "private-postgres",
   "tests/cost-ledger-shortfall.test.ts": "private-postgres",
   /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
      went away; what it asserts now is *which database* the ledger lands in,
@@ -3435,6 +3438,10 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/admin-costs-store.test.ts": {
     "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },
     "00000000-0000-4000-8000-0000c0be0a02": { kind: "seeded" },
+  },
+  "tests/cost-detail-store.test.ts": {
+    "00000000-0000-4000-8000-0000de7a0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000de7a0a02": { kind: "seeded" },
   },
   "tests/admin-feedback-store.test.ts": {
     "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },
