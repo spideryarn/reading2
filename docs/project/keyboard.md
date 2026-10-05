@@ -395,10 +395,43 @@ was mine* whoever writes the next one.
 Scrolling is animated ([`scroll.ts`](../../src/web/scroll.ts)), so a second press landing mid-flight
 would measure a position halfway between two items and step from *that* — two presses, one item of
 movement. Instead `keynav.ts` remembers the row its own last jump was headed for and steps from
-there, for `SCROLL_MS + 400` or until the reader grabs the page back with a wheel or a pointer.
+there.
 
-This is the one piece of state in the file, and it exists solely because the scroll is animated. If
-jumps ever become instant, delete it.
+**That aim stands while our own jump is unfinished, and after it ends for as long as the page is
+still at the pixel it ended on with the target row's layout unchanged.** `scrollToBlock` reports how
+each jump ends; `keynav.ts` § `Chain` records the offset and target layout then. A later press checks
+one target rectangle and the reading line before trusting a settled aim, because reflow can move
+rows without moving `scrollY` (a change of a pixel or more counts; a browser re-rounding an edge by
+a fraction does not). A changed block mapping also drops the numeric aim. The next press
+measures when those facts no longer hold. A wheel or a pointer still drops
+it outright, as before. So:
+
+- a second press mid-glide steps from the aim (its own scroll cancels the first, which ends the
+  *first* press's record, not the second's);
+- a row the page cannot bring to the reading line, at the clamped end of an article, keeps its aim
+  however long the reader pauses, so ↓ asks for the row after it and ↑ steps back one, not two;
+- **a ↓ that settles without moving the page leaves the aim where it was.** Several rows can begin
+  inside the last screenful, and these keys show no cursor, so the page moving is the only sign of a
+  press. If each ↓ at the bottom advanced the aim, ↑ had to walk it back through rows that cannot
+  move: nine dead presses on a 93-block article, in a browser, 2026-10-05. The aim stays on the
+  last row that moved the page and the first ↑ moves it. ↑ is not treated the same way: it adopts
+  its aim even when nothing moved, or an aim already deep in the last screen (several quick ↓)
+  would have ↑ ask for the same row for ever. The Diagram's Previous / Next do not do this; they
+  show their rung;
+- a scrollbar drag, the browser restoring a position, another feature's jump: the pixel is no
+  longer ours, and the next press measures.
+
+It was a timer until 2026-10-05 (`CHAIN_MS`, the glide plus 400 ms), and a timer cannot know whether
+the glide has run: under a long render the aim was dropped with the glide still pending and ↓
+repeated its target. The class is
+[a clock standing in for a fact](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md);
+the plan is
+[261005h](../plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md)
+§ Stage C. The rule is `keynav.ts` § `Chain`, shared with the Diagram's Previous / Next
+([diagram.md](diagram.md)), and `tests/step-chain.test.tsx` pins it over the real scroll.
+
+This is the one piece of state in the file. It exists because the scroll is animated and because
+the end of an article clamps.
 
 ### A note on the jump itself
 

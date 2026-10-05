@@ -69,7 +69,10 @@ so this adds a consumer of the policy rather than an exception to it
 ([security-map.md](security-map.md)).
 
 temml, its stylesheet and its one small font are a lazy chunk, fetched only when a block has a span.
-A load that fails leaves the TeX exactly as it was. The stylesheet is needed, not decorative: it is
+A load that fails leaves the TeX exactly as it was. The default loader first asks whether a different
+build is live and can reload safely (`src/web/stale-shell.ts` § `reloadIfStale`); the article stays
+held while it asks and while a requested reload starts (`src/web/maths.ts` § `renderArticleMaths`).
+The stylesheet is needed, not decorative: it is
 what lays display maths out as a block in Safari and Firefox. Display maths scrolls sideways inside
 its own box at phone width, like a code block ([narrow-windows.md](narrow-windows.md)).
 

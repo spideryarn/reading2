@@ -57,11 +57,12 @@
  * derived pair is real.
  */
 
+import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { closeDb } from "../src/db/client.js";
+import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { MirrorInput, MirrorRemark } from "../src/referee-mirror-types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -69,6 +70,15 @@ import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
 loadEnvLocal();
+
+/* Only the reporting leaf, so the disconnect case at the foot of this file can
+   ask whether a referee closing a tab was filed as a failure. Everything else
+   in the module is the real one. */
+const monitoring = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock("../src/monitoring.js", async (original) => ({
+  ...(await original<typeof import("../src/monitoring.js")>()),
+  captureFailure: monitoring.capture,
+}));
 
 const SLUG = "test-referee-mirror-route";
 
@@ -341,7 +351,7 @@ describe("Referee's mirror route", { timeout: 60_000 }, () => {
 
     beforeEach(async () => {
       const { row } = await asTestOwner(() =>
-        refereeCriteriaStore.begin(SLUG, CRITERION, {
+        refereeCriteriaStore.begin(SLUG, "feedfacefeedface", CRITERION, {
           kind: "diverging",
           poles: { against: "the evidence is thin", favour: "the evidence is strong" },
           scale: "rg",
@@ -429,6 +439,181 @@ describe("Referee's mirror route", { timeout: 60_000 }, () => {
       expect(first.commentId).toMatch(/^spya-[a-z0-9]{6}$/);
       expect(first.blockId).toBe(FIRST.blockId);
       expect(first.passage).toBe(FIRST.quote);
+    });
+  });
+
+  /**
+   * **A referee who leaves mid-run stops the paid call.**
+   *
+   * Mirror stores nothing — no row, no attempt, no result — so an answer that
+   * finishes after the referee has gone has nowhere to go. Until 2026-10-05 the
+   * call ran on anyway, paid for and unseen; Greg's answer to the fifth sweep's
+   * question 4 was to stop this one stream and change no other
+   * (docs/plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md).
+   *
+   * The transport is a stub that sends one piece of an answer and then holds
+   * the body open, erroring it only when the request's own signal aborts —
+   * which is what undici does. So "the call was stopped" is read off the signal
+   * the gateway handed to `fetch`, not off anything the route says about itself.
+   */
+  describe("a referee who leaves while the model is answering", () => {
+    it.each(["abort", "provider failure"] as const)(
+      "handles %s before fetch resolves without hiding an independent failure",
+      async (ending) => {
+        await asTestOwner(() =>
+          commentStore.create(SLUG, { ...FIRST, body: "This claim needs evidence." }),
+        );
+        monitoring.capture.mockClear();
+        let upstream: AbortSignal | undefined;
+        let rejectFetch!: (reason: unknown) => void;
+        let opened!: () => void;
+        const fetching = new Promise<void>((resolve) => {
+          opened = resolve;
+        });
+        vi.stubGlobal("fetch", (_input: unknown, init?: RequestInit) => {
+          upstream = init?.signal ?? undefined;
+          return new Promise<Response>((_resolve, reject) => {
+            rejectFetch = reject;
+            upstream?.addEventListener("abort", () => reject(upstream?.reason), {
+              once: true,
+            });
+            opened();
+          });
+        });
+        const req = Object.assign((async function* () {})(), {
+          method: "POST",
+          url: URL_FOR(SLUG),
+          headers: AUTHED_HEADERS,
+        }) as unknown as IncomingMessage;
+        const res = Object.assign(new EventEmitter(), {
+          writableEnded: false,
+          destroyed: false,
+          statusCode: 200,
+          setHeader() {},
+          writeHead() {},
+          flushHeaders() {},
+          write() {},
+          end() {
+            this.writableEnded = true;
+          },
+        });
+        const failure = new Error("upstream connection failed independently");
+        const pending = handleApi(req, res as unknown as ServerResponse, acceptAny);
+        try {
+          await fetching;
+          // Reject first, then disconnect before the rejection's catch runs.
+          if (ending === "provider failure") rejectFetch(failure);
+          res.destroyed = true;
+          res.emit("close");
+          expect(upstream?.aborted).toBe(true);
+        } finally {
+          rejectFetch(new Error("test over"));
+          await pending;
+        }
+        expect(res.writableEnded).toBe(true);
+        if (ending === "abort") {
+          expect(monitoring.capture).not.toHaveBeenCalled();
+        } else {
+          expect(monitoring.capture).toHaveBeenCalledWith(failure, {
+            route: "referee-mirror",
+            slug: SLUG,
+          });
+        }
+      },
+    );
+
+    it("aborts the upstream call, files no failure, and records the call as aborted", async () => {
+      await asTestOwner(() =>
+        commentStore.create(SLUG, { ...FIRST, body: "This claim is not supported by the data." }),
+      );
+      monitoring.capture.mockClear();
+
+      const since = new Date();
+      let upstream: AbortSignal | undefined;
+      let release: (why: unknown) => void = () => {};
+      vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+        fetches.push(String(input));
+        upstream = init?.signal ?? undefined;
+        const encoder = new TextEncoder();
+        const piece = { choices: [{ delta: { content: '{"remarks": [' } }] };
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(encoder.encode(`data: ${JSON.stringify(piece)}\n\n`));
+            release = (why) => {
+              try {
+                c.error(why);
+              } catch {
+                // Already errored or closed: the stream is over either way.
+              }
+            };
+            upstream?.addEventListener("abort", () => release(upstream?.reason), { once: true });
+          },
+        });
+        return new Response(body, {
+          status: 200,
+          headers: { "x-generation-id": "gen-mirror-left" },
+        });
+      });
+
+      const req = Object.assign((async function* () {})(), {
+        method: "POST",
+        url: URL_FOR(SLUG),
+        headers: AUTHED_HEADERS,
+      }) as unknown as IncomingMessage;
+      let answering!: () => void;
+      const firstDelta = new Promise<void>((resolve) => {
+        answering = resolve;
+      });
+      const res = Object.assign(new EventEmitter(), {
+        writableEnded: false,
+        destroyed: false,
+        statusCode: 200,
+        setHeader() {},
+        writeHead() {},
+        flushHeaders() {},
+        write(chunk: string) {
+          if (chunk.startsWith("event: delta")) answering();
+        },
+        end() {
+          this.writableEnded = true;
+        },
+      });
+
+      const pending = handleApi(req, res as unknown as ServerResponse, acceptAny);
+      try {
+        await firstDelta;
+        expect(fetches, "exactly one model call was opened").toHaveLength(1);
+        expect(upstream?.aborted, "the call was live while the referee was there").toBe(false);
+
+        res.destroyed = true;
+        res.emit("close");
+
+        expect(upstream?.aborted, "the referee left and the paid call ran on").toBe(true);
+      } finally {
+        /* Without the fix nothing ever errors the body, and the handler would
+           sit here until the stall clock fired thirty seconds later. */
+        release(new Error("test over"));
+        await pending;
+      }
+
+      /* A person closing a tab is not an incident. */
+      expect(monitoring.capture).not.toHaveBeenCalled();
+      expect(res.writableEnded).toBe(true);
+
+      /* **And the ledger says what happened.** One row for the call, marked
+         `aborted` rather than `ok`, with no price on it: this stub never sends
+         priced usage before the abort, so the
+         honest cost is "not told", not zero. */
+      const { sql } = await import("drizzle-orm");
+      const rows = (
+        await getDb().execute(
+          sql`select outcome, cost_source, credits_used_nanos
+                from spideryarn.ai_calls
+               where article_slug = ${SLUG} and purpose = 'referee-mirror'
+                 and started_at >= ${since.toISOString()}::timestamptz`,
+        )
+      ).rows as Record<string, unknown>[];
+      expect(rows).toEqual([{ outcome: "aborted", cost_source: "none", credits_used_nanos: null }]);
     });
   });
 });

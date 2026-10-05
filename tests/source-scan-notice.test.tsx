@@ -353,3 +353,42 @@ describe("the cap is never silent", () => {
     expect(text()).toContain("42 more were found and not listed");
   });
 });
+
+/* A copy opened from a home-screen icon outlives several deploys, so a scan a
+   newer server wrote can carry a kind, an explanation or a blind spot this
+   copy has no words for. An inherited name (`__proto__`) is the half that
+   throws or prints an object. docs/plans/261005h, Stage A. */
+describe("a value this copy of the app was built before", () => {
+  const UNKNOWN = ["a-newer-value", "__proto__", "constructor", "toString"];
+  const words = (value: string) => value.replaceAll("-", " ");
+
+  it("labels the values it knows (the control)", () => {
+    paint(examined({ findings: [HIDDEN_WEARING_A_LABEL] }));
+    expect(host.querySelector(".ref-scan-kind")?.textContent).toBe("Text taken out of the page");
+    expect(host.querySelector(".ref-scan-tag")?.textContent).toBe("the screen-reader-only idiom");
+  });
+
+  it.each(UNKNOWN)("shows finding kind %s as the server's own word", (kind) => {
+    paint(examined({ findings: [{ ...HIDDEN, kind } as unknown as ScanFinding] }));
+    expect(host.querySelector(".ref-scan-kind")?.textContent).toBe(words(kind));
+    expect(text()).toContain(PAYLOAD);
+  });
+
+  it.each(UNKNOWN)("keeps a finding whose everyday explanation is %s, without inventing one", (ordinary) => {
+    paint(examined({ findings: [{ ...HIDDEN, ordinary } as unknown as ScanFinding] }));
+    expect(host.querySelector(".ref-scan-tag")).toBeNull();
+    expect(text()).toContain(PAYLOAD);
+  });
+
+  it.each(UNKNOWN)("still names blind spot %s, between the ones it has words for", (spot) => {
+    paint(
+      examined({
+        blindSpots: ["approximated-cascade", spot, "images-of-text"] as unknown as HtmlSourceScan["blindSpots"],
+      }),
+    );
+    expand();
+    expect(text()).toContain(
+      `Not checked: the real CSS cascade — media queries, variables, gradients; ${words(spot)}; text drawn as a picture.`,
+    );
+  });
+});

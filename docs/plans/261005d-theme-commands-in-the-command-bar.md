@@ -143,3 +143,6 @@ against above.
   the phrases a reader would type, and a verb would need an entry in `parseArgumentQuery` and a
   runner for no gain.
 - Cross-device sync, which 261003e already declined.
+
+**[Q-theme-rows-where] decided: (a), leave it** — the rows stay on the reading view and the
+Metadata page only. Greg, 2026-10-05: "leave it for now".

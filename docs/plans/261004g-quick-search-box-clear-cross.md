@@ -49,8 +49,9 @@ suite and typecheck green, a GPT Sol code review, and a browser check at desktop
 ## Where it does not appear
 
 A phone, and an iPad without a trackpad, never draw this box: they get the ⚡, which opens the
-Search panel's own box (`pointer: coarse`, 261002h). That box has no cross, and no Escape key
-either on a touch screen. Raised with Greg as a question rather than built here.
+Search panel's own box (`pointer: coarse`, 261002h). That box had no cross yet, and no Escape key
+either on a touch screen. Greg answered `Q-panel-box-cross yes` on 2026-10-04, and it was built in
+[261005i](261005i-the-command-bar-opens-quick-search-and-the-search-panel-box-gets-a-clear-cross.md).
 
 ## Review
 

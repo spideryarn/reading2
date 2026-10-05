@@ -269,8 +269,11 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <strong>Quick search</strong> box in the bottom bar, press the <strong>⚡</strong> button
           that takes its place while Search is open, or press <strong>/</strong>. A phone or a
           narrow window has no room for the box: open <strong>Search</strong> and choose{" "}
-          <strong>quick</strong>. The box keeps your words after a search,
-          so you can add to them; the <strong>×</strong> at its right-hand end empties it.
+          <strong>quick</strong>. Typing <em>search for …</em> in the command bar does it too, at
+          any width: the first row it offers is the quick search, and the second finds the exact
+          words. The box keeps your words after a search, so you can add to them; the{" "}
+          <strong>×</strong> at its right-hand end empties it, and the box in the Search panel has
+          one as well.
         </p>
       </>
     ),

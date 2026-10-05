@@ -411,3 +411,24 @@ describe("coverage is only claimed when the question was actually put", () => {
     expect(text().toLowerCase()).not.toContain("criteria");
   });
 });
+
+/* A remark kind a newer server sends to a copy built before it. The badge is a
+   table read by that value. docs/plans/261005h, Stage A. */
+describe("a remark kind this copy of the app was built before", () => {
+  const remarkOf = (kind: string) => ({ ...ALL_FIVE[0], kind }) as unknown as MirrorRemark;
+  const badge = () => host.querySelector(".mir-kind")?.textContent;
+
+  it("labels a kind it knows (the control)", () => {
+    paint(api({ result: done({ remarks: [ALL_FIVE[0]!] }) }));
+    expect(badge()).toBe("Hard for an author to act on");
+  });
+
+  it.each(["a-newer-kind", "__proto__", "constructor", "toString"])(
+    "shows %s as the server's own word, and keeps the remark",
+    (kind) => {
+      paint(api({ result: done({ remarks: [remarkOf(kind)] }) }));
+      expect(badge()).toBe(kind.replaceAll("-", " "));
+      expect(text()).toContain("An author cannot tell from this which part of the design you mean.");
+    },
+  );
+});

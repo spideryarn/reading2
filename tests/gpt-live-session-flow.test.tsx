@@ -770,6 +770,11 @@ describe("the provider ending the call", () => {
     ["connection_lost", /connection was lost/],
     ["remote_hangup", /ended the call/],
     ["something_new", /conversation ended/],
+    /* Names every object inherits: the table answered with an object or a
+       function, which `??` lets through. docs/plans/261005h, Stage A. */
+    ["__proto__", /conversation ended/],
+    ["constructor", /conversation ended/],
+    ["toString", /conversation ended/],
   ])("session.closed %s says why, writes what was said and does not ask to close again", async (reason, sentence) => {
     const { spoken, speak } = recordingSpeak();
     const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });

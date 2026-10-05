@@ -99,6 +99,7 @@ import {
 import { stallOf, type LiveStall } from "../stall.js";
 import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveStep, LiveToolRun } from "../useLiveConversation.js";
 import { apiWiring } from "../wiring.js";
+import { ownLabel } from "../../lib/own-label.js";
 import { DelegationLoop, type DelegationEffect } from "./delegations.js";
 import { GptLiveMeter, backendReport, voiceReport, type GptLiveUsageReport } from "./meter.js";
 import { Segmenter, type Speaker, type SpokenExchange as FrozenExchange } from "./segments.js";
@@ -735,7 +736,10 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         /* Not our doing: the provider ended the call. Say why, then the
            ordinary hang-up, which writes what was said. */
         const reason = typeof e.reason === "string" ? e.reason : "unknown";
-        setError(CLOSED_SENTENCE[reason] ?? CLOSED_OTHER);
+        /* `ownLabel`, because the reason is the provider's string: a bare
+           lookup answers `toString` with a function, and a state setter
+           calls a function it is handed (lib/own-label.ts). */
+        setError(ownLabel(CLOSED_SENTENCE, reason) ?? CLOSED_OTHER);
         endedBecause.current = `provider-${reason}`.slice(0, 60);
         void stopRef.current();
         return;
