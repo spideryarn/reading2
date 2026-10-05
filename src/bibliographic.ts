@@ -26,6 +26,12 @@
  * next caller may ask again — unless the service told us to wait, which every
  * caller then honours.
  *
+ * **A Crossref record also carries Crossref's citation count and the moment it
+ * was read** (plan 261005i), for the Citations row. A record cached before the
+ * count was kept is asked about once more, by any caller, and a failed ask
+ * leaves it due again: so during a Crossref outage such a record is
+ * `unavailable` to every caller until one ask succeeds.
+ *
  * Nothing calls this from a route or a step yet: stages 3, 5 and 6 of the plan
  * are the callers.
  */
@@ -34,6 +40,7 @@ import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js"
 import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
+import { isCitedByCount } from "./registry-work.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 
 /* ------------------------------------------------------------ the types -- */
@@ -82,6 +89,22 @@ export interface WorkRecord {
   published?: string;
   /** The DOI the registry holds the record under — for an arXiv id, `10.48550/arxiv.<id>`. */
   doi: string;
+  /**
+   * **Crossref's `is-referenced-by-count`**: how many works Crossref holds that
+   * cite this one. Only ever on a Crossref record, and only a whole number
+   * `isCitedByCount` accepts. It counts citations from works whose publishers
+   * deposit their reference lists, so it runs lower than Google Scholar's.
+   * DataCite's count is not kept (plan 261005i § Passed over).
+   */
+  citedByCount?: number;
+  /**
+   * **When Crossref was asked for that count**, ISO, by the store's clock: on
+   * every Crossref record `lookupWork` returns, count or no count, because
+   * "asked, and there was none" is a different thing from "never asked". The
+   * parser never sets it; `withCountReadAt` does, from the moment the answer
+   * was stored. Absent on a DataCite record.
+   */
+  citedByCountReadAt?: string;
 }
 
 /**
@@ -103,6 +126,18 @@ export type LookupResult =
 
 /** What is remembered: an answer, never an error. */
 export type CachedAnswer = { kind: "found"; record: WorkRecord } | { kind: "not-found" };
+
+/**
+ * **An answer as the store keeps it, given the moment it was stored**: a
+ * Crossref record says that is when its count was read; a DataCite record and
+ * a miss say nothing. The one place that rule is written for a store kept in
+ * memory and for what `lookupWork` returns from a write; the Postgres store
+ * says the same thing in its `write` statement.
+ */
+export function withCountReadAt<A extends CachedAnswer>(answer: A, storedAt: Date): A {
+  if (answer.kind !== "found" || answer.record.source !== "crossref") return answer;
+  return { ...answer, record: { ...answer.record, citedByCountReadAt: storedAt.toISOString() } };
+}
 
 /* ------------------------------------------------------------ the policy -- */
 
@@ -173,8 +208,14 @@ export interface BibliographicStore {
   claim(id: WorkId, fresh: Freshness, leaseMs: number): Promise<IdentifierClaim | null>;
   /** Give a claim back with nothing learned. Only this claim: a later one is left alone. */
   release(claim: IdentifierClaim): Promise<void>;
-  /** Remember an answer and clear the claim, only while this exact claim still owns the row. */
-  write(claim: IdentifierClaim, answer: CachedAnswer): Promise<boolean>;
+  /**
+   * Remember an answer and clear the claim, only while this exact claim still
+   * owns the row. **The moment it was stored, by the store's clock, for every
+   * answer** (a DataCite record and a miss included), or null when the claim
+   * was lost and nothing was written. A Crossref record is kept with that
+   * moment as its `citedByCountReadAt`.
+   */
+  write(claim: IdentifierClaim, answer: CachedAnswer): Promise<Date | null>;
   /** Whether the service is cooling down right now. */
   coolingDown(service: LimiterService): Promise<boolean>;
   takeSlot(service: LimiterService, leaseMs: number): Promise<SlotLease | null>;
@@ -379,6 +420,9 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     .map(crossrefDay)
     .filter((day) => day !== undefined)
     .sort()[0];
+  /* Anything but a whole number the column can hold is no count, and the
+     record is still an answer (plan 261005i, GPT Sol's F3). */
+  const citedByCount = msg["is-referenced-by-count"];
   return {
     id,
     source: "crossref",
@@ -388,6 +432,7 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     ...(venue !== null ? { venue } : {}),
     ...(published !== undefined ? { published } : {}),
     doi: normaliseDoi(msg.DOI, doi),
+    ...(isCitedByCount(citedByCount) ? { citedByCount } : {}),
   };
 }
 
@@ -627,18 +672,20 @@ export async function lookupWork(id: WorkId, deps: LookupDeps = {}): Promise<Loo
     const asked = await ask(id, d);
     if (asked.kind === "unavailable") {
       await d.store.release(claim);
-    } else {
-      const written = await d.store.write(claim, asked);
       claim = null;
-      if (!written) {
-        /* This process paused past its lease and a successor owns the row. Its
-           answer may be perfectly plausible, but it is no longer authorised to
-           publish it or to clear the successor's claim. */
-        return await awaitOther(id, d);
-      }
+      return asked;
     }
+    const storedAt = await d.store.write(claim, asked);
     claim = null;
-    return asked;
+    if (storedAt === null) {
+      /* This process paused past its lease and a successor owns the row. Its
+         answer may be perfectly plausible, but it is no longer authorised to
+         publish it or to clear the successor's claim. */
+      return await awaitOther(id, d);
+    }
+    /* What the next caller will read from the cache, so the two agree: a
+       Crossref record carries the moment its count was read. */
+    return withCountReadAt(asked, storedAt);
   } catch (err) {
     d.log.error({ id, outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "bibliographic lookup failed");
     if (claim !== null) await d.store.release(claim).catch(() => {});

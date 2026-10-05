@@ -1,0 +1,305 @@
+{
+  "arm": "high-none-new0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "version": "simple-prompt/9",
+  "sourceSha256": "ea4e45d25a2fbd7530eb71c965ad2678410afc34564f404deb0865a37da0213d",
+  "at": "2026-10-05T16:32:45.014Z",
+  "bodyWords": 8580,
+  "band": "standard",
+  "bodyBlocks": 99,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "a65c945f19872f63",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 33437,
+  "costUsd": 0.1975956,
+  "tokens": {
+    "input": 12295,
+    "output": 3937,
+    "reasoning": 1488
+  },
+  "briefReadyMs": 22596,
+  "fullerReadyMs": 33369,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 488,
+  "briefWords": 94,
+  "fuller": [
+    {
+      "text": "This review asks how groups of brain cells actually process information, not just pass it along. It gives a beginner-friendly guide to a maths tool called partial information decomposition, or PID, and shows what it has found in real neurons. The authors draw mostly on their own studies and add their view of where the field should go.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks how groups of brain cells actually process information, not just pass it along.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "It gives a beginner-friendly guide to a maths tool called partial information decomposition, or PID, and shows what it has found in real neurons.",
+          "id": "spya-xn9j9k",
+          "key": "partial information decomposition, or PID"
+        },
+        {
+          "text": "The authors draw mostly on their own studies and add their view of where the field should go.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors call understanding how brains process information a grand challenge of modern neuroscience. Two things held this work back. One was a lack of data, now eased by tools that record hundreds or thousands of neurons at once. The other was a lack of ways to analyse that data, which is the gap PID helps fill.",
+      "ids": [
+        "spya-rxcze4",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "The authors call understanding how brains process information a grand challenge of modern neuroscience.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "Two things held this work back.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "One was a lack of data, now eased by tools that record hundreds or thousands of neurons at once.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "The other was a lack of ways to analyse that data, which is the gap PID helps fill.",
+          "id": "spya-s9kmxa"
+        }
+      ]
+    },
+    {
+      "text": "Older measures track how activity spreads from one neuron to another. The main one, transfer entropy, asks how much a source neuron's past helps predict a target's next step, beyond the target's own past. PID goes further by splitting what two source neurons tell us about a target into parts. Redundant information comes from either source, unique information from only one, and synergistic information only from both sources' joint pattern. The authors treat synergy as a sign of real processing, or computation.",
+      "ids": [
+        "spya-qjdbvj",
+        "spya-p4pyuy",
+        "spya-h5jzvm"
+      ],
+      "sentences": [
+        {
+          "text": "Older measures track how activity spreads from one neuron to another.",
+          "id": "spya-qjdbvj"
+        },
+        {
+          "text": "The main one, transfer entropy, asks how much a source neuron's past helps predict a target's next step, beyond the target's own past.",
+          "id": "spya-p4pyuy"
+        },
+        {
+          "text": "PID goes further by splitting what two source neurons tell us about a target into parts.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Redundant information comes from either source, unique information from only one, and synergistic information only from both sources' joint pattern.",
+          "id": "spya-h5jzvm",
+          "key": "synergistic information"
+        },
+        {
+          "text": "The authors treat synergy as a sign of real processing, or computation.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "In their lab work, the team grew slices of mouse brain cortex and recorded hundreds of neurons on 512-electrode grids. They mapped who drives whom using transfer entropy, finding about 0.4 to 1.0% of possible links significant. They then ran PID on thousands of triads: two source neurons feeding one target. Across 25 recordings, synergy rose with information flow and was reliably about a quarter of a triad's transfer entropy.",
+      "ids": [
+        "spya-sw5ukx",
+        "spya-kqkb58"
+      ],
+      "sentences": [
+        {
+          "text": "In their lab work, the team grew slices of mouse brain cortex and recorded hundreds of neurons on 512-electrode grids.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "They mapped who drives whom using transfer entropy, finding about 0.4 to 1.0% of possible links significant.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "They then ran PID on thousands of triads: two source neurons feeding one target.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "Across 25 recordings, synergy rose with information flow and was reliably about a quarter of a triad's transfer entropy.",
+          "id": "spya-kqkb58",
+          "key": "about a quarter"
+        }
+      ]
+    },
+    {
+      "text": "Three further patterns showed where synergy gathers. Triads inside the rich club, a core of best-connected neurons, had 2.7 times the synergy and held about 88% of it, despite under 40% of neurons. Triads with two links between the sources had 50% more synergy, while two links back from the target meant 10% less. Synergy grew as the two sources' activity became more alike, but peaked when that likeness reached about 7% of its maximum, then fell.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ],
+      "sentences": [
+        {
+          "text": "Three further patterns showed where synergy gathers.",
+          "id": null
+        },
+        {
+          "text": "Triads inside the rich club, a core of best-connected neurons, had 2.7 times the synergy and held about 88% of it, despite under 40% of neurons.",
+          "id": "spya-fud8q3",
+          "key": "2.7 times the synergy"
+        },
+        {
+          "text": "Triads with two links between the sources had 50% more synergy, while two links back from the target meant 10% less.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "Synergy grew as the two sources' activity became more alike, but peaked when that likeness reached about 7% of its maximum, then fell.",
+          "id": "spya-ybmve2"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "A study of three monkeys doing a reach-and-grasp task repeated many of these results in living animals. Activity was mostly synergy-led, but redundancy rose sharply during movement. The authors suggest the brain may copy the move signal many times so it reaches the muscles reliably.",
+      "ids": [
+        "spya-wr7f6y",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "A study of three monkeys doing a reach-and-grasp task repeated many of these results in living animals.",
+          "id": "spya-wr7f6y"
+        },
+        {
+          "text": "Activity was mostly synergy-led, but redundancy rose sharply during movement.",
+          "id": "spya-t8fayf"
+        },
+        {
+          "text": "The authors suggest the brain may copy the move signal many times so it reaches the muscles reliably.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "The authors name clear limits. The slice studies used a two-neuron method known to overstate links, and brain slices in a dish do not face a behaving animal's demands. With six source neurons, PID yields 7,828,354 parts, so fully describing a real neuron is out of reach. PID also spots statistical patterns without explaining the biology that causes them.",
+      "ids": [
+        "spya-j4cy9j",
+        "spya-aby2dp",
+        "spya-spdx0y"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name clear limits.",
+          "id": null
+        },
+        {
+          "text": "The slice studies used a two-neuron method known to overstate links, and brain slices in a dish do not face a behaving animal's demands.",
+          "id": "spya-j4cy9j"
+        },
+        {
+          "text": "With six source neurons, PID yields 7,828,354 parts, so fully describing a real neuron is out of reach.",
+          "id": "spya-aby2dp"
+        },
+        {
+          "text": "PID also spots statistical patterns without explaining the biology that causes them.",
+          "id": "spya-spdx0y"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that neurons do not simply add up their inputs; they respond to the patterns those inputs form. How much synergy appears depends on a neuron's place in the network and on what the animal is doing.",
+      "ids": [
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that neurons do not simply add up their inputs; they respond to the patterns those inputs form.",
+          "id": "spya-sp50v3",
+          "key": "neurons do not simply add up their inputs"
+        },
+        {
+          "text": "How much synergy appears depends on a neuron's place in the network and on what the animal is doing.",
+          "id": "spya-sp50v3"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review asks how groups of brain cells actually work with information. It explains a math tool, partial information decomposition, which splits up what several input cells tell one target cell. The authors call how brain circuits handle information one of neuroscience's biggest open questions.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks how groups of brain cells actually work with information.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "It explains a math tool, partial information decomposition, which splits up what several input cells tell one target cell.",
+          "id": "spya-xn9j9k",
+          "key": "partial information decomposition"
+        },
+        {
+          "text": "The authors call how brain circuits handle information one of neuroscience's biggest open questions.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "The key idea is synergy: information that shows only in the pattern of inputs together, not in any single one. Studies found synergy is common, especially in tight groups of the best-connected cells. So brain cells seem not to simply add up their inputs, but react to their patterns.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-fud8q3",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "The key idea is synergy: information that shows only in the pattern of inputs together, not in any single one.",
+          "id": "spya-xn9j9k",
+          "key": "synergy"
+        },
+        {
+          "text": "Studies found synergy is common, especially in tight groups of the best-connected cells.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "So brain cells seem not to simply add up their inputs, but react to their patterns.",
+          "id": "spya-sp50v3",
+          "key": "react to their patterns"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

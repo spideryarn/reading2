@@ -209,8 +209,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             </strong>{" "}
             The further across the strip it reaches, the longer you spent there. A quick glance
             may leave no shading. Use it to find where you had got to after jumping
-            around. Only whoever added the article sees it, and it
-            is <HelpRef to="experimental-features">experimental</HelpRef>.
+            around. Only whoever added the article sees it.
           </li>
           <li>
             <strong>One faint grey bar across the full width: where you jumped from.</strong> It
@@ -380,7 +379,9 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
             choice your Profile also has. <em>find more terms</em> and{" "}
             <em>more quotes</em> open Glossary or Quotes and press its <strong>Find more</strong> for
             you; they are offered only while that list can be added to. Press the microphone in the
-            box to say it instead of typing.
+            box to say it instead of typing. Press Stop twice quickly and the bar presses{" "}
+            <kbd>Enter</kbd> for you once the words arrive: it runs the command you named, or asks
+            what you meant.
           </li>
           <li>
             If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}
@@ -797,10 +798,6 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
         <ul>
           <li>
             <strong>More modes</strong>: {listOf(EXPERIMENTAL_MODES)}.
-          </li>
-          <li>
-            <strong>Reading time on the spine</strong>: a tinted area that reaches further across
-            where you have spent longer. Only you see it.
           </li>
           <li>
             <strong>Start the whole article again</strong>, on an article’s Metadata page.

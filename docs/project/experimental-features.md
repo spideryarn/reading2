@@ -220,15 +220,16 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
-**One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
-2026-09-16 — an area chart down the spine of where the reader has spent longer. Both the recording and the drawing,
-because it is new code running every second on an owner's article and a new kind of data about a
-person, so it starts with the readers who asked for the unfinished things. The switch is availability
-here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading
-time cannot be backfilled —
-[260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
+**[Reading time](reading-time.md) was behind it from 2026-09-16 and came out on 2026-10-05** — an
+area chart down the spine of where the reader has spent longer. Both the recording and the drawing
+went in, because it was new code running every second on an owner's article and a new kind of data
+about a person
+([260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)),
+and both came out: nothing was sampled with the switch off, so the chart had holes wherever it had
+been off. Every owner now has it, with no way yet to turn it off or erase it —
+[reading-time.md § Who gets it](reading-time.md#who-gets-it) has Greg's decision and what it gives up.
 
-**And the headings breadcrumb, since 2026-10-02** — one line in the sticky bar at the top of the
+**One thing that is not a mode is behind it: the headings breadcrumb, since 2026-10-02** — one line in the sticky bar at the top of the
 reading view saying where in the structure you are, part › section, following you as you scroll:
 
 > I sometimes feel as though I lose track of where I am. The structure mode helps a lot, but then I

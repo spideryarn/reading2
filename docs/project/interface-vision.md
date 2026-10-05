@@ -154,9 +154,9 @@ These are the reasons to go carefully, each one already said by Greg in another 
   Both now live there, and still need different voices — the
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
 - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
-  other modes have already made (and, since 2026-10-03, its own relation words:
-  [marginalia.md](marginalia.md#relation-words)), and the automatic help comments in 7E were declined for the same
-  reason. Greg would have had it run the missing modes, but only if a mode made later never reached
+  other modes have already made, and the automatic help comments in 7E were declined for the same
+  reason. **One exception since 2026-10-05, Greg's own**: the column's relation words are made the
+  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)). Greg would have had it run the missing modes, but only if a mode made later never reached
   the margin:
 
   > My worry is that if we *don't* fill in stuff that hasn't been generated, then even if we do

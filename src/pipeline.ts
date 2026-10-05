@@ -29,12 +29,12 @@ import {
 } from "./arc.js";
 import {
   BLOCKS_INPUT_HTML,
+  blocksAreWhatTheirHtmlProduces,
   blocksArtefact,
   type BlocksRun,
   NoBlocksProduced,
   previousBlocksFrom,
   runBlocks,
-  splitIntoBlocks,
 } from "./blocks.js";
 import type { Assets, PdfFigureEntry, PdfFigureFailure } from "./assets.js";
 import {
@@ -134,7 +134,10 @@ import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
 import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
 import { stageFailure } from "./job-failure.js";
-import { extractHtmlMetadata, extractPaperMetadata, paperMeta } from "./paper-metadata.js";
+import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
+import { modelTitleTidier } from "./title-tidy-model.js";
+import { plainTitle } from "./html.js";
+import type { TitleTidier } from "./title-tidy.js";
 import {
   generateSkim,
   PROMPT_VERSION as SKIM_PROMPT_VERSION,
@@ -962,160 +965,10 @@ export interface PipelineStep<N extends StepName = StepName> {
 }
 
 /**
- * One block, as a string that can be compared across storage shapes.
- *
- * **Keys sorted and every field included, id and all.** Sorted because the two
- * sides are built by different code — `splitIntoBlocks` writes an object
- * literal, the Postgres adapter assembles one from columns — so key *order* is
- * not a fact about the block. Every field, rather than a chosen tuple, because
- * a field added to `Block` later is then covered without anybody remembering,
- * and the way this check fails when a field is forgotten is silence.
- *
- * **Nothing is normalised away, and an earlier version of this stripped the
- * ids.** That version could not see a block id that had moved, nor an internal
- * link repointed from one heading to another — both of which are exactly what
- * `blocks` exists to get right (docs/project/block-ids.md). GPT Sol reproduced
- * both against the real guard, 2026-08-31.
- */
-function canonicalBlock(block: Block): string {
-  const fields = block as unknown as Record<string, unknown>;
-  return JSON.stringify(Object.keys(fields).sort().map((key) => [key, fields[key]]));
-}
-
-/**
- * Is stage 3's output still what stage 3 would produce from the HTML stage 2 is
- * holding **now**?
- *
- * Three questions, in increasing order of cost.
- *
- * 1. **Every id in the blocks artefact is in the stamped HTML.** All of them,
- *    not a sample. A cheap early rejection: it settles the commonest failure
- *    (stage 2 re-ran and wiped the ids) before anything is parsed, and it is
- *    the only question that can be asked without a full parse.
- * 2. **Stage 3, run again against the extracted HTML, writes the same
- *    document.** `splitIntoBlocks(extracted, storedBlocks).html` byte for byte
- *    against `stampedHtml`. This is the one question about the document as a
- *    document: a changed `<title>`, or anything else outside a block, moves it
- *    while every block stays identical.
- * 3. **And the same blocks, exactly** — ids, link targets, note fields and all.
- *
- * ## Why the baseline is passed, which took three goes to get right
- *
- * `splitIntoBlocks(extracted, file.blocks)`. Handing the stored blocks in is
- * what makes an **exact** comparison possible: unchanged content comes back
- * carrying the ids it already had (`carryOverIds`), so anything that differs
- * differs because the article did. Two earlier versions of this function got
- * that wrong in opposite directions — one omitted the baseline believing it
- * would manufacture agreement, the other passed it but then stripped the ids
- * out of the comparison, which threw away the very thing the baseline buys.
- * Omitting it is also the shape tests/blocks-baseline.test.ts refuses in `src/`,
- * because one argument to that function means "mint everything".
- *
- * ## Why question 1 is not enough on its own
- *
- * This began as `htmlCarriesItsIds`, which asked it alone. On disk that was
- * enough **by accident**: `extract.extractedHtml` and `blocks.stampedHtml` both
- * resolved to the same `output/<slug>.html` in the filesystem store's path map
- * (deleted 2026-09-05), so a
- * re-extraction overwrites the very file question 1 reads and the missing ids
- * give it away. In Postgres they are two columns (`extracted_html`,
- * `stamped_html`), question 1 compares stage 3's own output against stage 3's
- * own blocks, and it **returns true always** — a vacuous guard over the one
- * contract this codebase is built on, arriving at the moment the reads start
- * succeeding. docs/plans/260831b-finish-the-database-move.md § stage 1.
- *
- * ## Why not something cheaper than re-running the split
- *
- * Two cheaper things were tried and both were unsound, in ways worth keeping
- * because they looked well-measured at the time.
- *
- * - **Comparing the two documents' parsed text.** It under-fires:
- *   `<p>Alpha</p><p>Beta</p>` re-extracted as `<p>AlphaBeta</p>` has identical
- *   text and genuinely different blocks, as do a heading demoted to a
- *   paragraph, a repointed `href`, and whitespace inside a `<pre>`. And it
- *   over-fires in a way that cannot cure: stage 3 sanitises what it is handed
- *   and `FORBID_TAGS` (src/sanitize-policy.ts) removes `style` outright, so a
- *   healthy stamped HTML legitimately says less than its extraction — and under
- *   Postgres `extracted_html` stays unsanitised for ever, so the step would
- *   re-run and never report itself done.
- * - **Comparing the blocks with the ids normalised out.** Blind to a moved id
- *   and to a repointed internal link, which is most of what this guard is for.
- *
- * **The lesson, and it is the general one.** The first of those was measured
- * against one real article and found sound. One healthy pair says nothing about
- * the unhealthy ones, and nothing at all about the pairs that ought to be
- * healthy and are not — docs/reusable/silent-success.md.
- *
- * There is no cheap *exact* pre-check available from what is stored today. The
- * one that would work is persisted binding — digests of stage 2's input, the
- * stamped output and the blocks, written transactionally with the step run —
- * and that is storage work for a later stage. **Its absence is a reason to do
- * that work before the flip, not a reason to keep a cheaper heuristic now.**
- *
- * ## What it costs
- *
- * A full jsdom parse, a DOMPurify pass and a document walk — `splitIntoBlocks`
- * less the writing. Measured over the twenty articles in `output/` that have a
- * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
- * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
- * corpus. It runs once per `stepIsDone` for this one step: once per job that
- * contains `blocks`, and once per metadata-page load (src/store/pg.ts). Accepted as
- * temporary, against the persisted binding above.
- *
- * It is **not** short-circuited on the filesystem, where the two reads return
- * the same string. Two reasons: a guard that knows which store it is in is a
- * guard with an untested half, and the equality would not be safe anyway —
- * `runBlocks` writes the HTML before the blocks (src/blocks.ts), so an
- * interruption between the two leaves a stamped document and a blocks artefact
- * from different generations, wearing the same ids. GPT Sol, 2026-08-31.
- *
- * ## What it rests on, stated so it can be checked again
- *
- * Question 2 compares bytes, so it needs `splitIntoBlocks` to be **exactly**
- * idempotent: on the filesystem the candidates are derived from stage 3's own
- * output, because there is only one document. Measured across the twenty
- * articles in `output/` with a blocks artefact — exact HTML and exact blocks —
- * and independently by GPT Sol across 313 targeted and combinatorial cases
- * (canonical footnotes, nested lists, anchor retargeting, sanitiser removal,
- * embeds, templates, malformed nesting, SVG, orphan text, duplicate ids). No
- * non-idempotent class found. Evidence, not proof; and if it ever stops being
- * true, every filesystem article reports this step not-done at once rather than
- * quietly, which is the right way round for it to break.
- *
- * **The one case that is not idempotent is not reachable here**: `debugPage`
- * (src/extract.ts) writes `<!doctype html>` and jsdom serialises `<!DOCTYPE
- * html>`, so stage 2's string is not its own serialisation. It does not matter,
- * because both sides of question 2 are serialisations — `stampedHtml` is always
- * `dom.serialize()` output and so is the candidate. `output/revistes-ub-30977`
- * is the one article in the corpus still holding the lower-case form, and its
- * blocks artefact is from a different run anyway: question 1 rejects it, 0 ids
- * of 43.
- *
- * ## What it still does not prove
- *
- * That these blocks carry the ids a reader's comments name. Question 3 says
- * stage 3 would produce this artefact again, not that the ids in it were
- * carried rather than minted — `assertIdsCarried` (src/blocks.ts) is what holds
- * that, at write time, and it refuses rather than warns.
- *
- * **No ids at all is not "all of them are there".** `every` over an empty array
- * is true, so a `blocks.json` listing nothing passed this vacuously and the step
- * reported itself done having retained zero ids — an article the stages after it
- * then read as having no blocks in it. Reachable on a first ingest, where the
- * runtime guard in src/blocks.ts has no baseline to refuse against: a paywall or
- * an error page extracts to no prose, `{"blocks":[]}` satisfies the store's
- * shape check (`SHAPE` in src/store/artifacts.ts takes any array), and every
- * path exists and parses. GPT Sol, 2026-08-28.
- *
- * **Kept even though `assertSomethingWasProduced` (src/blocks.ts) now refuses to
- * write an empty artefact at all.** Belt and braces, and both halves have work:
- * the write-time guard stops new empties being created, and this one still has
- * to answer for the `blocks.json` files already on disk, which nothing will
- * rewrite. Deleting either leaves a real state unguarded.
- *
- * The cost of being wrong is small in the direction it can be wrong — stage 3
- * makes no model call, and re-running it carries the ids over rather than
- * minting new ones.
+ * The `blocks` step's `isDone`: three reads, and the question itself is
+ * `blocksAreWhatTheirHtmlProduces` (src/blocks.ts), where the reasoning is.
+ * The Metadata page asks the same function (src/store/pg.ts § `case "blocks"`),
+ * so the two cannot answer differently about one revision.
  */
 async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
   const file = await store.read(ctx.slug, "blocks", "blocks");
@@ -1126,16 +979,7 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
      "nothing to compare against": a `blocks` artefact whose input has gone is
      precisely the state this exists to refuse to call finished. */
   const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
-  if (!file?.blocks?.length || !stamped || !extracted) return false;
-
-  const ids = new Set<string>();
-  for (const [, id] of stamped.matchAll(/\sid="(spya-[a-z0-9]{6})"/g)) ids.add(id!);
-  if (!file.blocks.every((block) => ids.has(block.id))) return false;
-
-  const run = splitIntoBlocks(extracted, file.blocks);
-  if (run.html !== stamped) return false;
-  if (run.blocks.length !== file.blocks.length) return false;
-  return run.blocks.every((c, i) => canonicalBlock(c) === canonicalBlock(file.blocks[i]!));
+  return blocksAreWhatTheirHtmlProduces(extracted, stamped, file?.blocks);
 }
 
 /*
@@ -2080,6 +1924,47 @@ export const metadataReaders = {
 };
 
 /**
+ * **What tidies an imported title** in `extract` and `metadata`: a small model,
+ * with the rule behind it (src/title-tidy-model.ts, plan 261005j). In an
+ * object for `metadataReaders`' reason, so a test can `vi.spyOn` it and run
+ * the real step with no network.
+ */
+export const titleTidiers = {
+  import: modelTitleTidier(),
+};
+
+/**
+ * **The tidier one run of `extract` or `metadata` hands its seam**: import's,
+ * bound to the step's own cancellation, and **holding a title steady across a
+ * re-extraction**.
+ *
+ * `title` is in the fingerprint of every generated mode
+ * (`articleFingerprint`, src/source-hash.ts), and a model does not give the
+ * same answer every time: asked twice, it differed on a few titles in a
+ * hundred (docs/investigations/261005b-title-tidying-rule-against-a-small-model.md).
+ * So when the title arriving is the one the last revision tidied, that
+ * revision's pair is kept and no call is made.
+ *
+ * Only a title that **was** changed is held. One stored as it came is asked
+ * about again, because "the model looked and left it" and "imported before
+ * there was any tidying" are the same row, and the second should still be
+ * tidied when it is next extracted.
+ */
+function stepTitleTidier(ctx: StepContext, store: ArtifactReads): TitleTidier {
+  return async (title, context = {}) => {
+    ctx.signal.throwIfAborted();
+    const previous = await store.read(ctx.slug, "extract", "meta");
+    ctx.signal.throwIfAborted();
+    /* `metaColumns` makes the original plain on write too. In particular,
+       paper metadata can still contain inline markup before that boundary. */
+    if (previous?.titleOriginal !== undefined && previous.titleOriginal === plainTitle(title)) {
+      return { title: previous.title, titleOriginal: previous.titleOriginal };
+    }
+    return await titleTidiers.import(title, { ...context, signal: ctx.signal });
+  };
+}
+
+/**
  * **`extract`'s `meta`, keeping a minimal paper's abstract and DOI** when it
  * found none of its own. *Read this* re-reads the paper over a draft copied
  * from the minimal revision, and `metaColumns` writes every meta column `??
@@ -2293,14 +2178,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         manifest.kind === "pdf"
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
+      const paper = { slug: ctx.slug, ...(manifest.filename ? { filename: manifest.filename } : {}), found };
       const meta = await withArticleRegistry(
         ctx,
         "metadata",
         paperMeta({
-          slug: ctx.slug,
+          ...paper,
           kind: manifest.kind,
-          ...(manifest.filename ? { filename: manifest.filename } : {}),
-          found,
+          /* The abstract is the only prose a minimal paper has, so it is the
+             rule's evidence of which title words are acronyms. */
+          tidied: await stepTitleTidier(ctx, store)(paperTitle(paper), { body: found.abstract }),
         }),
         [],
       );
@@ -2436,7 +2323,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug });
+          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
           /* **The audit line for the one step that deletes by policy.**
              `removePlatformFurniture` (src/furniture.ts) is the only place in
              this pipeline that removes an element *because of what the
@@ -2530,6 +2417,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const result = await runPdfExtract({
         frontMatter: openRouterFrontMatterReader(modelFor("pdf-frontmatter", ctx.power)),
         authors: openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)),
+        titleTidier: stepTitleTidier(ctx, store),
         bytes,
         ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
@@ -4542,7 +4430,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            every illustration stale the moment they edited their profile box,
            and re-drawing it would then stamp the Sketch's anyway — a stage that
            never reports itself done and pays $0.30 an open to find out. */
-        profileHash: sketch.profileHash ?? null,
+        ...(sketch.profileHash === undefined ? {} : { profileHash: sketch.profileHash }),
       };
     },
     async run(ctx, store) {
@@ -4572,8 +4460,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          the panel offers to paint again, and the next paint inherits the same
          hash and reports the same thing — one press of a $0.30 button per
          circuit, for ever. `profileIsStale` is the three-state rule
-         (src/profile.ts): an artefact written deliberately without a profile,
-         and a reader who has since cleared theirs, are both *not* a mismatch. */
+         (src/profile.ts): a reader who has since cleared theirs is *not* a
+         mismatch; a Sketch drawn when they had none, once they have one, is
+         (since 2026-10-05), and the sketch step's own stamp already called
+         that Sketch not current, so the panel's one press redraws it first. */
       if (profileIsStale(sketch.profileHash, ctx.profile ? hashProfile(ctx.profile) : null)) {
         refuseToIllustrate("wrong-profile");
       }
@@ -4646,7 +4536,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         figuresFingerprint(assets),
         ctx.illustrationNote ?? "",
       );
-      run.illustrated.profileHash = sketch.profileHash ?? null;
+      /* A legacy Sketch's unknown provenance stays unknown. Turning absence
+         into null would make a permitted painting immediately profile-changed. */
+      if (sketch.profileHash === undefined) delete run.illustrated.profileHash;
+      else run.illustrated.profileHash = sketch.profileHash;
       /* The note this was painted with, from the same `ctx` value the two
          hashes above and in `stamp` use — `isStale` reads it back. */
       if (ctx.illustrationNote) run.illustrated.note = ctx.illustrationNote;
@@ -5036,6 +4929,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           registryIdentified: registered.counts.identified,
           registryAsked: registered.counts.asked,
           registryFound: registered.counts.found,
+          /* Found rows carrying Crossref's citation count (plan 261005i).
+             Zero beside a `registryFound` full of DOIs is the count not
+             arriving, and the rows would simply show none. */
+          registryCounted: registered.counts.counted,
           registryConflict: registered.counts.conflict,
           registryNotFound: registered.counts.notFound,
           registryUnavailable: registered.counts.unavailable,

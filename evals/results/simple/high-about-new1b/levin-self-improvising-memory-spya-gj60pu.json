@@ -1,0 +1,335 @@
+{
+  "arm": "high-about-new1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "levin-self-improvising-memory-spya-gj60pu",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:35:22.923Z",
+  "bodyWords": 7557,
+  "band": "standard",
+  "bodyBlocks": 57,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "cac88ea2df4a81b8",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 62782,
+  "costUsd": 0.2185014,
+  "tokens": {
+    "input": 19479,
+    "output": 9362,
+    "reasoning": 5834
+  },
+  "briefReadyMs": 43201,
+  "fullerReadyMs": 62749,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 607,
+  "briefWords": 114,
+  "fuller": [
+    {
+      "text": "This is a perspective essay by Michael Levin about what memory is for. He argues that memory exists to preserve salience, meaning what matters for acting next, rather than fidelity to exact details. He builds the case from examples across developmental biology, evolution, synthetic bioengineering and neuroscience, rather than from one new study. Borrowing from process philosophy and Buddhist thought, he treats the self as a process, not a thing.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-aj2njd"
+      ],
+      "sentences": [
+        {
+          "text": "This is a perspective essay by Michael Levin about what memory is for.",
+          "id": null
+        },
+        {
+          "text": "He argues that memory exists to preserve salience, meaning what matters for acting next, rather than fidelity to exact details.",
+          "id": "spya-uk4g45",
+          "key": "memory exists to preserve salience"
+        },
+        {
+          "text": "He builds the case from examples across developmental biology, evolution, synthetic bioengineering and neuroscience, rather than from one new study.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "Borrowing from process philosophy and Buddhist thought, he treats the self as a process, not a thing.",
+          "id": "spya-aj2njd"
+        }
+      ]
+    },
+    {
+      "text": "The starting point is a paradox: a species that never changes dies out, but one that changes stops being itself. Any learning agent faces this, so Levin says it bears on engineering new intelligences, AI and artificial life. Bodies face it from inside too, since their own parts mutate, age, turn cancerous and get hijacked by other organisms. He claims that coping with this unreliable material is not a weakness but the origin of intelligence.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-aj2njd",
+        "spya-fndetu"
+      ],
+      "sentences": [
+        {
+          "text": "The starting point is a paradox: a species that never changes dies out, but one that changes stops being itself.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Any learning agent faces this, so Levin says it bears on engineering new intelligences, AI and artificial life.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Bodies face it from inside too, since their own parts mutate, age, turn cancerous and get hijacked by other organisms.",
+          "id": "spya-aj2njd"
+        },
+        {
+          "text": "He claims that coping with this unreliable material is not a weakness but the origin of intelligence.",
+          "id": "spya-fndetu",
+          "key": "the origin of intelligence"
+        }
+      ]
+    },
+    {
+      "text": "Levin pictures a mind as a series of Selflets: slices of the self, probably a few hundred milliseconds thick. Each memory is then a note left by a past Selflet, a message the present one must interpret. So confabulation, usually treated as a bug in brains and in AI, becomes a powerful feature. He calls this active rebuilding of memory content mnemonic improvisation.",
+      "ids": [
+        "spya-m982w2",
+        "spya-x74rfd",
+        "spya-y92f0q"
+      ],
+      "sentences": [
+        {
+          "text": "Levin pictures a mind as a series of Selflets: slices of the self, probably a few hundred milliseconds thick.",
+          "id": "spya-m982w2",
+          "key": "Selflets"
+        },
+        {
+          "text": "Each memory is then a note left by a past Selflet, a message the present one must interpret.",
+          "id": "spya-x74rfd"
+        },
+        {
+          "text": "So confabulation, usually treated as a bug in brains and in AI, becomes a powerful feature.",
+          "id": "spya-y92f0q"
+        },
+        {
+          "text": "He calls this active rebuilding of memory content mnemonic improvisation.",
+          "id": "spya-y92f0q",
+          "key": "mnemonic improvisation"
+        }
+      ]
+    },
+    {
+      "text": "Caterpillars largely rebuild their brains into butterflies, yet some learned associations survive, reworked from leaves to food in general for a new body. Brain extract from trained sea slugs, injected only near the relevant nerve tissue, changes the recipient's behavior. Reports of memories moving through heart or lung transplants are, he notes, still uncertain. An odorant injected into a frog egg makes the resulting animal seek that odor when foraging. Levin concludes that memory traces act less like stored records and more like a prompt, with decoding supplying the intelligence.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-pb9mf7",
+        "spya-dvd0z2"
+      ],
+      "sentences": [
+        {
+          "text": "Caterpillars largely rebuild their brains into butterflies, yet some learned associations survive, reworked from leaves to food in general for a new body.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Brain extract from trained sea slugs, injected only near the relevant nerve tissue, changes the recipient's behavior.",
+          "id": "spya-pb9mf7"
+        },
+        {
+          "text": "Reports of memories moving through heart or lung transplants are, he notes, still uncertain.",
+          "id": "spya-pb9mf7"
+        },
+        {
+          "text": "An odorant injected into a frog egg makes the resulting animal seek that odor when foraging.",
+          "id": "spya-dvd0z2"
+        },
+        {
+          "text": "Levin concludes that memory traces act less like stored records and more like a prompt, with decoding supplying the intelligence.",
+          "id": "spya-dvd0z2",
+          "key": "more like a prompt"
+        }
+      ]
+    },
+    {
+      "text": "He extends this beyond brains with the bowtie architecture: rich information squeezed through a narrow bottleneck, then re-expanded, as in an autoencoder. An egg is such a bottleneck, rebuilding a body in a possibly different world with possibly mutated parts. Simple signals act as triggers: one voltage-altering drug grows tails in tadpoles but legs in froglets, never the reverse. Because compression strips out correlations, the stored trace looks random, so decoding must be creative.",
+      "ids": [
+        "spya-bc0zdy",
+        "spya-jvjkv7",
+        "spya-pkrzhd"
+      ],
+      "sentences": [
+        {
+          "text": "He extends this beyond brains with the bowtie architecture: rich information squeezed through a narrow bottleneck, then re-expanded, as in an autoencoder.",
+          "id": "spya-bc0zdy",
+          "key": "bowtie architecture"
+        },
+        {
+          "text": "An egg is such a bottleneck, rebuilding a body in a possibly different world with possibly mutated parts.",
+          "id": "spya-bc0zdy"
+        },
+        {
+          "text": "Simple signals act as triggers: one voltage-altering drug grows tails in tadpoles but legs in froglets, never the reverse.",
+          "id": "spya-jvjkv7"
+        },
+        {
+          "text": "Because compression strips out correlations, the stored trace looks random, so decoding must be creative.",
+          "id": "spya-pkrzhd"
+        }
+      ]
+    },
+    {
+      "text": "Newts with enlarged cells still build kidney tubules of normal width, using fewer cells or even one cell bent around itself. Levin proposes species differ in their willingness to confabulate in body-building, from the rigidly wired worm C. elegans to flexible planarian flatworms. Planaria have very noisy genomes yet resist aging, cancer and injury, which simulations link to reliance on large-scale pattern completion. Since such capable parts hide genome quality from selection, he proposes an intelligence ratchet that keeps improving problem-solving machinery.",
+      "ids": [
+        "spya-d0bcpv",
+        "spya-mbf6hs",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "Newts with enlarged cells still build kidney tubules of normal width, using fewer cells or even one cell bent around itself.",
+          "id": "spya-d0bcpv"
+        },
+        {
+          "text": "Levin proposes species differ in their willingness to confabulate in body-building, from the rigidly wired worm C. elegans to flexible planarian flatworms.",
+          "id": "spya-mbf6hs"
+        },
+        {
+          "text": "Planaria have very noisy genomes yet resist aging, cancer and injury, which simulations link to reliance on large-scale pattern completion.",
+          "id": "spya-mbf6hs"
+        },
+        {
+          "text": "Since such capable parts hide genome quality from selection, he proposes an intelligence ratchet that keeps improving problem-solving machinery.",
+          "id": "spya-fsxc8u",
+          "key": "intelligence ratchet"
+        }
+      ]
+    },
+    {
+      "text": "The most speculative section asks whether memories are themselves minimal agents, echoing William James: \"thoughts are thinkers.\" Memories may also be cognitive glue, something that makes a self more than the sum of its parts. A rat that learns lever pressing brings food holds a memory no single cell has: paw cells feel the lever, gut cells get the reward. His group is training memories into gene-regulatory network models and measuring integrated information to test this.",
+      "ids": [
+        "spya-hgts48",
+        "spya-wutsk4"
+      ],
+      "sentences": [
+        {
+          "text": "The most speculative section asks whether memories are themselves minimal agents, echoing William James: \"thoughts are thinkers.\"",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "Memories may also be cognitive glue, something that makes a self more than the sum of its parts.",
+          "id": "spya-hgts48",
+          "key": "cognitive glue"
+        },
+        {
+          "text": "A rat that learns lever pressing brings food holds a memory no single cell has: paw cells feel the lever, gut cells get the reward.",
+          "id": "spya-hgts48"
+        },
+        {
+          "text": "His group is training memories into gene-regulatory network models and measuring integrated information to test this.",
+          "id": "spya-hgts48"
+        }
+      ]
+    },
+    {
+      "text": "Levin says he has stated the strongest version of these claims, and a moderate hybrid with the conventional view may prove more useful. His causal chain runs from unreliable parts, to repair skills in body-building, to behavioral intelligence. Underneath sits polycomputing: the same physical process serving different functions depending on who interprets it. His conclusion is that the self is a construction, an adaptive story holding parts together, kept alive by reinterpreting memories rather than preserving them.",
+      "ids": [
+        "spya-grptcz",
+        "spya-ykm0pd",
+        "spya-em2h0d"
+      ],
+      "sentences": [
+        {
+          "text": "Levin says he has stated the strongest version of these claims, and a moderate hybrid with the conventional view may prove more useful.",
+          "id": "spya-grptcz"
+        },
+        {
+          "text": "His causal chain runs from unreliable parts, to repair skills in body-building, to behavioral intelligence.",
+          "id": "spya-ykm0pd"
+        },
+        {
+          "text": "Underneath sits polycomputing: the same physical process serving different functions depending on who interprets it.",
+          "id": "spya-ykm0pd",
+          "key": "polycomputing"
+        },
+        {
+          "text": "His conclusion is that the self is a construction, an adaptive story holding parts together, kept alive by reinterpreting memories rather than preserving them.",
+          "id": "spya-em2h0d"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Michael Levin asks what memory is really for. He argues living things keep rewriting their memories to fit their changing selves and world. He says this answers an old puzzle: how can anything change and still stay itself? He sees this as relevant to building new kinds of minds, including AI.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-hp8t7u"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Michael Levin asks what memory is really for.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "He argues living things keep rewriting their memories to fit their changing selves and world.",
+          "id": "spya-uk4g45",
+          "key": "keep rewriting their memories"
+        },
+        {
+          "text": "He says this answers an old puzzle: how can anything change and still stay itself?",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "He sees this as relevant to building new kinds of minds, including AI.",
+          "id": "spya-hp8t7u"
+        }
+      ]
+    },
+    {
+      "text": "A caterpillar becoming a butterfly keeps some memories, but must remap them to a new body. Memories get squeezed down, like compression in AI, so recalling them takes creative rebuilding. Levin calls this mnemonic improvisation: reshaping memories to fit new bodies and situations. His main claim: memory keeps meaning, not exact details, and this may be where intelligence comes from.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-pkrzhd",
+        "spya-fndetu"
+      ],
+      "sentences": [
+        {
+          "text": "A caterpillar becoming a butterfly keeps some memories, but must remap them to a new body.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Memories get squeezed down, like compression in AI, so recalling them takes creative rebuilding.",
+          "id": "spya-pkrzhd"
+        },
+        {
+          "text": "Levin calls this mnemonic improvisation: reshaping memories to fit new bodies and situations.",
+          "id": "spya-fndetu",
+          "key": "mnemonic improvisation"
+        },
+        {
+          "text": "His main claim: memory keeps meaning, not exact details, and this may be where intelligence comes from.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -33,7 +33,6 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { decidePublicPage } from "../src/public/page.js";
-import { OG_CARD } from "../src/public/page-head.js";
 import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
 import { redirectsToMetadata, viewFor } from "../src/read-address.js";
 import { modeParam } from "../src/web/params.js";
@@ -158,22 +157,25 @@ describe("vercel.json's rewrites", () => {
 
 describe("vercel.json's headers", () => {
   /**
-   * **Slice 1 changes crawler exposure by exactly nothing.**
+   * **One `noindex, nofollow` rule, and every `/read/` address is under it.**
    *
-   * The site-wide `noindex, nofollow` stays where it is and stays the only one:
-   * `src/public/page.ts` sets no `X-Robots-Tag` of its own, and two sources for
-   * one header is a duplicate on the wire. Slice 2 splits this rule and moves
-   * the decision into the function; until then, this case is what says the
-   * feature did not quietly do it early.
+   * It was site-wide until 2026-10-05, when Greg let search engines list our
+   * own pages and nothing else; it is now every path that is not one of those
+   * (tests/site-pages.test.ts has the whole of that). A shared article is never
+   * listed, so what this file cares about has not changed: `src/public/page.ts`
+   * sets no `X-Robots-Tag` of its own, two sources for one header is a
+   * duplicate on the wire, and the one rule still covers everything the
+   * function answers.
    */
-  it("still carries one site-wide noindex, which slice 1 must not touch", () => {
-    const robots = config.headers.flatMap((h) =>
-      h.headers.filter((k) => k.key.toLowerCase() === "x-robots-tag").map((k) => ({
-        source: h.source,
-        value: k.value,
-      })),
-    );
-    expect(robots).toEqual([{ source: "/(.*)", value: "noindex, nofollow" }]);
+  it("still carries one noindex rule, and it covers every reading address", () => {
+    const robots = config.headers.filter((h) => h.headers.some((k) => k.key.toLowerCase() === "x-robots-tag"));
+    expect(robots).toHaveLength(1);
+    expect(robots[0]?.headers).toEqual([{ key: "X-Robots-Tag", value: "noindex, nofollow" }]);
+    for (const address of ["/read/some-article", "/read/some-article/metadata", "/read/public", "/read/", "/read/a/b/c"]) {
+      /* Not `matches()`: this source has no `:name` in it, and that helper
+         would read the `(?:` of its lookahead as one. */
+      expect(new RegExp(`^${robots[0]?.source ?? ""}$`).test(address), address).toBe(true);
+    }
   });
 
   it("and the referrer policy beside it", () => {
@@ -610,112 +612,5 @@ describe("parseRoute and a malformed slug", () => {
        `?mode=tweets` now, and the old address is lifted before it is parsed
        (router.ts § `liftedTweetsHref`), so it reads through the article view. */
     expect(parseRoute("/read/a-slug")).toEqual({ kind: "read", slug: "a-slug", view: "article" });
-  });
-});
-
-/**
- * **public/robots.txt, and the one hole in it.**
- *
- * Greg's call, 2026-08-30: name the two preview bots so a shared link draws a
- * card in Meta's apps, and leave the blanket `Disallow: /` standing for
- * everybody else.
- *
- * **What this describe does not do is model a crawler.** It parses the file into
- * groups and asserts what is in them; it makes no claim about how any given
- * robot resolves `Allow` against `Disallow`, because a parser I wrote agreeing
- * with a parser I wrote is worth nothing. The real check is empirical and comes
- * after a deploy: paste a link and look at the card. What these cases are for is
- * the *other* failure — a later edit that drops a line, or adds a bot, without
- * anybody noticing.
- *
- * The one semantic claim here is the one that is easy to get wrong and cheap to
- * check: **a robot obeys exactly one group**, the most specific one naming it,
- * and inherits nothing from `*`. So a named group without its own `Disallow: /`
- * is not a narrow hole, it is an open door — and it would look, in a diff, like
- * the tidier version of this file.
- */
-describe("public/robots.txt", () => {
-  type Group = { agents: string[]; rules: { rule: string; path: string }[] };
-
-  const groups: Group[] = [];
-  {
-    const text = readFileSync(path.join(process.cwd(), "public/robots.txt"), "utf8");
-    let open: Group | null = null;
-    for (const raw of text.split("\n")) {
-      const line = raw.replace(/#.*$/, "").trim();
-      if (line === "") continue;
-      const [key = "", ...rest] = line.split(":");
-      const value = rest.join(":").trim();
-      const name = key.trim().toLowerCase();
-      if (name === "user-agent") {
-        /* Consecutive user-agent lines share one group; a rule closes it. */
-        if (open === null || open.rules.length > 0) {
-          open = { agents: [], rules: [] };
-          groups.push(open);
-        }
-        open.agents.push(value);
-      } else if (open !== null) {
-        open.rules.push({ rule: name, path: value });
-      }
-    }
-  }
-
-  const groupFor = (agent: string): Group | undefined =>
-    groups.find((g) => g.agents.some((a) => a.toLowerCase() === agent.toLowerCase()));
-
-  it("still shuts out everybody who is not named", () => {
-    expect(groupFor("*")?.rules).toEqual([{ rule: "disallow", path: "/" }]);
-  });
-
-  /* Mutation: drop either name and this reddens; that is the whole point of it,
-     because losing a card is silent — the link still works, it just looks like
-     nothing. */
-  /* Seven since 2026-10-05, where it was Meta's and X's alone: Greg asked for a
-     card on "X/Twitter, WhatsApp, Facebook, etc etc". None of these is a search
-     engine, and a search engine's name here is what this must refuse. */
-  const PREVIEW_BOTS = [
-    "facebookexternalhit",
-    "Twitterbot",
-    "LinkedInBot",
-    "WhatsApp",
-    "TelegramBot",
-    "Discordbot",
-    "Slackbot",
-  ];
-
-  it("names exactly the preview bots and no others", () => {
-    const named = groups.flatMap((g) => g.agents).filter((a) => a !== "*");
-    expect(named.sort()).toEqual([...PREVIEW_BOTS].sort());
-  });
-
-  it.each(PREVIEW_BOTS)(
-    "lets %s reach a shared article, the card's picture and the homepage, and nothing else",
-    (agent) => {
-      const group = groupFor(agent);
-      expect(group).toBeDefined();
-      /* All four lines. The `Allow`s alone would be the open door, because a
-         named group inherits nothing from `*`; `Disallow` alone would be the
-         hole closed again. `/$` is the homepage only: `$` ends the match. */
-      expect(group?.rules).toEqual([
-        { rule: "allow", path: "/read/" },
-        { rule: "allow", path: OG_CARD.path },
-        { rule: "allow", path: "/$" },
-        { rule: "disallow", path: "/" },
-      ]);
-    },
-  );
-
-  /**
-   * **The hole is for cards, not for search**, and this is the pair that says
-   * so. Fetching is now permitted for two robots; indexing is refused to all of
-   * them, by a header and a meta tag that neither of those two reads for
-   * anything. If a later slice wants public articles indexed, it has to defeat
-   * both of these deliberately — see docs/project/page-titles.md.
-   */
-  it("does not, on its own, let anything be indexed", () => {
-    const robots = config.headers.flatMap((h) =>
-      h.headers.filter((k) => k.key.toLowerCase() === "x-robots-tag").map((k) => k.value),
-    );
-    expect(robots).toEqual(["noindex, nofollow"]);
   });
 });

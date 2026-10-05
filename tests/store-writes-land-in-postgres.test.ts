@@ -127,7 +127,7 @@ describe("a write in postgres mode", () => {
   });
 
   it("puts a saved search in Postgres, and leaves no file behind", async () => {
-    const { run } = await searchStore.begin(SLUG, "every passage about cost", "meaning");
+    const { run } = await searchStore.begin(SLUG, "feedfacefeedface", "every passage about cost", "meaning");
 
     const runs = await searchStore.load(SLUG);
     expect(runs.map((r) => r.id)).toContain(run.id);

@@ -1,0 +1,315 @@
+{
+  "arm": "high-none-new1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "levin-self-improvising-memory-spya-gj60pu",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:45:17.550Z",
+  "bodyWords": 7557,
+  "band": "standard",
+  "bodyBlocks": 57,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "cac88ea2df4a81b8",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 34444,
+  "costUsd": 0.1103876,
+  "tokens": {
+    "input": 14467,
+    "output": 4333,
+    "reasoning": 1718
+  },
+  "briefReadyMs": 23122,
+  "fullerReadyMs": 34424,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 498,
+  "briefWords": 107,
+  "fuller": [
+    {
+      "text": "This is a perspective essay by biologist Michael Levin about what memory is for. Most memory research asks how information is stored and read back accurately. Levin argues instead that memory preserves salience, meaning what matters, rather than fidelity, meaning exact detail. He calls the ability to rewrite memories and fit them to new bodies and settings mnemonic improvisation.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-fndetu"
+      ],
+      "sentences": [
+        {
+          "text": "This is a perspective essay by biologist Michael Levin about what memory is for.",
+          "id": null
+        },
+        {
+          "text": "Most memory research asks how information is stored and read back accurately.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "Levin argues instead that memory preserves salience, meaning what matters, rather than fidelity, meaning exact detail.",
+          "id": "spya-uk4g45",
+          "key": "memory preserves salience"
+        },
+        {
+          "text": "He calls the ability to rewrite memories and fit them to new bodies and settings mnemonic improvisation.",
+          "id": "spya-fndetu",
+          "key": "mnemonic improvisation"
+        }
+      ]
+    },
+    {
+      "text": "The essay starts from a puzzle: a species that never changes dies out, but one that changes also stops being what it was. Each of us faces this too, since learning means change. Levin says evolution solved it by treating the Self as a process, not a fixed thing. He says this matters for engineering new kinds of minds, including AI.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-aj2njd"
+      ],
+      "sentences": [
+        {
+          "text": "The essay starts from a puzzle: a species that never changes dies out, but one that changes also stops being what it was.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Each of us faces this too, since learning means change.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Levin says evolution solved it by treating the Self as a process, not a fixed thing.",
+          "id": "spya-aj2njd"
+        },
+        {
+          "text": "He says this matters for engineering new kinds of minds, including AI.",
+          "id": "spya-hp8t7u"
+        }
+      ]
+    },
+    {
+      "text": "His argument builds from familiar cases of confabulation, where the mind reshapes memories to tell a coherent story. A patient made to laugh by a brain electrode often says they thought of a joke. Levin pictures the mind as a series of brief slices, which he calls Selflets, each perhaps a few hundred milliseconds long. Memories are then messages from past Selflets, and like all messages they must be interpreted.",
+      "ids": [
+        "spya-n869sd",
+        "spya-m982w2",
+        "spya-x74rfd"
+      ],
+      "sentences": [
+        {
+          "text": "His argument builds from familiar cases of confabulation, where the mind reshapes memories to tell a coherent story.",
+          "id": "spya-n869sd"
+        },
+        {
+          "text": "A patient made to laugh by a brain electrode often says they thought of a joke.",
+          "id": "spya-n869sd"
+        },
+        {
+          "text": "Levin pictures the mind as a series of brief slices, which he calls Selflets, each perhaps a few hundred milliseconds long.",
+          "id": "spya-m982w2",
+          "key": "Selflets"
+        },
+        {
+          "text": "Memories are then messages from past Selflets, and like all messages they must be interpreted.",
+          "id": "spya-x74rfd"
+        }
+      ]
+    },
+    {
+      "text": "Metamorphosis is his central example. Caterpillars largely rebuild their brains, yet some trained memories survive into the butterfly. A memory about which muscles to fire to reach leaves is useless to a flying nectar drinker, so it must be remapped to keep its point. Similarly, a frog grown from an egg injected with an odour molecule later seeks that odour when looking for food.",
+      "ids": [
+        "spya-yw42a3",
+        "spya-jw4p93",
+        "spya-dvd0z2"
+      ],
+      "sentences": [
+        {
+          "text": "Metamorphosis is his central example.",
+          "id": null
+        },
+        {
+          "text": "Caterpillars largely rebuild their brains, yet some trained memories survive into the butterfly.",
+          "id": "spya-yw42a3"
+        },
+        {
+          "text": "A memory about which muscles to fire to reach leaves is useless to a flying nectar drinker, so it must be remapped to keep its point.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Similarly, a frog grown from an egg injected with an odour molecule later seeks that odour when looking for food.",
+          "id": "spya-dvd0z2"
+        }
+      ]
+    },
+    {
+      "text": "Levin argues the same reinterpretation happens in bodies, not just brains: One voltage-changing chemical, Monensin, makes tadpoles grow tails but young frogs grow legs, never the reverse. Tadpoles with no normal eyes but an eye placed on the tail can still learn visual tasks. Newts with far larger cells still build kidney tubes of normal width, using fewer cells or even one bent cell.",
+      "ids": [
+        "spya-jvjkv7",
+        "spya-k6u8xj",
+        "spya-d0bcpv"
+      ],
+      "sentences": [
+        {
+          "text": "Levin argues the same reinterpretation happens in bodies, not just brains:",
+          "id": null
+        },
+        {
+          "text": "One voltage-changing chemical, Monensin, makes tadpoles grow tails but young frogs grow legs, never the reverse.",
+          "id": "spya-jvjkv7"
+        },
+        {
+          "text": "Tadpoles with no normal eyes but an eye placed on the tail can still learn visual tasks.",
+          "id": "spya-k6u8xj"
+        },
+        {
+          "text": "Newts with far larger cells still build kidney tubes of normal width, using fewer cells or even one bent cell.",
+          "id": "spya-d0bcpv"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "He links these cases through a bowtie architecture: rich information squeezed into a small core, then expanded again, as an animal is squeezed into an egg. Squeezed data looks increasingly random, so unpacking it must be creative, not just mechanical. He proposes species differ in their willingness to confabulate in building their bodies, with flatworms called planaria at the most flexible extreme.",
+      "ids": [
+        "spya-bc0zdy",
+        "spya-pkrzhd",
+        "spya-mbf6hs"
+      ],
+      "sentences": [
+        {
+          "text": "He links these cases through a bowtie architecture: rich information squeezed into a small core, then expanded again, as an animal is squeezed into an egg.",
+          "id": "spya-bc0zdy",
+          "key": "bowtie architecture"
+        },
+        {
+          "text": "Squeezed data looks increasingly random, so unpacking it must be creative, not just mechanical.",
+          "id": "spya-pkrzhd"
+        },
+        {
+          "text": "He proposes species differ in their willingness to confabulate in building their bodies, with flatworms called planaria at the most flexible extreme.",
+          "id": "spya-mbf6hs"
+        }
+      ]
+    },
+    {
+      "text": "More speculatively, Levin suggests memories may help hold a Self together. A rat learning that pressing a lever brings food forms a memory no single cell holds. Following William James's phrase \"thoughts are thinkers,\" he asks whether memories might have a small degree of agency themselves. He admits he states the strongest version, and a more moderate middle view may prove more useful.",
+      "ids": [
+        "spya-hgts48",
+        "spya-wutsk4",
+        "spya-grptcz"
+      ],
+      "sentences": [
+        {
+          "text": "More speculatively, Levin suggests memories may help hold a Self together.",
+          "id": "spya-hgts48"
+        },
+        {
+          "text": "A rat learning that pressing a lever brings food forms a memory no single cell holds.",
+          "id": "spya-hgts48"
+        },
+        {
+          "text": "Following William James's phrase \"thoughts are thinkers,\" he asks whether memories might have a small degree of agency themselves.",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "He admits he states the strongest version, and a more moderate middle view may prove more useful.",
+          "id": "spya-grptcz"
+        }
+      ]
+    },
+    {
+      "text": "His conclusion is that the unreliability of living matter is a feature, not a bug. Planaria have the noisiest genome yet the best regeneration and cancer resistance, which he says supports this. Intelligence, he argues, grew from the constant need to reinterpret information as parts and surroundings change, making the Self an adaptive, ever-rebuilt story.",
+      "ids": [
+        "spya-fsxc8u",
+        "spya-em2h0d"
+      ],
+      "sentences": [
+        {
+          "text": "His conclusion is that the unreliability of living matter is a feature, not a bug.",
+          "id": "spya-fsxc8u",
+          "key": "a feature, not a bug"
+        },
+        {
+          "text": "Planaria have the noisiest genome yet the best regeneration and cancer resistance, which he says supports this.",
+          "id": "spya-fsxc8u"
+        },
+        {
+          "text": "Intelligence, he argues, grew from the constant need to reinterpret information as parts and surroundings change, making the Self an adaptive, ever-rebuilt story.",
+          "id": "spya-em2h0d"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Michael Levin starts from a puzzle: if a living thing changes, is it still itself? He says this puzzle faces everything alive, from tiny parts of cells to whole species. His answer is that memory is less about storing exact records and more about reworking them to fit.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-uk4g45"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Michael Levin starts from a puzzle: if a living thing changes, is it still itself?",
+          "id": "spya-hp8t7u",
+          "key": "is it still itself?"
+        },
+        {
+          "text": "He says this puzzle faces everything alive, from tiny parts of cells to whole species.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "His answer is that memory is less about storing exact records and more about reworking them to fit.",
+          "id": "spya-uk4g45"
+        }
+      ]
+    },
+    {
+      "text": "Some memories survive when a caterpillar turns into a butterfly with a very different body. A lesson about finding leaves becomes a lesson about finding food that the butterfly can use. Levin concludes that memory keeps what matters, not exact details. He suggests this constant reworking, forced by unreliable bodies, may be where intelligence came from.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-uk4g45",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "Some memories survive when a caterpillar turns into a butterfly with a very different body.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "A lesson about finding leaves becomes a lesson about finding food that the butterfly can use.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Levin concludes that memory keeps what matters, not exact details.",
+          "id": "spya-uk4g45",
+          "key": "memory keeps what matters, not exact details"
+        },
+        {
+          "text": "He suggests this constant reworking, forced by unreliable bodies, may be where intelligence came from.",
+          "id": "spya-fsxc8u"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

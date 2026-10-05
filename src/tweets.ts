@@ -551,8 +551,8 @@ export function buildThread(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent: absent means "written before this existed" and
-       `null` means "written deliberately without a profile", and the page needs
-       to tell those apart. src/profile.ts § profileIsStale. */
+       `null` means "written with no profile", and only `null` reads as changed
+       once the reader has one. src/profile.ts § profileIsStale. */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
     limit: LIMIT,
     tweets,
