@@ -1332,6 +1332,17 @@ export const rememberParam = createParser<RememberView>({
   .withDefault("recall")
   .withOptions({ history: "push" });
 
+/**
+ * **Which part of Remember a query string names**, through `rememberParam`, so
+ * an unknown word is Recall here as it is on the reading view — `diagramInSearch`'s
+ * reason. For the metadata page's Remember link, which has no nuqs state to ask
+ * (Dock.tsx § `modeLinkHref`).
+ */
+export function rememberInSearch(search: string): RememberView {
+  const named = new URLSearchParams(search).get("remember");
+  return (named === null ? null : rememberParam.parse(named)) ?? rememberParam.defaultValue;
+}
+
 /* --------------------------------------------------------------- debate -- */
 
 /**

@@ -43,6 +43,7 @@ import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
 import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
+import type { FetchFailureCode } from "./types.js";
 import { canonicalKey } from "./source.js";
 import { readStreamCapped } from "./read-capped.js";
 import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
@@ -678,33 +679,13 @@ function credentialsSeen(): string {
  * ------------------------------------------------------------------ */
 
 /**
- * Why a fetch failed, as something to switch on.
- *
- * These exist because **every network and TLS failure in Node arrives as the
- * identical `TypeError: fetch failed`** — DNS, refused connection, expired
- * certificate, self-signed certificate and a missing intermediate are one
- * string at the top level, and the difference lives only in `err.cause.code`.
- * Code that matches on the message learns nothing, which is exactly the trap
- * the previous version fell into (docs/project/original-version/extraction.md).
+ * Why a fetch failed, as something to switch on. The union and the reason for
+ * it are in src/types.ts § `FetchFailureCode`: it lives there because
+ * src/messages.ts maps every code to a reader's sentence and may not import
+ * this file. Re-exported so that this stays the name's address for everybody
+ * else.
  */
-export type FetchFailureCode =
-  | "invalid-url"
-  | "unsupported-scheme"
-  | "blocked-address"
-  | "dns"
-  | "connection"
-  | "certificate"
-  | "timeout"
-  | "too-many-redirects"
-  | "unauthorized"
-  | "forbidden"
-  | "not-found"
-  | "rate-limited"
-  | "server-error"
-  | "http-error"
-  | "too-large"
-  | "unsupported-type"
-  | "empty";
+export type { FetchFailureCode };
 
 export class FetchFailure extends Error {
   readonly code: FetchFailureCode;

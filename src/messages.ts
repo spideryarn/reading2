@@ -31,7 +31,7 @@ import { readableDay } from "./billing-plan.js";
    — where the fact belongs — reaches src/fetch.ts's untyped packages. */
 import type { DocumentOrigin } from "./document-origin.js";
 import type { Mode } from "./modes.js";
-import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
+import type { DateRejection, EmbeddingReason, FetchFailureCode, StepName } from "./types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -523,6 +523,26 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-big": "blocked",
   /* The same refusal for a document fetched by address. See FETCH_TOO_BIG. */
   "fetch-big": "blocked",
+  /* The rest of the `fetch-` family: one for each other way a fetch by address
+     can fail, and two for the catch-all. Registered because their kinds are not
+     uniform, which is `up-`'s reason above. See `fetchFailed`. */
+  "fetch-address": "blocked",
+  "fetch-scheme": "blocked",
+  "fetch-private": "blocked",
+  "fetch-no-site": "retry",
+  "fetch-unreachable": "retry",
+  "fetch-certificate": "blocked",
+  "fetch-slow": "retry",
+  "fetch-redirects": "blocked",
+  "fetch-login": "blocked",
+  "fetch-refused": "blocked",
+  "fetch-not-found": "blocked",
+  "fetch-rate": "retry",
+  "fetch-site-trouble": "retry",
+  "fetch-type": "blocked",
+  "fetch-empty": "retry",
+  "fetch-declined": "blocked",
+  "fetch-incomplete": "retry",
   "up-pdf": "blocked",
   /* The page cap, as the *upload record* states it. The job card gets
      `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
@@ -2142,6 +2162,191 @@ export const FETCH_TOO_BIG: ReaderFacingFailure = {
     "which is the most this app can take. Trying again with the same document will not help. " +
     "Choose a smaller document, or save a shorter extract of this one as a file. [fetch-big]",
 };
+
+/**
+ * **Every other way a fetch by address can fail, each with its own sentence.**
+ *
+ * Until 2026-10-04 `too-large` above was the only one. The rest took
+ * `stepGaveUp`'s generic copy, which is `retry`, so a page that is not there
+ * was offered a Retry that asked the same address and got the same answer
+ * (docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § A).
+ *
+ * **The kind answers one question: will the Retry button on this job card
+ * help?** It is not `FetchFailure.retryable`, which asks whether *the fetcher*
+ * should try again within the same second, and gives no sentence.
+ *
+ * - `blocked` where the address or the site is the obstacle and will be the
+ *   same obstacle next time. Each of those names the step that can work
+ *   instead: check the address, or save the page as a PDF and upload the file,
+ *   which the add-article dialog takes.
+ * - `retry` where a later go can come out differently. Two of those are
+ *   deliberately generous. `dns` covers a name that does not exist and a
+ *   resolver's blip alike; the fetcher tells them apart for its own automatic
+ *   retries, and the card offers Retry for both because withholding a button
+ *   that would have worked is the worse mistake. `empty` is `retry` because we
+ *   do not know whether an empty body will last, not because it usually will
+ *   not.
+ *
+ * **No sentence names the address, the host or the status.** A stored failure
+ * message is not a place for a reading history (docs/project/logging.md), and
+ * a status is not an explanation (docs/project/copy.md, rule 1). Several codes
+ * are also raised part-way down a chain of redirects, so a sentence may not
+ * assume the address at fault is the one the reader typed.
+ *
+ * `http-error` is absent on purpose: it is two answers, decided by its status,
+ * in `fetchFailed` below.
+ */
+const FETCH_FAILED: Record<Exclude<FetchFailureCode, "http-error">, ReaderFacingFailure> = {
+  "invalid-url": {
+    kind: "blocked",
+    message:
+      "That address, or one the site redirected to, is not a web address this app can read. " +
+      "Trying again with the same address will not help. Check it for a slip or a missing part " +
+      "and add it again, or save the page as a PDF and upload the file. [fetch-address]",
+  },
+  "unsupported-scheme": {
+    kind: "blocked",
+    message:
+      "This app only opens addresses that begin with http or https, and that address, or one " +
+      "the site redirected to, begins with something else. Trying again will not help. If the " +
+      "page opens in your browser, save it as a PDF and upload the file. [fetch-scheme]",
+  },
+  "blocked-address": {
+    kind: "blocked",
+    message:
+      "That address leads somewhere private rather than to the public web, and this app does " +
+      "not open those. Trying again will not help. If you can open the page yourself, save it " +
+      "as a PDF and upload the file. [fetch-private]",
+  },
+  dns: {
+    kind: "retry",
+    message:
+      "This app could not find a site at that address. That is usually a slip in the address, " +
+      "and now and then a passing fault in looking the name up. Check the address first. If it " +
+      "is right, trying again in a minute is worth a go. [fetch-no-site]",
+  },
+  connection: {
+    kind: "retry",
+    message:
+      "The site at that address did not answer, or the connection dropped part-way. That is " +
+      "usually passing, so waiting a minute and trying again often works. [fetch-unreachable]",
+  },
+  certificate: {
+    kind: "blocked",
+    message:
+      "The site's security certificate did not check out, so this app did not read the page " +
+      "over that connection. That is the site's to fix, and trying again will not help until " +
+      "it does. If the page opens in your browser, save it as a PDF and upload the file. " +
+      "[fetch-certificate]",
+  },
+  timeout: {
+    kind: "retry",
+    message:
+      "The site took too long to answer, so this app stopped waiting. A slow site often " +
+      "answers on a second attempt, so trying again is worth a go. [fetch-slow]",
+  },
+  "too-many-redirects": {
+    kind: "blocked",
+    message:
+      "That address kept redirecting to another address without ever arriving at a page. " +
+      "Trying again would go round the same way. If the page opens in your browser, save it as " +
+      "a PDF and upload the file. [fetch-redirects]",
+  },
+  unauthorized: {
+    kind: "blocked",
+    message:
+      "That page is only shown to people signed in to its site, and this app cannot sign in " +
+      "for you. Trying again will not help. If you can open the page yourself, save it as a " +
+      "PDF and upload the file. [fetch-login]",
+  },
+  forbidden: {
+    kind: "blocked",
+    message:
+      "The site refused to give this app the page. Sites that turn away automated readers " +
+      "answer this way, and this one will most likely answer the same again. If the page opens " +
+      "in your browser, save it as a PDF and upload the file. [fetch-refused]",
+  },
+  "not-found": {
+    kind: "blocked",
+    message:
+      "There is no page at that address. The site said so, and trying again will get the same " +
+      "answer. Check the address for a slip or a missing part, and add it again. [fetch-not-found]",
+  },
+  "rate-limited": {
+    kind: "retry",
+    message:
+      "The site asked this app to slow down, because it has had too many requests lately. " +
+      "Waiting a few minutes and trying again usually works. [fetch-rate]",
+  },
+  "server-error": {
+    kind: "retry",
+    message:
+      "The site ran into trouble of its own while answering. That is usually passing, so " +
+      "waiting a few minutes and trying again is worth a go. [fetch-site-trouble]",
+  },
+  "too-large": FETCH_TOO_BIG,
+  "unsupported-type": {
+    kind: "blocked",
+    message:
+      "What is at that address is not a web page or a PDF, and those are the two things this " +
+      "app can read. Trying again will not help. If it is a document you can open, save it as " +
+      "a PDF and upload the file. [fetch-type]",
+  },
+  empty: {
+    kind: "retry",
+    message:
+      "The site answered with an empty page. This app cannot tell whether that will last, so " +
+      "trying again is worth a go. If it comes back empty again and the page opens in your " +
+      "browser, save it as a PDF and upload the file. [fetch-empty]",
+  },
+};
+
+/** `http-error` with a status the site will give again. See `fetchFailed`. */
+const FETCH_DECLINED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The site answered, but would not hand over the page, and it will most likely answer the " +
+    "same way again. Check the address. If the page opens in your browser, save it as a PDF " +
+    "and upload the file. [fetch-declined]",
+};
+
+/** `http-error` with any other status, or none. See `fetchFailed`. */
+const FETCH_INCOMPLETE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The site did not send the whole page in a form this app could use. That can be passing, " +
+    "so trying again is worth a go. If it keeps happening and the page opens in your browser, " +
+    "save it as a PDF and upload the file. [fetch-incomplete]",
+};
+
+/**
+ * **The sentence for one `FetchFailure`**, given its code and the status it
+ * kept. Called by the pipeline's fetch step and nowhere else: a link preview, a
+ * figure and a bibliographic lookup classify a failed fetch their own way and
+ * never put it on a job card.
+ *
+ * **Total, with no default arm**: `FETCH_FAILED` is a `Record` over the union,
+ * so a new code is a red compile here rather than a failure that quietly takes
+ * the generic sentence and a Retry.
+ *
+ * **`http-error` is the fetcher's catch-all, and it is not one kind.**
+ * `classifyStatus` in src/fetch.ts sends every status it has no name for there
+ * (400, 405, 413, 451 and the rest of the unnamed 4xx), and so do a body that
+ * arrived in part and a redirect that named no destination. A 4xx is the site
+ * refusing this request, and it will refuse it again, so that half is
+ * `blocked`. The exceptions are 408 and 425, which are about the moment and not
+ * the request. Everything else, a missing status included, is `retry`: we do
+ * not know it is lasting. ⟨GPT Sol's plan review, F1⟩
+ *
+ * `status` is compared and never printed, so a value that is not a number
+ * falls to `retry` and reaches nobody.
+ */
+export function fetchFailed(code: FetchFailureCode, status: number | null): ReaderFacingFailure {
+  if (code !== "http-error") return FETCH_FAILED[code];
+  const refused =
+    typeof status === "number" && status >= 400 && status < 500 && status !== 408 && status !== 425;
+  return refused ? FETCH_DECLINED : FETCH_INCOMPLETE;
+}
 
 /**
  * The bytes are neither a PDF nor a web page, whatever the file is called.

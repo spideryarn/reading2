@@ -212,6 +212,11 @@ export function CommentDialog({
     transcribe: sendForTranscription,
     /* One box per comment, as the follow-up itself is. */
     keep: keepDictation(`comment:${comment.id}`),
+    /* A double press on Stop also asks (dictation.md § A double press). */
+    onDone: () => askFollowUp(),
+    /* This dialog is reused from one comment to the next: a double press is a
+       wish to ask about the comment it was made on, and no other. */
+    doneKey: comment.id,
   });
 
   /* On screen for as long as it is mounted — this dialog has no shut state of
@@ -275,6 +280,22 @@ export function CommentDialog({
   useLayoutEffect(() => {
     freshRef.current = fresh;
   }, [fresh]);
+  /** The follow-up box's one action: put the question into chat. The form's
+      submit and a double press on Stop both end here, behind the guards the
+      form's handler explains. */
+  const askFollowUp = () => {
+    if (!own || comment.status === "pending") return;
+    if (dictate.busy) return;
+    const q = followUp.trim();
+    if (!q) return;
+    setFollowUp("");
+    touch();
+    own.onDiscuss(q);
+    /* The question is in chat now; a soft keyboard has nothing left
+       to do here (useVisualViewport.ts § `putKeyboardAway`). */
+    putKeyboardAway(followUpBox.current);
+  };
+
   const touch = () => {
     own?.onTouched?.();
     if (!isFresh) return;
@@ -832,15 +853,7 @@ export function CommentDialog({
                microphone actually recording, and Enter arrives from a soft
                keyboard as readily as from a hard one. dictation.md § Adding it
                to a box calls this the guard everybody forgets. */
-            if (dictate.busy) return;
-            const q = followUp.trim();
-            if (!q) return;
-            setFollowUp("");
-            touch();
-            own.onDiscuss(q);
-            /* The question is in chat now; a soft keyboard has nothing left
-               to do here (useVisualViewport.ts § `putKeyboardAway`). */
-            putKeyboardAway(followUpBox.current);
+            askFollowUp();
           }}
         >
           <input
@@ -865,7 +878,7 @@ export function CommentDialog({
             aria-label="Ask a follow-up question about this passage"
           />
           {dictate.dictation.supported && (
-            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} />
           )}
           <button
             type="submit"
@@ -878,7 +891,7 @@ export function CommentDialog({
           >
             Ask in chat
           </button>
-          <DictationStrip dictation={dictate.dictation} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
         </form>
       )}
 

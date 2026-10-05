@@ -173,7 +173,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
-          the box, to edit before you send; a recording stops after five minutes.{" "}
+          the box, to edit before you send; a recording stops after five minutes. Press Stop twice
+          quickly and it sends by itself once the words arrive; this works here, in Feedback, in a
+          comment follow-up, in a quiz answer and when you annotate a passage.{" "}
           <strong>Live</strong>, beside it, is a spoken conversation you can interrupt. Your audio goes
           directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a
           while, and press <strong>Live</strong> again. A call ends after five minutes of quiet, or
