@@ -1,0 +1,263 @@
+{
+  "arm": "high-none-len0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "identity-spya-k8x09v",
+  "version": "simple-prompt/8",
+  "sourceSha256": "66be976446617e13d2279aeba6a93b31043ecd5d6ca2c46c5be9371dd979ac1b",
+  "at": "2026-10-05T02:19:22.229Z",
+  "bodyWords": 879,
+  "bodyBlocks": 27,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "c88bcb88ff224afc",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 16130,
+  "costUsd": 0.0744976,
+  "tokens": {
+    "input": 8940,
+    "output": 2087,
+    "reasoning": 81
+  },
+  "briefReadyMs": 11222,
+  "fullerReadyMs": 16126,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 402,
+  "briefWords": 88,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham, written in February 2009, arguing from everyday observation rather than data. It starts with a puzzle: why do online talks about politics and religion turn so uniquely useless? Graham notes that any mention of religion on a forum tends to slide into a fight, while topics like Javascript or baking do not.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-znm6fz"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham, written in February 2009, arguing from everyday observation rather than data.",
+          "id": null
+        },
+        {
+          "text": "It starts with a puzzle: why do online talks about politics and religion turn so uniquely useless?",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "Graham notes that any mention of religion on a forum tends to slide into a fight, while topics like Javascript or baking do not.",
+          "id": "spya-znm6fz"
+        }
+      ]
+    },
+    {
+      "text": "His first clue is that people feel no need for expertise before giving opinions on religion. Strongly held beliefs are enough, and anyone can have those. A Javascript thread grows slowly because people feel they must know enough first. Politics, he sees, works like religion: strong convictions are all you need.",
+      "ids": [
+        "spya-pfruy3",
+        "spya-dpvyy2"
+      ],
+      "sentences": [
+        {
+          "text": "His first clue is that people feel no need for expertise before giving opinions on religion.",
+          "id": "spya-pfruy3"
+        },
+        {
+          "text": "Strongly held beliefs are enough, and anyone can have those.",
+          "id": "spya-pfruy3"
+        },
+        {
+          "text": "A Javascript thread grows slowly because people feel they must know enough first. Politics, he sees, works like religion: strong convictions are all you need.",
+          "id": "spya-dpvyy2"
+        }
+      ]
+    },
+    {
+      "text": "He tests one explanation and rejects it. Perhaps these topics have no definite answers, so no one can be proven wrong and every view feels equally valid. But some political questions do have definite answers, such as what a new policy will cost, and they turn just as sour.",
+      "ids": [
+        "spya-ah2ape",
+        "spya-gv44uj"
+      ],
+      "sentences": [
+        {
+          "text": "He tests one explanation and rejects it.",
+          "id": null
+        },
+        {
+          "text": "Perhaps these topics have no definite answers, so no one can be proven wrong and every view feels equally valid.",
+          "id": "spya-ah2ape"
+        },
+        {
+          "text": "But some political questions do have definite answers, such as what a new policy will cost, and they turn just as sour.",
+          "id": "spya-gv44uj"
+        }
+      ]
+    },
+    {
+      "text": "His answer is identity: these topics become part of who people think they are. People can never argue fruitfully about something tied to their identity, because they are already on a side. What counts depends on the people, not the topic. A battle involving your own country starts a fight; a Bronze Age battle does not, since no one knows which side to take.",
+      "ids": [
+        "spya-kwzcxp",
+        "spya-uz3ta2"
+      ],
+      "sentences": [
+        {
+          "text": "His answer is identity: these topics become part of who people think they are.",
+          "id": "spya-kwzcxp",
+          "key": "part of who people think they are"
+        },
+        {
+          "text": "People can never argue fruitfully about something tied to their identity, because they are already on a side.",
+          "id": "spya-kwzcxp"
+        },
+        {
+          "text": "What counts depends on the people, not the topic. A battle involving your own country starts a fight; a Bronze Age battle does not, since no one knows which side to take.",
+          "id": "spya-uz3ta2",
+          "key": "depends on the people, not the topic"
+        }
+      ]
+    },
+    {
+      "text": "This means a topic that sparks a \"religious war\" may still have a real answer. Programmers who see themselves as \"X programmers\" fight over languages, but languages can clearly be well or badly designed. A useful talk is possible if you leave out people who respond from identity. Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe with some people.",
+      "ids": [
+        "spya-s6tp4k",
+        "spya-zdmhnz"
+      ],
+      "sentences": [
+        {
+          "text": "This means a topic that sparks a \"religious war\" may still have a real answer.",
+          "id": "spya-s6tp4k"
+        },
+        {
+          "text": "Programmers who see themselves as \"X programmers\" fight over languages, but languages can clearly be well or badly designed.",
+          "id": "spya-s6tp4k"
+        },
+        {
+          "text": "A useful talk is possible if you leave out people who respond from identity. Even harmless-seeming topics, like Ford versus Chevy pickup trucks, can be unsafe with some people.",
+          "id": "spya-zdmhnz"
+        }
+      ]
+    },
+    {
+      "text": "His notes add two points. Once identity takes over, it happens fast: anyone can join, and angry posts draw angrier replies. And some labels may be worth keeping, like \"scientist\", because it commits you only to following the evidence, not to any belief. He likens it to a cupboard sign saying it must stay empty.",
+      "ids": [
+        "spya-jpnmw6",
+        "spya-mz9mzj",
+        "spya-w0epdj"
+      ],
+      "sentences": [
+        {
+          "text": "His notes add two points.",
+          "id": null
+        },
+        {
+          "text": "Once identity takes over, it happens fast: anyone can join, and angry posts draw angrier replies.",
+          "id": "spya-jpnmw6"
+        },
+        {
+          "text": "And some labels may be worth keeping, like \"scientist\", because it commits you only to following the evidence, not to any belief.",
+          "id": "spya-mz9mzj"
+        },
+        {
+          "text": "He likens it to a cupboard sign saying it must stay empty.",
+          "id": "spya-w0epdj"
+        }
+      ]
+    },
+    {
+      "text": "Graham says that, if his theory is right, it shows how to have better ideas, not just which talks to avoid. Since people cannot think clearly about what is part of their identity, the best plan is to let as few things into it as possible. He ends that the more labels you give yourself, the dumber they make you.",
+      "ids": [
+        "spya-xv45wq",
+        "spya-nt9xpg"
+      ],
+      "sentences": [
+        {
+          "text": "Graham says that, if his theory is right, it shows how to have better ideas, not just which talks to avoid.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "Since people cannot think clearly about what is part of their identity, the best plan is to let as few things into it as possible.",
+          "id": "spya-xv45wq",
+          "key": "let as few things into it as possible"
+        },
+        {
+          "text": "He ends that the more labels you give yourself, the dumber they make you.",
+          "id": "spya-nt9xpg"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "In this short essay, Paul Graham asks why talk about politics and religion so often turns into useless fighting. His answer is identity: the things people feel are part of who they are. People can't argue well about anything that is part of their identity.",
+      "ids": [
+        "spya-vnzvkm",
+        "spya-kwzcxp",
+        "spya-uz3ta2"
+      ],
+      "sentences": [
+        {
+          "text": "In this short essay, Paul Graham asks why talk about politics and religion so often turns into useless fighting.",
+          "id": "spya-vnzvkm"
+        },
+        {
+          "text": "His answer is identity: the things people feel are part of who they are.",
+          "id": "spya-kwzcxp",
+          "key": "His answer is identity"
+        },
+        {
+          "text": "People can't argue well about anything that is part of their identity.",
+          "id": "spya-kwzcxp"
+        }
+      ]
+    },
+    {
+      "text": "So the trouble comes from people, not topics; even programming languages or pickup trucks can spark it. He says this explains not just which talks to avoid, but how to think better. His conclusion: let as few things into your identity as possible.",
+      "ids": [
+        "spya-uz3ta2",
+        "spya-xv45wq",
+        "spya-nt9xpg"
+      ],
+      "sentences": [
+        {
+          "text": "So the trouble comes from people, not topics; even programming languages or pickup trucks can spark it.",
+          "id": "spya-uz3ta2"
+        },
+        {
+          "text": "He says this explains not just which talks to avoid, but how to think better.",
+          "id": "spya-xv45wq"
+        },
+        {
+          "text": "His conclusion: let as few things into your identity as possible.",
+          "id": "spya-xv45wq",
+          "key": "let as few things into your identity"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

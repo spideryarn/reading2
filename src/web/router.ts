@@ -78,7 +78,12 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
-import { ADMIN_FEEDBACK_PATH, ADMIN_USERS_PATH, ADMIN_VOUCHERS_PATH } from "../urls.js";
+import {
+  ADMIN_COSTS_PATH,
+  ADMIN_FEEDBACK_PATH,
+  ADMIN_USERS_PATH,
+  ADMIN_VOUCHERS_PATH,
+} from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
   canStamp,
@@ -95,7 +100,7 @@ import {
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users" | "feedback" | "vouchers";
+export type AdminPage = "home" | "users" | "feedback" | "vouchers" | "costs";
 
 export type Route =
   | { kind: "library" }
@@ -501,7 +506,7 @@ export function parseRoute(pathname: string): Route {
      matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users|feedback|vouchers))?\/?$/.exec(pathname);
+  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs))?\/?$/.exec(pathname);
   if (adminPath) {
     /* The captured segment *is* the page name for every page but the index,
        which has no segment. Written as a lookup rather than a chain of
@@ -511,7 +516,10 @@ export function parseRoute(pathname: string): Route {
     const page = adminPath[1];
     return {
       kind: "admin",
-      page: page === "users" || page === "feedback" || page === "vouchers" ? page : "home",
+      page:
+        page === "users" || page === "feedback" || page === "vouchers" || page === "costs"
+          ? page
+          : "home",
     };
   }
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
@@ -647,6 +655,8 @@ export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = ADMIN_FEEDBACK_PATH;
 /* Gift vouchers — docs/project/admin.md § `/admin/vouchers`. */
 export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
+/* The cost explorer — plan 261005a. */
+export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**

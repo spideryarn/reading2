@@ -19,6 +19,7 @@
  */
 
 import { formatNanos } from "./ai-spend.js";
+import { recordedNanos } from "./cost-cube.js";
 import type { AccountTally, SpendGroup } from "./store/ai-calls-spend-pg.js";
 import {
   type CostCategory,
@@ -27,38 +28,10 @@ import {
   describeFacts,
 } from "./cost-categories.js";
 
-/**
- * **What OpenRouter's cut adds on top of the credits figure** — the difference
- * between the ledger and a bank statement.
- *
- * Their fee is charged on *buying credits*, not per token: about 5.5% on a card
- * purchase, with a minimum, and different again for crypto. So a row's settled
- * `usage.cost` is a credits figure, and the cash it took to put those credits
- * there is roughly 5.5% more.
- *
- * **This is allocated in the report and never written to a row.** Multiplying
- * each stored cost by 1.055 would put an estimate in a column built to hold
- * settled figures — the exact thing drizzle/0023's cost-provenance design
- * exists to prevent — and would invent a precision that can never match a
- * statement, because the fee has a floor and does not divide evenly over calls.
- * Greg asked to see both figures (2026-09-02); this is the "both".
- *
- * It applies to **credits only**. A BYOK row was billed to somebody else's key
- * and never touched our credit balance, and a `computed` row went straight to
- * Anthropic or OpenAI without passing OpenRouter at all. Applying the uplift to
- * those would be charging ourselves a fee twice for money that never bought a
- * credit.
- */
-export const OPENROUTER_CREDIT_FEE = 0.055;
-
-/** Credits plus the fee it took to buy them, with the other pockets untouched. */
-export function cashNanos(totals: {
-  creditsNanos: number;
-  byokNanos: number;
-  computedNanos: number;
-}): number {
-  return Math.round(totals.creditsNanos * (1 + OPENROUTER_CREDIT_FEE)) + totals.byokNanos + totals.computedNanos;
-}
+/* The fee and the cash figure live in src/cost-cube.ts, which the browser can
+   import and this module (it reaches the spend collector) cannot be. One copy;
+   the names here are the ones `npm run cost` has always used. */
+export { OPENROUTER_CREDIT_FEE, estimatedCashNanos as cashNanos } from "./cost-cube.js";
 
 /** One category's money and its honesty markers. */
 export interface CategoryTotals {
@@ -109,13 +82,7 @@ function add(into: CategoryTotals, from: SpendGroup): void {
 }
 
 /** The three pockets as one figure. Callers add them deliberately, and say so. */
-export function totalNanos(t: {
-  creditsNanos: number;
-  byokNanos: number;
-  computedNanos: number;
-}): number {
-  return t.creditsNanos + t.byokNanos + t.computedNanos;
-}
+export const totalNanos = recordedNanos;
 
 /**
  * Turn the grouped SQL result into everything the report prints — **and check

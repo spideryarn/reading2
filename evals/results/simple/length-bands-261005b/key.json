@@ -1,0 +1,234 @@
+[
+  {
+    "id": "P01",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "fuller",
+    "A": "len0b",
+    "B": "len1b"
+  },
+  {
+    "id": "P02",
+    "kind": "control",
+    "slug": "fh-spya-s3fq0d",
+    "level": "fuller",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P03",
+    "kind": "control",
+    "slug": "identity-spya-k8x09v",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P04",
+    "kind": "whole",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len1whole",
+    "B": "len1b"
+  },
+  {
+    "id": "P05",
+    "kind": "control",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P06",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P07",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len1b"
+  },
+  {
+    "id": "P08",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P09",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len1b"
+  },
+  {
+    "id": "P10",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P11",
+    "kind": "control",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P12",
+    "kind": "control",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P13",
+    "kind": "test",
+    "slug": "scaling-hypothesis",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P14",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P15",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P16",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P17",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P18",
+    "kind": "test",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P19",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P20",
+    "kind": "control",
+    "slug": "fh-spya-s3fq0d",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P21",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P22",
+    "kind": "test",
+    "slug": "fh-spya-s3fq0d",
+    "level": "fuller",
+    "A": "len1a",
+    "B": "len0a"
+  },
+  {
+    "id": "P23",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0b",
+    "B": "len1b"
+  },
+  {
+    "id": "P24",
+    "kind": "control",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len0b",
+    "B": "len0a"
+  },
+  {
+    "id": "P25",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "brief",
+    "A": "len1b",
+    "B": "len0b"
+  },
+  {
+    "id": "P26",
+    "kind": "control",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len0b"
+  },
+  {
+    "id": "P27",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P28",
+    "kind": "test",
+    "slug": "identity-spya-k8x09v",
+    "level": "brief",
+    "A": "len0a",
+    "B": "len1a"
+  },
+  {
+    "id": "P29",
+    "kind": "control",
+    "slug": "dodo-spya-nyc4ud",
+    "level": "fuller",
+    "A": "len0a",
+    "B": "len0b"
+  }
+]

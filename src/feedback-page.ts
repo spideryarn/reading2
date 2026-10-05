@@ -41,7 +41,12 @@
  * this list fails in the safe direction: no label, not a wrong one.
  */
 import { isSlug } from "./ingest.js";
-import { ADMIN_FEEDBACK_PATH, ADMIN_USERS_PATH, ADMIN_VOUCHERS_PATH } from "./urls.js";
+import {
+  ADMIN_COSTS_PATH,
+  ADMIN_FEEDBACK_PATH,
+  ADMIN_USERS_PATH,
+  ADMIN_VOUCHERS_PATH,
+} from "./urls.js";
 
 /** The pages whose address is just itself. The router's `*_HREF` constants, as paths. */
 const FIXED_PAGES: ReadonlySet<string> = new Set([
@@ -63,6 +68,7 @@ const FIXED_PAGES: ReadonlySet<string> = new Set([
   ADMIN_USERS_PATH,
   ADMIN_FEEDBACK_PATH,
   ADMIN_VOUCHERS_PATH,
+  ADMIN_COSTS_PATH,
 ]);
 
 export function feedbackPageLabel(url: string | null): string | null {

@@ -272,6 +272,11 @@ const SHARED = new Set([
      Types only, no imports: the same argument as `admin.js` and
      `billing-plan.js` — a wire contract with an end on each side. */
   "admin-vouchers.js",
+  /* The `/admin/costs` wire shape and the pure filter, group and pivot over
+     it, shared with the analysis script so a figure has one definition. Imports
+     `step-order.js` and nothing else; `category` is a string the server fills
+     in because src/cost-categories.ts reaches the pipeline. Plan 261005a. */
+  "cost-cube.js",
   /* The Sketch diagram's schema, its validator and its painter — the two files
      that turn a model's scene into geometry. On the list for the reason the
      header states rather than for convenience: `sketch-scene.js` imports

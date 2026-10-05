@@ -1,8 +1,9 @@
 /**
- * Who the administrator is, and nothing else.
+ * Shared, import-free definitions for administrator-only surfaces.
  *
- * One account per Supabase project, spelled once, in a module that imports
- * nothing — so the browser can ask exactly the same question the server asks.
+ * The administrator's ids, wire shapes and money formatting live in a module
+ * that imports nothing, so the browser and server can share them without
+ * pulling server dependencies into the client bundle.
  * Greg, 2026-08-27:
  *
  * > Set up an /admin/ page that only user `greg@gregdetre.com` sees a link for
@@ -433,6 +434,26 @@ export function formatSpendNanos(nanos: number): string {
      `formatNanos` was caught doing on a live probe. */
   if (nanos !== 0 && Math.abs(dollars) < 0.0001) return `$${dollars.toFixed(8)}`;
   return `$${dollars.toFixed(4)}`;
+}
+
+/** One ten-thousandth of a dollar: the smallest figure drawn as itself. */
+const SMALLEST_DRAWN_NANOS = 100_000;
+
+/**
+ * The cost explorer's compact money formatter: two decimals from a dollar up,
+ * up to four below, and `<$0.0001` for a real cost smaller than that — never a
+ * free-looking zero. Kept beside `formatSpendNanos` so node reports and the
+ * browser use one dependency-neutral definition.
+ */
+export function formatCostNanos(nanos: number): string {
+  if (nanos > 0 && nanos < SMALLEST_DRAWN_NANOS) return `<${formatSpendNanos(SMALLEST_DRAWN_NANOS)}`;
+  /* 0.99995 and up would print as 1.0000 at four decimals. */
+  if (nanos === 0 || nanos >= 999_950_000) {
+    const cents = Math.round(nanos / 1e7);
+    return formatSpendNanos(cents * 1e7).slice(0, -2);
+  }
+  /* Four decimals, less any trailing zeros past the cents. */
+  return formatSpendNanos(nanos).replace(/(\.\d{2}\d*?)0+$/, (_all, kept: string) => kept);
 }
 
 /**
