@@ -154,6 +154,33 @@ One stage; it is small and none of it is useful alone.
 5. GPT Sol code review (write-capable), then a Sonnet browser check at desktop, iPad and phone
    widths, with a fake media stream so that Stop can really be pressed twice.
 
+## What landed
+
+Commits `4c59b9d9c` (the stage) and `fb5b6809a` (the code review's fixes and the note).
+
+**GPT Sol's code review** of `4c59b9d9c`
+([answer](261005a-dictation-double-press-on-stop-also-sends-code-review-sol.md)): ship with the
+fixes it made. It fixed four things red-first — a target that changes in the same batch as the
+ending (C1), a change of target now closing the window and withdrawing a wish already taken (C2),
+a test over the real `useDictation` (C3), `/help` naming the comment follow-up (C4) — and reported
+the older transcript-placement bug (C5), which is queue item `qi-cfrv4spd`.
+
+**Browser check** (Sonnet, Playwright with Chrome's fake microphone and `/api/transcribe` answered
+by the test after 1.5 s; nothing reached a real server), on `4c59b9d9c`, at 1440, 820 and 390 px
+wide, the last two by touch:
+
+- Feedback and chat, all three widths: a double press sends exactly once with the transcript; a
+  single press leaves the words unsent; a second press at 900 ms does not land and sends nothing.
+- By touch, the page did not zoom and the second tap was taken.
+- The annotate box, at 1440 only: a double press saves once.
+- The longer strip sentence fits on one line at 390 px in Feedback and chat.
+- **Not exercised**: the quiz answer and the comment follow-up in a browser (unit tests only);
+  annotate by touch; a real iPhone or iPad. The check ran before the code review's fixes, which
+  changed no rendering.
+- One thing seen and not chased: at 390 px the button showed a blue fill in the screenshot taken
+  just after the second tap. No rule of ours fills it; it is most likely Chrome's own tap highlight
+  caught mid-fade. Worth a glance on a real phone.
+
 ## Done looks like
 
 In Feedback, chat, the comment follow-up, the quiz answer box and the annotate box: dictate, press
