@@ -216,3 +216,35 @@ Illustrated only if you find yourself wanting it.
 > Q-double-stop-elsewhere yes for the command bar
 
 Illustrated stays as built (no double press). Dispatched to session `command-bar-double-stop`.
+
+## The command bar, built (queue item `qi-wd4mg6p6`)
+
+**The done action is Enter itself.** `CommandBar.tsx` had the key's two lines inline (take the
+selected row, or with none, ask what the sentence meant). They are now one function, `enter`, called
+by the key and by the field's `onDone`, so the double press cannot run anything Enter would not:
+
+```
+ words arrive ─▶ a row matches?  ── yes ─▶ that row, as Enter runs it (writes and generates included)
+                                 ── no ──▶ ask the fast model  ─▶ sure, and only moves the reader? go
+                                                               ─▶ otherwise "Did you mean", and wait
+```
+
+Nothing new was built in the hook. The only shared change is the words: the bar does not "send", so
+`DictationButton` and `DictationStrip` take `done="enter"` and say *"Press Enter when the words
+arrive"* and *"Turning that into text, then pressing Enter…"*. "Enter" rather than "run" because it
+stays true when the phrase matches nothing and the bar asks instead (the plan review's F4: do not
+promise what the box will not do).
+
+- **Shut bar**: it stays mounted, so `onDone` checks `open` and `doneKey` is whether it is open, as
+  Feedback's is. Shutting it withdraws the wish even if it is opened again.
+- **Not offered while a run is `Starting…`**, when Enter is refused.
+- **The simpler option passed over**: reusing the "send" wording unchanged. One prop fewer, and a
+  strip that says "then sending…" over a box that sends nothing.
+- **Complexity added, named**: one optional prop (`done`) on the button and the strip, with a
+  two-row table of words.
+
+Tests: `tests/command-bar-double-stop.test.tsx`, over the real bar, field and button with only
+`useDictation` stubbed. Red first: five of its eight failed before the wiring. The other three are
+"nothing runs" cases, which pass with no wiring at all; of those, the shut-bar one was made to fail
+by removing the bar's `open` check and `doneKey`. The one-press and no-transcript cases pin rules
+that live in the shared hook and were mutated there in the first stage.
