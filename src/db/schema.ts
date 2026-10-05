@@ -6699,7 +6699,8 @@ export const linkSummaries = spideryarn.table(
  * - `state` null — a claim and no answer yet: somebody is asking right now,
  *   until `claimed_until`. An error on that ask deletes the row, so an error
  *   stores nothing.
- * - `found` — a record, fresh for 180 days from `fetched_at`.
+ * - `found` — a record, fresh for 180 days from `fetched_at`; a Crossref one
+ *   only once `cited_by_count_read_at` is set (see that column).
  * - `not-found` — neither registry has it, remembered for 7 days.
  *
  * A stale `found` or `not-found` row being refreshed keeps its old answer while
@@ -6729,6 +6730,23 @@ export const bibliographicRecords = spideryarn.table(
     doi: text("doi"),
     /** When the answer was fetched. Null on a claim with no answer. */
     fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    /**
+     * `WorkRecord.citedByCount`: Crossref's `is-referenced-by-count`, the works
+     * it holds that cite this one. Only on a `found` Crossref row. Null when
+     * Crossref gave none, and on every row from before 2026-10-05.
+     */
+    citedByCount: integer("cited_by_count"),
+    /**
+     * **When Crossref was asked for that count**: set to `fetched_at`'s moment
+     * on every `found` Crossref answer, count or no count, and null otherwise.
+     * A second timestamp because null here on a Crossref row means *never
+     * asked* (a row cached before the count was kept), which
+     * `cited_by_count is null` alone cannot tell from *asked, and there was
+     * none*. Such a row is not fresh (src/store/pg-bibliographic.ts §
+     * `freshSql`), so it is asked about once more.
+     * docs/plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md.
+     */
+    citedByCountReadAt: timestamp("cited_by_count_read_at", { withTimezone: true }),
     /** The single-flight claim: somebody is asking until then. Null when nobody is. */
     claimedUntil: timestamp("claimed_until", { withTimezone: true }),
   },
@@ -6747,6 +6765,24 @@ export const bibliographicRecords = spideryarn.table(
     check(
       "bibliographic_records_published_day",
       sql`${t.publishedDay} is null or (${t.state} is not distinct from 'found' and ${t.publishedDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')`,
+    ),
+    /**
+     * A count is Crossref's, on a found record, never negative, and always
+     * with the moment it was read. `is not distinct from`, because a claim's
+     * `state` and `source` are null and `= 'found'` would let it through
+     * (docs/postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md).
+     */
+    check(
+      "bibliographic_records_cited_by_count",
+      sql`${t.citedByCount} is null or (${t.citedByCount} >= 0
+            and ${t.state} is not distinct from 'found' and ${t.source} is not distinct from 'crossref'
+            and ${t.citedByCountReadAt} is not null)`,
+    ),
+    /** The moment says "Crossref was asked", so only a found Crossref record has one. */
+    check(
+      "bibliographic_records_cited_by_count_read_at",
+      sql`${t.citedByCountReadAt} is null
+            or (${t.state} is not distinct from 'found' and ${t.source} is not distinct from 'crossref')`,
     ),
     /** Same length, at most 100, and a family name for every author. */
     check(

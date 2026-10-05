@@ -1,6 +1,6 @@
 {
-  "id": "dee293ea-6950-45c3-a728-3876353829d9",
-  "prevId": "59e9e2e5-7be2-4e5a-b369-f0fa79e2d2ce",
+  "id": "b0ed5654-abef-49fd-8fab-4ba034447980",
+  "prevId": "31f7e136-8b3e-4946-b624-67c8b18c20c8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1368,6 +1368,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "cited_by_count": {
+          "name": "cited_by_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cited_by_count_read_at": {
+          "name": "cited_by_count_read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "claimed_until": {
           "name": "claimed_until",
           "type": "timestamp with time zone",
@@ -1400,6 +1412,14 @@
         "bibliographic_records_published_day": {
           "name": "bibliographic_records_published_day",
           "value": "\"spideryarn\".\"bibliographic_records\".\"published_day\" is null or (\"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"published_day\" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')"
+        },
+        "bibliographic_records_cited_by_count": {
+          "name": "bibliographic_records_cited_by_count",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"cited_by_count\" is null or (\"spideryarn\".\"bibliographic_records\".\"cited_by_count\" >= 0\n            and \"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"source\" is not distinct from 'crossref'\n            and \"spideryarn\".\"bibliographic_records\".\"cited_by_count_read_at\" is not null)"
+        },
+        "bibliographic_records_cited_by_count_read_at": {
+          "name": "bibliographic_records_cited_by_count_read_at",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"cited_by_count_read_at\" is null\n            or (\"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"source\" is not distinct from 'crossref')"
         },
         "bibliographic_records_authors": {
           "name": "bibliographic_records_authors",

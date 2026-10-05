@@ -16,6 +16,7 @@ import type { UseCitations } from "../src/web/useCitations.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 
 const { CitationsPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/CitationsPanel.js");
+const { readCitationRegistry, readRegistryWork } = await import("../src/registry-work.js");
 const { DebatePanel, rowWork } = await import("../src/web/DebatePanel.js");
 const { orderReceptionRows, receptionOrderOptions, rowYear } = await import("../src/web/debate-order.js");
 
@@ -79,6 +80,51 @@ describe("Citations' by-line", () => {
   it("reads a malformed stored record as none", () => {
     const junk = { kind: "found", source: "openalex", title: "x", authors: [] } as unknown as CitationRegistry;
     expect(workByLine(work({ registry: junk }))).toEqual({ filled: null, conflict: null });
+  });
+});
+
+describe("a stored citation count, read back (plan 261005i)", () => {
+  const READ = "2026-10-04T12:00:00.000Z";
+  const stored = (citedBy: unknown, over: object = {}) =>
+    readCitationRegistry({ ...FOUND, ...over, citedBy } as unknown as CitationRegistry);
+
+  it("keeps a Crossref record's count and the moment it was read, and nothing else in it", () => {
+    expect(stored({ count: 357, readAt: READ, extra: "x" })).toEqual({ ...FOUND, citedBy: { count: 357, readAt: READ } });
+    expect(stored({ count: 0, readAt: READ })).toMatchObject({ citedBy: { count: 0, readAt: READ } });
+    expect(stored({ count: 2_147_483_647, readAt: READ })).toMatchObject({ citedBy: { count: 2_147_483_647 } });
+  });
+
+  it("drops a malformed count and keeps the record", () => {
+    for (const bad of [
+      { count: -1, readAt: READ },
+      { count: 3.5, readAt: READ },
+      { count: "357", readAt: READ },
+      { count: 2_147_483_648, readAt: READ },
+      { count: 357 },
+      { count: 357, readAt: "last Tuesday" },
+      { count: 357, readAt: 1_790_000_000_000 },
+      { readAt: READ },
+      [357, READ],
+      "357",
+      null,
+    ]) {
+      expect(stored(bad), JSON.stringify(bad)).toEqual(FOUND);
+    }
+  });
+
+  it("drops a well-formed count from a DataCite record, which would be drawn as Crossref's (GPT Sol's F2)", () => {
+    const read = stored({ count: 357, readAt: READ }, { source: "datacite" });
+    expect(read).toEqual({ ...FOUND, source: "datacite" });
+  });
+
+  it("never reads a count off a conflict", () => {
+    expect(
+      readCitationRegistry({ kind: "conflict", source: "crossref", citedBy: { count: 357, readAt: READ } } as unknown as CitationRegistry),
+    ).toEqual({ kind: "conflict", source: "crossref" });
+  });
+
+  it("leaves Debate's record without one: only Citations asks about a cited work's count", () => {
+    expect(readRegistryWork({ ...FOUND, citedBy: { count: 357, readAt: READ } })).not.toHaveProperty("citedBy");
   });
 });
 

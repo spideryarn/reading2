@@ -4877,6 +4877,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           registryIdentified: registered.counts.identified,
           registryAsked: registered.counts.asked,
           registryFound: registered.counts.found,
+          /* Found rows carrying Crossref's citation count (plan 261005i).
+             Zero beside a `registryFound` full of DOIs is the count not
+             arriving, and the rows would simply show none. */
+          registryCounted: registered.counts.counted,
           registryConflict: registered.counts.conflict,
           registryNotFound: registered.counts.notFound,
           registryUnavailable: registered.counts.unavailable,
