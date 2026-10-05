@@ -238,8 +238,17 @@ export function useAutosavedText({
         if (leaveAfterFlight.current) {
           leaveAfterFlight.current = false;
           queued.current = false;
-          lastChance();
-          endLeaveHold();
+          /* A `leave` that throws must not leave the tab held for good (GPT
+             Sol's fix check, plan 261005d). Caught rather than rethrown: the
+             box is gone, so there is nowhere left to say so, and rethrowing
+             from here is only an unhandled rejection. */
+          try {
+            lastChance();
+          } catch {
+            // Nothing can be shown; the hold below is what must not leak.
+          } finally {
+            endLeaveHold();
+          }
           return;
         }
         if (queued.current) {

@@ -17,6 +17,7 @@ import { type AutosavedText, useAutosavedText } from "../src/web/useAutosavedTex
 let sent: Array<{ text: string; ok(stored: string): void; fail(message: string): void }> = [];
 let left: string[] = [];
 let syncFailure: Error | null = null;
+let leaveFailure: Error | null = null;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -31,6 +32,7 @@ function Probe() {
       });
     },
     leave: (text) => {
+      if (leaveFailure) throw leaveFailure;
       left.push(text);
     },
   });
@@ -45,6 +47,7 @@ beforeEach(() => {
   sent = [];
   left = [];
   syncFailure = null;
+  leaveFailure = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -278,6 +281,16 @@ describe("leaving", () => {
 
     await act(async () => sent[0]?.fail("no"));
     expect(reloadVeto()).toBeNull();
+  });
+
+  it("lets go of that hold when the last-chance send itself throws", async () => {
+    act(() => get().setDraft("an older draft"));
+    act(() => get().commit());
+    act(() => get().setDraft("the newest words"));
+    act(() => root.render(null));
+    leaveFailure = new Error("leave threw");
+    await act(async () => sent[0]?.ok("an older draft"));
+    expect(reloadVeto(), "a failed send must not hold the tab for good").toBeNull();
   });
 
   it("does not send a last-chance duplicate after a successful save", async () => {

@@ -291,6 +291,17 @@ each finding checked.
 F12 and F18 were fixed after the review's snapshot, so each gets a narrow check of the fix (below),
 as engineering-manager.md asks. Discovery is closed.
 
+**The narrow check** of those late fixes
+([prompt](261005d-notice-a-deploy-on-wake-fix-check-prompt.md),
+[answer](261005d-notice-a-deploy-on-wake-fix-check-sol.md)), on `3aa01bf31`: F18, F19, the hold's
+ownership and the F15 edit are closed. F12 came back open at P2, reasoned: a `leave` that throws
+skipped the release, so the tab would stay held. Fixed with a `try`/`finally` and a test seen red
+against the old order. That is a P2 fixed after round two, so nothing further checks it.
+
+**Full `npm test`** on `3aa01bf31`, after `npm run build` and `npm run build:fleet`, 2026-10-05
+08:17 to 09:13 BST: 1,620 files passed, 1 skipped; 35,107 tests passed, 37 skipped; exit 0. The
+`finally` fix came after it and was run against its own suites and `npm run typecheck`.
+
 **The two-build check**, `npx tsx scripts/check-two-builds.ts`, run by the implementing agent on
 `0019c8c0c`: PASS (the open `/changelog` reloaded and the running client was build two), and with
 `--control` (`/build.json` still answering build one) every assertion failed, as it must.
