@@ -245,10 +245,8 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
-  it("every one of the four, and never more than one radio checked", () => {
+  it("draws every current experimental mode, and never more than one radio checked", () => {
     for (const mode of BEHIND_THE_SWITCH) {
-      /* Marginalia is a switch, not a band, since 2026-10-01: the next test. */
-      if (mode === "marginalia") continue;
       reading({ mode, experimental: EXPERIMENTAL_OFF });
       expect(radioModes(), mode).toContain(MODE_LABEL[mode]);
       expect(checked(), mode).toEqual([MODE_LABEL[mode]]);

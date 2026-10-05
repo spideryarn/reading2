@@ -720,7 +720,7 @@ it, arrives at:
 |---|---|
 | below 700px | the article alone — a band would cover the prose |
 | 700px and up | `?mode=summary` (Brief) |
-| 900px and up, experimental switch on | `?mode=summary&margin=1` |
+| 900px and up | `?mode=summary&margin=1` |
 
 The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
 ([`layout.ts`](../../src/web/layout.ts)) and `notesFit`

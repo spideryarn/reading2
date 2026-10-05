@@ -585,7 +585,7 @@ describe("Dock gives the ladder something to work with", () => {
     const cases = [
       { experimental: EXPERIMENTAL_OFF, margin: false, search: "" },
       { experimental: EXPERIMENTAL_ON, margin: false, search: "" },
-      /* The carried state keeps Marginalia visible with Experimental off. */
+      /* The margin-open case still has to give both arms the same pressed toggle. */
       { experimental: EXPERIMENTAL_OFF, margin: true, search: "?margin=1" },
     ];
     for (const { experimental, margin, search } of cases) {

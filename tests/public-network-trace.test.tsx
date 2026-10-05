@@ -1970,7 +1970,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * ## Two passes since 2026-09-03, and the count is not weakened
    *
-   * Five modes are behind the experimental-features switch, and a signed-out
+   * Some modes are behind the experimental-features switch, and a signed-out
    * reader is **forcibly off** — there is no answer this test could pose that
    * would put Quotes in a stranger's bar, because the store issues no request
    * for them at all. So the sweep runs twice rather than shrinking:
@@ -1983,7 +1983,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * The union is still compared with `MODES`, in both directions, which is the
    * invariant the pre-gate version held. Dropping the second pass would have
-   * quietly stopped pressing five of the thirteen.
+   * quietly stopped pressing the modes hidden from the default bar.
    */
   it("stays inside the public namespace when the modes are pressed", async () => {
     await open();

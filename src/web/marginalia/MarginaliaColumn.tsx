@@ -694,8 +694,8 @@ export function OwnerMarginFeed({
   const timelineRead = useTimelineRead(slug);
   const debateRead = useDebateRead(slug);
   /* **The one thing here that can spend**: the relation words are Marginalia's
-     own, with no band to make them in, so the press that turned the column on
-     asks for them (useRelations.ts). Never on a mount. */
+     own. New imports queue them; where none was stored, the press that turned
+     the column on asks for them (useRelations.ts). Never on a mount. */
   const relations = useRelations(slug);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own

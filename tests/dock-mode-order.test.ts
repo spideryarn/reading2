@@ -51,9 +51,12 @@ describe("the mode bar's order", () => {
     expect(visibleModes(true, undefined).map((m) => m.mode)).toEqual(RUNS.flat());
   });
 
-  it("puts a line before the first mode of each run and nowhere else", () => {
-    const starts = groupStarts(visibleModes(true, undefined));
-    expect([...starts].sort()).toEqual(RUNS.slice(1).map((run) => run[0]).sort());
+  it("puts a line before each band run, while Marginalia's own frame supplies its edge", () => {
+    /* Both Dock arms pass only the bands to `groupStarts`; Plain and
+       Marginalia already have frame edges (Dock.tsx § the three frames). */
+    const bands = visibleModes(true, undefined).filter((m) => m.mode !== "marginalia");
+    const starts = groupStarts(bands);
+    expect([...starts].sort()).toEqual(RUNS.slice(1, -1).map((run) => run[0]).sort());
   });
 
   it("keeps each run in one piece, so a run never draws two lines", () => {

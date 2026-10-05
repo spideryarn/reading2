@@ -560,9 +560,9 @@ describe("the route walk: one branded home control, never two triggers", () => {
   /**
    * **And the radiogroup still announces the visible modes.**
    *
-   * Against `visibleModes` rather than against a number: there are fourteen
-   * modes and five of them are experimental, so a literal count in a test is
-   * either wrong today or an invitation to delete a live mode to make it pass.
+   * Against `visibleModes` rather than against a number: which modes are
+   * experimental changes, so a literal count in a test is either wrong today
+   * or an invitation to delete a live mode to make it pass.
    * GPT Sol, G6. What it is really guarding is the wordmark and the Feedback
    * button having been added *outside* the group — a `DockHome` rendered as a
    * child of `.dock-modes` would move this number by one and nothing else in

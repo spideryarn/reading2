@@ -116,3 +116,51 @@ attempts returned no verdict: the model was at capacity.)
 
 It confirmed: the queue is for the importing owner only and honours the opt-out; a visitor's press
 arms nothing; arrival with `?margin=1` sends no job.
+
+## GPT Sol's code review, 2026-10-05
+
+[261005d-marginalia-code-review-sol.md](261005d-marginalia-code-review-sol.md). Verdict: approve,
+no P0 or P1, after fixes of its own, which I read and re-ran the gates on.
+
+- **P2, fixed by the reviewer.** Two doc passages still said the column was behind the switch
+  (`reading-view-overview.md`, the widths table in `url-state.md`).
+- **P3, fixed.** Source comments that still said the relation words are first made only by a press
+  (`useRelations.ts`, `activation.ts`, `auto-run-targets.ts`, `rerun-steps.ts`, `reset-role.ts`,
+  `MarginaliaColumn.tsx`, `Dock.tsx`).
+- **P3, fixed.** The switch-on separator test in `tests/dock-mode-order.test.ts` passed for the
+  wrong reason: it counted Marginalia's own frame as a line between runs. It now asks about the
+  bands only, as the bar does.
+- **P3, fixed.** Stale mode counts in test comments and a dead Marginalia exclusion.
+- It tried to break the three claims (the import queue is owner-scoped and honours the opt-out; a
+  visitor's two presses arm and request nothing private; the first-open default spends nothing) and
+  they held. It could not run the Postgres queue test in its sandbox; I ran it, green.
+
+## What landed
+
+Built as planned, in one stage (`623f4793b`, then the review fixes).
+
+- **Gates.** Typecheck green. The full suite once before the review: 7 red, 3 of them tests this
+  change had to follow (fixed, then green) and 4 the fresh-worktree ones that need `npm run build`.
+  After the review, the 14 affected files re-run: 421 passed. The full suite was not run a second
+  time; what changed after it is comments and four test files, each re-run.
+- **Browser** (Sonnet, Playwright on the box, local dev, switch off): the toggle is in the bar at
+  1440, 820 and 390px and opens and closes the column; the command bar has the row; a first open at
+  1440 arrives in Summary and Marginalia, at 820 in Summary alone; a signed-out reader of a public
+  article has the toggle and its press opens the column with no error; `/help` and `/features` no
+  longer tag it experimental. At 820 a press swaps the notes in for Summary's band, and at 390 it
+  says the notes need a wider window; both are the existing narrow-window behaviour. Shots:
+  `261005d-shot-2-open-1440.png`, `261005d-shot-4-fresh-1440.png`. Not checked: a real iPad or
+  phone, Safari.
+
+## Questions for Greg (not blocking)
+
+**[Q-relations-on-import]** Now that Marginalia is a main mode, its *so / but / vs* words are made
+when an article is added, like Glossary and Quotes: one more model call per article, about 4 to 5
+cents on the one article measured. The other choice is to make them only the first time the owner
+presses Marginalia, which costs nothing for articles nobody opens the column on, but then a new
+article that opens in Summary and Marginalia by default has no relation words until the column is
+turned off and on. Built: on import. Reversing it is one line and one exception in
+`src/web/auto-modes.ts`.
+
+**[Q-relations-backfill]** Articles added before this have no relation words until their owner
+presses the toggle. Leave it, or make them for existing articles in one paid sweep?
