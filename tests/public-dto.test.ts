@@ -1361,6 +1361,9 @@ describe("the artefacts a shared link carries", () => {
           moreAuthors: 3,
           year: 2004,
           venue: "Journal of Works",
+          /* Crossref's count and the day it was read (plan 261005i): public
+             data about a public DOI, rebuilt field by field like the rest. */
+          citedBy: { count: 357, readAt: "2026-10-04T12:00:00.000Z", extra: "cited-by extra must not cross" },
           ownerOnlySentinel: "citation registry extra must not cross",
         } as CitationRegistry & { ownerOnlySentinel: string },
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
@@ -1456,6 +1459,17 @@ describe("the artefacts a shared link carries", () => {
         citedInBody: false,
         url: "http://192.168.0.1/paper",
         linkFrom: "article",
+        /* A well-formed count on a DataCite record: nothing we write, but a
+           stored row is not revalidated, and the panel would label it
+           Crossref's (plan 261005i, GPT Sol's F2). The record crosses; the
+           count does not. */
+        registry: {
+          kind: "found",
+          source: "datacite",
+          title: "A work on a private host",
+          authors: [],
+          citedBy: { count: 424242, readAt: "2026-10-04T12:00:00.000Z" },
+        },
       },
       {
         /* A `web` link is the owner's own *Find it*: dropped unjudged. */
@@ -2171,6 +2185,9 @@ describe("the artefacts a shared link carries", () => {
         "citations[].registry.authors",
         "citations[].registry.authors[].family",
         "citations[].registry.authors[].given",
+        "citations[].registry.citedBy",
+        "citations[].registry.citedBy.count",
+        "citations[].registry.citedBy.readAt",
         "citations[].registry.kind",
         "citations[].registry.moreAuthors",
         "citations[].registry.source",
@@ -2192,6 +2209,13 @@ describe("the artefacts a shared link carries", () => {
     expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
     expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
     expect(json).not.toContain("conflict");
+    /* Crossref's count crosses with its day and nothing else; a DataCite record keeps its metadata and loses a count. */
+    expect(built.citations?.citations[0]?.registry?.citedBy).toEqual({ count: 357, readAt: "2026-10-04T12:00:00.000Z" });
+    expect(json).not.toContain("cited-by extra must not cross");
+    const datacite = built.citations?.citations.find((w) => w.id === "w-private")?.registry;
+    expect(datacite).toMatchObject({ kind: "found", source: "datacite", title: "A work on a private host" });
+    expect(datacite).not.toHaveProperty("citedBy");
+    expect(json).not.toContain("424242");
     expect(built.citations?.capped).toBe(true);
   });
 

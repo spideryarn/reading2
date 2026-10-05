@@ -84,6 +84,7 @@ import type {
   ToolRun,
 } from "../types.js";
 import { isThreadKind } from "../types.js";
+import { originColumns, originFromColumns } from "../thread-origin.js";
 import { splitHint } from "../recall-hint.js";
 import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -226,6 +227,9 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ...anchorOf(t),
+    /* Where it was started from. Named here or it does not exist on the way
+       out; `upsertThread` is the write half. src/thread-origin.ts. */
+    ...originFromColumns(t),
     /* Normalised here, the twin of `normaliseKind` in src/chat.ts. The column
        is `not null default 'chat'` so in practice this only widens the string
        to the union — but the default lives in exactly two places on purpose,
@@ -321,10 +325,15 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
       anchorQuote: quoteOf(thread.anchor),
       anchorStart: startOf(thread.anchor),
       kind: thread.kind,
+      /* The write half of the origin; `threadsFor` is the read half. On
+         insert only, like the anchor: the conflict clause below does not name
+         these four. */
+      ...originColumns(thread.origin),
     })
     .onConflictDoUpdate({
       target: [chatThreads.articleId, chatThreads.id],
       /* `created_at` is deliberately absent: a thread is created once. So are
+         the four origin columns, and so are
          the three anchor columns, and for the stronger version of the same
          reason — a conversation is about what it started as, and every later
          turn of an anchored thread comes through here. Naming them in `set`
