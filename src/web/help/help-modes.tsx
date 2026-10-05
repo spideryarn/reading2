@@ -546,11 +546,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>
           <li>
-            <strong>Explore</strong>: for working out what you think, more than for remembering what
+            <strong>Explore</strong>: for deepening your thinking about the piece, including where it
+            may be weak, more than for remembering what
             the piece says. It is sent what you have highlighted, bookmarked and written on this
             article, and a list of your other conversations about it, and starts from one of those.
             Each short reply does one thing: asks a question that opens your idea up, tries it on a
-            case (your own, when your reason for reading gives one), makes a connection, or looks
+            case (your own, when your reason for reading gives one), makes a connection, raises one
+            possible problem with the piece for you to weigh, or looks
             up what others have said and links it. It says which parts come from the article, the
             web, your notes and its own view. One Explore conversation per article; typed or
             dictated, with no Live conversation yet. Explore is one of the{" "}

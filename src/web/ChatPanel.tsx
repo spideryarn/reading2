@@ -1832,6 +1832,11 @@ export const EXPLORE_STARTERS: readonly string[] = [
   "Start from what I've marked and discussed",
   "Help me apply this to my own work",
   "Where does this sit in the wider world?",
+  /* The fourth, 2026-10-05. Greg (spya-mvmpks): Explore is *"also about
+     exploring potential problems and criticisms and concerns"*. A request,
+     like the other three: it puts no view of the piece in the reader's mouth.
+     evals/remember-explore.ts sends these same words as its critic's turn 1. */
+  "Where might this piece be wrong, or missing something?",
 ];
 
 /**
@@ -1856,7 +1861,8 @@ function ExploreInvitation({ onAsk }: { onAsk(question: string): void }) {
         talked about here, and helps you take your own ideas further.
       </p>
       <p className="chat-empty-hint">
-        It can try the piece on cases of your own, and look up what others have said about it.
+        It can try the piece on cases of your own, look at where it may be weak, and look up what
+        others have said about it.
       </p>
       <ul>
         {EXPLORE_STARTERS.map((starter) => (

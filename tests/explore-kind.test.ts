@@ -162,6 +162,29 @@ describe("Explore's prompt", () => {
     expect(systemOf("explore")).not.toContain("OFFERING AN ACTION");
   });
 
+  /* Greg, 2026-10-05 (spya-mvmpks): Explore is "also about exploring potential
+     problems and criticisms and concerns". A fifth move, with the rules that
+     keep it fair (plan 261005l, and GPT Sol's PR-4 and PR-5 on that plan). */
+  it("may raise a possible problem with the piece, fairly and one at a time", () => {
+    const explore = systemOf("explore");
+    expect(explore).toContain("A POSSIBLE PROBLEM WITH THE PIECE");
+    expect(explore).toContain("TESTING THE PIECE");
+    expect(explore).toContain("BE FAIR BEFORE YOU OBJECT");
+    /* The piece's own answer is looked for before the objection is made. */
+    expect(explore).toMatch(/where the author\s+answers or qualifies/i);
+    /* An absence is said of a passage, never of the whole piece. */
+    expect(explore).toContain("ABSENCE IS A NARROW CLAIM");
+    /* No verdict on the piece as a whole, and never a bulleted list. */
+    expect(explore).toMatch(/no verdict on\s+(it|the piece) as a whole/i);
+    expect(explore).toMatch(/at most\s+three/i);
+    /* Tutorial and Recall are not given the move. */
+    expect(systemOf("tutorial")).not.toContain("TESTING THE PIECE");
+    expect(systemOf("remember")).not.toContain("TESTING THE PIECE");
+    /* The mode's name, where the prompt says it (it was "the rest of Remember"). */
+    expect(explore).toMatch(/like the rest of Learn/);
+    expect(explore).not.toMatch(/the rest of Remember/);
+  });
+
   /* Greg's reframing, rule by rule. Headings and phrases, not whole sentences:
      the eval reads the turns, and this only stops a rule being deleted. */
   it("asks for what Greg asked for", () => {

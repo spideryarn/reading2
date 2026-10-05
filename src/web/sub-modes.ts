@@ -84,7 +84,9 @@ export const REMEMBER_SUB_MODES: Readonly<Record<RememberView, SubModeWords>> = 
   },
   explore: {
     label: "Explore",
-    description: "Think it through for yourself: starts from what you have marked and discussed, and looks beyond the piece",
+    /* Widened 2026-10-05 (Greg, spya-mvmpks): not only the reader's own ideas
+       but *"potential problems and criticisms and concerns"* about the piece. */
+    description: "Think it through for yourself: your own ideas, where the piece may be weak, and what others say. Starts from what you have marked and discussed",
     /* The one part of Remember still behind the switch. Greg named Recall,
        Quiz and Tutorial for the mainstream features on 2026-10-04
        (spya-cnqcjf) and left this one out; it is two days old.

@@ -296,7 +296,11 @@ describe("Explore's panel", () => {
     expect(hints.join(" ")).toMatch(/what you've highlighted, noted and talked about/);
     const buttons = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")];
     expect(buttons.map((b) => b.textContent)).toEqual([...EXPLORE_STARTERS]);
-    expect(EXPLORE_STARTERS).toHaveLength(3);
+    /* Four since 2026-10-05: the fourth asks what may be wrong with the piece
+       (Greg, spya-mvmpks; plan 261005l). */
+    expect(EXPLORE_STARTERS).toHaveLength(4);
+    expect(EXPLORE_STARTERS).toContain("Where might this piece be wrong, or missing something?");
+    expect(hints.join(" ")).toMatch(/where it may be weak/);
   });
 
   it("sends a starter as the reader's first message, word for word", () => {
