@@ -34,7 +34,7 @@
     "dev": "vite",
     "dev:pretty": "vite | pino-pretty",
     "live:spike": "tsx scripts/live-spike.ts",
-    "build:client": "vite build",
+    "build:client": "vite build && tsx scripts/build-site-pages.ts",
     "build:api": "vite build --config vite.api.config.ts",
     "build:fleet": "vite build --config vite.fleet.config.ts",
     "build": "npm run build:client && npm run build:api",

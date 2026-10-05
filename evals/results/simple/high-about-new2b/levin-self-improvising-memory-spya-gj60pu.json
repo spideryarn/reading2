@@ -1,0 +1,307 @@
+{
+  "arm": "high-about-new2b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "levin-self-improvising-memory-spya-gj60pu",
+  "version": "simple-prompt/10",
+  "sourceSha256": "8d2804f6152f3db03738a05ef35f3a657d44c21acbe393edebeb8f829bee6d5f",
+  "at": "2026-10-05T16:47:50.017Z",
+  "bodyWords": 7557,
+  "band": "standard",
+  "bodyBlocks": 57,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "cac88ea2df4a81b8",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 64278,
+  "costUsd": 0.1633676,
+  "tokens": {
+    "input": 13989,
+    "output": 6962,
+    "reasoning": 4213
+  },
+  "briefReadyMs": 23761,
+  "fullerReadyMs": 64267,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 596,
+  "briefWords": 95,
+  "fuller": [
+    {
+      "text": "This essay by biologist Michael Levin argues that memory works by preserving salience, not fidelity: it keeps what matters, not an exact record. It is a perspective piece built from examples in developmental biology, evolution, bioengineering and neuroscience, rather than a report of one new experiment. Its central claim is that living things constantly reinterpret and rewrite their memories to suit a changing body and world.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-aj2njd"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by biologist Michael Levin argues that memory works by preserving salience, not fidelity: it keeps what matters, not an exact record.",
+          "id": "spya-uk4g45",
+          "key": "preserving salience, not fidelity"
+        },
+        {
+          "text": "It is a perspective piece built from examples in developmental biology, evolution, bioengineering and neuroscience, rather than a report of one new experiment.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "Its central claim is that living things constantly reinterpret and rewrite their memories to suit a changing body and world.",
+          "id": "spya-aj2njd"
+        }
+      ]
+    },
+    {
+      "text": "The starting point is a paradox: a species or self that never changes dies out, but one that changes seems to stop being itself. Levin says the puzzle rests on pure logic, so it applies to agents at every scale, from parts of cells to whole lineages. That, he says, makes it relevant to engineering new intelligences, from AI to artificial life. His answer, drawn from process philosophy and Buddhist thought, is to treat the self as an ongoing process rather than a fixed thing.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-aj2njd"
+      ],
+      "sentences": [
+        {
+          "text": "The starting point is a paradox: a species or self that never changes dies out, but one that changes seems to stop being itself.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Levin says the puzzle rests on pure logic, so it applies to agents at every scale, from parts of cells to whole lineages.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "That, he says, makes it relevant to engineering new intelligences, from AI to artificial life.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "His answer, drawn from process philosophy and Buddhist thought, is to treat the self as an ongoing process rather than a fixed thing.",
+          "id": "spya-aj2njd"
+        }
+      ]
+    },
+    {
+      "text": "Levin pictures a mind as a series of Selflets: thin slices of the self, each probably a few hundred milliseconds long. Memories are then notes left by a past slice for a future one, and like any message they must be interpreted. So confabulation, usually treated as a bug in AI and in court witnesses, becomes a feature he calls mnemonic improvisation: actively rebuilding memory content to fit the present.",
+      "ids": [
+        "spya-m982w2",
+        "spya-x74rfd",
+        "spya-y92f0q"
+      ],
+      "sentences": [
+        {
+          "text": "Levin pictures a mind as a series of Selflets: thin slices of the self, each probably a few hundred milliseconds long.",
+          "id": "spya-m982w2",
+          "key": "Selflets"
+        },
+        {
+          "text": "Memories are then notes left by a past slice for a future one, and like any message they must be interpreted.",
+          "id": "spya-x74rfd"
+        },
+        {
+          "text": "So confabulation, usually treated as a bug in AI and in court witnesses, becomes a feature he calls mnemonic improvisation: actively rebuilding memory content to fit the present.",
+          "id": "spya-y92f0q",
+          "key": "mnemonic improvisation"
+        }
+      ]
+    },
+    {
+      "text": "The evidence is a set of biological cases where information survives by being remapped to a new setting, not copied. Some trained caterpillars keep memories as butterflies, even though leaf-finding details are useless to a nectar-drinking flyer, so the lesson must be remapped. An odor molecule injected into a frog egg leads the grown animal to seek that odor when hunting food, so one cell must turn the cue into behavior. Newts engineered with much larger cells still build kidney tubes of normal width, using fewer cells, or even one cell bending around itself.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-dvd0z2",
+        "spya-d0bcpv"
+      ],
+      "sentences": [
+        {
+          "text": "The evidence is a set of biological cases where information survives by being remapped to a new setting, not copied.",
+          "id": null
+        },
+        {
+          "text": "Some trained caterpillars keep memories as butterflies, even though leaf-finding details are useless to a nectar-drinking flyer, so the lesson must be remapped.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "An odor molecule injected into a frog egg leads the grown animal to seek that odor when hunting food, so one cell must turn the cue into behavior.",
+          "id": "spya-dvd0z2"
+        },
+        {
+          "text": "Newts engineered with much larger cells still build kidney tubes of normal width, using fewer cells, or even one cell bending around itself.",
+          "id": "spya-d0bcpv"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "A recurring pattern is the bowtie architecture: data squeezed through a narrow middle and expanded again, as in an autoencoder. Each organism compresses into an egg that must re-inflate in a possibly different world, with possibly mutated parts. Because compression strips out correlations, the stored trace looks increasingly random, so decoding it must be creative, not just step-by-step deduction. Levin proposes that species differ in their willingness to confabulate while building a body, and that planarian flatworms, despite very noisy genomes, commit fully and regenerate best.",
+      "ids": [
+        "spya-bc0zdy",
+        "spya-pkrzhd",
+        "spya-mbf6hs"
+      ],
+      "sentences": [
+        {
+          "text": "A recurring pattern is the bowtie architecture: data squeezed through a narrow middle and expanded again, as in an autoencoder.",
+          "id": "spya-bc0zdy",
+          "key": "bowtie architecture"
+        },
+        {
+          "text": "Each organism compresses into an egg that must re-inflate in a possibly different world, with possibly mutated parts.",
+          "id": "spya-bc0zdy"
+        },
+        {
+          "text": "Because compression strips out correlations, the stored trace looks increasingly random, so decoding it must be creative, not just step-by-step deduction.",
+          "id": "spya-pkrzhd"
+        },
+        {
+          "text": "Levin proposes that species differ in their willingness to confabulate while building a body, and that planarian flatworms, despite very noisy genomes, commit fully and regenerate best.",
+          "id": "spya-mbf6hs"
+        }
+      ]
+    },
+    {
+      "text": "The most speculative step blurs the line between data and the minds holding them, echoing William James: \"thoughts are thinkers.\" Levin asks whether memories could have minimal agency, helping shape the mind that will reuse them later. He also asks whether memories act as cognitive glue, binding parts into a self: a rat's lever-and-reward memory belongs to no single cell. Underneath all this is polycomputing: the same physical process can compute different things depending on who interprets it.",
+      "ids": [
+        "spya-wutsk4",
+        "spya-hgts48",
+        "spya-ykm0pd"
+      ],
+      "sentences": [
+        {
+          "text": "The most speculative step blurs the line between data and the minds holding them, echoing William James: \"thoughts are thinkers.\"",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "Levin asks whether memories could have minimal agency, helping shape the mind that will reuse them later.",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "He also asks whether memories act as cognitive glue, binding parts into a self: a rat's lever-and-reward memory belongs to no single cell.",
+          "id": "spya-hgts48",
+          "key": "cognitive glue"
+        },
+        {
+          "text": "Underneath all this is polycomputing: the same physical process can compute different things depending on who interprets it.",
+          "id": "spya-ykm0pd"
+        }
+      ]
+    },
+    {
+      "text": "Levin says he has deliberately stated the strongest version of these claims, and that a more moderate hybrid may prove most useful. He admits nobody yet knows how this plasticity works. Proposed tests include moving pattern memories between planaria through tissue implants, for which only unpublished preliminary data exist, and transferring learned memories between gene-network models.",
+      "ids": [
+        "spya-grptcz",
+        "spya-hrzvpz",
+        "spya-nj2qud"
+      ],
+      "sentences": [
+        {
+          "text": "Levin says he has deliberately stated the strongest version of these claims, and that a more moderate hybrid may prove most useful.",
+          "id": "spya-grptcz"
+        },
+        {
+          "text": "He admits nobody yet knows how this plasticity works.",
+          "id": "spya-hrzvpz"
+        },
+        {
+          "text": "Proposed tests include moving pattern memories between planaria through tissue implants, for which only unpublished preliminary data exist, and transferring learned memories between gene-network models.",
+          "id": "spya-nj2qud"
+        }
+      ]
+    },
+    {
+      "text": "The conclusion is that the noise and unreliability of living matter is a feature: intelligence arose because of it, not in spite of it. Organisms that cannot handle novelty in their own parts and memories, not just their surroundings, are unlikely to persist. The self, on this view, is a construction: an adaptive story that holds parts together and guides action.",
+      "ids": [
+        "spya-fsxc8u",
+        "spya-em2h0d"
+      ],
+      "sentences": [
+        {
+          "text": "The conclusion is that the noise and unreliability of living matter is a feature: intelligence arose because of it, not in spite of it.",
+          "id": "spya-fsxc8u"
+        },
+        {
+          "text": "Organisms that cannot handle novelty in their own parts and memories, not just their surroundings, are unlikely to persist.",
+          "id": "spya-em2h0d"
+        },
+        {
+          "text": "The self, on this view, is a construction: an adaptive story that holds parts together and guides action.",
+          "id": "spya-em2h0d"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "In this essay, biologist Michael Levin asks what memory is really for. He argues memory keeps what matters, not the exact details. He says this matters for anyone building new kinds of minds, including AI.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-hp8t7u"
+      ],
+      "sentences": [
+        {
+          "text": "In this essay, biologist Michael Levin asks what memory is really for.",
+          "id": null
+        },
+        {
+          "text": "He argues memory keeps what matters, not the exact details.",
+          "id": "spya-uk4g45",
+          "key": "keeps what matters, not the exact details"
+        },
+        {
+          "text": "He says this matters for anyone building new kinds of minds, including AI.",
+          "id": "spya-hp8t7u"
+        }
+      ]
+    },
+    {
+      "text": "A caterpillar's lessons can survive into a butterfly, whose body and food are totally different. So memories must be reread and reshaped to fit a new life. Levin calls this confabulation, making up stories to fill gaps, and says it is a feature, not a bug. His main claim: life became intelligent because its parts are unreliable, not despite it.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-y92f0q",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "A caterpillar's lessons can survive into a butterfly, whose body and food are totally different.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "So memories must be reread and reshaped to fit a new life.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Levin calls this confabulation, making up stories to fill gaps, and says it is a feature, not a bug.",
+          "id": "spya-y92f0q",
+          "key": "a feature, not a bug"
+        },
+        {
+          "text": "His main claim: life became intelligent because its parts are unreliable, not despite it.",
+          "id": "spya-fsxc8u"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

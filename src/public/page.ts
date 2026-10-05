@@ -80,11 +80,13 @@
  *
  * ## Robots
  *
- * **This module sets no `X-Robots-Tag`.** The site-wide `noindex, nofollow` in
- * vercel.json still owns it in this slice, and a second one would collide —
- * duplicate headers are a real deployed failure mode and the whole point of
- * slice 1 is that crawler exposure does not change at all. Slice 2 splits the
- * static rule and moves the header here; see the plan.
+ * **This module sets no `X-Robots-Tag`.** The `noindex, nofollow` rule in
+ * vercel.json owns it, and a second one would collide — duplicate headers are
+ * a real deployed failure mode. That rule covers every path that is not one of
+ * our own pages (src/site-pages.ts) since 2026-10-05, and every `/read/`
+ * address is one it covers: a shared article is never listed (Greg, that day:
+ * *"no"*). The meta tag in the composed head says the same, and the default
+ * shell this serves untouched says it too.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -175,7 +177,7 @@ const ALLOW = READ_METHODS.join(", ");
  * The digest is a parameter rather than read from the compiled constant, so
  * that this function stays a function. It goes on **every** response, including
  * the refusals: the deployed check compares it against the SHA-256 of
- * `GET /index.html`, and a check that only runs on the happy path would not
+ * `GET /shell.html`, and a check that only runs on the happy path would not
  * notice a stale shell being served to the case that matters.
  */
 export function decidePublicPage(

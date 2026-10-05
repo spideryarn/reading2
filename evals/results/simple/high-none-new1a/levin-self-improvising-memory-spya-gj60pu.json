@@ -1,0 +1,308 @@
+{
+  "arm": "high-none-new1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "levin-self-improvising-memory-spya-gj60pu",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:35:26.833Z",
+  "bodyWords": 7557,
+  "band": "standard",
+  "bodyBlocks": 57,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "cac88ea2df4a81b8",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 39787,
+  "costUsd": 0.1014676,
+  "tokens": {
+    "input": 14454,
+    "output": 4024,
+    "reasoning": 1343
+  },
+  "briefReadyMs": 20965,
+  "fullerReadyMs": 39779,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 553,
+  "briefWords": 98,
+  "fuller": [
+    {
+      "text": "This is a perspective essay by biologist Michael Levin about what memory is for. He argues that memory preserves salience, meaning what matters about an experience, rather than fidelity, meaning its exact details. He builds the case from examples in developmental biology, evolution, bioengineering and neuroscience, not from a single new experiment. His name for the skill of rewriting memories to fit new bodies and situations is mnemonic improvisation.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-fndetu"
+      ],
+      "sentences": [
+        {
+          "text": "This is a perspective essay by biologist Michael Levin about what memory is for.",
+          "id": null
+        },
+        {
+          "text": "He argues that memory preserves salience, meaning what matters about an experience, rather than fidelity, meaning its exact details.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "He builds the case from examples in developmental biology, evolution, bioengineering and neuroscience, not from a single new experiment.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "His name for the skill of rewriting memories to fit new bodies and situations is mnemonic improvisation.",
+          "id": "spya-fndetu",
+          "key": "mnemonic improvisation"
+        }
+      ]
+    },
+    {
+      "text": "The essay starts from a puzzle the author calls the persistence paradox. A species that never changes dies out, but one that changes stops being what it was; the same holds for a person who learns. Levin says this puzzle faces agents at every scale, from parts of cells to whole lineages, so it matters for building AI and artificial life too. His answer, shared with process philosophy and Buddhist thought, is to treat the Self as an ongoing process rather than a fixed thing.",
+      "ids": [
+        "spya-hp8t7u",
+        "spya-aj2njd"
+      ],
+      "sentences": [
+        {
+          "text": "The essay starts from a puzzle the author calls the persistence paradox.",
+          "id": "spya-hp8t7u",
+          "key": "persistence paradox"
+        },
+        {
+          "text": "A species that never changes dies out, but one that changes stops being what it was; the same holds for a person who learns.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "Levin says this puzzle faces agents at every scale, from parts of cells to whole lineages, so it matters for building AI and artificial life too.",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "His answer, shared with process philosophy and Buddhist thought, is to treat the Self as an ongoing process rather than a fixed thing.",
+          "id": "spya-aj2njd"
+        }
+      ]
+    },
+    {
+      "text": "Confabulation, the mind's habit of making up a story to fill gaps, is usually seen as a flaw. For example, a patient laughs when a brain electrode fires, then says they were thinking of a joke. Levin pictures each of us as a series of Selflets, brief slices of self probably a few hundred milliseconds thick. An engram, the physical trace a memory leaves, is then a note from a past Selflet that the present one must interpret, like any message.",
+      "ids": [
+        "spya-n869sd",
+        "spya-m982w2",
+        "spya-x74rfd"
+      ],
+      "sentences": [
+        {
+          "text": "Confabulation, the mind's habit of making up a story to fill gaps, is usually seen as a flaw.",
+          "id": "spya-n869sd"
+        },
+        {
+          "text": "For example, a patient laughs when a brain electrode fires, then says they were thinking of a joke.",
+          "id": "spya-n869sd"
+        },
+        {
+          "text": "Levin pictures each of us as a series of Selflets, brief slices of self probably a few hundred milliseconds thick.",
+          "id": "spya-m982w2"
+        },
+        {
+          "text": "An engram, the physical trace a memory leaves, is then a note from a past Selflet that the present one must interpret, like any message.",
+          "id": "spya-x74rfd"
+        }
+      ]
+    },
+    {
+      "text": "Several cases suggest that memories are remapped, not just stored. Some memories survive a caterpillar becoming a butterfly, though a leaf-eating crawler's details are useless to a nectar-drinking flier; the lesson, roughly \"food\", carries over. Brain extract from trained sea slugs, injected only near the right nerve tissue, still changes a naive slug's behavior. An odor molecule injected into a frog egg leads the grown animal to seek that odor when hunting food, so engrams act more like prompts than recordings.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-pb9mf7",
+        "spya-dvd0z2"
+      ],
+      "sentences": [
+        {
+          "text": "Several cases suggest that memories are remapped, not just stored.",
+          "id": null
+        },
+        {
+          "text": "Some memories survive a caterpillar becoming a butterfly, though a leaf-eating crawler's details are useless to a nectar-drinking flier; the lesson, roughly \"food\", carries over.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "Brain extract from trained sea slugs, injected only near the right nerve tissue, still changes a naive slug's behavior.",
+          "id": "spya-pb9mf7"
+        },
+        {
+          "text": "An odor molecule injected into a frog egg leads the grown animal to seek that odor when hunting food, so engrams act more like prompts than recordings.",
+          "id": "spya-dvd0z2"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Levin links this to a bowtie pattern: information is squeezed into a small form, then expanded and reinterpreted at the other end. An egg is such a squeeze, rebuilding a whole body that may meet a new world with changed parts. Bodies do the same reinterpreting: one voltage-changing drug makes tadpoles grow tails but froglets grow legs. Newts with giant cells still build normal-width kidney tubes, sometimes from one cell bending around itself.",
+      "ids": [
+        "spya-bc0zdy",
+        "spya-jvjkv7",
+        "spya-d0bcpv"
+      ],
+      "sentences": [
+        {
+          "text": "Levin links this to a bowtie pattern: information is squeezed into a small form, then expanded and reinterpreted at the other end.",
+          "id": "spya-bc0zdy",
+          "key": "bowtie"
+        },
+        {
+          "text": "An egg is such a squeeze, rebuilding a whole body that may meet a new world with changed parts.",
+          "id": "spya-bc0zdy"
+        },
+        {
+          "text": "Bodies do the same reinterpreting: one voltage-changing drug makes tadpoles grow tails but froglets grow legs.",
+          "id": "spya-jvjkv7"
+        },
+        {
+          "text": "Newts with giant cells still build normal-width kidney tubes, sometimes from one cell bending around itself.",
+          "id": "spya-d0bcpv"
+        }
+      ]
+    },
+    {
+      "text": "Planarian flatworms have very noisy genomes yet resist aging, cancer and injury, with the best regeneration. Levin proposes they rely most on large-scale pattern completion over genetic details, a willingness to confabulate in body-building. He argues intelligence arose because of, not in spite of, unreliable living material.",
+      "ids": [
+        "spya-mbf6hs",
+        "spya-fsxc8u"
+      ],
+      "sentences": [
+        {
+          "text": "Planarian flatworms have very noisy genomes yet resist aging, cancer and injury, with the best regeneration.",
+          "id": "spya-mbf6hs"
+        },
+        {
+          "text": "Levin proposes they rely most on large-scale pattern completion over genetic details, a willingness to confabulate in body-building.",
+          "id": "spya-mbf6hs"
+        },
+        {
+          "text": "He argues intelligence arose because of, not in spite of, unreliable living material.",
+          "id": "spya-fsxc8u",
+          "key": "because of, not in spite of"
+        }
+      ]
+    },
+    {
+      "text": "More speculatively, he asks whether memories help hold a self together, since a rat's lever-and-reward memory belongs to no single cell. He also wonders if memories have a little agency of their own, echoing William James: \"thoughts are thinkers\". He admits he has given the strongest version of these claims, and a more moderate middle view may prove more useful.",
+      "ids": [
+        "spya-hgts48",
+        "spya-wutsk4",
+        "spya-grptcz"
+      ],
+      "sentences": [
+        {
+          "text": "More speculatively, he asks whether memories help hold a self together, since a rat's lever-and-reward memory belongs to no single cell.",
+          "id": "spya-hgts48"
+        },
+        {
+          "text": "He also wonders if memories have a little agency of their own, echoing William James: \"thoughts are thinkers\".",
+          "id": "spya-wutsk4"
+        },
+        {
+          "text": "He admits he has given the strongest version of these claims, and a more moderate middle view may prove more useful.",
+          "id": "spya-grptcz"
+        }
+      ]
+    },
+    {
+      "text": "The conclusion is that organisms unable to handle change in their own parts and memories are unlikely to persist. The Self is a construction: an adaptive story that holds parts together and lets them solve problems. Levin ends by inviting readers to treat each act as a message to a future self, knowing it will be reinterpreted.",
+      "ids": [
+        "spya-em2h0d",
+        "spya-weeyq2"
+      ],
+      "sentences": [
+        {
+          "text": "The conclusion is that organisms unable to handle change in their own parts and memories are unlikely to persist.",
+          "id": "spya-em2h0d"
+        },
+        {
+          "text": "The Self is a construction: an adaptive story that holds parts together and lets them solve problems.",
+          "id": "spya-em2h0d"
+        },
+        {
+          "text": "Levin ends by inviting readers to treat each act as a message to a future self, knowing it will be reinterpreted.",
+          "id": "spya-weeyq2"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay asks how living things keep memories when their bodies and lives keep changing. It starts from a puzzle: if you change, are you still you? The author says this puzzle faces everything alive, from tiny cells to whole species.",
+      "ids": [
+        "spya-uk4g45",
+        "spya-hp8t7u"
+      ],
+      "sentences": [
+        {
+          "text": "This essay asks how living things keep memories when their bodies and lives keep changing.",
+          "id": "spya-uk4g45"
+        },
+        {
+          "text": "It starts from a puzzle: if you change, are you still you?",
+          "id": "spya-hp8t7u"
+        },
+        {
+          "text": "The author says this puzzle faces everything alive, from tiny cells to whole species.",
+          "id": "spya-hp8t7u"
+        }
+      ]
+    },
+    {
+      "text": "A caterpillar that learns where food is can still use that lesson as a butterfly. It keeps the meaning, not the details, since butterflies drink nectar instead of eating leaves. The author argues memory works to keep what matters, not to stay exact. He suggests this constant reworking of old information may be where intelligence comes from.",
+      "ids": [
+        "spya-jw4p93",
+        "spya-uk4g45",
+        "spya-em2h0d"
+      ],
+      "sentences": [
+        {
+          "text": "A caterpillar that learns where food is can still use that lesson as a butterfly.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "It keeps the meaning, not the details, since butterflies drink nectar instead of eating leaves.",
+          "id": "spya-jw4p93"
+        },
+        {
+          "text": "The author argues memory works to keep what matters, not to stay exact.",
+          "id": "spya-uk4g45",
+          "key": "keep what matters, not to stay exact"
+        },
+        {
+          "text": "He suggests this constant reworking of old information may be where intelligence comes from.",
+          "id": "spya-em2h0d"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 3,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

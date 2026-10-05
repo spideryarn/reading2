@@ -375,7 +375,7 @@ export function QuizPanel({
   sections?: QuizSections | undefined;
   /**
    * The reader's reading so far — src/web/read-filter.ts. **Absent means
-   * reading time is off**, and then there is no tick-box and every question is
+   * reading time is off** (a visitor; every owner has it), and then there is no tick-box and every question is
    * walked, exactly as before: an empty level map would otherwise read as
    * "read nothing" and hide the whole quiz.
    */

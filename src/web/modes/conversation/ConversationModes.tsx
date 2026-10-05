@@ -24,7 +24,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
 import type { BlockId, ChatThread, SingleThreadKind, ThreadKind, ThreadOrigin } from "../../../types.js";
 import { isSingleThreadKind } from "../../../types.js";
-import { currentAt, rememberParam, threadParam } from "../../params.js";
+import { chatFromParam, currentAt, modeParam, rememberParam, threadParam } from "../../params.js";
+import { listedInChat, sourcesIn } from "../../thread-source.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
@@ -73,10 +74,8 @@ import { chatDraftsFor } from "../../chat-draft.js";
  *    *replace* — a push would put the broken combination one Back press away
  *    from the reader we have just rescued from it.
  *
- * There was a third — opening a Remember conversation from chat's list set
- * `remember=recall` with it — and it went on 2026-10-01 with the shared list:
- * chat no longer lists Remember conversations, so nothing outside this band
- * opens one (plan 261001m).
+ * Opening a Remember row from Chat sets mode, sub-mode and thread together
+ * in `ConversationBand` below; that navigation does not belong to this toggle.
  *
  * ## And the live conversation is hung up before the panel goes
  *
@@ -472,19 +471,44 @@ export function ConversationBand({
     error,
   } = useChat(slug, onSettled);
   /**
-   * **This mode's conversations, and only this mode's.**
+   * **The conversations this band may open: this mode's kind, and only it.**
    *
    * The list was shared between chat and Remember from 2026-08-27 until report
    * `spya-peszam` (Greg, 2026-10-01): *"The Remember mode should be its own
    * single, special conversation thread (not visible from Chat, nor should
-   * other Chat threads be visible in Remember mode)."* So a thread of the other
-   * kind is not here at all, and neither is Candidates, which is Referee mode's
-   * machinery. Plan 261001m § 4.
+   * other Chat threads be visible in Remember mode)."* Plan 261001m § 4.
+   *
+   * **The "not visible from Chat" half of that changed on 2026-10-05**, for
+   * report `spya-hyfqkq`: Chat's list now shows Remember's conversations too
+   * (`listed` below; plan
+   * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+   * D5). The other half stands, and so does this filter: Remember shows only
+   * its own one conversation, and what Chat may *open* is still only a chat.
    */
   /* Origins come from the server, through a load or the successful `begin`
      frame. A held draft may have been refused, so it cannot label a row. */
   const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
+  /**
+   * **What Chat's list draws: every conversation but Referee's Candidates.**
+   *
+   * A second set beside `threads`, and the two are kept apart on purpose (the
+   * plan review's F3). Everything below that decides which conversation is
+   * open, where a question goes or whose unsent words are whose reads
+   * `threads`. Only two things read this one: the panel's list, and the
+   * arrival rule's "is there anything to show".
+   */
+  const listed = useMemo(() => everyThread.filter(listedInChat), [everyThread]);
   const [thread, setThread] = useQueryState("thread", threadParam);
+  /** `?chatfrom=`: which source Chat's list is narrowed to. Null is All. */
+  const [from, setFrom] = useQueryState("chatfrom", chatFromParam);
+  /* For a press on a Remember row, which changes three parameters at once. */
+  /* Closed on a line of its own: tests/last-view.test.ts reads the keys of
+     every `useQueryStates` call by that shape. */
+  const [{ mode: modeNow }, setWhere] = useQueryStates({
+    mode: modeParam,
+    remember: rememberParam,
+    thread: threadParam,
+  });
   /* Recall, Tutorial and Explore: each one conversation per article, no
      list. Named for Remember because that is where all three live. */
   const single = isSingleThreadKind(kind) ? kind : null;
@@ -546,6 +570,10 @@ export function ConversationBand({
    * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
   const drafts = chatDraftsFor(slug);
+  /* A draft recovered onto a forced list must survive another mode change
+     before its row is opened. Empty local rows go with this band; keeping its
+     destination lets the next visit recover the words and pending origin. */
+  const heldOnList = useRef<string | null>(null);
   useEffect(() => {
     for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
   }, [threads, named, drafts]);
@@ -682,6 +710,7 @@ export function ConversationBand({
    */
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
+    heldOnList.current = null;
     setPendingLive(null);
     const id = begin(kind);
     /* Begun here, in this tab, and nothing submitted to it: the one kind of
@@ -753,6 +782,7 @@ export function ConversationBand({
   useEffect(() => {
     started.current = false;
     arrived.current = false;
+    heldOnList.current = null;
   }, [slug, kind]);
 
   /**
@@ -810,7 +840,9 @@ export function ConversationBand({
    * only when the list has answered.
    *
    * 1. A handed-over question wins (the effect above has spent the latch).
-   * 2. **The reader left words or a pending origin, and is put back with them.** Only the
+   * 2. **A known non-chat URL shows the list.** Unsent chat words remain on
+   *    their row; missing fresh drafts and pending origins get a local row.
+   * 3. **Otherwise, the reader left words or a pending origin, and is put back with them.** Only the
    *    place they were in is ever recovered (`drafts.destination`), so an older
    *    conversation with words in it cannot take over the list or another
    *    conversation:
@@ -832,11 +864,11 @@ export function ConversationBand({
    *      first question's write has not landed, or another tab deleted it;
    *      beginning another would send a follow-up without its history. The
    *      words stay in the store, under its id.
-   * 3. Otherwise the rule above: no conversations, so start one.
+   * 4. Otherwise the rule above: no conversations of any listed kind, so start one.
    *
-   * **Step 2 is not taken on a failed load.** `loaded` means "we have asked",
+   * **Steps 2 and 3 are not taken on a failed load.** `loaded` means "we have asked",
    * and a list that failed to arrive has no conversations in it whatever the
-   * server holds, so "not listed" would be a claim about nothing. Step 3 is
+   * server holds, so "not listed" would be a claim about nothing. Step 4 is
    * left as it was on a failed load.
    *
    * One effect rather than two, because two arrival rules are two answers to
@@ -844,12 +876,64 @@ export function ConversationBand({
    * with words in its box was handed a new empty conversation by step 3.
    * Plan 261004j, and GPT Sol's two reviews of it (F1–F3, F6, F7).
    */
+  /**
+   * **A `?thread=` naming a conversation of another kind is cleared, and the
+   * list shown** (the plan review's F3). It gets here two ways: carried over
+   * from Remember, which writes its conversation's id into the address, or
+   * pasted. The panel could not have opened it (it is not in `threads`), so
+   * this only makes the address say what is on screen.
+   *
+   * Only once the list has shown what kind it is: an id the list does not
+   * hold may be a first question still being written, which the note on the
+   * latch above says not to clear. By *replace*: this corrects the address;
+   * it is not a step the reader took. Before the arrival rule, so that when
+   * that rule puts the reader back in the chat they left, its write is the
+   * later of the two.
+   *
+   * **Only while the address still says Chat** (`modeNow`). A press on a
+   * Remember row writes `mode=remember` and that conversation's id together,
+   * and this band can render once more before it is unmounted: without the
+   * check it cleared the id the press had just written.
+   */
+  useEffect(() => {
+    if (kind !== "chat" || modeNow !== "chat" || !loaded || thread === null) return;
+    if (everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+      void setThread(null, { history: "replace" });
+    }
+  }, [kind, modeNow, loaded, thread, everyThread, setThread]);
+
+  /**
+   * **A filter whose source this article has no conversation from becomes
+   * All**, by replace, once the list has answered (the plan review's F6). The
+   * panel already reads such a choice as All; this keeps the address from
+   * holding a word that would start narrowing the list later, unasked.
+   */
+  useEffect(() => {
+    if (kind !== "chat" || !loaded || loadFailed || from === null) return;
+    if (!sourcesIn(listed).includes(from)) void setFrom(null, { history: "replace" });
+  }, [kind, loaded, loadFailed, from, listed, setFrom]);
+
   useEffect(() => {
     if (remembering || !loaded) return;
     if (!arrived.current) {
       arrived.current = true;
       const was = drafts.destination();
-      if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
+      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+        /* A known non-chat URL means the list, even if this tab left words in
+           another chat. Stored chats already have a selectable row. Recover
+           a missing draft as a row too, without selecting it or sending it. */
+        if (was && !threads.some((t) => t.id === was)
+          && ((drafts.thread(was) ?? "").trim() !== "" || drafts.origin(was))
+          && (drafts.isFresh(was) || drafts.origin(was))) {
+          const id = drafts.isFresh(was) ? begin(kind) : begin(kind, was);
+          if (id !== was) {
+            drafts.markFresh(id);
+            drafts.moveThread(was, id);
+          }
+          drafts.setDestination(id);
+          heldOnList.current = id;
+        }
+      } else if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
         && !threads.some((t) => t.id === thread)
         && (!drafts.isFresh(was) || loadFailed)) {
         /* A submitted first turn may have landed without acknowledgement.
@@ -876,11 +960,15 @@ export function ConversationBand({
       }
     }
     if (started.current) return;
-    if (threads.length === 0) {
+    /* `listed`, not `threads`, since 2026-10-05: an article whose only
+       conversations are Remember's has rows to show, and a blank chat begun
+       over them would hide the list this visit was for. The box under the
+       list and the + in the header still start one. */
+    if (listed.length === 0) {
       started.current = true;
       startNew();
     }
-  }, [remembering, loaded, loadFailed, threads, everyThread, thread, setThread, startNew, drafts, begin, kind]);
+  }, [remembering, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind]);
 
   /**
    * **Where chat is, written down for the next visit** — the conversation on
@@ -899,8 +987,10 @@ export function ConversationBand({
    */
   useEffect(() => {
     if (kind !== "chat" || !loaded) return;
-    if (threads.some((t) => t.id === thread)) drafts.setDestination(thread);
-    else if (!loadFailed) drafts.setDestination(null);
+    if (threads.some((t) => t.id === thread)) {
+      heldOnList.current = null;
+      drafts.setDestination(thread);
+    } else if (!loadFailed && heldOnList.current === null) drafts.setDestination(null);
   }, [kind, loaded, loadFailed, threads, thread, drafts]);
 
   /**
@@ -948,11 +1038,27 @@ export function ConversationBand({
       /* Remember is handed its one conversation and nothing else, so the panel
          has nothing it could list. */
       threads={remembering ? (theRemember ? [theRemember] : []) : threads}
+      /* Chat's list, its filter, and the way from a Remember row back to
+         Remember. None of them for Remember, which has no list. */
+      listed={kind === "chat" ? listed : undefined}
+      from={kind === "chat" ? from : undefined}
+      onFrom={kind === "chat" ? (next) => void setFrom(next) : undefined}
+      /* **One navigation for all three**, so Back from Remember is one press
+         and there is no entry on the stack that says Chat with a Recall
+         conversation open. Pushed, as a press on the bar's Remember is.
+         Remember's band would write its conversation's id itself; naming it
+         here means the address is right from the first frame. */
+      onOpenRemember={kind === "chat" ? (view, id) => {
+        setPendingLive(null);
+        void setWhere({ mode: "remember", remember: view, thread: id }, { history: "push" });
+      } : undefined}
       threadId={current}
       /* Open a conversation from the list, or close one back to it — chat's
-         only, since Remember has neither. Every row is this mode's kind now, so
-         there is no other mode to follow it into. */
+         only, since Remember has neither. The panel calls this for a chat's
+         row and `onOpenRemember` for a Remember row. */
       onThread={(id) => {
+        heldOnList.current = null;
+        drafts.setDestination(id);
         setPendingLive(null);
         void setThread(id);
       }}
@@ -1034,6 +1140,7 @@ export function ConversationBand({
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question) => {
         if (resettingNow.current) return;
+        heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {
