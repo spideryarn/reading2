@@ -60,12 +60,33 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
 }
 
 /**
+ * **What a double press on Stop will do in this box**, for the three places
+ * that say so. Most boxes send. The command bar does not — "send" in this app
+ * means posting into a conversation — and its done action is whatever Enter
+ * does with the phrase: run the row it names, or ask what it meant. So it says
+ * Enter, which is true of both (Greg's yes to the bar, 2026-10-05, plan 261005a).
+ */
+export type DoneAction = "send" | "enter";
+const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: string }> = {
+  send: {
+    again: "Send when the words arrive",
+    button: "Turning your words into text, then sending",
+    strip: "Turning that into text, then sending…",
+  },
+  enter: {
+    again: "Press Enter when the words arrive",
+    button: "Turning your words into text, then pressing Enter",
+    strip: "Turning that into text, then pressing Enter…",
+  },
+};
+
+/**
  * What the strip says, in one place — because it is also what the live region
  * says, and the two must not be allowed to drift apart.
  */
-function dictationWords(d: UseDictation, sendingAfter: boolean): string {
+function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction): string {
   if (d.transcribing) {
-    return sendingAfter ? "Turning that into text, then sending…" : "Turning that into text…";
+    return sendingAfter ? DONE_WORDS[done].strip : "Turning that into text…";
   }
   if (d.phase === "opening") return "Opening the microphone…";
   if (d.quiet) {
@@ -164,10 +185,13 @@ export function DictationButton({
   disabled,
   again,
   sendingAfter,
+  done = "send",
 }: {
   dictation: UseDictation;
   toggle(): void;
   disabled?: boolean | undefined;
+  /** What the double press does here, for the button's name. `DoneAction`. */
+  done?: DoneAction | undefined;
   /**
    * **The second press of a double press on Stop**: `useDictationField().again`,
    * which is there only for the moment after Stop in which a second press
@@ -228,9 +252,9 @@ export function DictationButton({
           ? DICTATION_OFFLINE
           : busy
             ? sendingAfter
-              ? "Turning your words into text, then sending"
+              ? DONE_WORDS[done].button
               : pressable
-                ? "Send when the words arrive"
+                ? DONE_WORDS[done].again
                 : "Turning your words into text"
             : dictation.armed
               ? "Stop dictating"
@@ -283,17 +307,20 @@ export function DictationStrip({
   dictation,
   id,
   sendingAfter = false,
+  done = "send",
 }: {
   dictation: UseDictation;
   /** For `aria-describedby` on the box, if the caller wants it. */
   id?: string | undefined;
+  /** What the double press does here, for the sentence. `DoneAction`. */
+  done?: DoneAction | undefined;
   /** `useDictationField().sendingAfter`: a double press on Stop was taken. */
   sendingAfter?: boolean | undefined;
 }) {
   const [picking, setPicking] = useState(false);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const busy = dictation.armed || dictation.transcribing;
-  const words = dictationWords(dictation, sendingAfter);
+  const words = dictationWords(dictation, sendingAfter, done);
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until

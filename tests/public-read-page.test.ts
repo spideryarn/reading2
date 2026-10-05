@@ -97,6 +97,7 @@ const HEAD: PublicHead = {
   gist: "A short description with an em dash — and a curly quote's apostrophe.",
   canonical: "https://example.com/a-public-article",
   authors: [],
+  image: null,
 };
 
 /** The title of an article that is **not** shared. It must appear nowhere. */

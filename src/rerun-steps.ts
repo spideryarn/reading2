@@ -112,8 +112,8 @@ export const METADATA_RERUN_STEPS = [
   "quiz",
   "faq",
   /* **Joined on 2026-10-03 with the step**, the way to redo the margin's
-     relation words by hand (an import normally makes them first; the owner's
-     press on Marginalia fills a missing or stale result). The three answers: **one**
+     relation words by hand (the column makes them the first time its owner
+     sees it, and again when they are stale). The three answers: **one**
      metered call a press — a single `streamMessage`, no tools
      (`generateRelations`), and none at all on an article with fewer than two
      paragraphs; **no prerequisite** beyond the article itself; and **safe to

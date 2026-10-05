@@ -212,10 +212,14 @@ export function PrivacyPage() {
               — GPT Sol, 2026-09-16. And "anybody reading an article you have
               shared" rather than "anybody else": the operator can read stored
               data, which this page says in its own paragraph above.
+              **For every article of the reader's own, since 2026-10-05**: until
+              then the bullet said "with experimental features on", which was
+              when it was kept. There is no control yet to turn it off or erase
+              it, and the bullet promises none.
               docs/project/privacy.md § Reading time. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
-            articles</strong> — with experimental features on, a running total of the seconds each
+            articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
             where you have been, for example. We keep the totals, not a history of your reading (our
             ordinary server logs do show when an update arrived). It is not shown to anybody reading
@@ -487,7 +491,10 @@ export function PrivacyPage() {
           out);{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first
-          two pages of a PDF you add in a batch, for which it is shown the text of those two pages;{" "}
+          two pages of a PDF you add in a batch, for which it is shown the text of those two pages,
+          and to tidy the title of anything you add (its capitals, a site’s name stuck on the end),
+          for which it is shown the title, the site’s name and the language the page declares, and
+          none of the text;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

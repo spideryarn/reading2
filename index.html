@@ -70,20 +70,21 @@
     <!-- spideryarn:managed-head:start -->
     <title>Spideryarn</title>
     <meta name="description" content="AI-assisted reading: an article at whatever level of detail you need." />
-    <!-- Belt and braces, and it changes nothing today: the `X-Robots-Tag`
-         header Vercel sets already says exactly this for every path, and
-         public/robots.txt still says `Disallow: /`. It is here for the day the
-         header is narrowed so that shared articles can be indexed — at which
-         point a `/read/` URL that somehow missed the rewrite would otherwise be
-         indexable by accident. Fail closed: a document that says nothing about
-         robots is a document that may be indexed. -->
+    <!-- **This head is the default, and the default says noindex.** Since
+         2026-10-05 the header in vercel.json covers every path except our own
+         pages (src/site-pages.ts), and those pages are served a head of their
+         own, with no robots tag, written into the build by
+         scripts/build-site-pages.ts. This one is what every OTHER path gets: a
+         reader's shelf, a profile, an admin page, a private article. Fail
+         closed: a document that says nothing about robots is a document that
+         may be indexed. scripts/client-shell.ts refuses to compile a shell
+         without this line into the function that answers `/read/<slug>`. -->
     <meta name="robots" content="noindex, nofollow" />
-    <!-- **The card for every page that is not a shared article** — the
-         homepage, /changelog, /features — since 2026-10-05. Before it, a link
-         to any of them previewed as the bare product name. A shared article's
-         own card replaces these with the rest of the region
-         (src/public/page-head.ts). Fetching for a card is not indexing: the
-         robots line above is untouched.
+    <!-- **The card for an app page** — /login, /read/public, a private
+         article — since 2026-10-05. A shared article's own card replaces these
+         with the rest of the region (src/public/page-head.ts), and so does each
+         of our own pages' (`composeSitePage`, the same file). Fetching for a
+         card is not indexing: the robots line above is untouched.
          **No `og:url`, on purpose.** This one head is served at every path, so
          any address written here is wrong for most of them; and its absence is
          how `articleWaitTitle` (src/web/page-title.ts) and

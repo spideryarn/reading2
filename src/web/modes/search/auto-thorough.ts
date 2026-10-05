@@ -8,21 +8,25 @@
  * >
  * > — Greg, 2026-10-04
  *
- * Two pure decisions and the hook that carries them out. All of it lives in
- * this tab: no server change, and no promise across a reload
- * (docs/project/search.md § A quick search starts the thorough one).
+ * Three pure decisions and the hook that carries them out. All of it lives in
+ * the browser, with no server change. The swap is made by the tab that asked;
+ * a pair that tab left behind is tidied at the next load, from a record kept
+ * in stored-pairs.ts (docs/project/search.md § A quick search starts the
+ * thorough one).
  *
  * - `launchThorough`: does this finished quick row get its thorough search
  *   now? One per *settled* answer, because a thorough search costs much more
  *   than a quick one and cannot be cancelled once begun.
  * - `settleThorough`: what becomes of a thorough search that is out: wait,
  *   swap it in for its quick row, or throw it away.
+ * - `tidyPair`: what becomes of a pair a reload left behind.
  * - `useAutoThorough`: the watch list, the settle timers, the pairs, and the
  *   rows the panel is shown in place of the hook's.
  */
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { SearchRun } from "../../../types.js";
+import { storedPairs } from "./stored-pairs.js";
 
 /**
  * How long a quick answer must stay `done` with the same words before its
@@ -123,6 +127,43 @@ export function launchThorough(row: {
   return { type: "launch" };
 }
 
+/** What `tidyPair` reads of a saved row. */
+export type TidyRow = Pick<SearchRun, "kind" | "status" | "criterion">;
+
+export type Tidy =
+  /** Both finished and still the pair that was launched: swap, as the tab that asked would have. */
+  | "swap"
+  /** One of them is still running: leave both, and look again at the next load. */
+  | "keep"
+  /** No longer a pair: leave both rows for good. */
+  | "forget";
+
+/**
+ * **A pair a reload left behind** (the plan's Q-reload): what to do with one
+ * remembered pair (stored-pairs.ts), given the rows a fresh load brought.
+ *
+ * `swap` only when both rows are there, of the kinds recorded, finished, and
+ * both still hold the words the thorough search was asked with. So a quick
+ * row whose words were changed is never deleted, and neither is one a failed
+ * thorough search leaves. Never when the thorough row is ticked: a thorough
+ * search started by itself is not, so the tick is the reader's, and they have
+ * chosen between the two, whether or not it has finished. Otherwise a row
+ * still running is never touched; the pair is kept for the next load.
+ */
+export function tidyPair(
+  words: string,
+  now: { quick: TidyRow | undefined; meaning: TidyRow | undefined; meaningTicked: boolean },
+): Tidy {
+  const { quick, meaning } = now;
+  if (quick?.kind !== "quick" || meaning?.kind !== "meaning") return "forget";
+  if (quick.criterion.trim() !== words || meaning.criterion.trim() !== words) return "forget";
+  if (quick.status === "error" || meaning.status === "error") return "forget";
+  // Before "still running": a tick on a running thorough row is already the reader's choice.
+  if (now.meaningTicked) return "forget";
+  if (quick.status === "pending" || meaning.status === "pending") return "keep";
+  return "swap";
+}
+
 /**
  * What the hook needs from `SearchBand` that does not exist until after the
  * hook has run: the typing session is made after `useSearchMode`, which needs
@@ -140,6 +181,8 @@ export interface AutoThoroughWiring {
   owns(quickId: string): boolean;
   /** The box's words now, trimmed. */
   boxWords(): string;
+  /** Is this row ticked in `?runs=`? */
+  ticked(id: string): boolean;
   /** Put the thorough row where the quick one is: colour, `?runs=`, then delete the quick row. */
   swap(pair: ThoroughPair): void;
 }
@@ -290,18 +333,26 @@ function settlePairs(
       unasked: unasked(look, pair.quickId, pair.words),
     });
     switch (decision.type) {
+      /* In each arm the pair stops being one a later load may tidy
+         (stored-pairs.ts): its answer is to be thrown away, or it is settled
+         here. Only a pair still waiting, undiscarded, stays written. */
       case "wait":
-        if (pair !== before) discards.add(pair.meaningId);
+        if (pair !== before) {
+          discards.add(pair.meaningId);
+          storedPairs.forget(pair.meaningId);
+        }
         break;
       case "swap":
         // Before the calls, so a second pass cannot swap it again.
         local.acted.add(pair.meaningId);
+        storedPairs.forget(pair.meaningId);
         if (quick) local.place.set(pair.meaningId, quick.createdAt);
         wired.swap(pair);
         settled = true;
         break;
       case "drop":
         local.acted.add(pair.meaningId);
+        storedPairs.forget(pair.meaningId);
         wired.drop(pair.meaningId);
         settled = true;
         break;
@@ -330,11 +381,14 @@ function settlePairs(
 export function useAutoThorough<Run extends SearchRun>({
   slug,
   runs,
+  loaded,
   wiring,
 }: {
   slug: string;
   /** Every row `useSearch` holds, hidden ones included. */
   runs: Run[];
+  /** The opening read of the saved list has answered, with a list and not a failure. */
+  loaded: boolean;
   wiring: MutableRefObject<AutoThoroughWiring>;
 }): AutoThorough<Run> {
   const [pairs, setPairs] = useState<ThoroughPair[]>([]);
@@ -357,6 +411,46 @@ export function useAutoThorough<Run extends SearchRun>({
     [slug, local],
   );
 
+  /* **A pair a reload left behind is swapped when the list arrives**, once per
+     load: the pairs this browser wrote down at launch and never settled
+     (stored-pairs.ts), each checked against the loaded rows by `tidyPair`.
+     The swap is the in-tab one, so the colour, the tick and the place are
+     kept the same way. A pair another tab is still settling is not checked
+     for; the plan's § Follow-up says what that risks.
+
+     Once per load because `loaded` is the only trigger, and deliberately not
+     `slug`: on a switch of article `loaded` is still true for one render over
+     the previous article's rows, and a pass then would find none of the new
+     article's rows and forget its pairs. A replay does nothing: a record is
+     forgotten before its swap is called. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `loaded` is the trigger — the rows are read as they stand when the list arrives, not on each later change, nor on a change of `slug` (above).
+  useEffect(() => {
+    if (!loaded) return;
+    /* Offline, the delete cannot land: leave the pairs written for a load
+       that reaches the server. (A saved copy of the list served while the
+       browser thinks it is online is the caller's to exclude from `loaded`.) */
+    if (navigator.onLine === false) return;
+    const byId = new Map(runs.map((r) => [r.id, r]));
+    const taken = new Set<string>();
+    for (const pair of storedPairs.of(slug)) {
+      const quick = byId.get(pair.quickId);
+      const decision = taken.has(pair.quickId)
+        ? "forget"
+        : tidyPair(pair.words, {
+            quick,
+            meaning: byId.get(pair.meaningId),
+            meaningTicked: wiring.current.ticked(pair.meaningId),
+          });
+      if (decision === "keep") continue;
+      storedPairs.forget(pair.meaningId);
+      if (decision === "swap" && quick) {
+        taken.add(pair.quickId);
+        local.place.set(pair.meaningId, quick.createdAt);
+        wiring.current.swap({ ...pair, discard: false });
+      }
+    }
+  }, [loaded, local, wiring]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: `looks` is a trigger, not an input — a timer or Enter asks for another look.
   useEffect(() => {
     const look: Look = {
@@ -367,6 +461,10 @@ export function useAutoThorough<Run extends SearchRun>({
       again: lookAgain,
     };
     const launched = launchWatched(look);
+    // Written down, so a reload before it lands can still tidy the pair.
+    for (const pair of launched) {
+      storedPairs.add({ slug, quickId: pair.quickId, meaningId: pair.meaningId, words: pair.words });
+    }
     const { discards, settled } = settlePairs(look, pairs);
     /* Applied as a functional update, by id, rather than by replacing the
        list with one built from this effect's `pairs`: a rename queued by a
@@ -380,7 +478,7 @@ export function useAutoThorough<Run extends SearchRun>({
         ...launched,
       ]);
     }
-  }, [runs, pairs, looks, local, wiring]);
+  }, [slug, runs, pairs, looks, local, wiring]);
 
   const hiddenIds = useMemo(() => new Set(pairs.map((p) => p.meaningId)), [pairs]);
   const visible = useMemo(
@@ -410,6 +508,7 @@ export function useAutoThorough<Run extends SearchRun>({
   );
   const renamed = useCallback(
     (from: string, to: string) => {
+      storedPairs.invalidate(from);
       if (local.watch.delete(from)) local.watch.add(to);
       const words = local.submitted.get(from);
       if (words !== undefined) {

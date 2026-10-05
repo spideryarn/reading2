@@ -430,22 +430,35 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
     await script();
     const ctx = { ...ctxFor(), profile: "I am a different reader" };
     expect(await shownFor(() => STEPS.illustrated.run(ctx, store, nullCheckpointStore()))).toMatch(
-      /different reader profile/,
+      /before your reader profile said what it says now/,
     );
     expect(briefCalls).toBe(0);
   });
 
-  it("does not refuse a Sketch drawn deliberately without a profile", async () => {
-    /* The negative control for the case above, and it is the three-state rule
-       rather than an equality: `null` means *written deliberately without a
-       profile*, which is not a mismatch with anything. Refusing it would make
-       every unprofiled Sketch unpaintable by a reader who has a profile — which
-       is most of them. src/profile.ts § `profileIsStale`. */
+  it("refuses a Sketch drawn when the reader had no profile, once they have one", async () => {
+    /* Greg, 2026-10-05: "B treat a first profile as a change". Until then this
+       test said the opposite — `null` meant *written deliberately without a
+       profile* and was a mismatch with nothing. It has to be refused now for
+       the loop's reason above: the route calls such a picture
+       `profileChanged`, and a paint that inherited `null` again would be
+       offered again. The panel's one press redraws the Sketch first
+       (§ "redraws a Sketch drawn before the reader had a profile" below).
+       src/profile.ts § `profileIsStale`. */
     writeSketch(sketchFixture());
     await script();
     const ctx = { ...ctxFor(), profile: "I am a reader with a profile" };
+    expect(await shownFor(() => STEPS.illustrated.run(ctx, store, nullCheckpointStore()))).toMatch(
+      /before your reader profile said what it says now/,
+    );
+    expect(briefCalls).toBe(0);
+  });
+
+  it("does not refuse a Sketch drawn with no profile while the reader still has none", async () => {
+    /* The negative control for the two above: nothing on either side. */
+    writeSketch(sketchFixture());
+    await script();
     await expect(
-      STEPS.illustrated.run(ctx, store, nullCheckpointStore()),
+      STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore()),
     ).resolves.toBeTruthy();
   });
 
@@ -516,6 +529,25 @@ describe("what the store records when the illustrated step has run", () => {
     const result = await STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore());
     const written = result.parts?.illustrated as Illustrated | undefined;
     expect(written?.profileHash).toBe("abc123");
+  });
+
+  it("preserves an absent Sketch profile stamp through painting and storage", async () => {
+    const { profileHash: _absent, ...legacy } = sketchFixture();
+    writeSketch(legacy as Sketch);
+    expect(await readSketch()).not.toHaveProperty("profileHash");
+    await script();
+    const ctx = { ...ctxFor(), profile: "I am a reader with a profile" };
+    const result = await STEPS.illustrated.run(ctx, store, nullCheckpointStore());
+    const illustrated = result.parts?.illustrated as Illustrated;
+    expect(illustrated).not.toHaveProperty("profileHash");
+    const stamp = await STEPS.illustrated.stamp?.(ctx, store);
+    expect(stamp).not.toHaveProperty("profileHash");
+    if (!stamp) throw new Error("no stamp for a usable legacy Sketch");
+    await store.write(SLUG, "illustrated", { illustrated }, stamp);
+    const saved = await store.read(SLUG, "illustrated", "illustrated");
+    expect(saved).not.toHaveProperty("profileHash");
+    expect(profileIsStale(saved?.profileHash, hashProfile(ctx.profile))).toBe(false);
+    expect(await stepIsDone(STEPS.illustrated, ctx, store)).toBe(true);
   });
 });
 
@@ -813,9 +845,9 @@ describe("one press that draws and then paints", () => {
 
   it("redraws a Sketch the panel calls profile-changed", async () => {
     /* **The reader has a profile now, and it is not the one the Sketch was
-       drawn for.** Both halves of that matter: `profileIsStale` answers false
-       when *either* side is null (src/profile.ts), so a case with no current
-       profile is a case the panel never shows this refusal for. */
+       drawn for.** `profileIsStale` answers false when the reader has none
+       now (src/profile.ts), so a case with no current profile is a case the
+       panel never shows this refusal for. */
     const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
     const sketch = {
       ...(await stampedNow(ctx)),
@@ -841,6 +873,22 @@ describe("one press that draws and then paints", () => {
     /* And it is the profile that made it re-run, not the article. */
     const { blocks, tree, meta } = await articleNow();
     expect(sketchIsStale(sketch, blocks, tree, meta), "the article moved too").toBe(false);
+  });
+
+  it("redraws a Sketch drawn before the reader had a profile", async () => {
+    /* The first-profile case (Greg, 2026-10-05). The panel now calls this
+       Sketch profile-changed, so the same press must redraw it: were the
+       Sketch half to skip, the painting would inherit `null` and the step
+       would refuse it, every time. */
+    const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
+    const sketch = { ...(await stampedNow(ctx)), profileHash: null } as Sketch;
+    writeSketch(sketch);
+    expect((await store.read(SLUG, "sketch", "sketch"))?.profileHash).toBeNull();
+    expect(profileIsStale(sketch.profileHash, hashProfile(ctx.profile))).toBe(true);
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "the Sketch half would skip — and the paint would be refused for ever",
+    ).toBe(false);
   });
 
   /**

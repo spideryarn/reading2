@@ -1538,8 +1538,8 @@ export const ILLUSTRATE_SKETCH_STALE: ReaderFacingFailure = {
 export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "The sketch of this article was drawn for a different reader profile, so the painting would " +
-    "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
+    "The sketch of this article was drawn before your reader profile said what it says now, so " +
+    "the painting would be made for an earlier reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
 };

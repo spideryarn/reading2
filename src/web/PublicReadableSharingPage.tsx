@@ -46,10 +46,12 @@
  *    which is a good argument for having declined it. What this page claims is
  *    the no-training commitment, carrying the same hedge `/privacy` gives it.
  *  - **"The SEO canonical points search engines at your page."** The canonical
- *    is real (src/public/page-head.ts § `tags`) and no search engine ever reads
- *    it, because every response is `noindex, nofollow` and `robots.txt` is
- *    `Disallow: /`. Saying it the briefed way would have swapped a strong true
- *    claim for a weak one that sounds like an excuse.
+ *    is real (src/public/page-head.ts § `tags`) and is not what keeps a shared
+ *    article out of search: every `/read/` response is `noindex, nofollow`.
+ *    Saying it the briefed way would have swapped a strong true claim for a
+ *    weak one that sounds like an excuse. (Until 2026-10-05 the whole site was
+ *    `noindex` and `robots.txt` was `Disallow: /`; our own pages may be listed
+ *    since then, and a shared article still may not.)
  *
  * The four claims that can go stale *silently* — the robots disallow, the
  * `noindex` header, the canonical tag and the no-training wording — are pinned
@@ -286,30 +288,53 @@ export function PublicReadableSharingPage({ signedIn }: { signedIn: boolean }) {
         </Section>
 
         <Section title="It is kept out of search engines">
+          {/* Rewritten 2026-10-05, when Greg let search engines list our own
+              pages ("yes definitely we want those to be visible") and asked
+              whether a shared article should ever be listed ("no"). Every
+              sentence here is about the shared copy, and each is held to the
+              file it describes by tests/public-readable-sharing-page.test.tsx.
+              docs/plans/261005f-link-previews-and-seo-for-shared-links.md. */}
           <p>
-            This is the part we can be most definite about. Every response Spideryarn serves carries
-            an <code className="tw:text-foreground">X-Robots-Tag: noindex, nofollow</code> header,
-            every page carries the matching{" "}
-            <code className="tw:text-foreground">&lt;meta name="robots"&gt;</code>, and our{" "}
-            <code className="tw:text-foreground">robots.txt</code> disallows crawling of the whole
-            site. We publish no sitemap. After every deploy our script re-checks the live{" "}
-            <code className="tw:text-foreground">robots.txt</code> — that it is still a real plain-text
-            file and still carries a disallow rule — and reports the deploy as failed if it is not.
+            This is the part we can be most definite about. Every shared article Spideryarn serves
+            carries an <code className="tw:text-foreground">X-Robots-Tag: noindex, nofollow</code>{" "}
+            header and the matching{" "}
+            <code className="tw:text-foreground">&lt;meta name="robots"&gt;</code>, which tell a
+            search engine not to list the page. Our sitemap names our own pages — this one, the
+            homepage, pricing and the like — and no article. After every deploy our script
+            re-checks the live <code className="tw:text-foreground">robots.txt</code> — that it is
+            answered successfully as plain text — and reports the deploy
+            as failed if it is not.
           </p>
           <p>
-            There is one narrow hole and it is worth naming: the link-preview fetchers of Facebook,
-            X, LinkedIn, WhatsApp, Telegram, Discord and Slack are allowed at{" "}
-            <code className="tw:text-foreground">/read/</code>, at our homepage and at the one
-            picture of our own logo that a preview shows, so that pasting a shared link into a chat
-            shows a title and a one-line description instead of a bare URL. None of those puts a
-            page into a search result, and all of them still receive the noindex header.
+            We let search engines list our own pages, and ask them not to list shared articles. Our{" "}
+            <code className="tw:text-foreground">robots.txt</code> lets a crawler fetch a page under{" "}
+            <code className="tw:text-foreground">/read/</code>, and that is deliberate: a search
+            engine has to be able to fetch a page to read the noindex on it, and one that is merely
+            blocked can still list the bare address. What a crawler is sent there is the title,
+            a short description when we have one, and a link to your original when we can safely
+            republish its address. The text of the article is
+            fetched separately, from an address{" "}
+            <code className="tw:text-foreground">robots.txt</code> disallows.
+          </p>
+          <p>
+            The link-preview fetchers of Facebook, X, LinkedIn, WhatsApp, Telegram, Discord and
+            Slack are allowed at <code className="tw:text-foreground">/read/</code> and at our own
+            pages, so that a pasted shared link can show the title and any description we have,
+            instead of a bare URL. The preview's picture is the first suitable picture
+            in the article that we hold our own copy of, fetched from us and not from your servers,
+            and otherwise a picture of our own logo. Suitable here means a PNG or JPEG between
+            20 KB and 5 MB; that is a rough filter for icons and very large pictures, not a check of
+            what the picture shows. Figures recovered from a PDF are not used on the card. None of
+            those fetchers puts a page into a search result. On shared article pages, all of them
+            still receive the noindex header.
           </p>
           <p>
             Where that address is one we can safely republish, the page also carries a{" "}
             <code className="tw:text-foreground">&lt;link rel="canonical"&gt;</code> pointing at
             yours, so any machine that does read our copy is told yours is the authoritative one.
-            That is belt-and-braces rather than the main protection: nothing is indexing us to begin
-            with, and it is left out on the same addresses that get no source line above.
+            That is belt-and-braces rather than the main protection: the noindex is what keeps our
+            copy out, and the canonical is left out on the same addresses that get no source line
+            above.
           </p>
         </Section>
 

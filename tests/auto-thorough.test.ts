@@ -13,6 +13,8 @@ import {
   SETTLE_MS,
   settleThorough,
   type ThoroughPair,
+  tidyPair,
+  type TidyRow,
 } from "../src/web/modes/search/auto-thorough.js";
 
 const WORDS = "arguments against";
@@ -136,5 +138,66 @@ describe("launchThorough", () => {
 
   it("does not try the same row and words twice", () => {
     expect(launchThorough({ ...settled, tried: true, submitted: true })).toEqual({ type: "idle" });
+  });
+});
+
+describe("tidyPair: a remembered pair, met again on a fresh load (Q-reload)", () => {
+  const quick = (over: Partial<TidyRow> = {}): TidyRow => ({
+    kind: "quick",
+    status: "done",
+    criterion: WORDS,
+    ...over,
+  });
+  const thorough = (over: Partial<TidyRow> = {}): TidyRow => ({
+    kind: "meaning",
+    status: "done",
+    criterion: WORDS,
+    ...over,
+  });
+  const now = (q: TidyRow | undefined, m: TidyRow | undefined, meaningTicked = false) => ({
+    quick: q,
+    meaning: m,
+    meaningTicked,
+  });
+
+  it("swaps when both rows are finished with the words the pair was launched with", () => {
+    expect(tidyPair(WORDS, now(quick(), thorough()))).toBe("swap");
+  });
+
+  it("compares the words trimmed", () => {
+    expect(tidyPair(WORDS, now(quick({ criterion: ` ${WORDS} ` }), thorough()))).toBe("swap");
+  });
+
+  it.each([
+    ["the thorough row", quick(), thorough({ status: "pending" })],
+    ["the quick row", quick({ status: "pending" }), thorough()],
+  ])("keeps the pair for the next load while %s is still running", (_name, q, m) => {
+    expect(tidyPair(WORDS, now(q, m))).toBe("keep");
+  });
+
+  it.each([
+    ["the thorough row failed", quick(), thorough({ status: "error" })],
+    ["the quick row failed", quick({ status: "error" }), thorough()],
+    ["the quick row's words were changed", quick({ criterion: `${WORDS} dualism` }), thorough()],
+    [
+      "the quick row's words were changed and it is running again",
+      quick({ criterion: `${WORDS} dualism`, status: "pending" }),
+      thorough(),
+    ],
+    ["the thorough row holds other words", quick(), thorough({ criterion: "something else" })],
+    ["the quick row has gone", undefined, thorough()],
+    ["the thorough row has gone", quick(), undefined],
+    ["the row recorded as quick is a thorough one", quick({ kind: "meaning" }), thorough()],
+    ["the row recorded as thorough is a quick one", quick(), thorough({ kind: "quick" })],
+  ])("forgets the pair, and leaves both rows, when %s", (_name, q, m) => {
+    expect(tidyPair(WORDS, now(q, m))).toBe("forget");
+  });
+
+  it("forgets the pair when the reader has ticked the thorough row", () => {
+    expect(tidyPair(WORDS, now(quick(), thorough(), true))).toBe("forget");
+  });
+
+  it("a reader's thorough tick invalidates the record even while the row is pending", () => {
+    expect(tidyPair(WORDS, now(quick(), thorough({ status: "pending" }), true))).toBe("forget");
   });
 });

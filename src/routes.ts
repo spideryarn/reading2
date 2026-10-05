@@ -9606,9 +9606,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      /* **Not `withProfileChanged`**, whose rule calls an artefact written
-         without a profile never stale. A route is exactly what a profile should
-         change, so none → some counts here — `routeProfileIsStale`, the same
+      /* **Not `withProfileChanged`**, whose rule does not count a cleared
+         profile. A route is exactly what a profile should change, so any
+         difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited. */
       const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);

@@ -441,9 +441,9 @@ describe("Plain closes both columns", () => {
     expect(modeInUrl()).toBe("summary");
   });
 
-  /* The column's relation words are asked for by the press that turns it on
-     (plan 261003f). The press that turns it off arms nothing: its feed is still
-     mounted for that instant and would claim the token. */
+  /* The column's relation words are asked for when it is shown (plan 261005d),
+     so no press of the toggle arms anything, and the one that turns it off
+     starts nothing either. */
   it("the press that turns the notes off arms nothing", async () => {
     await open("?mode=summary&margin=1");
     armed.length = 0;

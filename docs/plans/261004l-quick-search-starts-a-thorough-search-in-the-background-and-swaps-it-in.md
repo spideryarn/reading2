@@ -204,6 +204,93 @@ choice is to keep it as an unticked saved row, since it was paid for. Recommende
 
 So the pair is to be tidied once you have left Search mode; dispatched to session `search-pair-tidy`.
 
+## Follow-up: a pair left behind is tidied when the list is next loaded
+
+For Q-reload above. In the browser only: no server change, no migration.
+
+**The first design, and why it was dropped.** Read the pair off the loaded rows alone: a finished
+thorough row with the same words as an earlier finished quick row replaces it. GPT Sol's design
+review ([prompt](261004l-pair-tidy-design-review-prompt.md),
+[answer](261004l-pair-tidy-design-review-sol.md)) said do not build it, and two findings stand:
+
+- **T2.** A reader who asks quick and thorough for the same words by hand, then unticks the
+  thorough one because they prefer the quick answer, leaves exactly the rows an abandoned pair
+  leaves. The rule would delete the row they chose.
+- **T1.** Quick A, thorough A starts, the words change to B and back to A, then the reader leaves.
+  The tab that asked had marked that thorough answer to be thrown away; the rule would swap it in.
+
+The saved rows do not say which thorough row the app started for which quick row. Only the tab
+that launched it knows.
+
+**So the pair is written down.** When a thorough search is started by itself, the browser records
+`{ slug, quickId, meaningId, words }` in `localStorage` (`src/web/modes/search/stored-pairs.ts`).
+The record is removed when the pair is settled in that tab (swapped, dropped) and the moment its
+answer is marked to be thrown away (the quick row changed words, went back to searching, or was
+deleted). Revisions, retries and deletions revoke it at the call, before an effect or departure;
+a tick or press on the thorough row revokes it too, even if the reader unticks it afterwards, and
+so does *select all*, which ticks it. A gesture on the quick row keeps the record: its tick is what
+the thorough row inherits. A row that `begin` answers under another id has its record removed
+rather than rewritten under the new id, so that rare pair is not tidied after a reload.
+Leaving Search mode, reloading or closing the tab removes nothing, so what is still
+written is exactly the pairs left behind.
+
+**One storage key per pair**, named by the thorough row's id. The first build kept one list under
+one key, and the code review found the hole in that (R1): two tabs each read the list, change it and
+write it back, so a tab can write back an older list and revive a record the reader cancelled, and
+a later load then deletes a quick row they kept. The reviewer's fix was a Web Lock round every read
+and write, which made the whole module asynchronous and needed a fallback for browsers without
+locks and a "distrust storage" mode for a failed write. With a key each there is no list to write
+back: forgetting is one `removeItem`, and nothing another tab writes can undo it. Not covered: a
+`removeItem` that throws, in a storage that can still be read later.
+
+**When it is tidied.** Once, when Search mode opens and the saved list arrives. Each record for
+this article is checked against the loaded rows by a pure function, `tidyPair` in
+`auto-thorough.ts`:
+
+- **swap** when both rows are there, of the kinds recorded, **finished**, and both still hold the
+  recorded words, and the thorough row is **not ticked**. A thorough search started by itself is
+  never ticked, so a tick is the reader's: they have seen both and chosen, and both stay.
+- **keep the record** when either row is still running. Nothing is touched; the next load looks
+  again.
+- **forget the record, leave both rows** for anything else: a row gone, a row failed, the quick
+  row's words changed.
+
+A swap is exactly the in-tab one, through the same `wiring.swap`: the thorough row takes the colour
+the quick row is drawn in, takes its place in `?runs=` (ticked if it was, unticked if not), is
+listed at the quick row's time, and the quick row is deleted.
+
+**What this does not do.**
+
+- A pair with no record is never touched: one left behind before this shipped, one launched in
+  another browser or device, or one whose storage was cleared. Both rows stay, as before.
+- Come back to Search within the few seconds the thorough search is still running, and both rows
+  show, the thorough one as still searching, until the list is next loaded. A row loaded as
+  running gets no later news in that tab; that is older than this work.
+- Offline (`navigator.onLine` false), or when the opening response carries
+  `x-spideryarn-offline: copy`, nothing is tidied and the record is kept (Sol's T4).
+  The latter matters when the browser believes it is online but the server could not be reached.
+- A failed thorough row left behind stays in the list. In the tab that asked it would have been
+  removed unseen.
+
+**The cross-tab case (review F8, and T3 of this one).** Still no server-side check. `localStorage`
+is shared between tabs, so a second tab opening Search on the same article reads the first tab's
+record. While the thorough search runs, it keeps it and does nothing. The window is the moment the
+answer lands: the first tab settles the pair within milliseconds, and a second tab whose list
+loaded in that moment may act too. If both swap, the result is the same swap done twice, which is
+harmless. If the first tab is throwing the answer away (an unasked edit in its box) or revising the
+quick row just then, the second tab can delete a quick row that has just changed, or both rows can
+be lost. That needs one reader with the same article's Search open in two tabs, one loading in the
+instant the other's thorough answer lands with an edit in hand. What is lost costs a second, or six
+cents, to ask again. **Accepted, as F8 was.** Sol's fix is a DELETE that carries what the browser
+expects the row to be and is refused if it is not; it closes the changed-row half and not the
+both-lost half, and is the server-side check this plan set out to avoid.
+
+**Options passed over.** Have the server's GET delete the quick row: it cannot keep the tick (only
+the URL knows it) or the colour (an automatic colour is worked out in the browser). Store the link
+on the row: a migration, and the server still cannot do the swap. Poll a row loaded as running so
+the pair is tidied without a second load: a timer and a second read for a case that fixes itself.
+
+
 ## Log
 
 - 2026-10-04: plan written; cost measured from `ai_calls`.
@@ -244,3 +331,34 @@ So the pair is to be tidied once you have left Search mode; dispatched to sessio
 - 2026-10-04: thorough took 4 to 12 s in these runs, and 9 s median in production. The reader-facing
   words "about half a minute" (the button's title, /help) and search.md's "15–40 seconds" are
   older and now look long; not changed here.
+- 2026-10-05: **the follow-up for Q-reload, built** (§ Follow-up). In order:
+  - GPT Sol's design review ([prompt](261004l-pair-tidy-design-review-prompt.md),
+    [answer](261004l-pair-tidy-design-review-sol.md)) of the first design, pairing by the loaded
+    rows alone: **do not build.** T1 and T2 taken, which is why the pair is written down. T3
+    (cross-tab) accepted and described. T4 taken as "nothing offline, nothing from a saved copy".
+  - Built red first; nine deliberate breakages of the rule each turned a test red.
+  - Sol's code review, write-capable ([prompt](261004l-pair-tidy-code-review-prompt.md),
+    [answer](261004l-pair-tidy-code-review-sol.md)): **do not land**, with its own checks never
+    run (it timed out on a shared lock during a box overload; its first run was killed for memory
+    and left only tests). R2 (revoke at the gesture) and R3 (the saved-copy header) kept as it
+    wrote them. R1 was real, and its fix, a Web Lock round an asynchronous store with a fallback
+    and a distrust mode, was **replaced by one storage key per pair**. Its `loaded`-per-slug change
+    to `useSearch` was reverted; the tidy effect leaves `slug` out of its dependencies instead. Its
+    postmortem for the locking fix was deleted with the fix. R4 accepted. Two of its test cases
+    were not taken: pressing the quick row does not cancel the tidy.
+  - Sol's second pass, read-only ([prompt](261004l-pair-tidy-code-review-2-prompt.md),
+    [answer](261004l-pair-tidy-code-review-2-sol.md)): **land with two changes**, both made. S1: a
+    renamed row's record is removed, not rewritten. S2: *select all* cancels the tidy.
+  - Gates: `tests/auto-thorough.test.ts` and `tests/search-auto-thorough.test.tsx` 89 of 89,
+    `tests/use-search.test.ts` and `tests/doc-links.test.ts` green, `npm run typecheck` clean.
+    One run had the F2 deadline case red at load 74; it passed alone (C4 above).
+    **The full `npm test` was not run**: the Overseer asked for targeted files only while the box
+    was overloaded. The breakage checks were not repeated on the one-key-per-pair storage.
+  - Browser check by a Sonnet subagent (Playwright, 1440 wide, real model calls). Reload with the
+    spinner showing: two rows ([before](261004l-shot-pair-tidy-A-before.png)), and after the
+    thorough search finished and one more reload, one thorough row, ticked, the quick row's colour,
+    `?runs=` naming it, no record left, no error line
+    ([after](261004l-shot-pair-tidy-A-after.png)). Leave for Glossary for 30 s and come back: one
+    row, the same way ([shot](261004l-shot-pair-tidy-B-after.png)). The ordinary in-tab swap
+    leaves no record. Not looked at: the marks in the prose after the tidy, and an unticked quick
+    row (both are in the band tests).

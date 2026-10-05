@@ -157,7 +157,7 @@ describe("the reserved shelf address", () => {
     const ok = decidePublicPage(
       "GET",
       "public-notes",
-      { kind: "found", head: { slug: "public-notes", title: "A piece", gist: null, canonical: null, authors: [] } },
+      { kind: "found", head: { slug: "public-notes", title: "A piece", gist: null, canonical: null, authors: [], image: null } },
       "sha",
     );
     expect(ok.status).toBe(200);

@@ -52,6 +52,7 @@ import {
   stepQuickSession,
 } from "../../quick-session.js";
 import { type AutoThoroughWiring, useAutoThorough } from "./auto-thorough.js";
+import { storedPairs } from "./stored-pairs.js";
 
 /** Until `SearchBand` has filled it in, on its first render: nothing owns, nothing runs. */
 const UNWIRED: AutoThoroughWiring = {
@@ -60,6 +61,7 @@ const UNWIRED: AutoThoroughWiring = {
   drop: () => {},
   owns: () => false,
   boxWords: () => "",
+  ticked: () => false,
   swap: () => {},
 };
 
@@ -119,7 +121,7 @@ export function SearchBand({
   /* Only a request this tab started is known to be in flight — `running` and
      `isRunning` are the hook's, because only the hook knows the id the server
      answered under. useSearch.ts § inFlight. */
-  const { runs, loaded, loadError, ask, retry, revise, running, isRunning, remove, recolour, error } =
+  const { runs, loaded, loadError, loadFromCopy, ask, retry, revise, running, isRunning, remove, recolour, error } =
     useSearch(slug, {
       onRenamed: (from, to) => {
         renameActive.current(from, to);
@@ -134,7 +136,9 @@ export function SearchBand({
      hook's own lookups. The wiring is filled in further down, once the
      typing session and `?runs=` exist. */
   const wiring = useRef<AutoThoroughWiring>(UNWIRED);
-  const upgrade = useAutoThorough({ slug, runs, wiring });
+  /* `loaded` is true for a failed read too, and a failed read's empty list
+     would read as "both rows have gone": only a list that arrived is tidied. */
+  const upgrade = useAutoThorough({ slug, runs, loaded: loaded && loadError === null && !loadFromCopy, wiring });
   renameUpgrade.current = upgrade.renamed;
   const { panel, setActive } = useSearchMode({
     runs: upgrade.visible,
@@ -164,7 +168,11 @@ export function SearchBand({
       upgrade.watch(id);
       return id;
     },
-    revise,
+    revise: (id, words) => {
+      // Revoke before React can batch a revision with leaving the mode.
+      storedPairs.invalidate(id);
+      revise(id, words);
+    },
     submitted: upgrade.submitted,
   });
   renameSession.current = typing.renamed;
@@ -177,6 +185,7 @@ export function SearchBand({
     drop: (meaningId) => remove(meaningId, { quiet: true }),
     owns: typing.owns,
     boxWords: () => draft.text().trim(),
+    ticked: (id) => panel.active.includes(id),
     swap: ({ meaningId, quickId }) => {
       /* The colour the quick row is drawn in **now**, not at launch: the
          reader may have recoloured it while the thorough search ran (review
@@ -202,6 +211,24 @@ export function SearchBand({
   return (
     <SearchPanel
       {...panel}
+      /* **A tick or a press on a thorough row is the reader choosing**, so a
+         pair a reload left behind is no longer tidied over it, even if they
+         untick it again (stored-pairs.ts; `forget` does nothing for any other
+         row). A gesture on the quick row is not: its tick is what the thorough
+         row inherits. */
+      onToggle={(id, on) => {
+        storedPairs.forget(id);
+        panel.onToggle(id, on);
+      }}
+      onSolo={(id) => {
+        storedPairs.forget(id);
+        panel.onSolo(id);
+      }}
+      // Select all ticks every thorough row, a left-behind one included.
+      onToggleAll={(on) => {
+        if (on) for (const pair of storedPairs.of(slug)) storedPairs.forget(pair.meaningId);
+        panel.onToggleAll(on);
+      }}
       access={{
         kind: "owner",
         loaded,
@@ -226,6 +253,7 @@ export function SearchBand({
              second to ask again, and the plan says what keeping it would
              cost. */
           if (sourceId !== undefined) {
+            storedPairs.invalidate(sourceId);
             const id = ask(question, kind, panel.slots.get(sourceId));
             remove(sourceId);
             setActive((ids) => [...ids.filter((x) => x !== sourceId), id]);
@@ -247,6 +275,7 @@ export function SearchBand({
         onRetry: (id) => {
           const run = runs.find((candidate) => candidate.id === id);
           if (!run || isRunning(run.criterion, run.kind)) return;
+          storedPairs.invalidate(id);
           retry(id);
         },
         /* Straight through. Unlike every other write on this panel it does not
@@ -254,6 +283,7 @@ export function SearchBand({
            like, never which marks are drawn or which one the reader is on. */
         onRecolour: recolour,
         onDelete: (id) => {
+          storedPairs.invalidate(id);
           typing.rowGone(id);
           remove(id);
           setActive((ids) => ids.filter((x) => x !== id));

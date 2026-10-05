@@ -1012,6 +1012,23 @@ export function findSecretsInBundle(js: string): string[] {
   return found;
 }
 
+/**
+ * **Does this `robots.txt` carry a `Disallow: /` directive** — a line of its
+ * own, with any comment stripped first?
+ *
+ * The check it replaces was `/disallow/i` over the whole body, which the
+ * file's own comments satisfy: they say "Disallow" several times, so the check
+ * passed with every real directive deleted. Found by GPT Sol on 2026-10-05;
+ * docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
+ *
+ * **Still the small fix and not the whole one**, and that postmortem says so:
+ * one directive in the wrong group satisfies this too. `judgeRobotsTxt` in
+ * scripts/check-public-shell.ts reads the groups, and a deploy does not run it.
+ */
+export function hasDisallowAll(robotsTxt: string): boolean {
+  return robotsTxt.split("\n").some((raw) => /^Disallow:\s*\/$/i.test(raw.replace(/#.*$/, "").trim()));
+}
+
 /** The `/assets/*.js` files an `index.html` asks the browser to load. */
 export function assetUrlsIn(html: string): string[] {
   return [...new Set(html.match(/\/assets\/[A-Za-z0-9._-]+\.js/g) ?? [])];

@@ -353,6 +353,25 @@ composed for an article, which `articleWaitTitle` below and `scripts/check-publi
 read. The research is
 [261005b](../research/261005b-link-previews-and-seo-for-republished-articles.md).
 
+**Later that day, two more things, both Greg's answers to that plan's questions.**
+
+*A shared article's card may show the article's own first picture.* Greg: *"hmmm, not sure. go with
+the lead image for now"*. Only when we hold a copy: the address is our own
+`/api/public/asset/<slug>/<hash>.<ext>`, never the publisher's, chosen by `leadImageOf` in
+[`src/asset-delivery.ts`](../../src/asset-delivery.ts) (the first stored PNG or JPEG between 20 KB
+and 5 MB; the manifest records no dimensions, so bytes stand in for them, and a small photograph is
+passed over while a heavy icon is not). Otherwise the brand image. **`LEAD_IMAGE_ON_CARDS` in
+`page-head.ts` is the one switch.**
+
+*Each of our own pages has a head of its own, written by the build.* The nine pages in
+[`src/site-pages.ts`](../../src/site-pages.ts) are served a static file whose `<title>` is the
+string `pageTitle` sets a moment later (`tests/site-pages.test.ts` holds the two equal, page by
+page), with a description, a canonical and an `og:url` naming the page, and no robots tag. So the
+sentence above needs a second half: those pages **do** carry an `og:url` now, and
+`serverComposedHead` is not misled, because it wants one ending `/read/<slug>`. Every other path is
+still the default head, with none. [deployment.md](deployment.md), under "Our own pages may be
+listed", has the serving.
+
 `tests/page-head.test.ts` § *the one title rule, applied by both sides* is the check, and its expected
 strings are written out rather than computed from either side — an expectation spelled
 `documentTitle(t)` would agree with every possible behaviour of `documentTitle`, which is how a test

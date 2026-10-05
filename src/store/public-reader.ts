@@ -53,7 +53,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
-import { storedAssetFor } from "../asset-delivery.js";
+import { type LeadImage, leadImageOf, storedAssetFor } from "../asset-delivery.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
@@ -138,6 +138,15 @@ export interface PublicHead {
   gist: string | null;
   /** The address the fetcher finally landed on. A candidate canonical, unsanitised. */
   canonical: string | null;
+  /**
+   * **The article's own first picture, when we hold a copy fit for a card**, or
+   * `null` for our brand image.
+   *
+   * Which stored object, and never an address: `leadImageOf` in
+   * src/asset-delivery.ts chooses it, and src/public/page-head.ts spells the
+   * URL, on our own origin, and holds the switch that turns it off.
+   */
+  image: LeadImage | null;
 }
 
 /**
@@ -501,6 +510,10 @@ const PUBLIC_PROJECTIONS = {
     headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
     rootGist: articleRevisions.rootGist,
     finalUrl: articleRevisions.finalUrl,
+    /* The image manifest, for the one picture a card may show:
+       `PublicHead.image`. The same column the `asset` projection reads, and the
+       route that serves the bytes reads it again for itself. */
+    assets: articleRevisions.assets,
     hasTree: sql<boolean>`${articleRevisions.tree} is not null`.as("has_tree"),
     /* `exists`, not a count: the question is whether there is at least one, and
        counting every block of a long article to learn that it is more than zero
@@ -1068,6 +1081,7 @@ export const pgPublicReader: PublicArticleReader = {
         gist: found.revision.rootGist,
         canonical: found.revision.finalUrl,
         authors: publicAuthorNames(found.revision.authors, found.revision.byline),
+        image: leadImageOf(found.revision.assets as Assets | null),
       };
       return { sharedBy: "public", head };
     });

@@ -78,14 +78,15 @@ describe("a conversation started from a claim is not its block's chat", () => {
 
 describe("threadSource", () => {
   it("says a conversation with a stored origin was started from a claim in Debate, with the claim's words", () => {
-    expect(threadSource({ origin: CLAIM })).toEqual({
+    expect(threadSource({ kind: "chat", origin: CLAIM })).toEqual({
+      from: "debate",
       mode: "debate",
       label: "Started from a claim in Debate",
       quote: "RNA can transfer a memory",
     });
   });
 
-  it("says nothing for a conversation with no stored origin", () => {
-    expect(threadSource({})).toBeNull();
+  it("says nothing for a plain chat (the other rules are tests/thread-source.test.ts)", () => {
+    expect(threadSource({ kind: "chat" })).toBeNull();
   });
 });

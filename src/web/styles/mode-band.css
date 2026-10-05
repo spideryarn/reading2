@@ -443,16 +443,58 @@
 }
 .chat-thread:hover .chat-thread-actions,
 .chat-thread:focus-within .chat-thread-actions { opacity: 1; pointer-events: auto; }
-/* **Where the conversation was started from** (ChatPanel.tsx §
-   `ThreadSourceMark`, plan 261005i): the source mode's icon beside the title's
-   first line, always drawn, unlike the two actions after it. Not a control, so
-   it has no hover of its own; its card says what it means. The padding is the
-   title's top padding and gives the card a target a pointer can find. */
-.chat-thread-source {
+/* **Where the conversation came from** (ChatPanel.tsx § `ThreadSourceMark`,
+   plan 261005i): the source mode's icon at the head of the row, always drawn,
+   unlike the two actions at its end. `chat-thread-lead` is the slot, on every
+   row once any row has an icon, so a plain chat's title starts level with the
+   others. The icon is a button so a finger and the keyboard can open its
+   card; the padding is the title's top padding, so the glyph sits on the
+   title's first line. */
+.chat-thread-lead {
   flex: none;
   display: inline-flex;
+  width: 1.25rem;
+  justify-content: center;
+}
+.chat-thread-source {
+  display: inline-flex;
   padding: 0.55rem 0.25rem 0.25rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
   color: var(--ink-faint);
+  cursor: help;
+}
+.chat-thread-source:hover,
+.chat-thread-source[aria-expanded="true"] { color: var(--ink); }
+/* The slot has taken the title's left padding. */
+.chat-thread-lead + .chat-thread-open { padding-left: 0.2rem; }
+/* **The filter above the list** (ChatPanel.tsx § `ThreadList`): All, Chats,
+   then one per other source present. Remember's chips, made to wrap: this row
+   is as wide as the band and may hold five words on a phone
+   (docs/project/narrow-windows.md § rows wrap). */
+.chat-from {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.4rem 0.5rem 0.1rem;
+}
+.chat-from-btn {
+  white-space: nowrap;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.81rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.chat-from-btn:hover { color: var(--ink); }
+.chat-from-btn.on {
+  background: var(--rule);
+  color: var(--ink);
 }
 /* In the card: the item's own words, on a line of their own under ours. */
 .chat-thread-source-quote { display: block; margin-top: 0.2rem; }

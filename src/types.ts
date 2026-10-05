@@ -389,15 +389,9 @@ export interface TweetThread {
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -434,9 +428,10 @@ export interface ThreadResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
 }
@@ -740,15 +735,9 @@ export interface Glossary {
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -822,9 +811,10 @@ export interface GlossaryResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
   /**
@@ -1482,7 +1472,8 @@ export interface SkimResponse {
   outdated: boolean;
   /**
    * The profile is not the one the route was written for — **including none →
-   * some**, which the shared `profileIsStale` does not count.
+   * some** (the shared `profileIsStale` counts that too since 2026-10-05) and
+   * some → none, which it does not.
    */
   profileChanged: boolean;
   /**

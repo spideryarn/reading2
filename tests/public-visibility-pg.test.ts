@@ -51,6 +51,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { MANAGED_HEAD_END, MANAGED_HEAD_START, composeShell } from "../src/public/page-head.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
 import { PUBLIC_ONLY } from "../src/store/public-access.js";
 import { publicHeadOf } from "./helpers/public-head.js";
@@ -982,7 +983,53 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And nothing that renders came with it. A head read that quietly grew a
        `blocks` or a `tree` key is the failure this whole projection exists to
        make impossible, and it would not show up in any assertion above. */
-    expect(Object.keys(head).sort()).toEqual(["authors", "canonical", "gist", "slug", "title"]);
+    expect(Object.keys(head).sort()).toEqual(["authors", "canonical", "gist", "image", "slug", "title"]);
+    /* No image manifest on this fixture, so no picture of the article's own. */
+    expect(head.image).toBeNull();
+  });
+
+  /**
+   * **The article's own first picture reaches the head, from the database, as
+   * two fields and no address.** Greg, 2026-10-05: *"go with the lead image for
+   * now"*. tests/lead-image.test.ts holds the choosing and the composing; what
+   * only a database can say is that the head projection selects the manifest
+   * at all, and that what comes back is `{sha256, ext}` and not the entry, whose
+   * `url` is the publisher's. GPT Sol, plan review.
+   */
+  it("carries the article's own first stored picture, and nothing of where it came from", async () => {
+    const db = getDb();
+    const sha = "d".repeat(64);
+    const publisher = "https://cdn.publisher.example/lead-photo.jpg";
+    const manifest = {
+      version: "assets/2",
+      sourceHash: "x",
+      fetchedAt: "2026-10-05T00:00:00.000Z",
+      entries: [
+        { url: "https://cdn.publisher.example/pixel.gif", status: "stored", sha256: "e".repeat(64), ext: "gif", contentType: "image/gif", bytes: 43 },
+        { url: publisher, status: "stored", sha256: sha, ext: "jpeg", contentType: "image/jpeg", bytes: 180_000 },
+      ],
+    };
+    try {
+      await db.update(articleRevisions).set({ assets: manifest as never }).where(eq(articleRevisions.id, REVISION_ID));
+      const head = await pgPublicReader.loadHead(SLUG);
+      expect(head.image).toEqual({ sha256: sha, ext: "jpeg" });
+      expect(JSON.stringify(head)).not.toContain("publisher.example");
+      const html = composeShell(
+        `<html><head>${MANAGED_HEAD_START}${MANAGED_HEAD_END}</head><body></body></html>`,
+        head,
+      );
+      expect(html).toContain(`property="og:image" content="https://www.spideryarn.com/api/public/asset/${SLUG}/${sha}.jpeg"`);
+      expect(html).not.toContain("publisher.example");
+
+      /* Only a failed entry: there is no copy of ours, so there is no picture. */
+      await db
+        .update(articleRevisions)
+        .set({ assets: { ...manifest, entries: [{ url: publisher, status: "failed", reason: "blocked", at: "2026-10-05T00:00:00.000Z" }] } as never })
+        .where(eq(articleRevisions.id, REVISION_ID));
+      expect((await pgPublicReader.loadHead(SLUG)).image).toBeNull();
+    } finally {
+      await db.update(articleRevisions).set({ assets: null }).where(eq(articleRevisions.id, REVISION_ID));
+    }
   });
 
   it("wrote exactly one event, saying who and from what to what", async () => {
