@@ -176,6 +176,23 @@ describe("the cards' words", () => {
     expect(`${MARG_TIPS.citation.what} ${MARG_TIPS.citation.how}`).not.toMatch(/why it is cited|reason it is cited/i);
   });
 
+  it("explains an assumed Timeline year instead of promising dates are never guessed", () => {
+    const event: TimelineEvent = {
+      id: "e", label: "The launch", order: 1, modality: "happened", occurrences: [],
+      dating: {
+        kind: "dated",
+        when: {
+          earliest: "2026-05-12", latest: "2026-05-12", phrase: "12 May", yearFrom: "piece",
+          extent: "instant", yearFilled: true, at: { blockId: "spya-aaaaaa", start: 18, end: 24 },
+        },
+      },
+    };
+    paint([{ kind: "timeline", items: [{ event, quote: "The launch was on 12 May." }] }]);
+    expect(host.querySelector(".marg-stamp")?.textContent).toContain("year assumed");
+    expect(MARG_TIPS.timeline.how).not.toContain("never guessed");
+    expect(MARG_TIPS.timeline.how).toMatch(/year.*assum|assum.*year/i);
+  });
+
   it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
     expect(MARG_TIPS.debate.how).toMatch(/AI wrote the headline/i);
   });

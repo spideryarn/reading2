@@ -87,6 +87,39 @@ building; owner isolation already holds*.
    and not part of either report; reported to the Overseer rather than changed here.
 4. **Keep it small** (P2). Agreed; nothing added.
 
+## GPT Sol's code review
+
+On commit `2357dddd3`, 2026-10-05, fixing as it went. Verdict: *accept with these fixes*. It found
+no label that gets past the path check in about 89,000 probes, and no real label wrongly refused.
+
+1. **A plain link threw away an unsent draft** (P1, fixed by Sol). The Write tab's words would have
+   gone with the page load. The link is now the app's own `Link`, which changes page without
+   reloading, and an ordinary click shuts the dialog; a click that opens another tab leaves it
+   open. This replaces "the dialog goes away with the page" in Stage 1 above.
+2. **`/auth/callback` is still an exception** (P2, left). The Feedback host is not mounted there,
+   so a draft would not survive following a link to it. The dialog cannot normally file a report
+   from that page, so nothing is built for it.
+3. **The Timeline card's "never guessed" was untrue** (P2, fixed by Sol). The finding the plan
+   review raised and this plan had left. Checked against `src/types.ts` § `When.yearFrom`: a year
+   the article did not write comes from its publication date, or, with none, from the one year the
+   piece states, and only the second is marked "year assumed". The card now says that.
+4. **Keyboard focus did not underline the line** (P2, fixed by Sol).
+
+## Browser check
+
+By a Sonnet subagent with Playwright, 2026-10-05, at 1440x900, 820x1180 and 390x844, light and
+dark. **The Earlier tab passed**: the path is an underlined link whose `href` is its text; a click
+or a tap opens that page in the same tab with the dialog gone; a 63-character path wraps inside a
+390px window; Tab reaches the link with a visible focus ring. One caveat: Sol's review was editing
+the link while the check ran, so some of those runs may have used the plain link and some the
+router one. Both behave the same on those checks; that a draft survives is shown by the unit test
+only. The subagent also measured the link at about 38x15px on a phone, a small target.
+
+Only the Earlier tab could be checked. The shared local database was behind this tree's
+migrations, so no article would load, and the session was refused permission to migrate it. The
+Marginalia change is covered by its tests and by reading the CSS, and has not been seen in a
+browser.
+
 ## Tests
 
 - `tests/feedback-dialog.test.tsx`: the page is an `<a>` with the label as its `href`; a `page`

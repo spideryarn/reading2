@@ -195,6 +195,10 @@ p.marg-shut {
     color: var(--ink);
   }
 }
+.marg-shut-button:focus-visible .marg-shut-line {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .marg-shut-button:focus-visible .marg-chevron {
   color: var(--ink);
 }

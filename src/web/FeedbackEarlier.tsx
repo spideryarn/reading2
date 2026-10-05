@@ -56,6 +56,7 @@ import {
   type FeedbackKind,
 } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 
 export type EarlierState =
@@ -373,9 +374,20 @@ export function EarlierList({
                   {report.page === null ? null : (
                     <>
                       {" · on "}
-                      <a className="fb-earlier-page" href={report.page}>
+                      <Link
+                        className="fb-earlier-page"
+                        href={report.page}
+                        onClick={(event) => {
+                          if (event.defaultPrevented || event.button !== 0 || event.metaKey ||
+                            event.ctrlKey || event.shiftKey || event.altKey) return;
+                          /* Native close reaches the dialog's existing onClose.
+                             Route inside the app so the hidden Write draft survives;
+                             opening another tab leaves this dialog alone. */
+                          event.currentTarget.closest("dialog")?.close();
+                        }}
+                      >
                         {report.page}
-                      </a>
+                      </Link>
                     </>
                   )}
                   {report.shipped ? (

@@ -54,8 +54,8 @@ one would otherwise be missed; it would not be, so it is not
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
   reference entry for a citation (not the model's reason, since 261003j), or the comment and the
   first lines of its AI answer. **The line is the button**, so its card says "Press this line" and
-  its words are underlined under a pointer (Greg, `spya-xf6m2u`: *"the tooltip says to 'press it'
-  but I don't see anything to press"*;
+  its words are underlined under a pointer or keyboard focus (Greg, `spya-xf6m2u`: *"the tooltip
+  says to 'press it' but I don't see anything to press"*;
   [261005l](../plans/261005l-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md)). This was
   [report 82](../user-feedback/261002_0300-marginalia-shows-other-modes-items.md), and the reasons
   are in [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md):
