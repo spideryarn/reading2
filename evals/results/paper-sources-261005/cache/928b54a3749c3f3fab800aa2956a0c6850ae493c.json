@@ -1,0 +1,1 @@
+{"source":"iacr-eprint","label":"2023/1","role":"fulltext","expect":"pdf","requestedUrl":"https://eprint.iacr.org/2023/001.pdf","outcome":"fetch-failed","elapsedMs":69,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

@@ -1,0 +1,1 @@
+{"source":"chemrxiv","label":"Ion mobility","role":"landing","expect":null,"requestedUrl":"https://chemrxiv.org/engage/chemrxiv/article-details/chemrxiv-2025-l6zz7","outcome":"fetch-failed","elapsedMs":609,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

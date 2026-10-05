@@ -1,0 +1,1 @@
+{"source":"ssrn","label":"SSRN 3340189","role":"landing","expect":null,"requestedUrl":"https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3340189","outcome":"fetch-failed","elapsedMs":114,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

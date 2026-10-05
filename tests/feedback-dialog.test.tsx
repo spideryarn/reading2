@@ -46,6 +46,7 @@ vi.mock("../src/web/lib/api.js", () => ({
 
 vi.mock("../src/web/router.js", () => ({
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
+  navigate: vi.fn(),
 }));
 
 /**
@@ -119,6 +120,7 @@ beforeEach(() => {
 const { FeedbackDialog } = await import("../src/web/FeedbackDialog.js");
 const { FeedbackHost, useFeedbackOpen } = await import("../src/web/FeedbackButton.js");
 const { reloadVeto } = await import("../src/web/safe-to-reload.js");
+const { navigate } = await import("../src/web/router.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -295,6 +297,7 @@ function body(): Record<string, unknown> {
 }
 
 beforeEach(() => {
+  vi.mocked(navigate).mockClear();
   posts.length = 0;
   answer = ok(201);
   lists.length = 0;
@@ -1562,8 +1565,11 @@ describe("the Earlier tab", () => {
     expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent).toContain(
       " · Suggestion · on /read/why-trees-spya-k3m9qt · Shipped",
     );
-    /* Text, not a link: the label has lost the query, so it is not where they were. */
-    expect(items[0]?.querySelector(".fb-earlier-meta a")).toBeNull();
+    /* A link since spya-tqk7au ("Make it a link"), to the label itself: the
+       page, without the query it was filed with. */
+    const link = items[0]?.querySelector("a.fb-earlier-page");
+    expect(link?.getAttribute("href")).toBe("/read/why-trees-spya-k3m9qt");
+    expect(items[1]?.querySelector(".fb-earlier-meta a")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-page")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).not.toContain(" on ");
   });
@@ -1591,6 +1597,70 @@ describe("the Earlier tab", () => {
     click(tab("Earlier"));
     await act(async () => {});
     expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  /* The label is an href now, so only a path on this origin may be one. The
+     server sends nothing else (src/feedback-page.ts); this is the second line. */
+  it.each([
+    "https://elsewhere.example/read/x",
+    "//elsewhere.example/read/x",
+    "/\\elsewhere.example/read/x",
+    /* A browser drops a tab or a newline before resolving, so these are `//host` too. */
+    "/\t/elsewhere.example/read/x",
+    "/\n/elsewhere.example/read/x",
+    "/read/x\\..\\y",
+    "javascript:alert(1)",
+    "read/x",
+    "",
+  ])("refuses a page that is not a path on this site: %j", async (bad) => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], page: bad }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    expect(panelOf("Earlier").querySelector("a.fb-earlier-page")).toBeNull();
+  });
+
+  it("follows a page in the app, closes the dialog, and keeps an unsent Write draft", async () => {
+    listAnswer = page(REPORTS);
+    const harness = mountControlledHarness();
+    type("Still writing this report.");
+    click(tab("Earlier"));
+    await act(async () => {});
+    const link = panelOf("Earlier").querySelector("a.fb-earlier-page");
+    if (!link) throw new Error("no page link");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => link.dispatchEvent(event));
+    expect(event.defaultPrevented, "a document navigation would discard the draft").toBe(true);
+    expect(navigate).toHaveBeenCalledWith("/read/why-trees-spya-k3m9qt");
+    expect(harness.dialog.open).toBe(false);
+    harness.show(true);
+    expect(firstBox().value).toBe("Still writing this report.");
+    expect(posts).toHaveLength(0);
+  });
+
+  it.each(["metaKey", "ctrlKey", "shiftKey", "altKey"])("leaves a %s page activation to the browser and keeps the dialog open", async (modifier) => {
+    listAnswer = page(REPORTS);
+    const dialog = mountControlled();
+    click(tab("Earlier"));
+    await act(async () => {});
+    const link = panelOf("Earlier").querySelector("a.fb-earlier-page");
+    if (!link) throw new Error("no page link");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, [modifier]: true });
+    // Suppress jsdom's unimplemented navigation after observing the handler.
+    let prevented = true;
+    document.addEventListener("click", (e) => {
+      prevented = e.defaultPrevented;
+      e.preventDefault();
+    }, { once: true });
+    act(() => link.dispatchEvent(event));
+    expect(prevented).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dialog.open).toBe(true);
   });
 
   it("filters on the server, one read per filter per opening, and starts on All", async () => {

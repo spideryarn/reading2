@@ -1,0 +1,1 @@
+{"source":"taylor-francis","label":"JASA","role":"landing","expect":null,"requestedUrl":"https://www.tandfonline.com/doi/abs/10.1080/01621459.2017.1285773","outcome":"fetch-failed","elapsedMs":65,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

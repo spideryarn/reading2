@@ -1,0 +1,1 @@
+{"source":"europepmc","label":"eLife burial","role":"fulltext","expect":"pdf","requestedUrl":"https://europepmc.org/backend/ptpmcrender.fcgi?accid=PMC12401548&blobtype=pdf","outcome":"fetch-failed","elapsedMs":66,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}

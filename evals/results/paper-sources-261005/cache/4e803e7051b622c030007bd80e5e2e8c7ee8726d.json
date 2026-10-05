@@ -1,0 +1,1 @@
+{"source":"nature","label":"paywalled: Go (2016)","role":"fulltext","expect":"pdf","requestedUrl":"https://www.nature.com/articles/nature16961.pdf","outcome":"fetch-failed","elapsedMs":772,"failure":{"code":"too-many-redirects","status":null,"message":"That address redirected more than 5 times."}}
