@@ -473,7 +473,8 @@ describe("the money, which is zero and is not free", () => {
       },
     }));
     const { report } = await collectSpend(
-      async () => openRouterImage("illustrate", ASK).catch((e: unknown) => e),
+      /* One attempt; what a retry records is tests/ai-call-transport-retry.test.ts. */
+      async () => openRouterImage("illustrate", ASK, { retryTransport: false }).catch((e: unknown) => e),
       { attribution: { scopeKind: "cli", ownerId: environmentOwnerId() } },
     );
     expect(report.calls).toHaveLength(1);

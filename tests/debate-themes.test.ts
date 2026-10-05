@@ -416,7 +416,7 @@ describe("synthesiseDebate", () => {
   });
 
   it("stores failed when the provider refuses", async () => {
-    answer = () => Promise.reject(new ProviderRefused(502, "", new Headers()));
+    answer = () => Promise.reject(new ProviderRefused(502, "", new Headers(), false));
     expect(await synthesiseDebate({ rows, model: "m" })).toEqual({ kind: "failed" });
   });
 

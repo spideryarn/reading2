@@ -154,9 +154,10 @@ progress section lists which.
 ## Progress
 
 - [x] GPT Sol review of this plan
-- [ ] Stage 1 red tests, then the retry
-- [ ] Stage 2 docs
+- [x] Stage 1 red tests (45 of 98 red before the fix: [the list](261005j-red-first.txt)), then the retry
+- [x] Stage 2 docs
 - [ ] GPT Sol code review
+- [ ] Mutations, and the affected suites on the final tree (held: see Gates)
 
 ## GPT Sol's plan review
 
@@ -172,3 +173,34 @@ all accepted and written into the plan above:
 4. F4 (P1): `shelf-topics` has two outer retries, not one. Every call in that file opts out.
 5. F5 (P2): the stall clock is reset before the backoff as well as after it.
 6. F6 (P3): paper-metadata fails its step; it does not fall back.
+
+## As built
+
+- **Two shapes, one rule.** The four whole-call seams wrap their body in `asTransportAttempts`.
+  The stream has its own small loop, `acceptedStream`, because its retry ends at the response
+  headers rather than at the end of the call. It is a plain `async` function, not part of the
+  generator, so a consumer's `return()` cannot land between a meter and its `finish`. Both ask
+  `mayAskAgain` and wait in `backOff`.
+- **`ProviderRefused` takes `priced` as a required fourth argument**, so every construction
+  site has to say. `src/pdf-read.ts` § `refuseBodyError` builds one from an error found inside a
+  `200` and says `true`: the provider accepted that work, and it keeps a 5xx-in-a-200 the
+  verdict it has always been there.
+- **Embeddings asks again after a dropped connection with its existing backoff** (2 s,
+  doubling, five goes), not the gateway's short one. That is up to 30 s of waiting inside its
+  240 s budget, the same as it already spends on a 5xx.
+
+Existing tests that changed, and what each became:
+
+| Test | Was | Now |
+| --- | --- | --- |
+| `ai-call.test.ts` "still refuses on the status when the refusal's body is not JSON…" | five 502 bodies, one row each | the same five bodies on a 403. It is about the body; a 502 is now asked again. |
+| `ai-call.test.ts` "records a fetch that never connected"; `ai-call-images.test.ts` "records the call even when the request never connected"; `ai-call.test.ts` "records a refused call as an error row" (decisions, 500) | one request, one row | unchanged assertions, with `retryTransport: false`. The retried version of each is in the new file. |
+| `ai-call.test.ts` "clears it when the second call never gets a body at all" | second call refused with a 503 | refused with a 403. The per-attempt reset of `end` is tested in the new file. |
+| `quick-search.test.ts`, four tests on what quick search does once a chunk has failed | the failing chunk answered 502 | it answers 403, a verdict refused once. Quick search does not opt out: a chunk that blips is asked again inside its 20 s deadline. |
+| `embeddings.test.ts`, two tests on a `TypeError` from `fetch` | failed at once | same assertions on a fake clock, because the batch is now asked five times. |
+| six test files that build a `ProviderRefused` | three arguments | four. |
+
+## Gates
+
+- `npm run typecheck` on the final tree: green.
+- `tests/ai-call-transport-retry.test.ts`: 98 of 98 green after the fix (the build's own run).
