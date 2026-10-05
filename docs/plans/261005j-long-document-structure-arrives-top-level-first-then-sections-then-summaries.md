@@ -1,0 +1,384 @@
+# Long-document structure arrives top level first, then sections, then summaries
+
+Up: [plans.md](../project/plans.md)
+
+Status as of 2026-10-05: **a plan, reviewed, not built.** Stage 0 (the line in Structure) is
+being built separately and is not on `dev` as this is written. The paid eval in stage 2 is
+blocked: the box's OpenRouter key has no room left this
+month (`limit_remaining` 0), and the Overseer has taken that to Greg.
+
+Another plan shares this name's prefix,
+`261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md`, by the
+open-before-structure session. The two are related on purpose: see § What this builds on.
+
+## What this is for
+
+A document too long for one structure answer (past about 2,890 blocks; a 250-page book is about
+3,100) has its table of contents asked for in "slices" since 2026-10-05
+([261005a](261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md),
+[structure-step.md § When one answer will not fit](../project/structure-step.md#when-one-answer-will-not-fit)).
+If anything in that goes wrong, the reader gets a table of contents made of the author's own
+headings: no summary sentence per section, some sections named by their opening words.
+
+Greg, 2026-10-05, answering [Q-plain-tree-notice] (A was "say nothing", B "one line in Structure
+saying so"):
+
+> B yes add an indication. Although I'm not delighted by falling back to the original headings. I
+> feel like it should be possible to do this robustly, progressively and fairly low-latency, e.g.
+> just the top-level headings first, then the lower-level headings within each of those? then do
+> the summaries later in parallel? or something like that. Run evals etc.
+
+So three words to earn: **robust** (the plain tree becomes rare, and when part of it fails only
+that part is plain), **progressive** (the reader sees something useful early and it fills in), and
+**low-latency**.
+
+## What was measured before designing (2026-10-05)
+
+`evals/long-structure/measure-today.ts`, read-only (one `BEGIN READ ONLY` transaction), against
+the local database and production.
+
+| | local | production |
+|---|---|---|
+| structure calls recorded, last 45 days | 45, all `ok` | 6, all `ok` |
+| structure steps that ended "from its headings" | 3 (all before the slices existed) | 0 |
+| structure steps that ended "read in N parts" (slices) | 1, succeeded | 0 |
+| revisions holding a tree marked `provisional: "headings"` (drafts and superseded ones included) | 7, none of them an article's current revision | 0 |
+| one call's wall time, by input size | under 20k tokens: 24 s median, 47 s p90; 20k to 60k: 47 s, 105 s; 60k to 120k: 111 s, 120 s | the same shape on six calls |
+
+A call the ledger records as `ok` came back; whether its answer was accepted is a different fact,
+recorded on the step, and the two rows above are kept apart for that reason.
+
+**There is no recorded slices failure to count.** The slices path is not deployed, and locally it
+has run on one real book, once, and worked (4 slices, 5 calls, 131 seconds, $1.00). So "why do
+the slices fail today" has no answer in the data, and the fallback rate is unknown. What can be
+said is read from the code (`runSlices`, `src/structure-slices.ts`, and its caller in
+`src/structure.ts`):
+
+1. **It is all or nothing.** The first failed call sets `stopped`, the calls in flight are waited
+   for, and the whole document gets the headings tree. Four good slices and one bad one give the
+   reader none of the four. If one call fails with probability *p*, a book of *n* slices plus the
+   root call falls back with probability 1 − (1 − *p*)^(n+1): at *p* = 3% that is 14% for the
+   250-page book and about 75% at the 45-slice ceiling.
+2. **A refused or cut-short answer is never asked again**, on the reasoning that the same request
+   would get the same answer. A smaller request would not.
+3. **Optional calls can sink the whole tree.** A failed refill (one chapter asked for again to
+   divide it), a failed root call (one sentence for the whole book), or one section the labels
+   step could not ask about each discard every slice. 261005a named the refill rule as "the first
+   thing to revisit if the fallback rate is not near zero".
+4. **Nothing tries again.** The step ends `done` with the plain tree. Since stage 0 the owner has
+   a Try again; before it there was only a full reset.
+5. **Nothing is shown until everything is done.** The book's 131 seconds of structure sit after
+   its transcription and before the article opens at all.
+6. **Past about 45 slices there is not time in one attempt.** The number is not a hard line (it
+   depends on how long the calls take), and it is not a wall either: a good answer is saved even
+   when it arrives too late to use, and a saved answer is read before the deadline is consulted,
+   so a second attempt starts from where the first stopped. (This paragraph said "a certain
+   fallback" until the plan review, F5.)
+
+One more number matters and is not about slices: **one ordinary call on a 142-page paper took 508
+seconds** (2026-09-04, `effort: "medium"`; the effort is `low` now, and Moby-Dick at 2,569 blocks
+took 94 to 129 seconds). A document well under the slices line can still be the slowest import a
+reader has. Whether a staged shape should take those too is a question the eval can answer.
+
+## What exists already, and what does not
+
+From a read-only survey of the code and the earlier plans (file and line in the survey's report,
+kept in this session; the load-bearing ones were re-read by me).
+
+**Built, and reusable:**
+
+- `buildBoundedHeadingTree`: free, instant, sound. It is the plain tree, and the slices are cut
+  along it.
+- The slices machinery: planning on the author's headings, a checkpoint per request (so a second
+  run buys only what is missing), a deadline and a time cap per call, eight calls at a time.
+- A root call that writes the whole-book sentence from the top-level titles and gists.
+- The breadth-first cascade Greg's idea resembles
+  ([260904c](260904c-hierarchy-structure-in-waves.md), `src/structure-cascade.ts`,
+  `src/structure-expand.ts`, `src/structure-deepen.ts`): a prompt that divides **one section**
+  into one level of children with gists, a strict parser, a width gate. **It is switched off for
+  every reader** (`SPIDERYARN_DEEPEN_STRUCTURE`). It starts from the ordinary whole-document call,
+  runs one wave only, never writes a gist for the node it starts from, and on Moby-Dick cost 2.5
+  to 3.5 times as much, ran longer, and divided the same parent differently on 15 of 22 repeats.
+  Its quality was never judged. So Greg's idea is **partly built as parts, and not as a path**:
+  there is no "top level only" first call and no gists-later pass.
+- The labels pattern: a revision is published with labels `pending`, a free successor job is
+  queued in the same transaction, the browser drives it.
+- A blind-judge harness (`evals/structure-whole-document/blind.ts`) and long local documents.
+
+**Not built:**
+
+- A tree of which **some** nodes are the model's and some are plain. `Tree.provisional` is
+  tree-level and `checkTree`'s gist rule is all or nothing. `src/types.ts` says a node-level state
+  "only earns its place if partially-streamed nodes ever have to coexist with finished ones".
+  That is now.
+- A first call that returns only the top level, and any measurement of one.
+- A call that returns titles and ranges without gists, a call that writes gists for nodes that
+  already exist, and any measurement of what either saves.
+- An open reading view picking up a new tree without a reload.
+
+## What this builds on
+
+The open-before-structure session is planning exactly the last item: a first import publishes
+with the bounded headings tree, a successor `["structure"]` job builds the real one, and the open
+page swaps it in. **That is this plan's delivery mechanism, and this plan does not build a second
+one.** It gives "progressive" its first step for free (the author's headings at once), and it
+gives "robust" an automatic second attempt (the successor job can be asked again). This plan is
+about what the structure step does inside that job. If their work is stopped, stage 4 below is
+what has to be re-thought; stages 1 to 3 stand alone.
+
+Three facts constrain how many times a tree can be replaced, whoever does it: node ids are
+positional and renumber on a swap; any tree write resets the paragraph labels (the slowest pass,
+221 seconds and $1.53 on the book); and the hash other modes are keyed on includes the gists, and
+the labels prompt carries each section's gist. **So every extra publish of a fuller tree costs a
+labels pass, and gists must land before labels are asked for.** That argues for few swaps, and
+against gists as a late, separate publish.
+
+## The plan review, and what changed
+
+GPT Sol, read-only, 2026-10-05:
+[the review](261005j-long-document-structure-plan-review-sol.md), verdict **build with changes**.
+It confirmed from the code that the slices are all or nothing, that a refused or cut-short answer
+is not asked again, and that a failed refill, root call or unaskable section each give the whole
+document the headings tree. I checked each finding against the code before taking it.
+
+- **F5 (P2, established): the simpler route was turned down on a false premise. Taken, and it
+  reorders the plan.** I had written that a document past the time ceiling "fails identically
+  every time". It does not: saved answers are read before the deadline is consulted
+  (`src/structure-slices.ts`, the checkpoint read at the top of `ask`), and a late good answer is
+  still saved. So trying again makes progress. **Stage 1 is now two stages: 1a, a capped
+  automatic second attempt and optional calls that cannot sink the tree, which needs no new kind
+  of tree; and 1b, the mixed tree, which does.**
+- **F1 (P1, established): a mark on the node does not fix section navigation.** The client takes
+  one "section level" for the whole article. A plain stretch puts its paragraphs at depth 3; a
+  model part with no sections puts them at depth 2, and its paragraphs would then be listed as
+  sections. Taken: 1b does not start until it has a written rule for what a section is in a tree
+  of mixed depth (the review's: the deepest internal ancestor of a paragraph), and that rule is a
+  client change with its own tests. This is the same fault 261005a reported in today's model
+  trees, so the fix is worth having whether or not 1b is built.
+- **F2 (P1, established): "whole nodes of the headings tree" was too loose.** A slice can be cut
+  inside a part of that tree, and the planner's step back to a heading can move a cut off the
+  tree's own boundary. Taken: 1b builds the plain stretch as an exact cover of the failed
+  interval, with the ancestors it needs made for it, and checks the real cut points against it.
+- **F3 (P1, reasoned): halving can lose a half silently, and buys the refused request again.**
+  Taken: each half is accepted only if it tiles its own blocks, the seam check includes the new
+  midpoint, and the decision to split is saved so a later run does not ask for the whole slice
+  first. With no heading to cut at, the cut is at a window boundary; below a minimum size a slice
+  is not halved; one good half is kept and the other is plain (1b) or fails the attempt (1a).
+- **F4 (P1, reasoned): keep the admission and settlement rules.** Taken as a constraint on both
+  stages: every call (halves, re-asks, refills, the root) goes through the same pool, the same
+  "does its cap fit before the deadline" check and the same expired-peer check; usage is read
+  before an answer is judged; every started call is waited for; a reader's Stop is a
+  cancellation. Tests for a timeout during a halving and for a good answer arriving after a
+  peer's failure.
+- **F6 (P2, established): carry the mark everywhere a tree is built or crosses.** Taken: the mark
+  says why (a plain node, or a root whose sentence could not be written, which does not make its
+  children plain); `buildTree` and the public DTO carry it; the publish guard keeps using
+  `checkTree` and gets no second exemption; the structure hash includes it without changing the
+  hash of a tree that has none.
+- **F7 (P1, established): the judge as it stands cannot decide this.** It shows a part's opening
+  sentence and three deeper gists. Taken: § Stage 2 below.
+- **F8 (P2, reasoned): six documents and two runs are a pilot.** Taken: said so, a second
+  document past the line added, the bars restated with a cost ceiling, and the simulation
+  described as arithmetic about assumptions.
+- **F9 (P2, established): the script counted every revision with a tree, not published ones.**
+  Fixed in the script and in the table above (none of the seven local ones is current).
+
+## The design
+
+Four changes, in the order they should be built. Only the first is certain; the eval decides the
+last, and 1b is built only if 1a leaves a fallback rate worth the new kind of tree.
+
+### Stage 1a: try again by itself, and optional calls cannot sink the tree (robust, the simple half)
+
+No new prompt and no new kind of tree. Every tree it publishes is one of the two that exist
+today: finished, or wholly plain.
+
+- **A failed refill keeps the section it was meant to divide** (reversing review finding F28 of
+  261005a, which that plan flagged as the first thing to revisit).
+- **A section too long for one labels call is cut into windows on its own**, the way the plain
+  tree already cuts one, where today it sinks everything.
+- **A refused or cut-short slice is cut in two and each half asked once** (rules in F3 above). In
+  1a, a half that fails is a failed attempt.
+- **The step tries a second time by itself when the first attempt fell back for a reason a second
+  could fix**: a failed call, a failed root call, out of time. Capped at one automatic retry, in
+  the same job where the time is there and as a successor job where it is not (on the
+  open-before-structure mechanism, when that is on `dev`; until then, in the same job only). It
+  buys only what is missing. Not retried: could not plan, and a joined tree that will not build,
+  which would fail the same way.
+- **`StructureRun.source` says how many attempts it took and why the first fell back**, logged at
+  every value ([silent-success.md](../reusable/silent-success.md)).
+
+Tests, red first, with the injected model seam and so free: a failing refill, an unaskable
+section and a truncated slice each still give a finished tree; one failing slice gives a finished
+tree on the automatic second attempt, with only that slice asked for again; a slice that fails
+twice gives the plain tree and says so; the F4 cases. And one piece of arithmetic, written up as
+arithmetic: at assumed per-call failure rates of 1%, 3% and 10%, the share of documents left
+wholly plain, today against 1a.
+
+### Stage 1b: a failed part is plain, and the rest is kept (robust, the larger half)
+
+Built only if 1a's numbers, and what the eval sees fail, say the plain tree is still common
+enough to matter. It needs the contract in F1, F2 and F6 written first.
+
+```
+ today                                   stage 1
+ ─────                                   ───────
+ slice 1 ok ─┐                           slice 1 ok ──► the model's sections
+ slice 2 ok ─┤                           slice 2 ok ──► the model's sections
+ slice 3 ✗  ─┼─► all thrown away,        slice 3 ✗  ──► the author's headings for that
+ slice 4 ok ─┘   whole tree plain                       stretch only, marked as such
+                                         slice 4 ok ──► the model's sections
+                                         root call  ──► one sentence for the whole
+```
+
+- **A slice that still fails after 1a's second attempt gets a plain stretch for exactly its own
+  blocks**, built from the author's headings as the plain tree is (F2), and every other slice
+  keeps the model's answer.
+- **Each plain node says so on itself, and why** (F6), and `checkTree` excuses exactly those
+  nodes from the gist rule and no others. A failed root call keeps the tree and leaves the root's
+  sentence unwritten, marked as that. A tree with no model node at all is still
+  `provisional: "headings"`, as today. The reader's line in Structure (stage 0) gains a second
+  wording: some parts are the author's headings only. Try again buys only the failed slices.
+- **Out of time keeps what arrived**, under the admission rules of F4.
+- **`StructureRun.source` counts the plain slices**, logged at every value.
+
+What it gives up: a tree can be finished in some parts and plain in others. Every consumer of a
+gist already reads it conditionally, which the review confirmed for the ones it checked; what
+they do not all tolerate is paragraphs at different depths (F1), and that is the real cost.
+
+Tests, red first, free: one failing slice of four gives a sound tree with three slices' gists and
+one marked plain stretch that tiles its blocks; a cut inside a part of the headings tree, and
+repeated or consecutive headings at a cut; a failing root keeps the rest; a second run asks only
+for what was plain; `checkTree`, through publication, still refuses an unmarked node with no
+gist; the client's section list over a mixed tree has no paragraph listed as a section and no
+empty title.
+
+### Stage 2: the eval that decides the shape (progressive, low-latency)
+
+Greg's shape, and the two decisions inside it that nothing has measured:
+
+```
+ A. slices (today, with stage 1)        B. top level first             C. B, with gists later
+ ───────────────────────────────        ──────────────────             ─────────────────────
+ cut at ~1,000 blocks, blind            one call reads the whole       as B, but the per-part
+ to each other; each call               document and returns only      calls return titles and
+ returns parts, sections and            the top-level parts (title,    ranges only, and a third
+ gists for its stretch; then            start, one sentence);          round of calls writes the
+ one root call                          then one call per part, in     gists for nodes that
+                                        parallel, for its sections     already exist
+                                        and their gists
+```
+
+- **B against A** asks whether a first call that sees the whole document makes better top-level
+  parts. A's known weakness is that a slice does not know it is a slice: on the book it cut
+  stories into scenes at the top level (25 parts for about 13 stories), and a chapter across a
+  seam becomes two. B's first call is small to answer (a few dozen parts) however long the
+  document, so the "answer will not fit" refusal does not apply to it; its input does have to fit,
+  and that bound is checked before the call (review F3 of 261005a, still open). B also has a
+  natural early result: the top level, after one call.
+- **C against B** asks whether leaving the gists out of the second round makes it enough faster to
+  pay for a third round that reads the text again. It is what Greg sketched ("then do the
+  summaries later in parallel"). The hypothesis here is that it does **not** pay: output is the
+  small part of these calls' time, every block is read twice, and because gists must exist before
+  labels and before most modes, the reader could not use the earlier tree for much. That is a
+  guess: how much of a call's time is the gists has never been measured, and a tree with titles
+  and no gists is already something a reader can use, as the plain tree shows. The eval is there
+  to settle it either way.
+- **The cascade's prompt is not an arm.** B's second round is the ordinary structure call on one
+  part, the prompt every article is cut by, as the slices use it. The expansion prompt has a
+  different schema, one measured run and no quality judgement; taking it would mean evaluating a
+  prompt as well as a shape. Named so the review can disagree.
+
+**Corpus** (seven documents; block counts from the earlier work, to be re-checked by the harness
+before any paid call): the 250-page book (3,053 blocks, past the line) and a second document past
+the line, to be found or made by joining two of the Gutenberg books; Moby-Dick (2,569) and the
+second Gutenberg book (1,326), long but inside the line; the 160-page paper (1,025); the long web
+page `gwern-scaling-long`; and the book with its heading blocks turned into paragraphs, the
+headingless case. For the ones that fit one call, the ordinary single call is a fourth arm, which
+is what says whether a staged shape should also take documents under the line. **This is a
+pilot** (review F8): two documents past the line and two runs each can show a large difference in
+quality or time and cannot show a failure rate. One giant section, one enormous paragraph and a
+deadline that runs out are exercised with made-up documents and the fake model, for nothing.
+
+**Measured, per document and arm, over two runs each, cold (no checkpoint), the arms interleaved
+so that a slow hour is not one arm's:**
+
+- wall time to the top level, and to the finished tree, at eight calls at a time;
+- calls, failures and re-asks, by reason;
+- cost, from the ledger;
+- the mechanical checks (`checkTree` clean, every authored heading starts a node, parts per
+  document, sections with no children over 60 blocks; seams on headings, reported as not
+  applicable for the headingless document and not as a pass);
+- a blind judge, each arm against today's output for the same document and C directly against B,
+  two judges from different families;
+- repeat stability: the top-level starts of run 1 against run 2.
+
+**The judge is extended first, and shown to be able to fail** (review F7). `blind.ts` today shows
+a part's opening sentence and three deeper gists against 400 characters each, which cannot say
+where a part ends or whether two sets of gists are as good. It gains: the document's authored
+headings; the same sampled passages for every arm (chosen from the document, not from a tree);
+the text either side of each top-level boundary; and section gists compared on the same passages.
+Before any arm is judged, three spoiled trees are: one with two parts welded together, one with
+invented gists, one with gists removed. A judge that does not mark those down is not used.
+
+**Budget.** About 24 document-arm pairs, two runs, at roughly $0.7 a run on average, is about
+$34, plus about $5 of judging: **cap $40**, reported to the dollar. Unpaid first: the harness, the
+planner for B over every document, the judge's materials, and a dry run with the fake model.
+
+**What would decide it**, reported as paired results per document and not as an average. B is
+taken over A if the judges prefer its top level on most documents, it is no slower to the
+finished tree by more than a quarter, and it costs no more than half as much again. C is taken
+over B only if the finished tree arrives at least a third sooner, the judges do not prefer B's
+gists on the aligned passages, and the cost is within the same ceiling. If neither clears its
+bar, stages 1a and 1b are the fix and stage 3 is not built.
+
+Written up under `docs/investigations/` before anything is built from it.
+
+### Stage 3: build the shape the eval picks
+
+Planned in detail after stage 2, and reviewed again. In outline, if B wins: a top-level call with
+its own small schema and prompt version; the per-part round reusing the slices machinery with
+parts as the units (a part too big for one call is sliced, as now); stage 1's rule for a failed
+part; the root sentence from the first call, so the separate root call goes. Prompt changes
+follow [prompting-guide.md](../project/prompting-guide.md).
+
+### Stage 4: what the reader sees while it happens
+
+On the open-before-structure mechanism, once it is on `dev`: the author's headings at once, then
+the finished tree swapped in. Whether the top level (B's first call) is worth a publish of its
+own in between is **a question for Greg, asked with the eval's numbers and not before**: it would
+show model-written part titles perhaps a minute earlier, and it costs a third tree swap and the
+care that goes with one. If the gap between the first call and the finished tree is short, the
+answer is no.
+
+## Stages
+
+- [ ] **0.** The line in Structure when the tree is the author's headings, with Try again for the
+  owner.
+- [x] Plan review by GPT Sol (read-only).
+- [ ] **1a.** A second attempt by itself, and optional calls that cannot sink the tree. Unpaid.
+  Tests red first, gates, Sol code review, the arithmetic.
+- [ ] **1b.** The mixed tree, if 1a leaves a need. Its contract (F1, F2, F6) first.
+- [ ] **2.** The eval. Paid, cap $40, blocked on the OpenRouter key's limit.
+- [ ] **3.** The chosen shape, with its own plan section and review.
+- [ ] **4.** Delivery, on the open-before-structure work.
+
+## The simpler options passed over
+
+- **Stop at the line and Try again (stage 0).** It makes the plain tree visible and recoverable;
+  it does not make it rarer, and Greg asked for that.
+- **Just retry the whole step automatically.** I passed this over at first, on a premise the
+  review showed was false (F5). It is now stage 1a, ahead of the mixed tree.
+- **Turn the cascade on.** It is the nearest existing thing to Greg's sketch. It cannot write a
+  gist for the node it starts from, only divides downwards, and its one measurement ended
+  undecided at several times the cost.
+- **Build B without the eval.** It is the more appealing shape, and its first call reads the
+  whole document, which is new: no call here has been measured on reading 250 pages to write
+  thirty lines. A shape chosen for looking right is how the cascade got built and left off.
+
+## The questions put to the review
+
+All five are answered in § The plan review: a per-node mark, yes, with a reason on it (F6);
+mixing does break the section level, and needs a rule first (F1); halving is sound only with the
+rules in F3; the bars were biased and two runs say nothing about failure rates (F7, F8); and the
+simple half of stage 1 need not wait for the eval (F5).
