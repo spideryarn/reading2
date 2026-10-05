@@ -1213,9 +1213,13 @@ export function Conversation({
    * - **A card gets room only at its cap** (`sized`). Below it the card's
    *   height is its content's, and room would inflate it by most of a screen.
    *   A transcript that overflows is a card at its cap, where room is free.
-   * - **A tool row arriving mid-answer** is drawn above the text and pushes
-   *   the line being read down a row. Once text has started, a change in its
-   *   offset inside the turn is added to `scrollTop`.
+   * - **Held on screen, not only left alone.** Not moving `scrollTop` is not
+   *   enough: a tool row drawn above text already being read pushes it down a
+   *   row, and a panel that grows taller (the "Latest" pill leaving, a
+   *   shrinking composer) makes the browser clamp `scrollTop`. So the hold
+   *   remembers where its anchor is **on screen** — the answer's words once
+   *   there are any, the question until then — and puts it back. A reader's
+   *   own scroll is told apart by its scroll event, which re-records.
    *
    * The arithmetic is chat-hold.ts; the plan, the measurement and GPT Sol's
    * review are docs/plans/261005f-a-streamed-answer-stays-where-it-starts.md.
@@ -1229,9 +1233,35 @@ export function Conversation({
     placed: boolean;
     /** The `scrollTop` it was placed at. */
     target: number;
-    /** The answer text's offset inside its turn, once there is text. */
-    textAt: number | null;
+    /** Whether the anchor is the answer's words, or still the question. */
+    words: boolean;
+    /** Where the anchor was on screen, from the scroller's top edge. */
+    seenAt: number;
   } | null>(null);
+  /**
+   * What a hold keeps still: the answer's first words once there are any, and
+   * until then the question (or the waiting answer, when nothing was asked).
+   */
+  const anchorIn = (el: HTMLElement) => {
+    const turns = el.querySelectorAll<HTMLElement>(":scope > [data-turn]");
+    const answer = turns[turns.length - 1];
+    if (!answer) return null;
+    const before = turns[turns.length - 2];
+    const question = before?.dataset.turn === "user" ? before : null;
+    /* The first thing in the turn that is not the tool strip: the waiting
+       line, then the words. */
+    const first = answer.querySelector<HTMLElement>(":scope > :not(.chat-tools)");
+    const words = first !== null && !first.classList.contains("chat-thinking");
+    return { answer, question, words, node: words ? first : (question ?? answer) };
+  };
+  /** Record where a held answer's anchor is now: the view was moved on purpose. */
+  const noteAnchor = (el: HTMLElement) => {
+    const h = hold.current;
+    const at = h?.placed ? anchorIn(el) : null;
+    if (!h || !at) return;
+    h.words = at.words;
+    h.seenAt = at.node.getBoundingClientRect().top - el.getBoundingClientRect().top;
+  };
   const wasBusy = useRef(false);
   const sizedNow = useRef(sized);
   sizedNow.current = sized;
@@ -1245,48 +1275,49 @@ export function Conversation({
     const gap = room.current;
     const h = hold.current;
     if (!el || !gap || !h) return;
-    const turns = el.querySelectorAll<HTMLElement>(":scope > [data-turn]");
-    const answer = turns[turns.length - 1];
-    if (!answer) return;
-    const before = turns[turns.length - 2];
-    const question = before?.dataset.turn === "user" ? before : null;
+    const at = anchorIn(el);
+    if (!at) return;
     const edge = el.getBoundingClientRect().top;
-    let top = el.scrollTop;
-    const within = (n: Element) => n.getBoundingClientRect().top - edge + top;
-    const answerTop = within(answer);
-    /* The first thing in the turn that is not the tool strip: the waiting
-       line, then the words. Only the words are worth holding still. */
-    const text = answer.querySelector<HTMLElement>(":scope > :not(.chat-tools)");
-    const textAt =
-      text && !text.classList.contains("chat-thinking") ? within(text) - answerTop : null;
+    const was = el.scrollTop;
+    const onScreen = (n: Element) => n.getBoundingClientRect().top - edge;
+    const seen = onScreen(at.node);
     const client = el.clientHeight;
     const roomNow = gap.offsetHeight;
     const natural = el.scrollHeight - roomNow;
     const placing = !h.placed;
+    let top = was;
     if (placing) {
       h.target = holdTarget({
-        questionTop: question ? within(question) : null,
-        answerTop,
+        questionTop: at.question ? onScreen(at.question) + was : null,
+        answerTop: onScreen(at.answer) + was,
         clientHeight: client,
         pad: Number.parseFloat(getComputedStyle(el).paddingTop) || 0,
       });
-    } else if (h.textAt !== null && textAt !== null && textAt !== h.textAt) {
-      h.target += textAt - h.textAt;
-      top += textAt - h.textAt;
-    }
-    h.textAt = textAt;
-    const roomy = sizedNow.current === "fixed" || natural > client + 1;
-    let want = roomy ? roomNeeded({ target: h.target, clientHeight: client, naturalHeight: natural }) : 0;
-    if (placing) {
-      /* Where it actually lands. A card below its cap has nowhere to scroll
-         to, and a target it never reached must not ask for room later. */
-      h.target = Math.min(h.target, Math.max(0, natural + want - client));
-      want = roomy ? roomNeeded({ target: h.target, clientHeight: client, naturalHeight: natural }) : 0;
       top = h.target;
-      h.placed = true;
+    } else if (h.words === at.words && h.seenAt < client) {
+      /* Put the anchor back where it was. Only when it was on screen or above
+         it: content arriving below what the reader is looking at is no reason
+         to move them. */
+      top = was + (seen - h.seenAt);
     }
+    const roomy = sizedNow.current === "fixed" || natural > client + 1;
+    /* Room for the placement, and for wherever the view is now: shrinking it
+       must never clamp a reader who scrolled down into it. */
+    const roomFor = (to: number) =>
+      roomy ? roomNeeded({ target: to, clientHeight: client, naturalHeight: natural }) : 0;
+    let want = roomFor(Math.max(h.target, top));
+    /* Where it actually lands. A card below its cap has nowhere to scroll to,
+       and a target it never reached must not ask for room later. */
+    top = Math.max(0, Math.min(top, natural + want - client));
+    if (placing) {
+      h.target = top;
+      h.placed = true;
+      want = roomFor(top);
+    }
+    h.words = at.words;
+    h.seenAt = seen + was - top;
     if (want !== roomNow) gap.style.height = `${want}px`;
-    if (el.scrollTop !== top) el.scrollTop = top;
+    if (was !== top) el.scrollTop = top;
     /* Nobody scrolled, so no scroll event will say the answer has grown past
        the fold. Guarded, because a same-value set is not free: see `awayNow`. */
     const atBottom = natural + want - top - client < 60;
@@ -1307,7 +1338,7 @@ export function Conversation({
       hold.current = null;
       if (room.current) room.current.style.height = "0px";
     } else if (busy && (!wasBusy.current || !h || h.count !== count)) {
-      hold.current = { count, placed: false, target: 0, textAt: null };
+      hold.current = { count, placed: false, target: 0, words: false, seenAt: 0 };
     }
     wasBusy.current = busy;
     if (!visible) {
@@ -1366,6 +1397,9 @@ export function Conversation({
     stick.current = true;
     setAway(false);
     el.scrollTop = el.scrollHeight;
+    /* Now, not when the scroll event arrives: a streamed word can land first,
+       and would put a held answer back where it was. */
+    noteAnchor(el);
   };
 
   return (
@@ -1389,6 +1423,10 @@ export function Conversation({
             empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
           stick.current = atBottom;
           setAway(!atBottom);
+          /* The reader moved, so this is where a held answer's anchor now is.
+             Our own writes and a browser's clamp fire this too, after `settle`
+             has already put things back, and record what it left. */
+          noteAnchor(el);
         }}
       >
         {empty &&
@@ -1772,6 +1810,19 @@ export function Turn({
           <span className="chat-edited" title="You rewrote this question">
             edited
           </span>
+        )}
+        {/* **The row keeps its height while an answer arrives**, with nothing in
+            it to press. It used to be withdrawn whole, so every question in the
+            transcript grew a row the moment an answer finished, and the answer
+            being read moved down by one (seen in the browser check of plan
+            261005f). The pencil itself is still absent, which is what the focus
+            fallback above relies on. */}
+        {!canEdit && (
+          <div className="chat-actions held" aria-hidden="true">
+            <span className="chat-icon">
+              <Pencil size={12} />
+            </span>
+          </div>
         )}
         {canEdit && (
           <div className="chat-actions">

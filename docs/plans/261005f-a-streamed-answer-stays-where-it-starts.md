@@ -167,6 +167,41 @@ of the answer is **on screen** after at most one placement, and then does not mo
 stream does, until the reader scrolls or the panel is resized. Live is the stated exception. The
 gates are green; GPT Sol has reviewed the plan and the code.
 
+## The browser check
+
+**First pass, on `2902f4d68`** (Playwright, system Chrome, the same stand-in stream, ten paragraphs;
+a Sonnet subagent sampling every 200 ms). "Line" is the top of the answer's first paragraph from the
+top of the scroller, at the first words → at the end. The page never scrolled, and the console
+showed no React warning.
+
+| Case | Line | Room | Verdict |
+|---|---|---|---|
+| Chat, first question, 1280 | 85 → 85, then 112 at the finish | 0 | held; **+27 at the finish** |
+| Chat, second question | 121 → 121, then 148 | 434 → 0 | held; +27; **question at 47, not 11** |
+| *Latest* mid-stream | pill appeared; one press went to the end; `scrollTop` then fixed at 2499 while the content grew 3118 → 4633; pill came back | | pass |
+| Block chat card, first question | 183 → 183, then 210; card top fixed at 221, bottom grew to its cap | 0 | held; +27 |
+| Same card, follow-up at its cap | 147 → 147, then 174 | 107 → 0 | held; +27 |
+| Floating panel (900 wide), first and follow-up | 135 → 135 → 162; 123 → 123 → 150 | 0; 199 → 0 | held; +27 |
+| Phone 390×844, first and second | 85 → 85 → 112; 122 → 122 → 148 | 0; 509 → 0 | held; +27 |
+| A 1,500-character question | line at 230 of 599 (0.38), question top −420 | 294 → 0 | pass |
+| Retry | placed again, then held | 294 → 0 | pass |
+| Reload a finished conversation | opens at its end | 0 | pass (unchanged) |
+
+Two things it found, both fixed afterwards:
+
+- **+27 px when the answer finishes.** Every question's pencil row was withdrawn while an answer
+  arrived and came back when it ended, so each question grew a row above the line being read. The
+  row now keeps its height throughout, empty. And the hold no longer only *leaves `scrollTop`
+  alone*: it remembers where its anchor is on screen and puts it back, which also covers a tool row
+  (Sol F4) by the same rule instead of a special one.
+- **A follow-up question landed 36 px low.** The "Latest" pill was showing when the question was
+  sent; placing cleared it, the panel grew by the pill's row, and the browser clamped `scrollTop`
+  before the room was re-sized. The same put-it-back rule, run from the resize observer, fixes it;
+  and the room is now sized for wherever the view is as well as for the placement, so shrinking it
+  cannot clamp a reader who scrolled down into it.
+
+*The second pass, on the reviewed code, is below the code review.*
+
 ## The plan review
 
 [GPT Sol's review](261005f-a-streamed-answer-plan-review-sol.md) said **rework**, seven findings, all

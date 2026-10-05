@@ -46,6 +46,10 @@ const thread = (messages: ChatMessage[]): ChatThread => ({
 
 /** The panel: 400px of transcript on screen. */
 const CLIENT = 400;
+/** What the panel is short by while something (the "Latest" pill) takes a row. */
+let taken = 0;
+/** The scroller's resize observer, which jsdom does not have. */
+let resized: (() => void) | null = null;
 /** Each turn's height, in the order they are drawn. */
 let heights: number[] = [];
 /** The tool strip's height inside the last answer, when it has one. */
@@ -78,7 +82,7 @@ function layOut(): void {
   });
   define(proto, "clientHeight", {
     get(this: HTMLElement) {
-      return isScroller(this) ? CLIENT : 0;
+      return isScroller(this) ? CLIENT - taken : 0;
     },
   });
   define(proto, "offsetHeight", {
@@ -90,10 +94,10 @@ function layOut(): void {
     get(this: HTMLElement) {
       if (!isScroller(this)) return tops.get(this) ?? 0;
       /* A browser clamps on read too: content that shrank has already moved it. */
-      return Math.max(0, Math.min(tops.get(this) ?? 0, natural() + roomOf(this) - CLIENT));
+      return Math.max(0, Math.min(tops.get(this) ?? 0, natural() + roomOf(this) - (CLIENT - taken)));
     },
     set(this: HTMLElement, v: number) {
-      tops.set(this, isScroller(this) ? Math.max(0, Math.min(v, natural() + roomOf(this) - CLIENT)) : v);
+      tops.set(this, isScroller(this) ? Math.max(0, Math.min(v, natural() + roomOf(this) - (CLIENT - taken))) : v);
     },
   });
   define(Element.prototype, "getBoundingClientRect", {
@@ -166,6 +170,18 @@ const QUESTION_TOP = 900;
 
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  taken = 0;
+  resized = null;
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+    constructor(seen: () => void) {
+      resized = seen;
+    }
+    observe() {}
+    disconnect() {}
+  };
+  restore.push(() => {
+    delete (globalThis as { ResizeObserver?: unknown }).ResizeObserver;
+  });
   layOut();
   heights = [100, 800];
   strip = 0;
@@ -341,6 +357,56 @@ describe("a typed answer in a panel of fixed height", () => {
     heights = [100, 800, 60, 70];
     paint(asked("", "pending", { tools }));
     expect(scroller().scrollTop).toBe(QUESTION_TOP);
+  });
+
+  it("keeps the line being read still when the question above it grows", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 300];
+    paint(asked("An answer."));
+    heights = [100, 800, 87, 300];
+    paint(asked("An answer.", "done"));
+    expect(scroller().scrollTop).toBe(QUESTION_TOP + 27);
+  });
+
+  it("does not move a reader who is above the answer when it changes below them", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 300];
+    paint(asked("An answer."));
+    readerScrollsTo(100);
+    strip = 40;
+    heights = [100, 800, 60, 340];
+    paint(asked("An answer.", "pending", {
+      tools: [{ name: "search_library", label: "searched your library", status: "running" }],
+    }));
+    expect(scroller().scrollTop).toBe(100);
+  });
+
+  it("puts the question back when the panel grows taller and the browser clamps it", () => {
+    /* The pill's row is in the way when the question is sent... */
+    taken = 36;
+    paint(EARLIER);
+    heights = [100, 800, 60, 30];
+    paint(asked(""));
+    expect(scroller().scrollTop).toBe(QUESTION_TOP);
+    /* ...and then it goes: the panel is 36 taller, and the room, sized for the
+       shorter one, lets the browser clamp. The observer puts it right. */
+    taken = 0;
+    expect(scroller().scrollTop, "control: the model clamps as a browser does").toBe(QUESTION_TOP - 36);
+    act(() => resized?.());
+    expect(scroller().scrollTop).toBe(QUESTION_TOP);
+    expect(roomOf(scroller())).toBe(310);
+  });
+
+  it("does not shrink the room out from under a reader who scrolled down into it", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 30];
+    paint(asked(""));
+    heights = [100, 800, 60, 600];
+    paint(asked("A long answer."));
+    readerScrollsTo(1560 - CLIENT);
+    heights = [100, 800, 60, 620];
+    paint(asked("A long answer, more."));
+    expect(scroller().scrollTop).toBe(1560 - CLIENT);
   });
 
   it("puts the question back after the panel was hidden, which loses a scroll position", () => {
