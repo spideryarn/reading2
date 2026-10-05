@@ -1,0 +1,1 @@
+{"source":"pnas","label":"Catastrophic forgetting","role":"fulltext","expect":"html","requestedUrl":"https://www.pnas.org/doi/full/10.1073/pnas.1611835114","outcome":"fetch-failed","elapsedMs":62,"failure":{"code":"forbidden","status":403,"message":"That site refused the request. Sites that police automated readers usually answer this way."}}
