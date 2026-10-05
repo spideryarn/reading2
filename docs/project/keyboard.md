@@ -395,10 +395,32 @@ was mine* whoever writes the next one.
 Scrolling is animated ([`scroll.ts`](../../src/web/scroll.ts)), so a second press landing mid-flight
 would measure a position halfway between two items and step from *that* — two presses, one item of
 movement. Instead `keynav.ts` remembers the row its own last jump was headed for and steps from
-there, for `SCROLL_MS + 400` or until the reader grabs the page back with a wheel or a pointer.
+there.
 
-This is the one piece of state in the file, and it exists solely because the scroll is animated. If
-jumps ever become instant, delete it.
+**That aim stands while our own jump is unfinished, and after it ends for as long as the page is
+still at the pixel it ended on.** `scrollToBlock` reports how each jump ends, and the press that
+started it writes down `window.scrollY` then; the next press steps from the aim if the jump has not
+ended or the page is still exactly there, and measures otherwise. A wheel or a pointer still drops
+it outright, as before. So:
+
+- a second press mid-glide steps from the aim (its own scroll cancels the first, which ends the
+  *first* press's record, not the second's);
+- a row the page cannot bring to the reading line, at the clamped end of an article, keeps its aim
+  however long the reader pauses, so ↓ goes on to the last row and ↑ steps back one, not two;
+- a scrollbar drag, the browser restoring a position, another feature's jump: the pixel is no
+  longer ours, and the next press measures.
+
+It was a timer until 2026-10-05 (`CHAIN_MS`, the glide plus 400 ms), and a timer cannot know whether
+the glide has run: under a long render the aim was dropped with the glide still pending and ↓
+repeated its target. The class is
+[a clock standing in for a fact](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md);
+the plan is
+[261005h](../plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md)
+§ Stage C. The rule is `keynav.ts` § `Chain`, shared with the Diagram's Previous / Next
+([diagram.md](diagram.md)), and `tests/step-chain.test.tsx` pins it over the real scroll.
+
+This is the one piece of state in the file. It exists because the scroll is animated and because
+the end of an article clamps.
 
 ### A note on the jump itself
 

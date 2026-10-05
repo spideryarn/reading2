@@ -148,6 +148,125 @@ wait for the jump's end instead: it was the clock, written down as the requireme
 **Simpler option passed over:** a bigger `CHAIN_MS`. It goes green on any test with a large enough
 number and loses on a longer book, which is what the postmortem says about its sibling.
 
+## What GPT Sol's plan review changed (2026-10-05)
+
+[The review](261005h-three-robustness-bugs-plan-review-sol.md) said build all three, each with
+changes. Every finding was accepted; where the text above disagrees with this section, this wins.
+
+**Stage A.**
+
+- **P-1 (P0), P-2 (P1): the maths recovery is awaited, not fired in the background.** Returning the
+  article while the build check runs lets the reader start typing a comment or a criterion, neither
+  of which `safeToReload()` knows about, and then reloads over it. So `renderArticleMaths` awaits
+  `reloadIfStale()` *before* handing the article back, the way `LazyPage.tsx` § `orReloadIfStale`
+  holds its rejection: nothing of the article is on screen yet, so nothing can be typed into it. A
+  load whose `signal` is already aborted skips recovery entirely, and one aborted while the check
+  is pending is covered by `reloadIfStale`'s own address check, to be proved by a test (leave
+  before the rejection; leave while the check is pending; a draft present).
+- **P-3 (P1):** `PROVENANCE_WORD[note.provenance]` (`MarginaliaColumn.tsx`, the stamp) joins the
+  inventory. The implementer greps each of the six files for any further table read by a wire
+  value rather than trusting this list.
+- **P-4 (P3):** the blind-spot list joins an *empty* segment, not the word "undefined". The fix is
+  the same; the test asserts every blind spot sent is represented.
+
+**Stage B.**
+
+- **P-5 (P1): guarding `tree.ts` only moves the crash.** Sol reproduced three more:
+  `marginalia/notes.ts` § `marginaliaNotes` (`root.children is not iterable`), `crumbs.ts` §
+  `isCrumbSection`, and `whereForBlock` (Skim). With that many walkers, **the fix is at the door**:
+  one function that gives every node of a stored tree a `children` list (the same object back when
+  none was missing), called where the client receives the tree, so no walker can meet the state.
+  `buildChains` keeps a guard of its own, since it is the reported crash and is also reachable from
+  tests and scripts that hand it a tree directly. If the implementer finds more than two doors,
+  fall back to guarding each walker and say so. Tests: root and inner node without a list, through
+  the door, into geometry, outline, summary tree, marginalia notes, crumbs and `whereForBlock`.
+
+**Stage C.** P-6, P-7 and P-8 together replace "clear the chain when our jump's `done` fires":
+
+- P-6: a second tap on a step button fires `touchstart`, which cancels the glide and delivers
+  `done("cancelled")` *before* the click, so clearing on `done` breaks rapid taps on the device the
+  buttons exist for.
+- P-7: `glideTarget()` is null during an instant (reduced-motion) jump's corrective frame, so it is
+  not a completion signal; option (b) is dropped and the Diagram forwards `done`. Every branch must
+  call it, including `beginJump`'s already-there return.
+- P-8: the clamped-end edge is real in both directions.
+
+**The rule that satisfies all three: the aim stands while our jump is unfinished, and after it ends
+for as long as the page is still at the pixel it ended on.**
+
+```
+press            → chain = { row, endedAtY: null }      (this object is the token)
+our jump's done  → that object's endedAtY = window.scrollY   (settled, cancelled or missing alike)
+next press       → chain valid  iff  endedAtY === null  ||  window.scrollY === endedAtY
+                   valid → step from chain.row;  otherwise → measureRow()
+```
+
+A second tap's `touchstart` cancels the glide at some pixel and the click arrives at that same
+pixel: valid. A jump clamped at the end of the article settles and the page stays put: valid, so ↓
+goes on and ↑ steps back from the aim. A reader's wheel, a scrollbar drag, another feature's jump:
+the pixel changes, and the next press measures. Nothing expires, and an older jump's late `done`
+writes to its own object, not the newer press's. It is the arrival anchor's rule
+(`scroll.ts` § `ourScrollY`) applied to the chain.
+
+The existing drop listeners (keynav's `wheel` / `pointerdown`; the Diagram's outside-gesture list)
+stay. The pixel rule makes most of them redundant, and removing them is a separate change nobody
+has asked for.
+
+Tests added to the list: the real scroll engine in the Diagram touch test (today's `onFollow` only
+records ids); reduced motion; an already-there jump; both clamped-end sequences.
+
+## Stage C's measurement: it did not happen in a real browser (2026-10-05)
+
+A Sonnet subagent, Playwright on system Chrome, commit `8f93796bb`, trusted CDP input so the gap
+between presses is wall-clock. Two presses, a gap, then where the reader ended up.
+
+**0 repeats in 436 two-press trials.** ↓ and the Diagram's Next (Force picture), a 3,053-block
+article (`s3-doctorow-250p-spya-jg872v`, from the top and from row 1500) and a 93-block one
+(`submarine-spya-qw0f3d`), at 1440, 820 and 390 wide, 6× CPU throttle (and 12× for ↓), gaps from
+50 to 1,500 ms. Not run: 4×, throttle off beyond a sanity check, 820 for the Diagram, the Sketch
+picture (it needs a paid generation).
+
+What it saw instead:
+
+- ↓ on the long article at 6×: the glide's last movement comes 400 to 590 ms after the press, a
+  few as late as 694 ms. So the glide does end right around the 600 ms timer; no second press was
+  caught in the gap.
+- **The Diagram's Next holds the main thread for about 15 seconds on the 3,053-block article at 6×**
+  (1.5 to 2 s on the short one), so a second click is never delivered inside the window at all.
+  That is a performance defect of its own and is reported to the Overseer, not fixed here.
+
+So the controlled reproduction stands and the browser frequency is, as far as this could measure,
+zero. The fix still lands because the rule it replaces is the class that cost six days in
+production one file away, and because the pixel rule is no more machinery than the timer. It is
+the lowest-value of the three, and the debrief says so.
+
 ## Progress
 
-Nothing built yet.
+All three built by Opus subagents on 2026-10-05, one commit each, red first. GPT Sol's code review
+and the browser check are still to come as of this commit.
+
+- **Stage B, `56ef1be7c`.** One door, as hoped: `article/access.ts` § `resolveAccess`, so
+  `tree.ts` § `withChildLists` is called there and `buildChains` keeps its own guard. 29 of 38
+  function-level tests and 4 of 5 tests that mount the real `App` were red before. Known limit: the
+  walkers outside `tree.ts` are safe because of the door, not on their own, and
+  `src/section-path.ts` reads `.children` unguarded on the server too, which is outside this stage.
+- **Stage A, `d96aa2e5a`.** `src/web/lib/own-label.ts` § `ownLabel`, `plainWords`. 41 tests red
+  before. What was really wrong at each site: `__proto__` crashed SourceScanNotice, MirrorPanel,
+  CriteriaPanel and ProfilePage, and in Marginalia made the slot's boundary drop every note beside
+  the block; `toString` as a GPT-Live close reason made the error read "[object Undefined]"; an
+  ordinary unknown value only drew a blank. The maths recovery is `renderArticleMaths`'s `recover`
+  option, awaited. Two things decided in passing: an unknown everyday explanation is omitted but the
+  finding keeps its place in the list; and after a reload is requested the article is returned at
+  once, so raw TeX can show for an instant before the page is replaced.
+  Other tables that may be read by a wire value were noticed and not traced (`RERUN_LABEL`,
+  `KIND_WORD` in FeedbackEarlier, three in DebatePanel, `SCORE_LABEL`, `QUOTE_SCORE_LABEL`,
+  `SECTION_LABEL`, `FROM_LABEL`, `DIMENSION_LABEL`, `DEPTH_LABEL`, `STATE_WORD`): reported to the
+  Overseer as a follow-up.
+- **Stage C, this commit.** `keynav.ts` § `Chain` (`startChain`, `endChain`, `chainedRow`), shared
+  by both callers; `CHAIN_MS` and both timers are gone. The Diagram's ending is forwarded
+  `stepTo` → `onFollow` (`FollowJump`) → `Reader.tsx` § `followTo` → `jumpTo` → `beginJump`, five
+  files, every new parameter optional. Red before: C3 for both callers, reduced motion, an
+  already-there jump, both clamped-end sequences, and a page moved with no gesture. Five mutations
+  of the finished rule each turned tests red, including the "clear on done" design this plan first
+  proposed. Known limit: the type stops `jumpTo` being passed as `onFollow` unwrapped, but only
+  tests hold "every branch calls `ended`".

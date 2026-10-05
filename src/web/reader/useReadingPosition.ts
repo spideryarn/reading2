@@ -25,7 +25,7 @@ import {
   watchBarVisibility,
 } from "../scroll.js";
 import { positionToWrite, type Section } from "../position.js";
-import { beginJump } from "../keynav.js";
+import { beginJump, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
 import { isFolded, subscribeFold } from "../fold.js";
@@ -267,11 +267,14 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   // must leave it alone, or the restore effect would stop recognising the
   // position the reader is actually standing at.
   const jumpTo = useCallback(
-    /* `aim`: a passage key, or a quote to paint on landing — flash.ts § `JumpAim`. */
-    (blockId: BlockId, aim?: JumpAim) => {
+    /* `aim`: a passage key, or a quote to paint on landing — flash.ts § `JumpAim`.
+       `ended`: told when the jump is over, moved or not — keynav.ts § `JumpEnded`.
+       The Diagram's step buttons are the caller that needs it (Reader.tsx §
+       `followTo`). */
+    (blockId: BlockId, aim?: JumpAim, ended?: JumpEnded) => {
       const moved = beginJump(blocks, blockId, (id) => {
         void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
-      }, aim);
+      }, aim, ended);
       if (moved) synced.current = blockId;
     },
     [blocks, setAt],

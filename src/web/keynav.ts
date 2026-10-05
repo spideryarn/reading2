@@ -45,7 +45,6 @@ import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
 import { dropPendingFlash, flashBlock, type FlashTarget, type JumpAim } from "./flash.js";
 import {
-  SCROLL_MS,
   abandonScroll,
   arrivalAnchor,
   glideTarget,
@@ -71,15 +70,84 @@ import { isFolded } from "./fold.js";
 const NAV_DEPTH_ATTR = "data-nav-depth";
 
 /**
- * How long we keep believing our own last jump instead of measuring.
+ * **The row a press aimed at, and whether the next press may still step from
+ * it** instead of measuring.
  *
  * Scrolling is animated, so a second press that lands mid-flight would measure
  * a position halfway between two items and step from *that* — two presses, one
  * item of movement. Chaining from the last target instead makes rapid presses
- * count exactly. Comfortably longer than the jump itself, short enough that a
- * press after any real pause measures the world afresh.
+ * count exactly.
+ *
+ * **The aim stands while our own jump is unfinished, and after it ends for as
+ * long as the page is still at the pixel it ended on.** One object per press:
+ * the jump that press starts is told to call `endChain` on *that* object, so an
+ * older jump ending late — the newer press cancels it, and it says so after the
+ * newer chain exists — writes to its own and not to the newer one.
+ *
+ * Why the pixel, and not simply forgetting the aim when the jump ends:
+ *
+ *  - a second tap on a touch screen stops the glide with its `touchstart` and
+ *    the jump reports `cancelled` *before* the tap's click arrives. The click
+ *    arrives at the pixel the glide stopped on, so the aim is still good;
+ *  - a row the page cannot bring to the reading line (the last rows of an
+ *    article, where the scroll is clamped) settles with the measurement still
+ *    naming the row before it. The page has not moved, so ↓ goes on and ↑ steps
+ *    back from the aim;
+ *  - a wheel, a scrollbar, the browser restoring a position, another feature's
+ *    jump: the pixel changes, and the next press measures.
+ *
+ * It is the arrival anchor's rule (scroll.ts § `ourScrollY`) applied to the
+ * chain, and like it nothing here expires.
+ *
+ * **This was a timer until 2026-10-05** (`CHAIN_MS`, the glide plus 400 ms). A
+ * timer and the glide's frames are separate callbacks, so under a long render
+ * the aim could be dropped with the glide still to run, and the next press
+ * repeated the last target. How long our jump takes is not ours to promise;
+ * whether it has ended is something the jump reports.
+ * docs/postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md, and
+ * docs/plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md
+ * § Stage C. Pinned in tests/step-chain.test.tsx.
+ *
+ * Shared with DiagramPanel.tsx § `stepTo`: nothing that steps may disagree
+ * about when an aim is stale.
  */
-export const CHAIN_MS = SCROLL_MS + 400;
+export interface Chain {
+  /** The row the press was headed for. */
+  readonly row: number;
+  /** `window.scrollY` when that press's jump ended, or `null` while it has not. */
+  endedAtY: number | null;
+}
+
+/** A press has aimed at `row` and its jump has not ended. */
+export function startChain(row: number): Chain {
+  return { row, endedAtY: null };
+}
+
+/**
+ * That press's jump has ended — settled, cancelled, missing or with nowhere to
+ * go, alike. Exactly the browser's own readback, compared exactly below, as
+ * `ourScrollY` is.
+ */
+export function endChain(chain: Chain): void {
+  chain.endedAtY = window.scrollY;
+}
+
+/** The row to step from if the last press's aim still stands, or `null`: measure. */
+export function chainedRow(chain: Chain | null): number | null {
+  if (chain === null) return null;
+  return chain.endedAtY === null || window.scrollY === chain.endedAtY ? chain.row : null;
+}
+
+/**
+ * **What a jump calls when it is over**, however it ended: it settled, the
+ * reader or a newer movement stopped it, there was no row to go to, or the
+ * reader was already there and nothing moved. Once per jump.
+ *
+ * A caller that keeps a `Chain` hands `() => endChain(mine)`. Whoever accepts
+ * one of these must call it on **every** branch: a branch that forgets leaves
+ * an aim that stands until something else happens to drop it.
+ */
+export type JumpEnded = () => void;
 
 /* ----------------------------------------------------------------- pure -- */
 
@@ -327,12 +395,18 @@ export function measureOrigin(blocks: Block[]): JumpOrigin {
  * `scrollToBlock`: a quote names no drawn mark, and the scroll would treat it
  * as a passage still to arrive and go on re-measuring. So a quote jump scrolls
  * exactly as a bare block jump does, centred on the block.
+ *
+ * **`ended` hears that the jump is over, on both branches** (`JumpEnded`): at
+ * once when the reader is already there, and from the scroll's own report
+ * otherwise, whichever of its three endings that is. The Diagram's step
+ * buttons are the caller that needs it (§ `Chain`).
  */
 export function beginJump(
   blocks: Block[],
   target: BlockId,
   push: (id: BlockId) => void,
   aim?: JumpAim,
+  ended?: JumpEnded,
 ): boolean {
   const given: FlashTarget = typeof aim === "string" ? { passage: aim } : (aim ?? {});
   const passage = given.passage ?? undefined;
@@ -349,6 +423,7 @@ export function beginJump(
        only drop the arrival anchor the reader is standing on (plan 260929a). */
     if (glideTarget() !== null) abandonScroll();
     flashBlock(target, flash);
+    ended?.();
     return false;
   }
   /* `from` is the whole address, not just the path: it is what lets the wrapper
@@ -368,6 +443,7 @@ export function beginJump(
     "smooth",
     (outcome) => {
       if (outcome === "settled") flashBlock(target, flash);
+      ended?.();
     },
     { align: "centre", passage },
   );
@@ -448,12 +524,10 @@ export function useArrowNav(
    * pointer crossing from the spine to the prose re-renders nothing.
    */
   const aim = useRef(fallbackDepth);
-  /** The row our own last jump was headed for. See CHAIN_MS. */
-  const chain = useRef<number | null>(null);
+  /** The row our own last jump was headed for, while that still stands. See `Chain`. */
+  const chain = useRef<Chain | null>(null);
 
   useEffect(() => {
-    let timer = 0;
-
     const resolve = (el: Element | null | undefined): number => {
       const zone = el?.closest?.(`[${NAV_DEPTH_ATTR}]`);
       const d = Number(zone?.getAttribute(NAV_DEPTH_ATTR));
@@ -549,18 +623,19 @@ export function useArrowNav(
         const id = blocks[row]?.id;
         return id === undefined || !isFolded(id);
       });
-      const target = stepTarget(starts, chain.current ?? measureRow(), dir);
+      const target = stepTarget(starts, chainedRow(chain.current) ?? measureRow(), dir);
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
       // keypress goes back to the browser, so ↓ on the last paragraph still
       // scrolls the last screenful into view instead of dying silently.
-      if (!block) return;
+      if (target === null || !block) return;
       e.preventDefault();
 
-      chain.current = target;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(drop, CHAIN_MS);
-      scrollToBlock(block.id);
+      /* This press's own object, so that the older jump this scroll is about
+         to cancel ends *its* chain and not this one. */
+      const mine = startChain(target);
+      chain.current = mine;
+      scrollToBlock(block.id, "smooth", () => endChain(mine));
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });
@@ -572,10 +647,9 @@ export function useArrowNav(
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("wheel", drop);
       window.removeEventListener("pointerdown", drop);
-      window.clearTimeout(timer);
-      /* The timer that would have dropped the chain is gone, so drop it now:
-         otherwise a mode change mid-chain (which changes `acrossDepth`) leaves
-         a stale target that nothing ever expires. GPT Sol's plan review, 261001q. */
+      /* A mode change mid-chain changes `acrossDepth`, and with it which rows
+         the chain's number means. Nothing else would drop an aim whose jump is
+         still unfinished, so drop it here. GPT Sol's plan review, 261001q. */
       drop();
     };
   }, [plan, blocks, fallbackDepth, enabled, acrossDepth]);

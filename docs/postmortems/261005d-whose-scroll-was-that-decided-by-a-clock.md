@@ -65,6 +65,13 @@ Siblings found by grepping `src/web` for the shape:
   still pending when the chain expires, and a second Next repeats the first target); how often a
   browser gets there is unmeasured. `keynav.ts` keeps the same timer for ↑ / ↓. Reported to the
   Overseer as its own item rather than fixed here.
+  **Replaced on 2026-10-05**
+  ([plan 261005h](../plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md)
+  § Stage C): `CHAIN_MS` and both timers are gone. The aim now stands while our own jump is
+  unfinished, and after it ends for as long as the page is still at the pixel it ended on — the
+  anchor's rule above, applied to the chain (`keynav.ts` § `Chain`). A browser measurement found 0
+  repeats in 436 two-press trials, so this sibling was fixed for its class, not for a symptom
+  anyone saw.
 - **A neighbour of a different class, found by the same browser check:** the row Structure marks as
   current (`useColumnContext`) never asked the anchor at all, so on a long article it marked the
   row before the one clicked from the moment of landing. The report read as one symptom ("`?at=`

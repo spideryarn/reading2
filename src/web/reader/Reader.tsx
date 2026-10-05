@@ -71,6 +71,7 @@ import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { isCrumbSection } from "../crumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
+import type { FollowJump } from "../DiagramPanel.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
 import {
   type ChatHandoff,
@@ -787,6 +788,11 @@ export function Reader({
     },
     [jumpTo, bandCovers, rememberBandFocus],
   );
+  /* **The Diagram walking the picture**: plain `jumpTo`, which does not step
+     the band aside, and with the step's `ended` put in `jumpTo`'s third
+     parameter rather than its second, which is a flash aim. The step buttons
+     need to hear that their jump is over — keynav.ts § `Chain`. */
+  const followTo = useCallback<FollowJump>((blockId, ended) => jumpTo(blockId, undefined, ended), [jumpTo]);
   useEffect(() => {
     if (bandBack) return;
     const was = bandFocus.current;
@@ -3047,7 +3053,7 @@ export function Reader({
             onJump={bandJump}
             /* Walking the picture follows it in the prose without stepping the
                band aside — DiagramPanel.tsx § `onFollow`. */
-            onFollow={jumpTo}
+            onFollow={followTo}
           />
         );
       /* **The first mode that could break on its own**, 2026-09-05 — the

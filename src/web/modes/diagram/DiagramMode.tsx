@@ -16,7 +16,7 @@ import type { Article, BlockId } from "../../../types.js";
 import { diagramAxisParam, diagramHueParam, diagramParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { buildSummaryTree } from "../../tree.js";
-import { DiagramPanel, type DiagramAccess } from "../../DiagramPanel.js";
+import { DiagramPanel, type DiagramAccess, type FollowJump } from "../../DiagramPanel.js";
 
 /**
  * Diagram mode's band — the article, drawn.
@@ -80,7 +80,7 @@ export function DiagramBand({
   at: BlockId | null;
   onJump(id: BlockId): void;
   /** The picture being walked rather than pressed — DiagramPanel.tsx § `onFollow`. */
-  onFollow?(id: BlockId): void;
+  onFollow?: FollowJump;
 }) {
   useRenderCount("DiagramBand");
   const [kind, setKind] = useQueryState("diagram", diagramParam);

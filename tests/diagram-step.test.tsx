@@ -34,7 +34,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, ProjectionResponse, Tree } from "../src/types.js";
 import { DiagramPanel } from "../src/web/DiagramPanel.js";
-import { CHAIN_MS } from "../src/web/keynav.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 
 /**
@@ -332,9 +331,9 @@ describe("one press is one paragraph", () => {
   it("counts two rapid presses as two, with the page still in flight", async () => {
     /* The second press lands before the glide has finished, so the reading line
        is still somewhere between the two rows — measure it and you step from
-       half way and land on the rung you have just used. `CHAIN_MS` is how long
-       the last target stands instead. keynav.ts has the same guard for the same
-       reason; this panel did not.
+       half way and land on the rung you have just used. The last target stands
+       instead (keynav.ts § `Chain`, which ↑ / ↓ share; this panel once had no
+       such guard).
 
        The fixture never moves `onRow` between the presses, which is the
        strongest form of the case: nothing has caught up at all. */
@@ -391,17 +390,26 @@ describe("one press is one paragraph", () => {
     expect(jumped).toEqual([blocks[2]?.id, blocks[9]?.id]);
   });
 
-  it("measures the world again once the chain has expired", async () => {
-    // The other half of the same rule: after a real pause the reader may have
-    // scrolled somewhere by hand, and the last target is worthless.
+  it("measures the world again once the page is somewhere the press did not leave it", async () => {
+    /* The other half of the same rule: the last target is worth something only
+       while the page is where the press's jump ended. Until 2026-10-05 this
+       waited 650 ms and expected the target forgotten with the page untouched:
+       the timer, written down as the requirement (plan 261005h). What ends the
+       aim is the page moving, however soon — and here by a route that fires no
+       wheel, touch, pointer or key, so the listener the test above exercises
+       cannot be what drops it. tests/step-chain.test.tsx has the same over the
+       real scroll engine, and the pause that must *not* end it. */
     const blocks = await mount();
     await scrollTo(1);
     await press("Next");
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, CHAIN_MS + 50));
-    });
-    await press("Next");
-    expect(jumped).toEqual([blocks[2]?.id, blocks[2]?.id]);
+    try {
+      Object.defineProperty(window, "scrollY", { value: 800, configurable: true });
+      await scrollTo(8);
+      await press("Next");
+      expect(jumped).toEqual([blocks[2]?.id, blocks[9]?.id]);
+    } finally {
+      Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+    }
   });
 
   it("moves the readout on the press, not a frame later", async () => {

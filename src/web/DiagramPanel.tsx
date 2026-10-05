@@ -86,7 +86,15 @@ import { type UseProjection, useProjection } from "./useProjection.js";
 import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
-import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
+import {
+  chainedRow,
+  endChain,
+  measureRow,
+  startChain,
+  stepTarget,
+  type Chain,
+  type JumpEnded,
+} from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
 import { DIAGRAM_SUB_MODES } from "./sub-modes.js";
@@ -130,6 +138,14 @@ export type DiagramAccess =
    * told exactly that and offered nothing — `SketchView`'s visitor arm.
    */
   | { kind: "visitor"; sketch?: PublicSketch | undefined };
+
+/**
+ * **Take the article to a block because the picture is being walked**, and
+ * call `ended` when that jump is over — however it ended, and also when the
+ * reader was already there and nothing moved (keynav.ts § `JumpEnded`). The
+ * step buttons hand one; the picture's arrow keys keep no aim and do not.
+ */
+export type FollowJump = (id: BlockId, ended?: JumpEnded) => void;
 
 interface Props {
   access: DiagramAccess;
@@ -185,8 +201,14 @@ interface Props {
    * paragraph shows; walking the picture must not, or the first step would hide
    * the picture being walked. Defaults to `onJump`. GPT Sol, plan review of
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
+   *
+   * **It is also told how to say the jump is over** (`FollowJump`), which the
+   * step buttons need and `onJump` cannot give them. A property rather than a
+   * method on purpose: a method's parameters are checked loosely, and
+   * `onFollow={jumpTo}` — whose second parameter is a flash aim, not this —
+   * would compile and hand the callback to the wrong argument.
    */
-  onFollow?(id: BlockId): void;
+  onFollow?: FollowJump;
   /**
    * Every block of the article, in order — what the Force picture's graph is
    * built from (src/web/graph.ts), and what the two scatters name their lanes
@@ -646,7 +668,15 @@ export function DiagramPanel({
   onKind,
   atRow,
   onJump,
-  onFollow = onJump,
+  /* `onJump` does not say when its jump is over, so with no `onFollow` a step
+     counts it as over at once: the aim then stands only while the page is at
+     the pixel the press found it on (keynav.ts § `Chain`). Reader, the one
+     caller in the app, always hands `onFollow`; a new caller whose jump glides
+     must too, or a press mid-glide measures a row half way. */
+  onFollow = (id, ended) => {
+    onJump(id);
+    ended?.();
+  },
   blocks,
   axis,
   onAxis,
@@ -1197,25 +1227,29 @@ export function DiagramPanel({
    * `SCROLL_MS`, firing exactly the scroll events a hand would, so a second
    * press mid-flight measures a row half way between two rungs and lands short
    * — two presses, one rung of movement. So the row the last press *aimed at*
-   * stands for `CHAIN_MS`, which is the glide plus a margin, and after any real
-   * pause the world is measured afresh.
+   * stands while that press's jump is unfinished, and after it ends for as long
+   * as the page is still at the pixel it ended on. The rule and its reasons are
+   * keynav.ts § `Chain`; this file only has to get the jump's ending to it.
    *
-   * **A timer rather than `glideTarget()`, which was the first attempt.** The
-   * glide clears its own handle in the same tick as its final `scrollTo`
-   * (scroll.ts § tick), so between that and the scroll event it causes there is
-   * a gap where nothing is in flight and the measurement is still mid-air. A
-   * press in the gap steps from the wrong row, rarely and invisibly. ⟨Sol⟩,
-   * 2026-08-31. The timer has no gap, and `CHAIN_MS` is already the constant
-   * for exactly this.
+   * **The ending is forwarded, not inferred** — `onFollow` is handed
+   * `() => endChain(mine)` and Reader carries it through `jumpTo` and
+   * `beginJump` to `scrollToBlock`'s own report. `glideTarget()` cannot stand
+   * in for it: under reduced motion the page moves at once and the jump settles
+   * a frame later, after its re-check, and for that frame nothing is "in
+   * flight" while a centred row sits below the reading line with no arrival
+   * anchor yet — a measurement there names the row before it (⟨Sol⟩,
+   * 2026-10-05, plan 261005h P-7). After a *smooth* glide settles there is no
+   * such gap: its last frame moves the page before it reports, and `measureRow`
+   * reads the layout as it then is. (A comment here from 2026-08-31 said
+   * otherwise, and was the reason for a 600 ms timer, `CHAIN_MS`, until
+   * 2026-10-05.)
    *
-   * The reader taking the page back drops it, on the same two events
-   * `scroll.ts`'s own `bail` listens for. **Not `pointerdown`**, which keynav
-   * can afford to include and this cannot: here the press *is* a pointerdown,
-   * so dropping on it would clear the chain a moment before every click that
-   * sets one.
+   * The reader taking the page back also drops it outright, below. **Not on
+   * `pointerdown` inside the step bar**, which keynav can afford to include
+   * and this cannot: here the press *is* a pointerdown, so dropping on it would
+   * clear the chain a moment before every click that sets one.
    */
-  const chain = useRef<number | null>(null);
-  const chainTimer = useRef(0);
+  const chain = useRef<Chain | null>(null);
   useEffect(() => {
     /**
      * **Anything the reader does that is not another press of these buttons
@@ -1241,7 +1275,6 @@ export function DiagramPanel({
     const drop = (e: Event) => {
       if ((e.target as Element | null)?.closest?.(".diag-step")) return;
       chain.current = null;
-      window.clearTimeout(chainTimer.current);
     };
     for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
       window.addEventListener(type, drop, { passive: true });
@@ -1250,10 +1283,9 @@ export function DiagramPanel({
       for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
         window.removeEventListener(type, drop);
       }
-      window.clearTimeout(chainTimer.current);
     };
   }, []);
-  const stepFrom = (): number => chain.current ?? measureRow();
+  const stepFrom = (): number => chainedRow(chain.current) ?? measureRow();
 
   /**
    * One step through the article, and the picture follows because it is drawn
@@ -1278,12 +1310,11 @@ export function DiagramPanel({
     /* The mark moves now rather than a frame later, when the scroll this is
        about to start gets measured — see `assume` in `useReaderRow`. */
     assumeRow(row);
-    chain.current = row;
-    window.clearTimeout(chainTimer.current);
-    chainTimer.current = window.setTimeout(() => {
-      chain.current = null;
-    }, CHAIN_MS);
-    onFollow(stop.blockId);
+    /* This press's own object, so that the older jump this one is about to
+       cancel ends *its* chain and not this one (keynav.ts § `Chain`). */
+    const mine = startChain(row);
+    chain.current = mine;
+    onFollow(stop.blockId, () => endChain(mine));
   };
   /**
    * Whether that press would go anywhere, for the greyed-out look.
@@ -1293,16 +1324,19 @@ export function DiagramPanel({
    * `measureRow` reads a rect per row of the article.
    *
    * The chain is the half that matters, and leaving it out was a bug ⟨Sol⟩
-   * found: it does not clear when the scroll-derived state catches up, it
-   * clears on a timer, so a Previous that had just stepped off the first rung
-   * went on announcing itself unavailable while working, and a Next that had
-   * just landed on the last rung went on looking live while doing nothing —
-   * for as long as the reader kept pressing. Reading a ref in render is
-   * ordinarily how you get a value nothing re-renders for; here the press that
-   * writes it also calls `setRoving`, so a render always follows.
+   * found: it does not end when the scroll-derived state catches up, it ends
+   * by its own rule (keynav.ts § `Chain`), so a Previous that had just stepped
+   * off the first rung went on announcing itself unavailable while working,
+   * and a Next that had just landed on the last rung went on looking live
+   * while doing nothing — for as long as the reader kept pressing. **The same
+   * `chainedRow` the press reads**, so the look and the press cannot disagree
+   * about whether the aim still stands. Reading a ref in render is ordinarily
+   * how you get a value nothing re-renders for; here the press that writes it
+   * also calls `setRoving`, so a render always follows, and the page moving
+   * away re-renders through the measured row.
    */
   const canStep = (dir: -1 | 1) =>
-    starts.length > 0 && stepTarget(starts, chain.current ?? rowForRung, dir) !== null;
+    starts.length > 0 && stepTarget(starts, chainedRow(chain.current) ?? rowForRung, dir) !== null;
 
   /* The pointer's position, mirrored into a ref so the follow-scroll below can
      read it without re-running every time the pointer leaves the picture. */
