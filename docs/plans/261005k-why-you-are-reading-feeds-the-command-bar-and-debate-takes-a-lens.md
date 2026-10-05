@@ -2,7 +2,7 @@
 
 Owned by [plans.md](../project/plans.md). Queue item `qi-wjb27jre`, part 3 of report `spya-thpsnd`
 ([the note](../user-feedback/261003_1010-fewer-modes-part-3-why-you-are-reading-feeds-the-bar.md)).
-Session `why-reading-feeds-the-bar`. **Status: planned, not built.**
+Session `why-reading-feeds-the-bar`. **Status: both stages built, reviewed and on `dev` (`b4500cd96`, 2026-10-05). Not yet seen in full in a browser, and one part is a question for Greg: see the Log's last entries.**
 
 ## What Greg asked for, and what he has decided
 
@@ -258,6 +258,35 @@ Opus subagent, tests red first.
 - [ ] The feedback note's ending; the queue item; push to `dev`; `worktree:check`; remove the tree.
 
 ## Log
+
+- 2026-10-05: **merged with `dev`, the full suite, and pushed** (`b4500cd96`). Six conflicts with
+  two sibling sessions, both sides kept (the merge commit `b600f2830` lists them). The migration
+  was regenerated on top of dev's journal as `drizzle/20261005203554_chat_thread_origin_lens.sql`,
+  byte-identical to the reviewed one; `20261005185425` no longer exists. A lens chat is now titled
+  *Angle: <the words>* (`src/chat-title.ts`), which the merge exposed. **The full suite on the
+  merged tree: 36,773 passed, 14 failed in 10 files.** Three files were mine and are fixed (the
+  eval's spend listing; two pinned request traces, which now include the bar's one read of why
+  you are reading on each owner's reading view, added on purpose). Five were dev's own and were
+  fixed on dev in `fada977ff`, merged; two are the fleet tests a fresh worktree reds without
+  `npm run build:fleet`. After that merge every previously red file except the fleet pair was
+  re-run and is green, with typecheck and `db:chain`. **The full suite was not run a second
+  time.**
+- 2026-10-05: **what is not done.** (1) The shared local database still refuses `db:migrate` over
+  another session's ledger row, so the new column is not there locally: Send from a lens chat,
+  *Your angles* with a real thread in it, and the paid check that the seed makes Chat search the
+  web are **unverified outside tests**. (2) `[Q-suggest-together]` is unanswered.
+- 2026-10-05: **the browser check was tried and could check nothing.** A Sonnet subagent started a
+  dev server from this tree and signed in; `GET /api/library` and `GET /api/article/<slug>`
+  answered 500 (`sqlstate 42703`, a missing column in `spideryarn.articles`). The cause is wider
+  than this plan: the local database is also missing dev's `…184047_article_share_link` and
+  `…200628_reading_difficulty`, behind the same refused `db:migrate`, so any dev server on current
+  `dev` cannot open an article. **Nothing in either feature has been seen in a browser at any
+  width.** No screenshots. The checklist is in this session's brief to that subagent (bar: the
+  row, the list, wrapping at phone width, the model's face, hide on typing, survive a reopen,
+  arrows, each kind of row pressed, held Enter; Debate: the box with and without a run, the
+  handoff, the 16px input and 40px button on a phone; `/privacy` and `/help`), and its Playwright
+  helpers are in the session scratchpad, which does not outlive the session. The worktree is left
+  standing for that check.
 
 - 2026-10-05: plan written. Both sibling sessions' work (261005i quick search from the bar; 261005i
   chat origins) is on `dev` and merged into this tree before planning; A extends the second, B
