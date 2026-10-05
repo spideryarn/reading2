@@ -133,7 +133,7 @@ function raw(over: Record<string, unknown> = {}): Record<string, unknown> {
 function build(events: unknown[], dropped: Dropped = emptyDropped()): Timeline {
   return buildTimeline(
     { events },
-    { power: "standard", slug: "test", blocks: BLOCKS, sourceHash: "h", frame: FRAME, elapsedMs: 1, dropped },
+    { power: "standard", slug: "test", blocks: BLOCKS, sourceHash: "h", frame: FRAME, fetchedAt: null, elapsedMs: 1, dropped },
   );
 }
 
@@ -252,6 +252,17 @@ describe("occurrences are believed only when the article backs them up", () => {
 });
 
 describe("three outcomes, not two", () => {
+  it("rejects a label's invented year even if its day and month are cited", () => {
+    const cited = occurrence("By May 12, some agents had figured out how to talk.");
+    expect(cited).toHaveLength(1);
+    expect(labelStatesAnUncitedDate("May 12, 2025: agents talk", cited, null)).toBe(true);
+    expect(labelStatesAnUncitedDate("May 12, 2025: agents talk", cited, FRAME)).toBe(true);
+    expect(labelStatesAnUncitedDate("May 12: agents talk", cited, null)).toBe(false);
+    const stated = validateOccurrences([{ blockId: "spya-aaaaaa", quote: "By May 12, 2025, agents talked." }],
+      [block("spya-aaaaaa", "By May 12, 2025, agents talked.")], emptyDropped());
+    expect(stated).toHaveLength(1);
+    expect(labelStatesAnUncitedDate("May 12, 2025: agents talk", stated, null)).toBe(false);
+  });
   const occurrence = (quote: string, blockId = "spya-aaaaaa") =>
     validateOccurrences([{ blockId, quote }], BLOCKS, emptyDropped());
 
@@ -354,6 +365,69 @@ describe("three outcomes, not two", () => {
        is a different sentence from "that date is not in the passage". */
     expect(out).toEqual({ kind: "rejected", reason: "noYearFrame", phrase: "By May 12" });
     expect(dropped.noYearFrame).toBe(1);
+  });
+
+  it("dates it in the piece's own single year when there is no publication date", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "By May 12",
+      occurrence("By May 12, some agents had figured out how to talk."),
+      null,
+      "happened",
+      dropped,
+      2026,
+    );
+    expect(out).toMatchObject({ kind: "dated", when: { latest: "2026-05-12", yearFilled: true } });
+    expect(dropped.noYearFrame).toBe(0);
+  });
+
+  it("marks a row whose year is the piece's, and only when that was used", () => {
+    const blocks = [...BLOCKS, block("spya-zzzzzz", "2026-07-19…credentials [are] used to read secrets.")];
+    const opts = {
+      power: "standard" as const,
+      slug: "test",
+      blocks,
+      sourceHash: "h",
+      fetchedAt: "2026-08-30T10:00:00.000Z",
+      elapsedMs: 1,
+    };
+    const assumed = buildTimeline({ events: [raw()] }, { ...opts, frame: null, dropped: emptyDropped() });
+    expect(assumed.events[0]?.dating).toMatchObject({
+      kind: "dated",
+      when: { latest: "2026-05-12", yearFilled: true, yearFrom: "piece" },
+    });
+    // A publication date is the better frame, and then nothing is assumed.
+    const framed = buildTimeline({ events: [raw()] }, { ...opts, frame: FRAME, dropped: emptyDropped() });
+    expect(framed.events[0]?.dating).toMatchObject({ kind: "dated", when: { yearFilled: true } });
+    expect(JSON.stringify(framed)).not.toContain("yearFrom");
+    // And with neither, the row is what it always was.
+    const neither = buildTimeline(
+      { events: [raw()] },
+      { ...opts, blocks: BLOCKS, frame: null, dropped: emptyDropped() },
+    );
+    expect(neither.events[0]?.dating).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
+  });
+
+  /**
+   * **One full date in an old year is usually history, not the year the piece
+   * is about.** 13 of the 16 production articles that state exactly one year
+   * state one older than the year before we fetched them (plan 261005d), so
+   * the year is assumed only when it is the fetch year or the one before.
+   */
+  it("does not assume a stated year that is not the year we fetched the piece, or the one before", () => {
+    const blocks = [...BLOCKS, block("spya-zzzzzz", "On March 3, 1896 the first one was built.")];
+    const opts = { power: "standard" as const, slug: "test", blocks, sourceHash: "h", frame: null, elapsedMs: 1 };
+    const dating = (fetchedAt: string | null) =>
+      buildTimeline({ events: [raw()] }, { ...opts, fetchedAt, dropped: emptyDropped() }).events[0]?.dating;
+    expect(dating("2026-08-30T10:00:00.000Z")).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
+    expect(dating("1898-01-01T00:00:00.000Z")).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
+    // The year before the fetch is still a current piece: fetched in January, written in December.
+    expect(dating("1897-01-05T00:00:00.000Z")).toMatchObject({ kind: "dated", when: { latest: "1896-05-12" } });
+    expect(dating("1896-06-01T00:00:00.000Z")).toMatchObject({ kind: "dated" });
+    // And a piece cannot be about a year after we fetched it.
+    expect(dating("1895-06-01T00:00:00.000Z")).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
+    // No fetch time, no assumption.
+    expect(dating(null)).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
   });
 
   it("gives no phrase at all when the model gave none, and counts nothing", () => {
@@ -505,6 +579,40 @@ describe("what the model says, believed as little as possible", () => {
 });
 
 describe("ids inherit on the evidence, never on the label", () => {
+  it("keeps a year-less row's link when a rerun fills its year from the piece", () => {
+    const blocks = [...BLOCKS, block("spya-zzzzzz", "On July 19, 2026 it ended.")];
+    const opts = {
+      power: "standard" as const,
+      slug: "test",
+      sourceHash: "h",
+      frame: null,
+      fetchedAt: "2026-08-30T10:00:00.000Z",
+      elapsedMs: 1,
+    };
+    const before = buildTimeline({ events: [raw()] }, { ...opts, blocks: BLOCKS, dropped: emptyDropped() });
+    expect(before.events[0]?.dating).toMatchObject({ kind: "rejected", reason: "noYearFrame" });
+    const after = buildTimeline({ events: [raw({ label: "Agents talk" })] }, {
+      ...opts, blocks, inherit: idsByEvidence(before), dropped: emptyDropped(),
+    });
+    expect(after.events[0]?.dating).toMatchObject({ kind: "dated", when: { yearFrom: "piece" } });
+    expect(after.events[0]?.id).toBe(before.events[0]?.id);
+  });
+
+  it("does not guess between duplicate old or fresh passages during the year migration", () => {
+    const rejected = event({ id: "spya-old001", dating: { kind: "rejected", reason: "noYearFrame", phrase: "By May 12" } });
+    const dated = event({ id: "spya-new001", dating: { kind: "dated", when: {
+      earliest: null, latest: "2026-05-12", extent: "instant", phrase: "By May 12",
+      at: { blockId: "spya-aaaaaa", start: 0, end: 9 }, yearFilled: true, yearFrom: "piece",
+    } } });
+    const oldDuplicates = idsByEvidence({ events: [rejected, { ...rejected, id: "spya-old002" }] } as Timeline);
+    expect(inheritIds([dated], oldDuplicates)[0]?.id).toBe(dated.id);
+    const oneOld = idsByEvidence({ events: [rejected] } as Timeline);
+    const freshDuplicates = [dated, { ...dated, id: "spya-new002" }];
+    expect(inheritIds(freshDuplicates, oneOld).map((e) => e.id)).toEqual(["spya-new001", "spya-new002"]);
+    // A normal match and the migration fallback must never hand out the same id twice.
+    expect(inheritIds([dated, event({ id: "spya-new003" })], oneOld).map((e) => e.id))
+      .toEqual(["spya-new001", "spya-new003"]);
+  });
   it("carries an id across a run that paraphrased the label", () => {
     const before = event({ id: "spya-old001", label: "Message volume crashes package manager" });
     const after = event({ id: "spya-new001", label: "Agents crash the package manager" });
@@ -659,6 +767,7 @@ describe("the answer's shape is read before anything in it", () => {
           blocks: BLOCKS,
           sourceHash: "h",
           frame: FRAME,
+          fetchedAt: null,
           elapsedMs: 1,
           dropped: emptyDropped(),
         }),

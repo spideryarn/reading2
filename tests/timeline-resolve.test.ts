@@ -29,6 +29,7 @@
    with `new Date(iso).toLocaleDateString("en-GB", …)` reddens **seven** of the
    twenty-one tests here, and every failure is off by one day. */
 process.env.TZ = "America/Los_Angeles";
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -42,6 +43,7 @@ import {
   yearsOf,
 } from "../src/web/TimelinePanel.js";
 import { resolveTimelineEvent } from "../src/web/search-hits.js";
+import { MarginNotesSlot } from "../src/web/marginalia/MarginaliaColumn.js";
 import { DATE_REJECTED_SHORT, DATE_REJECTED_WHY } from "../src/messages.js";
 import type {
   Block,
@@ -159,7 +161,7 @@ describe("the four dating states", () => {
     { kind: "dated", when: when() },
     { kind: "words", phrase: "another month later" },
     { kind: "untimed" },
-    { kind: "rejected", reason: "noYearFrame", phrase: "On July 7" },
+    { kind: "rejected", reason: "phraseNotInOccurrence", phrase: null },
   ];
 
   it("draws four different rows", () => {
@@ -178,6 +180,23 @@ describe("the four dating states", () => {
     const untimed = datingWords({ kind: "untimed" }, false);
     expect(words.text).toContain("another month later");
     expect(words.text).not.toBe(untimed.text);
+  });
+
+  /**
+   * **A day and a month with no year is still the article's date** — Greg,
+   * 2026-10-04 (spya-fyjac4), on a piece where seventeen rows read "dated — but
+   * which year?" beside passages that plainly said "On July 7". The words were
+   * already in the artefact; the column was hiding them.
+   */
+  it("shows the article's own words when only the year is missing", () => {
+    const shown = datingWords({ kind: "rejected", reason: "noYearFrame", phrase: "On July 7" }, false);
+    expect(shown).toEqual({ text: "“On July 7”", tone: "words" });
+    // With no words located there is nothing of the article's to show.
+    const bare = datingWords({ kind: "rejected", reason: "noYearFrame", phrase: null }, false);
+    expect(bare).toEqual({ text: DATE_REJECTED_SHORT.noYearFrame, tone: "rejected" });
+    // The other rejections name a date we refused, so their words stay out of the column.
+    const refused = datingWords({ kind: "rejected", reason: "unparseablePhrase", phrase: "May 3 or 4" }, false);
+    expect(refused.tone).toBe("rejected");
   });
 
   /**
@@ -295,7 +314,7 @@ describe("the panel, rendered", () => {
     };
   }
 
-  function draw(events: TimelineEvent[], over: Partial<UseTimeline> = {}) {
+  function draw(events: TimelineEvent[], over: Partial<UseTimeline> = {}, eventId: string | null = null) {
     const timeline = {
       version: "timeline/1",
       generator: "test",
@@ -313,7 +332,7 @@ describe("the panel, rendered", () => {
       root.render(
         createElement(TimelinePanel, {
           access: { kind: "owner", owner: owner({ timeline, ...over }) },
-          eventId: null,
+          eventId,
           onEvent: () => {},
           found: [],
           openKey: null,
@@ -331,7 +350,7 @@ describe("the panel, rendered", () => {
       event({ id: "a", dating: { kind: "dated", when: when({ earliest: null, latest: "2026-05-12" }) } }),
       event({ id: "b", dating: { kind: "words", phrase: "another month later" } }),
       event({ id: "c", dating: { kind: "untimed" } }),
-      event({ id: "d", dating: { kind: "rejected", reason: "noYearFrame", phrase: "On July 7" } }),
+      event({ id: "d", dating: { kind: "rejected", reason: "noYearFrame", phrase: null } }),
     ]);
     const cells = [...el.querySelectorAll(".tl-when")].map((n) => n.textContent ?? "");
     expect(cells[0]).toContain("at or before 12 May");
@@ -344,6 +363,85 @@ describe("the panel, rendered", () => {
       (n) => [...n.classList].find((c) => c.startsWith("tl-when-")) ?? "",
     );
     expect(new Set(tones).size).toBe(4);
+  });
+
+  /**
+   * **What Greg was looking at on 2026-10-04** (spya-fyjac4): no publication
+   * date, one row whose passage writes `2026-07-19` in full, and the rest
+   * year-less. The head said "Everything dated here is in 2026" over seventeen
+   * rows reading "dated — but which year?".
+   */
+  it("shows year-less dates as the article wrote them, and does not claim a year for them", () => {
+    const el = draw([
+      event({ id: "a", dating: { kind: "rejected", reason: "noYearFrame", phrase: "On July 7" } }),
+      event({ id: "b", dating: { kind: "rejected", reason: "noYearFrame", phrase: "By July 13" } }),
+      event({
+        id: "c",
+        dating: {
+          kind: "dated",
+          when: when({ earliest: "2026-07-19", latest: "2026-07-19", yearFilled: false }),
+        },
+      }),
+    ]);
+    const cells = [...el.querySelectorAll(".tl-when")].map((n) => n.textContent ?? "");
+    expect(cells[0]).toBe("“On July 7”");
+    expect(cells[1]).toBe("“By July 13”");
+    // The one full date keeps its year on the row, since the others have none to share.
+    expect(cells[2]).toContain("2026");
+    const head = el.querySelector(".tl-frame")?.textContent ?? "";
+    expect(head).not.toContain("Everything dated here");
+    expect(head).toMatch(/have no year/);
+    expect(el.textContent).not.toContain(DATE_REJECTED_SHORT.noYearFrame);
+  });
+
+  /** A year we assumed from the piece's own single stated year is said to be assumed. */
+  it("says so when the year is the one the piece states rather than a publication date", () => {
+    const el = draw([
+      event({
+        id: "a",
+        dating: {
+          kind: "dated",
+          when: when({ earliest: "2026-07-07", latest: "2026-07-07", yearFilled: true, yearFrom: "piece" }),
+        },
+      }),
+      event({ id: "b", dating: { kind: "dated", when: when({ earliest: "2026-07-11", latest: "2026-07-11", yearFilled: true, yearFrom: "piece" }) } }),
+      event({ id: "c", dating: { kind: "untimed" } }),
+    ]);
+    const head = el.querySelector(".tl-frame")?.textContent ?? "";
+    expect(head).toMatch(/assumed/);
+    expect(head).not.toMatch(/comes from when the piece was published/);
+  });
+
+  it("marks an assumed year in the margin, where there is no panel header", () => {
+    const e = event({ dating: { kind: "dated", when: when({ yearFrom: "piece" }) } });
+    act(() => root.render(createElement(MarginNotesSlot, {
+      notes: [{ kind: "timeline", items: [{ event: e, quote: "The article's words." }] }],
+      viewer: "owner",
+    })));
+    expect(host.querySelector(".marg-stamp")?.textContent).toMatch(/year assumed/);
+  });
+
+  it("does not claim that a partly filled range states no year at all", () => {
+    const e = event({ id: "a", dating: { kind: "dated", when: when({
+      earliest: "2026-07-13", latest: "2026-07-19", extent: "extended",
+      phrase: "From July 13 through July 19, 2026", yearFrom: "piece",
+    }) } });
+    const el = draw([e], {}, "a");
+    expect(el.querySelector(".tl-detail")?.textContent).toContain("assumed");
+    expect(el.querySelector(".tl-detail")?.textContent).not.toContain("does not write the year here");
+  });
+
+  it.each([0, 1, 2, 3, 4, 5, 6, 7])("keeps the year explanation true for source combination %i", (bits) => {
+    const rows: TimelineEvent[] = [event({ id: "full", dating: { kind: "dated", when: when({ yearFilled: false }) } })];
+    if (bits & 1) rows.push(event({ id: "pub" }));
+    if (bits & 2) rows.push(event({ id: "piece", dating: { kind: "dated", when: when({ yearFrom: "piece" }) } }));
+    if (bits & 4) rows.push(event({ id: "words", dating: { kind: "rejected", reason: "noYearFrame", phrase: "During May" } }));
+    const head = draw(rows).querySelector(".tl-frame")?.textContent ?? "";
+    expect(head.includes("taken from when the piece was published")).toBe(Boolean(bits & 1));
+    expect(head.includes("assumed year")).toBe(Boolean(bits & 2));
+    expect(head.includes("have no year")).toBe(Boolean(bits & 4));
+    expect(head.includes("Everything dated here")).toBe(!(bits & 4));
+    expect(head).not.toContain("We do not know when");
   });
 
   /**
