@@ -31,10 +31,14 @@
  *   2026-10-02: an owner's laptop sits on rung 3);
  * - the last rung (4), a window under 732px, or **any touch screen**
  *   (`pointer: coarse` — a text box in a fixed bar at the foot of an iPad is
- *   where the on-screen keyboard misbehaves): the ⚡, which opens Search mode
- *   on *quick* with the panel's box focused;
- * - **Search mode open and this box not focused**: the ⚡ too (a class this
- *   component sets), so there is only ever one box to type in.
+ *   where the on-screen keyboard misbehaves): **nothing**. Until 2026-10-05
+ *   these drew the ⚡ alone; Greg, `spya-n8pgy2`: "if there isn't much room,
+ *   don't bother showing the quick search icon alone without the input text
+ *   bar" — the Search button is in the same bar (plan 261005h). `/` still
+ *   works there, and does what the ⚡ did;
+ * - **Search mode open and this box not focused**, at a width that has the
+ *   box: the ⚡ (a class this component sets), so there is only ever one box
+ *   to type in. It opens Search mode on *quick* with the panel's box focused.
  *
  * The ⚡ focuses the panel's box inside the tap when the panel is already
  * mounted. When it is not, the box mounts a render later and focuses itself
@@ -57,7 +61,8 @@
  * ## `/`
  *
  * The web's usual key for "jump to search" (GitHub, YouTube, Gmail). It
- * focuses this box, or does the ⚡'s job where the box is not shown. The
+ * focuses this box, or does the ⚡'s job where the box is not shown — which
+ * includes everywhere the ⚡ is not drawn either. The
  * guards are G's (TermJump.tsx § isOurKey) less one: **Shift is not refused**,
  * because some layouts need it to type `/` at all (Sol F10). It overrides
  * Firefox's Quick Find, a niche duplicate of ⌘F/Ctrl-F, as GitHub does.

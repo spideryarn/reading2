@@ -458,7 +458,8 @@ search: the asking is the band's typing session either way. Type into it with Se
 the first qualifying pause opens Search mode on `?match=quick` (switching from another matcher if
 needed); the panel's box does not take focus from the bar. If the final fit rung, window width or
 pointer setting hides the focused bar box, focus transfers to the panel with scrolling prevented.
-While Search mode is open and the bar box is not focused it shows as a ⚡ button. Both boxes can
+While Search mode is open and the bar box is not focused it shows as a ⚡ button (where the bar
+has room for the box at all). Both boxes can
 be visible while the bar box has focus; they share the same words and typing session.
 
 - **A cross empties it**, shown while the box has words in it (Greg, 2026-10-04:
@@ -466,12 +467,24 @@ be visible while the bar box has focus; they share the same words and typing ses
   is Escape's clear — one function, `clear`, for both — except that the cursor stays in the box.
   The box does **not** wipe itself after a search: the words stay so they can be refined.
   [261004g](../plans/261004g-quick-search-box-clear-cross.md).
-- **A coarse pointer gets the ⚡ at every width**, and so do a mouse at fit rung 4
-  and a window under 732px. Rung 3 keeps a compact 7rem input after the button labels disappear.
-  The ⚡ opens Search mode on quick with the panel's box focused. A text box in a fixed bar at the
-  foot of an iPad is where the on-screen keyboard misbehaves. When the
-  panel is not yet mounted it focuses a render after the tap, so **iOS may need a second tap to
-  raise the keyboard** — the accepted cost, not something the Playwright check can show.
+- **Where there is no room for the box, nothing is drawn**: a coarse pointer at every width, a
+  mouse at fit rung 4, and a window under 732px. Rung 3 keeps a compact 7rem input after the button
+  labels disappear. A text box in a fixed bar at the foot of an iPad is where the on-screen keyboard
+  misbehaves, which is why a finger never gets one. Until 2026-10-05 those three cases drew the ⚡
+  alone. Greg, 2026-10-05 (`spya-n8pgy2`):
+
+  > if there isn't much room, don't bother showing the quick search icon alone without the input
+  > text bar, because the quick search icon does just the same thing as clicking the search icon,
+  > which we are already also showing, so the quick search icon alone doesn't add any value.
+
+  **The two were not quite the same door**, and the difference is what a phone gave up: the ⚡
+  opened Search on *quick*, while the Search button opens it on whichever kind the URL names, and
+  with none named that is *thorough* (`resolveMatcher` in [`params.ts`](../../src/web/params.ts)).
+  So on a phone *quick* is the Search button and then the *quick* tab. `/` still goes straight
+  there. [261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md).
+- **The ⚡ that is left** stands in for the box while Search mode is open and the box is not
+  focused, at a width that has the box. It opens Search mode on quick with the panel's box focused.
+  When the panel is not yet mounted it focuses a render after the press.
 - **Only on an owner's reading view**, where the band that can ask (`SearchBand`) would mount; a
   visitor's view has no control and no `/` (`hasQuickSearch` in
   [`Dock.tsx`](../../src/web/Dock.tsx)).
@@ -488,8 +501,10 @@ keep the icon and make *search for X* open quick search (B), or remove the icon 
 >
 > — Greg, 2026-10-04
 
-So B: **the box and the ⚡ stay**, and removing them is still open
+So B: **the box and the ⚡ stay** wherever they are drawn, and removing them is still open
 ([interface-vision.md § Decluttering the bottom bar](interface-vision.md#decluttering-the-bottom-bar)).
+A phone and a touch screen draw neither since 261005h, above, so there the command bar is the one
+step to a quick search.
 
 Every `find` in the bar — a typed verb (*search for*, *find*, *does it mention* …) or a sentence a
 model read as one — now draws two rows: ***Quick search “X”*** first, so Enter runs it, and
@@ -518,7 +533,7 @@ exact-words row alone. A *Find “X”* chip in a chat answer still opens the ex
 ### The cross in the panel's own box
 
 The Search panel's box has the same cross since 2026-10-05, for all three matchers (Greg,
-2026-10-04: *"Q-panel-box-cross yes"*). A phone has no Escape, and the ⚡ sends a phone to this box.
+2026-10-04: *"Q-panel-box-cross yes"*). A phone has no Escape, and this is the only box a phone types a search into.
 It is Escape's clear (one `clear` in `Box`,
 [`SearchPanel.tsx`](../../src/web/SearchPanel.tsx)): it empties the box, leaves the ticked searches
 alone, and puts the cursor in the box. `.srch-clear` in
@@ -586,8 +601,8 @@ answered by the metadata page already. The convention survives on that page for 
 rows; the bar is all live controls now. See
 [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md#the-dimmed-placeholders-are-gone).
 
-Since 2026-10-02 the bar also carries **a quick-search box** (a ⚡ on touch screens and narrow
-windows), beside the Search button rather than instead of it: the button opens the mode as it always
+Since 2026-10-02 the bar also carries **a quick-search box** (nothing on touch screens and narrow
+windows, since 2026-10-05), beside the Search button rather than instead of it: the button opens the mode as it always
 has, the box always searches *quick*. It is the one text box in the bar —
 [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar).
 

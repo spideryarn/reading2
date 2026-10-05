@@ -215,7 +215,9 @@ So this is a goal, not a plan. What has happened and what is on the table:
   ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)).
 - **Done:** a `find` or *search for* in the command bar now opens quick search
   ([261005i](../plans/261005i-the-command-bar-opens-quick-search-and-the-search-panel-box-gets-a-clear-cross.md)).
-  The quick-search icon stays; removing it (Greg's option C on Q-bar-3) is still open.
+  The quick-search box and icon stay; removing them (Greg's option C on Q-bar-3) is still open.
+  Separately, the same day, a narrow or touch bar stopped drawing the icon alone
+  ([261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md)).
 - **Proposed, not decided** (all in queue item `qi-5ay85q7d` and the plan above): one *Extracts*
   button opening a menu of Quotes, Glossary and Ideas; or a merged *Lists* mode with sub-modes; or
   leaving the bar alone and leaning on the command bar. Folding those lists into Marginalia was

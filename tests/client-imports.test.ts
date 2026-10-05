@@ -210,6 +210,12 @@ const SHARED = new Set([
      an unopened one out, so a browser copy and a server copy would be two
      rules for one paragraph. It imports types only. src/recall-hint.ts. */
   "recall-hint.js",
+  /* How a conversation's title is cut from its first question. The server
+     stores that cut; Chat's list asks whether a stored title is exactly it
+     before drawing the whole question instead (src/web/chat-list-row.ts), so
+     a browser copy would be a second rule for one string. It imports
+     nothing. src/chat-title.ts. */
+  "chat-title.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the

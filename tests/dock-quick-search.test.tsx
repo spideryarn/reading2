@@ -10,8 +10,8 @@
  * for the reading view's one job here: drawing the band when Search mode is
  * open. The owner gate is the Dock's, so it is asked of the real `Dock`.
  *
- * jsdom has no layout and loads no stylesheet, so which of the box and the ⚡
- * a narrow window or a touch screen shows is not visible here — that is the
+ * jsdom has no layout and loads no stylesheet, so whether a narrow window or
+ * a touch screen draws the control at all is not visible here — that is the
  * fit ladder's CSS (styles/dock-quick-search.css) and the browser check's.
  * What is visible is the class that says which one Search mode wants.
  */
@@ -719,7 +719,8 @@ describe("preserved boundaries", () => {
  * A browser check on 2026-10-02 found an owner's reading view already at the
  * last rung at 1440×900, and the last rung drew the ⚡ — so a laptop never saw
  * the search *bar* Greg asked for. Rung 4 went in below it: rung 3 drops every
- * label and keeps a compact box, and only rung 4 swaps it for the ⚡.
+ * label and keeps a compact box, and only rung 4 gives it up — for the ⚡
+ * until 2026-10-05, and for nothing since (plan 261005h).
  */
 describe("the box outlives the labels (the fit ladder's CSS)", () => {
   const rules = (): { sel: string[]; body: string }[] =>
@@ -742,9 +743,57 @@ describe("the box outlives the labels (the fit ladder's CSS)", () => {
     expect(width(".dock.dock-fit-3 .dock-qs-input")).toBeLessThan(width(".dock.dock-fit-2 .dock-qs-input"));
   });
 
-  it("turns it into the ⚡ at rung 4", () => {
+  /* Until 2026-10-05 rung 4 drew the ⚡ alone. Greg, `spya-n8pgy2`: "if there
+     isn't much room, don't bother showing the quick search icon alone without
+     the input text bar … the quick search icon alone doesn't add any value."
+     The children are hidden as well as the wrapper because DockQuickSearch
+     reads the field's own computed `display`, which a hidden parent does not
+     change. */
+  it("draws nothing at rung 4: no box, and no lone ⚡", () => {
+    expect(hides(".dock.dock-fit-4 .dock-qs")).toBe(true);
     expect(hides(".dock.dock-fit-4 .dock-qs-field")).toBe(true);
-    expect(shows(".dock.dock-fit-4 .dock-qs-bolt")).toBe(true);
+    expect(hides(".dock.dock-fit-4 .dock-qs-bolt")).toBe(true);
+    expect(shows(".dock.dock-fit-4 .dock-qs-bolt")).toBe(false);
+  });
+
+  it("draws nothing under 732px or for a finger, whatever the rung", () => {
+    const css = readerCssNoComments();
+    const block =
+      /@media \(max-width: 731px\), \(pointer: coarse\)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/.exec(css)?.[1] ?? "";
+    const hidden = [...block.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /display:\s*none/.test(m[2] ?? ""))
+      .flatMap((m) => (m[1] ?? "").split(",").map((x) => x.trim()));
+    expect(hidden).toContain(".dock .dock-qs");
+    expect(hidden).toContain(".dock .dock-qs .dock-qs-field");
+    expect(hidden).toContain(".dock .dock-qs .dock-qs-bolt");
+    expect(block).not.toMatch(/inline-flex/);
+  });
+
+  /* Search mode open and the bar's box not focused: still the ⚡, where the
+     width has a box to stand in for. One box to type in, at any width. */
+  it("keeps the ⚡ that stands in for the box while Search mode is open", () => {
+    expect(shows(".dock-qs--bolt .dock-qs-bolt")).toBe(true);
+    expect(hides(".dock-qs--bolt .dock-qs-field")).toBe(true);
+    /* `hides` above proves a hiding declaration exists, not that a stronger
+       or later rule cannot put the bolt back. There is exactly one state in
+       which any rule may show it. */
+    const showingBolt = rules()
+      .filter((r) => /display:\s*inline-flex/.test(r.body))
+      .flatMap((r) => r.sel)
+      .filter((sel) => sel.includes(".dock-qs-bolt"));
+    expect(showingBolt).toEqual([".dock-qs--bolt .dock-qs-bolt"]);
+  });
+
+  /* The rule that keeps that ⚡ is (0,2,0). Each rule that removes it must
+     outrank it by specificity, not by where it happens to sit in the file. */
+  it("outranks the Search-open ⚡ where there is no room", () => {
+    const specificity = (sel: string) => (sel.match(/\./g) ?? []).length;
+    const removing = rules()
+      .filter((r) => /display:\s*none/.test(r.body))
+      .flatMap((r) => r.sel)
+      .filter((sel) => sel.endsWith(".dock-qs-bolt") && sel !== ".dock-qs-bolt");
+    expect(removing.length).toBeGreaterThanOrEqual(2);
+    for (const sel of removing) expect(specificity(sel)).toBeGreaterThan(specificity(".dock-qs--bolt .dock-qs-bolt"));
   });
 });
 

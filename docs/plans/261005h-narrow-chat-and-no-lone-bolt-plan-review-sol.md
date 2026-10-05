@@ -1,0 +1,10 @@
+**Verdict: approve with changes.**
+
+1. **P2 — `rowTitle` can silently override a legitimate rename.** [`chat-list-row.ts:37`](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/web/chat-list-row.ts:37>) accepts any ellipsis-ended title that prefixes the first question, while [`titleFrom` only produces one exact cut](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/chat.ts:114>). Renaming a thread to `Explain…` would therefore display the original full question instead. The planned rename test misses this case. Extract `titleFrom` into a client-safe pure module and expand only when `title === titleFrom(question)`.
+
+No P0/P1 findings. Everything else checks out:
+
+- The hidden child rules outrank `.dock-qs--bolt`, `/` and focused-box handoff still work, and removing rung 4’s whole control remains monotonic, so the ladder cannot oscillate ([CSS](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/web/styles/dock-quick-search.css:143>), [handler/effect](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/web/DockQuickSearch.tsx:146>), [ladder](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/web/dock-fit.ts:172>)).
+- Keeping the wide-window, Search-open ⚡ is a reasonable reading of Greg’s width-qualified request. Quick versus thorough is a real distinction, but changing Search’s default is a separate product decision with no cheap CSS-only addition.
+- Whitespace, `space > 20`, first-question edits, and spoken turns otherwise agree with `titleFrom`; chat messages have no attachment field.
+- The narrow clamps are not defeated later: `voices.css` changes only typeface. The list already scrolls, and loading is a separate surface ([mode-band.css](</home/greg/code/spideryarn2/.claude/worktrees/fbsvsbae-n8pgy2-narrow-chat-and-search/src/web/styles/mode-band.css:335>)).
