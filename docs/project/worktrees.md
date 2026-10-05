@@ -36,6 +36,7 @@ What is built:
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
 | [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup-bootstrap.mjs`](../../scripts/worktree-setup-bootstrap.mjs) | Where `npm run worktree:setup` actually starts, and **plain Node on purpose**: the script above needs `tsx` and a package, and a new tree on `/var/tmp` has no `node_modules` of its own nor an ancestor's to borrow, so until 2026-10-05 the command that installs dependencies failed with `tsx: not found` for want of them. With no finished install it runs `npm ci` first — **only in a linked worktree, never the primary** — then hands over, and [`worktree-deps.ts`](../../scripts/worktree-deps.ts) lets setup skip its own install when the merge did not move the lockfile. Do not import a package into it. |
 | [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
 | [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
@@ -138,12 +139,27 @@ Claude Code 2.1.289:
 trees made by hand under `/var/tmp/spideryarn-worktrees/` that afternoon are reachable that way.
 `SPIDERYARN_WORKTREE_ROOT` moves the directory, and exists for the hook's own tests.
 
-**Not yet followed by the fleet dashboard.** Its "remove worktree" action refuses any directory that
-is not under `<primary>/.claude/worktrees/` (`planRemoveWorktree` in
-[`tools/fleet/actions.ts`](../../tools/fleet/actions.ts), and the same test in `routes-actions.ts`),
-and the Overseer's recovery view will not reconstruct a path for one
-(`tools/overseer/recovery-view.ts`). Both refuse with a reason rather than doing the wrong thing, so
-a tree on `/` is removed with `npm run worktree:remove` until they are taught the second root.
+**One list of where a worktree may be: [`scripts/worktree-roots.ts`](../../scripts/worktree-roots.ts).**
+The move left six pieces of code each still recognising a worktree by `.claude/worktrees/` in its
+path, and each wrong in its own quiet way about a tree on `/`: the fleet dashboard refused to remove
+it, the recovery view called its directory "not recorded", its row showed no worktree name, the
+readiness scan never read its logs, and `claude-accounts` took it for the primary. All were fixed on
+2026-10-05 ([the plan](../plans/261005l-worktree-tooling-learns-the-var-tmp-root.md)). **Anything
+new that asks "is this a worktree, and which?" asks that file** — or asks git, which is what tells
+you *whose* worktree it is: a path under the external root has the right shape whatever repository
+it belongs to. That is why the dashboard's removal plan now begins with `git worktree list`, and
+why a third location is one edit there and one in the hook (a test holds the two defaults level).
+
+**One limit left in the dashboard's removal.** Its third step is `npm run worktree:check` inside the
+tree, which needs the tree's own dependencies. A tree on `/` that was never set up has none and
+nothing to borrow, so the plan stops there with `tsx: not found` — a refusal, with the tree intact.
+Remove that one with `npm run worktree:remove -- --branch <name>` from the primary, which runs the
+same check from the primary's code. (Measured 2026-10-05; with dependencies installed, the four steps
+removed a real tree under `/var/tmp`.)
+
+**Not followed: the readiness loop's runner.** `scripts/readiness-loop.ts` still makes its own
+worktree under `.claude/worktrees/`, on `/home`. One tree, and nothing is wrong with it but the disk
+it is on.
 
 ### Two things about `EnterWorktree` that have each cost an agent an hour
 

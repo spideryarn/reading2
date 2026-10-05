@@ -145,6 +145,8 @@ export function sessionNameForLog(logPath: string): string {
 export type ReadinessDeps = {
   /** The primary checkout, whose worktrees are scanned alongside it. */
   primary: string;
+  /** The other place worktrees live; null for none. Unset means the box's own, scripts/worktree-roots.ts — so a test sets it, or it scans real trees. */
+  externalRoot?: string | null | undefined;
   dir?: string | undefined;
   nowMs?: (() => number) | undefined;
   /** Injected by tests, so a scan can be driven without a tmux server. */
@@ -191,7 +193,7 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
       const held = store?.read({ sinceMs, nowMs: at }) ?? null;
       const knownRunIds = new Set((held?.readings ?? []).map((r) => r.record.runId));
 
-      const roots = checkoutRoots(deps.primary);
+      const roots = deps.externalRoot === undefined ? checkoutRoots(deps.primary) : checkoutRoots(deps.primary, deps.externalRoot);
       const live = await liveSessions();
       const bodies = new Map<string, Readonly<Record<string, string>>>();
 

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -6,6 +7,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import {
   main,
+  primaryRepoRoot,
   recordLaunchOutcome,
   resolveForLaunch,
   runAuthStatus,
@@ -1856,5 +1858,42 @@ describe("on-box account resolution", () => {
       providerAccountId: "uuid-pool1",
       outcome: "failed",
     });
+  });
+});
+
+describe("primaryRepoRoot", () => {
+  const PRIMARY = "/home/greg/code/spideryarn2";
+  const common = () => `${PRIMARY}/.git`;
+
+  /* The bug: it cut the path at `/.claude/worktrees/`, so from a tree under
+     /var/tmp/spideryarn-worktrees/ — every new one on the box since 2026-10-05 —
+     it answered with the worktree, and `add` seeded that into Codex's trust list. */
+  test("is the primary checkout from a worktree under the external root", () => {
+    expect(primaryRepoRoot("/var/tmp/spideryarn-worktrees/some-agent", common)).toBe(PRIMARY);
+  });
+
+  test("is the primary checkout from the primary and from an in-repo worktree", () => {
+    expect(primaryRepoRoot(PRIMARY, common)).toBe(PRIMARY);
+    expect(primaryRepoRoot(`${PRIMARY}/.claude/worktrees/some-agent`, common)).toBe(PRIMARY);
+  });
+
+  test("leaves the checkout as given when git cannot answer", () => {
+    const broken = () => {
+      throw new Error("not a git repository");
+    };
+    expect(primaryRepoRoot("/srv/not-a-repo", broken)).toBe("/srv/not-a-repo");
+  });
+
+  test("agrees with git about the checkout this suite is running from", () => {
+    const here = path.resolve(import.meta.dirname, "..");
+    // Git lists the primary first. An unrelated repository's .git/HEAD also
+    // exists, so checking existence alone cannot establish whose primary it is.
+    const first = execFileSync("git", ["worktree", "list", "--porcelain", "-z"], {
+      cwd: here,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).split("\0")[0];
+    expect(first?.startsWith("worktree ")).toBe(true);
+    expect(primaryRepoRoot(here)).toBe(first?.slice("worktree ".length));
   });
 });

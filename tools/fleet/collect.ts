@@ -44,6 +44,7 @@ import {
 import { describeKey } from "./describe-pass.js";
 import { descriptionsRoot, readDescriptionMemory } from "./describe-store.js";
 import { readPause, readSessionStore, type StoreIndex } from "./pause.js";
+import { worktreePlace } from "../../scripts/worktree-roots.js";
 import { classifyPaneHarness } from "../overseer/harness.js";
 import { probeProcessTableAsync } from "../overseer/work-probe.js";
 import type { ProcessTableReading } from "../overseer/work.js";
@@ -277,16 +278,15 @@ export function tmuxServerPid(listPanesOutput: string): number | null {
 /**
  * The worktree's directory name, for a session inside one.
  *
- * Worktrees live at `<repo>/.claude/worktrees/<name>`, so the segment after
- * `worktrees` is the name. Returns null for a session sitting in a plain
- * checkout, which is not the same as an unknown — the caller renders it as
- * blank rather than as a guess.
+ * Where a worktree may be is scripts/worktree-roots.ts's to say — under
+ * `<repo>/.claude/worktrees/` or, on the box since 2026-10-05, under
+ * `/var/tmp/spideryarn-worktrees/`. This used to look for a path segment called
+ * `worktrees`, so every new tree's row showed the bare repo. Returns null for a
+ * session sitting in a plain checkout, which is not the same as an unknown —
+ * the caller renders it as blank rather than as a guess.
  */
-export function worktreeOf(dir: string): string | null {
-  const parts = dir.split("/");
-  const at = parts.lastIndexOf("worktrees");
-  if (at === -1) return null;
-  return parts[at + 1] ?? null;
+export function worktreeOf(dir: string, env: Readonly<Record<string, string | undefined>> = process.env): string | null {
+  return worktreePlace(dir, env)?.name ?? null;
 }
 
 /**

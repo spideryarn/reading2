@@ -43,6 +43,7 @@ import {
   type RecoveryRecord,
 } from "../tools/overseer/recovery.js";
 import { EVENTS_FILE, foldEvents, type RegisterEntry } from "../tools/overseer/store.js";
+import { externalWorktreeRoot } from "../scripts/worktree-roots.js";
 
 type FullRecord = Extract<RecoveryRecord, { oversize: false }>;
 
@@ -391,6 +392,22 @@ describe("evidence", () => {
     const b = await recoveryEvidence(record({ entry: entryOf(outside) }), deps(tempRoot()));
     expect(a.kind === "checked" && a.worktree.kind).toBe("recorded");
     expect(b.kind === "checked" && b.worktree.kind).toBe("not-recorded");
+  });
+
+  test("a worktree under the external root is recorded too, and only under its own name", async () => {
+    // Every new tree on the box since 2026-10-05; the root is asked of the function the view asks.
+    const tree = `${externalWorktreeRoot()}/ri-wt`;
+    const meta = (dir: string) => ({ version: 1 as const, kind: "claude" as const, repo: "spideryarn/reading2", dir });
+    const inside = row("$56", "wt-ext", null, { worktree: "ri-wt", meta: meta(tree) });
+    const deeper = row("$57", "wt-ext-2", null, { worktree: "ri-wt", meta: meta(`${tree}/tools/fleet`) });
+    const another = row("$58", "wt-ext-3", null, { worktree: "ri-wt", meta: meta(`${externalWorktreeRoot()}/ri-wt-two`) });
+    const kindOf = async (r: typeof inside) => {
+      const e = await recoveryEvidence(record({ entry: entryOf(r) }), deps(tempRoot()));
+      return e.kind === "checked" ? e.worktree.kind : e.kind;
+    };
+    expect(await kindOf(inside)).toBe("recorded");
+    expect(await kindOf(deeper)).toBe("recorded");
+    expect(await kindOf(another)).toBe("not-recorded");
   });
 });
 

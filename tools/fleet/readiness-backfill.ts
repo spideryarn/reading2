@@ -42,6 +42,8 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 
+import { externalWorktreeRoot } from "../../scripts/worktree-roots.js";
+
 import {
   footerRequired,
   parseBanner,
@@ -540,7 +542,7 @@ export function scanLogs(options: ScanOptions): ScanResult {
 }
 
 /**
- * The checkouts to scan: the primary, and every worktree under it.
+ * The checkouts to scan: the primary, and every worktree of it.
  *
  * Worktrees are where most of the box's suites actually run, so a scan of the
  * primary alone would show a nearly empty day on a night when a dozen agents
@@ -552,9 +554,32 @@ export function scanLogs(options: ScanOptions): ScanResult {
  */
 export const MAX_ROOTS = 100;
 
-export function checkoutRoots(primary: string): { roots: string[]; truncated: boolean; why: string | null } {
+/**
+ * `externalRoot` is the second place worktrees live — on the box since
+ * 2026-10-05, where every new one is; scripts/worktree-roots.ts. Until this
+ * took it, the scan saw the primary and a shrinking set of old trees and said
+ * nothing was missing. Each directory is listed under its own cap of
+ * `MAX_ROOTS`, so a full one cannot hide the other, and a failure in one does
+ * not stop the other being listed. Null scans the in-repo directory alone.
+ */
+export function checkoutRoots(
+  primary: string,
+  externalRoot: string | null = externalWorktreeRoot(),
+): { roots: string[]; truncated: boolean; why: string | null } {
   const roots = [primary];
-  const worktrees = join(primary, ".claude", "worktrees");
+  let truncated = false;
+  let why: string | null = null;
+  for (const worktrees of [join(primary, ".claude", "worktrees"), ...(externalRoot === null ? [] : [externalRoot])]) {
+    const listed = listDirectories(worktrees);
+    roots.push(...listed.dirs);
+    truncated ||= listed.truncated;
+    why ??= listed.why;
+  }
+  return { roots, truncated, why };
+}
+
+function listDirectories(worktrees: string): { dirs: string[]; truncated: boolean; why: string | null } {
+  const roots: string[] = [];
   let handle: Dir;
   try {
     handle = opendirSync(worktrees);
@@ -564,8 +589,8 @@ export function checkoutRoots(primary: string): { roots: string[]; truncated: bo
        and not a fault. Anything else IS a fault, and this used to swallow both
        identically, so a permissions problem read as "no worktrees" and the scan
        quietly covered a fraction of the box. */
-    if (code === "ENOENT") return { roots, truncated: false, why: null };
-    return { roots, truncated: false, why: (err as Error).message };
+    if (code === "ENOENT") return { dirs: roots, truncated: false, why: null };
+    return { dirs: roots, truncated: false, why: (err as Error).message };
   }
 
   /* **`opendirSync`, for the same reason `discoverLogs` uses it.** This was
@@ -598,7 +623,7 @@ export function checkoutRoots(primary: string): { roots: string[]; truncated: bo
       /* Already closed, or the directory went away under us. */
     }
   }
-  return { roots, truncated, why: null };
+  return { dirs: roots, truncated, why: null };
 }
 
 /** `package.json` script bodies for a checkout, or `{}` when it has none we can read. */
