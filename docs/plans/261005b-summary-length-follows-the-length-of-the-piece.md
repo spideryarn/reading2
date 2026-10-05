@@ -184,9 +184,12 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
 
 - **[Q-summary-length-numbers]** whether these four rows are the lengths he wants. They are easy
   to change: one table, `FULLER_LENGTH` in `src/simple-summary.ts`.
+  **Decided: keep them for now** — Greg, 2026-10-05: "let's see how it feels".
 - **[Q-brief-for-a-book]** whether he wants a longer Brief for a book anyway. He wrote
   "summaries", plural; the measurement says a longer Brief reads as padded and a reader would
   rather have the 80-word one. The recommendation is to leave Brief alone.
+  **Decided: slightly longer** — Greg, 2026-10-05: "maybe Brief could be ever so slightly longer
+  but not much". Dispatched to session `brief-slightly-longer`.
 
 ## Ledger
 
