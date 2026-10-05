@@ -87,6 +87,12 @@ describe("rowTitle", () => {
     expect(question[shown.length - 1]).toBe(" ");
   });
 
+  it("does not split an emoji at the hard cap when there is no later word boundary", () => {
+    const question = `${"word ".repeat(5)}${"x".repeat(214)}😀 and then some words`;
+    const shown = rowTitle(asked(question));
+    expect(shown).not.toMatch(/[\uD800-\uDFFF]…$/);
+  });
+
   it("falls back to the title when there is nothing to read it from", () => {
     expect(rowTitle({ title: "Something cut…", messages: [] })).toBe("Something cut…");
     expect(rowTitle({ title: "Something cut…", messages: [said("assistant", "Something cut off")] })).toBe(
@@ -98,16 +104,17 @@ describe("rowTitle", () => {
 
 describe("how many lines a row may take (styles/mode-band.css)", () => {
   const css = readFileSync("src/web/styles/mode-band.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  /** The body of the `max-width: 731px` block that names the list's rows. */
-  const narrow = (): string => {
-    for (const m of css.matchAll(/@media \(max-width: 731px\)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)) {
-      if ((m[1] ?? "").includes(".chat-thread-title")) return m[1] ?? "";
-    }
-    return "";
-  };
+  /** Every `max-width: 731px` block that names the list's rows, in source order. */
+  const narrow = (): string =>
+    [...css.matchAll(/@media \(max-width: 731px\)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)]
+      .map((m) => m[1] ?? "")
+      .filter((body) => /\.chat-thread-(?:title|last)/.test(body))
+      .join("\n");
   const wide = (): string => css.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g, "");
-  const rule = (within: string, selector: string): string =>
-    new RegExp(`${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`).exec(within)?.[1] ?? "";
+  const rule = (within: string, selector: string): string => {
+    const found = [...within.matchAll(new RegExp(`${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`, "g"))];
+    return found.at(-1)?.[1] ?? "";
+  };
 
   it("gives the title three lines and the preview two under 732px", () => {
     expect(rule(narrow(), ".chat-thread-title")).toContain("-webkit-line-clamp: 3");

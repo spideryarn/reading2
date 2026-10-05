@@ -41,7 +41,9 @@ export function rowTitle(thread: Pick<ChatThread, "title" | "messages">): string
   if (!first || !title.endsWith("…") || titleFrom(first.text) !== title) return title;
   const question = first.text.replace(/\s+/g, " ").trim();
   if (question.length <= ROW_TITLE_MAX) return question;
-  const cut = question.slice(0, ROW_TITLE_MAX);
+  /* A UTF-16 cut can land between an emoji's surrogate pair. Drop the first
+     half rather than drawing the replacement character before the ellipsis. */
+  const cut = question.slice(0, ROW_TITLE_MAX).replace(/[\uD800-\uDBFF]$/, "");
   const space = cut.lastIndexOf(" ");
   return `${space > title.length ? cut.slice(0, space) : cut}…`;
 }

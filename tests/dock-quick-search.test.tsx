@@ -653,6 +653,14 @@ describe("the box outlives the labels (the fit ladder's CSS)", () => {
   it("keeps the ⚡ that stands in for the box while Search mode is open", () => {
     expect(shows(".dock-qs--bolt .dock-qs-bolt")).toBe(true);
     expect(hides(".dock-qs--bolt .dock-qs-field")).toBe(true);
+    /* `hides` above proves a hiding declaration exists, not that a stronger
+       or later rule cannot put the bolt back. There is exactly one state in
+       which any rule may show it. */
+    const showingBolt = rules()
+      .filter((r) => /display:\s*inline-flex/.test(r.body))
+      .flatMap((r) => r.sel)
+      .filter((sel) => sel.includes(".dock-qs-bolt"));
+    expect(showingBolt).toEqual([".dock-qs--bolt .dock-qs-bolt"]);
   });
 
   /* The rule that keeps that ⚡ is (0,2,0). Each rule that removes it must
