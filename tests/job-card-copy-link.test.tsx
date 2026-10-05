@@ -24,7 +24,7 @@ vi.mock("../src/web/FeedbackButton.js", () => ({ useFeedbackOpen: () => null }))
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { JobCard } = await import("../src/web/AddArticle.js");
-const { IMPORT_LINK_COPY_FAILED } = await import("../src/messages.js");
+const { IMPORT_LINK_COPY_FAILED, IMPORT_LINK_COPY_TIP } = await import("../src/messages.js");
 
 const queue: UseJobs = {
   jobs: [],
@@ -99,6 +99,18 @@ async function press(): Promise<void> {
 }
 
 describe("the copy-the-link button on a job card", () => {
+  it("describes this import's link without promising it survives failure or Retry", () => {
+    expect(IMPORT_LINK_COPY_TIP).toContain("this import's article");
+    expect(IMPORT_LINK_COPY_TIP).toContain("If the import fails, the link leads nowhere");
+    expect(IMPORT_LINK_COPY_TIP).not.toContain("for good");
+  });
+
+  it("also copies a minimal paper's import link", async () => {
+    render({ ...IMPORT, steps: steps("fetch", "metadata") });
+    await press();
+    expect(written).toEqual([`${location.origin}/read/a-piece`]);
+  });
+
   it.each(["queued", "running", "done"] as const)("is on an import job that is %s", (status) => {
     render({ ...IMPORT, status, ...(status === "done" ? { finishedAt: NOW } : {}) });
     expect(copyButton()).not.toBeNull();

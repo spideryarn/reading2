@@ -55,11 +55,14 @@ vi.mock("../src/web/lib/api.js", async (importActual) => ({
 
 /** Every `attempt` the page asked the access hook with, in order. */
 let attempts: number[] = [];
+let unreadableAfterCompletion = false;
 vi.mock("../src/web/article/access.js", () => ({
   useArticleAccess: (_slug: string, _readerId: string | null, attempt: number) => {
     attempts.push(attempt);
     /* Not readable until it is asked again; then a marker in place of the article. */
-    return attempt === 0 ? { kind: "not-shared" } : { kind: "error", message: "THE ARTICLE" };
+    return attempt === 0 || unreadableAfterCompletion
+      ? { kind: "not-shared" }
+      : { kind: "error", message: "THE ARTICLE" };
   },
 }));
 vi.mock("../src/web/LandingPage.js", () => ({ LandingPage: () => "THE LANDING PAGE" }));
@@ -114,6 +117,7 @@ beforeEach(async () => {
   jobEngine.reset();
   calls = [];
   attempts = [];
+  unreadableAfterCompletion = false;
   queue = [];
   hold = null;
   vi.useFakeTimers();
@@ -221,12 +225,43 @@ describe("signed in, at an address nobody can read yet", () => {
     expect(calls.filter((c) => c === "GET /api/jobs").length).toBeGreaterThan(0);
   });
 
-  it("says Not shared over an import that finished before the page arrived", async () => {
+  it("reads again if the fresh list first reveals the import already done", async () => {
     queue = [job(IMPORT, "done")];
     await show(READER);
     await advance(0);
+    expect(attempts.at(-1)).toBe(1);
+    expect(text()).toContain("THE ARTICLE");
+  });
+
+  it("does not loop if the article is still unreadable after the completed import was checked", async () => {
+    unreadableAfterCompletion = true;
+    queue = [job(IMPORT, "done")];
+    await show(READER, true);
+    await advance(0);
+    await advance(LIST_WAIT_MS * 2);
+    expect(Math.max(...attempts)).toBe(1);
     expect(text()).toContain(NOT_SHARED);
-    expect(attempts.every((a) => a === 0), "a done job is not a reason to read again, or it would loop").toBe(true);
+  });
+
+  it("allows a fresh completed-import check after an in-place change of address", async () => {
+    unreadableAfterCompletion = true;
+    queue = [job(IMPORT, "done")];
+    await show(READER);
+    await advance(0);
+    expect(Math.max(...attempts)).toBe(1);
+    queue = [job(IMPORT, "done", { slug: "another-paper" })];
+    await act(async () => {
+      root?.render(createElement(ArticlePage, { slug: "another-paper", view: "article", readerId: READER }));
+    });
+    await advance(0);
+    expect(Math.max(...attempts)).toBe(2);
+  });
+
+  it("recognises a minimal paper as an import too", async () => {
+    queue = [job(["fetch", "metadata"], "running")];
+    await show(READER);
+    await advance(0);
+    expect(text()).toContain(STILL_BEING_ADDED_HEADING);
   });
 
   it("says Not shared when the list cannot be read, rather than nothing", async () => {

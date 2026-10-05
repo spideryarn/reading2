@@ -13,8 +13,11 @@
  *    probe's three answers, and a copy from the offline cache is not one;
  *  - **the page does not leave by itself while sharing is unsettled** (GPT
  *    Sol's plan review, P2-5), and does when it is settled or untouched;
- *  - **one share per slug** (P1): a Retry that comes back under another slug
- *    takes back what was shared under the old one and starts from nothing.
+ *  - **one share per slug, per tab** (P1; code review F11, F12): a Retry that
+ *    comes back under another slug starts from nothing and sends nothing
+ *    about the old one, and two addresses for one slug show one controller;
+ *  - **a reload does not claim a state it cannot read** (code review F10):
+ *    what the tab remembers leads to *unknown*, never to a request.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -111,10 +114,12 @@ vi.mock("../src/web/lib/api.js", async (importActual) => {
 
 const { AddPage, resetAddPurposeForTests } = await import("../src/web/AddPage.js");
 const { resetAutoModesSettingForTests } = await import("../src/web/auto-modes-setting.js");
+const { resetShareAtAddForTests } = await import("../src/web/add-share.js");
 const {
   SHARE_AT_ADD_ALREADY_AN_ARTICLE,
   SHARE_AT_ADD_LABEL,
   SHARE_AT_ADD_ON,
+  SHARE_AT_ADD_RECALLED,
   SHARE_AT_ADD_UNKNOWN,
   SHARING_CONFIRM_TITLE,
   SHARING_RIGHTS_CONFIRM,
@@ -135,8 +140,11 @@ let host: HTMLDivElement;
 let root: Root;
 let strict = false;
 
+/** The address the page is at. A case may change it in place. */
+let source: { kind: "url"; url: string } = URL_SOURCE;
+
 function render(): void {
-  const page = createElement(AddPage, { source: URL_SOURCE });
+  const page = createElement(AddPage, { source });
   act(() => {
     root.render(strict ? createElement(StrictMode, null, page) : page);
   });
@@ -199,6 +207,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   resetAutoModesSettingForTests();
   resetAddPurposeForTests();
+  resetShareAtAddForTests();
+  window.sessionStorage.clear();
+  source = URL_SOURCE;
   jobs = [];
   addResult = null;
   retryResult = null;
@@ -391,6 +402,38 @@ describe("the page does not leave by itself while sharing is unsettled", () => {
 });
 
 describe("one share per slug", () => {
+  it("stops pending public retries when the add page unmounts", async () => {
+    putAnswer = async () => json({ error: "No article" }, { status: 404 });
+    await importing();
+    await share();
+    const sent = puts.length;
+    act(() => root.unmount());
+    root = createRoot(host);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(puts).toHaveLength(sent);
+  });
+
+  it("does not schedule a public retry for a 404 answered after unmount", async () => {
+    const first = heldResponse();
+    putAnswer = async () => first.promise;
+    await importing();
+    await share();
+    act(() => root.unmount());
+    root = createRoot(host);
+    first.answer(json({ error: "No article" }, { status: 404 }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(puts).toEqual([PUBLIC()]);
+  });
+
+  it("keeps a confirmed public share when the add page unmounts", async () => {
+    await importing();
+    await share();
+    act(() => root.unmount());
+    root = createRoot(host);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(puts).toEqual([PUBLIC()]);
+  });
+
   /** The import fails, and Retry comes back as a job under another slug. */
   async function retryOntoAnotherSlug(): Promise<void> {
     jobs = [makeJob("job-1", "error")];
@@ -408,17 +451,17 @@ describe("one share per slug", () => {
     await settle();
   }
 
-  it("after a share succeeded: the old slug is made private, and the new one starts from nothing", async () => {
+  it("after a share succeeded: nothing is sent to the old slug, and the new one starts from nothing", async () => {
     await importing();
     await share();
     expect(puts).toEqual([PUBLIC()]);
 
     await retryOntoAnotherSlug();
-    expect(puts, "the old slug was left public behind a box that reads off").toEqual([PUBLIC(), PRIVATE()]);
+    /* No take-back: its failure would have nobody to tell (GPT Sol's code review, F11). */
+    expect(puts, "an unshare the reader did not ask for").toEqual([PUBLIC()]);
     expect(probes, "the new slug was not asked about").toEqual([SLUG, OTHER]);
     expect(shareBox()?.checked, "the old share was carried to the new slug").toBe(false);
     expect(text()).not.toContain(SHARE_AT_ADD_ON);
-    expect(puts.some((p) => p.startsWith(`${OTHER}:`)), "something was sent about the new slug").toBe(false);
   });
 
   it("the new slug needs its own confirmation, rights tick included", async () => {
@@ -431,7 +474,7 @@ describe("one share per slug", () => {
     expect(puts.some((p) => p.startsWith(`${OTHER}:`))).toBe(false);
   });
 
-  it("during an unanswered request: its answer changes nothing on the page, and is taken back", async () => {
+  it("during an unanswered request: its answer changes nothing on the new slug's box, and nothing is taken back", async () => {
     const first = heldResponse();
     putAnswer = async (slug, body) => (body.visibility === "public" ? first.promise : did(slug, body));
     await importing();
@@ -439,12 +482,30 @@ describe("one share per slug", () => {
     expect(puts).toEqual([PUBLIC()]);
 
     await retryOntoAnotherSlug();
-    expect(puts, "nothing to take back until the request answers").toEqual([PUBLIC()]);
     first.answer(json({ visibility: "public", publicAt: AT }));
     await settle();
-    expect(puts).toEqual([PUBLIC(), PRIVATE()]);
+    expect(puts).toEqual([PUBLIC()]);
     expect(shareBox()?.checked).toBe(false);
     expect(text()).not.toContain(SHARE_AT_ADD_ON);
+  });
+
+  it("a Retry back onto the first slug shows that slug's own share again, still on", async () => {
+    await importing();
+    await share();
+    await retryOntoAnotherSlug();
+    expect(shareBox()?.checked).toBe(false);
+
+    jobs = [makeJob("job-3", "running", SLUG)];
+    addResult = jobs[0] ?? null;
+    retryResult = null;
+    /* The page follows one job by id; a new address for the same article is how it gets there here. */
+    source = { kind: "url", url: "https://example.com/a-paper?again" };
+    render();
+    await settle();
+    expect(shareBox()?.checked, "the first slug's state was lost").toBe(true);
+    expect(text()).toContain(SHARE_AT_ADD_ON);
+    expect(probes, "the first slug was probed twice").toEqual([SLUG, OTHER]);
+    expect(puts).toEqual([PUBLIC()]);
   });
 
   it("an adopted article after the Retry gets the line, not the box", async () => {
@@ -453,5 +514,99 @@ describe("one share per slug", () => {
     await retryOntoAnotherSlug();
     expect(shareBox()).toBeNull();
     expect(text()).toContain(SHARE_AT_ADD_ALREADY_AN_ARTICLE);
+  });
+});
+
+describe("one controller per slug, whatever the address (GPT Sol's code review, F12)", () => {
+  it("an equivalent address with the same slug keeps the same share and its state", async () => {
+    await importing();
+    await share();
+    expect(text()).toContain(SHARE_AT_ADD_ON);
+
+    /* The same article by another spelling of its address: a new POST, a new job, the same slug. */
+    addResult = makeJob("job-2", "running");
+    jobs = [addResult];
+    source = { kind: "url", url: "https://example.com/a-paper/" };
+    render();
+    await settle();
+
+    expect(shareBox()?.checked, "a second controller started from off").toBe(true);
+    expect(text()).toContain(SHARE_AT_ADD_ON);
+    expect(probes, "a second controller probed again").toEqual([SLUG]);
+    expect(puts, "a second writer for one slug").toEqual([PUBLIC()]);
+
+    /* And the one writer is the one the box unticks. */
+    click(shareBox(), "share box");
+    await settle();
+    expect(puts).toEqual([PUBLIC(), PRIVATE()]);
+    expect(shareBox()?.checked).toBe(false);
+  });
+});
+
+describe("after a reload, before the import has published (GPT Sol's code review, F10)", () => {
+  /** A reload: a new page and an empty registry, in the same tab. */
+  async function reload(): Promise<void> {
+    act(() => root.unmount());
+    resetShareAtAddForTests();
+    root = createRoot(host);
+    await importing();
+  }
+
+  it("does not show a share this tab made as plain off, and sends nothing by itself", async () => {
+    await importing();
+    await share();
+    expect(puts).toEqual([PUBLIC()]);
+
+    await reload();
+    expect(probes).toEqual([SLUG, SLUG]);
+    expect(shareBox()?.checked, "a public article behind an unticked box").toBe(true);
+    expect(text()).toContain(SHARE_AT_ADD_RECALLED);
+    expect(text(), "it claimed a state it cannot read").not.toContain(SHARE_AT_ADD_ON);
+    expect(puts, "the mark sent a request").toEqual([PUBLIC()]);
+  });
+
+  it("unticking it sends private", async () => {
+    await importing();
+    await share();
+    await reload();
+    click(shareBox(), "share box");
+    await settle();
+    expect(puts).toEqual([PUBLIC(), PRIVATE()]);
+    expect(shareBox()?.checked).toBe(false);
+    expect(text()).not.toContain(SHARE_AT_ADD_RECALLED);
+
+    /* And a confirmed private is forgotten: the next reload is plain off. */
+    await reload();
+    expect(shareBox()?.checked).toBe(false);
+    expect(text()).not.toContain(SHARE_AT_ADD_RECALLED);
+  });
+
+  it("waits at Ready rather than leaving, since the reader has not been told", async () => {
+    await importing();
+    await share();
+    await reload();
+    await finish();
+    expect(navigations).toEqual([]);
+    expect(button(OPEN)).toBeTruthy();
+    expect(puts, "completion sent a publish on the strength of the mark").toEqual([PUBLIC()]);
+  });
+
+  it("is plain off without the mark: another tab, or storage that was cleared", async () => {
+    await importing();
+    await share();
+    window.sessionStorage.clear();
+    await reload();
+    expect(shareBox()?.checked).toBe(false);
+    expect(text()).not.toContain(SHARE_AT_ADD_RECALLED);
+    expect(puts).toEqual([PUBLIC()]);
+  });
+
+  it("a share the server refused leaves no mark", async () => {
+    putAnswer = async () => json({ error: "No." }, { status: 409 });
+    await importing();
+    await share();
+    putAnswer = did;
+    await reload();
+    expect(shareBox()?.checked).toBe(false);
   });
 });

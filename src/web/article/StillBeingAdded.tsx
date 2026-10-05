@@ -64,10 +64,13 @@ export const LIST_WAIT_MS = 8000;
 export function OwnerNotShared({
   slug,
   onPublished,
+  retryCompleted,
 }: {
   slug: string;
   /** The import is done: read the article again. */
   onPublished: () => void;
+  /** One reread may close a race between the access 404 and the job list. */
+  retryCompleted: boolean;
 }) {
   /** A list asked for after this page arrived has landed, or the wait for one is over. */
   const [settled, setSettled] = useState(false);
@@ -103,7 +106,10 @@ export function OwnerNotShared({
     if (liveId !== null) setFollowed({ slug, id: liveId });
   }, [slug, liveId]);
   const followedId = followed?.slug === slug ? followed.id : null;
-  const job = live ?? queue.jobs.find((j) => j.id === followedId) ?? null;
+  const completed = settled && retryCompleted
+    ? queue.jobs.find((j) => j.slug === slug && j.status === "done" && isImportJob(j))
+    : null;
+  const job = live ?? queue.jobs.find((j) => j.id === followedId) ?? completed ?? null;
   const jobId = job?.id ?? null;
 
   /* `watchTerminal` hears `done` from the list and from `/advance` alike. Any

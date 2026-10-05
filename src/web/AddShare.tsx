@@ -27,6 +27,7 @@ import {
   SHARE_AT_ADD_GAVE_UP,
   SHARE_AT_ADD_LABEL,
   SHARE_AT_ADD_ON,
+  SHARE_AT_ADD_RECALLED,
   SHARE_AT_ADD_UNKNOWN,
   SHARE_AT_ADD_WAITING,
   SHARE_AT_ADD_WHAT,
@@ -174,7 +175,12 @@ function line(state: ShareAtAddState) {
         </Warning>
       );
     case "unknown":
-      return <Warning>{SHARE_AT_ADD_UNKNOWN}</Warning>;
+      /* Two ways of not knowing, and each sentence is true of one only. */
+      return (
+        <Warning>
+          {state.because === "reload" ? SHARE_AT_ADD_RECALLED : SHARE_AT_ADD_UNKNOWN}
+        </Warning>
+      );
     default: {
       const never: never = state;
       return never;

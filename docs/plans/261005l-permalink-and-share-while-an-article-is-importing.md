@@ -17,7 +17,7 @@ still minutes for a PDF).
 > While I'm importing an article, make it possible for me to mark it as public/shared as it's
 > importing
 
-**Status: being built, 2026-10-05.**
+**Status: built, 2026-10-05.** § What landed says where the build differs from the design below.
 
 ## What is already true (checked in the code, 2026-10-05)
 
@@ -184,4 +184,33 @@ publication is safe for a visitor to read.
 
 ## What landed
 
-(filled in at the end)
+2026-10-05. The three parts, browser only. Where the build differs from § What we build above,
+this section is the truth.
+
+- **Part 1** as planned: `isImportJob` (`src/job-state.ts`), the button in `JobCard`. The copy
+  failure prints the address, since the card has no box to select it from.
+- **Part 2** as planned: `OwnerNotShared` (`src/web/article/StillBeingAdded.tsx`). It follows the
+  job by id once found; a Retry under another slug moves to `/read/<new slug>`; if no fresh list
+  arrives in eight seconds it draws `NotSharedPage`. The code review added one re-read when the
+  import finished between the 404 and the first list (F14).
+- **Part 3, changed by the code review.** GPT Sol's
+  [code review](261005l-permalink-and-share-code-review-sol.md) fixed two bugs itself (F13: retries
+  that went on after the page left; F14) and left three (F10 to F12), all in how the plan's
+  take-back and per-address controller behaved. They were closed by removing parts:
+  - **no automatic take-back**: `private` is sent only when the reader unticks. So the plan's
+    *"disposing one that is `on` or `unknown` sends `private`"* is not what the code does;
+  - **one controller per slug per tab** (`shareAtAddFor`), not one per add address;
+  - **after a reload** the page cannot read the switch back before publication. A
+    `sessionStorage` mark makes it say so and offer the untick. A second tab has no mark.
+  - Once the page has waited at *Ready* for sharing it stays until *Open the article*, so the
+    link and the result can be read.
+  The postmortem is
+  [261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md).
+- **Left as found:** `HighPowerIntent.dispose()` is called during render in `AddPage.tsx`
+  (Sol's F15, older than this change).
+
+A third question for Greg came out of the review:
+
+- **[Q-read-the-switch-before-publication]** Add a small owner-only read of an article's
+  visibility that works before publication, so a reloaded or second tab shows the box as it
+  really is?

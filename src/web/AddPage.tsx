@@ -84,7 +84,7 @@ import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
 import { asVisibilityState } from "./AccessSharing.js";
-import { ShareAtAdd, type ShareIo, shareUnsettled } from "./add-share.js";
+import { type ShareAtAdd, shareAtAddFor, type ShareIo, shareUnsettled } from "./add-share.js";
 import { AddShare } from "./AddShare.js";
 
 /**
@@ -195,7 +195,8 @@ const putHighPower: PutHighPower = (slug, on) =>
   }).then((r) => readJson<{ highPowerSince: string | null }>(r));
 
 /**
- * *Make it public*'s two requests (src/web/add-share.ts).
+ * *Make it public*'s two requests, and what the tab remembers
+ * (src/web/add-share.ts).
  *
  * **The probe is the read Metadata's sharing card is drawn from**,
  * `GET /api/metadata/:slug`: 404 until the slug has a published revision, 200
@@ -208,8 +209,38 @@ const putHighPower: PutHighPower = (slug, on) =>
  * **The write is the card's own**, with its reply checked by the card's own
  * parser. `rightsConfirmed` goes on the publish only: the server refuses it on
  * an unpublish (AccessSharing.tsx § `set`).
+ *
+ * **The marks are `sessionStorage`, one key per slug**: this tab made that
+ * slug public, or may have. They are what a reload has in place of a read
+ * (GPT Sol's code review, F10) and are only ever a hint, so a storage that
+ * throws (a private window, blocked site data) is a tab with no marks, and
+ * the box then starts at off as it does in any other tab.
  */
+const SHARE_MARK_PREFIX = "spideryarn.share-at-add.";
 const shareIo: ShareIo = {
+  marks: {
+    recall(slug) {
+      try {
+        return window.sessionStorage.getItem(SHARE_MARK_PREFIX + slug) !== null;
+      } catch {
+        return false;
+      }
+    },
+    remember(slug) {
+      try {
+        window.sessionStorage.setItem(SHARE_MARK_PREFIX + slug, "1");
+      } catch {
+        /* Not remembered: a reload shows the box off, as another tab would. */
+      }
+    },
+    forget(slug) {
+      try {
+        window.sessionStorage.removeItem(SHARE_MARK_PREFIX + slug);
+      } catch {
+        /* A storage that cannot be written held no mark we could have set. */
+      }
+    },
+  },
   async probe(slug) {
     const res = await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`);
     if (res.headers.get("x-spideryarn-offline") === "copy") return "unknown";
@@ -225,31 +256,6 @@ const shareIo: ShareIo = {
       ),
     }).then(async (r) => asVisibilityState(await readJson<unknown>(r))),
 };
-
-/** The page's share, and the `/add/` address it belongs to. */
-interface ShareHeld {
-  source: string;
-  share: ShareAtAdd;
-}
-
-/**
- * **The share for this address and this article**, the held one or its
- * successor, or none before there is a slug. One per slug, never retargeted
- * (GPT Sol's plan review, P1; add-share.ts says what goes wrong otherwise):
- *
- *  - **a new slug within one address** (a Retry that comes back under another
- *    article: `slugForRetry`) is a new share, starting from its own probe;
- *  - **a new address** holds none until its own job has a slug;
- *  - **no slug** (a poll that briefly has no matching job) keeps the one it
- *    has, as `purposeFor` keeps its session.
- *
- * Making one starts nothing: this is called during render, and only a
- * committed render disposes the old share and starts the new one.
- */
-function shareFor(held: ShareHeld | null, source: string, slug: string | null): ShareHeld | null {
-  if (held?.source === source && (slug === null || held.share.slug === slug)) return held;
-  return slug === null ? null : { source, share: new ShareAtAdd(slug, shareIo) };
-}
 
 /**
  * The purpose session's three requests (src/web/add-purpose.ts). `save` and
@@ -765,26 +771,41 @@ export function AddPage({ source: origin }: { source: AddSource }) {
   }, [highPower, highPowerSlug, highPowerAlive, highPowerLate]);
 
   /**
-   * ***Make it public* for this add**, one share per slug — plan 261005l § 3.
-   * The job's own slug, or the completion's, never one derived from the
-   * address: the same rule as High-powered AI above. Render selects a
-   * candidate; a committed render disposes the one it replaces, which takes
-   * back whatever that one shared under its own slug, and starts the new
-   * one's probe.
+   * ***Make it public* for this add** — plan 261005l § 3. The tab keeps one
+   * controller per slug (add-share.ts § `shareAtAddFor`), and this page shows
+   * the one for its article: the job's own slug, or the completion's, never
+   * one derived from the address — the same rule as High-powered AI above.
    *
-   * **Not disposed on unmount**: a reader who shared and then opened the
-   * article has not asked for that to be undone, and StrictMode's
-   * unmount-and-mount-again must not undo it either.
+   *  - **Looked up by slug alone, not by address.** Two addresses that name
+   *    one article show the same controller with the state it has, so there
+   *    is one writer per slug (GPT Sol's code review, F12).
+   *  - **A Retry that comes back under another slug** (`slugForRetry`) shows
+   *    that slug's own controller, unticked. Nothing is sent about the old
+   *    slug: its controller stays in the registry as it was (F11).
+   *  - **No slug** (a poll that briefly has no matching job) keeps the one
+   *    this address last had, as `purposeFor` keeps its session. A new
+   *    address shows none until its own job has a slug.
+   *
+   * Looking one up starts nothing. The committed render starts its probe and
+   * attaches it; leaving it, by unmount or for another slug, pauses its
+   * unsent retries without undoing anything it shared. Effect replay under
+   * StrictMode reattaches the same controller.
    */
-  const shareRef = useRef<ShareHeld | null>(null);
-  const shareHeld = shareFor(shareRef.current, wanted, highPowerSlug);
-  const share = shareHeld?.share ?? null;
+  const shareSlugRef = useRef<{ source: string; slug: string } | null>(null);
+  const shareSlug =
+    highPowerSlug ?? (shareSlugRef.current?.source === wanted ? shareSlugRef.current.slug : null);
+  const share = shareSlug === null ? null : shareAtAddFor(shareSlug, shareIo);
+  /* What the completion effect reads: the controller on the committed screen. */
+  const shareRef = useRef<ShareAtAdd | null>(null);
   useLayoutEffect(() => {
-    if (shareRef.current === shareHeld) return;
-    shareRef.current?.share.dispose();
-    shareRef.current = shareHeld;
-    shareHeld?.share.start();
-  }, [shareHeld]);
+    shareSlugRef.current = shareSlug === null ? null : { source: wanted, slug: shareSlug };
+    shareRef.current = share;
+  }, [share, shareSlug, wanted]);
+  useLayoutEffect(() => {
+    share?.start();
+    share?.resume();
+    return () => share?.pause();
+  }, [share]);
   /* Whether a 404 from the switch is *not yet*: the same question High-powered
      AI asks, with the same answer. */
   useEffect(() => {
@@ -871,8 +892,8 @@ export function AddPage({ source: origin }: { source: AddSource }) {
        queued is sent again (add-share.ts § `settle`). Here and not in
        `openArticle`, because what it answers decides whether the page leaves.
        Only the share for this completion's own article. */
-    const sharing = shareRef.current?.share ?? null;
-    if (sharing?.slug === completionSlug) void sharing.settle();
+    const sharing = shareRef.current?.slug === completionSlug ? shareRef.current : null;
+    if (sharing) void sharing.settle();
     /* **A third reason not to leave by itself**: the sharing confirmation is
        open, or there is an answer about sharing the reader has not had the
        chance to read. A fast import would otherwise navigate out from under

@@ -113,6 +113,13 @@ export function ArticlePage({
      still-being-added page once its import is, to load the article in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
+  /* A job list can first reveal an import already done after access got 404.
+     Check it once for this owner/address, even across the loading unmount. */
+  const [checkedImport, setCheckedImport] = useState<{ slug: string; readerId: string | null } | null>(null);
+  const rereadImport = useCallback(() => {
+    setCheckedImport({ slug, readerId });
+    reread();
+  }, [slug, readerId, reread]);
   /* A private link's key, when the address has one (useShareKey.ts). A visitor's
      requests carry it; an owner's never do. */
   const shareKey = useShareKey();
@@ -167,7 +174,13 @@ export function ArticlePage({
      for that job and draws it; with none it is `NotSharedPage`, as it always
      was. A signed-out visitor is untouched. StillBeingAdded.tsx, plan 261005l. */
   if (access.kind === "not-shared")
-    return signedIn ? <OwnerNotShared slug={slug} onPublished={reread} /> : <LandingPage />;
+    return signedIn ? (
+      <OwnerNotShared
+        slug={slug}
+        onPublished={rereadImport}
+        retryCompleted={checkedImport?.slug !== slug || checkedImport.readerId !== readerId}
+      />
+    ) : <LandingPage />;
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
      this one, and the error page is a `<pre>` with nothing to press. It draws

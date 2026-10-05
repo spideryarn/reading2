@@ -8,12 +8,21 @@
  * review asked for each: one instance belongs to one slug for life (P1), the
  * box is offered only once the probe has said there is no article yet (P2-2),
  * and a share that gave up while the job sat queued is sent again at
- * completion (P2-7).
+ * completion (P2-7). And from its code review: the only `private` sent is the
+ * box unticked (F11), the tab has one controller per slug (F12), and what the
+ * tab remembers across a reload leads to *unknown* and sends nothing (F10).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MAX_NOT_YET } from "../src/web/add-high-power.js";
-import { type Probe, ShareAtAdd, type ShareIo, shareUnsettled } from "../src/web/add-share.js";
+import {
+  type Probe,
+  resetShareAtAddForTests,
+  ShareAtAdd,
+  shareAtAddFor,
+  type ShareIo,
+  shareUnsettled,
+} from "../src/web/add-share.js";
 
 const AT = "2026-10-05T12:00:00.000Z";
 const PUBLIC = { visibility: "public", publicAt: AT } as const;
@@ -29,7 +38,14 @@ type Answer = typeof PUBLIC | typeof PRIVATE | null | Error;
 function scripted(probe: Probe | Error, ...answers: Answer[]) {
   const calls: Array<[string, "public" | "private"]> = [];
   const probes: string[] = [];
+  /** The slugs this tab remembers making public: the page's `sessionStorage`. */
+  const marks = new Set<string>();
   const io: ShareIo = {
+    marks: {
+      recall: (slug) => marks.has(slug),
+      remember: (slug) => void marks.add(slug),
+      forget: (slug) => void marks.delete(slug),
+    },
     probe: async (slug) => {
       probes.push(slug);
       if (probe instanceof Error) throw probe;
@@ -43,7 +59,7 @@ function scripted(probe: Probe | Error, ...answers: Answer[]) {
       return next;
     },
   };
-  return { io, calls, probes };
+  return { io, calls, probes, marks };
 }
 
 /** A started share whose probe has answered. */
@@ -63,6 +79,7 @@ function confirm(share: ShareAtAdd): void {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  resetShareAtAddForTests();
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -159,6 +176,20 @@ describe("the confirmation", () => {
 });
 
 describe("before the article's row exists", () => {
+  it("pauses pending retries and can resume the same consent after effect replay", async () => {
+    const { io, calls } = scripted("none", refusal(404), PUBLIC);
+    const share = await offered(io);
+    confirm(share);
+    await vi.advanceTimersByTimeAsync(0);
+    share.pause();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(1);
+    share.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(2);
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+
   it("treats a 404 as *not yet* while the job is alive, and retries", async () => {
     const { io, calls } = scripted("none", refusal(404), refusal(404), PUBLIC);
     const share = await offered(io);
@@ -255,7 +286,7 @@ describe("the server's other answers", () => {
       const share = await offered(io);
       confirm(share);
       await vi.runAllTimersAsync();
-      expect(share.get()).toEqual({ kind: "unknown" });
+      expect(share.get()).toEqual({ kind: "unknown", because: "write" });
     }
   });
 
@@ -303,103 +334,167 @@ describe("the server's other answers", () => {
   });
 });
 
-describe("one share per slug — disposed when the slug changes", () => {
-  it("after a share succeeded, sends its own slug private and changes no state", async () => {
-    const { io, calls } = scripted("none", PUBLIC, PRIVATE);
-    const share = await offered(io);
-    confirm(share);
-    await vi.runAllTimersAsync();
-    share.dispose();
-    await vi.runAllTimersAsync();
-    expect(calls).toEqual([
-      ["an-essay", "public"],
-      ["an-essay", "private"],
-    ]);
-    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
-  });
-
-  it("while unknown, sends its own slug private", async () => {
-    const { io, calls } = scripted("none", new TypeError("Failed to fetch"), PRIVATE);
-    const share = await offered(io);
-    confirm(share);
-    await vi.runAllTimersAsync();
-    share.dispose();
-    await vi.runAllTimersAsync();
-    expect(calls).toEqual([
-      ["an-essay", "public"],
-      ["an-essay", "private"],
-    ]);
-  });
-
-  it("during an unanswered request: the answer changes no state, and a share that took is taken back", async () => {
+describe("nothing is sent that the reader did not ask for", () => {
+  /* GPT Sol's code review, F11 and F12: a compensating unshare whose failure
+     nobody can see is worse than the state it compensates for. The only
+     `private` this class sends is the box being unticked. */
+  it("a publish that answers after its page has gone is kept, and nothing is taken back", async () => {
     let answer: (v: typeof PUBLIC) => void = () => {};
     const calls: Array<[string, string]> = [];
+    const { io: base } = scripted("none");
     const io: ShareIo = {
-      probe: async () => "none",
+      ...base,
       put: (slug, to) => {
         calls.push([slug, to]);
-        if (to === "private") return Promise.resolve(PRIVATE);
         return new Promise((resolve) => {
           answer = resolve;
         });
       },
     };
     const share = await offered(io);
-    let told = 0;
     confirm(share);
-    share.subscribe(() => {
-      told += 1;
-    });
-    share.dispose();
-    expect(calls).toEqual([["an-essay", "public"]]);
-
+    share.pause();
     answer(PUBLIC);
     await vi.runAllTimersAsync();
-    expect(share.get()).toEqual({ kind: "saving", to: "public" });
-    expect(told).toBe(0);
-    expect(calls).toEqual([
-      ["an-essay", "public"],
-      ["an-essay", "private"],
-    ]);
-  });
-
-  it("during an unanswered request that is then refused, sends nothing more", async () => {
-    let reject: (e: Error) => void = () => {};
-    const calls: Array<[string, string]> = [];
-    const io: ShareIo = {
-      probe: async () => "none",
-      put: (slug, to) => {
-        calls.push([slug, to]);
-        return new Promise((_resolve, rej) => {
-          reject = rej;
-        });
-      },
-    };
-    const share = await offered(io);
-    confirm(share);
-    share.dispose();
-    reject(refusal(404));
-    await vi.runAllTimersAsync();
+    expect(share.get()).toEqual({ kind: "on", publicAt: AT });
     expect(calls).toEqual([["an-essay", "public"]]);
   });
 
-  it("stops a not-yet retry, and sends nothing for a share never sent", async () => {
-    const { io, calls } = scripted("none", refusal(404));
-    const share = await offered(io);
-    confirm(share);
+  it("pausing a share that is on, unknown or refused-while-public sends nothing", async () => {
+    for (const answers of [[PUBLIC], [new TypeError("Failed to fetch")], [PUBLIC, refusal(503)]] as Answer[][]) {
+      const { io, calls } = scripted("none", ...answers);
+      const share = await offered(io);
+      confirm(share);
+      await vi.runAllTimersAsync();
+      if (answers.length === 2) {
+        share.untick();
+        await vi.runAllTimersAsync();
+      }
+      const sent = calls.length;
+      share.pause();
+      await vi.runAllTimersAsync();
+      expect(calls).toHaveLength(sent);
+    }
+  });
+});
+
+describe("one controller per slug, per tab", () => {
+  /* F12: two controllers for one slug are two writers, and the older one's
+     answer can land last. */
+  it("hands back the same controller for the same slug, with its state", async () => {
+    const { io, calls } = scripted("none", PUBLIC);
+    const first = shareAtAddFor("an-essay", io);
+    first.start();
     await vi.advanceTimersByTimeAsync(0);
-    share.dispose();
+    confirm(first);
     await vi.runAllTimersAsync();
-    expect(calls).toHaveLength(1);
+
+    const again = shareAtAddFor("an-essay", io);
+    expect(again).toBe(first);
+    again.start();
+    await vi.runAllTimersAsync();
+    expect(again.get()).toEqual({ kind: "on", publicAt: AT });
+    expect(calls).toEqual([["an-essay", "public"]]);
   });
 
-  it("ignores a probe that answers after it was disposed", async () => {
-    const { io } = scripted("none");
-    const share = new ShareAtAdd("an-essay", io, 10);
-    share.start();
-    share.dispose();
+  it("gives another slug its own, starting from nothing", async () => {
+    const { io } = scripted("none", PUBLIC);
+    const a = shareAtAddFor("an-essay", io);
+    a.start();
+    await vi.advanceTimersByTimeAsync(0);
+    confirm(a);
     await vi.runAllTimersAsync();
-    expect(share.get()).toEqual({ kind: "probing" });
+
+    const b = shareAtAddFor("another", io);
+    expect(b).not.toBe(a);
+    expect(b.slug).toBe("another");
+    expect(b.get()).toEqual({ kind: "probing" });
+    expect(a.get()).toEqual({ kind: "on", publicAt: AT });
+  });
+});
+
+describe("what this tab remembers across a reload", () => {
+  /* F10: before publication nothing on the server can be asked whether the
+     article is public. A mark in the tab is a hint, and leads to *unknown*. */
+  it("remembers a share that is on, and forgets it when private is confirmed", async () => {
+    const { io, marks } = scripted("none", PUBLIC, PRIVATE);
+    const share = await offered(io);
+    expect([...marks]).toEqual([]);
+    confirm(share);
+    await vi.runAllTimersAsync();
+    expect([...marks]).toEqual(["an-essay"]);
+    share.untick();
+    await vi.runAllTimersAsync();
+    expect([...marks]).toEqual([]);
+  });
+
+  it("remembers a publish that did not come back, and one it could not read", async () => {
+    for (const answer of [new TypeError("Failed to fetch"), null] as const) {
+      const { io, marks } = scripted("none", answer);
+      const share = await offered(io);
+      confirm(share);
+      await vi.runAllTimersAsync();
+      expect([...marks]).toEqual(["an-essay"]);
+    }
+  });
+
+  it("remembers nothing for a publish the server refused, or one never sent", async () => {
+    const { io, marks } = scripted("none", refusal(409, "No."));
+    const share = await offered(io);
+    share.open();
+    share.tick(true);
+    expect([...marks]).toEqual([]);
+    share.share();
+    await vi.runAllTimersAsync();
+    expect([...marks]).toEqual([]);
+  });
+
+  it("keeps the mark when unsharing is refused or does not come back", async () => {
+    for (const answer of [refusal(503), new TypeError("Failed to fetch")] as const) {
+      const { io, marks } = scripted("none", PUBLIC, answer);
+      const share = await offered(io);
+      confirm(share);
+      await vi.runAllTimersAsync();
+      share.untick();
+      await vi.runAllTimersAsync();
+      expect([...marks]).toEqual(["an-essay"]);
+    }
+  });
+
+  it("a marked slug with nothing published starts unknown, and sends nothing on the strength of the mark", async () => {
+    const { io, calls, marks } = scripted("none");
+    marks.add("an-essay");
+    const share = await offered(io);
+    expect(share.get()).toEqual({ kind: "unknown", because: "reload" });
+    share.observe(true);
+    await share.settle();
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([]);
+  });
+
+  it("unticking it sends private, and a confirmed private forgets the mark", async () => {
+    const { io, calls, marks } = scripted("none", PRIVATE);
+    marks.add("an-essay");
+    const share = await offered(io);
+    share.untick();
+    await vi.runAllTimersAsync();
+    expect(calls).toEqual([["an-essay", "private"]]);
+    expect(share.get()).toEqual({ kind: "off" });
+    expect([...marks]).toEqual([]);
+  });
+
+  it("without the mark it starts off", async () => {
+    const { io, marks } = scripted("none");
+    marks.add("some-other-essay");
+    const share = await offered(io);
+    expect(share.get()).toEqual({ kind: "off" });
+  });
+
+  it("the mark does not offer a box over an article already on the shelf", async () => {
+    const { io, marks } = scripted("article");
+    marks.add("an-essay");
+    const share = await offered(io);
+    expect(share.get()).toEqual({ kind: "adopted" });
   });
 });
 
@@ -410,7 +505,8 @@ describe("shareUnsettled — what holds the add page from leaving by itself", ()
     expect(shareUnsettled({ kind: "saving", to: "public" })).toBe(true);
     expect(shareUnsettled({ kind: "refused", message: "no", on: false, attempted: "public" })).toBe(true);
     expect(shareUnsettled({ kind: "gave-up" })).toBe(true);
-    expect(shareUnsettled({ kind: "unknown" })).toBe(true);
+    expect(shareUnsettled({ kind: "unknown", because: "write" })).toBe(true);
+    expect(shareUnsettled({ kind: "unknown", because: "reload" })).toBe(true);
   });
 
   it("does not hold for a box never touched, or a share that is on", () => {

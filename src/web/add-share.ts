@@ -15,15 +15,32 @@
  *
  * The shape is `HighPowerIntent`'s (src/web/add-high-power.ts): the page
  * knows the slug before the row exists, so a `404` while the job is alive
- * means *not yet* and is retried. Four things differ, each from GPT Sol's
- * review of the plan:
+ * means *not yet* and is retried. Six things differ, each from GPT Sol's
+ * reviews of the plan and of the code:
  *
- *  - **One instance per slug, for life** (P1). That intent is retargeted when
- *    a Retry comes back under another slug, and carries `on` across. Here
- *    that would say B is public without sharing it, and unticking would make
- *    B private and leave A public. So the slug is a constructor argument, and
- *    a new slug is a new instance. `dispose` takes back whatever this one
- *    shared, against its own slug.
+ *  - **One controller per slug, per tab, for the tab's life** (plan review
+ *    P1, code review F12). That intent is retargeted when a Retry comes back
+ *    under another slug, and carries `on` across. Here that would say B is
+ *    public without sharing it, and unticking would make B private and leave
+ *    A public. So the slug is a constructor argument, and `shareAtAddFor`
+ *    keeps one instance per slug in a module-level registry: two addresses
+ *    that name one article (`/add/A` and `/add/A/`) get the same controller,
+ *    so there are never two writers for one slug whose answers could land in
+ *    the wrong order. A Retry onto another slug shows that slug's own
+ *    controller, and the old one stays as it was, still saying what is true
+ *    of its slug.
+ *  - **The only `private` it sends is the box being unticked** (code review
+ *    F11). An earlier version took a share back when the page moved to
+ *    another slug. A compensating write whose failure nobody can see is worse
+ *    than the state it compensates for, and what it compensated for is an
+ *    unpublished import nobody can read.
+ *  - **A reload cannot read the state back, so it does not claim one** (code
+ *    review F10). Before publication no route says whether the article is
+ *    public. The controller leaves a mark in the tab when a publish took or
+ *    may have (`ShareIo.marks`), and a fresh controller that finds the mark
+ *    starts at `unknown`: the box ticked, a sentence saying why, and
+ *    unticking sends `private`. The mark never sends a publish. Another tab
+ *    has no mark and starts at `off`; that residual is accepted.
  *  - **It first finds out whether there is already an article here** (P2-2).
  *    An import can adopt one already on the shelf (`freeSlug`, src/jobs.ts),
  *    with a glossary and notes that would go public on the press, and the
@@ -62,8 +79,12 @@ export type ShareAtAddState =
   | { kind: "refused"; message: string; on: boolean; attempted: "public" | "private" }
   /** `MAX_NOT_YET` *not yet*s with the job still alive. `settle` tries again. */
   | { kind: "gave-up" }
-  /** No answer arrived, or one that could not be read: the write may or may not have committed. */
-  | { kind: "unknown" };
+  /**
+   * It may be public and we cannot say. `write`: no answer arrived, or one
+   * that could not be read. `reload`: this tab made it public before the page
+   * was reloaded, and nothing can be asked until the import has published.
+   */
+  | { kind: "unknown"; because: "write" | "reload" };
 
 /** What the probe found at the slug: nothing published, an article, or no answer it can trust. */
 export type Probe = "none" | "article" | "unknown";
@@ -77,6 +98,16 @@ export interface ShareIo {
    * Rejects with the status on it for a refusal.
    */
   put(slug: string, to: "public" | "private"): Promise<VisibilityState | null>;
+  /**
+   * **What this tab remembers having made public**, by slug: the page's
+   * `sessionStorage`, injected so a test can drive it. A hint, never an
+   * answer. None of the three may throw.
+   */
+  marks: {
+    recall(slug: string): boolean;
+    remember(slug: string): void;
+    forget(slug: string): void;
+  };
 }
 
 /**
@@ -117,7 +148,7 @@ export class ShareAtAdd {
   private notYet = 0;
   /** A terminal pre-claim 404 is waiting for Retry to make the job live again. */
   private retryOnNextAlive = false;
-  private disposed = false;
+  private active = true;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -136,11 +167,11 @@ export class ShareAtAdd {
 
   /**
    * Ask whether there is already an article here. Once; a second call does
-   * nothing. Not in the constructor, because the add page makes an instance
-   * during a render that may never commit.
+   * nothing. Not in the constructor, because the add page looks its
+   * controller up during a render that may never commit.
    */
   start(): void {
-    if (this.started || this.disposed) return;
+    if (this.started) return;
     this.started = true;
     void this.io.probe(this.slug).then(
       (found) => this.probed(found),
@@ -148,11 +179,23 @@ export class ShareAtAdd {
     );
   }
 
+  /** Stop unsent work when its page leaves, without undoing a confirmed share. */
+  pause(): void {
+    this.active = false;
+    this.clearRetry();
+  }
+
+  /** Effect replay may attach the same controller again under StrictMode. */
+  resume(): void {
+    this.active = true;
+    this.kick();
+  }
+
   /** Whether the page's job can still create the article's row. */
   observe(jobAlive: boolean): void {
     const wasAlive = this.jobAlive;
     this.jobAlive = jobAlive;
-    if (jobAlive && !wasAlive && this.retryOnNextAlive && !this.disposed) {
+    if (jobAlive && !wasAlive && this.retryOnNextAlive) {
       /* A failed job can end before its claim creates the article row. Its 404
          is final for that attempt, but Retry under the same slug is still the
          share the owner confirmed. */
@@ -165,7 +208,6 @@ export class ShareAtAdd {
 
   /** The box, ticked: open the confirmation. Sends nothing. */
   open(): void {
-    if (this.disposed) return;
     const from = this.state;
     if (from.kind !== "off" && !(from.kind === "refused" && !from.on)) return;
     this.retryOnNextAlive = false;
@@ -174,13 +216,13 @@ export class ShareAtAdd {
 
   /** The rights box inside the confirmation. */
   tick(rights: boolean): void {
-    if (this.disposed || this.state.kind !== "confirming") return;
+    if (this.state.kind !== "confirming") return;
     this.set({ kind: "confirming", rights });
   }
 
   /** *Cancel* inside the confirmation. */
   cancel(): void {
-    if (this.disposed || this.state.kind !== "confirming") return;
+    if (this.state.kind !== "confirming") return;
     this.set({ kind: "off" });
   }
 
@@ -190,7 +232,7 @@ export class ShareAtAdd {
    * `rightsConfirmed: true` on the strength of this.
    */
   share(): void {
-    if (this.disposed || this.state.kind !== "confirming" || !this.state.rights) return;
+    if (this.state.kind !== "confirming" || !this.state.rights) return;
     this.notYet = 0;
     this.set({ kind: "waiting" });
     this.kick();
@@ -198,7 +240,6 @@ export class ShareAtAdd {
 
   /** The box, unticked. Ignored while a request is in flight (the box is disabled then). */
   untick(): void {
-    if (this.disposed) return;
     this.retryOnNextAlive = false;
     switch (this.state.kind) {
       case "confirming":
@@ -239,7 +280,6 @@ export class ShareAtAdd {
    * final. Resolves when no request is in flight; never rejects.
    */
   settle(): Promise<void> {
-    if (this.disposed) return Promise.resolve();
     this.jobAlive = false;
     this.clearRetry();
     if (this.state.kind === "gave-up") {
@@ -250,39 +290,19 @@ export class ShareAtAdd {
     return this.inFlight ?? Promise.resolve();
   }
 
-  /**
-   * **The page's import is now about another slug**, or another address. This
-   * one stops, and takes back what it shared: a box that now reads off must
-   * not leave the old slug public behind it. An answer that arrives
-   * afterwards changes no state.
-   *
-   * Not for the page going away: a reader who shared and then opened the
-   * article has not asked for that to be undone.
-   */
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.clearRetry();
-    const { state } = this;
-    if (state.kind === "on" || state.kind === "unknown" || (state.kind === "refused" && state.on)) {
-      this.takeBack();
-    }
-    /* A public request still out is taken back when it answers: `send`. */
-  }
-
   private probed(found: Probe): void {
-    if (this.disposed || this.state.kind !== "probing") return;
-    this.set(
-      found === "none"
-        ? { kind: "off" }
-        : found === "article"
-          ? { kind: "adopted" }
-          : { kind: "unavailable" },
-    );
+    if (this.state.kind !== "probing") return;
+    if (found === "article") this.set({ kind: "adopted" });
+    else if (found === "unknown") this.set({ kind: "unavailable" });
+    /* Nothing published, and this tab remembers making it public. That is
+       not read back from anywhere, so it is not `on`: `unknown`, which draws
+       the box ticked and lets it be unticked. It sends nothing. */
+    else if (this.io.marks.recall(this.slug)) this.set({ kind: "unknown", because: "reload" });
+    else this.set({ kind: "off" });
   }
 
   private kick(): void {
-    if (this.disposed || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
+    if (!this.active || this.state.kind !== "waiting" || this.inFlight || this.retry) return;
     this.send("public");
   }
 
@@ -292,25 +312,25 @@ export class ShareAtAdd {
     this.inFlight = this.io.put(this.slug, to).then(
       (answer) => {
         this.inFlight = null;
-        if (this.disposed) {
-          /* It took, or we cannot tell, after the page moved on to another slug. */
-          if (to === "public" && answer?.visibility !== "private") this.takeBack();
-          return;
-        }
         this.retryOnNextAlive = false;
         this.notYet = 0;
-        if (answer === null) this.set({ kind: "unknown" });
-        else if (answer.publicAt !== null) this.set({ kind: "on", publicAt: answer.publicAt });
-        else this.set({ kind: "off" });
+        if (answer === null) {
+          /* A publish we cannot read may have taken. An unshare we cannot read
+             leaves whatever mark there was. */
+          if (to === "public") this.io.marks.remember(this.slug);
+          this.set({ kind: "unknown", because: "write" });
+        } else if (answer.publicAt !== null) {
+          this.io.marks.remember(this.slug);
+          this.set({ kind: "on", publicAt: answer.publicAt });
+        } else {
+          /* Private, in the server's own words: the only thing that forgets. */
+          this.io.marks.forget(this.slug);
+          this.set({ kind: "off" });
+        }
       },
       (e: unknown) => {
         this.inFlight = null;
         const status = statusOf(e);
-        if (this.disposed) {
-          /* No status is no answer: the write may have committed. */
-          if (to === "public" && status === null) this.takeBack();
-          return;
-        }
         const message = e instanceof Error ? e.message : "The request failed.";
         if (to === "public" && status === 404 && this.jobAlive) {
           /* The claim has not opened the draft yet. */
@@ -320,6 +340,9 @@ export class ShareAtAdd {
           }
           this.notYet += 1;
           this.set({ kind: "waiting" });
+          /* The request may answer after unmount. Keep its outcome, but do
+             not create a new writer with no page left to own it. */
+          if (!this.active) return;
           this.retry = setTimeout(() => {
             this.retry = null;
             this.kick();
@@ -330,18 +353,15 @@ export class ShareAtAdd {
            again when JobCard's Retry produces the replacement job. */
         this.retryOnNextAlive = to === "public" && status === 404;
         if (status === null || before.kind === "unknown") {
-          this.set({ kind: "unknown" });
+          /* No status is no answer: a publish may have committed. */
+          if (to === "public" && status === null) this.io.marks.remember(this.slug);
+          this.set({ kind: "unknown", because: "write" });
           return;
         }
         const knownOn = before.kind === "on" || (before.kind === "refused" && before.on);
         this.set({ kind: "refused", message, on: knownOn, attempted: to });
       },
     );
-  }
-
-  /** One unshare for this slug with nobody watching the answer. */
-  private takeBack(): void {
-    void this.io.put(this.slug, "private").catch(() => {});
   }
 
   private clearRetry(): void {
@@ -353,4 +373,31 @@ export class ShareAtAdd {
     this.state = next;
     for (const listener of this.listeners) listener();
   }
+}
+
+/**
+ * **The tab's controllers, by slug.** At module level so a page that
+ * unmounted and the next one mounted on the same article find the same one,
+ * whatever address each was reached by.
+ */
+const controllers = new Map<string, ShareAtAdd>();
+
+/**
+ * The one controller for `slug` in this tab, made on first asking. Making one
+ * starts nothing (`start`), so this is safe to call during render. `io` is
+ * the first caller's; the add page passes the same object every time.
+ */
+export function shareAtAddFor(slug: string, io: ShareIo): ShareAtAdd {
+  let held = controllers.get(slug);
+  if (!held) {
+    held = new ShareAtAdd(slug, io);
+    controllers.set(slug, held);
+  }
+  return held;
+}
+
+/** A fresh tab, for a test: what a reload does to the registry. */
+export function resetShareAtAddForTests(): void {
+  for (const held of controllers.values()) held.pause();
+  controllers.clear();
 }

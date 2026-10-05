@@ -4526,6 +4526,18 @@ export const SHARE_AT_ADD_UNKNOWN =
   "That did not come back, so we cannot say whether it took effect. Check Access & sharing on " +
   "the article's Metadata page.";
 
+/**
+ * **The page was reloaded after this tab made the article public, and the
+ * import has not published.** Nothing on the server can be asked about
+ * visibility until it has, so the box does not claim either state: it is
+ * drawn ticked, with this, and unticking sends the private write. The tab's
+ * own memory is a hint and not an answer (src/web/add-share.ts §
+ * `ShareIo.marks`). GPT Sol's code review, F10.
+ */
+export const SHARE_AT_ADD_RECALLED =
+  "You made this public before this page was reloaded, and we cannot read that back until the " +
+  "import has finished. Untick this to make it private.";
+
 /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
 export const STILL_BEING_ADDED_HEADING = "Still being added";
 export const STILL_BEING_ADDED =
