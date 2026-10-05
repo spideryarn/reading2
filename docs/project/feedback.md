@@ -188,7 +188,7 @@ were in the query string. The browser refuses any label that is not a plain path
 a wrong value cannot become a link elsewhere. Following it in this tab closes the dialog and
 uses the app's router so an unsent Write draft survives on ordinary app pages; opening it in
 another tab leaves the dialog open:
-[261005l](../plans/261005l-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md),
+[261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md),
 which also records the check that one reader cannot see another's reports here.
 
 ### Shipped or not, since 2026-09-30

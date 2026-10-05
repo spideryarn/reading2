@@ -14,7 +14,7 @@ status; the next feedback sweep does.
 **Ending: Shipped.** It is on `dev` and not deployed.
 
 What we did, in
-[261005l](../plans/261005l-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md):
+[261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md):
 
 - **There was something to press: the line itself.** A "Cites" line is a button that opens the
   work's by-line and reference entry underneath. It was drawn as plain text with a small faint
@@ -25,4 +25,7 @@ What we did, in
 - **The line answers the pointer**: its words are underlined and its chevron darkens on hover or
   keyboard focus, and the chevron is a shade darker at rest.
 
-Not checked against the article the report came from, which is only in production.
+**Not seen in a browser.** The local database was behind the code's migrations, no article would
+load, and the session was refused permission to migrate it. The words are covered by tests; the
+underline and the chevron are CSS that nobody has looked at yet. The Overseer was told in the
+debrief. Nor was it checked against the article the report came from, which is only in production.

@@ -15,7 +15,7 @@ has no Sentry sign-in and did not write the Sentry status; the next feedback swe
 **Ending: Shipped.** It is on `dev` and not deployed.
 
 What we did, in
-[261005l](../plans/261005l-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md):
+[261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md):
 
 - **The page is a link.** It opens that page in the same tab. It goes to the page, not to the
   paragraph or mode the report was filed in; whether to carry the paragraph too is a question put to
