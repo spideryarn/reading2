@@ -1,6 +1,6 @@
 # An arXiv link of any shape imports the paper, through a source resolver other sources can join
 
-Status as of 2026-10-05: **plan, revised after GPT Sol's first review, not built** — evidence: no
+Status as of 2026-10-05: **plan, revised after GPT Sol's two reviews, being built** — evidence: no
 `src/paper-sources.ts` in the tree. The eval it rests on is run and written up in
 [261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
 
@@ -132,23 +132,33 @@ HTML. That is why `urlKey` has to resolve: it is what makes that address and a f
 page.** Making it the abstract page needs a second address column and every reader of the first
 taught which one it wants; it is in § Questions and decisions for Greg, not built.
 
-**Jobs already queued when this deploys** (Sol's F1). A job row stores the `urlKey` it was queued
-with. A job queued from a `pdf/` link before the deploy has the old key; if the same reader pastes
-the `abs` link while it is still running, recomputing the old job's key with the new code would
-match it, adopt its slug, and queue a second job on the same article that the stored keys cannot
-recognise as the same work — a second slot charged. So the in-flight lookup
-(`inFlightSlugForUrlKey` in `src/jobs.ts`) compares what an active job was **queued** as, not a
-recomputation: it uses the unresolved key of the job's address. For that to match every new job,
-the address a job is queued with is the resolved paper's canonical address:
+**Jobs already queued when this deploys** (Sol's F1, F11, F12). A job row stores the `urlKey` and
+the work key it was queued with. A job queued from a `pdf/` link before the deploy carries the old
+ones. If the same reader pastes the `abs` link while it is still running, the in-flight lookup
+(`inFlightSlugForUrlKey` in `src/jobs.ts`, which recomputes each active job's key from its address
+and is not changed) finds it and adopts its slug; but the stored work keys differ, so the queue's
+unique index does not see the same work, a second job is inserted on the same article, and its
+slot is charged for a run in which every step is skipped.
 
-- **`sourceAddress(input)`**, new in `src/ingest.ts`: `normaliseUrl`, then
-  `https://arxiv.org/abs/<versionedId>` when the address resolves. `parseJobRequest`
-  (`src/routes.ts`), the add page (`src/web/AddPage.tsx`) and `npm run ingest`
-  (`scripts/stage.ts`) use it where they use `normaliseUrl` today. A new job's address and its
-  resolved key are then the same string's key, with the tracking parameters gone.
-- A pre-deploy `pdf/` job and a post-deploy `abs` paste therefore do not match in flight, and the
-  second paste makes a second article, which is what production does today. Nothing new can go
-  wrong in the window; the dedup simply starts with jobs queued after the deploy.
+The fix is in `enqueue`, before the insert: **when the allocation adopted an active job's slug and
+that job is the same work as this request under today's resolver (`sameWork`, which already
+compares addresses by `urlKey`), hand that job back**, exactly as the `sameWork` outcome of the
+insert does (give it a pump, return it; the request's reservation was never attached to anything).
+So the equivalence no longer depends on keys an older build persisted. For jobs queued after the
+deploy the index gives the same answer a moment later, as it does today.
+
+The first revision of this fix compared the *unresolved* key in the in-flight lookup and
+canonicalised the address at the route. Sol's second round showed it left the window open as two
+articles and two charges (F11) and made a retried pre-deploy job invisible to a new paste (F12).
+It is withdrawn, and with it `sourceAddress`: nothing canonicalises a job's address. A job keeps
+the address it was given, tracking parameters and all, as today, and `urlKey` and the fetch step
+each resolve it when they need to.
+
+- [ ] Red first, in Postgres: seed an active ingest job as the old build would have written it (a
+      `pdf/` address, the unresolved `url_key` and its `work_key`, an ingest reservation), then
+      enqueue the `abs` address with a reservation of its own. One active job, the seeded one
+      handed back, and the new reservation not attached to any job. The same for an `html/` seed,
+      and for a retry of a failed pre-deploy `pdf/` job followed by an `abs` paste.
 
 ### Caller 2: what is fetched (`src/pipeline.ts`, the `fetch` step)
 
@@ -237,12 +247,10 @@ address, not the route.
       `arxiv.org.evil.example`, `arxiv.org:444/abs/…`, an id with trailing junk, a userinfo
       address, a non-arXiv DOI, `doi.org:444`). `identityOf`'s existing any-version tests stay green.
 - [ ] `src/paper-sources.ts`, and the id pattern's other readers pointed at it.
-- [ ] Tests first, red: `sourceAddress`, `urlKey` and `slugFromUrl` over the same shapes
-      (`tests/ingest.test.ts`); `urlKey` of an ordinary address is byte-for-byte what it was.
-- [ ] Tests first, red, for the deploy window: an active job whose address is the `pdf/` shape (as
-      queued before this change) is **not** adopted by a new `abs` request; an active job queued
-      through `sourceAddress` **is**, from any shape (`tests/one-article-for-one-address.test.ts`
-      or beside it; these need Postgres and are mine to run).
+- [ ] Tests first, red: `urlKey` and `slugFromUrl` over the same shapes (`tests/ingest.test.ts`);
+      `urlKey` of an ordinary address is byte-for-byte what it was.
+- [ ] Tests first, red, for the deploy window: the three Postgres sequences in § Caller 1 (these
+      need Postgres and are mine to run, and their raw output goes to the code reviewer).
 - [ ] Tests first, red: the fetch step over an injected fetch — candidate served and right kind →
       stored; first is 404 → second stored; first is 410 → second; first is the wrong kind or lacks
       its marker → second; first is 503, a timeout, a blocked address, too large → that failure,
@@ -252,8 +260,8 @@ address, not the route.
       URL, and against the job's address when the manifest has none.
 - [ ] Build it, with arXiv's candidates `[pdf]`. `npm run typecheck`, the touched test files,
       `npm run lint` on them.
-- [ ] Mutate: reverse the candidate order, drop the kind check, let a 503 fall through, recompute
-      the in-flight key — each must turn a test red.
+- [ ] Mutate: reverse the candidate order, drop the kind check, let a 503 fall through, remove the
+      hand-back in `enqueue` — each must turn a test red.
 - [ ] One real import, locally, of Greg's link, end to end through the queue: the article is the
       paper.
 - [ ] Docs: `fetching.md` (a new section, and loose end 1 closed), `ingest-queue.md`,
@@ -318,9 +326,13 @@ classes outside `article.ltx_document`, an extra authored sibling, a linked desc
       its text in a `foreignObject`, and its 58 words vanish. Trace where; keep the text and its
       links without loosening the sanitiser. If it cannot be done without touching the sanitiser's
       policy, it is recorded as a known loss and reported to Greg, not built.
-- [ ] Re-run `evals/arxiv-html-vs-pdf/run.ts --html-only` on the five papers and re-judge the two
-      the PDF arm won, same rubric. Record the result in 261005e. The corpus fixtures' extraction
-      is unchanged (`npm test`).
+- [ ] **Fixes 1 to 6 gate the switch** (Sol's F13). If fix 4 cannot keep the table safely, or the
+      cause of fault 6 is ours and cannot be repaired under the rules above, the HTML candidate is
+      not added and the format choice goes back to Greg with the evidence. Fix 7 is the one
+      exception, and only when repairing it would need the sanitiser's policy changed.
+- [ ] Re-run `evals/arxiv-html-vs-pdf/run.ts --html-only` on the five papers and re-judge all five
+      HTML arms against the PDF arms already bought, same rubric. Record the result in 261005e.
+      The corpus fixtures' extraction is unchanged (`npm test`).
 - [ ] **Then** put the HTML candidate first, in the same commit as that evidence.
 - [ ] One real import of Greg's link, locally, end to end; a Sonnet subagent opens it in a browser
       and checks the figures load, the maths draws, the tables have their headers.
@@ -371,7 +383,7 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
 
   | ID | Finding | Disposition |
   |---|---|---|
-  | F1 (P0) | A job queued before the deploy keeps its old key; the new `urlKey` adopts its slug and a second job is charged | **Fixed in the plan**: the in-flight lookup compares the address a job was queued with, and new jobs are queued with the canonical address. § Caller 1 |
+  | F1 (P0) | A job queued before the deploy keeps its old key; the new `urlKey` adopts its slug and a second job is charged | First fix (compare the address a job was queued with) **withdrawn after round 2**; see F11 |
   | F2 (P1) | `meta.url` is `final_url`; stage 2 cannot set it | **Accepted, the design changed**: no `sourceUrl`; the article's address is where its text came from, and `urlKey` is what joins the shapes. The abstract-page link is a question for Greg |
   | F3 (P1) | Falling back on any failure hides the cause; the last candidate's kind was unchecked | **Fixed**: only 404/410 or a wrong kind moves on; every candidate must match; an HTML marker |
   | F4 (P1) | A source found only after a redirect is not "one more object" | **Accepted as wording**: the claim is narrowed to statically recognisable sources; the post-fetch hook is not built and is part 2's call |
@@ -382,5 +394,14 @@ Nobody is reading the chat, so decisions taken on Greg's behalf are recorded her
   | F9 (P1) | The write-up claimed more than it measured; the boxed passage is content, not cosmetic | **Fixed** in 261005e and here; the boxed passage is fix 7. **Overruled in part**: Sol would not switch HTML on until fix 7 passes. If fix 7 needs the sanitiser's policy changed it is recorded and reported instead, because that policy is a defence and the PDF arm has silent losses of its own (a scrambled table column) |
   | F10 (P2) | Do not switch HTML-first on before the fixes | **Accepted**: the first stage ships arXiv as PDF only |
 
-- Plan review, GPT Sol, round 2 (the fixes above only): *(pending)*
+- **Plan review, GPT Sol, round 2** (`261005l-arxiv-link-imports-the-paper-plan-review-2-sol.md`,
+  on commit `b5a3678f2`): *build it after fixing F11, F13*. F2 to F10 confirmed fixed.
+
+  | ID | Finding | Disposition |
+  |---|---|---|
+  | F11 (P0) | The first F1 fix left the deploy window open as two articles and two charges | **Fixed, by the route Sol offered**: a direct hand-back in `enqueue` when `sameWork` under today's resolver identifies the active holder. § Caller 1. This fix was not in the round-2 snapshot, so the code review checks it first, with the Postgres test's raw output |
+  | F12 (P2) | A retry bypasses `sourceAddress`, and a new paste then loops to a 409 | **Gone with its cause**: `sourceAddress` and the unresolved comparison are both withdrawn |
+  | F13 (P1) | HTML could be switched on with fix 4 or 6 unresolved | **Fixed**: fixes 1 to 6 gate the switch; all five papers are re-judged |
+
+  Discovery on the plan is closed at two rounds.
 - Code review, GPT Sol: *(pending)*

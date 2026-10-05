@@ -78,11 +78,11 @@ interface ArmResult {
   modelCalls?: number;
   title?: string;
   /** What the masthead would print under the title. */
-  byline?: string;
+  byline?: string | undefined;
   counts?: ArmCounts;
   /** The PDF extractor's own per-page recall, for the PDF arm. */
   pdfRecall?: number | null;
-  pages?: number;
+  pages?: number | undefined;
 }
 
 function multiset(words: string[]): Map<string, number> {
