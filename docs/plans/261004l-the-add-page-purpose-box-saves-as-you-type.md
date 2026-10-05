@@ -316,6 +316,22 @@ that a failed or cancelled import leaves its row and purpose for a Retry to reus
 another article. One wording of its I changed back: the rename box's label stays *Couldn't rename
 it*, which is what it nearly always is.
 
+**Browser check, second run** (Sonnet subagent, sha 50b4862a5 at start and end, three fresh
+imports). All passed. At 1280 px with the modes box ticked: one `GET /api/reader?slug=`, then one
+`PATCH` answered 200 `{"entry":null,"purpose":"…"}`, the line under the box went from *Not saved
+yet…* to *Saved* while the import was still on `structure`, the page opened the article by itself
+within about a second of the job finishing, and all seven first-mode jobs, created at publication,
+carry *"Why they are reading this piece: purpose-bc2 desktop: what the author assumes"* in their
+profile. At 390 px: saved mid-import, then select-all, delete and blur sent `{"purpose":null}`,
+answered 200, and the column is null; nothing scrolls sideways and nothing is clipped. Focused as
+the import finished: the page waited 22 s on the *Ready* sentence with one button, **Open the
+article**, which opened it with the sentence stored. No console errors or failed requests.
+Screenshots: [1280](261004l-shot-1280-saved.png), [390](261004l-shot-390-saved.png).
+
+One thing seen and not explained, on a re-add of an article already in the local library (not the
+path under test): the line briefly read *Not saved. The import stopped before this article's saved
+reason could be read.* before *Saved*.
+
 ## Stages
 
 One stage: one page and one small class. Plan review (GPT Sol, read-only), build, code review
