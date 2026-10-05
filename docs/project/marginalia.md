@@ -112,13 +112,16 @@ options passed over and GPT Sol's review are in
   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
   *why* or *e.g.* later is a row in each table and no new model call.
-- **The press that turns the column on asks for it**, and nothing else does. Marginalia's row in
+- **An import queues it, since 2026-10-05**, with the other main modes' steps, when the mode left
+  the experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md); [ingest-queue.md](ingest-queue.md)).
+- **Otherwise the press that turns the column on asks for it**: on an article imported before
+  then, or with the add page's box unticked, or where the queued run failed. Marginalia's row in
   `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
   starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
   a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
   arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
   [`src/web/useRelations.ts`](../../src/web/useRelations.ts). The first-open default that turns the
-  column on for a reader with the experimental switch on is such an arrival, not a press
+  column on is such an arrival, not a press
   ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
 - **Nothing in the column says it is running.** The words appear when the job finishes; the job
   is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.

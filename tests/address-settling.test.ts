@@ -68,7 +68,7 @@ import { parseRoute, settleAddress } from "../src/web/router.js";
 
 const SLUG = "a-shared-piece";
 const TITLE = "A shared piece";
-const HEAD: PublicHead = { slug: SLUG, title: TITLE, gist: null, canonical: null };
+const HEAD: PublicHead = { slug: SLUG, title: TITLE, gist: null, canonical: null, authors: [] };
 
 /* A shell with the sentinels, so `composeShell` is exercised rather than a
    stand-in for it — the title asserted below is the one that reaches the

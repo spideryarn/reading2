@@ -1,0 +1,820 @@
+diff --git a/docs/plans/261005d-marginalia-out-of-the-experimental-switch.md b/docs/plans/261005d-marginalia-out-of-the-experimental-switch.md
+new file mode 100644
+index 000000000..acc2290b8
+--- /dev/null
++++ b/docs/plans/261005d-marginalia-out-of-the-experimental-switch.md
+@@ -0,0 +1,118 @@
++# Marginalia out of the experimental switch
++
++Up: [plans.md](../project/plans.md)
++
++Report `spya-vv54j2` (Sentry SPIDERYARN-READING2-C2, queue item `qi-ef6fvbcm`), from an admin, so
++trusted input. Greg, 2026-10-04:
++
++> Let's take the annotations mode out of experimental features, i.e. make it a mainstream feature
++> available to everybody.
++
++"Annotations" is the mode called Marginalia since 2026-10-01
++([261001n](261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md)).
++
++## What changes for a reader
++
++- **Switch off**: the Marginalia toggle is at the right-hand end of the modes in the bottom bar, in
++  its own frame, and *Marginalia* is a row in the command bar. Until now both were drawn only with
++  the switch on, or while the notes were already open.
++- **Switch on**: as today.
++- **A visitor** (signed out, or on somebody else's article) gains the toggle too. `POLICY.marginalia`
++  is already `available`, and a visitor's column draws what the payload carries. It has no relation
++  words (owner only, [marginalia.md](../project/marginalia.md)) and a visitor's press starts no job.
++- **A new article has its relation words made on import**, with the other main modes, when the add
++  page's *Generate the main modes* box is ticked (the default). See the first decision below.
++- **A first-opened article arrives in Summary and Marginalia** for every signed-in reader whose
++  window has room for both (from 900 usable px), not only for a reader with the switch on. See the
++  second decision.
++
++## The build
++
++1. `MODE_CATALOG.marginalia.experimental` to `false` (`src/mode-catalog.ts`), and `marginalia` out of
++   `BEHIND_THE_SWITCH` (`tests/dock-experimental-modes.test.tsx`): the two edits
++   [mode.md § Moving a mode in or out of the switch](../project/mode.md#moving-a-mode-in-or-out-of-the-switch)
++   names.
++2. `relations` into `AUTO_MODE_STEPS` (`src/auto-mode-steps.ts`), in `STEP_ORDER`, and into the
++   literal list in `tests/auto-modes.test.tsx`; the sentence the add page says (`autoModesDetail`)
++   gains Marginalia by derivation, and its test follows.
++3. `firstOpenSearch` (`src/web/last-view.ts`) loses its `marginalia` argument; the effect that
++   applies the default still waits for the experimental store's `loaded`, because that snapshot is
++   also where `signedIn` comes from. Tests in `tests/last-view.test.ts` and
++   `tests/first-open-default-wiring.test.tsx`.
++4. Whatever else names the old state: the comment in `Dock.tsx` about the third frame, the
++   command-pick catalogue if it is compared exactly, `/help` and `/features` (their *experimental*
++   tag is read from the catalog), tests that assumed the toggle absent with the switch off.
++5. Docs: `experimental-features.md` (the row leaves the table, with Greg's words),
++   `marginalia.md`, `url-state.md`, `mode.md` if it says so, `interface-vision.md` line on gating.
++
++## Two decisions taken here, each named so Greg can reverse it
++
++**1. Relation words are made on import.** The add page's list is *every mode outside the switch
++that makes something on a press* (`derivedAutoModeSteps`, held equal to the written list by a
++test). Marginalia's press makes `relations`, so leaving the switch puts it on that list by the
++existing rule. One `capable`-tier call per article, **cold**: Relations shares a cached article
++with no other step (`src/models.ts`), so there is no cache discount. The one measured run was
++$0.045 and 14 seconds ([261003f](261003f-marginalia-relation-words-and-timeline-events.md)). An
++article too short to have turns stores an empty list without a model call. It reads no other step,
++so it is a one-step job.
++
++*The alternative*: keep it off the list with a named exception in `auto-modes.ts`, so the words are
++made on the first press of the toggle. Cheaper per import. Passed over because the first-open
++default below turns the column on *without* a press, which by design spends nothing, so a new
++article would arrive with a margin that has no relation words until the reader turns the column off
++and on again.
++
++**2. The first-open default includes Marginalia for everybody signed in.** Greg asked for it
++(`spya-ax5tmm`, plan [261005a](261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)):
++*"(if there's even more room) Marginalia mode in right-hand"*. That plan held Marginalia back for
++readers with the switch off only because the mode was experimental, and left the question
++`Q-marginalia-switch`, which this report answers.
++
++## The simpler option passed over
++
++The flag and nothing else. Then the derived-list test is red (so decision 1 has to be made one way
++or the other regardless), and the first-open default would go on reading the experimental switch to
++decide about a mode that is no longer experimental, with a comment saying why that is now false.
++
++## Checked, and not changing
++
++- **No route is gated on the switch**; nothing on the server changes except the queued list.
++- **Arriving with `?margin=1` spends nothing**: `useRelations` spends through `useAutoRun`, which
++  waits for a press. Unchanged.
++- **The bar is one button wider with the switch off.** `dock-fit.ts` sheds labels by measured width.
++- **Articles already imported** have no relation words until their owner presses the toggle; no
++  backfill.
++
++## Tests, red first
++
++- `tests/dock-experimental-modes.test.tsx`: `marginalia` out of the list; red until the flag moves.
++- `tests/auto-modes.test.tsx`: the literal list with `relations`; red until the written list follows.
++- `tests/last-view.test.ts`: at 900px the default is Summary and Marginalia with no switch argument.
++
++## Not done here
++
++- No backfill of relation words for existing articles.
++- Signed-out readers still get no first-open default (`Q-first-open-visitors` in 261005a stands).
++
++## GPT Sol's plan review, 2026-10-05
++
++[261005d-marginalia-plan-review-sol.md](261005d-marginalia-plan-review-sol.md). No P0; verdict
++*rework*, for consequences the plan missed rather than the approach. All taken. (Four earlier
++attempts returned no verdict: the model was at capacity.)
++
++- **P1, the cost premise was false.** The plan said the call reuses a cached prefix. It does not.
++  Decision 1 above now gives the full cold cost.
++- **P1, the server's own test.** `tests/publication-queues-the-main-modes.test.ts` holds a second
++  written copy of the queued requests; it gains `["relations"]`. `ingest-queue.md` lists the jobs.
++- **P2, named tests.** Three assertions in `tests/auto-modes.test.tsx`; the switch-off toggle case
++  in `tests/dock-experimental-modes.test.tsx` (now drawn, unpressed); the switch-off case in
++  `tests/first-open-default-wiring.test.tsx`; the command-pick catalogue, regenerated (one line).
++- **P2, a signed-out visitor's press.** `tests/public-network-trace.test.tsx` now presses the toggle
++  on and then off from a bare public page and asserts nothing private and nothing but GETs.
++- **P2, copy that would be false.** `/help` called Marginalia experimental; the relation-word card
++  said "when you turn it on"; the mode's card said turning it on makes the pass.
++- **P2, docs.** `reading-view-overview.md`, `mode.md`, `marginalia.md`, `interface-vision.md`.
++- **P3, stale comments**, and `STEP_ORDER` already holds `relations`.
++
++It confirmed: the queue is for the importing owner only and honours the opt-out; a visitor's press
++arms nothing; arrival with `?margin=1` sends no job.
+diff --git a/docs/plans/261005d-marginalia-plan-review-sol.md b/docs/plans/261005d-marginalia-plan-review-sol.md
+new file mode 100644
+index 000000000..c8dfdbe5a
+--- /dev/null
++++ b/docs/plans/261005d-marginalia-plan-review-sol.md
+@@ -0,0 +1,28 @@
++No P0s. The queue design is mechanically safe, but the plan needs rework because its cost premise is false and several independent contracts are missing.
++
++- **P1 — Decision 1 relies on caching that does not exist.** The plan says most of Relations’ input will use a prefix cached by the other import jobs ([plan:50](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/plans/261005d-marginalia-out-of-the-experimental-switch.md:50>)). Current policy explicitly says no two distinct stages share an article cache ([step-order.ts:81](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/step-order.ts:81>)), and Relations specifically “shares a cached article with nothing” because its schema differs ([models.ts:1958](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/models.ts:1958>)). Production one-call stages currently record zero cache reads/writes, and cross-job cache coordination is deliberately absent ([prompt-caching.md:242](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/prompt-caching.md:242>)). This decision adds one cold capable-tier call to every default import. Re-state the decision using the full measured marginal cost, without a cache discount.
++
++- **P1 — The server-side queue contract and its independent test are omitted.** The production integration test deliberately copies the current seven requests rather than importing the list ([publication-queues-the-main-modes.test.ts:21](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/publication-queues-the-main-modes.test.ts:21>), [publication-queues-the-main-modes.test.ts:121](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/publication-queues-the-main-modes.test.ts:121>)). It must gain `["relations"]` between Ideas and Simple and change seven to eight. This suite is the evidence that all import paths, opt-out, ordering, work-key joining, free status and transaction rollback still work. The authoritative queue documentation also enumerates the jobs and omits Marginalia ([ingest-queue.md:618](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/ingest-queue.md:618>)).
++
++- **P2 — Several exact tests and generated artefacts need named changes, not the plan’s generic sweep.**
++  
++  - The three separate assertions for reader copy, requests and queue grouping all need Relations ([auto-modes.test.tsx:198](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/auto-modes.test.tsx:198>), [auto-modes.test.tsx:206](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/auto-modes.test.tsx:206>), [auto-modes.test.tsx:225](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/auto-modes.test.tsx:225>)).
++  - The switch-off Dock case currently expects the closed Marginalia toggle to disappear; it must instead expect a visible, unpressed toggle ([dock-experimental-modes.test.tsx:258](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/dock-experimental-modes.test.tsx:258>)).
++  - The first-open wiring case explicitly expects switch-off to produce Summary alone, and its surrounding descriptions still say the switch decides ([first-open-default-wiring.test.tsx:3](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/first-open-default-wiring.test.tsx:3>), [first-open-default-wiring.test.tsx:88](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/first-open-default-wiring.test.tsx:88>)).
++  - The command-pick catalogue definitely is compared exactly, so “if” is wrong. Marginalia must gain the `owner-article-experimental-off` context in [command-pick-catalogue.generated.json:389](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/command-pick-catalogue.generated.json:389>); the gate is [command-pick-catalogue.test.ts:269](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/command-pick-catalogue.test.ts:269>). The eval answer snapshot uses the switch-on context and should remain unchanged.
++
++- **P2 — The newly reachable signed-out visitor press needs direct network coverage.** The signed-out sweep excludes toggles from `modeRadios`, then opens `?margin=1` and tests only the on→off press ([public-network-trace.test.tsx:1988](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/public-network-trace.test.tsx:1988>), [public-network-trace.test.tsx:2036](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/public-network-trace.test.tsx:2036>)). Once the default bar exposes Marginalia, test the unpressed toggle from a bare public page, click off→on and on→off, and assert no private request or non-GET. The signed-in non-owner test already covers both presses, but only with Experimental on ([public-network-trace.test.tsx:2919](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/public-network-trace.test.tsx:2919>)).
++
++- **P2 — Reader-facing help and origin copy will be false.** `/help` does not only derive a tag: it explicitly calls Marginalia experimental ([help-topics.tsx:140](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/help/help-topics.tsx:140>)), while the existing help test checks only the derived heading/table tags and will not catch that sentence ([help-page.test.tsx:224](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/help-page.test.tsx:224>)). Relation-word cards say they were made when the reader turned Marginalia on ([tips.ts:77](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/marginalia/tips.ts:77>)), and the catalogue’s shared tooltip says turning it on causes the model pass ([mode-catalog.ts:643](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/mode-catalog.ts:643>)); both become false for imported results and were already false for visitors. `/features` needs no manual edit: its tag and test are derived from the catalogue ([FeaturesPage.tsx:33](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/FeaturesPage.tsx:33>), [features-page-modes.test.tsx:120](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/features-page-modes.test.tsx:120>)).
++
++- **P2 — Governing docs omitted or underspecified.** The missing entry-point doc says Marginalia is behind the switch twice and generates nothing ([reading-view-overview.md:9](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/reading-view-overview.md:9>), [reading-view-overview.md:159](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/reading-view-overview.md:159>)). `mode.md` says Marginalia has nothing to generate and that promoting a mode is “the whole of the behaviour”; this change disproves both statements ([mode.md:107](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/mode.md:107>), [mode.md:344](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/mode.md:344>)). The named `marginalia.md` edit must replace “the press … and nothing else” ([marginalia.md:115](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/marginalia.md:115>)); `interface-vision.md` must update not just gating but “shows only what other modes made” ([interface-vision.md:156](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/docs/project/interface-vision.md:156>)).
++
++- **P3 — Source comments remain stale, and `STEP_ORDER` already contains Relations.** No membership edit to `STEP_ORDER` is needed; Relations is already there, but its comment says an owner’s press starts it ([step-order.ts:117](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/step-order.ts:117>)). Also update the mode inventory in [auto-mode-steps.ts:24](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/auto-mode-steps.ts:24>), both stale Dock comments ([Dock.tsx:1038](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/Dock.tsx:1038>), [Dock.tsx:2861](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/Dock.tsx:2861>)), and the first-open comments and now-unused `on` dependency in [last-view.ts:49](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/last-view.ts:49>), [last-view.ts:493](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/last-view.ts:493>) and [last-view.ts:609](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/last-view.ts:609>). The press-path comments in `useRelations`, `activation` and `MarginaliaColumn` remain accurate for missing legacy/opted-out articles, but must stop implying it is the only production path.
++
++Safety conclusions:
++
++- Decision 1’s queue mechanics are safe: publication queues only for the importing owner and respects `auto_modes_off_at` ([pg-revisions.ts:2437](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/store/pg-revisions.ts:2437>), [pg-revisions.ts:2507](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/store/pg-revisions.ts:2507>)); Relations is a sharing step with no dependencies ([sharing-steps.ts:80](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/sharing-steps.ts:80>)); short articles store an empty result without a model call ([relations.ts:400](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/relations.ts:400>)); and successor jobs carry no ingest reservation/quota slot ([publication-queues-the-main-modes.test.ts:463](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/publication-queues-the-main-modes.test.ts:463>)). I found no runtime billing, lease-budget or queue code assuming seven.
++- Decision 2 applies to any signed-in reader, including a signed-in non-owner, because `firstOpenHref` checks sign-in rather than ownership ([last-view.ts:545](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/last-view.ts:545>)). That is consistent with `POLICY.marginalia: available` ([visitor.ts:193](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/visitor.ts:193>)). An owner’s arrival mounts five artefact GETs, including Relations, but sends no job POST ([artefact-read-hooks.test.tsx:159](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/tests/artefact-read-hooks.test.tsx:159>)); therefore it spends no money.
++- A visitor press cannot arm a job because Dock passes `arms = false` for visitors ([Dock.tsx:1898](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/Dock.tsx:1898>)), and the owner-only feed is not mounted ([Reader.tsx:3367](</home/greg/code/spideryarn2/.claude/worktrees/fbvv54j2-marginalia-not-experimental/src/web/reader/Reader.tsx:3367>)). It changes the URL and draws from the existing public payload; omitted relation words are handled as `null`.
++
++VERDICT: rework
+\ No newline at end of file
+diff --git a/docs/project/experimental-features.md b/docs/project/experimental-features.md
+index 45cb85a27..f923661fc 100644
+--- a/docs/project/experimental-features.md
++++ b/docs/project/experimental-features.md
+@@ -199,7 +199,7 @@ is a column rather than something in the browser's `localStorage`.
+ since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
+ four on 2026-09-03
+ ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
+-them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
++them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+ out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
+ `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
+ on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
+@@ -218,7 +218,6 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
+ | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
+ | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
+ | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
+-| [Marginalia](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (called Annotations until 2026-10-01) | A first experiment with a column to the *right* of the prose, which Greg asked to "play with" (SPIDERYARN-READING2-7K, 2026-10-01). It generates nothing — the parts' questions, the arc and any ideas already made — but whether notes beside the text help reading or become a second article down the margin is exactly what has not been tried. |
+ | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
+ 
+ **One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
+@@ -368,6 +367,23 @@ rather than a reason to hide the mode. Pressing the button starts a paid run, th
+ and Ideas, so this is a third default-visible mode that spends on a press
+ ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
+ 
++**Marginalia left the table on 2026-10-05.** It was called Annotations when Greg wrote this:
++
++> Let's take the annotations mode out of experimental features, i.e. make it a mainstream feature
++> available to everybody.
++>
++> — Greg, 2026-10-04 (spya-vv54j2)
++
++It had been behind the switch since it was built on 2026-10-01, as a first experiment with a column
++to the right of the prose. Its toggle is now at the end of the modes in every reader's bar, a
++visitor's included, where it draws what the public payload carries and starts nothing. Two things
++followed from the flag. **Its relation words are queued when an article is imported**, because the
++add page's list is every mode outside the switch that makes something
++([ingest-queue.md](ingest-queue.md)): one more model call per import, measured once at $0.045.
++**And the first-open default includes it for every signed-in reader with room**, no longer only
++for a reader with the switch on ([url-state.md](url-state.md)).
++[261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md).
++
+ **Remember left the table on 2026-10-05, without its Explore part.** Greg:
+ 
+ > I want to include at least part of the remember mode in the mainstream features, i.e. not only in
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index f39023ef5..b797eac9f 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -617,7 +617,8 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
+ 
+ **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
+ it.** When an import's first full publication commits, the same transaction queues one job per main
+-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
++mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
++relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
+ cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+ mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
+ reader's profile as it stood at publication.
+diff --git a/docs/project/interface-vision.md b/docs/project/interface-vision.md
+index 86ae99371..606171fbe 100644
+--- a/docs/project/interface-vision.md
++++ b/docs/project/interface-vision.md
+@@ -154,7 +154,8 @@ These are the reasons to go carefully, each one already said by Greg in another
+   Both now live there, and still need different voices — the
+   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
+ - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
+-  other modes have already made, and the automatic help comments in 7E were declined for the same
++  other modes have already made (and, since 2026-10-03, its own relation words:
++  [marginalia.md](marginalia.md#relation-words)), and the automatic help comments in 7E were declined for the same
+   reason. Greg would have had it run the missing modes, but only if a mode made later never reached
+   the margin:
+ 
+@@ -175,8 +176,8 @@ These are the reasons to go carefully, each one already said by Greg in another
+ - **Phones.** On a phone a band already covers the article, and a passage link in it scrolls text
+   you cannot see (5A), and the notes do not fit at all under 612px. The vision has no phone answer
+   yet.
+-- **Experimental gating.** Marginalia, the typefaces, cross-references, Debate, Diagram and FAQ are
+-  behind the switch or owner-only. A vision that makes them the default view is also a decision to
++- **Experimental gating.** Debate, Diagram and FAQ are behind the switch (Marginalia was until
++  2026-10-05, the typefaces until 2026-10-02) or owner-only. A vision that makes them the default view is also a decision to
+   take them out from behind it.
+ 
+ ## A path, simplest first
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 01c124a99..ed95999fd 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -112,13 +112,16 @@ options passed over and GPT Sol's review are in
+   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
+   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
+   *why* or *e.g.* later is a row in each table and no new model call.
+-- **The press that turns the column on asks for it**, and nothing else does. Marginalia's row in
++- **An import queues it, since 2026-10-05**, with the other main modes' steps, when the mode left
++  the experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md); [ingest-queue.md](ingest-queue.md)).
++- **Otherwise the press that turns the column on asks for it**: on an article imported before
++  then, or with the add page's box unticked, or where the queued run failed. Marginalia's row in
+   `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
+   starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
+   a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
+   arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
+   [`src/web/useRelations.ts`](../../src/web/useRelations.ts). The first-open default that turns the
+-  column on for a reader with the experimental switch on is such an arrival, not a press
++  column on is such an arrival, not a press
+   ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
+ - **Nothing in the column says it is running.** The words appear when the job finishes; the job
+   is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+diff --git a/docs/project/mode.md b/docs/project/mode.md
+index 267fc7a8c..6fd4252fb 100644
+--- a/docs/project/mode.md
++++ b/docs/project/mode.md
+@@ -112,7 +112,7 @@ Then the residue, which is why this page exists:
+   > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
+   > [261002a](../plans/261002a-summary-generates-on-open.md))
+ 
+-  Modes with nothing to generate (Plain, Structure and Marginalia) open without a run. So do
++  Modes with nothing to generate (Plain and Structure) open without a run. So do
+   surfaces that need the reader's words first (Search, Chat, Referee's Criteria and Mirror,
+   Remember's Recall). So a new
+   artefact-backed mode wants a name in
+@@ -348,6 +348,10 @@ Three edits, and the second is the point:
+ 1. **The `experimental` flag on its `MODE_CATALOG` entry**, [`src/mode-catalog.ts`](../../src/mode-catalog.ts)
+    — it was on the `MODES_UI` row until 2026-09-07. That is the whole of the behaviour — the route,
+    the band and the URL do not change, and a hidden mode was always reachable by `?mode=…` anyway.
++   **With one exception since 2026-09-30: a mode whose press makes something** joins or leaves the
++   steps queued on import, and `tests/auto-modes.test.tsx` is red until
++   [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts) follows — a per-import cost, so say it
++   in the plan (Marginalia, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)).
+ 2. **Its name in `BEHIND_THE_SWITCH`**, [`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx).
+    An independent copy of the policy on purpose, so that nobody moves a mode in or out of every
+    reader's bar by editing one boolean: change the flag alone and six of that file's tests go red,
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index 5ceab87a9..ecb031b78 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -10,8 +10,8 @@ goes stale.
+ what a bare `/read/<slug>` shows since 2026-08-31. (Hierarchy — the gist columns beside the prose,
+ which the default used to be — was removed on 2026-09-29; `?mode=hierarchy` opens Structure,
+ [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) The other is
+-Marginalia, which draws a column of notes to the right of the prose instead, behind the
+-experimental switch — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
++Marginalia, which draws a column of notes to the right of the prose instead (behind the
++experimental switch until 2026-10-05) — and since 2026-10-01 it is a switch of its own, `?margin=1`, that can be on
+ beside any band ([261001i](../plans/261001i-annotations-column-beside-a-band-mode.md)). So *a mode
+ is open* and *a band is open* are separate questions
+ ([plain-mode-and-the-way-out.md](../plans/plain-mode-and-the-way-out.md)).
+@@ -161,7 +161,7 @@ readers never are.
+   column of notes, each level with the block it is about and scrolling with the text — each
+   part's Socratic question, a stamp where an idea first occurs (if the ideas have been made), and
+   a head pinned at the top saying which part and section you are in and, from the arc, where the
+-  argument has got to. It opens no band, generates nothing, and hides its notes on a window too
++  argument has got to. It opens no band, generates only its own relation words ([marginalia.md](marginalia.md#relation-words)), and hides its notes on a window too
+   narrow for the column. **Not one of the radios since 2026-10-01**: its Dock button is a toggle
+   at the right-hand end and its address is `?margin=1`, so the column stays open beside whichever
+   band you choose; where there is no room for both (under 900px) but room for the column alone
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index 3a9f03ab2..350a3c4f0 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -741,11 +741,12 @@ it.
+   window too narrow for a band, uses the first open up: the default is not held over for a wider
+   window or a later sign-in. An article already in this browser that was last left in Plain at the
+   top had no key before this shipped, so it gets the default once.
+-- **Marginalia joins only with the experimental switch on**, because it is behind that switch
+-  ([experimental-features.md](experimental-features.md)). So the default waits for the switch's
+-  answer. If settings are already loaded, the address is settled before paint; otherwise the
+-  default waits for them, whether the article payload has arrived yet or not. The shelf does not
+-  load this setting itself. A switch that never answers means no default.
++- **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
++  experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
++  switch on. The default still waits for the settings store's answer, because that is where
++  "signed in" comes from. If settings are already loaded, the address is settled before paint;
++  otherwise the default waits for them, whether the article payload has arrived yet or not. The
++  shelf does not load settings itself. A store that never answers means no default.
+ - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
+ - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
+   open would be a first one. `readLastView` tells *failed* from *no key* for this.
+diff --git a/src/auto-mode-steps.ts b/src/auto-mode-steps.ts
+index 61438637d..5889d5ddb 100644
+--- a/src/auto-mode-steps.ts
++++ b/src/auto-mode-steps.ts
+@@ -26,7 +26,10 @@ import type { StepName } from "./types.js";
+  *
+  * `tweets` and `simple` are Summary's two artefacts (its thread and its
+  * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
+- * modes'; `crossrefs` belongs to no mode — the links from a phrase in one
++ * modes'; `relations` is Marginalia's relation words (so, but, vs), on the
++ * list since the mode left the experimental switch on 2026-10-05
++ * (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md);
++ * `crossrefs` belongs to no mode — the links from a phrase in one
+  * passage to the passage that backs it sit in the prose in every mode
+  * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 3).
+  */
+@@ -35,6 +38,7 @@ export const AUTO_MODE_STEPS: readonly StepName[] = [
+   "glossary",
+   "quotes",
+   "ideas",
++  "relations",
+   "simple",
+   "skim",
+   "crossrefs",
+diff --git a/src/command-pick-catalogue.generated.json b/src/command-pick-catalogue.generated.json
+index 73a1698cf..450f09f3c 100644
+--- a/src/command-pick-catalogue.generated.json
++++ b/src/command-pick-catalogue.generated.json
+@@ -402,6 +402,7 @@
+   "generates": true,
+   "contexts": [
+    "owner-article",
++   "owner-article-experimental-off",
+    "owner-article-archived",
+    "reader-on-someone-elses-article",
+    "owner-metadata"
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index 77702f5fc..2c38fc776 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -647,20 +647,23 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+        top-level parts (src/structure.ts § `questionFor`), the sentence at the
+        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
+        and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
+-       thing turning it on generates is its own relation words — so, but, vs
+-       (src/relations.ts, plan 261003f); other modes' lists are only read. The
++       thing it generates is its own relation words — so, but, vs
++       (src/relations.ts, plan 261003f), queued on import
++       (src/auto-mode-steps.ts, plan 261005d) or by the owner's press where
++       there are none; other modes' lists are only read. The
+        width is
+        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
+        drawn. */
+-    how: "Turning it on marks where the argument turns, with one model pass that puts so, but or vs beside those paragraphs. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
++    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, when the article is added or the first time its owner turns the column on. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
+        Comments row has it too and this row wins it. **Nothing here may start
+        with `notes`**, which is the Comments row's. */
+     aliases: ["annotations", "margin notes", "margin", "margins", "sidenotes", "side notes", "marginal notes"],
+-    /* **Behind the switch**: a first experiment with a column on the right,
+-       which Greg asked to "play with" (SPIDERYARN-READING2-7K). Nothing in it
+-       is finished enough to put on every reader's bar.
+-       docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
+-    experimental: true,
++    /* **Out from behind the switch on 2026-10-05.** It went in on 2026-10-01
++       as a first experiment with a column on the right. Greg, 2026-10-04
++       (spya-vv54j2): "Let's take the annotations mode out of experimental
++       features, i.e. make it a mainstream feature available to everybody."
++       docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
++    experimental: false,
+   },
+ };
+diff --git a/src/step-order.ts b/src/step-order.ts
+index cf4d64218..2db873e61 100644
+--- a/src/step-order.ts
++++ b/src/step-order.ts
+@@ -119,8 +119,10 @@ export const STEP_ORDER = [
+      Its fingerprint also covers the ordered paragraph pairs, rather than
+      FAQ's whole tree — src/relations.ts § inputFingerprint.
+      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
+-     over the whole article, started by the owner's press that turns Marginalia
+-     on. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
++     over the whole article, queued when an article is imported since
++     2026-10-05 (src/auto-mode-steps.ts) and otherwise started by the owner's
++     press that turns Marginalia on.
++     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+   "relations",
+   /* With the other body-only `ids` stages: `high` effort (measured against
+      `medium` in stage 1, src/models.ts § STAGE_EFFORT) and its own schema.
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 8ab986a88..b0aa53b74 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -1042,7 +1042,7 @@ const MODES_UI = [
+      outside the radiogroup, after it, so the bar and the command bar list it in
+      the same place. It had sat in the shape run beside Summary, for what it
+      draws: each part's question and where the argument has got to. Behind the
+-     switch. `PanelRight`: the column on the right.
++     experimental switch until 2026-10-05 (plan 261005d). `PanelRight`: the column on the right.
+      docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
+      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
+   {
+@@ -2870,8 +2870,8 @@ function DockModes({
+      Greg: *"move the Plain and Marginalia modes into their own icon-groups"*
+      (spya-ba8kqp). Plain is still a radio in the same radiogroup (exactly one
+      of Plain and the bands is on), so the radiogroup holds two frames.
+-     Marginalia's third frame is absent when Experimental is off and the notes
+-     are closed. The lines between runs (`groupStarts`) are drawn inside the
++     Marginalia's third frame was absent with Experimental off and the notes
++     closed until 2026-10-05, when the mode left the switch. The lines between runs (`groupStarts`) are drawn inside the
+      bands' frame only: a frame's edge already separates the other two.
+      docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
+   const radios = modes.filter((m) => m.mode !== "marginalia");
+diff --git a/src/web/help/help-topics.tsx b/src/web/help/help-topics.tsx
+index e9a74c684..ee73096fb 100644
+--- a/src/web/help/help-topics.tsx
++++ b/src/web/help/help-topics.tsx
+@@ -138,7 +138,7 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
+           </li>
+           <li>
+             <strong>Marginalia</strong> is a column of notes on the right of the article, which can
+-            stay open beside any panel. It is <HelpRef to="experimental-features">experimental</HelpRef>.
++            stay open beside any panel.
+           </li>
+           <li>
+             <strong>The bottom bar</strong> starts with the way home (the Spideryarn wordmark). On
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index 8a245f288..075593a8f 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -50,8 +50,7 @@
+  *
+  * Since 2026-10-05, for a signed-in reader: a bare address with **no key at
+  * all** for the slug opens in Summary where a band fits beside the prose, with
+- * Marginalia's notes too where those fit and the reader's experimental switch
+- * is on. It is the same decision with one more case, and the same rule: the
++ * Marginalia's notes too where those fit. It is the same decision with one more case, and the same rule: the
+  * link always wins. So that "no key" means *never opened in this browser*, an
+  * empty view is now stored as `""` rather than removed, and a storage that
+  * cannot be read or written means no default rather than one on every visit.
+@@ -490,18 +489,19 @@ export function writeLastView(slug: string, search: string, storage: StorageSour
+  * beside Summary's `roomy` band (from 900px). The widths are theirs; the tests
+  * sit either side of each. `?summary=` is left off, which is Brief.
+  *
+- * **`marginalia` is the reader's experimental switch**: Marginalia is behind
+- * it (src/mode-catalog.ts), and a default must not put an experimental column
+- * in front of a reader who has not asked for those. Summary is not behind it.
++ * **Not a question for the experimental switch since 2026-10-05**, when
++ * Marginalia left it (spya-vv54j2); until then a third argument kept the notes
++ * out for a reader whose switch was off.
++ * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
+  *
+  * Neither parameter starts anything on arrival — checked in the hooks, as
+  * `NEEDS_AN_EXPLICIT_PRESS` above says to: Summary's `useSimple` and
+  * Marginalia's `useRelations` both spend through `useAutoRun`, which waits for
+  * a press.
+  */
+-export function firstOpenSearch(windowWidth: number, rootFontPx: number, marginalia: boolean): string {
++export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
+   if (bandCoversProse(windowWidth)) return "";
+-  const notes = marginalia && notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
++  const notes = notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
+   return notes ? "?mode=summary&margin=1" : "?mode=summary";
+ }
+ 
+@@ -606,18 +606,19 @@ export function useLastView(slug: string, view: ArticleView): void {
+     history.replaceState(history.state, "", href);
+   }, [slug, view]);
+ 
+-  /* **The first-open default, applied once the experimental switch has
+-     answered**, because the switch decides whether Marginalia is part of it
+-     (`firstOpenSearch`). If the answer is already in the store, this runs in
+-     the same commit as the claim above, before paint. Otherwise it waits for
+-     settings, which can arrive before or after the article payload. A switch
+-     that never answers means no default.
++  /* **The first-open default, applied once the settings store has answered**,
++     because that store is where `signedIn` comes from. (Until 2026-10-05 its
++     experimental switch also decided whether Marginalia was part of the
++     default; plan 261005d.) If the answer is already in the store, this runs
++     in the same commit as the claim above, before paint. Otherwise it waits
++     for settings, which can arrive before or after the article payload. A
++     store that never answers means no default.
+ 
+      **Measured here, once**, with the reader's own two measurements
+      (reader/measure.ts): a resize afterwards moves the layout and never
+-     reapplies this. `signedIn` is the store's too, which is why no reader id
+-     is passed in. Declared after the claim so it sees this render's claim. */
+-  const { loaded, signedIn, on } = useExperimental();
++     reapplies this. No reader id is passed in, because `signedIn` is the
++     store's. Declared after the claim so it sees this render's claim. */
++  const { loaded, signedIn } = useExperimental();
+   useLayoutEffect(() => {
+     if (view !== "article" || !loaded || firstOpenFor.current !== slug) return;
+     firstOpenFor.current = null;
+@@ -626,10 +627,10 @@ export function useLastView(slug: string, view: ArticleView): void {
+       location.pathname,
+       location.search,
+       { signedIn },
+-      firstOpenSearch(usableWidth(), rootFontPx(), on),
++      firstOpenSearch(usableWidth(), rootFontPx()),
+     );
+     if (href !== null) history.replaceState(history.state, "", href);
+-  }, [slug, view, loaded, signedIn, on]);
++  }, [slug, view, loaded, signedIn]);
+ 
+   useEffect(() => {
+     const save = () => {
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+index 5fa663a14..dcc8a9a64 100644
+--- a/src/web/marginalia/tips.ts
++++ b/src/web/marginalia/tips.ts
+@@ -76,7 +76,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
+ 
+ /** Where a relation word came from: the same for all of them. */
+ const RELATION_ORIGIN =
+-  "Written by AI, which read each paragraph against the one before it. Made for Marginalia when you turn it on. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
++  "Written by AI, which read each paragraph against the one before it. Made for Marginalia. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
+ 
+ /**
+  * **What each relation word means**, in a card of its own on the word (a
+diff --git a/tests/auto-modes.test.tsx b/tests/auto-modes.test.tsx
+index 2411706bd..2cfb66269 100644
+--- a/tests/auto-modes.test.tsx
++++ b/tests/auto-modes.test.tsx
+@@ -152,7 +152,19 @@ describe("which steps are queued", () => {
+        became delegated — and `modeStep` answers `null` for a delegated mode,
+        so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
+        watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
+-    expect(derivedAutoModeSteps()).toEqual(["tweets", "glossary", "quotes", "ideas", "simple", "skim", "crossrefs"]);
++    /* `relations` since 2026-10-05, when Marginalia left the switch: its press
++       makes the relation words, so the rule above puts them on the list
++       (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
++    expect(derivedAutoModeSteps()).toEqual([
++      "tweets",
++      "glossary",
++      "quotes",
++      "ideas",
++      "relations",
++      "simple",
++      "skim",
++      "crossrefs",
++    ]);
+     expect(modeStep("summary")).toBeNull();
+   });
+ 
+@@ -186,7 +198,7 @@ describe("which steps are queued", () => {
+   it("names them to the reader", () => {
+     /* Summary once, though two of the steps are its own (its lengths and its
+        thread). It must not vanish with its `fixed` row (F2). */
+-    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas and Skim are prepared");
++    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas, Marginalia and Skim are prepared");
+     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
+   });
+ });
+@@ -204,6 +216,7 @@ describe("what each job asks for", () => {
+       ["glossary"],
+       ["quotes"],
+       ["ideas"],
++      ["relations"],
+       ["simple"],
+       ["quotes", "ideas", "skim"],
+       ["crossrefs"],
+@@ -214,7 +227,7 @@ describe("what each job asks for", () => {
+     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
+        goes before it. The publication stamps them in this order. */
+     const { together, after } = autoModePosts();
+-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["crossrefs"]]);
++    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["relations"], ["simple"], ["crossrefs"]]);
+     expect(after).toEqual([["quotes", "ideas", "skim"]]);
+   });
+ 
+diff --git a/tests/dock-corner-controls.test.tsx b/tests/dock-corner-controls.test.tsx
+index 1cd37346f..234277f73 100644
+--- a/tests/dock-corner-controls.test.tsx
++++ b/tests/dock-corner-controls.test.tsx
+@@ -573,8 +573,10 @@ describe("the route walk: one branded home control, never two triggers", () => {
+     await show(`/read/${SLUG}`);
+     const group = document.querySelector('[role="radiogroup"]');
+     expect(group).not.toBeNull();
++    /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
++       drawn after the group, never a radio in it (plan 261005d). */
+     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(
+-      visibleModes(false, "plain").length,
++      visibleModes(false, "plain").filter((m) => m.mode !== "marginalia").length,
+     );
+   });
+ 
+diff --git a/tests/dock-experimental-modes.test.tsx b/tests/dock-experimental-modes.test.tsx
+index abbd788a9..be0f5f053 100644
+--- a/tests/dock-experimental-modes.test.tsx
++++ b/tests/dock-experimental-modes.test.tsx
+@@ -101,10 +101,9 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
+      yet."* The whole mode this time, not only four of its pictures.
+      docs/project/experimental-features.md. */
+   "diagram",
+-  /* 2026-10-01: a first experiment with a column right of the prose, which
+-     Greg asked to "play with" (SPIDERYARN-READING2-7K) —
+-     docs/project/experimental-features.md. */
+-  "marginalia",
++  /* Marginalia was here from 2026-10-01 to 2026-10-05, when Greg asked for it
++     to be "a mainstream feature available to everybody" (spya-vv54j2).
++     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+ ];
+ 
+ /**
+@@ -256,10 +255,11 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+     }
+   });
+ 
+-  /* **Marginalia's toggle obeys the same rule** (261001i): with its notes on
+-     it stays drawn with the switch off, pressed, so the one control that turns
+-     them off cannot vanish — and it is never one of the checked radios. */
+-  it("Marginalia's toggle stays drawn and pressed while its notes are on", () => {
++  /* **Marginalia's toggle is drawn with the switch off, pressed or not**,
++     since 2026-10-05 when the mode left the switch (plan 261005d) — and it is
++     never one of the checked radios. Before that it obeyed the rule above:
++     drawn only while its notes were on. */
++  it("Marginalia's toggle is drawn with the switch off, and pressed while its notes are on", () => {
+     reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
+     const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
+     expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
+@@ -267,7 +267,9 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+     expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
+     expect(checked()).toEqual([MODE_LABEL.glossary]);
+     reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
+-    expect(host.querySelector('.dock-modes [aria-pressed]')).toBeNull();
++    const closed = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
++    expect(closed?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
++    expect(closed?.getAttribute("aria-pressed")).toBe("false");
+   });
+ 
+   /**
+diff --git a/tests/dock-mode-order.test.ts b/tests/dock-mode-order.test.ts
+index 8a66b9d77..a573279d7 100644
+--- a/tests/dock-mode-order.test.ts
++++ b/tests/dock-mode-order.test.ts
+@@ -71,7 +71,8 @@ describe("the mode bar's order", () => {
+   it("with the switch off, draws lines only where two surviving runs meet", () => {
+     /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
+        Remember (since 2026-10-05, spya-cnqcjf): the critical run is hidden
+-       whole, so no line is left for it. */
++       whole, so no line is left for it. Marginalia's toggle is last, in a
++       frame of its own, since it left the switch the same day (spya-vv54j2). */
+     const drawn = visibleModes(false, undefined);
+     expect(drawn.map((m) => m.mode)).toEqual([
+       "plain",
+@@ -84,8 +85,12 @@ describe("the mode bar's order", () => {
+       "search",
+       "chat",
+       "remember",
++      "marginalia",
+     ]);
+-    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "skim", "search"].sort());
++    /* The bar asks about the bands only: the toggle's frame is its own edge
++       (Dock.tsx § the three frames). */
++    const bands = drawn.filter((m) => m.mode !== "marginalia");
++    expect([...groupStarts(bands)].sort()).toEqual(["structure", "skim", "search"].sort());
+   });
+ 
+   it("gives a retained experimental mode its own line when it is alone in its run", () => {
+diff --git a/tests/first-open-default-wiring.test.tsx b/tests/first-open-default-wiring.test.tsx
+index 78ffae458..624420f55 100644
+--- a/tests/first-open-default-wiring.test.tsx
++++ b/tests/first-open-default-wiring.test.tsx
+@@ -4,7 +4,7 @@
+  *
+  * tests/last-view.test.ts pins the three pure functions; this is the part they
+  * cannot see — `useLastView`'s two layout effects: that the claim and the
+- * default meet, that the default waits for the experimental switch's answer,
++ * default meet, that the default waits for the settings store's answer,
+  * and that it is applied once. src/web/last-view.ts § The first-open default;
+  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
+  *
+@@ -91,10 +91,12 @@ describe("opening an article this browser has no key for", () => {
+     expect(location.pathname + location.search).toBe("/read/x?mode=summary&margin=1");
+   });
+ 
+-  it("arrives in Summary alone when the switch is off", () => {
++  it("arrives in Summary with the notes when the switch is off too", () => {
++    /* Summary alone until 2026-10-05, when Marginalia left the switch
++       (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
+     Object.assign(setting, { on: false, loaded: true, signedIn: true });
+     open();
+-    expect(location.search).toBe("?mode=summary");
++    expect(location.search).toBe("?mode=summary&margin=1");
+   });
+ 
+   it("waits for the switch's answer, then applies it", () => {
+diff --git a/tests/last-view.test.ts b/tests/last-view.test.ts
+index 4296116a7..1d09b6cd2 100644
+--- a/tests/last-view.test.ts
++++ b/tests/last-view.test.ts
+@@ -342,19 +342,20 @@ describe("the first-open default", () => {
+ 
+   describe("firstOpenSearch: what the window has room for", () => {
+     it("is the article alone just below 700 usable px, and Summary from 700", () => {
+-      expect(firstOpenSearch(699, 16, true)).toBe("");
+-      expect(firstOpenSearch(700, 16, true)).toBe("?mode=summary");
++      expect(firstOpenSearch(699, 16)).toBe("");
++      expect(firstOpenSearch(700, 16)).toBe("?mode=summary");
+     });
+ 
+     it("adds the notes from 900, and not at 899", () => {
+-      expect(firstOpenSearch(899, 16, true)).toBe("?mode=summary");
+-      expect(firstOpenSearch(900, 16, true)).toBe("?mode=summary&margin=1");
++      expect(firstOpenSearch(899, 16)).toBe("?mode=summary");
++      expect(firstOpenSearch(900, 16)).toBe("?mode=summary&margin=1");
+     });
+ 
+-    it("leaves the notes out at any width for a reader whose experimental switch is off", () => {
+-      expect(firstOpenSearch(900, 16, false)).toBe("?mode=summary");
+-      expect(firstOpenSearch(2400, 16, false)).toBe("?mode=summary");
+-      expect(firstOpenSearch(699, 16, false)).toBe("");
++    it("does not ask about the experimental switch: Marginalia left it on 2026-10-05", () => {
++      /* It took a third argument, the reader's switch, and left the notes out
++         when that was off (spya-vv54j2, plan 261005d). */
++      expect(firstOpenSearch.length).toBe(2);
++      expect(firstOpenSearch(2400, 16)).toBe("?mode=summary&margin=1");
+     });
+   });
+ 
+diff --git a/tests/public-network-trace.test.tsx b/tests/public-network-trace.test.tsx
+index 79ca2ec27..f4df09050 100644
+--- a/tests/public-network-trace.test.tsx
++++ b/tests/public-network-trace.test.tsx
+@@ -2034,12 +2034,25 @@ describe("a signed-out browser on a shared document", () => {
+     for (const mode of MODES) {
+       if (pressed.includes(mode)) continue;
+       /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
+-         address is `?margin=1` (261001i): kept drawn and pressed while the notes
+-         are on, and pressing it — which turns them off — stays public too. */
++         address is `?margin=1` (261001i). Since 2026-10-05 it is on a
++         stranger's default bar, unpressed (plan 261005d, GPT Sol's P2): so
++         both presses are made from a bare page, on and then off, and each
++         stays public and sends nothing but GETs. Until then only the press
++         that turns the notes off was reachable. */
+       if (mode === "marginalia") {
+         await remount();
+-        await open("?margin=1");
++        await open();
+         trace.length = 0;
++        const closed = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
++        expect(closed?.getAttribute("aria-label"), "the notes' toggle is on a stranger's bar").toBe(
++          MODE_LABEL.marginalia,
++        );
++        expect(closed?.getAttribute("aria-pressed")).toBe("false");
++        await act(async () => (closed as HTMLButtonElement).click());
++        await settle();
++        expect(outsidePublic(), "after turning marginalia on").toEqual([]);
++        expect(trace.filter((r) => r.method !== "GET"), "after turning marginalia on").toEqual([]);
++        expect(new URLSearchParams(location.search).get("margin")).toBe("1");
+         const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+         expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
+           MODE_LABEL.marginalia,
+diff --git a/tests/publication-queues-the-main-modes.test.ts b/tests/publication-queues-the-main-modes.test.ts
+index 845c392fa..bc3bf4b74 100644
+--- a/tests/publication-queues-the-main-modes.test.ts
++++ b/tests/publication-queues-the-main-modes.test.ts
+@@ -18,7 +18,7 @@
+  *    only the clause under test keeps it out.
+  * 2. **The opt-out**: `reader_profiles.auto_modes_off_at`, read in the
+  *    transaction. No row is on.
+- * 3. **The jobs**: the seven requests of src/auto-mode-steps.ts, written out
++ * 3. **The jobs**: the eight requests of src/auto-mode-steps.ts, written out
+  *    here a second time so the test does not agree with the code by reading it;
+  *    free; carrying the reader's rendered profile; in order, after the labels
+  *    job — including a labels holder whose `created_at` is later than the
+@@ -128,6 +128,7 @@ const EXPECTED: StepName[][] = [
+   ["glossary"],
+   ["quotes"],
+   ["ideas"],
++  ["relations"],
+   ["simple"],
+   ["crossrefs"],
+   ["quotes", "ideas", "skim"],
+@@ -481,7 +482,7 @@ describe("an import's first full publication queues the main modes", () => {
+     const exact = await db().execute<{ distinct_stamps: number }>(sql`
+       select count(distinct created_at)::int as distinct_stamps
+         from spideryarn.jobs where slug = ${slug} and id <> ${job.id}`);
+-    expect(exact.rows[0]?.distinct_stamps, "two successors share a created_at").toBe(8);
++    expect(exact.rows[0]?.distinct_stamps, "two successors share a created_at").toBe(9);
+   });
+ 
+   /* ------------------------------------------------------------------ 2 -- */

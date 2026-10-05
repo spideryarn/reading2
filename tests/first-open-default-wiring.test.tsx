@@ -4,7 +4,7 @@
  *
  * tests/last-view.test.ts pins the three pure functions; this is the part they
  * cannot see — `useLastView`'s two layout effects: that the claim and the
- * default meet, that the default waits for the experimental switch's answer,
+ * default meet, that the default waits for the settings store's answer,
  * and that it is applied once. src/web/last-view.ts § The first-open default;
  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
  *
@@ -91,10 +91,12 @@ describe("opening an article this browser has no key for", () => {
     expect(location.pathname + location.search).toBe("/read/x?mode=summary&margin=1");
   });
 
-  it("arrives in Summary alone when the switch is off", () => {
+  it("arrives in Summary with the notes when the switch is off too", () => {
+    /* Summary alone until 2026-10-05, when Marginalia left the switch
+       (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
     Object.assign(setting, { on: false, loaded: true, signedIn: true });
     open();
-    expect(location.search).toBe("?mode=summary");
+    expect(location.search).toBe("?mode=summary&margin=1");
   });
 
   it("waits for the switch's answer, then applies it", () => {

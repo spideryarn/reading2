@@ -1970,7 +1970,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * ## Two passes since 2026-09-03, and the count is not weakened
    *
-   * Five modes are behind the experimental-features switch, and a signed-out
+   * Some modes are behind the experimental-features switch, and a signed-out
    * reader is **forcibly off** — there is no answer this test could pose that
    * would put Quotes in a stranger's bar, because the store issues no request
    * for them at all. So the sweep runs twice rather than shrinking:
@@ -1983,7 +1983,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * The union is still compared with `MODES`, in both directions, which is the
    * invariant the pre-gate version held. Dropping the second pass would have
-   * quietly stopped pressing five of the thirteen.
+   * quietly stopped pressing the modes hidden from the default bar.
    */
   it("stays inside the public namespace when the modes are pressed", async () => {
     await open();
@@ -2034,12 +2034,25 @@ describe("a signed-out browser on a shared document", () => {
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
       /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
-         address is `?margin=1` (261001i): kept drawn and pressed while the notes
-         are on, and pressing it — which turns them off — stays public too. */
+         address is `?margin=1` (261001i). Since 2026-10-05 it is on a
+         stranger's default bar, unpressed (plan 261005d, GPT Sol's P2): so
+         both presses are made from a bare page, on and then off, and each
+         stays public and sends nothing but GETs. Until then only the press
+         that turns the notes off was reachable. */
       if (mode === "marginalia") {
         await remount();
-        await open("?margin=1");
+        await open();
         trace.length = 0;
+        const closed = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+        expect(closed?.getAttribute("aria-label"), "the notes' toggle is on a stranger's bar").toBe(
+          MODE_LABEL.marginalia,
+        );
+        expect(closed?.getAttribute("aria-pressed")).toBe("false");
+        await act(async () => (closed as HTMLButtonElement).click());
+        await settle();
+        expect(outsidePublic(), "after turning marginalia on").toEqual([]);
+        expect(trace.filter((r) => r.method !== "GET"), "after turning marginalia on").toEqual([]);
+        expect(new URLSearchParams(location.search).get("margin")).toBe("1");
         const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
         expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
           MODE_LABEL.marginalia,

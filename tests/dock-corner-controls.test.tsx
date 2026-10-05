@@ -560,9 +560,9 @@ describe("the route walk: one branded home control, never two triggers", () => {
   /**
    * **And the radiogroup still announces the visible modes.**
    *
-   * Against `visibleModes` rather than against a number: there are fourteen
-   * modes and five of them are experimental, so a literal count in a test is
-   * either wrong today or an invitation to delete a live mode to make it pass.
+   * Against `visibleModes` rather than against a number: which modes are
+   * experimental changes, so a literal count in a test is either wrong today
+   * or an invitation to delete a live mode to make it pass.
    * GPT Sol, G6. What it is really guarding is the wordmark and the Feedback
    * button having been added *outside* the group — a `DockHome` rendered as a
    * child of `.dock-modes` would move this number by one and nothing else in
@@ -573,8 +573,10 @@ describe("the route walk: one branded home control, never two triggers", () => {
     await show(`/read/${SLUG}`);
     const group = document.querySelector('[role="radiogroup"]');
     expect(group).not.toBeNull();
+    /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
+       drawn after the group, never a radio in it (plan 261005d). */
     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(
-      visibleModes(false, "plain").length,
+      visibleModes(false, "plain").filter((m) => m.mode !== "marginalia").length,
     );
   });
 

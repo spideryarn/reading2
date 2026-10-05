@@ -63,7 +63,9 @@
  *     what they meant** (spya-t0dg9u, plan 261003k): a sentence that names no
  *     row goes to a fast model, which answers with one of this bar's own rows
  *     or with nothing. Still no guess — nothing is asked or drawn until that
- *     Enter. `ask` below, and src/command-pick.ts.
+ *     Enter, or a press on the button that says so (2026-10-05, `ASK_LABEL`:
+ *     a phone may have no on-screen Enter after dictation). `ask` below, and
+ *     src/command-pick.ts.
  *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
  *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
  *     since the rest are the bar's own. The surviving half is still true *by
@@ -148,6 +150,7 @@ import {
   runProposal,
 } from "./command-proposal.js";
 import { type TagsControl, tagRunners } from "./command-runners.js";
+import { Button } from "./components/ui/button.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
@@ -1206,9 +1209,26 @@ export const NO_MATCH = "No command matches.";
  * **What follows it, since 2026-10-03, for a signed-in reader who has typed
  * something**: a sentence that names no row can be asked about (plan 261003k).
  * Greg's call 3 — an honest empty state over a guessed fallback — still holds:
- * nothing is guessed until the reader presses Enter for it.
+ * nothing is guessed until the reader asks for it.
+ *
+ * **A button, with Enter as its other route, since 2026-10-05** (spya-qem46c,
+ * plan 261005f). It was a sentence, *Press Enter to ask what you meant.*, and
+ * Greg dictated a question on an iPhone: *"there was no way to kick off that
+ * action on an iPhone because I don't have an enter key."* A dictation can
+ * finish with no phone keyboard on screen, so the offer has to be something a
+ * finger can press.
  */
-export const ASK_HINT = "Press Enter to ask what you meant.";
+export const ASK_LABEL = "Ask what you meant";
+/** Beside the button where the main pointer is not a finger. Enter works either way. */
+export const ASK_OR_ENTER = "or press Enter";
+/**
+ * The same button under `COULD_NOT_TELL`, where *Ask what you meant* would read
+ * as the bar contradicting itself (`offerToAsk`). That state is also a timeout
+ * or a dropped connection, and Enter was its only retry.
+ */
+export const ASK_AGAIN_LABEL = "Try again";
+/** A local, deterministic refusal: retrying unchanged cannot help. */
+export const ASK_TOO_LONG = "That sentence is too long. Shorten it and try again.";
 
 /** The line under the box while the sentence is with the model. */
 const ASKING = "Working out what you meant…";
@@ -1532,7 +1552,10 @@ export function CommandBar({
    * still asks again — a timeout deserves a second try — it is only the
    * invitation that waits for a changed sentence.
    */
-  const offerToAsk = canAsk && !(said?.kind === "message" && said.text === COULD_NOT_TELL);
+  const askMessage = said?.kind === "message" ? said.text : null;
+  const offerToAsk = canAsk && askMessage !== COULD_NOT_TELL && askMessage !== ASK_TOO_LONG;
+  /* A timeout may recover; an unchanged over-limit sentence cannot. */
+  const showAskButton = canAsk && askMessage !== ASK_TOO_LONG;
   const index = Math.min(selected, Math.max(0, results.length - 1));
   const active = results[index];
 
@@ -1655,6 +1678,13 @@ export function CommandBar({
    * take whichever row the half-heard words happened to select.
    */
   const dictationBusy = dictate.busy;
+  /**
+   * **When a press on the ask button would be refused** — `ask`'s own guards,
+   * as the reader can see them: a sentence already out, a run starting, the
+   * microphone on or its words on their way. `ask` is still the lock; this is
+   * the row's `aria-disabled` again, for the same reason.
+   */
+  const askRefused = dictationBusy || said?.kind === "asking" || said?.kind === "pending";
   /* **The bar stays mounted when it closes**, so the hook's cleanup never runs
      and a microphone left on would go on recording behind a shut bar.
      `dictation.toggle`, not the field's, which would put the focus back into a
@@ -1803,7 +1833,7 @@ export function CommandBar({
     const sentence = draft.trim();
     /* The route would refuse it; a paragraph is not a command. */
     if (sentence.length > MAX_SENTENCE) {
-      setSaid({ kind: "message", text: COULD_NOT_TELL });
+      setSaid({ kind: "message", text: ASK_TOO_LONG });
       return;
     }
     const request: PickRequest = { sentence, rows: keys, argumentKinds: argumentKindsHere(article) };
@@ -1977,10 +2007,51 @@ export function CommandBar({
         {results.length === 0 ? (
           /* Greg's answer 3: no search fallback, no list of everything, and
              nothing guessed. Beside it, for a signed-in reader who has typed
-             something, only the offer to ask (`ASK_HINT`) — which does
-             nothing until they press Enter for it. */
-          <p className="cmdbar-empty tw:m-0 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
-            {offerToAsk ? `${NO_MATCH} ${ASK_HINT}` : NO_MATCH}
+             something, only the offer to ask (`ASK_LABEL`) — which does
+             nothing until they press it, or Enter. */
+          <p className="cmdbar-empty tw:m-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:px-4 tw:py-4 tw:text-sm tw:text-muted-foreground">
+            {NO_MATCH}
+            {showAskButton && (
+              <>
+                {" "}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  /* 44px for a finger (narrow-windows.md § the finger floor). */
+                  className={`cmdbar-ask tw:pointer-coarse:min-h-11 ${askRefused ? "tw:cursor-default tw:opacity-50" : ""}`}
+                  /* `aria-disabled`, not `disabled`: a disabled button takes no
+                     mousedown, so a press on it would pull the focus out of
+                     the box. `ask` refuses, and this says so. */
+                  aria-disabled={askRefused || undefined}
+                  /* **The focus stays in the box.** At a desk the arrows and
+                     Enter go on working on the rows that come back; on a phone
+                     the keyboard stays as it was, up or down. The click still
+                     fires. */
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    /* Enter and Space activate a focused button with a
+                       zero-detail click. Put focus back on the combobox before
+                       suggestions replace this button; a finger tap must not
+                       summon the phone keyboard. */
+                    const fromKeyboard = e.detail === 0 && document.activeElement === e.currentTarget;
+                    ask();
+                    if (fromKeyboard && !askRefused) inputRef.current?.focus({ preventScroll: true });
+                  }}
+                >
+                  {offerToAsk ? ASK_LABEL : ASK_AGAIN_LABEL}
+                </Button>
+                {/* Three words a phone has no use for. `pointer`, the main
+                    one, as the size rules ask (touch.md): a touchscreen laptop
+                    keeps them. */}
+                {offerToAsk && (
+                  <span className="cmdbar-or-enter tw:pointer-coarse:hidden">
+                    {" "}
+                    {ASK_OR_ENTER}
+                  </span>
+                )}
+              </>
+            )}
           </p>
         ) : (
           <>

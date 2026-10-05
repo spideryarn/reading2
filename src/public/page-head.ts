@@ -36,8 +36,8 @@
 import { escapeHtml, headText } from "../html.js";
 import { type BandMode, DEFAULT_MODE } from "../modes.js";
 import type { ArticleView } from "../read-address.js";
-import { APP_NAME, documentTitle } from "../title-text.js";
-import { articleUrl, safePublicCanonical } from "../urls.js";
+import { APP_NAME, SEP, documentTitle } from "../title-text.js";
+import { PUBLIC_ORIGIN, articleUrl, safePublicCanonical } from "../urls.js";
 import type { PublicHead } from "../store/public-reader.js";
 
 /* `PUBLIC_ORIGIN` was defined here, with the argument for why it is a constant
@@ -79,6 +79,71 @@ import type { PublicHead } from "../store/public-reader.js";
    the one file whose job is to notice when the deployed head is wrong. */
 export const CARD_TITLE = 120;
 const DESCRIPTION = 240;
+
+/**
+ * **The picture on every card**: one static image for the whole site, drawn by
+ * scripts/make-og-card.ts and committed as `public/og-card.png`.
+ *
+ * Ours, and the same for every article. The article's own lead picture is
+ * somebody else's image under our name, and is still refused for the reasons
+ * the first slice gave: an endorsement, and another untrusted `src` sink.
+ * docs/plans/261005f-link-previews-and-seo-for-shared-links.md has the choice.
+ *
+ * `index.html` writes this address out by hand for the default head, and
+ * tests/og-card.test.ts holds the two together, with the file's real size.
+ */
+export const OG_CARD = {
+  path: "/og-card.png",
+  url: `${PUBLIC_ORIGIN}/og-card.png`,
+  width: 1200,
+  height: 630,
+} as const;
+
+/**
+ * **The names a card's title ends with**, or `""` for none: one name, two
+ * joined by `and`, or the first and `et al.`
+ *
+ * A card has room for a title and little else, and a paper's forty authors
+ * would be all of it.
+ */
+export function cardAuthors(names: readonly string[]): string {
+  const clean = names.map((n) => headText(n, 60)).filter((n) => n !== "");
+  const [first, second] = clean;
+  if (first === undefined) return "";
+  if (second === undefined) return first;
+  return clean.length === 2 ? `${first} and ${second}` : `${first} et al.`;
+}
+
+/**
+ * **What `og:title` says**: the article's title, then who wrote it.
+ *
+ * Greg, 2026-10-04: *"Probably the article title and/or authors first in the
+ * title"*. On the card only. The tab's `<title>` is `documentTitle`, which the
+ * client rewrites a second later and must agree with
+ * (docs/project/page-titles.md).
+ *
+ * **A title the clamp cut gets no names**, and neither does one the names
+ * would push past the clamp. `CARD_TITLE` is the budget for the whole string,
+ * and scripts/check-public-shell.ts can go on comparing a long title exactly.
+ *
+ * Exported for that script, which judges a deployed head with it.
+ */
+export function cardTitle(title: string | null, authors: readonly string[]): string {
+  /* "Untitled" rather than an empty tag, matching `articleTitle()` in
+     src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
+     back to the slug and so always hands over a string — it is the defence for
+     the paths that compose a head without one, and for a title that normalises
+     to nothing. `||` and not `??`: a title of `"   "` normalises to `""`, which
+     is as titleless as `null`. */
+  const clamped = headText(title ?? "", CARD_TITLE) || "Untitled";
+  const whole = headText(title ?? "", Number.MAX_SAFE_INTEGER);
+  const names = cardAuthors(authors);
+  if (names === "" || clamped !== whole) return clamped;
+  /* One budget for the whole string: names that do not fit are left off, not
+     cut, because half a name is worse than none. */
+  const withNames = `${clamped}${SEP}${names}`;
+  return [...withNames].length <= CARD_TITLE ? withNames : clamped;
+}
 
 /**
  * The boundary markers in index.html. The function replaces everything from the
@@ -206,13 +271,7 @@ function requireOnce(shell: string, marker: string, at: number): void {
  * becomes markup. src/html.ts explains why those are two jobs.
  */
 function tags(head: PublicHead, mode: BandMode, view: ArticleView): string[] {
-  /* "Untitled" rather than an empty tag, matching `articleTitle()` in
-     src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
-     back to the slug and so always hands over a string — it is the defence for
-     the paths that compose a head without one, and for a title that normalises
-     to nothing. `||` and not `??`: a title of `"   "` normalises to `""`, which
-     is as titleless as `null`. */
-  const cardTitle = headText(head.title ?? "", CARD_TITLE) || "Untitled";
+  const card = cardTitle(head.title, head.authors);
   /* `head.gist` is already `root_gist` — itself the gist → summary → excerpt
      fallback from src/library-scalars.ts. When there is none, all three
      description tags are omitted rather than filled with the app's strapline: a
@@ -233,16 +292,25 @@ function tags(head: PublicHead, mode: BandMode, view: ArticleView): string[] {
   /* Without the ` · Spideryarn` suffix: a card already carries `og:site_name`,
      so repeating it in the title spends the visible half of the card saying the
      same word twice. */
-  out.push(meta("property", "og:title", cardTitle));
+  out.push(meta("property", "og:title", card));
   if (description) out.push(meta("property", "og:description", description));
+  /* **Ours, while the canonical below is the original's, and they differ on
+     purpose.** Facebook follows an `og:url` that names another address and
+     draws that page's card instead, so the original's URL here would mean no
+     card of ours at all. docs/research/261005b § `og:url`. */
   out.push(meta("property", "og:url", articleUrl(head.slug)));
-  /* `summary`, not `summary_large_image`. There is no image in this slice —
-     a third-party lead image would be an endorsement, a privacy contact and
-     another untrusted `src` sink — and `summary_large_image` without one
-     renders as a broken card rather than a small one. */
-  out.push(meta("name", "twitter:card", "summary"));
-  out.push(meta("name", "twitter:title", cardTitle));
+  out.push(meta("property", "og:image", OG_CARD.url));
+  out.push(meta("property", "og:image:width", String(OG_CARD.width)));
+  out.push(meta("property", "og:image:height", String(OG_CARD.height)));
+  out.push(meta("property", "og:image:alt", APP_NAME));
+  /* The large card, since 2026-10-05 and the image above. Every other platform
+     draws a 1200x630 image large whatever X is told, so `summary` would only
+     make X the odd one out. Without an image this value draws a broken card:
+     the two go together. */
+  out.push(meta("name", "twitter:card", "summary_large_image"));
+  out.push(meta("name", "twitter:title", card));
   if (description) out.push(meta("name", "twitter:description", description));
+  out.push(meta("name", "twitter:image", OG_CARD.url));
 
   /* A canonical is a public statement about a URL we did not write, so
      `safePublicCanonical` gets the last word and its `null` means no tag at

@@ -19,30 +19,46 @@ Disallow: /
 
 # The hole, and it is only wide enough for a card.
 #
-# Pasting a shared /read/<slug> link into a chat should show its title and gist.
-# The services that draw those cards fetch the page like any other crawler, so a
-# blanket Disallow means no card — a bare URL, which is what slice 2 exists to
-# fix. Slack unfurls anyway (Slackbot honours only rules addressed to it by
-# name); Meta's crawler obeys the `*` group above, so before this it showed
-# nothing in WhatsApp, Messenger, Facebook or Instagram.
+# Pasting a shared /read/<slug> link into a chat should show its title, its gist
+# and a picture. The services that draw those cards fetch the page like any
+# other crawler, so a blanket Disallow means no card for a robot that obeys it.
+# Slack unfurls anyway (its fetchers ignore robots.txt:
+# https://api.slack.com/robots); Meta's crawler
+# obeys the `*` group above, so before this it showed nothing in WhatsApp,
+# Messenger, Facebook or Instagram.
 #
-# **This is not permission to index.** These two fetch a page to draw a card,
-# and neither puts it in a search result. Every response still carries
+# Three things are let through, and they are the whole of a card:
+#   /read/         a shared article's page, for its title and description
+#   /og-card.png   the picture, which is ours and the same on every card
+#   /$             the homepage and nothing under it (`$` ends the match)
+#
+# Since 2026-10-05 the group names seven preview fetchers, where it was Meta's
+# and X's alone. Some ignore this file, as Slack documents above; these are the
+# paths we permit for those that consult it. The list is also `PREVIEW_BOTS` in
+# scripts/check-public-shell.ts, which fails a deploy that disagrees, and the
+# platforms are named to authors on /features/public-readable-sharing.
+#
+# **This is not permission to index.** These fetch a page to draw a card, and
+# none puts it in a search result. Every response still carries
 # `X-Robots-Tag: noindex, nofollow` (vercel.json) and every page still carries
 # the matching `<meta name="robots">` (src/public/page-head.ts) — that pair is
 # what actually keeps this out of search, and it is untouched.
 #
 # Nothing new is exposed. A head is composed only for an article whose owner set
 # `visibility = 'public'`, and anybody holding the link can already fetch it.
-# A private slug answers with the plain shell, to these two as to anyone else.
+# A private slug answers with the plain shell, to these as to anyone else.
 #
-# A bot obeys exactly one group — the most specific one naming it — so each
-# needs its own Disallow as well; they do not inherit the `*` group above.
+# A bot obeys exactly one group — the most specific one naming it — and inherits
+# nothing from the `*` group above, so this group carries its own Disallow.
 
 User-agent: facebookexternalhit
-Allow: /read/
-Disallow: /
-
 User-agent: Twitterbot
+User-agent: LinkedInBot
+User-agent: WhatsApp
+User-agent: TelegramBot
+User-agent: Discordbot
+User-agent: Slackbot
 Allow: /read/
+Allow: /og-card.png
+Allow: /$
 Disallow: /

@@ -39,9 +39,12 @@ import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 
 import {
+  cardAuthors,
+  cardTitle,
   composeShell,
   MANAGED_HEAD_END,
   MANAGED_HEAD_START,
+  OG_CARD,
 } from "../src/public/page-head.js";
 /* `PUBLIC_ORIGIN` is in src/urls.ts, not in page-head.ts, since 2026-09-02 —
    the export bundle needs the same origin and a store file cannot import a page
@@ -77,6 +80,7 @@ function head(over: Partial<PublicHead> = {}): PublicHead {
     title: "The hard problem is a distraction",
     gist: "Consciousness research keeps circling one question that may not be the useful one.",
     canonical: "https://aeon.co/essays/the-hard-problem-is-a-distraction",
+    authors: [],
     ...over,
   };
 }
@@ -195,18 +199,26 @@ describe("what a link preview is told", () => {
     expect(metaContent(d, 'meta[property="og:title"]')).toBe(
       "The hard problem is a distraction",
     );
-    expect(metaContent(d, 'meta[name="twitter:card"]')).toBe("summary");
+    expect(metaContent(d, 'meta[name="twitter:card"]')).toBe("summary_large_image");
     expect(metaContent(d, 'meta[name="twitter:title"]')).toBe(
       "The hard problem is a distraction",
     );
     /* One head, not two: the shell's own `<title>` was inside the sentinels and
        has been replaced rather than joined. */
     expect(d.querySelectorAll("title")).toHaveLength(1);
-    /* No image in this slice. A third-party lead image would be an endorsement,
-       a privacy contact and another untrusted `src` sink — and
-       `summary_large_image` without one renders as a broken card. */
-    expect(d.querySelector('meta[property="og:image"]')).toBeNull();
-    expect(d.querySelector('meta[name="twitter:image"]')).toBeNull();
+    /* Our own static picture, never the article's: a third-party lead image
+       would be an endorsement, a privacy contact and another untrusted `src`
+       sink. `summary_large_image` without an image draws a broken card, so the
+       two are asserted together. */
+    expect(metaContent(d, 'meta[property="og:image"]')).toBe(OG_CARD.url);
+    expect(metaContent(d, 'meta[name="twitter:image"]')).toBe(OG_CARD.url);
+    expect(metaContent(d, 'meta[property="og:image:width"]')).toBe("1200");
+    expect(metaContent(d, 'meta[property="og:image:height"]')).toBe("630");
+    /* One of each: the default head's card tags were inside the sentinels and
+       were replaced, not joined. */
+    expect(d.querySelectorAll('meta[property="og:image"]')).toHaveLength(1);
+    expect(d.querySelectorAll('meta[property="og:title"]')).toHaveLength(1);
+    expect(d.querySelectorAll('meta[name="twitter:card"]')).toHaveLength(1);
   });
 
   it("gives the same description to all three, and omits all three when there is none", () => {
@@ -644,6 +656,60 @@ describe("the one title rule, applied by both sides", () => {
        composing a third title of its own. */
     expect(d.title).toBe(
       pageTitle({ kind: "read", title: long, view: "article", mode: DEFAULT_MODE }),
+    );
+  });
+
+  /**
+   * **Who wrote it, on the card only.** Greg, 2026-10-04: "Probably the article
+   * title and/or authors first in the title". Expected strings written out, as
+   * everywhere in this file.
+   */
+  it("ends the card title with one name, two, or the first and et al.", () => {
+    const card = (authors: string[]): string | null =>
+      metaContent(doc(composeShell(SHELL, head({ authors }))), 'meta[property="og:title"]');
+    expect(card([])).toBe("The hard problem is a distraction");
+    expect(card(["Anil Seth"])).toBe("The hard problem is a distraction · Anil Seth");
+    expect(card(["Anil Seth", "Tim Bayne"])).toBe(
+      "The hard problem is a distraction · Anil Seth and Tim Bayne",
+    );
+    expect(card(["Anil Seth", "Tim Bayne", "A. N. Other"])).toBe(
+      "The hard problem is a distraction · Anil Seth et al.",
+    );
+    /* A name that is nothing is not a name, and does not turn two into three. */
+    expect(cardAuthors(["  ", "Anil Seth", "", "Tim Bayne"])).toBe("Anil Seth and Tim Bayne");
+  });
+
+  it("gives X the same title, and leaves the tab alone", () => {
+    const d = doc(composeShell(SHELL, head({ authors: ["Anil Seth"] })));
+    expect(metaContent(d, 'meta[name="twitter:title"]')).toBe(
+      "The hard problem is a distraction · Anil Seth",
+    );
+    /* The client rewrites the tab a second later from a payload that does not
+       put authors in it, so a name here would be a tab that changes in front
+       of the reader. */
+    expect(d.title).toBe("The hard problem is a distraction · Spideryarn");
+  });
+
+  it("adds no names to a title the clamp already cut, or to no title at all", () => {
+    const long = Array(25).fill("word").join(" ");
+    expect(cardTitle(long, ["Anil Seth"])).toBe(Array(24).fill("word").join(" "));
+    expect(cardTitle("a".repeat(120), ["Anil Seth"])).toBe("a".repeat(120));
+/* And one budget for the whole string: names that would push it past 120
+       are left off whole, never cut. */
+    expect(cardTitle("a".repeat(115), ["Anil Seth"])).toBe("a".repeat(115));
+    expect(cardTitle("a".repeat(108), ["Anil Seth"])).toBe(`${"a".repeat(108)} · Anil Seth`);
+    expect(cardTitle("   ", ["Anil Seth"])).toBe("Untitled");
+    expect(cardTitle(null, ["Anil Seth"])).toBe("Untitled");
+  });
+
+  it("treats an author's name as a stranger's text", () => {
+    const hostile = 'Eve"><script>alert(1)</script>\u202E\nMallory';
+    const markup = composeShell(SHELL, head({ authors: [hostile] }));
+    expect(markup).not.toContain("<script>alert(1)");
+    const d = doc(markup);
+    expect(d.querySelectorAll("script")).toHaveLength(doc(SHELL).querySelectorAll("script").length);
+    expect(metaContent(d, 'meta[property="og:title"]')).toBe(
+      'The hard problem is a distraction · Eve"><script>alert(1)</script> Mallory',
     );
   });
 

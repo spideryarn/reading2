@@ -50,8 +50,7 @@
  *
  * Since 2026-10-05, for a signed-in reader: a bare address with **no key at
  * all** for the slug opens in Summary where a band fits beside the prose, with
- * Marginalia's notes too where those fit and the reader's experimental switch
- * is on. It is the same decision with one more case, and the same rule: the
+ * Marginalia's notes too where those fit. It is the same decision with one more case, and the same rule: the
  * link always wins. So that "no key" means *never opened in this browser*, an
  * empty view is now stored as `""` rather than removed, and a storage that
  * cannot be read or written means no default rather than one on every visit.
@@ -490,18 +489,19 @@ export function writeLastView(slug: string, search: string, storage: StorageSour
  * beside Summary's `roomy` band (from 900px). The widths are theirs; the tests
  * sit either side of each. `?summary=` is left off, which is Brief.
  *
- * **`marginalia` is the reader's experimental switch**: Marginalia is behind
- * it (src/mode-catalog.ts), and a default must not put an experimental column
- * in front of a reader who has not asked for those. Summary is not behind it.
+ * **Not a question for the experimental switch since 2026-10-05**, when
+ * Marginalia left it (spya-vv54j2); until then a third argument kept the notes
+ * out for a reader whose switch was off.
+ * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  *
  * Neither parameter starts anything on arrival — checked in the hooks, as
  * `NEEDS_AN_EXPLICIT_PRESS` above says to: Summary's `useSimple` and
  * Marginalia's `useRelations` both spend through `useAutoRun`, which waits for
  * a press.
  */
-export function firstOpenSearch(windowWidth: number, rootFontPx: number, marginalia: boolean): string {
+export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
   if (bandCoversProse(windowWidth)) return "";
-  const notes = marginalia && notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
+  const notes = notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
   return notes ? "?mode=summary&margin=1" : "?mode=summary";
 }
 
@@ -606,18 +606,19 @@ export function useLastView(slug: string, view: ArticleView): void {
     history.replaceState(history.state, "", href);
   }, [slug, view]);
 
-  /* **The first-open default, applied once the experimental switch has
-     answered**, because the switch decides whether Marginalia is part of it
-     (`firstOpenSearch`). If the answer is already in the store, this runs in
-     the same commit as the claim above, before paint. Otherwise it waits for
-     settings, which can arrive before or after the article payload. A switch
-     that never answers means no default.
+  /* **The first-open default, applied once the settings store has answered**,
+     because that store is where `signedIn` comes from. (Until 2026-10-05 its
+     experimental switch also decided whether Marginalia was part of the
+     default; plan 261005d.) If the answer is already in the store, this runs
+     in the same commit as the claim above, before paint. Otherwise it waits
+     for settings, which can arrive before or after the article payload. A
+     store that never answers means no default.
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
-     reapplies this. `signedIn` is the store's too, which is why no reader id
-     is passed in. Declared after the claim so it sees this render's claim. */
-  const { loaded, signedIn, on } = useExperimental();
+     reapplies this. No reader id is passed in, because `signedIn` is the
+     store's. Declared after the claim so it sees this render's claim. */
+  const { loaded, signedIn } = useExperimental();
   useLayoutEffect(() => {
     if (view !== "article" || !loaded || firstOpenFor.current !== slug) return;
     firstOpenFor.current = null;
@@ -626,10 +627,10 @@ export function useLastView(slug: string, view: ArticleView): void {
       location.pathname,
       location.search,
       { signedIn },
-      firstOpenSearch(usableWidth(), rootFontPx(), on),
+      firstOpenSearch(usableWidth(), rootFontPx()),
     );
     if (href !== null) history.replaceState(history.state, "", href);
-  }, [slug, view, loaded, signedIn, on]);
+  }, [slug, view, loaded, signedIn]);
 
   useEffect(() => {
     const save = () => {
