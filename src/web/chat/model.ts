@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -801,6 +801,8 @@ export interface TurnDone {
 export interface Begun {
   threadId: string;
   title: string;
+  /** The server's stored source, so a pending draft never invents one on a loaded row. */
+  origin?: ThreadOrigin;
   /** The assistant row the answer streams into. */
   messageId: string;
   /** The question above it. Absent from older servers; see `withServerIds`. */
@@ -1065,6 +1067,7 @@ export function withServerIds(
       : {
           ...t,
           id: begun.threadId,
+          ...(begun.origin ? { origin: begun.origin } : {}),
           // The title is cut on a word boundary on the server; the optimistic
           // one is a blunt 60-character slice that would otherwise stay on
           // screen until the next reload.

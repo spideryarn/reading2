@@ -52,9 +52,9 @@ export interface ChatDrafts {
    * It is not part of the words. Typing, clearing the box and submitting leave
    * it alone; `moveThread` carries it and `dropThread` forgets it. The band
    * sends it with the conversation's questions until the server has the
-   * thread, and goes on reading it after that to show the list where the
-   * conversation came from (`ConversationBand` § `pendingOrigin`).
-   * `clearOrigin` is for an id the server replaced.
+   * thread, then clears it. The acknowledged thread carries its own origin
+   * (`ConversationBand` § `pendingOrigin`). `clearOrigin` also forgets an id
+   * the server replaced.
    */
   origin(id: string): ThreadOrigin | undefined;
   setOrigin(id: string, origin: ThreadOrigin): void;

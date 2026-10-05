@@ -47,8 +47,9 @@
  * looked at was made by `ChatDialog`. It does now that a caller mode draws a
  * mark from a chat started in the band (Debate's claims; plan 261005i, F1).
  *
- * So `Reader` calls `refresh()` when the reader leaves Chat, and when a turn
- * finishes in the floating dialog. A refetch is the race the paragraphs above
+ * So `Reader` calls `refresh()` when the reader leaves Chat, and the chat
+ * controller calls it when a typed turn settles, even after the composer goes.
+ * A refetch is the race the paragraphs above
  * describe, so it goes through the same `foldInLocalWrites`: whatever was
  * added, touched or dropped while it was in the air wins over the answer, and
  * an older request can never land after a newer one. The list is not emptied
@@ -377,6 +378,8 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   const request = useRef(0);
   /** Whether any answer has landed for this article, so a failed *refresh* stays quiet. */
   const landed = useRef(false);
+  /** A completion from a composer that has gone may only refresh its own mounted article. */
+  const activeSlug = useRef<string | null>(null);
 
   const ask = useCallback(() => {
     const mine = ++request.current;
@@ -412,6 +415,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   }, [slug]);
 
   useEffect(() => {
+    activeSlug.current = slug;
     /* Another article: nothing done to the last one's list applies. */
     flight.current = null;
     landed.current = false;
@@ -426,8 +430,13 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     return () => {
       /* Whatever is out is for an article, or a mount, that has gone. */
       request.current++;
+      activeSlug.current = null;
     };
-  }, [ask]);
+  }, [ask, slug]);
+
+  const refresh = useCallback(() => {
+    if (activeSlug.current === slug) ask();
+  }, [ask, slug]);
 
   const add = useCallback((summary: ThreadSummary) => {
     flight.current?.written.add(summary.id);
@@ -456,5 +465,5 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     );
   }, []);
 
-  return { summaries, loaded, add, drop, touch, refresh: ask, error };
+  return { summaries, loaded, add, drop, touch, refresh, error };
 }

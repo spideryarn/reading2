@@ -2958,6 +2958,7 @@ export function Reader({
               onScreen={chatOnScreen}
               handoff={chatHandoff}
               onHandoffTaken={handoffTaken}
+              onSettled={refreshChats}
             />
           </ChatCommands>
         ) : null;

@@ -3384,6 +3384,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     frame("begin", {
       threadId: thread.id,
       title: thread.title,
+      /* Stored metadata, not the request's guess: the list can show its
+         source as soon as this acknowledgement arrives. */
+      ...(thread.origin ? { origin: thread.origin } : {}),
       messageId: reply.id,
       /* The *question's* id as well as the answer's, and leaving it out was a
          real bug rather than an omission.

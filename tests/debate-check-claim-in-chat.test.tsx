@@ -305,7 +305,8 @@ function answerTurn(body: { threadId: string; question: string; origin?: ThreadO
     start(c) {
       const frame = (event: string, data: unknown) =>
         c.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-      frame("begin", { threadId: body.threadId, title, messageId, questionId, attempt: "att" });
+      frame("begin", { threadId: body.threadId, title, messageId, questionId, attempt: "att",
+        ...(thread.origin ? { origin: thread.origin } : {}) });
       frame("delta", { text });
       frame("done", { text, citations: [], searches: 0, model: "a-model" });
       c.close();
@@ -342,6 +343,8 @@ const { DEBATE_CHECK_CLAIM } = await import("../src/web/DebatePanel.js");
 
 let host: HTMLDivElement;
 let root: Root;
+let releaseTurn: (() => void) | null;
+let holdTurn = false;
 
 enableHistorySync();
 
@@ -357,6 +360,8 @@ beforeEach(() => {
   activation.resetActivations();
   resetExperimental();
   forgetChatDrafts();
+  holdTurn = false;
+  releaseTurn = null;
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -367,6 +372,11 @@ beforeEach(() => {
       body = String(init?.body);
     }
     trace.push({ url, method, body });
+    if (holdTurn && url === `/api/chat/${SLUG}` && method === "POST") {
+      return new Promise<Response>((resolve) => {
+        releaseTurn = () => resolve(reply(url, method, body));
+      });
+    }
     return Promise.resolve(reply(url, method, body));
   });
   host = document.createElement("div");
@@ -439,6 +449,24 @@ async function typeAndSend(box: HTMLTextAreaElement, text: string): Promise<void
 }
 
 describe("checking a Debate claim in chat", () => {
+  it("refreshes the claim after an answer that begins and finishes after leaving Chat", async () => {
+    who.set(OWNER);
+    await open("?mode=debate&debate=claims");
+    await until(() => claims().length === 2, "both claims");
+    await act(async () => checkButtons()[0]?.click());
+    await until(() => param("mode") === "chat" && composer() !== null, "Chat");
+    holdTurn = true;
+    nextAnswer = "A late answer.";
+    await typeAndSend(composer() as HTMLTextAreaElement, composer()?.value ?? "");
+    expect(releaseTurn).not.toBeNull();
+    await act(async () => history.back());
+    await until(() => param("mode") === "debate" && claims().length === 2, "Debate");
+    expect(marks()).toHaveLength(0);
+    await act(async () => releaseTurn?.());
+    await until(() => marks()[0]?.querySelector(".dbt-claim-chat-line")?.textContent === "A late answer.",
+      "the late answer on the claim");
+  });
+
   it("starts a fresh chat that records the claim, and the claim shows the way back, its line, and loses it on delete", async () => {
     who.set(OWNER);
     await open(`?mode=debate&debate=claims&thread=${STORED.id}`);

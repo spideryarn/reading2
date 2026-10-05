@@ -36,7 +36,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isSingleThreadKind, isThreadKind } from "./types.js";
+import { isSingleThreadKind, isThreadKind, sameOrigin } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -284,6 +284,12 @@ export function withTurn(
      rule as the anchor check in the route. */
   if (existing && kind && existing.kind !== kind) {
     throw new ChatConflict("That conversation is already a different kind.");
+  }
+  /* The route's turn lock is per process. Another server can create this
+     thread after its origin check, so decide again from the snapshot read
+     under the database's article lock, before writing either message. */
+  if (existing && origin && !(existing.origin && sameOrigin(existing.origin, origin))) {
+    throw new ChatConflict("That conversation was not started from that item");
   }
   const user: ChatMessage = {
     id: mintUniqueId(ids),

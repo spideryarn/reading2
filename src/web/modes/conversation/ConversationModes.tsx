@@ -429,6 +429,8 @@ type ConversationBandProps = {
   handoff?: ChatHandoff | null | undefined;
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
   onHandoffTaken?: (() => void) | undefined;
+  /** An answer settled, including after this band has gone. */
+  onSettled?: (() => void) | undefined;
   /**
    * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Remember's
    * conversation views. Absent in chat mode. Built by `RememberBand` above and passed straight
@@ -445,6 +447,7 @@ export function ConversationBand({
   subMode,
   handoff,
   onHandoffTaken,
+  onSettled,
   onScreen,
 }: ConversationBandProps) {
   useRenderCount("ConversationBand");
@@ -467,7 +470,7 @@ export function ConversationBand({
     named,
     speak,
     error,
-  } = useChat(slug);
+  } = useChat(slug, onSettled);
   /**
    * **This mode's conversations, and only this mode's.**
    *
@@ -478,22 +481,9 @@ export function ConversationBand({
    * kind is not here at all, and neither is Candidates, which is Referee mode's
    * machinery. Plan 261001m § 4.
    */
-  /* **And a conversation this tab started from an item wears its origin at
-     once.** The row in this tab is the one the tab made, and the `begin` frame
-     that names it carries no origin, so without this the list would show no
-     source for it until a reload. The origin is the one sent with the turn
-     that created the thread (`pendingOrigin` below), shown only once the
-     server has the thread. A thread that arrived in a load has its own. */
-  const threads = useMemo(() => {
-    const held = chatDraftsFor(slug);
-    return everyThread
-      .filter((t) => t.kind === kind)
-      .map((t) => {
-        if (t.origin) return t;
-        const origin = held.origin(t.id);
-        return origin && named(t.id) ? { ...t, origin } : t;
-      });
-  }, [everyThread, kind, slug, named]);
+  /* Origins come from the server, through a load or the successful `begin`
+     frame. A held draft may have been refused, so it cannot label a row. */
+  const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
   const [thread, setThread] = useQueryState("thread", threadParam);
   /* Recall, Tutorial and Explore: each one conversation per article, no
      list. Named for Remember because that is where all three live. */
@@ -556,6 +546,9 @@ export function ConversationBand({
    * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
   const drafts = chatDraftsFor(slug);
+  useEffect(() => {
+    for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
+  }, [threads, named, drafts]);
   /**
    * `speak`, as the live session is handed it: **a spoken exchange is a
    * submission**, and it is one the typed draft knows nothing about — the
@@ -582,10 +575,9 @@ export function ConversationBand({
    * thread that already has it is let through, so a Send that did land
    * without this tab hearing is harmless too.
    *
-   * The store keeps the origin after that, for `threads` above to show; what
-   * ends "pending" is the server having the thread, not the entry going.
    * `named` answers from the controller, which re-renders this band when it
-   * changes.
+   * changes. The effect above forgets confirmed entries; the server's row
+   * carries the origin from then on.
    */
   const pendingOrigin = (id: string | null): ThreadOrigin | undefined =>
     kind === "chat" && id !== null && !named(id) ? drafts.origin(id) : undefined;
@@ -818,7 +810,7 @@ export function ConversationBand({
    * only when the list has answered.
    *
    * 1. A handed-over question wins (the effect above has spent the latch).
-   * 2. **The reader left words unsent, and is put back with them.** Only the
+   * 2. **The reader left words or a pending origin, and is put back with them.** Only the
    *    place they were in is ever recovered (`drafts.destination`), so an older
    *    conversation with words in it cannot take over the list or another
    *    conversation:
@@ -834,7 +826,9 @@ export function ConversationBand({
    *    - it is not listed, and was never submitted to → begin another and move
    *      the words across. A conversation with no message exists only in the
    *      tab that began it, and went with the band;
-   *    - it is not listed, and something *was* submitted to it → nothing. The
+   *    - it is not listed, and has a pending origin after submission → resume
+   *      the same id, so a late stored first turn remains part of its history;
+   *    - it is not listed, and something *was* submitted without a pending origin → nothing. The
    *      first question's write has not landed, or another tab deleted it;
    *      beginning another would send a follow-up without its history. The
    *      words stay in the store, under its id.
@@ -855,11 +849,21 @@ export function ConversationBand({
     if (!arrived.current) {
       arrived.current = true;
       const was = drafts.destination();
-      if (loadFailed || started.current || was === undefined) {
+      if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
+        && !threads.some((t) => t.id === thread)
+        && (!drafts.isFresh(was) || loadFailed)) {
+        /* A submitted first turn may have landed without acknowledgement.
+           Resume its exact id, never mint another: a later Send will join
+           that history if it exists and resend the identical origin. */
+        started.current = true;
+        begin(kind, was);
+        void setThread(was, { history: "replace" });
+        setFocusNonce((n) => n + 1);
+      } else if (loadFailed || started.current || was === undefined) {
         /* Nothing to recover, or no ground to recover it on. */
       } else if (was === null) {
         if (drafts.list().trim() !== "") started.current = true;
-      } else if ((drafts.thread(was) ?? "").trim() !== "") {
+      } else if ((drafts.thread(was) ?? "").trim() !== "" || drafts.origin(was) !== undefined) {
         if (threads.some((t) => t.id === thread)) {
           /* The reader's own choice. */
         } else if (threads.some((t) => t.id === was)) {
@@ -876,7 +880,7 @@ export function ConversationBand({
       started.current = true;
       startNew();
     }
-  }, [remembering, loaded, loadFailed, threads, thread, setThread, startNew, drafts]);
+  }, [remembering, loaded, loadFailed, threads, everyThread, thread, setThread, startNew, drafts, begin, kind]);
 
   /**
    * **Where chat is, written down for the next visit** — the conversation on
@@ -990,14 +994,18 @@ export function ConversationBand({
         const origin = pendingOrigin(current);
         const id = send(current, question, at, {
           onThreadId: (corrected) => {
-            /* The server named the conversation something else: its origin
-               follows, so the list still says where it came from. */
-            if (origin && current) {
-              drafts.setOrigin(corrected, origin);
-              drafts.clearOrigin(current);
-            }
             void setThread(corrected);
           },
+          ...(origin && current ? {
+            /* Data survives a mode change; URL navigation above does not. */
+            onConfirmed: (confirmed: string) => {
+              if (confirmed !== current) {
+                drafts.moveThread(current, confirmed);
+                if (drafts.destination() === current) drafts.setDestination(confirmed);
+              }
+              drafts.clearOrigin(confirmed);
+            },
+          } : {}),
           kind,
           ...(onScreen ? { visible: onScreen() } : {}),
           ...(origin ? { origin } : {}),

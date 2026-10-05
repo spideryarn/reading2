@@ -159,6 +159,7 @@ describe("an origin on the way in", () => {
   it("stores a claim's origin on the thread it creates, and reads it back equal", async () => {
     const out = await ask({ threadId: THREAD, question: "does it hold up?", origin: claim() });
     expect(out.frames[0]?.event).toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(claim());
     const thread = await stored();
     expect(thread?.origin).toEqual({ mode: "debate", blockId: BLOCK, quote: QUOTE });
     expect(thread?.kind, "a claim check is an ordinary chat").toBe("chat");

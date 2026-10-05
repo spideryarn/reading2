@@ -218,4 +218,25 @@ describe("asking for the summaries again", () => {
     await answer(2, [summary(C)]);
     expect(ids()).toEqual([C]);
   });
+
+  it("ignores an old composer's completion after changing article", async () => {
+    await mount("a-piece");
+    const afterOldAnswer = api().refresh;
+    await mount("another-piece");
+    const count = asked.length;
+    await act(async () => afterOldAnswer());
+    expect(asked).toHaveLength(count);
+    await answer(count - 1, [summary(B)]);
+    expect(ids()).toEqual([B]);
+  });
+
+  it("ignores an old composer's completion after the article unmounts", async () => {
+    await mount();
+    const afterOldAnswer = api().refresh;
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    const count = asked.length;
+    await act(async () => afterOldAnswer());
+    expect(asked).toHaveLength(count);
+  });
 });

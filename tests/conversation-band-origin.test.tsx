@@ -42,7 +42,7 @@ const posts: { url: string; body: Record<string, unknown> }[] = [];
 /** What the list GET answers with. */
 let stored: ChatThread[] = [];
 /** How the next chat POST is answered. */
-let onPost: (body: Record<string, unknown>) => Response;
+let onPost: (body: Record<string, unknown>) => Response | Promise<Response>;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -72,7 +72,7 @@ const OTHER: ThreadOrigin = { mode: "debate", blockId: "spya-cccccc", quote: "Me
 const SEED = "Check this claim";
 
 /** The server names the rows, answers, and finishes. */
-function answered(threadId: string): Response {
+function answered(threadId: string, origin?: unknown): Response {
   const enc = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({
     start(c) {
@@ -80,6 +80,7 @@ function answered(threadId: string): Response {
         c.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       frame("begin", {
         threadId,
+        ...(origin ? { origin } : {}),
         title: "Check this claim",
         messageId: "spya-rep222",
         questionId: "spya-que222",
@@ -109,7 +110,7 @@ beforeEach(() => {
   posts.length = 0;
   stored = [];
   panel = undefined;
-  onPost = (body) => answered(String(body.threadId));
+  onPost = (body) => answered(String(body.threadId), body.origin);
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -197,10 +198,23 @@ describe("a conversation handed over with an origin", () => {
     expect("origin" in (posts[1]?.body ?? {}), "a follow-up carries none").toBe(false);
   });
 
+  it("uses the server's replacement id and stored origin, and forgets the pending entry", async () => {
+    onPost = (body) => answered("spya-rgn444", body.origin);
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    const guessed = open();
+    await send(SEED);
+    await vi.waitFor(() => expect(open()).toBe("spya-rgn444"));
+    expect(prop<ChatThread[]>("threads").find((t) => t.id === open())?.origin).toEqual(CLAIM);
+    expect(drafts().origin(guessed)).toBeUndefined();
+    expect(drafts().origin(open())).toBeUndefined();
+    await send("Follow up");
+    expect(posts[1]?.body.threadId).toBe("spya-rgn444");
+    expect(posts[1]?.body.origin).toBeUndefined();
+  });
+
   it("shows the list where the conversation came from at once, before any reload", async () => {
-    /* The row in this tab is the one the tab made: the `begin` frame names it
-       and carries no origin. So the band puts the origin it sent on the thread
-       it hands the panel, or the list would show no source until a reload. */
+    /* The `begin` frame carries the stored origin; a pending draft does not
+       stand in for the server's acknowledgement. */
     await mount({ slug: SLUG, question: SEED, origin: CLAIM });
     const fresh = open();
     const handed = () => prop<ChatThread[]>("threads").find((t) => t.id === fresh);
@@ -274,6 +288,31 @@ describe("a conversation handed over with an origin", () => {
     expect(drafts().origin(fresh)).toBeUndefined();
   });
 
+  it("keeps a claim's origin on returning to Chat after the reader cleared the seed", async () => {
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    const fresh = open();
+    drafts().setThread(fresh, "");
+    await leave();
+    await show(null);
+    expect(drafts().origin(open())).toEqual(CLAIM);
+    await send("My own question about that claim");
+    expect(posts[0]?.body.origin).toEqual(CLAIM);
+  });
+
+  it("does not overlay a refused origin on an existing plain thread after returning to Chat", async () => {
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    const fresh = open();
+    // Another creator won this id, so the server refuses our origin.
+    stored = [{ id: fresh, kind: "chat", title: "Plain chat", createdAt: "2026-10-05T10:00:00Z",
+      updatedAt: "2026-10-05T10:00:00Z", messages: [] }];
+    onPost = () => new Response(JSON.stringify({ error: "That conversation was not started from that item" }),
+      { status: 409, headers: { "content-type": "application/json" } });
+    await send(SEED);
+    await leave();
+    await show(null);
+    expect(prop<ChatThread[]>("threads").find((t) => t.id === fresh)?.origin).toBeUndefined();
+  });
+
   it("keeps the origin after a first Send that failed, and sends it again", async () => {
     onPost = refused;
     await mount({ slug: SLUG, question: SEED, origin: CLAIM });
@@ -283,11 +322,54 @@ describe("a conversation handed over with an origin", () => {
     expect(posts[0]?.body.origin).toEqual(CLAIM);
     expect(drafts().origin(open()), "the server has no thread, so it is still pending").toEqual(CLAIM);
 
-    onPost = (body) => answered(String(body.threadId));
+    onPost = (body) => answered(String(body.threadId), body.origin);
     await send(SEED);
     expect(posts).toHaveLength(2);
     expect(posts[1]?.body.threadId).toBe(fresh);
     expect(posts[1]?.body.origin, "the second attempt creates the thread, so it carries it").toEqual(CLAIM);
+  });
+
+  it("keeps the pending origin and id after a failed first Send followed by leaving Chat", async () => {
+    onPost = refused;
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    const fresh = open();
+    await send(SEED);
+    await leave();
+    await show(null);
+    expect(open(), "a possibly stored first turn must still use its original thread id").toBe(fresh);
+    expect(drafts().origin(open())).toEqual(CLAIM);
+    onPost = (body) => answered(String(body.threadId), body.origin);
+    await send("Try again");
+    expect(posts[1]?.body.threadId).toBe(fresh);
+    expect(posts[1]?.body.origin).toEqual(CLAIM);
+  });
+
+  it("forgets a pending guess when the server corrects its id after leaving Chat", async () => {
+    let release!: (response: Response) => void;
+    onPost = () => new Promise((resolve) => { release = resolve; });
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    const guessed = open();
+    await send(SEED);
+    await leave();
+    stored = [{ id: "spya-rgn444", kind: "chat", title: SEED, origin: CLAIM,
+      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z", messages: [] }];
+    await act(async () => release(answered("spya-rgn444", CLAIM)));
+    await settleChat();
+    await show(null);
+    expect(drafts().origin(guessed)).toBeUndefined();
+    expect(prop<ChatThread[]>("threads").some((t) => t.id === guessed)).toBe(false);
+  });
+
+  it("keeps an explicit choice of another chat while a submitted origin draft is missing", async () => {
+    onPost = refused;
+    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+    await send(SEED);
+    await leave();
+    stored = [{ id: "spya-rgn555", kind: "chat", title: "Another chat",
+      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z", messages: [] }];
+    history.replaceState(null, "", "/a-piece?mode=chat&thread=spya-rgn555");
+    await show(null);
+    expect(open()).toBe("spya-rgn555");
   });
 });
 

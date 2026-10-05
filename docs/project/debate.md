@@ -103,8 +103,10 @@ How it works, and what to know before changing it:
   and the same one resent is fine. The quote never reaches an error message, because those are
   logged.
 - **The reading view's thread summaries are asked for again** when the reader leaves Chat, when a
-  mark is pressed, and when an answer finishes in the floating panel. Chat's band never told that
-  list anything, so without this the mark would not appear until a reload.
+  mark is pressed, and when a typed answer settles in either chat surface, including after its
+  composer has unmounted. See the completion callback in
+  [`chat/controller.ts`](../../src/web/chat/controller.ts): a departure refresh alone can run
+  before the thread exists.
 - **Until the first typed Send lands, the origin waits beside the conversation's unsent words**
   ([`chat-draft.ts`](../../src/web/chat-draft.ts)), so it survives a look at another mode and a
   first Send that fails. **Live is not offered on that conversation until then**: a spoken first

@@ -117,6 +117,8 @@ export interface SpokenExchange {
  * `ChatApi.send`.
  */
 export interface SendOptions {
+  /** Data-only acknowledgement; survives unmount, so never navigate from this callback. */
+  onConfirmed?(threadId: string): void;
   /**
    * Whether this answer should be written for the reader's profile. Absent
    * means yes.
@@ -323,8 +325,8 @@ export interface ChatApi {
    * answer to claim as the *next* exchange's tail. See `SpokenLanded`.
    */
   speak(spoken: SpokenExchange, onThreadId?: (id: string) => void): Promise<SpokenLanded>;
-  /** Start an empty conversation locally. Nothing is stored until you send. */
-  begin(kind?: ThreadKind): string;
+  /** Start locally; an unconfirmed origin draft may resume its original id. No write. */
+  begin(kind?: ThreadKind, threadId?: string): string;
   /**
    * Forget an empty conversation. Local only, and a no-op on anything that has
    * a message in it — see `withoutEmpty`.
@@ -411,7 +413,7 @@ const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   explore: "Exploring",
 };
 
-export function useChat(slug: string): ChatApi {
+export function useChat(slug: string, onSettled?: () => void): ChatApi {
   /**
    * The state, the operations in flight and the tombstones — all of it, and one
    * of it per article.
@@ -438,7 +440,7 @@ export function useChat(slug: string): ChatApi {
    */
   const held = useRef<ChatController | null>(null);
   if (!held.current || held.current.slug !== slug) {
-    held.current = new ChatController(slug, chatEffects);
+    held.current = new ChatController(slug, chatEffects, onSettled);
   }
   const controller = held.current;
   const { state, threads, recovering } = useSyncExternalStore(
@@ -470,13 +472,14 @@ export function useChat(slug: string): ChatApi {
 
   useEffect(() => {
     startLoad();
-    /* **And when this hook goes, the callbacks go with it.** The controller
+    /* **And when this hook goes, its navigation callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
        for the `begin` frame is still sent after the panel closed — but
        `onThreadId` is the panel's own `setThread`, and calling that from a
        conversation the reader has left reopens or repoints whatever they are
        looking at now. What the controller decides for itself survives; what it
-       was doing on somebody else's behalf does not. */
+       was doing on somebody else's behalf does not. Data-only draft
+       acknowledgements and article-level completion work survive detach. */
     return () => {
       controller.detach();
     };
@@ -631,8 +634,9 @@ export function useChat(slug: string): ChatApi {
    * arrives, which is what makes the optimistic id safe.
    */
   const begin = useCallback(
-    (kind: ThreadKind = "chat") => {
-      const id = mintId();
+    (kind: ThreadKind = "chat", threadId?: string) => {
+      const id = threadId ?? mintId();
+      if (controller.state.base.some((t) => t.id === id)) return id;
       const at = new Date().toISOString();
       /* Straight into `base`, with no operation over it. Starting a
          conversation is synchronous and local — nothing leaves the tab, so
@@ -786,6 +790,7 @@ export function useChat(slug: string): ChatApi {
           },
         },
         onThreadId,
+        opts.onConfirmed,
       );
       return id;
     },

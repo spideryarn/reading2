@@ -302,7 +302,7 @@ export function ChatDialog({
     cancelAndDiscard,
     remove,
     error,
-  } = useChat(slug);
+  } = useChat(slug, onSettled);
 
   const thread = target.kind === "thread" ? threads.find((t) => t.id === target.threadId) : undefined;
 
@@ -822,19 +822,6 @@ export function ChatDialog({
    */
   const tail = thread?.messages[thread.messages.length - 1];
   const streaming = tail?.role === "assistant" && tail.status === "pending";
-
-  /* Tell the owner when an answer stops arriving (`onSettled`). Keyed on the
-     conversation as well, so switching from one that is streaming to one that
-     is not is not mistaken for an answer finishing. */
-  const wasStreaming = useRef<{ thread: string | undefined; streaming: boolean }>({
-    thread: thread?.id,
-    streaming,
-  });
-  useEffect(() => {
-    const was = wasStreaming.current;
-    wasStreaming.current = { thread: thread?.id, streaming };
-    if (was.thread === thread?.id && was.streaming && !streaming) onSettled?.();
-  }, [thread?.id, streaming, onSettled]);
 
   /**
    * Is this the very first answer of a conversation the reader just started?
