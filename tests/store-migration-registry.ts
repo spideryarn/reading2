@@ -2629,6 +2629,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
   "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
+  /* The cost cube's query, 261005a: ledger rows in 2033 under two seeded owners. */
+  "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
   /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
@@ -3429,6 +3431,10 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      It seeds `…dd` itself through `seedAuthUser`. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
+  },
+  "tests/admin-costs-store.test.ts": {
+    "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000c0be0a02": { kind: "seeded" },
   },
   "tests/admin-feedback-store.test.ts": {
     "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },

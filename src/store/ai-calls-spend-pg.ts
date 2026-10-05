@@ -58,26 +58,35 @@
  * there. [pg-admin.ts](pg-admin.ts) was the first; this is the second, added
  * 2026-09-02 with the same justification and under the same rule:
  *
- * - `/admin/users` reads it through the `/api/admin` gate in `src/routes.ts`,
- *   which is the whole of the enforcement (docs/project/admin.md).
+ * - `/admin/users` and `/admin/costs` read it through the `/api/admin` gate in
+ *   `src/routes.ts`, which is the whole of the enforcement
+ *   (docs/project/admin.md).
  * - `npm run cost -- --owners` reads it from a CLI on Greg's own machine.
- * - **It returns money and an owner id and nothing else** — no title, no URL, no
- *   slug, no sentence of anybody's reading. That is the rule admin.md states for
- *   the page, and it is the reason a second entry on that list is a widening
- *   rather than a hole.
+ * - **What it returns across owners**: money, an owner id, an opaque article
+ *   id, and the names of jobs, steps and models — and a slug only for the
+ *   administrator's own articles. No title, no URL, no other owner's slug, no
+ *   sentence of anybody's reading.
+ *
+ * Until 2026-10-05 that list was "money and an owner id and nothing else".
+ * `spendCube` widened it because Greg asked for it on 2026-10-04 (report
+ * spya-mykvhz): a page that *"breaks down by user (and then within user, by
+ * article) or mode or model"*. Which articles an account has spent on, and on
+ * what, is now visible to the administrator; what any of them is called is not.
  *
  * A third would be a decision about who may see across owners, which is why the
  * list is in the test rather than a per-file opt-out somewhere quieter.
  *
  * ## What may be logged from this file
  *
- * Nothing. It returns numbers and owner ids to one CLI and one admin route, and
- * the insert path's `guardDbStore` reasoning applies to the callers rather than
- * here — these statements bind two timestamps.
+ * Nothing. It returns what the section above lists to one CLI and the admin
+ * routes, and the insert path's `guardDbStore` reasoning applies to the callers
+ * rather than here — these statements bind two timestamps and, in `spendCube`,
+ * the asker's own id.
  */
 
 import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
+import type { CostCubeGroup } from "../cost-cube.js";
 import { getDb } from "../db/client.js";
 import { aiCalls } from "../db/schema.js";
 
@@ -295,6 +304,111 @@ export async function productSpendByOwner(
       },
     ]),
   );
+}
+
+/** The most groups `spendCube` will return. Measured 2026-10-05: production groups to 660. */
+export const SPEND_CUBE_MAX_GROUPS = 20_000;
+
+/** The window groups to more than the cap. Thrown rather than truncating. */
+export class SpendCubeTooLarge extends Error {
+  constructor(readonly maxGroups: number) {
+    super(`the cost cube for this window has more than ${maxGroups} groups`);
+    this.name = "SpendCubeTooLarge";
+  }
+}
+
+/* `at time zone 'UTC'`, never the session's zone: the ledger's day is UTC. No
+   bound parameter, so the select and the `group by` render the same text. */
+const UTC_DAY = sql<string>`to_char(${aiCalls.startedAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+
+/**
+ * **The cost cube**: the ledger over `[since, until)`, grouped by everything
+ * `/admin/costs` and `npm run cost:analyse` break spend down by. One query;
+ * every table, pivot and chart is a fold of its rows (src/cost-cube.ts).
+ * docs/plans/261005a-admin-costs-page-cost-analysis-report-and-a-cost-tracking-audit.md.
+ *
+ * ## No other owner's slug leaves the database
+ *
+ * A slug is usually made from the title, so it says what somebody reads.
+ * `adminOwnerId` is whoever is asking, and only that owner's rows carry
+ * `articleSlug`. Anybody else's article is its opaque `articleId`; a row of
+ * theirs with a slug and no id gets `recordedSlugHash`, which keeps two
+ * recorded slugs apart and names neither.
+ *
+ * **Grouped by the underlying columns**, not by the two `case` expressions, so
+ * two slugs can never merge into one group — and because the bound owner id is
+ * a different parameter each time it is written, which `group by` would not
+ * recognise as the selected expression.
+ *
+ * A row with an `articleId` is that article. One with only a recorded slug is
+ * not claimed to be: a deleted article's slug can be minted again (`belongsTo`
+ * below). No token or duration measure — the wires disagree about what an
+ * input token is, and summed duration is not elapsed time.
+ */
+export async function spendCube(
+  since: string | undefined,
+  until: string | undefined,
+  adminOwnerId: string,
+  maxGroups: number = SPEND_CUBE_MAX_GROUPS,
+): Promise<CostCubeGroup[]> {
+  const ownSlug = sql<string | null>`case when ${aiCalls.ownerId} = ${adminOwnerId}
+    then ${aiCalls.articleSlug} end`;
+  /* 40 bits of md5 over owner and slug: enough to keep one owner's handful of
+     recorded slugs apart, and nothing a slug can be read back out of. */
+  const recordedSlugHash = sql<string | null>`case
+    when ${aiCalls.articleId} is null
+     and ${aiCalls.articleSlug} is not null
+     and ${aiCalls.ownerId} <> ${adminOwnerId}
+    then substr(md5(${aiCalls.ownerId}::text || ':' || ${aiCalls.articleSlug}), 1, 10) end`;
+  const rows = await getDb()
+    .select({
+      day: UTC_DAY,
+      ownerId: aiCalls.ownerId,
+      articleId: aiCalls.articleId,
+      articleSlug: ownSlug,
+      recordedSlugHash,
+      scopeKind: aiCalls.scopeKind,
+      job: aiCalls.purpose,
+      stepName: aiCalls.stepName,
+      wire: aiCalls.wire,
+      requestedModel: aiCalls.requestedModel,
+      answeredModel: aiCalls.answeredModel,
+      upstream: aiCalls.upstream,
+      providerAccount: aiCalls.providerAccount,
+      costSource: aiCalls.costSource,
+      isByok: aiCalls.isByok,
+      outcome: aiCalls.outcome,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      unpricedCalls: UNPRICED_CALLS,
+      computedCalls: COMPUTED_CALLS,
+      settledCalls: SETTLED_CALLS,
+    })
+    .from(aiCalls)
+    .where(window(since, until))
+    .groupBy(
+      UTC_DAY,
+      aiCalls.ownerId,
+      aiCalls.articleId,
+      aiCalls.articleSlug,
+      aiCalls.scopeKind,
+      aiCalls.purpose,
+      aiCalls.stepName,
+      aiCalls.wire,
+      aiCalls.requestedModel,
+      aiCalls.answeredModel,
+      aiCalls.upstream,
+      aiCalls.providerAccount,
+      aiCalls.costSource,
+      aiCalls.isByok,
+      aiCalls.outcome,
+    )
+    /* One past the cap, so "exactly the cap" and "more than it" can be told apart. */
+    .limit(maxGroups + 1);
+  if (rows.length > maxGroups) throw new SpendCubeTooLarge(maxGroups);
+  return rows;
 }
 
 /** Which credentials paid for the window's rows, and how many each. */

@@ -189,7 +189,7 @@ npm run cost:analyse -- ... --commentary notes.md   # an agent's findings, place
   written under `logs/` (gitignored) and is not committed when it holds production figures.
 
 How to run one, and the checklist of questions, goes in a new
-[`docs/project/admin-costs.md`](../project/admin-costs.md).
+`docs/project/admin-costs.md` (written in stage 5).
 
 ### The audit
 
