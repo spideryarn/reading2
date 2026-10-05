@@ -61,11 +61,22 @@ function secs(ms: number): number {
 /** The rows the migration must seed. Checked on a failed take so absence is a fault, not permanent `busy`. */
 const EXPECTED_SLOTS: Record<LimiterService, number> = { crossref: 2, datacite: 1, openalex: 1 };
 
-/** The fresh-answer test, against the table's own columns — one copy, used by the read and by the claim. */
+/**
+ * The fresh-answer test, against the table's own columns — one copy, used by the read and by the claim.
+ *
+ * **A found Crossref row nobody has asked for its citation count is not fresh**
+ * (plan 261005i): it was cached before the count was kept, and would otherwise
+ * show none for its remaining 180 days. `write` sets the moment on every
+ * Crossref answer, count or no count, so this refuses a row once — one refresh
+ * that *works*: a failed one leaves the moment null and the row eligible
+ * (GPT Sol's F4). A DataCite row has no count to go back for.
+ */
 function freshSql(fresh: Freshness): SQL {
   return sql`(
     (spideryarn.bibliographic_records.state = 'found'
-      and spideryarn.bibliographic_records.fetched_at > now() - make_interval(secs => ${secs(fresh.foundMs)}))
+      and spideryarn.bibliographic_records.fetched_at > now() - make_interval(secs => ${secs(fresh.foundMs)})
+      and not (spideryarn.bibliographic_records.source = 'crossref'
+               and spideryarn.bibliographic_records.cited_by_count_read_at is null))
     or (spideryarn.bibliographic_records.state = 'not-found'
       and spideryarn.bibliographic_records.fetched_at > now() - make_interval(secs => ${secs(fresh.notFoundMs)}))
   )`;
@@ -81,6 +92,8 @@ interface RecordRow {
   venue: string | null;
   published_day: string | null;
   doi: string | null;
+  cited_by_count: number | null;
+  cited_by_count_read_at: Date | string | null;
   fresh: boolean;
   claimed: boolean;
 }
@@ -105,6 +118,12 @@ function answerOf(id: WorkId, row: RecordRow): CachedAnswer | null {
       ...(row.venue !== null ? { venue: row.venue } : {}),
       ...(row.published_day !== null ? { published: row.published_day } : {}),
       doi: row.doi,
+      /* Crossref's only, whatever the row holds: the CHECKs say the same, and
+         a count under another registry's name must not leave this file. */
+      ...(row.source === "crossref" && row.cited_by_count !== null ? { citedByCount: Number(row.cited_by_count) } : {}),
+      ...(row.source === "crossref" && row.cited_by_count_read_at !== null
+        ? { citedByCountReadAt: new Date(row.cited_by_count_read_at).toISOString() }
+        : {}),
     },
   };
 }
@@ -113,6 +132,7 @@ const rawPgBibliographicStore: BibliographicStore = {
   async read(id, fresh) {
     const result = await getDb().execute(sql`
       select state, source, title, authors_family, authors_given, year, venue, published_day, doi,
+             cited_by_count, cited_by_count_read_at,
              coalesce(${freshSql(fresh)}, false) as fresh,
              coalesce(claimed_until > now(), false) as claimed
         from spideryarn.bibliographic_records
@@ -158,7 +178,15 @@ const rawPgBibliographicStore: BibliographicStore = {
     /* `sql.param`, because a bare array inside drizzle's `sql` is spread into a
        list of parameters; node-postgres writes one array parameter as a
        Postgres array literal, nulls included. */
-    return await getDb().transaction(async (tx): Promise<boolean> => {
+    /* The count and the moment it was read belong to a found Crossref record
+       and to nothing else, so any other answer clears both: a refresh that
+       finds DataCite's record, or nothing, must not leave Crossref's old count
+       under it (plan 261005i, GPT Sol's F4). The moment is set whether or not
+       Crossref gave a count — see `freshSql`. The millisecond, as the claim's
+       is, so the moment returned here is exactly the one a later read gives. */
+    const fromCrossref = found?.source === "crossref";
+    const storedAt = sql`date_trunc('milliseconds', now())`;
+    return await getDb().transaction(async (tx): Promise<Date | null> => {
       /* The claim row already exists. Updating it under the exact lease moment is
          the write fence: a claimant that wakes after expiry cannot overwrite the
          answer or clear the claim of the process that took over. */
@@ -168,11 +196,15 @@ const rawPgBibliographicStore: BibliographicStore = {
                authors_family = ${sql.param(family)}::text[], authors_given = ${sql.param(given)}::text[],
                year = ${found?.year ?? null}::integer, venue = ${found?.venue ?? null}, doi = ${found?.doi ?? null},
                published_day = ${found?.published ?? null},
-               fetched_at = now(), claimed_until = null
+               cited_by_count = ${fromCrossref ? (found.citedByCount ?? null) : null}::integer,
+               cited_by_count_read_at = ${fromCrossref ? storedAt : sql`null`},
+               fetched_at = ${storedAt}, claimed_until = null
          where id = ${claim.id}
            and claimed_until = ${claim.until.toISOString()}::timestamptz
-        returning id`);
-      return rowsOf(result).length === 1;
+        returning fetched_at`);
+      const row = rowsOf<{ fetched_at: Date | string }>(result)[0];
+      /* No row: the claim was lost, and nothing was written. */
+      return row ? new Date(row.fetched_at) : null;
     }, READ_COMMITTED);
   },
 

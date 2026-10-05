@@ -37,7 +37,7 @@ import { bearsParam, debateOrderParam, debateParam, debateThreadParam } from "..
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
 import { useCiters } from "../../useCiters.js";
-import { DebatePanel } from "../../DebatePanel.js";
+import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
 import { yearOf } from "../../debate-order.js";
 
 /**
@@ -70,6 +70,7 @@ export function DebateBand({
   blockOrder,
   publishedAt,
   articleTitle,
+  claimChats,
 }: {
   slug: string;
   onJump(id: BlockId): void;
@@ -82,6 +83,13 @@ export function DebateBand({
   publishedAt: unknown;
   /** The article's title, for Reception's *Who cites it* search (DebatePanel § Props). */
   articleTitle: string | null;
+  /**
+   * A claim's chat: the reading view's thread summaries, and the two things a
+   * claim can do with them (DebatePanel § `DebateClaimChats`). The owner's
+   * band only; `VisitorDebateBand` below takes none, so a visitor's claims
+   * have neither the button nor the mark.
+   */
+  claimChats: DebateClaimChats;
 }) {
   useRenderCount("DebateBand");
   const articleYear = yearOf(publishedAt);
@@ -103,7 +111,7 @@ export function DebateBand({
   const citers = useCiters(slug, view === "reception" || debate.status === "none");
   return (
     <DebatePanel
-      access={{ kind: "owner", owner: debate, citers }}
+      access={{ kind: "owner", owner: debate, citers, claimChats }}
       onJump={onJump}
       view={view}
       onView={setView}

@@ -53,11 +53,12 @@
  * |---|---|
  * | the guard's `await withSpendAttribution(…)` → `void withSpendAttribution(…)` | *holds the request open* — the subject |
  * | `release()` deleted from `answer`'s `finally` | *releases the registry by the time it answers* |
- * | `release()` called straight after `beganAnswering`, before the stream | *still holds the registry …, however old the lease* |
- * | `beganAnswering` a flag rather than a count (`+ 1` → `1`) | *a second attempt keeps the registry after the first finishes* |
+ * | `release()` called straight after `answering.hold`, before the stream | *still holds the registry …, however old the lease* |
+ * | `hold` in src/live-keys.ts a flag rather than a count (`+ 1` → `1`) | *a second attempt keeps the registry after the first finishes* |
  *
  * **The last three are not this migration's risks** — nothing in the move
- * touches `answer` or `beganAnswering`. They are here because an oracle for a
+ * touches `answer` or `answering.hold` (`beganAnswering` until 2026-10-05,
+ * plan 261005i § C). They are here because an oracle for a
  * lock that has never been watched failing on the lock is the file this one's
  * header warns about, and because the second attempt is what makes the registry
  * a count.

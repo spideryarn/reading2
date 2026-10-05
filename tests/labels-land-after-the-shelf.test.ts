@@ -90,7 +90,13 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { buildTree, type ModelNode } from "../src/structure.js";
 import { mintId } from "../src/ids.js";
-import { advanceJobWith, type AdvanceParts, type StepRegistry } from "../src/jobs.js";
+import {
+  advanceJobWith,
+  type AdvanceParts,
+  cascadeForce,
+  type StepRegistry,
+  unrunnableStepPlan,
+} from "../src/jobs.js";
 import { LABELS_PROMPT_VERSION, mergeLabels } from "../src/labels.js";
 import type { CompletedLabelsFile, LabelRun, PendingLabelsFile } from "../src/labels.js";
 import { CAPABLE_MODEL } from "../src/models.js";
@@ -285,7 +291,11 @@ interface Fixture {
  * is what stops the successor's step skipping, and a fixture with no receipt
  * would pass whether the deletion happened or not.
  */
-async function publishLabelledArticle(slug: string): Promise<Fixture> {
+async function publishLabelledArticle(
+  slug: string,
+  /** `Tree.provisional` for the published tree: the headings fallback's mark. */
+  provisional?: Tree["provisional"],
+): Promise<Fixture> {
   const seeded = runBlocks({ slug, extractedHtml: EXTRACTED_HTML, previous: undefined });
   const blocks = blocksArtefact(seeded.blocks).blocks;
 
@@ -322,7 +332,10 @@ async function publishLabelledArticle(slug: string): Promise<Fixture> {
       fetchedAt: new Date("2026-09-07T00:00:00.000Z"),
       extractedHtml: EXTRACTED_HTML,
       stampedHtml: seeded.html,
-      tree: treeFor(slug, blocks, labelsFor(blocks, OLD_LABEL)),
+      tree: {
+        ...treeFor(slug, blocks, labelsFor(blocks, OLD_LABEL)),
+        ...(provisional ? { provisional } : {}),
+      },
       navLabelStatus: "ready",
     })
     .where(eq(articleRevisions.id, begun.revisionId));
@@ -463,14 +476,14 @@ const INGEST_STEPS: StepName[] = DEFAULT_INGEST_STEPS.filter(
   (name) => name !== "fetch" && name !== "extract" && name !== "assets",
 );
 
-async function queueIngest(slug: string): Promise<string> {
+async function queueIngest(slug: string, names: StepName[] = INGEST_STEPS): Promise<string> {
   return await insertWhenSlotFree(slug, async () => {
     const id = mintId();
     await db().insert(jobsTable).values({
       id,
       ownerId: OWNER,
       slug,
-      steps: stepsOf(INGEST_STEPS),
+      steps: stepsOf(names),
       status: "queued",
       workKey: `labels-after-shelf-${id}`,
     });
@@ -711,6 +724,60 @@ describe("an ingest that publishes before its labels are bought", () => {
     const readable = await pgArticleReader.loadArticle(slug);
     expect(readable.navLabelStatus).toBe("ready");
     expect(readable.blocks.map((b) => b.text)).toEqual(fixture.blocks.map((b) => b.text));
+  });
+
+  /**
+   * **Structure's *Try again*, on the server** (src/web/StructureNotice.tsx):
+   * a job of `{ steps: ["structure"], force: ["structure"] }` on an article
+   * already on the shelf, whose tree is the headings fallback.
+   *
+   * The case above is `["blocks", "structure"]`. This is the same machinery
+   * with the one step, pinned because a press now depends on each line of it:
+   * the plan is runnable and the force names exactly the step; the owner's
+   * payload carries `tree.provisional` to draw the line from; the job
+   * publishes a new revision whose tree has lost the mark; the labels receipt
+   * is gone and the free successor is queued. The tree the fake step returns
+   * is a model-shaped one, so "lost the mark" is the fake's doing — what is
+   * under test is that the store publishes and serves what the step wrote
+   * rather than carrying the old column.
+   *
+   * **What it does not show**: `enqueue`'s own acceptance of the request (the
+   * row is inserted directly, as every job in this file is), and the real
+   * `generateStructure`. And nothing here runs `arc`: a job of one step never
+   * reaches it, which is why the browser asks for it afterwards.
+   */
+  it("a structure-only plan is runnable, and forcing it names only itself", () => {
+    expect(unrunnableStepPlan(["structure"])).toBeUndefined();
+    expect([...cascadeForce(["structure"], new Set<StepName>(["structure"]))]).toEqual([
+      "structure",
+    ]);
+  });
+
+  mine("a forced structure-only job on a headings tree publishes and queues the labels", async () => {
+    const slug = `${SLUG_PREFIX}${mintId()}`;
+    const fixture = await publishLabelledArticle(slug, "headings");
+
+    /* The premise, and the fact the browser's line is drawn from. */
+    expect((await pgArticleReader.loadArticle(slug)).tree.provisional).toBe("headings");
+
+    labelGate.handler = undefined;
+    labelGate.calls = 0;
+    const advanced = await advanceWhenSlotFree(await queueIngest(slug, ["structure"]));
+    expect(advanced?.done, "the structure-only job did not finish").toBe(true);
+    expect(advanced?.job.status).toBe("done");
+
+    const shelf = await onTheShelf(slug);
+    expect(shelf.id, "the job published nothing").not.toBe(fixture.baseRevisionId);
+    const served = await pgArticleReader.loadArticle(slug);
+    expect(served.tree.provisional).toBeUndefined();
+    expect(served.navLabelStatus).toBe("pending");
+    expect(await runRow(shelf.id, "labels")).toBeUndefined();
+    expect(labelGate.calls, "the structure job bought labels").toBe(0);
+
+    const successor = await successorOf(slug);
+    expect(successor, "no labels successor was queued").toBeDefined();
+    expect(successor?.status).toBe("queued");
+    expect(successor?.ingestEventId, "the free successor took a quota slot").toBeNull();
   });
 
   /**

@@ -71,6 +71,7 @@ import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
 import { isThreadKind } from "../types.js";
+import { originFromColumns } from "../thread-origin.js";
 
 const logger = log("store");
 
@@ -614,6 +615,10 @@ export async function exportArticle(
            fields is exactly how `tools` went missing from an export once
            already; the anchor is the same trap one row up. */
         ...anchorFragment(thread),
+        /* Where the conversation was started from, omitted where there is
+           none. The same mapping the store reads with (src/thread-origin.ts,
+           which is pure and has no store behind it). */
+        ...originFromColumns(thread),
         /* **Always written, unlike the anchor above and `stopped` below**, and
            the difference is that `ChatThread.kind` is *required*. Both stores
            therefore always have one: `withTurn` sets it on every thread it
