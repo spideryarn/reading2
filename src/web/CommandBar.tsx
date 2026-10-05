@@ -2562,7 +2562,7 @@ export function CommandBar({
                 }}
               >
                 {/* A sub-mode says which mode it is in, muted, before its own
-                    name — `Remember › Quiz` — so *Simple* is not a mystery and
+                    name — `Learn › Quiz` — so *Simple* is not a mystery and
                     the pictures read as Diagram's. Outside `cmdbar-name`, which
                     stays the row's own label. */}
                 {command.kind === "submode" && (

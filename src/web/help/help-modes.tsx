@@ -163,8 +163,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           Each article keeps its own conversations under <strong>All conversations</strong>. That
           list holds every conversation you have had about the article, not only the ones started
           in Chat. A row from somewhere else has a small icon in front of it: point at it, or tap
-          it, to see where it came from, for example a claim in Debate, a passage, or Remember.
-          Pressing a Remember row takes you to Remember, where that conversation lives; it cannot
+          it, to see where it came from, for example a claim in Debate, a passage, or Learn.
+          Pressing a Learn row takes you to Learn, where that conversation lives; it cannot
           be renamed or deleted from Chat. When the list has conversations from more than one
           place, the buttons above it (<strong>All</strong>, <strong>Chats</strong> and one for
           each other place) narrow it.
@@ -514,7 +514,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
 
   remember: {
     keywords:
-      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn check understanding explain back study revise",
+      "recall memory tutorial guided reading explore think ideas own view apply wider world quiz test yourself questions retention learn remember check understanding explain back study revise critique criticism problems objections weaknesses",
     whenToUse: (
       <>
         <p>
@@ -546,11 +546,13 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             reading into account. Typed or dictated; there is no Live conversation here yet.
           </li>
           <li>
-            <strong>Explore</strong>: for working out what you think, more than for remembering what
+            <strong>Explore</strong>: for deepening your thinking about the piece, including where it
+            may be weak, more than for remembering what
             the piece says. It is sent what you have highlighted, bookmarked and written on this
             article, and a list of your other conversations about it, and starts from one of those.
             Each short reply does one thing: asks a question that opens your idea up, tries it on a
-            case (your own, when your reason for reading gives one), makes a connection, or looks
+            case (your own, when your reason for reading gives one), makes a connection, raises one
+            possible problem with the piece for you to weigh, or looks
             up what others have said and links it. It says which parts come from the article, the
             web, your notes and its own view. One Explore conversation per article; typed or
             dictated, with no Live conversation yet. Explore is one of the{" "}
@@ -562,7 +564,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             in a sentence or two. Writing them takes about a minute the first time.
           </li>
         </ul>
-        <p>Remember is only for whoever added the article.</p>
+        <p>Learn is only for whoever added the article.</p>
       </>
     ),
     reading: (

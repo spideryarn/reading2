@@ -91,18 +91,16 @@ export const MODES = [
      mode; that mode then arrived as **Referee** rather than Reviewer (see
      above), so the collision he feared never happened. The rename went ahead
      anyway on the weaker but real case: *Review* still reads ambiguously
-     sitting beside a tool whose whole subject is peer review; *Remember* names
-     what the product is *for* — vision.md's "internalise and interrogate" —
-     where *Review* named only the mechanism; and it works as an umbrella over
-     the sub-modes that now live under it, Recall and Quiz (and Tutorial since 2026-10-02,
-     Explore since 2026-10-03).
+     sitting beside a tool whose whole subject is peer review; *Remember*
+     named what the product was *for* — vision.md's "internalise and
+     interrogate" — where *Review* named only the mechanism.
 
-     The cost, named rather than hidden: *Remember* can suggest saved memories
-     or spaced repetition, and this mode does neither. Its description
-     (`MODE_CATALOG` in src/mode-catalog.ts, and a `blurb` on a `MODES_UI` row
-     in src/web/Dock.tsx until 2026-09-07) carries the weight of correcting
-     that, so it has to stay accurate.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+     Renamed for the reader to **Learn** on 2026-10-05, while this identifier
+     stayed `remember`. It is the umbrella over Recall, Tutorial, Explore and
+     Quiz. The catalogue description now distinguishes that whole from a
+     course or flashcards. The two rename plans hold the reasons and costs:
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md and
+     docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
   "remember",
   /* **`outline` was the eighth, 2026-08-28 to 2026-09-10, and it is not a mode
      any more** — the whole document as one nested list that never scrolled (it may

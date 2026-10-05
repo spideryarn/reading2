@@ -482,9 +482,9 @@ Where the icon is:
 
 | Surface | Mark |
 |---|---|
-| glossary, ideas, quotes, Summary (Thread included), Remember's Quiz | the person icon in the band's corner, beside the (i) |
+| glossary, ideas, quotes, Summary (Thread included), Learn's Quiz | the person icon in the band's corner, beside the (i) |
 | sketch | the same icon, in the picture's own bar |
-| chat, Remember's conversations, explain | — |
+| chat, Learn's conversations, explain | — |
 
 **Chat gets no icon**, because an answer is not an artefact anybody rewrites, so there is nothing
 for one to describe. Every answer uses the profile, except the reading-candidates list

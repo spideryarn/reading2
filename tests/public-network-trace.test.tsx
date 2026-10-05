@@ -954,7 +954,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
   search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
-  remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
+  remember: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -1662,7 +1662,7 @@ describe("a signed-out browser on a shared document", () => {
     await open("?mode=remember&remember=quiz");
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "the owners-only boundary").toBe(true);
-    expect(readable(band as Element)).toContain("Remember is for whoever added this article");
+    expect(readable(band as Element)).toContain("Learn is for whoever added this article");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });

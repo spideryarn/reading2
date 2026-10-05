@@ -409,7 +409,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   remember: {
     description:
-      "Work the piece into memory through Recall, a short Tutorial or a Quiz, or Explore what you think of it — not saved notes or flashcards",
+      /* Rewritten 2026-10-05 with the name (plan 261005l). *Remember* wrongly
+         suggested saved memories, and the sentence ended by denying them;
+         *Learn* suggests a course, so it denies that instead. Explore's half
+         follows Greg's widening of it the same day: your own view, and where
+         the piece may be weak (spya-mvmpks). */
+      "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
     /* **Two sentences about the whole mode, since 2026-10-04.** It was a
        110-word walk through Recall, Tutorial and Explore; Greg (spya-usyhwy):
        *"it's like one big paragraph. Prefer smaller paragraphs or bullet
@@ -425,15 +430,20 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        reader expects.
 
        **`quiz` is deliberately absent**, and it is the clearest example of the
-       rule these aliases follow. Quiz is one of Remember's *other* sub-modes, and
+       rule these aliases follow. Quiz is one of Learn's *other* sub-modes, and
        opening the mode lands on Recall (`params.ts`), so `quiz` here would name
        a destination and then not go there. GPT Sol found this, 2026-09-07.
        Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
-       "quiz" }` — the bar's *Remember › Quiz* row (src/web/sub-modes.ts, plan
+       "quiz" }` — the bar's *Learn › Quiz* row (src/web/sub-modes.ts, plan
        261001d) — and that row, not an alias here, is where `quiz` lands.
        `test me` is left out for the same reason, and `flashcards` because the
        description denies it. Both spellings of *practise*. */
-    aliases: ["recall", "memorise", "memorize", "study", "revise", "revision", "practice", "practise", "learn"],
+    /* `remember` since 2026-10-05: it was the mode's name until then, and the
+       word a reader already knows should still find it, as `trajectory` finds
+       Skim. `learn` left the list the same day, because it is the name now.
+       The sub-mode rows get the old compounds (*remember quiz*) from
+       command-match.ts § `FORMER_PARENT_NAMES`. */
+    aliases: ["recall", "remember", "memorise", "memorize", "study", "revise", "revision", "practice", "practise"],
     /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
        *"I think recall submode for sure. I think quiz mode as well. And then
        let's try tutorial too."* Explore, the fourth part, stays behind the

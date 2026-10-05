@@ -3018,7 +3018,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the legacy acceptance above covers the one request old tabs sent it on and
      nothing wider. GPT Sol's review, finding 7. */
   if (stance !== undefined && !askingRemember) {
-    throw httpError(400, "A stance only applies in Remember mode");
+    throw httpError(400, "A stance only applies in Learn mode");
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
      `withRetry` and `withEdit` do not go through `withTurn` at all, so an

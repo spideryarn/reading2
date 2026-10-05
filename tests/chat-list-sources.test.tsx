@@ -152,9 +152,9 @@ describe("a row's source icon", () => {
     paint(EVERY);
     expect(rows()).toHaveLength(EVERY.length);
     expect(mark(CHAT)).toBeNull();
-    expect(mark(REMEMBER)?.getAttribute("aria-label")).toBe("From Remember › Recall");
-    expect(mark(TUTORIAL)?.getAttribute("aria-label")).toBe("From Remember › Tutorial");
-    expect(mark(EXPLORE)?.getAttribute("aria-label")).toBe("From Remember › Explore");
+    expect(mark(REMEMBER)?.getAttribute("aria-label")).toBe("From Learn › Recall");
+    expect(mark(TUTORIAL)?.getAttribute("aria-label")).toBe("From Learn › Tutorial");
+    expect(mark(EXPLORE)?.getAttribute("aria-label")).toBe("From Learn › Explore");
     expect(mark(CLAIM)?.getAttribute("aria-label")).toBe("Started from a claim in Debate");
     expect(mark(PASSAGE)?.getAttribute("aria-label")).toBe("About a passage");
     for (const t of EVERY) {
@@ -194,7 +194,7 @@ describe("a row's source icon", () => {
     expect(debate?.getAttribute("aria-expanded")).toBe("false");
 
     press(mark(REMEMBER));
-    expect(cards().some((c) => c.includes("From Remember › Recall"))).toBe(true);
+    expect(cards().some((c) => c.includes("From Learn › Recall"))).toBe(true);
     expect(wentToRemember).toEqual([]);
   });
 });
@@ -262,11 +262,11 @@ describe("the filter above the list", () => {
 
   it("offers All, Chats, then one choice per other source present, with Remember's three as one", () => {
     paint(EVERY);
-    expect(words()).toEqual(["All", "Chats", "Debate", "Remember", "About a passage"]);
+    expect(words()).toEqual(["All", "Chats", "Debate", "Learn", "About a passage"]);
     paint([CHAT, TUTORIAL, EXPLORE]);
-    expect(words()).toEqual(["All", "Chats", "Remember"]);
+    expect(words()).toEqual(["All", "Chats", "Learn"]);
     paint([REMEMBER, CLAIM]);
-    expect(words()).toEqual(["All", "Debate", "Remember"]);
+    expect(words()).toEqual(["All", "Debate", "Learn"]);
   });
 
   it("defaults to All, which shows every row", () => {
@@ -287,7 +287,7 @@ describe("the filter above the list", () => {
   it("narrows the rows to the chosen source", () => {
     paint(EVERY, { from: "remember" });
     expect(rows().map((r) => r.dataset.thread).sort()).toEqual([REMEMBER.id, TUTORIAL.id, EXPLORE.id].sort());
-    expect(choices().find((b) => b.getAttribute("aria-pressed") === "true")?.textContent).toBe("Remember");
+    expect(choices().find((b) => b.getAttribute("aria-pressed") === "true")?.textContent).toBe("Learn");
     paint(EVERY, { from: "chats" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CHAT.id]);
     paint(EVERY, { from: "debate" });

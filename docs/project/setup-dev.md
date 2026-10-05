@@ -501,7 +501,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call — but not a *Dig deeper* answer, which is always the high-power model ([glossary.md](glossary.md#digging-deeper-into-a-term)) |
 | `SPIDERYARN_CHAT_MODEL` | the chat |
 | `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
-| `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Remember's quiz |
+| `SPIDERYARN_QUIZ_MARK_MODEL` | marking an answer in Learn's quiz |
 | `SPIDERYARN_REFEREE_MIRROR_MODEL` | Mirror, the model reading a referee's own notes |
 | `SPIDERYARN_REFEREE_CRITERIA_MODEL` | Criteria, one of a referee's own questions run over the paper |
 | `SPIDERYARN_REFEREE_CLAIMS_MODEL` | Claims, pulling what the paper claims about itself |

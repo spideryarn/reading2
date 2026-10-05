@@ -141,7 +141,7 @@ export const SHOTS = {
     file: "remember.png",
     w: 720,
     h: 1428,
-    alt: "Remember mode, waiting for the reader to say what they took from the piece.",
+    alt: "Learn mode, waiting for the reader to say what they took from the piece.",
   },
   quiz: {
     src: quizShot,
