@@ -672,6 +672,59 @@ describe("the CLI, end to end", () => {
     expect(existsSync(both)).toBe(false);
   }, 60_000);
 
+  /**
+   * The same overwrite the codex wrapper had: a subagent with `--access write` that writes its
+   * report to the `--output` path itself had it replaced by the result event's text. The rule and
+   * the helper are shared — docs/plans/261005c-long-document-follow-ups-…-page-cap.md § (f) — and
+   * the codex tests carry the wider set of cases; these pin this wrapper's own wiring.
+   */
+  describe("--output: a report the run wrote itself is not overwritten", () => {
+    function runAt(o: { pre?: string; body: (target: string) => string }) {
+      const target = join(mkdtempSync(join(tmpdir(), "run-claude-target-")), "answer.md");
+      if (o.pre !== undefined) writeFileSync(target, o.pre);
+      const bin = fakeClaude(o.body(target));
+      const r = spawnSync(
+        "npx",
+        ["tsx", "scripts/run-claude.ts", "--prompt", "p", "--output", target],
+        { encoding: "utf8", env: wrapperEnv({ PATH: `${join(bin, "..")}:${process.env.PATH}` }) },
+      );
+      return { ...r, target, sidecar: `${target}.last-message.txt` };
+    }
+    const result = (fields: Record<string, unknown> = {}) => `printf '%s\\n' '${resultEvent(fields)}'`;
+
+    it("keeps the report, puts the result beside it, and says so", () => {
+      const r = runAt({ body: (t) => `printf 'THE-REPORT\\n' > ${shellQuote(t)}\n${result()}` });
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(r.target, "utf8")).toBe("THE-REPORT\n");
+      expect(readFileSync(r.sidecar, "utf8")).toBe("THE-ANSWER");
+      expect(r.stdout).toContain(`Output: ${r.target}`);
+      expect(r.stdout).toContain(r.sidecar);
+      expect(r.stdout).toContain("THE-REPORT");
+    }, 60_000);
+
+    it("still replaces a target from a previous invocation that this run did not touch", () => {
+      const r = runAt({ pre: "STALE from yesterday\n", body: () => result() });
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(r.target, "utf8")).toBe("THE-ANSWER");
+      expect(existsSync(r.sidecar)).toBe(false);
+    }, 60_000);
+
+    it("writes no sidecar when the run wrote the target with the result's own bytes", () => {
+      const r = runAt({ pre: "STALE\n", body: (t) => `printf 'THE-ANSWER' > ${shellQuote(t)}\n${result()}` });
+      expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(r.target, "utf8")).toBe("THE-ANSWER");
+      expect(existsSync(r.sidecar)).toBe(false);
+    }, 60_000);
+
+    it("a kept report does not make an empty result pass", () => {
+      // The usability check is about what the model said last, not about what sits at the path.
+      const r = runAt({ body: (t) => `printf 'THE-REPORT\\n' > ${shellQuote(t)}\n${result({ result: "" })}` });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain("its answer was empty");
+      expect(readFileSync(r.target, "utf8")).toBe("THE-REPORT\n");
+    }, 60_000);
+  });
+
   it("--quiet keeps the status and the paths, and drops the answer", () => {
     const r = runCli(`printf '%s\\n' '${resultEvent({ result: "SECRET-ANSWER" })}'`, ["--quiet"]);
     expect(r.status).toBe(0);

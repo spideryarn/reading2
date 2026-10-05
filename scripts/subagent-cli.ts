@@ -28,8 +28,10 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
-  closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, statSync,
+  closeSync, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync,
+  renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -554,4 +556,111 @@ export function answerIsUsable(path: string): boolean {
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
+}
+
+/**
+ * **The answer file, and a report the subagent wrote there itself.**
+ *
+ * Both wrappers end by writing the subagent's last message to `--output`. A write-capable reviewer
+ * sometimes writes its whole report to that same path, and until 2026-10-05 the wrapper then put
+ * the one-line last message on top of it: exit 0, a printed path, and the report gone. The rule
+ * these two functions hold is one sentence — **nothing written to the target during this
+ * invocation is destroyed** — and it is
+ * docs/plans/261005c-long-document-follow-ups-stale-sentence-run-codex-overwrite-guard-breadcrumb-paragraph-source-guess-page-cap.md § (f).
+ *
+ * The snapshot is the target's **content**, not its mtime and size: a report replaced by different
+ * bytes of the same length, with the mtime put back, reads as untouched to a stat, and a stale
+ * file somebody merely touched reads as written. A changed hash is evidence that something wrote
+ * the file during the run, not proof of who — which is why nothing below is deleted, only moved.
+ *
+ * Hashed in chunks, for the reason `answerIsUsable` scans in chunks: memory stays at one buffer
+ * whatever is at the path.
+ */
+export type WriteTargetSnapshot = string;
+export const ABSENT_TARGET: WriteTargetSnapshot = 'absent';
+/** Present but not readable as a file. Equal to itself, so it never reads as "changed". */
+const UNREADABLE_TARGET: WriteTargetSnapshot = 'unreadable';
+
+export function snapshotWriteTarget(path: string): WriteTargetSnapshot {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, 'r');
+    const hash = createHash('sha256');
+    const buf = Buffer.alloc(ANSWER_CHUNK_BYTES);
+    for (;;) {
+      const len = readSync(fd, buf, 0, ANSWER_CHUNK_BYTES, null);
+      if (len === 0) return `sha256:${hash.digest('hex')}`;
+      hash.update(buf.subarray(0, len));
+    }
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? ABSENT_TARGET : UNREADABLE_TARGET;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/** codex leaves its last message in a file; claude's arrives as a string in the result event. */
+export type LastMessage = { kind: 'file'; path: string } | { kind: 'text'; text: string };
+
+export interface PlacedAnswer {
+  /** What to print as `Output:` — always the target, whichever of the two it now holds. */
+  answerPath: string;
+  /** Where the last message went: the target, or the sidecar beside a kept report. The caller's
+   *  usability check reads THIS, so a kept report cannot make an empty answer pass. */
+  lastMessagePath: string;
+  /** One line for the console when something was kept or moved aside; otherwise undefined. */
+  note: string | undefined;
+}
+
+/**
+ * Put the last message at `target` without destroying anything this invocation wrote there.
+ *
+ * `atStart` is the snapshot taken after preflight (`sameWriteTarget` can create the file, empty)
+ * and `beforeFinalAttempt` the one taken before the last credential attempt; a wrapper with one
+ * attempt passes the same value twice. Three outcomes:
+ *
+ *   - changed during the final attempt, and not to the last message's own bytes → the target is
+ *     kept and the last message goes beside it, `<target>.last-message.txt`;
+ *   - changed during an EARLIER attempt and left alone by the final one → those bytes move to
+ *     `<target>.earlier-attempt.txt` and the last message takes the target. Freshness belongs to
+ *     the final attempt: a report from an attempt whose credential then failed is not its answer;
+ *   - otherwise → overwritten, as always. A file from a previous invocation must still be
+ *     replaced, which is what makes a fresh answer distinguishable from a stale one.
+ *
+ * A target with nothing in it but whitespace is never "kept": there is nothing there to destroy,
+ * and an empty file printed as the answer would be the silence `answerIsUsable` exists to refuse.
+ */
+export function placeAnswer(o: {
+  target: string; lastMessage: LastMessage;
+  atStart: WriteTargetSnapshot; beforeFinalAttempt: WriteTargetSnapshot;
+}): PlacedAnswer {
+  const { target, lastMessage } = o;
+  const sidecar = `${target}.last-message.txt`;
+  const write = (path: string): void => {
+    if (lastMessage.kind === 'file') copyFileSync(lastMessage.path, path);
+    else writeFileSync(path, lastMessage.text);
+  };
+  const now = snapshotWriteTarget(target);
+  const messageHash = lastMessage.kind === 'file'
+    ? snapshotWriteTarget(lastMessage.path)
+    : `sha256:${createHash('sha256').update(lastMessage.text, 'utf8').digest('hex')}`;
+  const holdsSomethingElse = now !== messageHash && answerIsUsable(target);
+
+  if (holdsSomethingElse && now !== o.beforeFinalAttempt) {
+    write(sidecar);
+    return {
+      answerPath: target, lastMessagePath: sidecar,
+      note: `Kept ${target}: it was written during this run and is not the last message, which is at ${sidecar}`,
+    };
+  }
+  let note: string | undefined;
+  if (holdsSomethingElse && o.beforeFinalAttempt !== o.atStart) {
+    const aside = `${target}.earlier-attempt.txt`;
+    renameSync(target, aside);
+    note = `An earlier attempt of this run wrote ${target}; that is now at ${aside}, and the last attempt's answer is at ${target}`;
+  }
+  write(target);
+  // A sidecar from a previous invocation is no longer this target's last message.
+  rmSync(sidecar, { force: true });
+  return { answerPath: target, lastMessagePath: target, note };
 }

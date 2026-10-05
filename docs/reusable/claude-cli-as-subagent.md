@@ -363,6 +363,10 @@ most evidence against.
   compares inodes rather than comparing strings, because two names that do not exist yet under a
   symlinked parent directory are the same file and look nothing like each other. Both wrappers use
   it; the codex one never had a check at all.
+- **A report the run wrote to `--output` itself is kept.** Since 2026-10-05 the wrapper notices
+  that the file's content changed during the run and is not the result text, leaves it alone,
+  writes the result beside it as `<output>.last-message.txt`, and says so. A file left by an
+  earlier invocation is still replaced, and an empty result still fails whatever is at the path.
 - **A timeout bounds the child, and until 2026-09-06 it did not bound the *call*.** A helper the
   child leaves behind in its own process group holds the stdio pipe open, and the wrapper waited on
   it: a five-minute timeout returned after fifteen, saying `timed out after 5m` the whole while,

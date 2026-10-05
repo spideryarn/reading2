@@ -30,6 +30,7 @@ import {
   parseArgs, pickNewestInFamily, readAnswerForConsole, resolveModelFamily, reviewProfileDefined,
   runCodex, shouldFallBack, untrustedCheckoutHint,
 } from "../scripts/run-codex.js";
+import { ABSENT_TARGET, placeAnswer, snapshotWriteTarget } from "../scripts/subagent-cli.js";
 import { EXIT_FILE, START_FILE, readArtefacts, shellQuote } from "../tools/overseer/launch-artefacts.js";
 import { makeLaunchDir, type LaunchFixture } from "./helpers/launch-fixture.js";
 import { pinForWrapper } from "./helpers/wrapper-env.js";
@@ -1469,4 +1470,198 @@ describe("--launch-dir", () => {
     expect(r.status).toBe(0);
     expect(r.calls.map((c) => c[1])).toEqual(["unset"]);
   }, 60_000);
+});
+
+/**
+ * A write-capable reviewer sometimes writes its report to the `--output` path itself. Until
+ * 2026-10-05 the wrapper then copied codex's one-line last message over it, and the report was gone
+ * with exit 0 and a printed path. One rule now: nothing written to the target during this
+ * invocation is destroyed — docs/plans/261005c-long-document-follow-ups-…-page-cap.md § (f).
+ *
+ * The stand-in is handed the target's path in its own script, so each case is the wrapper's real
+ * wiring and not only the helper's arithmetic.
+ */
+describe("--output: a report the run wrote itself is not overwritten", () => {
+  const LAST = "LAST-MESSAGE\n";
+  const lastMessage = `printf 'LAST-MESSAGE\\n' > "$out"`;
+
+  /** `pre` is what the target holds before the wrapper starts; `body` is given the target's path. */
+  function runAt(o: {
+    pre?: string; body: (target: string) => string; extraArgs?: string[]; env?: Record<string, string>;
+  }) {
+    const target = join(mkdtempSync(join(tmpdir(), "run-codex-target-")), "answer.md");
+    if (o.pre !== undefined) writeFileSync(target, o.pre);
+    const bin = fakeCodex(o.body(target));
+    const r = spawnSync(
+      "npx",
+      ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--output", target, ...(o.extraArgs ?? [])],
+      { encoding: "utf8", env: pinForWrapper({ ...process.env, PATH: `${dirname(bin)}:${process.env.PATH}`, ...o.env }) },
+    );
+    return { ...r, target, sidecar: `${target}.last-message.txt`, earlier: `${target}.earlier-attempt.txt` };
+  }
+  const text = (path: string) => readFileSync(path, "utf8");
+
+  it("keeps the report, puts the last message beside it, and says so", () => {
+    const r = runAt({ body: (t) => `printf 'THE-REPORT, many lines\\n' > ${shellQuote(t)}\n${lastMessage}` });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe("THE-REPORT, many lines\n");
+    expect(text(r.sidecar)).toBe(LAST);
+    expect(r.stdout).toContain(`Output: ${r.target}`);
+    expect(r.stdout).toContain(r.sidecar);
+    // What is printed is the kept report, since that is the path the caller was just given.
+    expect(r.stdout).toContain("THE-REPORT");
+  }, 60_000);
+
+  it("still replaces a target left by a previous invocation that this run did not touch", () => {
+    // The other half: keeping whatever is there would make a stale review pass for a fresh one.
+    const r = runAt({ pre: "STALE from yesterday\n", body: () => lastMessage });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe(LAST);
+    expect(existsSync(r.sidecar)).toBe(false);
+  }, 60_000);
+
+  it("writes a target that was absent", () => {
+    const r = runAt({ body: () => lastMessage });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe(LAST);
+    expect(existsSync(r.sidecar)).toBe(false);
+  }, 60_000);
+
+  it("writes no sidecar when the run wrote the target with the last message's own bytes", () => {
+    const r = runAt({ pre: "STALE\n", body: (t) => `printf 'LAST-MESSAGE\\n' > ${shellQuote(t)}\n${lastMessage}` });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe(LAST);
+    expect(existsSync(r.sidecar)).toBe(false);
+  }, 60_000);
+
+  it("sees a same-size replacement that keeps the old mtime as a change (G1)", () => {
+    // Size and mtime both say "untouched" here; only the content says otherwise.
+    const r = runAt({
+      pre: "OLD-REPORT-AAAA\n",
+      body: (t) => `cp -p ${shellQuote(t)} "$here/stamp"\nprintf 'NEW-REPORT-BBBB\\n' > ${shellQuote(t)}\n`
+        + `touch -r "$here/stamp" ${shellQuote(t)}\n${lastMessage}`,
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(r.target)).toBe("NEW-REPORT-BBBB\n");
+    expect(text(r.sidecar)).toBe(LAST);
+  }, 60_000);
+
+  it("a kept report does not make an empty last message pass", () => {
+    const r = runAt({ body: (t) => `printf 'THE-REPORT\\n' > ${shellQuote(t)}\n: > "$out"` });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("wrote no answer");
+    expect(text(r.target)).toBe("THE-REPORT\n");
+  }, 60_000);
+
+  it("moves aside what an earlier credential attempt wrote, and answers with the final attempt (G2)", () => {
+    // Attempt one writes the target and dies on credit; attempt two never touches it. The target
+    // must be attempt two's answer — and attempt one's bytes must still exist somewhere.
+    const r = runAt({
+      body: (t) => `if [ -z "$CODEX_API_KEY" ]; then printf 'ATTEMPT-ONE REPORT\\n' > ${shellQuote(t)}; `
+        + `echo "ERROR: Your workspace is out of credits." >&2; exit 1; fi\n${lastMessage}`,
+      env: { CODEX_API_KEY: "sk-TEST" },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain("retrying with CODEX_API_KEY");
+    expect(text(r.target)).toBe(LAST);
+    expect(text(r.earlier)).toBe("ATTEMPT-ONE REPORT\n");
+    expect(existsSync(r.sidecar)).toBe(false);
+    expect(r.stdout).toContain(r.earlier);
+  }, 60_000);
+
+  const launched = (f: LaunchFixture, body: string) => spawnSync(
+    "npx",
+    ["tsx", "scripts/run-codex.ts", "--prompt", "p", "--sandbox", "read-only", "--auth", "subscription-only", "--launch-dir", f.dir],
+    { encoding: "utf8", env: pinForWrapper({ ...process.env, PATH: `${dirname(fakeCodex(body))}:${process.env.PATH}` }) },
+  );
+
+  it("keeps a report written to --launch-dir's default answer path, and exit.json describes it", () => {
+    const f = makeLaunchDir();
+    const target = join(f.dir, "answer.md");
+    const r = launched(f, `printf 'THE-REPORT\\n' > ${shellQuote(target)}\n${lastMessage}`);
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(target)).toBe("THE-REPORT\n");
+    expect(text(`${target}.last-message.txt`)).toBe(LAST);
+    expect(readArtefacts(f.dir, f.correlationId).exit).toMatchObject({
+      kind: "present", record: { verdict: { kind: "ok" }, answer: { path: target, bytes: 11, usable: true } },
+    });
+  }, 60_000);
+
+  it("--launch-dir with nothing written by the run: the last message is the answer", () => {
+    const f = makeLaunchDir();
+    const r = launched(f, lastMessage);
+    expect(r.status, r.stderr).toBe(0);
+    expect(text(join(f.dir, "answer.md"))).toBe(LAST);
+    expect(existsSync(join(f.dir, "answer.md.last-message.txt"))).toBe(false);
+  }, 60_000);
+});
+
+describe("snapshotWriteTarget and placeAnswer", () => {
+  const scratch = () => join(mkdtempSync(join(tmpdir(), "place-answer-")), "answer.md");
+  const text = (path: string) => readFileSync(path, "utf8");
+  const message = { kind: "text", text: "LAST" } as const;
+
+  it("snapshots content: absent, and a different value for different bytes of one size", () => {
+    const target = scratch();
+    expect(snapshotWriteTarget(target)).toBe(ABSENT_TARGET);
+    writeFileSync(target, "AAAA");
+    const a = snapshotWriteTarget(target);
+    writeFileSync(target, "BBBB");
+    expect(snapshotWriteTarget(target)).not.toBe(a);
+    writeFileSync(target, "AAAA");
+    expect(snapshotWriteTarget(target)).toBe(a);
+  });
+
+  it("keeps a target changed during the final attempt, and reports where each thing is", () => {
+    const target = scratch();
+    const before = snapshotWriteTarget(target);
+    writeFileSync(target, "REPORT");
+    const placed = placeAnswer({ target, lastMessage: message, atStart: before, beforeFinalAttempt: before });
+    expect(text(target)).toBe("REPORT");
+    expect(placed).toMatchObject({ answerPath: target, lastMessagePath: `${target}.last-message.txt` });
+    expect(text(placed.lastMessagePath)).toBe("LAST");
+    expect(placed.note).toContain(placed.lastMessagePath);
+  });
+
+  it("overwrites an untouched target, from a file as well as from text", () => {
+    const target = scratch();
+    writeFileSync(target, "STALE");
+    const before = snapshotWriteTarget(target);
+    const source = scratch();
+    writeFileSync(source, "FROM-FILE");
+    const placed = placeAnswer({ target, lastMessage: { kind: "file", path: source }, atStart: before, beforeFinalAttempt: before });
+    expect(text(target)).toBe("FROM-FILE");
+    expect(placed).toEqual({ answerPath: target, lastMessagePath: target, note: undefined });
+  });
+
+  it("moves an earlier attempt's bytes aside when the final attempt left them alone", () => {
+    const target = scratch();
+    const atStart = snapshotWriteTarget(target);
+    writeFileSync(target, "ATTEMPT-ONE");
+    const beforeFinal = snapshotWriteTarget(target);
+    const placed = placeAnswer({ target, lastMessage: message, atStart, beforeFinalAttempt: beforeFinal });
+    expect(text(target)).toBe("LAST");
+    expect(text(`${target}.earlier-attempt.txt`)).toBe("ATTEMPT-ONE");
+    expect(placed.lastMessagePath).toBe(target);
+    expect(placed.note).toContain(".earlier-attempt.txt");
+  });
+
+  it("does not keep a target the run only emptied: there is nothing in it to destroy", () => {
+    const target = scratch();
+    writeFileSync(target, "STALE");
+    const before = snapshotWriteTarget(target);
+    writeFileSync(target, "\n");
+    placeAnswer({ target, lastMessage: message, atStart: before, beforeFinalAttempt: before });
+    expect(text(target)).toBe("LAST");
+    expect(existsSync(`${target}.last-message.txt`)).toBe(false);
+  });
+
+  it("removes a last-message sidecar left by a previous invocation when it writes the target", () => {
+    // Otherwise a fresh answer sits beside a stale "last message" that is not this run's.
+    const target = scratch();
+    writeFileSync(`${target}.last-message.txt`, "YESTERDAY");
+    const before = snapshotWriteTarget(target);
+    placeAnswer({ target, lastMessage: message, atStart: before, beforeFinalAttempt: before });
+    expect(existsSync(`${target}.last-message.txt`)).toBe(false);
+  });
 });
