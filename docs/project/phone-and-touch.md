@@ -204,7 +204,7 @@ existing question already answers it.
 | What | Where | Note |
 |---|---|---|
 | **the reading view's narrow window** | `styles/narrow-window.css` § a narrow window; `styles/crumbs.css` § a narrow window | the query is derived from `layout.ts`'s constants and its copies carry the markers checked by `tests/spine-width.test.ts` |
-| other narrow UI | `styles/feedback.css`; the width arm in `styles/dock-quick-search.css` | local adaptations at the reading view's boundary; quick search also asks whether the pointer is coarse |
+| other narrow UI | `styles/feedback.css`; the width arm in `styles/dock-quick-search.css`; Chat's list of conversations in `styles/mode-band.css` | local adaptations at the reading view's boundary; quick search also asks whether the pointer is coarse, and draws nothing at all where either is true; a row of Chat's list gets three lines of title and two of preview ([261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md)) |
 | **a small device**, narrow or short | `styles/narrow-window.css` § a small device | the bottom bar's hiding. The `max-height` half is what catches a landscape phone |
 | **a mode covers the article** | `layout.ts` § `bandCoversProse`; `Reader.tsx` writes `.band-covers` | arithmetic, not a media query, because it moves with `?spine=0` |
 | which columns fit | `layout.ts` § `fitView`, `fitMode`; `reader/measure.ts` § `useWindowWidth` | the width is the page's less the notch, and is re-measured on rotation |

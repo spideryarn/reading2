@@ -130,7 +130,7 @@ import { scanArticleSource } from "./source-scan.js";
 /* Referee mode's Mirror sub-mode. The generator, and only the generator: the
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
-import { mirrorStream } from "./referee-mirror.js";
+import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
 /* A pure predicate, so importing it here does not drag the filesystem store
    into a file that must work with either one — the same rule the `withEdit` /
    `withRetry` import above states. The palette's *size* is deliberately not in
@@ -234,6 +234,7 @@ import type { CitersResult } from "./types.js";
 /* The other half of the same card, and the half we wrote — a model call with a
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
+import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import {
   advanceJob,
@@ -1106,11 +1107,6 @@ function readingTimeBatch(body: unknown): Record<string, number> {
  * for both, and for the dead one it spins for ever.
  *
  * Only the running process can tell them apart, so it keeps the list.
- */
-const answering = new Map<string, number>();
-
-/**
- * Mark a comment as being answered right now, and hand back the release.
  *
  * **A count rather than a flag, and that is not defensive padding.** It was a
  * `Set` while the only way to re-answer a comment was the "Try again" link on a
@@ -1124,19 +1120,10 @@ const answering = new Map<string, number>();
  *
  * Chat needed `Live` and `settleThread` for the same problem. This is the small
  * version: nothing here can stop or supersede anything, it only stops the sweep
- * from lying.
+ * from lying. The count itself is src/live-keys.ts, shared with `searching`,
+ * `refereeing` and `pullingClaims` below.
  */
-function beganAnswering(key: string): () => void {
-  answering.set(key, (answering.get(key) ?? 0) + 1);
-  let released = false;
-  return () => {
-    if (released) return; // a double release must not decrement someone else's
-    released = true;
-    const left = (answering.get(key) ?? 1) - 1;
-    if (left > 0) answering.set(key, left);
-    else answering.delete(key);
-  };
-}
+const answering = liveKeys();
 
 /**
  * What this process is answering *in this article*, as bare comment ids.
@@ -1282,20 +1269,24 @@ function sse(res: ServerResponse): {
    * beside the first. A caller that wants only the frames can ignore this.
    *
    * **And most do. There is no rule here, only ten choices** — what each
-   * stream does when the reader leaves, read off the callers on 2026-10-04:
+   * stream does when the reader leaves, read off the callers on 2026-10-04,
+   * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, and `search` for a quick run
+   *                           `markOneAnswer`, `runMirror`, and `search` for a
+   *                           quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
-   *                           `runRefereeCriterion`, `runRefereeClaims`,
-   *                           `runMirror`, and `search` for a meaning run
+   *                           `runRefereeCriterion`, `runRefereeClaims`, and
+   *                           `search` for a meaning run
    *
-   * "A stream whose answer is stored runs on" is the tempting summary and it is
-   * false both ways: `runMirror` stores nothing and runs on, and
+   * Every stream that runs on has a save path for its answer; a deleted or
+   * superseded row can refuse the save. The converse is still not a rule:
    * `streamAskedTerm` stores its term and stops. Each caller's own comment says
-   * why. Whether there should be one rule is Greg's to decide
-   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4); when
+   * why. Greg was asked whether there should be one rule and chose the narrow
+   * step — stop Mirror,
+   * which stored nothing, and change nothing else
+   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4). When
    * you add a stream, choose on purpose and add it to this list.
    */
   gone: AbortSignal;
@@ -1766,113 +1757,116 @@ async function answer(
   const { blockId } = comment;
   const quote: string = comment.quote;
   const key = `${slug}/${comment.id}`;
-  const release = beganAnswering(key);
+  const release = answering.hold(key);
 
-  const { frame } = sse(res);
-  frame("begin", comment);
-
-  /**
-   * Send the `done` frame, carrying **what the store actually holds**.
-   *
-   * `commentStore.patch` answers `undefined` when this attempt is no longer the
-   * live one — a sweep buried it and the reader has begun another. Framing our
-   * own answer then would put it back on their screen, which is the overwrite
-   * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
-   * whatever the `done` frame carries. So on a refusal the row is read back and
-   * framed instead, and the reader's panel ends up agreeing with the database.
-   *
-   * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
-   * simply stays silent. The comment client turns a stream that ends without a
-   * `done` into "The answer stopped arriving. Try again." and writes that error
-   * over the row — so silence here would clobber the newer attempt in the UI
-   * with a message about an older one.
-   *
-   * The fallback is our own patch, for the case where the read finds nothing:
-   * the comment was deleted mid-answer, and `useComments` already knows what to
-   * do with a `done` frame for an id it has deleted.
-   */
-  const settle = async (patch: AnswerFinish): Promise<void> => {
-    const kept = await commentStore.patch(slug, comment.id, patch, attempt);
-    if (kept) {
-      frame("done", { ...comment, ...patch });
-      return;
-    }
-    let stored: Comment | undefined;
-    try {
-      stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
-    } catch (readErr) {
-      // The write was refused and the read-back failed too. Say so, then fall
-      // back — a `done` frame the reader can act on beats a stream that stops.
-      log("store").error(
-        { ...errorFields(readErr), slug, id: comment.id },
-        `could not read back a superseded explanation for ${slug}`,
-      );
-    }
-    frame("done", stored ?? { ...comment, ...patch });
-  };
-
-  let text = "";
   try {
-    for await (const event of explainStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      blockId,
-      quote,
-      dig,
-      profile,
-    })) {
-      if (event.type === "delta") {
-        text += event.text;
-        frame("delta", { text: event.text });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", comment);
+
+    /**
+     * Send the `done` frame, carrying **what the store actually holds**.
+     *
+     * `commentStore.patch` answers `undefined` when this attempt is no longer the
+     * live one — a sweep buried it and the reader has begun another. Framing our
+     * own answer then would put it back on their screen, which is the overwrite
+     * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
+     * whatever the `done` frame carries. So on a refusal the row is read back and
+     * framed instead, and the reader's panel ends up agreeing with the database.
+     *
+     * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
+     * simply stays silent. The comment client turns a stream that ends without a
+     * `done` into "The answer stopped arriving. Try again." and writes that error
+     * over the row — so silence here would clobber the newer attempt in the UI
+     * with a message about an older one.
+     *
+     * The fallback is our own patch, for the case where the read finds nothing:
+     * the comment was deleted mid-answer, and `useComments` already knows what to
+     * do with a `done` frame for an id it has deleted.
+     */
+    const settle = async (patch: AnswerFinish): Promise<void> => {
+      const kept = await commentStore.patch(slug, comment.id, patch, attempt);
+      if (kept) {
+        frame("done", { ...comment, ...patch });
+        return;
       }
-      await settle({
-        status: "done" as const,
-        answer: event.answer,
-        citations: event.citations,
-        searches: event.searches,
-        model: event.model,
-      });
-    }
-  } catch (err) {
-    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
-       function owns the response and the outer catch never sees the error — so
-       a failure inside a stream is invisible to the seam in `serveApi`, and a
-       stream is exactly where a model call fails. Same reasoning at the two
-       other streams below. */
-    captureFailure(err, { route: "explain", slug });
-    /* The partial answer is kept, exactly as chat keeps one. Half an
-       explanation and a reason beats a spinner that turns into nothing, and the
-       reader has already read the half. */
-    const patch = {
-      status: "error" as const,
-      error: sayToReader(err, { route: "explain", slug }),
-      ...(text.trim() ? { answer: text.trim() } : {}),
+      let stored: Comment | undefined;
+      try {
+        stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
+      } catch (readErr) {
+        // The write was refused and the read-back failed too. Say so, then fall
+        // back — a `done` frame the reader can act on beats a stream that stops.
+        log("store").error(
+          { ...errorFields(readErr), slug, id: comment.id },
+          `could not read back a superseded explanation for ${slug}`,
+        );
+      }
+      frame("done", stored ?? { ...comment, ...patch });
     };
-    /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
-       error would reach the outer handler, which would try to `send` a JSON 500
-       onto a response that is already an open event stream — and the reader
-       would see the stream simply stop. A store that cannot record the failure
-       is a worse thing than a failure, and it is worth its own line. */
+
+    let text = "";
     try {
-      await settle(patch);
-    } catch (storeErr) {
-      log("store").error(
-        { ...errorFields(storeErr), slug, id: comment.id },
-        `could not record a failed explanation for ${slug}`,
-      );
-      /* The secondary failure, and worth its own issue rather than a footnote
-         on the first: one of these means a model call failed, two mean the
-         store is broken too, and only the second is an emergency. */
-      captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
-      /* `settle` frames the `done` itself, so this is the one path that still
-         has to: the store could not be told, and the reader must still be. */
-      frame("done", { ...comment, ...patch });
+      for await (const event of explainStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        blockId,
+        quote,
+        dig,
+        profile,
+      })) {
+        if (event.type === "delta") {
+          text += event.text;
+          frame("delta", { text: event.text });
+          continue;
+        }
+        await settle({
+          status: "done" as const,
+          answer: event.answer,
+          citations: event.citations,
+          searches: event.searches,
+          model: event.model,
+        });
+      }
+    } catch (err) {
+      /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+         function owns the response and the outer catch never sees the error — so
+         a failure inside a stream is invisible to the seam in `serveApi`, and a
+         stream is exactly where a model call fails. Same reasoning at the two
+         other streams below. */
+      captureFailure(err, { route: "explain", slug });
+      /* The partial answer is kept, exactly as chat keeps one. Half an
+         explanation and a reason beats a spinner that turns into nothing, and the
+         reader has already read the half. */
+      const patch = {
+        status: "error" as const,
+        error: sayToReader(err, { route: "explain", slug }),
+        ...(text.trim() ? { answer: text.trim() } : {}),
+      };
+      /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
+         error would reach the outer handler, which would try to `send` a JSON 500
+         onto a response that is already an open event stream — and the reader
+         would see the stream simply stop. A store that cannot record the failure
+         is a worse thing than a failure, and it is worth its own line. */
+      try {
+        await settle(patch);
+      } catch (storeErr) {
+        log("store").error(
+          { ...errorFields(storeErr), slug, id: comment.id },
+          `could not record a failed explanation for ${slug}`,
+        );
+        /* The secondary failure, and worth its own issue rather than a footnote
+           on the first: one of these means a model call failed, two mean the
+           store is broken too, and only the second is an emergency. */
+        captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
+        /* `settle` frames the `done` itself, so this is the one path that still
+           has to: the store could not be told, and the reader must still be. */
+        frame("done", { ...comment, ...patch });
+      }
+    } finally {
+      res.end();
     }
   } finally {
     release();
-    res.end();
     await freeDig?.();
   }
 }
@@ -4668,13 +4662,15 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
  * running process can tell a search in flight from one that died with the
  * process that was writing it.
  */
-/* **A map to the attempt holding the key, not a set** (plan 261002h, Sol F7).
-   A revision re-asks the same run id while the superseded attempt may still be
+/* **A count per key, not a set and not one holder** (src/live-keys.ts). A
+   revision re-asks the same run id while the superseded attempt may still be
    unwinding, so two requests can hold one key at once. With a set, the old
    attempt's `finally` deleted the key out from under the newer one, and a sweep
-   could then bury a run this process is still answering. Each request releases
-   the key only if it is still the holder. */
-const searching = new Map<string, symbol>();
+   could then bury a run this process is still answering (plan 261002h, Sol F7).
+   With one holder, an older attempt whose `begin` answered late took the key
+   over and did the same (plan 261005i § C). Each request releases its own
+   hold, and the key is live while any remain. */
+const searching = liveKeys();
 
 /**
  * What this process is searching *in this article*, as bare run ids.
@@ -4750,9 +4746,12 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  */
 /**
  * **A 409 for a paper not yet read through, before a route writes anything** —
- * for the two streamed routes that record a row before they read the article
- * (`search`, `runRefereeCriterion`). Every other caller of `loadArticle`
- * reads it first and gets `NotProcessed` from there. One indexed read.
+ * for the two streamed routes that used to record a row before they read the
+ * article (`search`, `runRefereeCriterion`). Since plan 261005i § D they read
+ * it first, and `loadArticle` would refuse the same paper; this stays ahead of
+ * it because that refusal also carries the paper (`NotProcessed.paper`), which
+ * is a different 409 body from the one these two have always sent. Every other
+ * caller of `loadArticle` gets `NotProcessed` from there. One indexed read.
  */
 async function refuseAPaperNotReadYet(slug: string): Promise<void> {
   if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
@@ -4790,27 +4789,29 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
 
   /* Before `begin`, which writes the run and opens the stream: a paper not yet
      read through is refused as an answer, not stored as a failed search and
-     reported as a fault. `loadArticle` below would refuse it too, inside the
-     stream. Plan 261001m. */
+     reported as a fault. Plan 261001m. */
   await refuseAPaperNotReadYet(slug);
+  /* Read before the row is written, and the same `article` goes to the model:
+     the run is stamped with the hash of the blocks it is answered over, not of
+     whatever is current when `begin` runs (plan 261005i § D, as
+     `runRefereeClaims`). A failed read is an HTTP error with no row. */
+  const article = await loadArticle(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
+    hashBlocks(article.blocks),
     criterion.trim(),
     kind,
     typeof id === "string" ? id : undefined,
     undefined,
     { revises },
   );
-  const key = `${slug}/${run.id}`;
-  const holder = Symbol(run.id);
-  searching.set(key, holder);
+  const release = searching.hold(`${slug}/${run.id}`);
   try {
     const { frame, gone } = sse(res);
     frame("begin", run);
 
     let patch: SearchFinish;
     try {
-      const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
       let model = "";
       /* **The stored run's kind, not the request's.** They agree today —
@@ -4883,9 +4884,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     /* Held from the moment the pending row exists until the answer is stored.
        Releasing it straight after the model call let a GET sweep the row before
        `finish`; registering it outside this finally let a failed SSE setup pin
-       it for the life of the process. Only by the holder: a revision may have
-       taken the key since (see `searching`). */
-    if (searching.get(key) === holder) searching.delete(key);
+       it for the life of the process. Only this request's own hold: a revision
+       may hold the same key (see `searching`). */
+    release();
   }
 }
 
@@ -4912,12 +4913,12 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
  * store does not mean "an answer is coming", because it is written *before* the
  * model call precisely so a crash leaves evidence.
  *
- * A map to the request holding the key, as `searching` is and for its reason.
- * A retry needs an `error` row, but deleting a pending criterion and posting
- * its id again can overlap two requests in this process. The deleted run's
- * answer cannot be stored, and it must not release the replacement's marker.
+ * A count per key, as `searching` is and for its reason. A retry needs an
+ * `error` row, but deleting a pending criterion and posting its id again can
+ * overlap two requests in this process. The deleted run's answer cannot be
+ * stored, and it must not release the replacement's marker.
  */
-const refereeing = new Map<string, symbol>();
+const refereeing = liveKeys();
 
 /** What this process is running *in this article*, as bare ids — `liveRuns`. */
 function liveCriteria(slug: string): Set<string> {
@@ -5091,19 +5092,24 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
-  /* Before `begin`, for `search`'s reason. */
+  /* Before `begin`, for `search`'s reason — and the article is read before it
+     too, so the row carries the hash of the blocks the model is sent. */
   await refuseAPaperNotReadYet(slug);
-  const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
-  const key = `${slug}/${row.id}`;
-  const holder = Symbol(row.id);
-  refereeing.set(key, holder);
+  const article = await loadArticle(slug);
+  const { row, attempt } = await refereeCriteriaStore.begin(
+    slug,
+    hashBlocks(article.blocks),
+    criterion,
+    config,
+    id,
+  );
+  const release = refereeing.hold(`${slug}/${row.id}`);
   try {
     const { frame } = sse(res);
     frame("begin", row);
 
     let patch: CriterionFinish;
     try {
-      const article = await loadArticle(slug);
       let results: RefereeResult[] = [];
       let model = "";
       for await (const event of runCriterionStream({
@@ -5146,9 +5152,9 @@ async function runRefereeCriterion(
       res.end();
     }
   } finally {
-    /* Held from the pending row to the stored answer, and released only by its
-       holder — `search`'s `finally` above says why, for both halves. */
-    if (refereeing.get(key) === holder) refereeing.delete(key);
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
@@ -5172,12 +5178,13 @@ async function runRefereeCriterion(
  * written *before* the model call precisely so a crash leaves evidence. A slug
  * rather than a `slug/id` because there is only ever one run per article.
  *
- * **A map to the request holding the slug, not a set.** One run per article is
+ * **A count per slug, not a set and not one holder.** One run per article is
  * what the *store* keeps; two tabs can each have a request in flight, and both
  * hold this one key. With a set the first to finish deleted it, and a sweep
- * could then bury the newer run while this process was still answering it.
+ * could then bury the newer run while this process was still answering it;
+ * with one holder, so did an older run whose `begin` answered late.
  */
-const pullingClaims = new Map<string, symbol>();
+const pullingClaims = liveKeys();
 
 /**
  * The run a request should ask for, and a 400 saying why not.
@@ -5255,8 +5262,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
      store that read the revision itself could stamp a newer one than the model
      was shown, if the article was re-extracted since the line above. */
   const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
-  const holder = Symbol(slug);
-  pullingClaims.set(slug, holder);
+  const release = pullingClaims.hold(slug);
   try {
     const { frame } = sse(res);
     frame("begin", row);
@@ -5323,9 +5329,9 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
       res.end();
     }
   } finally {
-    /* Held from the pending row to the stored answer, and released only by its
-       holder — `search`'s `finally` above says why, for both halves. */
-    if (pullingClaims.get(slug) === holder) pullingClaims.delete(slug);
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
@@ -5399,7 +5405,14 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
     text: c.criterion,
   }));
 
-  const { frame } = sse(res);
+  /* **`gone` goes to the model call**, since 2026-10-05. Nothing above is
+     stored, so an answer that finishes after the referee has left has nowhere
+     to go: letting it run was a paid call nobody could ever read. Greg's
+     decision on the one stream of the ten that was pure waste —
+     docs/plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md.
+     The gateway records the stopped call as `aborted`, and `mirrorStream` says
+     `READER_LEFT` rather than blaming the model for half an object. */
+  const { frame, gone } = sse(res);
   let chars = 0;
   try {
     for await (const event of mirrorStream({
@@ -5408,6 +5421,7 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
       criteria,
       slug,
       power: powerOf(article),
+      signal: gone,
     })) {
       if (event.type === "delta") {
         chars += event.text.length;
@@ -5420,8 +5434,12 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
        function owns the response and the outer catch never sees the error —
-       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. */
-    captureFailure(err, { route: "referee-mirror", slug });
+       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. A
+       referee who left is not a failure worth an issue, and `frame` below is a
+       no-op on their closed socket. **Asked of the error, not of `gone`:** a
+       provider that fails on its own just before the referee goes reaches here
+       with the signal aborted too, and that one is still a failure. */
+    if (!isRefereeLeft(err)) captureFailure(err, { route: "referee-mirror", slug });
     /* No partial text travels with it, unlike the quiz's. Half of a JSON
        object is not half of an answer: nothing in it has been checked, and a
        remark whose pointers have not been verified is exactly the

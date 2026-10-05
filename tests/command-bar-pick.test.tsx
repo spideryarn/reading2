@@ -498,6 +498,28 @@ describe("a pick that generates, writes or takes words never runs without a seco
     expect(location.search).toContain("find=consciousness");
   });
 
+  /* Plan 261005i: a model's `find` is the same two rows a typed verb draws,
+     and neither runs from the answer — a quick search spends, so it is
+     proposed and pressed. */
+  it("draws a find answer as a quick search and the exact words, and runs neither until Enter", async () => {
+    const searched: string[] = [];
+    const quickSearch = (words: string) => {
+      searched.push(words);
+      return { kind: "close" } as const;
+    };
+    reading({ exec: { ...executor(), quickSearch } });
+    openBar();
+    await ask("is consciousness mentioned anywhere");
+    await answer({ kind: "argument", argument: "find", words: "consciousness" });
+    expect(listed()).toEqual(["Quick search “consciousness”", "Find “consciousness” in this article"]);
+    expect(searched).toEqual([]);
+    expect(location.search).not.toContain("find=");
+    press("Enter");
+    await settle();
+    expect(searched).toEqual(["consciousness"]);
+    expect(location.search).not.toContain("find=");
+  });
+
   it("keeps an alias two glossary entries share as two rows, and opens neither (F3)", async () => {
     reading();
     openBar();

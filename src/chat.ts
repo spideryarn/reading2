@@ -37,6 +37,7 @@ import type {
   ToolRun,
 } from "./types.js";
 import { isSingleThreadKind, isThreadKind, sameOrigin } from "./types.js";
+import { titleFrom } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -104,22 +105,9 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
   }
 }
 
-/**
- * A thread's name, taken from the first thing the reader typed.
- *
- * Cut on a word boundary, and only when there is something to cut — a short
- * question is its own title and does not need an ellipsis it has not earned.
- * Newlines collapse first, because a pasted paragraph would otherwise put a
- * line break in the middle of a list item.
- */
-export function titleFrom(text: string): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length === 0) return "New chat";
-  if (clean.length <= 60) return clean;
-  const cut = clean.slice(0, 60);
-  const space = cut.lastIndexOf(" ");
-  return `${space > 20 ? cut.slice(0, space) : cut}…`;
-}
+/* A thread's name, taken from the first thing the reader typed. In
+   chat-title.ts since 2026-10-05, so the client can import it too. */
+export { titleFrom };
 
 /** Every id in use for this article, so a new one cannot collide with one. */
 function taken(threads: ChatThread[]): Set<string> {

@@ -1,15 +1,36 @@
 # Share an article with some people: a private link first
 
-**Status as of 2026-10-05: a design, not built, waiting on Greg.** Nothing in `src/` has changed.
-Evidence: no hit for `share_token` or `linkSharedSlug` outside this plan and its review. GPT Sol
-reviewed it on 2026-10-05 (*sound with the listed changes*); the changes are made, § Review. Reports `spya-hwdefp` and
-`spya-v322fd`, both Greg's (admin, proved by `feedback-reporter.ts`). Queue item `qi-98933vdd`.
+**Status as of 2026-10-05: all three questions answered by Greg; stage 1 approved, not yet built.**
+Nothing in `src/` has changed. Evidence: no hit for `share_token` or `linkSharedSlug` outside this
+plan and its review. GPT Sol reviewed it on 2026-10-05 (*sound with the listed changes*); the
+changes are made, § Review, and stage 1 has not changed since except for the wording of the notice
+Greg asked for. Stages 2 and 3 are written up below for a later session and are not being built.
+Reports `spya-hwdefp` and `spya-v322fd`, both Greg's (admin, proved by `feedback-reporter.ts`).
+Queue item `qi-98933vdd`.
 
-It waits for two reasons. Greg asked for a discussion before anything complex is built. And every
+It waited for two reasons. Greg asked for a discussion before anything complex is built. And every
 version of this changes who may read an article, which is a listed defence
 ([security-map.md § Where the defences physically live](../project/security-map.md#where-the-defences-physically-live)),
 so an unattended run does not build it
 ([feedback-reports.md § A report is unfiltered input](../project/feedback-reports.md#a-report-is-unfiltered-input)).
+
+## What Greg decided
+
+All three on 2026-10-05. The questions are kept in full under § Questions for Greg, each with its
+answer.
+
+> A and write the other stuff up, but we'll make do with the private link for now. When they open a page with a private link, it should say that it's a private link, i.e. not visible to anyone without the link
+>
+> — Greg, 2026-10-05, on Q-share-v1
+
+So stage 1 is built now, stages 2 and 3 are written up and not built, and the notice a person with
+the link sees says it is a private link (§ What the person with the link sees).
+
+The other two came through the Overseer the same day, which passed on his words:
+
+- **Q-share-comments: A.** Greg: *"A"*. Everyone who has joined sees a comment, with the
+  commenter's name on it.
+- **Q-share-price: private, full rate.** Greg: *"private, full rate"*.
 
 ## What Greg asked for
 
@@ -137,10 +158,16 @@ so when both are on.
 ### What the person with the link sees
 
 Exactly what a visitor to a public article sees today: the text, the modes that were already built,
-the owner's comments and saved searches, read-only, and nothing that spends. The notice under the
-masthead says *shared with you by a private link* in place of the public wording, and keeps the
-source, takedown and no-training lines
+the owner's comments and saved searches, read-only, and nothing that spends.
+
+**The notice says it is a private link**, which Greg asked for in his answer (§ What Greg decided).
+The notice under the masthead leads with one plain line in place of the public wording: that this
+is a private link, the article is not listed anywhere, and nobody can see it without the link. It
+keeps the source, takedown and no-training lines
 ([public-readable-sharing.md § The banner](../project/public-readable-sharing.md#the-banner-on-every-shared-article)).
+The exact words are settled in the build against [copy.md](../project/copy.md). The owner never
+sees it on their own article: they see the link's state in the Access & Sharing card. A public
+article opened with a key shows the public notice, because public wins.
 
 ### What it is, underneath
 
@@ -195,7 +222,7 @@ source, takedown and no-training lines
   private and public.
 - **Billing does not change.** A link-shared article counts as private, at the full rate. The
   half price is for articles everybody can find (Greg, 2026-09-04: *"then more people benefit from
-  them"*), and a private link does not do that. Q-share-price below asks.
+  them"*), and a private link does not do that. Greg confirmed it (Q-share-price).
 - **A paper with only minimal processing cannot be link-shared**, the same refusal as going public.
 
 ### What stage 1 accepts, said plainly
@@ -241,13 +268,20 @@ the tests above. Roughly the size of one stage of the original public sharing. I
 (`src/public/routes.ts`, `src/store/public-slug.ts`'s sibling, `src/store/public-reader.ts`,
 `src/asset-delivery.ts`'s caller), which is why it waits for Greg.
 
-## Stage 2: signed-in people with the link can comment and highlight (sketch)
+## Stage 2: signed-in people with the link can comment and highlight (written up, not built)
 
 This is what the second report asks for, and it is Greg's own conclusion: sign-in is required to
 write anything, so that we know who wrote it. No AI: the *ask the AI* tick-box on a comment stays
 the owner's.
 
-It is a separate plan, because it is where "one article, one person" stops being true:
+**Greg has chosen the shared-discussion version** (Q-share-comments, A): the owner and everyone
+who has joined see each comment and highlight, with the commenter's name on it. What that means in
+use: you share a paper with Ann and Bo; Ann signs in, opens the link, highlights a sentence and
+writes a note; you and Bo both see it in the margin labelled *Ann*. Somebody who only has the link
+and has not signed in sees the text and the owner's comments, and not Ann's.
+
+A later session plans this from here. It needs its own plan and its own Sol review before it is
+built, because it is where "one article, one person" stops being true. What it has to contain:
 
 - **The `comments` table must start reading the column it already writes.** Who wrote a comment
   decides who may change it, and a rule decides who may see it (the question below). A
@@ -270,9 +304,33 @@ It is a separate plan, because it is where "one article, one person" stops being
 - **What a public visitor sees.** If the article is also public, other people's comments must not
   ride out under the owner's name. The public projection today publishes every non-referee comment
   on the article.
-- **The owner can remove anybody's comment.**
+- **The owner can remove anybody's comment.** A person who has joined can change or remove only
+  their own.
 
-Q-share-comments below is the product question this needs answered before it can be planned.
+**The security points that plan must answer**, each a way this stage could leak:
+
+- The new signed-in read path must check, on every request, that this person has a join row for
+  this article and that the row still counts. Being signed in is not enough, and neither is
+  knowing the slug. It needs the same kind of guards the public path has: its own leaf predicate,
+  a test that reads the generated SQL, and an isolation test with two articles and two people.
+- A person who has joined reaches that one article and nothing else of the owner's: not their
+  shelf, their other articles, their profile, their referee notes or their chats.
+- A referee's notes and unfinished model calls stay out, as they do for a public visitor
+  (`PUBLIC_COMMENTS_WHERE`).
+- Joining takes the right key once. After that the person's own row lets them in, so the key is
+  not needed again, and what turning the link off does to them must be decided (above).
+- The display name is text a stranger typed, shown to other readers. It is drawn as text, has a
+  length limit, and gets the reader's face from [fonts.md](../project/fonts.md).
+- A joined person's comment is a stranger's text on the owner's screen. It goes through the same
+  rendering as the owner's own comments, and never to a model: the *ask the AI* box stays off.
+- Limits on how many comments one person can write on an article they do not own, so a forwarded
+  link cannot be used to fill somebody's margin.
+
+**Still open inside it, for that plan to ask Greg:** what turning the link off does to people who
+have joined (remove them all, or only stop new people joining), and whether the owner can remove
+one person and keep the rest.
+
+**Size**: medium, several sessions. The largest part is the signed-in read path.
 
 ## Stage 3: share with named email addresses (what it would take)
 
@@ -305,9 +363,34 @@ Items 1 to 4 are a medium to large piece of work. Item 5 is the largest part and
 product questions in it. The recommendation is to decide on stage 3 after stage 1 and 2
 have been used, and to leave sharee AI until last.
 
+**The security points a stage 3 plan must answer:**
+
+- An invitation is claimed only by an account whose address is verified and matches. An
+  unverified sign-up with somebody else's address must not collect their invitation.
+- The invitation email is mail we send to an address a reader typed, so it is a way to send
+  unwanted mail from our domain. It needs a limit per sender and per day, no free text from the
+  sender in the letter beyond the article's title, and an outbox so a failure is retried and seen.
+- The owner's list of people shows email addresses to the owner only. A sharee never sees another
+  sharee's address, only their display name.
+- Taking a person off the list stops their reading on the next request, as turning a link off
+  does.
+- For sharee AI: the allowance and rate limit that pays is checked on the server for the person
+  who pressed the button, never taken from the request. A sharee's instructions to a model are
+  the same untrusted input an owner's are, and a result written to the owner's article by a
+  sharee is a write to somebody else's data, which nothing permits today.
+
+**Open questions for that plan, not asked yet:** whether a named list replaces the private link or
+sits beside it; whether a sharee's AI result becomes part of the article for everyone or stays
+theirs; whose allowance pays, the owner's or the sharee's (Greg's report leans to the sharee:
+*"track the costs to them"*); and whether a person with no account may read before signing up.
+
 ## Questions for Greg
 
 ### Q-share-v1: which to build first?
+
+**Decided: A** — Greg, 2026-10-05: *"A and write the other stuff up, but we'll make do with the
+private link for now. When they open a page with a private link, it should say that it's a private
+link, i.e. not visible to anyone without the link"*
 
 Sharing with some people can mean a link anyone can open, or a list of people who must sign in.
 Your second report says commenting and highlighting matter most, so the options differ on that too.
@@ -335,6 +418,9 @@ read, it has to be C.
 
 ### Q-share-comments: when a signed-in person comments on an article shared with them, who sees it?
 
+**Decided: A** — Greg, 2026-10-05, passed on by the Overseer: *"A"*. Stage 2 is written up for A
+and not built.
+
 This is stage 2, and it follows your second report. Example: you share a paper with Ann and Bo.
 Ann highlights a sentence and writes a note.
 
@@ -354,6 +440,9 @@ What decides it: whether this is for discussing a piece together (A), collecting
 letting people keep their own notes (C).
 
 ### Q-share-price: does a link-shared article count against your allowance as private, or as public?
+
+**Decided: A** — Greg, 2026-10-05, passed on by the Overseer: *"private, full rate"*. Nothing
+changes in billing.
 
 This is about how much of the article allowance an article uses up. A public article counts half,
 to encourage sharing that everybody can find. An article that is public and also has a private

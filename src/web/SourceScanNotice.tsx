@@ -87,6 +87,15 @@ import type {
 } from "../injection-scan-types.js";
 import type { SourceScanState } from "./useSourceScan.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
+
+/*
+ * The three tables below are read by values the server sent, so each is read
+ * through `ownLabel` (lib/own-label.ts): a copy of the app older than the
+ * scanner meets kinds it has no words for. A kind or a blind spot then shows
+ * as the server's own word. An everyday explanation is left out, because this
+ * copy cannot say what it means; the finding itself stays.
+ */
 
 /** What each trick is, in words a referee reads rather than a property name. */
 const KIND_LABEL: Record<FindingKind, string> = {
@@ -415,12 +424,16 @@ function Examined({
  * it whatever the document says — so this paragraph always has something in it,
  * which is the point: the reason it exists is that an empty list would render as
  * *we looked at everything*.
+ *
+ * **A blind spot this copy has no sentence for is still named**, in the
+ * server's own word. Dropping it would shorten the list, which is the same
+ * false claim in a smaller size.
  */
 function WhatWasNotChecked({ scan }: { scan: HtmlSourceScan }) {
   return (
     <p className="ref-scan-line ref-scan-blind">
       <strong>Not checked:</strong>{" "}
-      {scan.blindSpots.map((spot) => BLIND_SPOT_LABEL[spot]).join("; ")}
+      {scan.blindSpots.map((spot) => ownLabel(BLIND_SPOT_LABEL, spot) ?? plainWords(spot)).join("; ")}
       {scan.unreadableSelectors > 0 ? ` (${scan.unreadableSelectors} of them)` : ""}. Nor layering,
       masks, or anything a browser would have to draw to decide.
     </p>
@@ -428,6 +441,7 @@ function WhatWasNotChecked({ scan }: { scan: HtmlSourceScan }) {
 }
 
 function Finding({ finding }: { finding: ScanFinding }) {
+  const ordinary = finding.ordinary === undefined ? undefined : ownLabel(ORDINARY_LABEL, finding.ordinary);
   return (
     /* `data-` attributes so tests/source-scan-notice.test.tsx can assert the
        *order* of the rows rather than only their presence — rule 3 is about
@@ -438,10 +452,8 @@ function Finding({ finding }: { finding: ScanFinding }) {
       data-kind={finding.kind}
       data-ordinary={finding.ordinary ?? "none"}
     >
-      <span className="ref-scan-kind">{KIND_LABEL[finding.kind]}</span>
-      {finding.ordinary !== undefined && (
-        <span className="ref-scan-tag">{ORDINARY_LABEL[finding.ordinary]}</span>
-      )}
+      <span className="ref-scan-kind">{ownLabel(KIND_LABEL, finding.kind) ?? plainWords(finding.kind)}</span>
+      {ordinary !== undefined && <span className="ref-scan-tag">{ordinary}</span>}
       <span className="ref-scan-where">{finding.where}</span>
       <q className="ref-scan-text">{finding.text}</q>
       <span className="ref-scan-detail">{finding.detail}</span>

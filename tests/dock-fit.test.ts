@@ -74,7 +74,8 @@ import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
  *
  * **Five since 2026-10-02**: rung 4 went in below the old last rung so the
  * bar's quick-search box outlives the labels (plan 261002h) — rung 3 keeps a
- * compact box, and only rung 4 turns it into the ⚡.
+ * compact box, and only rung 4 gives it up (for a ⚡ until 2026-10-05, for
+ * nothing since — plan 261005h).
  */
 const NEED = [1425, 1330, 814, 600, 557];
 
@@ -155,7 +156,7 @@ describe("the bar chooses the widest rung that fits", () => {
 
   /* Rung 4, 2026-10-02 (plan 261002h): the search box is the last thing to
      go — after every label — so a laptop still has a box to type in. */
-  it("turns the search box into the ⚡ only once every label has gone", () => {
+  it("gives up the search box only once every label has gone", () => {
     dock.setWidth(580);
     expect(chooseDockFit(dock.el, 0)).toBe(4);
     expect(wearing(dock.el)).toBe(4);
@@ -299,7 +300,7 @@ describe("the stylesheet backs the ladder", () => {
    * **Rung 4 is rung 3 and then some** (2026-10-02, plan 261002h). It went in
    * at the bottom so that the quick-search box could outlive the labels: rung
    * 3 drops every label and keeps a compact box, rung 4 does all of that and
-   * turns the box into the ⚡. A rung-3 rule missing its rung-4 twin would put
+   * gives the box up (for nothing, since 2026-10-05). A rung-3 rule missing its rung-4 twin would put
    * a label (or the wide padding) *back* on a narrower bar, so every
    * `.dock-fit-3` selector must be in the same selector list as its
    * `.dock-fit-4` twin — and the check is fed the broken shape to prove it
@@ -441,7 +442,7 @@ describe("the stylesheet backs the ladder", () => {
       .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
     expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
-    /* Rung 4 (2026-10-02) is rung 3 plus the search box gone to the ⚡, so it
+    /* Rung 4 (2026-10-02) is rung 3 less the search box, so it
        is "the rung below" too. */
     expect(
       shows.some((sel) => sel.includes("dock-fit-3") || sel.includes("dock-fit-4")),
