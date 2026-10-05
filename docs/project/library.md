@@ -929,6 +929,11 @@ Published the note on the bottom row says the date as well; that repeat is known
 ([261005e](../plans/261005e-an-end-of-article-mark-and-the-publication-date-on-the-shelf-card.md)).
 The Table view is unchanged: its Published column still starts hidden.
 
+**Each `·` belongs to the fact before it.** On a phone the line wraps, and it wraps between facts.
+The dot is drawn after each fact but the last, so the upper line ends with a dot and the lower one
+starts with a fact. It was in front of each fact until 2026-10-05, and a wrapped line started with
+a dot. The cards on `/read/public` do the same.
+
 ### Three rules a browser cannot check
 
 The sort moved from the server into the client, and three things came with it that look right on
@@ -1016,6 +1021,13 @@ where the argument stands at the end of part one ([granularity-zoom.md § The ar
 so using it here would put a sentence about the opening where the reader expects a sentence about the
 article — and it would look completely right. The fallbacks are `summary` and then Readability's
 `excerpt`, both of which at least mean the whole thing; failing those, no blurb at all.
+
+**Under the meta line, the topics the article is in**: up to four pills, or three and `+N`. They
+are labels, and part of the card's link —
+[shelf-terms.md § On each card and table row](shelf-terms.md#on-each-card-and-table-row). The table
+has the same line under each title. While the shelf is expected to have topics, every card holds
+that line's height, blank until its pills arrive and blank for an article in no topic, so the pills
+landing does not move the shelf.
 
 The reading time comes from [`src/reading-time.ts`](../../src/reading-time.ts), which exists so that
 the card and the masthead cannot drift. They run on opposite sides of the wire, so nothing would ever

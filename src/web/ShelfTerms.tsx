@@ -28,16 +28,15 @@
  * The counts come in already computed by the one formula in shelf-narrow.ts,
  * and a click goes back up as a key. docs/project/shelf-terms.md.
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
-import type { PaperTopic } from "./PaperCard.js";
+import type { ArticleTopics } from "./article-topics.js";
 import { libraryTopicsViewParam } from "./params.js";
 import { availableTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
-import { topicHueStops } from "./topic-colour.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 /** How many chips the collapsed row draws, besides any chosen ones. */
@@ -45,6 +44,17 @@ export const COLLAPSED_CHIPS = 12;
 
 /** Below this many distinct works the server chooses no topics at all. */
 export const MIN_WORKS = 8;
+
+/**
+ * **Whether a shelf of this many article rows might have topics**, asked
+ * before the answer says. Rows are only an upper bound on distinct works
+ * (`ShelfTermsLoading` below says why), so `true` is "might", and `false` is
+ * "certainly not". One copy, for the placeholder row and for the room each
+ * card holds for its pills (useShelfTerms.ts § `topicsExpected`).
+ */
+export function mightHaveTopics(articleCount: number): boolean {
+  return articleCount >= MIN_WORKS;
+}
 
 const QUIET_BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
@@ -136,7 +146,7 @@ function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
  * collapse after the answer if they are copies or no useful topics survive.
  */
 export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
-  const mightHaveTopics = articleCount >= MIN_WORKS;
+  const ghostPills = mightHaveTopics(articleCount);
   /* The chooser returns at most one topic per distinct work. More than twelve
      article rows is therefore necessary — though not sufficient — for the
      real row's conditional "All N topics" button. */
@@ -152,7 +162,7 @@ export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
         <LoaderCircle className="cmt-spinner" size={13} />
         Loading topics…
       </span>
-      {mightHaveTopics && (
+      {ghostPills && (
         <>
           {GHOST_PILL_REM.map((rem, i) => (
             <span
@@ -188,6 +198,7 @@ export function ShelfTerms({
   entryOf,
   inScope,
   archived,
+  articleTopics,
 }: {
   data: LibraryTermsResponse;
   /** `|visible ∩ its articles|` per key — shelf-narrow.ts § topicCounts. */
@@ -206,36 +217,21 @@ export function ShelfTerms({
   inScope: ReadonlySet<string>;
   /** Whether the archive is in scope, which the tooltip names. */
   archived: boolean;
+  /**
+   * Each topic's hue and each article's topics, worked out by the page from
+   * `data.terms` (article-topics.ts) and shared with the pills on each card,
+   * so the two cannot disagree and the colouring runs once per answer.
+   */
+  articleTopics: ArticleTopics;
 }) {
   const [all, setAll] = useState(false);
   const [view, setView] = useQueryState("topicsView", libraryTopicsViewParam);
   const { terms, pending, scope } = data;
-  /* Selection, search and the two views all rerender this component without
-     changing the server answer. Keep the O(topics² × members + topics³)
-     projection tied to that answer, while still calling the hook on the empty
-     early-return path below. */
-  const hues = useMemo(() => topicHueStops(terms), [terms]);
-  /* Every topic each article is in, for its paper card: over **every** topic
-     the server chose, not only those drawn, in rank order with the hue each
-     already wears — so a card names the same topics however the view is
-     narrowed (plan 261002f). */
-  const topicsBySlug = useMemo(() => {
-    const by = new Map<string, PaperTopic[]>();
-    for (const t of terms) {
-      const topic: PaperTopic = {
-        key: t.key,
-        label: t.label,
-        slot: hues.get(t.key) ?? 0,
-        ...(t.granularity !== undefined ? { voice: "ai" as const } : {}),
-      };
-      for (const a of t.articles) {
-        const list = by.get(a.slug);
-        if (list) list.push(topic);
-        else by.set(a.slug, [topic]);
-      }
-    }
-    return by;
-  }, [terms, hues]);
+  /* Each topic's hue, and every topic each article is in for its paper card:
+     the O(topics² × members + topics³) projection, memoised by the page on
+     the server answer (article-topics.ts) so that selection, search and the
+     two views rerender this component without redoing it. */
+  const { hues, bySlug: topicsBySlug } = articleTopics;
 
   /* What the row is still waiting for. On the phrase row, the program's
      reading. On a model-named row that reading is not what the topics come

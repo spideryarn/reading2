@@ -81,8 +81,14 @@ function factsOf(entry: LibraryEntry): string[] {
   const line = host.querySelector("[data-shelf-facts]");
   if (!line) throw new Error("the card has no facts line");
   return [...line.querySelectorAll("[data-shelf-fact]")].map((el) =>
-    (el.textContent ?? "").replace(/^·/, "").trim(),
+    (el.textContent ?? "").replace(/^·|·$/g, "").trim(),
   );
+}
+
+/** Each fact's whole text, separator included, as the card drew it. */
+function rawFactsOf(entry: LibraryEntry): string[] {
+  factsOf(entry);
+  return [...host.querySelectorAll("[data-shelf-fact]")].map((el) => el.textContent ?? "");
 }
 
 describe("the publication date on a shelf card", () => {
@@ -133,5 +139,40 @@ describe("the publication date on a shelf card", () => {
     delete paper.siteName;
     expect(factsOf(paper)).toEqual(["2011"]);
     expect(host.querySelector("[data-shelf-fact]")?.textContent).toBe("2011");
+  });
+});
+
+/**
+ * **The separator belongs to the fact before it.** Each fact is one flex item,
+ * so whatever a fact starts with is what a wrapped line starts with: a dot in
+ * front of each fact put a "·" at the start of the second line on a phone
+ * (queue item `qi-gtftnpre`, plan 261005h § E). jsdom lays nothing out, so
+ * this pins where the dot is in the markup; that a wrapped line then starts
+ * with a fact is the browser's doing.
+ */
+describe("the separators on a shelf card's facts line", () => {
+  const entry: LibraryEntry = { ...BARE, publishedYear: 2017 };
+
+  it("puts no separator in front of a fact", () => {
+    const raw = rawFactsOf(entry);
+    expect(raw.length).toBe(5);
+    for (const fact of raw) expect(fact.trimStart().startsWith("·"), fact).toBe(false);
+  });
+
+  it("ends every fact but the last with one", () => {
+    const raw = rawFactsOf(entry);
+    for (const fact of raw.slice(0, -1)) expect(fact.trimEnd().endsWith("·"), fact).toBe(true);
+    for (const fact of raw) expect(fact.match(/·/g)?.length ?? 0, fact).toBeLessThanOrEqual(1);
+  });
+
+  it("gives the last fact none", () => {
+    expect(rawFactsOf(entry).at(-1)).toBe("60 blocks");
+  });
+
+  it("gives a single fact none", () => {
+    const paper: LibraryEntry = { ...BARE, processing: "minimal", publishedYear: 2011 };
+    delete paper.byline;
+    delete paper.siteName;
+    expect(rawFactsOf(paper)).toEqual(["2011"]);
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "title_original" text;

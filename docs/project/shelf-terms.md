@@ -412,6 +412,65 @@ strengthen an apparent overlap that the chooser treats as one work.
 so three copies of one piece are named once. Only the naming is deduplicated; every count stays
 physical ([§ The count](#the-count-one-formula)).
 
+## On each card and table row
+
+> On the logged in home page, for each article show its topic-pills. If there's lots, then maybe
+> only show the first three.
+>
+> — Greg, 2026-10-04 (`spya-mtajjy`)
+
+Each article on the signed-in shelf shows the topics it is in, on a line of its own under its meta
+line (cards) or its byline line (table). Plan
+[261005a](../plans/261005a-topic-pills-on-each-shelf-card-and-table-row.md).
+
+- **Up to four are all shown; from five, the first three and `+N`.** A `+1` would take about the
+  room of the pill it hides. The order is the row's: broad first.
+- **Labels, not controls.** A pill wears the row's marks (hue dot, `›`, the model's face) with no
+  count. On a card, pressing it opens the article like the rest of the card; that includes `+N`,
+  because nothing on the line is lifted above the stretched link. In the table the labels do
+  nothing, and the title remains the link. Whether a pill should filter when pressed is an open
+  question for Greg, in the plan.
+- **In the table they are running text, not pills**: the dot and the label with no border
+  (`plain`). The Article column is about 250px wide, where bordered pills stacked one to a line and
+  made a row taller than its card.
+- **Over every topic the server chose**, as the paper card's are, so a card's pills do not change
+  as the view narrows. Nothing is asked of the server that the row did not already ask.
+- **The line's height is held while topics are expected**, so the pills landing does not move the
+  shelf (plan
+  [261005h](../plans/261005h-five-small-ui-fixes-from-the-queue-search-copy-remember-chips-shelf-pills-shift-marginalia-yearless-date-shelf-facts-dot.md)
+  § C). While they are expected, every card and table row draws the line: with pills when the
+  article has topics, and blank when it has none or none yet. Topics are expected when
+  (`topicsExpected` in [`useShelfTerms.ts`](../../src/web/useShelfTerms.ts)):
+  - an answer has at least one topic; or
+  - there is no answer yet, or the answer has no topics and is not the last word (articles still
+    being read, or the model still choosing), and the shelf has at least eight article rows. That
+    is the test the placeholder row uses for its outline pills (`mightHaveTopics`).
+
+  They are not expected after a settled answer with no topics, after a failed request, or while
+  waiting on a shelf under eight rows. Then no line is drawn.
+- **An article in no topic keeps the blank line while the shelf has topics.** Taking it away when
+  the answer settles would move the card a second time. The cost is that such a card is one line
+  taller than it needs to be.
+- **The blank line is blank.** No outline pills and no shimmer: it claims nothing about an article
+  that may be in no topic. It is hidden from a screen reader.
+- **Each form holds its own height**, set as a minimum on the line itself, so a blank line and a
+  line of pills are one element with the same classes. A card's is one pill tall (the 1rem text
+  line, the pill's padding and its border); the table's is one 1rem line of running text. The
+  arithmetic is beside the pill's classes in
+  [`ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx).
+- **What can still move.** Pills that wrap to a second line grow the card by that line. Eight rows
+  that are copies of fewer works hold the line and then lose it when the answer settles with no
+  topics. A shelf under eight rows cannot have topics, so nothing is held for it. Switching the
+  archive in drops the line until the archived list has loaded.
+- **The `+N` cannot reveal the hidden topics on the card.** The rest are in More detail.
+- **Not on the Include public section's cards**, which are other people's articles and not in this
+  reader's tree, and not on `/read/public`.
+
+The page works out each article's topics once per answer (`articleTopics`) and gives the same value
+to the Topics row and, through a context, to the cards and cells. The card and the table take the
+pills as a slot rather than importing them, because `ShelfEntry.tsx` and `library-columns.tsx` are
+shared with the lazy `/admin` and `/design` routes.
+
 ## Touch
 
 The shared `Tooltip` opens on hover and focus, not on a tap, and a chip cannot both toggle and hold a
@@ -467,6 +526,8 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
 | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
 | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
 | the More-detail rows: swatch, chip, count bar, links with the paper card | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
+| each topic's hue and each article's topics, once per answer; how many pills a card shows | [`src/web/article-topics.ts`](../../src/web/article-topics.ts) |
+| the pills on a card and a table row, and the context they read | [`src/web/ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx) |
 | a topic's colour from the articles it shares with the others | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 

@@ -1,0 +1,69 @@
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index 9db1c3231..e9c6c5606 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -1432,6 +1432,23 @@ export function Conversation({
+           const atBottom =
+             empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+           const h = hold.current;
++          /* **A clamp is not the reader.** When the panel grows taller under a
++             hold (the "Latest" pill leaving as a question is sent, the composer
++             shrinking back to one row) the room is briefly too short and the
++             browser pulls `scrollTop` down to the new maximum. If anything
++             forced a layout first, this event arrives *before* the resize
++             observer, and recording it as the reader's choice left a follow-up
++             question 36px low (the second browser pass of plan 261005f). Its
++             signature cannot be a reader: above where the hold last was, and
++             exactly at the end of what there is to scroll. */
++          if (
++            h?.placed &&
++            el.scrollTop < h.top - 0.5 &&
++            el.scrollHeight - el.clientHeight - el.scrollTop < 1
++          ) {
++            settle();
++            return;
++          }
+           /* `settle` writes scrollTop to place or compensate a hold, and the
+              browser reports that write through this same event. Only a
+              different position is evidence that the reader moved. */
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index d887ec9e4..3796bf04b 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -467,6 +467,12 @@
+   flex: 1;
+   min-height: 0;
+   overflow-y: auto;
++  /* The transcript decides where it is itself (ChatPanel.tsx § A streamed
++     answer stays where it starts), and a browser's own scroll anchoring, where
++     there is one, is a second opinion it cannot see: in Chrome it moved a
++     just-placed question 31px up the moment the first words replaced
++     "thinking…". Safari has none, so this also makes the two agree. */
++  overflow-anchor: none;
+   padding: 0.7rem;
+   /* The band is narrow and the turns are prose, so they get the reading face
+      rather than the UI one — an answer set in the interface font reads as a
+diff --git a/tests/chat-streamed-answer-stays.test.tsx b/tests/chat-streamed-answer-stays.test.tsx
+index 6c2e8b0fb..3cd3e0a52 100644
+--- a/tests/chat-streamed-answer-stays.test.tsx
++++ b/tests/chat-streamed-answer-stays.test.tsx
+@@ -420,6 +420,19 @@ describe("a typed answer in a panel of fixed height", () => {
+     expect(roomOf(scroller())).toBe(310);
+   });
+ 
++  it("puts the question back when the clamp's scroll event arrives before the observer", () => {
++    taken = 36;
++    paint(EARLIER);
++    heights = [100, 800, 60, 30];
++    paint(asked(""));
++    taken = 0;
++    act(() => {
++      scroller().dispatchEvent(new Event("scroll", { bubbles: true }));
++    });
++    expect(scroller().scrollTop, "a clamp is not the reader's choice").toBe(QUESTION_TOP);
++    expect(roomOf(scroller())).toBe(310);
++  });
++
+   it("does not shrink the room out from under a reader who scrolled down into it", () => {
+     paint(EARLIER);
+     heights = [100, 800, 60, 30];

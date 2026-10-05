@@ -203,6 +203,8 @@ export const REVISION_CARRY_POLICY: Record<
 
   // Stage 2's reading of the piece.
   title: "carry",
+  /* With the title it is the original of: a draft that inherits one inherits both. */
+  titleOriginal: "carry",
   byline: "carry",
   // The byline's structured twin, written by the same step (plan 260929d).
   authors: "carry",
