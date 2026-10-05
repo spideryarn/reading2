@@ -131,3 +131,10 @@ browser.
 
 `feedback.md` § the Earlier tab (the label is now a link), `marginalia.md` if it describes the
 card's words.
+
+## Greg's answers, 2026-10-06
+
+- **[Q-whose-reports]** — nobody else's report was seen; the line was caution. *"no, I'm just being
+  cautious"*. Nothing to change: the privacy check above stands.
+- **[Q-earlier-link-target]** — **B**: the link also carries the paragraph (`at=spya-…`), so it opens
+  where the report was filed. *"B whatever's simplest"*. Queued.
