@@ -1730,13 +1730,17 @@ export function pdfPagesIncomplete(pages: readonly number[]): ReaderFacingFailur
  * `blocked` rather than `bug`, matching the exception's own declared kind and
  * for its stated reason — a request that cannot pass a size boundary, where the
  * reader's move is a shorter piece.
+ *
+ * It said until 2026-10-05 that "reading a long piece in sections is not built
+ * yet". Structure and labels do read one in sections now and no longer end
+ * here; every other `budgetFor` caller still can, so the message stays and the
+ * clause went — docs/plans/261005c-long-document-follow-ups-stale-sentence-run-codex-overwrite-guard-breadcrumb-paragraph-source-guess-page-cap.md § (e).
  */
 export const ARTICLE_TOO_LONG_FOR_ONE_PASS: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "This article is longer than this step can handle in one go, and reading a long piece in " +
-    "sections is not built yet. Trying again will not help — the article is the same length each " +
-    "time — but a shorter piece will work. [ai-too-long]",
+    "This article is longer than this step can handle in one go. Trying again will not help — " +
+    "the article is the same length each time — but a shorter piece will work. [ai-too-long]",
 };
 
 /**

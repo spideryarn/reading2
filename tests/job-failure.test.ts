@@ -234,13 +234,13 @@ describe("the card the reader actually sees", () => {
           name: "structure",
           label: "Building the structure",
           status: "error",
-          error: "This article has to be processed in sections, which is not built yet.",
+          error: "This article is longer than this step can handle in one go. [ai-too-long]",
         },
       ],
     };
     const html = cardHtml(job);
     expect(html).not.toContain("Retry");
-    expect(html).toContain("processed in sections");
+    expect(html).toContain("longer than this step can handle");
   });
 });
 
