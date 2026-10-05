@@ -190,6 +190,8 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
   rather have the 80-word one. The recommendation is to leave Brief alone.
   **Decided: slightly longer** — Greg, 2026-10-05: "maybe Brief could be ever so slightly longer
   but not much". Dispatched to session `brief-slightly-longer`.
+  **Not built yet: blocked on the measurement.**
+  [§ A slightly longer Brief, blocked](#a-slightly-longer-brief-blocked-2026-10-05).
 
 ## Ledger
 
@@ -232,3 +234,38 @@ is [261005a](../investigations/261005a-summary-length-bands-measured.md); in sho
 - A paid run was lost: one unreadable article in a batch of four crashed the probe before the
   other three were written to disk.
 - $6.96 of model calls across the 28 recorded writes, and the lost run on top.
+
+### A slightly longer Brief, blocked (2026-10-05)
+
+Session `brief-slightly-longer` was asked to make Brief a little longer and to decide by a small
+blind measurement whether that is for every piece or only the long and book bands. **Nothing was
+built or changed: Brief's prompt is still `/9` byte for byte.** The measurement needs paid writes,
+and the dev OpenRouter key had none left: `GET /api/v1/key` answered `limit: 300`,
+`limit_remaining: 0`, `usage_monthly: 300.007`, at about 17:10 on 2026-10-05. No call was made
+and nothing was spent. An unmeasured prompt change was not shipped, as briefed.
+
+What the files already here say, free, for whoever picks it up:
+
+- **Today's Brief is not 80 words.** Asked for about 80 and never more than 130, the eleven
+  `len0a|len0b` writes came back at 88 to 113 words, about 97 on average
+  ([261005a § Length](../investigations/261005a-summary-length-bands-measured.md#length)). So
+  "about 80 to about 100" describes the ask, and the words on the page are already near 100.
+- **The model runs over the ask at every size tried.** Asked for 60 it wrote 71 to 94; for 110
+  (the long article) 139 and 112; for 140 (the book) 159 and 145, and those two were the ones
+  judged padded. So an ask of 100 would likely write about 115 to 125, which is close to the
+  long band's banded Brief that the judge did not prefer.
+- **So the arms worth paying for are small**: an ask of about 90 and one of about 100 (each with
+  its "never more than" moved by the same amount), on the same six pieces, two writes each,
+  against `len0a|len0b` as the before side and `len0a` against `len0b` as the control. Same
+  judge setup as round one, with the two short essays in full so an omission can be checked.
+  Judge every band, then read the long and book pairs apart: that is what answers "every piece
+  or only the long ones".
+- **What it would cost**: the probe writes both levels, so each write is a whole press. Round
+  one's 28 writes were $6.96, and the book is most of it. One new arm over six pieces twice is
+  about $3; two arms about $6, or about $3.50 if the second arm is run on the long article and
+  the book alone.
+- **To build when measured**: `BRIEF_LENGTH` in `src/simple-summary.ts` (or a per-band table like
+  `FULLER_LENGTH` if only the long bands move), `SIMPLE_PROMPT_VERSION` to `/10`, the pinned
+  Brief hash in `tests/simple-two-levels.test.ts` and the "Brief the same in every band"
+  assertion in `tests/simple-length-bands.test.ts`. `SIMPLE_LIMITS.brief` (240 words) already
+  clears it.
