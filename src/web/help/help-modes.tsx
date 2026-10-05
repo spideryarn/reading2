@@ -786,6 +786,18 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             page. Often no page says, and the row stays as it was.
           </li>
           <li>
+            Some rows also say something like <em>cited 357 times · Crossref</em>. That one is a real
+            count, not the model’s view: Crossref is the registry that issues most DOIs, and where the
+            article gives a DOI that Crossref holds, this is its own number for the work. Point at the
+            words, or tap them, for the day we read it; it is not refreshed after that. Crossref only
+            counts citations from works whose publishers have sent it their reference lists, so the
+            number is usually lower than Google Scholar’s, and it should not be compared across
+            fields or between an old work and a new one. <em>no citations recorded</em> means
+            Crossref has none on file, not that nobody has cited the work. Most rows have no count,
+            because most works are cited without a DOI. It sits beside influence and does not change
+            the order or what the slider hides.
+          </li>
+          <li>
             <strong>first cited</strong> jumps to where the article first cites it.{" "}
             <em>only in the references</em> means the article lists it but never cites it in the text.
           </li>

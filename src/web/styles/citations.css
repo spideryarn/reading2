@@ -118,9 +118,11 @@
    in the line's own faint ink and UI face, kept on one line so it wraps as a
    piece. A button so the explanation can be opened by touch or keyboard too.
    *from the web*, beside a bar whose number Dig deeper read off a page, is the
-   same thing said the other way round, and drawn the same. */
+   same thing said the other way round, and drawn the same. So is *cited 357
+   times · Crossref*: a count beside the bars, with its day in the card. */
 .cite-influence-unknown,
-.cite-influence-web {
+.cite-influence-web,
+.cite-cited-by {
   padding: 0;
   border: 0;
   background: none;

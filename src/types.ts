@@ -4522,8 +4522,26 @@ export interface RegistryWork {
   venue?: string;
 }
 
-/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
-export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
+/**
+ * **Crossref's count of the works that cite this one, and when it was read**
+ * (plan 261005i): `is-referenced-by-count`, a dated snapshot and never a live
+ * number. Only ever beside a Crossref record. `readAt` is ISO, by the
+ * database's clock.
+ */
+export interface RegistryCitedBy {
+  count: number;
+  readAt: string;
+}
+
+/**
+ * Citations' registry field: a record whose title agrees, or the fact that it
+ * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
+ * a conflict's record is another work, whose count is not this row's, and
+ * Debate's rows do not ask.
+ */
+export type CitationRegistry =
+  | ({ kind: "found"; citedBy?: RegistryCitedBy } & RegistryWork)
+  | { kind: "conflict"; source: RegistrySource };
 
 /**
  * How a cited work was matched to an article here, strongest first. `title` is

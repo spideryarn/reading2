@@ -17,6 +17,7 @@ The design, the review that reshaped it and the real runs are
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
 gives them, more than two authors shortened to *First et al.*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+for some works a real citation count (§ [Crossref's citation count](#crossrefs-citation-count)),
 where the link came from, and **first cited**, a jump to the passage
 ([`BlockRef`](../../src/web/BlockRef.tsx)). A work the article names only in its bibliography says
 *only in the references* and jumps there. § [Which citation, and whose
@@ -89,6 +90,50 @@ and the row says the article's identifier points to a different title. The by-li
 the article gives no authors or no year, the registry's are drawn, marked *from Crossref* / *from
 DataCite*. A visitor's row carries a found record, never a conflict. Outside the stamp and the
 prompt, and the step never fails for it ([`citation-registry.ts`](../../src/citation-registry.ts)).
+
+### Crossref's citation count
+
+A row whose DOI Crossref holds also says how many times the work has been cited, as the number
+itself: *cited 357 times · Crossref*. It was [Q-crossref-count] in
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md),
+and the answer was:
+
+> Q-crossref-count yes
+>
+> — Greg, 2026-10-04
+
+The plan is
+[261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md).
+
+- **Where it comes from.** Crossref's `is-referenced-by-count`, in the answer the registry lookup
+  above already fetches. No extra request, no model, no press.
+- **Which rows.** Only a `found` record from Crossref: the titles agreed, so the count is this
+  work's. A *conflict* carries none (that DOI is another work), and so does a DataCite record,
+  which is what every arXiv id resolves to. Most rows of most lists therefore have no count.
+- **What the row says.** The count in words beside the bars, with thousands separators; *cited
+  once* for one; and for zero ***no citations recorded · Crossref***, because Crossref counts only
+  citations from works whose publishers deposit their reference lists, so zero is a statement about
+  its records. The card on those words (hover, focus or tap, as *influence unknown* has) gives the
+  day it was read and that caveat. The day is in the card and not on the line: with it the piece
+  would be wider than the band at its narrowest. Owner and visitor alike: it is public data about
+  a public DOI.
+- **It is a dated snapshot.** The day is the day Crossref was asked, kept beside the count
+  (`citedBy: { count, readAt }` on the row's `registry`). Nothing refreshes it on read; a list made
+  again from Metadata gets the registry cache's answer, which is up to 180 days old.
+- **It is alongside influence, not instead of it.** It is never drawn as a bar, because nothing
+  maps a count onto 0–1, and it changes neither the threshold nor any order. Whether the bar should
+  change now that counts exist is still [Q-bar-on-relevance] in 261003m.
+- **An existing list gets counts when it is made again**, as every other registry fact does. The
+  first such run asks Crossref once more about each DOI it had cached before 2026-10-05, because
+  those answers were stored without a count. A failed ask leaves the record due again, so a
+  Crossref outage can make a cached record unavailable to import, Debate and *Dig deeper* too until
+  one ask succeeds (`freshSql` in [`pg-bibliographic.ts`](../../src/store/pg-bibliographic.ts) has
+  the rule, and the `cited_by_count_read_at` column's comment in
+  [`schema.ts`](../../src/db/schema.ts) says why it needs a second timestamp).
+
+`readCitationRegistry` in [`registry-work.ts`](../../src/registry-work.ts) is the one reader, for
+the panel, the public projection and chat: it keeps a count only beside a Crossref record, a whole
+number, with a moment that parses, and otherwise drops the count and keeps the record.
 
 ## The one safety property
 
@@ -301,7 +346,7 @@ available on a list that had none.
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's
-memory, not a citation count, and what *influence unknown* means, and, **only when the model reported it**, that the list was capped at
+memory, not a citation count, and what *influence unknown* means, whose count *cited 357 times · Crossref* is, and, **only when the model reported it**, that the list was capped at
 80; it also carries the work count and provenance. The two notes were a foot pinned under the list
 until Greg, 2026-09-30 (`spya-nca765`), then briefly lived in the order row; the count was in that
 row too, shown only outside *prioritised*, whose threshold row already says "n of m"
@@ -663,9 +708,9 @@ the press's own search and this call on 13 works, most of them well known: **non
 For 10 no page's title named the work, so no call was made; for 3 the work's own page came back
 and said nothing about its standing, because a search for a work returns the work, and an abstract
 does not say how famous it is. So today *Dig deeper* leaves influence as it was nearly every time.
-A source that does say, such as a registry's citation count, is the open question in
-[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md);
-the numbers are in
+A source that does say is a registry's citation count, and since 2026-10-05 a row with a DOI shows
+Crossref's beside the bars (§ [Crossref's citation count](#crossrefs-citation-count)); it does not
+fill in influence, which stays the model's. The probe's numbers are in
 [261003f](../investigations/261003f-citations-influence-unknown-unless-confident-before-and-after.md).
 
 **The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
@@ -768,7 +813,10 @@ behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is 
 (§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
 is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
 what that means. The page's words and its address are not in the row. `loadCitations` attaches the
-owner's kept answers, so the tool needed no wider read.
+owner's kept answers, so the tool needed no wider read. A row with Crossref's citation count says
+it after the scores, *cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the
+number and the day `readCitationRegistry` let through, and our words outside the fence say what
+the count leaves out.
 
 ## Making it again
 
@@ -795,7 +843,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it an 
 button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; a real citation count from a registry (*Dig deeper*'s influence is an AI estimate from a web page, not a count; Crossref's `is-referenced-by-count` for a row with a DOI is still deferred, [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; folding Citations into Debate as a sub-mode, and placing a cited work in the debate's threads (a proposal awaiting Greg, [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; folding Citations into Debate as a sub-mode, and placing a cited work in the debate's threads (a proposal awaiting Greg, [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 

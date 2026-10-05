@@ -179,6 +179,16 @@ write-up says so. It goes in the same `docs/investigations/` note as stage 1's n
 *cited 4,512 times, Crossref*) instead of, or beside, a 0–1 bar? It is free, sourced, and needs no
 press. Recommend yes, as a follow-up, shown as the count itself rather than squeezed onto a bar.
 
+**Answered.**
+
+> Q-crossref-count yes
+>
+> — Greg, 2026-10-04
+
+Built as
+[261005i](261005i-citations-show-crossref-citation-count-with-source-and-date-read.md): the count
+itself, beside the bars, with its source and the day it was read.
+
 **[Q-bar-on-relevance]** Should the threshold bar use relevance alone for every row, leaving
 influence as its own order and its own bar on the row? Then no row's place under the bar depends on
 a number from memory, and unknown needs no special case. It would change which rows the default view

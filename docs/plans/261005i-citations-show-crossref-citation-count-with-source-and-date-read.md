@@ -197,4 +197,18 @@ the implementer greps for any other place that strips a doi.org prefix by hand a
 
 ## Review log
 
-(filled in as the reviews arrive)
+### GPT Sol's plan review
+
+[The review](261005i-citations-crossref-count-plan-review-sol.md), of commit `d6673bebc`: **build
+as written**, no P0 or P1, seven findings, all taken. **Where a row below differs from the text
+above, the row wins.**
+
+| | finding | what the build does |
+|---|---|---|
+| F1 (P2) | `write` must say "stored" for a DataCite or not-found answer too, and `memoryBibliographicStore` in `src/backfill-registry-facts.ts` is a production store, not a test fake | `write` returns the stored `fetched_at` for every successful write and null only for a lost claim; `citedByCountReadAt` is set from it only on a Crossref `found`; the memory store follows, on its injected clock |
+| F2 (P2) | `readCitationRegistry` would pass a well-formed `citedBy` on a DataCite record, labelled Crossref | the reader keeps `citedBy` only when `source` is `crossref`; a test has a DataCite record keep its metadata and lose the count |
+| F3 (P2) | a safe integer can exceed Postgres `integer`, and the failed write would lose the whole record | the parser keeps a count only up to 2,147,483,647; above that is no count and the record stays |
+| F4 (P2) | "once" is one *successful* refresh: a failed refresh leaves the row eligible, and the refresh can first happen in import, Debate or *Dig deeper* | said so here. Other callers' output shapes are unchanged; a cached answer can be `unavailable` during a Crossref outage until one refresh succeeds. Tests: failed refresh then retry, Crossref replaced by DataCite, replaced by not-found, each clearing the old count columns |
+| F5 (P2) | stage 2: decoding and then trimming sentence punctuation eats a real trailing bracket (`a%5B1%5D` becomes `a[1`) | trim the sentence's punctuation first, decode the address form second, validate without trimming again. Tests: encoded terminal brackets, a literal `%252F`, a malformed escape, each host form. The `a%2Fb` ambiguity `doiOfUrl` documents stays, and is said |
+| F6 (P3) | *influence unknown* is `Tooltip` plus `useTapReveal` in `UnknownInfluence`, not `ControlTip` | that component is the precedent |
+| F7 (P3) | nulling `fetched_at` would break `bibliographic_records_shape` | that alternative would not have worked as written; struck |
