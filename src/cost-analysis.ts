@@ -70,10 +70,14 @@ export const CACHE_MIN_NANOS = 1_000_000_000;
 /** … and flagged when less than this share of its prompt tokens were cache reads. */
 export const CACHE_LOW_SHARE = 0.1;
 /**
- * … and only when a job of it typically makes at least this many calls. A task
- * that makes one call per job has nothing to reuse inside the job, and is left
- * unmarked on purpose (docs/project/prompt-caching.md): flagging those was
- * eight false alarms out of eight on production, 2026-10-05.
+ * … and only when a job of it typically makes at least this many calls: the
+ * clearest case for reuse, and the only one this lead looks for. Flagging
+ * every low share was eight false alarms out of eight on production,
+ * 2026-10-05. **It is a narrower question, not a clean bill**: a cache can also
+ * be reused across requests, and across tasks in one job
+ * (docs/project/prompt-caching.md), and neither is examined. The "median" is
+ * the lower middle value (`spread` in src/cost-report.ts), so jobs of 1 and 3
+ * calls read as 1. GPT Sol, final check of plan 261005a.
  */
 export const CACHE_MIN_CALLS_PER_JOB = 2;
 /**
@@ -963,7 +967,7 @@ function leadCacheUse(cacheUse: readonly CacheUse[]): Lead | null {
     title: "Several calls per job, little cache reuse",
     detail:
       `Suggestive: ${plural(flagged.length, "mode or task", "modes or tasks")} made at least ${CACHE_MIN_CALLS} calls on one wire, typically several calls in one job (a median of at least ${CACHE_MIN_CALLS_PER_JOB}), recorded at least ${usd(CACHE_MIN_NANOS)}, and read less than ${Math.round(CACHE_LOW_SHARE * 100)}% of ${flagged.length === 1 ? "its" : "their"} prompt tokens from cache. ` +
-      `A job that makes several calls over one article is where a low share is worth a look; a task that makes one call per job has nothing to reuse inside the job and is not flagged. ` +
+      `A job that makes several calls of one task is the clearest place for reuse, and the only one this lead looks for. A pair that is not flagged has not been cleared: a cache can also be reused across requests, and across tasks in one job, and the table below lists every pair's share. ` +
       `The amount is everything the flagged calls recorded (${usd(amount)}), not what caching would save. ` +
       "It does not show that the calls of one job share a prefix that could be cached, or that the model and route support caching; each share is within one wire, because the two wires count input tokens differently.",
     evidence: {

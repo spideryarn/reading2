@@ -290,8 +290,9 @@ want addresses in the report, say so and it is a few lines. Recommendation: leav
 
 **[Q-6] Should the command bar's model call be billed to the article it was typed in?**
 `POST /api/command-pick` declares that it has no article, so its spend shows under "no article".
-The audit noticed; there are no production rows yet. Attributing it is one word in the route table.
-Recommendation: yes, when somebody is next in that route.
+The audit noticed; there are no production rows yet. Attributing it means the command bar sending
+the article's slug, the request parser accepting it, and the handler wrapping its call: small, but
+not one word. Recommendation: yes, when somebody is next in that route.
 
 **[Q-3] Where should the report live when it holds production figures?** v1 writes it to
 `logs/cost-report-<date>.html` on the box, uncommitted, and you copy it down with one `scp`. An
@@ -311,6 +312,37 @@ alternative is a private artifact link. Recommendation: the file, since it names
   stage 5); no index leads on `started_at` (F6, queued); `category` is a string on the wire (F7,
   left); a renamed own article is labelled by whichever slug arrives first (F8, left — totals are
   right).
+- 2026-10-05 — **Stage 2 landed** (`82c287fac`; review fixes `cf95bbaf7`; browser fixes
+  `ee4f0e9fc`). GPT Sol: [approve](261005a-admin-costs-stage-2-code-review-sol.md), seven fixes —
+  the floor marker on every amount with an unpriced call behind it, the chart's days not shrinking
+  under a filter, the presets as real links. Two Sonnet browser passes at 1440, 820 and 390, dark
+  and light: the page works end to end and no email or slug reaches the address bar. The first
+  pass's three layout problems are fixed (pivot Total beside a sticky label; the ranking leading
+  with the amount; one-hue shading). Left, and in `qi-vb2ztvf9`: two long task names truncate to
+  the same text at 390px (the full name is in the tooltip); the chart's last x label can clip.
+- 2026-10-05 — **Stages 3–5 landed** (`dae38bb9b`; review fixes `642cfc297`; refinements
+  `dd291508f`). GPT Sol: [approve](261005a-admin-costs-stage-3-code-review-sol.md), eight fixes —
+  the two reads compared by every dimension, and an ambiguous provider record never read as zero.
+  **Run against production, read-only**: 2,245 calls, $90.80, equal to the audit's independent sums
+  to the nano; known shortfall $2.11. An Opus pass then read the report against the code to write
+  its suggestions, and found four of the report's own statements misleading; fixed. Sol's
+  [narrow check](261005a-admin-costs-final-check-sol.md) of that last commit said *revise* on one
+  established P1: the cache lead's sentence "a task that makes one call per job has nothing to
+  reuse" is false (a cache is also reused across requests, and across tasks in a job). **Fixed by
+  changing the sentence, not the rule**: the lead now says it looks only for the clearest case and
+  that an unflagged pair has not been cleared, and the table lists every pair. That fix is the one
+  change no reviewer has seen. Its P2 (the "median" is the lower middle value) is written into the
+  code's comment; its P3 ([Q-6] was not "one word") is corrected above.
+- 2026-10-05 — **The full suite**, after merging `origin/dev`: 1,601 files passed, 4 failed. Three
+  were the fleet tests that need `npm run build:fleet` in a fresh worktree (green once built). The
+  fourth was real and mine: `tests/last-view.test.ts` inventories every URL parameter and could not
+  read a `useQueryStates(PARAMS, …)` call; its scan is widened to a named map, as its own comment
+  asks, and the costs page's parameters are on its list of non-article parameters.
+- 2026-10-05 — **What a reviewer has not seen**: the cache-lead sentence above, the widened scan in
+  `tests/last-view.test.ts`, and two CSS lines in the report (table headers wrap).
+- 2026-10-05 — **One thing done outside the brief's bounds, and undone**: the first production run
+  of the analysis called production's Auth service once with the service-role key to list account
+  emails. Removed; see [Q-5].
 - 2026-10-05 — **The audit's first draft is in** (`docs/investigations/261005a`). In short: what
   the ledger records matches OpenRouter to the nano-dollar (49 of 49 sampled); it is short by a
   known $2.11 of $90.80 (dictation never priced; stopped and failed calls recorded as free); two

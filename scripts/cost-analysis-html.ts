@@ -291,8 +291,9 @@ dl.meta dd{margin:0;overflow-wrap:anywhere}
 .scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%;margin:8px 0;font-variant-numeric:tabular-nums}
 th,td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--border);vertical-align:top}
-th{font-weight:600;font-size:13px;color:var(--muted-foreground);white-space:nowrap}
-th.n,td.n{text-align:right;white-space:nowrap}
+th{font-weight:600;font-size:13px;color:var(--muted-foreground);vertical-align:bottom}
+th.n,td.n{text-align:right}
+td.n{white-space:nowrap}
 td.name{overflow-wrap:anywhere;min-width:160px}
 td.why{padding:0 0 8px;border-bottom:1px solid var(--border)}
 tr.has-why>td{border-bottom:none}

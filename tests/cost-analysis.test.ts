@@ -782,7 +782,9 @@ describe("lead: cache use, inside one wire", () => {
       [{ kind: "text", text: "arc" }, { kind: "count", count: 1 }, { kind: "text", text: "" }],
     ]);
     expect(found?.detail).toMatch(/several calls/);
-    expect(found?.detail).toMatch(/one call per job has nothing to reuse/);
+    /* A pair it does not flag is not cleared, and the sentence must say so. */
+    expect(found?.detail).toMatch(/not flagged has not been cleared/);
+    expect(found?.detail).not.toMatch(/nothing to reuse/);
   });
 
   it("counts calls per job by job id, by run for request work with none, and alone with neither", () => {
