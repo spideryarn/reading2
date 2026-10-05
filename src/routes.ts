@@ -6249,6 +6249,10 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
   const job = await enqueue({
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
+    /* Open on a stand-in outline; a second job builds the structure. The other
+       sender is `POST /api/jobs` with a URL, which has the note.
+       docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+    openEarly: true,
     /* The quota slot, spread onto the request so it rides the job's own INSERT.
        Empty when nothing was reserved — src/billing/admission.ts. Every earlier
        exit from this function leaves without a job, and none of them has to do
@@ -10711,8 +10715,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
+      /* `openEarly` on a pasted address only: the article opens on a stand-in
+         outline and a second job builds the structure. `enqueue` honours it
+         only for a new article. **Deleting it here and in `queueAnUpload` is the
+         whole way back** if this misbehaves; everything else is inert without it.
+         docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
       const queue = (slot: IngestSlot) =>
-        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+        enqueue({
+          ...work,
+          ...(profile ? { profile } : {}),
+          ...(request.url !== undefined ? { openEarly: true as const } : {}),
+          ...slot,
+        });
       /**
        * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
        * is free.** The two shapes arrive at the same endpoint and are told apart

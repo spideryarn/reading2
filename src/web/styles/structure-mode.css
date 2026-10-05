@@ -446,3 +446,26 @@
   font-weight: 600;
 }
 .struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+
+/* **The structure-arriving line** (StructureArriving.tsx), above the toggle in
+   the same head row, in all three presentations — so it is the head, and not a
+   panel, that learns to stack. The head is a flex row for every other band;
+   wrapping it here and giving the note the whole first line leaves the toggle
+   exactly where it was when there is no note, which is nearly always.
+
+   Nothing new to look at: the sentence is `.struct-empty`, this band's own
+   fixed-sentence style (the app's face, `--font-ui`), and the button is the
+   toggle's chip. The head row's own right padding already clears the corner
+   (i) (mode-band.css § `.has-about > .band-head`).
+   docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+.band-head:has(> .struct-arriving-note) { flex-wrap: wrap; }
+.struct-arriving-note {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.6rem;
+}
+.struct-arriving-failed { flex: 1 1 100%; }
+.struct-view-btn:disabled { cursor: default; opacity: 0.6; }

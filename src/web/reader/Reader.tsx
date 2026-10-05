@@ -66,6 +66,7 @@ import type { Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { visitorArrival } from "../modes/structure/StructureArriving.js";
 import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
 import { isCrumbSection } from "../crumbs.js";
@@ -3017,6 +3018,13 @@ export function Reader({
                guessed here is why that move cost this line nothing but its
                example. */
             proseBeside={fit.modeW > 0}
+            /* **The one thing here that does differ by footing**, and it is
+               data, not a second band: while the real structure is on its way
+               an owner's line comes from the job list and carries *Build it*
+               (ArticlePage.tsx § `OwnedReader`); a visitor's is read off the
+               payload and has nothing to press, so this branch starts no job
+               subscription for them. Plan 261005j, GPT Sol's F10. */
+            arrival={owner ? owner.structureArrival : visitorArrival(article.tree)}
             onJump={bandJump}
           />
         );

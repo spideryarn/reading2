@@ -460,6 +460,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
+  /* A step that reads the structure, on an article still showing the stand-in
+     outline it opened with. See `STRUCTURE_NOT_BUILT`. */
+  "jb-no-structure": "blocked",
   /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
      See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
@@ -1542,6 +1545,25 @@ export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
     "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
+};
+
+/**
+ * **A step that reads the article's structure was asked to run before the
+ * structure exists.** An article that opened early is published with a
+ * stand-in outline cut from its headings, and the job that builds the real
+ * structure failed or has not run; `runStep` (src/jobs.ts) refuses every step
+ * after `structure` but `assets` until it has.
+ *
+ * `blocked`, so no Retry is offered, and so the sentence has to carry the way
+ * out itself: the Structure band is where the structure is built.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md § Review record, F4.
+ */
+export const STRUCTURE_NOT_BUILT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The structure of this article has not been built yet, and this is made from the structure. " +
+    "Open Structure and build it there, then run this again. Until it is built, this will come " +
+    "back the same way. [jb-no-structure]",
 };
 
 /* ----------------------------------------------------- asking the web (debate) -- */
@@ -6024,3 +6046,40 @@ const PAPER_UNREADABLE: Record<PaperUnreadableReason, string> = {
 export function paperUnreadableSentence(why: PaperUnreadableReason): string {
   return PAPER_UNREADABLE[why];
 }
+
+/* ------------------------------------------------------------------------ *
+ * The line at the top of the Structure band while the real structure is on
+ * its way — src/web/modes/structure/StructureArriving.tsx,
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The band is showing a stand-in outline, and the real one is being built.
+ *
+ * **It does not say the rows are the article's own headings**, which the first
+ * draft did. Where an article has no usable headings the stand-in cuts windows
+ * and names them from their opening words (src/heading-tree.ts), and even a
+ * headed article can gain subdivisions the author never wrote. GPT Sol's plan
+ * review, F6. A visitor is shown this one too.
+ */
+export const STRUCTURE_ARRIVING = "This is a temporary outline while the structure is being built.";
+
+/**
+ * No job is building it and the tree is still the stand-in: the job failed, or
+ * was stopped, or never ran. Not a `ReaderFacingFailure` — the job's own
+ * failure is on its own record with its own code; this is the band saying what
+ * it can see, beside the button that starts another.
+ */
+export const STRUCTURE_STALLED = "The structure could not be built.";
+
+/** The owner's way out of `STRUCTURE_STALLED`. Never drawn for a visitor. */
+export const STRUCTURE_BUILD = "Build it";
+
+/**
+ * The structure was built, and from blocks that are not the ones on screen —
+ * a Rebuild in another tab while this one was open. Swapping the tree in would
+ * point its rows at the wrong paragraphs, so the page asks for the one thing
+ * that puts both right. Nothing reloads by itself: a reload drops a typed draft
+ * and a streaming answer.
+ */
+export const STRUCTURE_READY_RELOAD = "The structure is ready. Reload the page to see it.";

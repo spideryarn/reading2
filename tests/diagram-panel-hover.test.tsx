@@ -426,6 +426,29 @@ describe("hovering a bubble", () => {
     });
     expect(cardText()).toContain("you are here");
   });
+
+  it("lets go of a hovered node when the tree is replaced under it", () => {
+    /* An article opened before its structure is built has its tree replaced
+       live (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+       GPT Sol's F1). The builders' node ids are positional, so `n3` in the new
+       tree can be a different passage — and a node replaced under the pointer
+       fires no pointer-leave, so the held hover also stops the picture
+       following the reader (DiagramPanel.tsx § the follow-scroll effect). */
+    mount();
+    act(() => {
+      host
+        .querySelector('g.diag-node[data-diag-id="n3"] .diag-box')
+        ?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+    });
+    expect(cardText()).toContain("Section n3");
+
+    /* The same picture kind, a new tree: `mount` builds its fixture afresh. */
+    mount();
+
+    expect(cardText(), "the card is still on a node of the tree that went").toContain(
+      "you are here",
+    );
+  });
 });
 
 describe("what the panel asks the server for", () => {

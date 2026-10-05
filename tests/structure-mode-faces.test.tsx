@@ -22,6 +22,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, modeFromParam, RETIRED_MODES } from "../src/modes.js";
 import { readMode } from "../src/read-address.js";
 import { structureColumnsBand } from "../src/web/layout.js";
+import { STRUCTURE_ARRIVING } from "../src/messages.js";
+import type { StructureArrival } from "../src/web/modes/structure/StructureArriving.js";
 import { StructureBand } from "../src/web/modes/structure/StructureMode.js";
 import { modeParam } from "../src/web/params.js";
 import { buildSections } from "../src/web/position.js";
@@ -392,5 +394,84 @@ describe("Fisheye and Expanded", () => {
     act(() => chip("Fisheye")!.click());
     await vi.waitFor(() => expect(list()).not.toBeNull());
     expect(columns()).toBeNull();
+  });
+});
+
+/* **The line that says the structure is still coming, in every presentation.**
+   An article opened before its structure is built shows a stand-in outline,
+   and the band says so above it — the columns, the list and Expanded alike,
+   because which of the three a reader has is decided by their window and not by
+   anything they chose.
+   docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   § Stage 2. The line's own states are tests/structure-arriving.test.tsx. */
+describe("the structure-arriving line", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+  function mountArriving(arrival: StructureArrival | null) {
+    act(() => {
+      root.render(
+        <NuqsAdapter>
+          <StructureBand
+            article={article}
+            leafDepth={geometry.leafDepth}
+            sections={buildSections(geometry, blocks)}
+            layoutKey="k"
+            supplementOf={geometry.supplementOf}
+            arcByRow={null}
+            proseBeside
+            rootFontPx={16}
+            arrival={arrival}
+            onJump={() => {}}
+          />
+        </NuqsAdapter>,
+      );
+    });
+  }
+  const line = () => host.querySelector(".struct-arriving");
+
+  it("is drawn above the columns", () => {
+    bandWidth = edge() + 100;
+    mountArriving({ state: "building" });
+    expect(columns()).not.toBeNull();
+    expect(columns()?.querySelector(".struct-arriving")?.textContent).toBe(STRUCTURE_ARRIVING);
+    /* Above the rows: it is in the band's head row. */
+    expect(columns()?.querySelector(":scope > .band-head")?.contains(line())).toBe(true);
+  });
+
+  it("is drawn above the list", () => {
+    bandWidth = edge() + 100;
+    mountArriving({ state: "building" });
+    resizeTo(edge() - 1);
+    expect(list()?.querySelector(".struct-arriving")?.textContent).toBe(STRUCTURE_ARRIVING);
+    expect(list()?.querySelector(":scope > .band-head")?.contains(line())).toBe(true);
+  });
+
+  it("is drawn above Expanded", () => {
+    bandWidth = edge() + 100;
+    mountArriving({ state: "building" });
+    /* By the chip rather than by the address: nuqs holds the value an earlier
+       case in this file wrote, and a `replaceState` here does not reach it. */
+    const chip = Array.from(host.querySelectorAll<HTMLButtonElement>(".struct-view-btn")).find(
+      (b) => b.textContent === "Expanded",
+    );
+    act(() => chip?.click());
+    const band = host.querySelector(".mode-band.outln.outln-expanded");
+    expect(band, "fixture: Expanded must be the presentation on screen").not.toBeNull();
+    expect(band?.querySelector(".struct-arriving")?.textContent).toBe(STRUCTURE_ARRIVING);
+  });
+
+  it("leaves the toggle where it was", () => {
+    bandWidth = edge() + 100;
+    mountArriving({ state: "building" });
+    expect(host.querySelectorAll(".struct-view-btn")).toHaveLength(2);
+  });
+
+  it("is not drawn for an article whose structure is in", () => {
+    bandWidth = edge() + 100;
+    mountArriving(null);
+    expect(line()).toBeNull();
+    mount();
+    expect(line(), "nor when the prop is not passed at all").toBeNull();
   });
 });

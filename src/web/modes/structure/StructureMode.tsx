@@ -32,6 +32,7 @@ import { OutlinePanel } from "../../OutlinePanel.js";
 import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { StructurePanel } from "../../StructurePanel.js";
+import { StructureArriving, type StructureArrival } from "./StructureArriving.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
@@ -143,6 +144,7 @@ export function StructureBand({
   arcByRow,
   proseBeside,
   rootFontPx,
+  arrival = null,
   onJump,
 }: {
   article: Article;
@@ -173,6 +175,17 @@ export function StructureBand({
    * the root size changes without changing the band's border-box width.
    */
   rootFontPx: number;
+  /**
+   * **The real structure is still on its way**, and what to say about it above
+   * the rows — or null / absent when the tree is not a stand-in waiting to be
+   * replaced, which is nearly every article. StructureArriving.tsx.
+   *
+   * Handed in rather than worked out here because the two footings get it from
+   * different places: an owner's comes from the job list and carries **Build
+   * it**; a visitor's is read off the payload and carries nothing to press.
+   * This band stays the one component for both and learns nothing about jobs.
+   */
+  arrival?: StructureArrival | null;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("StructureBand");
@@ -274,7 +287,19 @@ export function StructureBand({
    * it is open, so going back to Fisheye lands on the right one.
    */
   const [view, setView] = useQueryState("structure", structureParam);
-  const head = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
+  const toggle = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
+  /* **The arriving line rides in the head, above the toggle**, so one line here
+     puts it at the top of all three presentations — both panels already draw
+     `head` as the band's first row — and neither panel learns it exists. With
+     nothing to say the head is the toggle alone, exactly as before. */
+  const head = arrival ? (
+    <>
+      <StructureArriving arrival={arrival} />
+      {toggle}
+    </>
+  ) : (
+    toggle
+  );
 
   if (view === "expanded" || face === "list") {
     return (

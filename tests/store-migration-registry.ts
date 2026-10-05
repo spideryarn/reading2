@@ -3083,6 +3083,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `activeSlugsFor` is over the owner's whole queue, and the owner is the
      shared dev one. No article, no GoTrue, no bucket. */
   "tests/one-article-for-one-address.test.ts": "private-postgres",
+  /* Plan 261005j: an import that opens before its structure is built, through
+     the real `enqueue`, claim, `structure` step and publication. */
+  "tests/open-before-structure-queue.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
      is what the conversion falsifies, and the lane follows from the two owners
@@ -3110,6 +3113,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      throughout — it publishes real revisions, claims a real job and inserts a
      real `ingest_events` row to prove the successor never settles one. */
   "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
+  /* Plan 261005j: what a publication queues when its tree is the stand-in a
+     first import opened with. The main-modes suite's harness. */
+  "tests/publication-of-an-awaiting-tree.test.ts": "private-postgres",
   /* Plan 261004h: an import's first full publication queues the main-mode
      jobs. The same harness as the labels-successor suite above — real
      revisions, real job rows, a real `reader_profiles` row for the opt-out. */

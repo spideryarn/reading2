@@ -92,7 +92,7 @@ import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
+import { awaitingStructure, type Block, type JobReset, type OwnerId, type StepName, type Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { extraColumns, extraSteps } from "../reset.js";
 import {
@@ -2060,6 +2060,18 @@ export interface PublishRevisionResult {
    */
   readonly successor: SuccessorOutcome | null;
   /**
+   * **What became of the `structure` job a stand-in tree needs** — `null` on
+   * every publication whose tree is not awaiting its structure, which is
+   * nearly all of them. `queued` is an import that opened early;
+   * `alreadyQueued` is a later publication still carrying the stand-in;
+   * `boundToOlderBase` is that publication finding a holder that can never
+   * publish over it, which `logPublication` warns about. Its own field rather
+   * than a second meaning of `successor`: a publication has one or the other,
+   * and a reader of either should not have to ask which job it is.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  readonly structureSuccessor: SuccessorOutcome | null;
+  /**
    * **What a reset's publication queued to make its extras again**, one
    * outcome per step of `jobs.reset.regenerate`, in that order. Empty for every
    * publication that is not a reset's, and for a reset that asked for none.
@@ -2391,8 +2403,44 @@ export async function publishRevisionIn(
    * runs the successor* in the plan: the browser's `jobEngine` drives every
    * queued job the signed-in owner has, from any page.
    */
+  /**
+   * **A revision that publishes a stand-in tree buys the job that builds the
+   * real one, and nothing that reads the tree** — here, for the reason the
+   * labels successor below is here: the pointer and the job become true
+   * together, and an article that committed awaiting with nothing queued would
+   * show an outline of headings for ever.
+   *
+   * A first import that asked to open early publishes this
+   * (`awaitingStructure`, src/types.ts). While it is awaiting:
+   *
+   * - **no `labels` job**: it would label the leaves of a tree about to be
+   *   replaced, and the real tree's publication is `pending` and buys its own;
+   * - **no main-mode jobs**: they read the tree. They are queued further down,
+   *   by the publication that replaces this one.
+   *
+   * **Every awaiting publication asks, not only the first.** A later one that
+   * still carries the stand-in (an `assets` re-run, a standalone `fetch`)
+   * collapses onto the queued job by its work key, and queues a fresh one when
+   * the first has failed and gone. It is not a guaranteed way back: a holder
+   * bound to an older draft answers `boundToOlderBase` and cannot publish over
+   * this revision (GPT Sol, F3) — `logPublication` says so, and the reader's
+   * way out is the Structure band.
+   *
+   * `structure` is exclusive and this job is older than anything queued after
+   * this commit, so a mode a reader asks for meanwhile normally waits behind it.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  const awaiting = awaitingStructure(tree);
+  const structureSuccessor = awaiting
+    ? await enqueueSuccessorIn(tx, {
+        ownerId: article.ownerId as OwnerId,
+        slug,
+        steps: ["structure"],
+      })
+    : null;
+
   const successor =
-    draft.navLabelStatus === "pending"
+    !awaiting && draft.navLabelStatus === "pending"
       ? await enqueueSuccessorIn(tx, {
           ownerId: article.ownerId as OwnerId,
           slug,
@@ -2472,15 +2520,33 @@ export async function publishRevisionIn(
    * A successor insert that throws rolls the whole publication back, as the
    * labels successor's does. Nothing is driven from here: the owner's browser
    * drives every queued job they have, from any page.
+   *
+   * **An import that opened early has two first publications, and the modes
+   * belong to the second** (plan 261005j). The first carries the stand-in tree,
+   * which the modes must not read, so `!awaiting` keeps them out of it. The
+   * second is whichever publication replaces a stand-in with a real tree: the
+   * structure job's, a reader's *Build it*, a Rebuild. That job reserved no
+   * name and the article already serves something, so neither clause above
+   * lets it in — `replacesAStandIn` does, read off the revision this one
+   * replaces, under the article lock. One predicate and one call, so no
+   * publication can queue them twice; the reader's switch is read at whichever
+   * publication it is.
    */
+  const jobThatMayQueueModes = fenced !== null && reset === null && !awaiting;
   const firstFullPublicationOfAnImport =
-    fenced !== null &&
-    reset === null &&
+    jobThatMayQueueModes &&
     ((fenced.reservesName && article.currentRevisionId === null && processing !== "minimal") ||
       upgradedFromMinimal);
-  const autoModes = firstFullPublicationOfAnImport
-    ? await queueMainModesIn(tx, article, successor)
-    : [];
+  /* The one extra read, and only where the answer can matter. */
+  const replacesAStandIn =
+    jobThatMayQueueModes &&
+    !firstFullPublicationOfAnImport &&
+    article.currentRevisionId !== null &&
+    (await revisionAwaitsStructure(tx, article.currentRevisionId));
+  const autoModes =
+    firstFullPublicationOfAnImport || replacesAStandIn
+      ? await queueMainModesIn(tx, article, successor)
+      : [];
 
   return {
     revisionId,
@@ -2490,10 +2556,29 @@ export async function publishRevisionIn(
     /* Carried out of the transaction whole, so `logPublication` can say the
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
+    structureSuccessor,
     regenerated,
     autoModes,
     upgradedFromMinimal,
   };
+}
+
+/**
+ * Is `revisionId`'s tree the stand-in a first import opened with? One column
+ * of one row by primary key, and only the flag: the tree itself stays where it
+ * is. `awaitingStructure` (src/types.ts) is the same question of a tree in hand.
+ */
+async function revisionAwaitsStructure(tx: Tx, revisionId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ provisional: sql<string | null>`${articleRevisions.tree}->>'provisional'` })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  /* Compared here rather than cast into a `Tree`: the column is whatever JSON
+     was stored, and the one value that matters is the one `awaitingStructure`
+     names. */
+  const standIn: NonNullable<Tree["provisional"]> = "awaiting-structure";
+  return row?.provisional === standIn;
 }
 
 /**
@@ -2945,6 +3030,15 @@ export function logPublication(
       ...(published.successor?.kind === "queued"
         ? { successorJobId: published.successor.jobId }
         : {}),
+      /* Present only when this revision reached the shelf on a stand-in tree
+         (an import that opened early, plan 261005j): the job that builds the
+         real one, and whether this publication queued it or joined it. */
+      ...(published.structureSuccessor
+        ? {
+            structureJobId: published.structureSuccessor.jobId,
+            structureJob: published.structureSuccessor.kind,
+          }
+        : {}),
       /* Present only on a reset's publication that asked for its extras to be
          made again: which jobs it queued, by id and outcome. Ids only. */
       ...(published.regenerated.length
@@ -2987,6 +3081,7 @@ export function logPublication(
    * article prose.
    */
   sayWhatBecameOfTheSuccessor(opts.slug, published);
+  sayWhatBecameOfTheStructureJob(opts.slug, published);
   /* After the commit, and only here. The article is now serving a tree that
      `checkTree` rejects — carried forward, not caused by this publication, and
      already in front of readers before it. Re-running `structure` repairs it.
@@ -3053,6 +3148,40 @@ function sayWhatBecameOfTheSuccessor(slug: string, published: PublishRevisionRes
     default: {
       const unreachable: never = successor;
       throw new Error(`unhandled successor outcome: ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
+/**
+ * The same question of the `structure` job a stand-in tree needs, and the same
+ * exhaustive shape. `logPublication`'s own line carries the id and the kind;
+ * this adds the sentence for the arm that is not a success.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+function sayWhatBecameOfTheStructureJob(slug: string, published: PublishRevisionResult): void {
+  const job = published.structureSuccessor;
+  if (!job) return;
+  switch (job.kind) {
+    /* Already in the line above (`structureJob`), and neither is news: one
+       bought the job, the other joined a job that will pick this revision up. */
+    case "queued":
+    case "alreadyQueued":
+      return;
+    case "boundToOlderBase":
+      /* The queued structure job is working from an earlier base, so its own
+         publication will be refused and this revision keeps its stand-in.
+         Nothing queued a second one. The reader sees the outline of headings
+         and, once that job has ended, the Structure band's offer to build it
+         (GPT Sol, F3 of the plan review). Ids only. */
+      logger.warn(
+        { slug, revisionId: published.revisionId, holderJobId: job.jobId },
+        "published on a stand-in tree without a structure job that can replace it: the queued one " +
+          "is bound to an earlier revision — once that job ends, run structure for this article",
+      );
+      return;
+    default: {
+      const unreachable: never = job;
+      throw new Error(`unhandled structure successor outcome: ${JSON.stringify(unreachable)}`);
     }
   }
 }

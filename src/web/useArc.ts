@@ -91,7 +91,20 @@ export interface UseArc {
   error: string | null;
 }
 
-export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
+export function useArc(
+  slug: string,
+  fromPayload: Arc | undefined,
+  /**
+   * **The article's tree is a stand-in the real structure is about to
+   * replace** (`awaitingStructure`, src/types.ts) — an article opened before
+   * its structure was built. No arc is asked for while it is: the arc is one
+   * sentence per *part*, and the parts are about to change; the server's gate
+   * would end the job `blocked` anyway, which has no Retry. It reads as usual.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   * § Review record, GPT Sol's F8.
+   */
+  structureAwaited = false,
+): UseArc {
   /* The payload's arc is the answer whenever there is one, so the opening state
      is `ready` rather than `loading` for almost every reader. */
   const [arc, setArc] = useState<Arc | null>(fromPayload ?? null);
@@ -173,6 +186,13 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
   const outdated = fromPayload !== undefined && isArcOutdated(fromPayload.version);
   useEffect(() => {
     if (status !== "absent" && !outdated) return;
+    /* **Before the once-guard, not after it**, and the order is the whole of
+       this line: a wait that had already written `started` would be a wait for
+       ever, because nothing below runs twice for one slug. Left unspent, the
+       guard lets this effect run as it does on any open the moment the real
+       tree is in — `structureAwaited` is a dependency for that reason.
+       tests/arc-waits-for-structure.test.tsx. */
+    if (structureAwaited) return;
     if (started.current === slug) return;
     started.current = slug;
     /* Unforced. The step's own freshness check is the thing being trusted here,
@@ -181,7 +201,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
        unforced run regenerates. Forcing would also work and would cost a model
        call on any race where another tab wrote one first. */
     void queue.start();
-  }, [status, outdated, slug, queue]);
+  }, [status, outdated, structureAwaited, slug, queue]);
 
   return {
     status,

@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Article, Comment, Crossref, Visibility } from "../../types.js";
+import { awaitingStructure, type Article, type Comment, type Crossref, type Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
 import { LogoLoader } from "../LogoLoader.js";
@@ -49,6 +49,12 @@ import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
+import { type LateStructure, useLateStructure } from "./useLateStructure.js";
+import { type StepJob, useStepJob } from "../useStepJob.js";
+import {
+  STRUCTURE_BUILDING,
+  type StructureArrival,
+} from "../modes/structure/StructureArriving.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
@@ -433,6 +439,42 @@ function OwnedArticle({
     );
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} archive={archive} />;
 }
+/** `useStepJob`'s completion callback, for a caller with nothing to re-read. Stable. */
+const NOTHING_TO_REFRESH = () => {};
+
+/**
+ * **What the Structure band is told**, from where the structure stands and the
+ * owner's job for it — `null` when there is nothing to say, which is nearly
+ * always. The owner's half of modes/structure/StructureArriving.tsx; a
+ * visitor's is `visitorArrival`, which has no job in it.
+ */
+function structureArrivalOf(
+  structure: LateStructure,
+  job: StepJob<"structure">,
+): StructureArrival | null {
+  switch (structure) {
+    case "final":
+      return null;
+    case "building":
+      return STRUCTURE_BUILDING;
+    case "stalled":
+      return {
+        state: "stalled",
+        build: {
+          press: () => void job.start(),
+          starting: job.starting,
+          failed: job.failed?.message ?? null,
+        },
+      };
+    case "mismatch":
+      return { state: "mismatch" };
+    default: {
+      const unreachable: never = structure;
+      throw new Error(`Unknown structure state: ${String(unreachable)}`);
+    }
+  }
+}
+
 /**
  * **Where the private hooks are mounted, and the only place they are.**
  *
@@ -451,7 +493,7 @@ function OwnedArticle({
  */
 function OwnedReader({
   slug,
-  article,
+  article: handed,
   onRenamed,
   archive,
 }: {
@@ -460,6 +502,37 @@ function OwnedReader({
   onRenamed: OnRenamed;
   archive: ArchiveControl;
 }) {
+  /**
+   * **The article, with the real structure laid over it once that exists.**
+   *
+   * A first import opens before its structure is built, on a stand-in tree;
+   * `useLateStructure` swaps the real one in live when its job has gone — the
+   * same article, the same `blocks` array, a new `tree`. Everything below reads
+   * `article`, so nothing below knows there were two.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   * § Stage 2.
+   *
+   * **Here and not in `OwnedArticle`**: it subscribes to the job engine, and
+   * the metadata page has no tree to draw. Coming back from that page mounts
+   * this afresh, which is fine — the check is a level, so it finds the tree
+   * again rather than needing to have been watching.
+   *
+   * Owner-only by being here. A visitor keeps the tree they were sent.
+   */
+  const late = useLateStructure(slug, handed);
+  const article = late.article;
+  /**
+   * **Build it** — the owner's way out when no structure job is coming and the
+   * tree is still the stand-in. `{ slug, steps: ["structure"] }`, unforced: the
+   * step itself answers *not done* while the stored tree is awaiting
+   * (src/pipeline.ts § `STEPS.structure.isDone`).
+   *
+   * Quiet, for the arc's reason below: it is mounted on every owned article
+   * and must not hold the engine's idle poll. Nothing to refresh on completion
+   * either — `useLateStructure` sees the job come and go in the list, and asks.
+   */
+  const structureJob = useStepJob(slug, "structure", NOTHING_TO_REFRESH, "quiet");
+  const structureArrival = structureArrivalOf(late.structure, structureJob);
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
   /**
@@ -541,7 +614,10 @@ function OwnedReader({
    * in useArc.ts keeps the job it starts, not the poll.
    * tests/public-network-trace.test.tsx § an owner's reading view, left alone.
    */
-  const arc = useArc(slug, article.arc);
+  /* **And not while the tree is a stand-in** — the third argument. The arc is a
+     sentence per part, and the parts are about to be replaced; once the real
+     tree is in this runs as it does on any open (useArc.ts § `structureAwaited`). */
+  const arc = useArc(slug, article.arc, awaitingStructure(article.tree));
   /**
    * **Where the reader has spent time**, recorded and drawn only with
    * experimental features on — both halves, as availability rather than
@@ -573,6 +649,7 @@ function OwnedReader({
           quiz,
           crossrefs,
           arc,
+          structureArrival,
           readingTime,
         }}
         onRenamed={onRenamed}
