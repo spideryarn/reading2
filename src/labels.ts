@@ -78,7 +78,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { log } from "./log.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, TooLongForOnePass, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 import { plainWords } from "./plain-words.js";
 
@@ -354,7 +354,7 @@ export const LABEL_HEADROOM = 16_000;
  * is a preference, and the things it gives way to are the sibling rule and now
  * this.
  */
-const MAX_BATCH = 60;
+export const MAX_BATCH = 60;
 
 /**
  * What `detectShift` needs before it is allowed to fail a batch.
@@ -418,7 +418,7 @@ const SHIFT_OWN_CEILING = 0.3;
  * residue is `acceptGap`'s to refuse, and it is why the refusal is not deleted
  * now that this exists.
  */
-const MIN_BATCH = ((): number => {
+export const MIN_BATCH = ((): number => {
   for (let n = 1; n <= MAX_BATCH; n++) {
     if (n - droppedBudget(n) >= MIN_SHIFT_EVIDENCE) return n;
   }
@@ -784,6 +784,35 @@ export function planBatches(
 
   assertCoversEveryBlock(batches, blocks);
   return batches;
+}
+
+/** What an answer labelling `count` blocks is expected to cost. */
+const labelAnswerTokens = (count: number): number => 200 + count * 55;
+
+/**
+ * The `max_tokens` of one labels call over `count` blocks, and it throws
+ * `TooLongForOnePass` where no call could hold the answer. The one home of
+ * that sum: `runBatch` sizes its call with it, and the structure step asks it
+ * whether a tree can be labelled at all before handing one over.
+ */
+export function labelCallBudget(count: number, headroom: number = LABEL_HEADROOM): number {
+  return budgetFor("nav labels", labelAnswerTokens(count), headroom);
+}
+
+/**
+ * The planned batches of `tree` whose first call would be refused as too long
+ * for one answer. Empty for any tree the labels step can start on.
+ */
+export function unaskableBatches(tree: Tree, blocks: Block[]): Batch[] {
+  return planBatches(tree, blocks).filter((batch) => {
+    try {
+      labelCallBudget(batch.blocks.length);
+      return false;
+    } catch (err) {
+      if (err instanceof TooLongForOnePass) return true;
+      throw err;
+    }
+  });
 }
 
 /**
@@ -1876,8 +1905,8 @@ async function runBatch(
   only?: number[],
 ): Promise<{ labels: Record<string, string>; record: LabelBatchRecord }> {
   const started = Date.now();
-  const answerTokens = 200 + (only ?? batch.blocks).length * 55;
-  const maxTokens = budgetFor("nav labels", answerTokens, headroom);
+  const answerTokens = labelAnswerTokens((only ?? batch.blocks).length);
+  const maxTokens = labelCallBudget((only ?? batch.blocks).length, headroom);
   const { shared, own } = batchParts(batch, blocks, outline);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
