@@ -215,7 +215,48 @@ resize observer, and was being recorded as the reader's choice. Both fixed: `.ch
 `overflow-anchor: none`, so the transcript's position has one author, and a clamp is recognised by
 its signature in the scroll handler (above where the hold was, and exactly at the end) and put back.
 
-*The third pass, on that fix, is below.*
+**Third pass, on `9ea7e23f2`** (the final code, after the second code review; 50 ms samples from the
+send to 2.5 s past the finish). "Question" is the question's top from the top of the scroller, whose
+padding is 11.2 px, at the send / first words / mid-stream / finish / 2.5 s later.
+
+| Case | Question | Answer's first line, drift |
+|---|---|---|
+| Chat, first question | 11.2 at all five | 0 |
+| Chat, follow-up, pill not showing | 11.3 at all five | 0 |
+| Chat, follow-up, **pill showing at the send** (was 47) | 11.3 at all five | 0 |
+| Chat, a third question straight after | 11.5 at all five | 0 |
+| Block chat card: first, follow-up, second follow-up | 11.2; 8.5; 10.8, each constant | 0 |
+| Floating panel at 900: first, follow-up, second | 11.2; 11.5; 10.8, each constant | 0 |
+| Phone 390×844: first, second, third | 11.2; 11.0; 10.8, each constant | 0 |
+
+*Latest* mid-stream: one jump (2305 → 2552), then no following to the end and after it. A wheel up
+150, down 100 and up 1 mid-stream each stayed exactly where the reader put it. Opening and
+cancelling the editor on an earlier question, not streaming, moved nothing above it (the browser's
+anchoring is back once the answer ends). The page never scrolled; no React warning. The card's
+follow-up at 8.5 is 2.7 px above the padding and does not move; its first line is whole in the
+screenshot.
+
+Not covered by any pass: a real model's pacing (the key was over its limit all day, so every stream
+was the stand-in), a touch screen (the phone case was a 390 px desktop window), and Safari.
+
+Screenshots, a follow-up mid-stream: Chat [before](261005f-shot-1-before-chat-follow-up.png) and
+[after](261005f-shot-2-after-chat-follow-up.png); the block chat card
+[before](261005f-shot-3-before-block-chat-card.png) and
+[after](261005f-shot-4-after-block-chat-card-follow-up.png).
+
+## The code reviews
+
+GPT Sol, twice, fixing as it went; both **approve with changes**.
+
+- [The first](261005f-a-streamed-answer-code-review-sol.md), on `3ad32b3e7`: **C1** Live stopped
+  following after a held answer outgrew the panel; **C2** an answer starting with bare text had no
+  element to hold, so the hold took the streaming cursor at its end. Both P1, both fixed by the
+  reviewer with a red test first.
+- [The second](261005f-a-streamed-answer-code-review-2-sol.md), on `97938e5bc`, of the clamp and
+  anchoring fix only: **D1** a 0.6 px wheel movement matched the clamp's signature; **D2**
+  `overflow-anchor: none` on every transcript cost a reader in history the browser's anchoring.
+  Both P2, both fixed by the reviewer. Why Chrome moved the view is its inference (`.chat-room` as
+  the anchor), not a trace.
 
 ## The plan review
 
