@@ -135,7 +135,7 @@ import {
 } from "./pdf-integrity.js";
 import type { Author, Meta } from "./types.js";
 import { MAX_PAGES } from "./uploads.js";
-import { ProviderRefused, openRouterJson } from "./ai-call.js";
+import { ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js";
 
 /**
  * The prompt's name, which goes in `meta.method` so an article on disk says
@@ -961,7 +961,10 @@ export function openRouterReader(
               },
             },
           },
-          ...(signal ? [{ signal }] : []),
+          /* `retryTransport: false`: `withTransportRetries` below is this
+             call's retry, through a width gate the gateway cannot see. With
+             both, one chunk on a bad minute would be nine requests. */
+          { ...(signal ? { signal } : {}), retryTransport: false },
         );
         /* **Inside the retried call, not after it** — see `refuseBodyError`. */
         refuseBodyError(answer.json as OpenRouterResponse | null);
@@ -1086,7 +1089,7 @@ function refuseBodyError(json: OpenRouterResponse | null): void {
   const code = (error as { code?: unknown }).code;
   const kind = (error as { metadata?: { error_type?: unknown } }).metadata?.error_type;
   if (code === 429 || code === "429" || kind === "rate_limit_exceeded") {
-    throw new ProviderRefused(429, "", new Headers());
+    throw new ProviderRefused(429, "", new Headers(), true);
   }
   /* **A numeric code is the provider's own status and is carried as one**, so
      `withTransportRetries` refuses it once rather than three times — a 400 in a
@@ -1098,7 +1101,10 @@ function refuseBodyError(json: OpenRouterResponse | null): void {
      an ordinary `Error` and is retried like a dropped connection: an unknown
      refusal genuinely might be transient, and two extra attempts on one chunk is
      the cheaper mistake of the two available. */
-  if (typeof code === "number") throw new ProviderRefused(code, "", new Headers());
+  /* `priced: true` on both: this is a `200`, so the provider accepted the work,
+     and the meter that would know is not in reach. It keeps a 5xx-in-a-200 the
+     verdict it has always been here, rather than something the loop re-buys. */
+  if (typeof code === "number") throw new ProviderRefused(code, "", new Headers(), true);
   throw new Error("The transcription service refused this chunk.");
 }
 
@@ -1151,7 +1157,7 @@ async function pdfCall<T>(send: () => Promise<T>, signal: AbortSignal | undefine
 }
 
 /**
- * How many times a call is asked again — a *transport* failure, or the one
+ * How many times a call is asked again — a *transport* failure, an unpriced 5xx, or the one
  * refusal that means "later". Three goes in total, not three retries.
  */
 const TRANSPORT_ATTEMPTS = 3;
@@ -1342,6 +1348,16 @@ function backoffFor(asked: number | null, rateLimited: boolean, attempt: number)
  * with no credit. Asking again changes neither, and asking again a hundred times
  * over turns one bad request into three hundred.
  *
+ * **A second exception since 2026-10-05: a 5xx the gateway says is
+ * `worthAskingAgain`** — a transient status whose body priced nothing. Until
+ * then a 503 failed the chunk and with it the PDF step, while a dropped
+ * connection was retried. The gateway's own retry is switched off for this call
+ * (`retryTransport: false`), so this loop is the only one; it asks the
+ * gateway's predicate so that it cannot re-buy a refusal that was billed. What
+ * this loop does with any *other* thrown error is older and wider than the
+ * gateway's rule: it asks again after any non-abort throw, including a `200`
+ * whose body broke. Known, and left as it is (plan 261005j).
+ *
  * The wait honours `Retry-After` in full where the provider sent one it can
  * afford (`MAX_RETRY_AFTER_MS`), gives up rather than truncating one it cannot,
  * doubles from `RATE_LIMIT_BACKOFF_MS` where there was no header at all, is
@@ -1370,7 +1386,7 @@ async function withTransportRetries<T>(
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
       const rateLimited = error instanceof ProviderRefused && error.status === 429;
-      if (error instanceof ProviderRefused && !rateLimited) throw error;
+      if (error instanceof ProviderRefused && !rateLimited && !worthAskingAgain(error)) throw error;
       if (attempt >= TRANSPORT_ATTEMPTS) throw error;
       const asked = error instanceof ProviderRefused ? error.retryAfterMs : null;
       /* **A wait we cannot afford is a refusal, not a shorter wait.** The

@@ -408,7 +408,7 @@ describe("runCitationLookup — what is stored", () => {
   });
 
   it("reports a refused call in the house copy, and stores nothing", async () => {
-    const { lookUp, saved } = harness(new ProviderRefused(429, "busy", new Headers()));
+    const { lookUp, saved } = harness(new ProviderRefused(429, "busy", new Headers(), false));
     await expect(lookUp("a-piece", WORK_ID)).rejects.toMatchObject({
       status: 502,
       message: providerHttpFailure(429).message,

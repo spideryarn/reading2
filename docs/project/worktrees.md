@@ -75,7 +75,7 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 ## Starting one
 
 ```bash
-claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
+claude --worktree my-thing      # creates the worktree (on the box: /var/tmp/spideryarn-worktrees/my-thing), branch worktree-my-thing
 npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
@@ -619,17 +619,16 @@ knowing because both read as alarming and neither means what it appears to.
   you resumed was locked by the session that made it, so its lock names a pid that is gone: the lock
   reads as stale, and you need what anybody needs — which, since 2026-09-12, involves no waiting.)
 
-And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
+And what `ExitWorktree` would not tell you, until 2026-10-05: it removed gitignored files without a prompt, and it counted
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
 **So `ExitWorktree` is for leaving a worktree, not for removing one** — `action: "keep"` to leave,
 and `npm run worktree:remove` to remove, before or after.
 
-`discard_changes: true` is the one path in this repo that bypasses every guard described here.
-Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
-guard whose failure looks like success. If you find yourself reaching for it, run
-`npm run worktree:remove` instead and read what it says.
+Since 2026-10-05 `discard_changes: true` no longer bypasses the guards: a WorktreeRemove hook hands
+the removal to `npm run worktree:remove`, which refuses as it always did. `npm run worktree:remove`
+is still the one to run, because it prints its reasons where you will read them.
 
 ### Sweeping them up
 

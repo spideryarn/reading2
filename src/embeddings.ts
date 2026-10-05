@@ -41,7 +41,7 @@
  * themselves — src/similar.ts is the current example, and says so.
  */
 import type { EmbeddingReason } from "./types.js";
-import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
+import { type JsonCall, ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js";
 
 /**
  * The measured winner. See the file header — this is a conclusion, not a
@@ -257,7 +257,10 @@ export async function embedBatch(
     call = await openRouterJson(
       "embeddings",
       inputType ? { model, input, input_type: inputType } : { model, input },
-      { signal: deadline ? AbortSignal.any([deadline, ownDeadline]) : ownDeadline, apiKey },
+      /* `retryTransport: false`: the loop below is this call's retry, five goes
+         honouring `Retry-After`. With the gateway's as well, a batch on a bad
+         minute would be fifteen requests. */
+      { signal: deadline ? AbortSignal.any([deadline, ownDeadline]) : ownDeadline, apiKey, retryTransport: false },
     );
   } catch (err) {
     /* **A connection that never opened is a provider failure too**, and until
@@ -269,6 +272,16 @@ export async function embedBatch(
        `TOTAL_TIMEOUT_MS`), and giving up on a slow provider is a provider
        failure by any honest reading. ⟨Sol⟩ */
     if (!(err instanceof ProviderRefused)) {
+      /* **A dropped connection is asked again, like a 5xx** (2026-10-05; until
+         then it failed the batch at once). `worthAskingAgain` and not
+         `instanceof TypeError`: a `200` whose body broke is a `TypeError` too,
+         and only the gateway knows which this is. A deadline of ours that has
+         fired is not asked again. */
+      if (worthAskingAgain(err) && attempt < MAX_ATTEMPTS && !ownDeadline.aborted && !deadline?.aborted) {
+        await sleep(backoffMs(null, attempt), deadline);
+        if (deadline?.aborted) throw providerFailed(`embeddings ${model}: gave up waiting`);
+        return embedBatch(model, input, apiKey, inputType, deadline, attempt + 1);
+      }
       throw providerFailed(`embeddings ${model}: ${(err as Error).name ?? "the call failed"}`, {
         cause: err,
       });
@@ -315,7 +328,9 @@ export async function embedBatch(
     /* 429 and 5xx are the provider being busy, not the request being wrong, and
        they are common enough on a run of a few hundred blocks that failing on
        one would waste every batch already paid for. Back off and try again. */
-    const retryable = err.status === 429 || err.status >= 500;
+    /* **Not a 5xx that was priced**: the gateway saw a cost in its body, so it
+       was billed, and asking again buys it twice. A 429 is a queue either way. */
+    const retryable = err.status === 429 || (err.status >= 500 && !err.priced);
     if (retryable && attempt < MAX_ATTEMPTS) {
       const wait = backoffMs(err.retryAfterMs, attempt);
       /* **The sleep is abortable.** A deadline that only gets looked at between
