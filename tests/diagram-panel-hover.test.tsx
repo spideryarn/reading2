@@ -58,7 +58,7 @@ const TOPICS = [
 ];
 
 /** Two sections, plus an internal link from the first to the second. */
-function article(): { root: SummaryNode; blocks: Block[] } {
+function article(): { root: SummaryNode; blocks: Block[]; tree: Tree } {
   const blocks = [
     block("b0", TOPICS[0] ?? "", `<p>${TOPICS[0]} <a href="#spya-b2">the second part</a></p>`),
     block("b1", TOPICS[1] ?? ""),
@@ -80,7 +80,7 @@ function article(): { root: SummaryNode; blocks: Block[] } {
   } as unknown as Tree;
   const root = buildSummaryTree(tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
-  return { root, blocks };
+  return { root, blocks, tree };
 }
 
 /**
@@ -427,6 +427,25 @@ describe("hovering a bubble", () => {
     expect(cardText()).toContain("you are here");
   });
 
+  it("keeps a hovered node when only the image HTML redraws", () => {
+    const original = article();
+    mount("force", () => original);
+    act(() => {
+      host
+        .querySelector('g.diag-node[data-diag-id="n3"] .diag-box')
+        ?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+    });
+    expect(cardText()).toContain("Section n3");
+
+    const redrawnBlocks = original.blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(original.tree, redrawnBlocks)!;
+    expect(redrawnRoot).not.toBe(original.root);
+    mount("force", () => ({ root: redrawnRoot, blocks: redrawnBlocks }));
+
+    expect(cardText(), "an image redraw dropped a real hover").toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+  });
+
   it("lets go of a hovered node when the tree is replaced under it", () => {
     /* An article opened before its structure is built has its tree replaced
        live (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
@@ -448,6 +467,37 @@ describe("hovering a bubble", () => {
     expect(cardText(), "the card is still on a node of the tree that went").toContain(
       "you are here",
     );
+  });
+
+  it("keeps keyboard roving focus through images, then resets it for a new stored tree", () => {
+    const original = article();
+    mount("force", () => original);
+    const first = host.querySelector<SVGGElement>('g.diag-node[data-diag-id="n2"]')!;
+    const held = host.querySelector<SVGGElement>('g.diag-node[data-diag-id="n3"]')!;
+    act(() => first.focus());
+    act(() => first.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowDown", bubbles: true, cancelable: true,
+    })));
+    expect(document.activeElement).toBe(held);
+    expect(held.getAttribute("tabindex")).toBe("0");
+    expect(cardText()).toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+
+    const redrawnBlocks = original.blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(original.tree, redrawnBlocks)!;
+    mount("force", () => ({ root: redrawnRoot, blocks: redrawnBlocks }));
+    expect(document.activeElement, "images moved actual focus out of the held node").toBe(held);
+    expect(held.getAttribute("tabindex"), "images reset the roving tabstop").toBe("0");
+    expect(first.getAttribute("tabindex")).toBe("-1");
+    expect(cardText(), "images discarded the keyboard's picked node").toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+
+    const replacement = structuredClone(original.tree);
+    const replacedRoot = buildSummaryTree(replacement, redrawnBlocks)!;
+    mount("force", () => ({ root: replacedRoot, blocks: redrawnBlocks }));
+    expect(held.getAttribute("tabindex"), "a new stored tree retained the old roving node").toBe("-1");
+    expect(first.getAttribute("tabindex")).toBe("0");
+    expect(cardText(), "a new stored tree retained the old keyboard pick").toContain("you are here");
   });
 });
 

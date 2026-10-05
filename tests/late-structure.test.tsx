@@ -31,7 +31,7 @@
  * Harness from tests/arc-idle-poll.test.ts: the real engine singleton, a faked
  * `apiFetch`, fake timers.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Block, BlockId, Tree } from "../src/types.js";
@@ -367,15 +367,22 @@ describe("what the fetched article says", () => {
     expect(last?.structure).toBe("mismatch");
   });
 
-  it("stays as it is when the fetch fails", async () => {
-    override = (url) => (url === `/api/article/${SLUG}` ? json({ error: "no" }, 500) : null);
+  it("reports a failed check honestly and lets the reader retry it without rebuilding", async () => {
+    let answer = json({ error: "no" }, 500);
+    override = (url) => (url === `/api/article/${SLUG}` ? answer : null);
     const article = held(tree("awaiting-structure"));
     await show(SLUG, article);
     await advance(5_000);
 
     expect(articleFetches()).toHaveLength(1);
-    expect(last?.structure).toBe("building");
+    expect(last?.structure).toBe("unread");
     expect(last?.article).toBe(article);
+    answer = json(payload(tree()));
+    await act(async () => last?.retry());
+    await advance(5_000);
+    expect(articleFetches()).toHaveLength(2);
+    expect(last?.structure).toBe("final");
+    expect(calls.filter((c) => c.startsWith("POST"))).toEqual([]);
   });
 
   it("mends a fetched node with no `children` list, as the article's door does", async () => {
@@ -391,6 +398,22 @@ describe("what the fetched article says", () => {
 });
 
 describe("asking again", () => {
+  it("checks again when the first snapshot of a new structure job is already done", async () => {
+    let answer = payload(tree("awaiting-structure"));
+    override = (url) => (url === `/api/article/${SLUG}` ? json(answer) : null);
+    await show(SLUG, held(tree("awaiting-structure")));
+    await advance(5_000);
+    expect(last?.structure).toBe("stalled");
+
+    /* Another tab can finish between our polls. No render saw it active. */
+    answer = payload(tree());
+    queue = [structureJob("done", "ls-fast")];
+    jobEngine.poke();
+    await advance(3_000);
+    expect(last?.structure).toBe("final");
+    expect(articleFetches()).toHaveLength(2);
+  });
+
   it("fetches again each time a structure job for the slug comes and goes", async () => {
     let answer = payload(tree("awaiting-structure"));
     override = (url) => (url === `/api/article/${SLUG}` ? json(answer) : null);
@@ -425,6 +448,56 @@ describe("asking again", () => {
 });
 
 describe("what arrives afterwards", () => {
+  it("ignores a read from before a new structure job began", async () => {
+    let release: (r: Response) => void = () => {};
+    override = (url) =>
+      url === `/api/article/${SLUG}` ? new Promise<Response>((r) => (release = r)) : null;
+    const article = held(tree("awaiting-structure"));
+    await show(SLUG, article);
+    await advance(3_000);
+    expect(articleFetches()).toHaveLength(1);
+
+    queue = [structureJob("running", "ls-new")];
+    jobEngine.poke();
+    await advance(2_000);
+    release(json(payload(tree())));
+    await advance(2_000);
+    expect(last?.structure).toBe("building");
+    expect(last?.article).toBe(article);
+  });
+
+  it.each([200, 500])("ignores a read after sign-out (HTTP %s)", async (status) => {
+    let release: (r: Response) => void = () => {};
+    override = (url) =>
+      url === `/api/article/${SLUG}` ? new Promise<Response>((r) => (release = r)) : null;
+    await show(SLUG, held(tree("awaiting-structure")));
+    await advance(3_000);
+    jobEngine.stop();
+    release(status === 200 ? json(payload(tree())) : json({ error: "gone" }, status));
+    await advance(2_000);
+    expect(last?.structure).toBe("building");
+  });
+
+  it("swaps a late answer only once through StrictMode's double effects", async () => {
+    let release: (r: Response) => void = () => {};
+    override = (url) =>
+      url === `/api/article/${SLUG}` ? new Promise<Response>((r) => (release = r)) : null;
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(createElement(StrictMode, null, createElement(Probe, {
+        slug: SLUG, article: held(tree("awaiting-structure")),
+      })));
+    });
+    await advance(3_000);
+    expect(articleFetches()).toHaveLength(1);
+    release(json(payload(tree())));
+    await advance(2_000);
+    expect(last?.structure).toBe("final");
+    expect(articleFetches()).toHaveLength(1);
+  });
+
   it("keeps the real tree when the images' second draw lands after the swap", async () => {
     override = (url) => (url === `/api/article/${SLUG}` ? json(payload(tree())) : null);
     await show(SLUG, held(tree("awaiting-structure")));

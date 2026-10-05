@@ -1,7 +1,7 @@
 /**
  * **A first import that asked to open early gets a stand-in tree from the
- * `structure` step with no model call — and the step does not count as done
- * until a real tree has replaced it.**
+ * `structure` step with no model call. The marked import may resume with that
+ * stand-in; after publication, structure still has to replace it.**
  *
  * Stage 1 of
  * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
@@ -15,9 +15,10 @@
  *    the step carries the mark **and** the article has never been published.
  *    The second half is what lets the job that builds the real tree reach the
  *    model whatever mark it carries.
- * 3. `stepIsDone` answers *no* for `structure` while the stored tree is the
- *    stand-in. Without it the second job finds a finished run and skips, and
- *    the real tree never arrives under a green tick. Mutation-watched; see
+ * 3. `stepIsDone` answers *no* for the successor while the stored tree is the
+ *    stand-in, and *yes* for a marked unpublished import resuming its work.
+ *    Without the former the second job skips and the real tree never arrives;
+ *    without the latter a short claim repeatedly builds the same stand-in. See
  *    tests/open-before-structure-queue.test.ts for the same through the queue.
  *
  * And the two small things beside them: the progress card's clause for the new
@@ -169,7 +170,7 @@ describe("STEPS.structure.run", () => {
 
     expect(modelCalls, "the import waited on the model after asking not to").toBe(0);
     expect(awaitingStructure(product.parts.tree as Tree)).toBe(true);
-    expect(product.detail).toContain("a first outline from its headings");
+    expect(product.detail).toContain("a first outline (the full structure follows)");
     expect(product.detail, "the card reports a failure that did not happen").not.toContain("too long");
   });
 
@@ -195,6 +196,14 @@ describe("STEPS.structure.run", () => {
 
     expect(modelCalls).toBe(1);
     expect(awaitingStructure(product.parts.tree as Tree)).toBe(false);
+  });
+
+  it("describes a headingless stand-in without claiming it came from headings", async () => {
+    const store = storeWith(paragraphs(12), false);
+    const product = await STEPS.structure.run(ctxFor({ headingsFirst: true }), store, checkpoints());
+    expect(awaitingStructure(product.parts.tree as Tree)).toBe(true);
+    expect(product.detail).toContain("a first outline");
+    expect(product.detail).not.toContain("from its headings");
   });
 });
 
@@ -227,6 +236,19 @@ describe("stepIsDone for structure", () => {
     const store = await stored(false);
     expect(await stepIsDone(STEPS.structure, ctxFor(), store)).toBe(true);
   });
+
+  it("keeps a marked unpublished import's stand-in when its claim resumes", async () => {
+    const store = await stored(true);
+    // Draft outputs are not earlier published blocks. This fake has no revision model.
+    store.hasEarlierBlocks = async () => false;
+    expect(await stepIsDone(STEPS.structure, ctxFor({ headingsFirst: true }), store)).toBe(true);
+  });
+
+  it("replaces the stand-in after publication even when the step carries the mark", async () => {
+    const store = await stored(true);
+    store.hasEarlierBlocks = async () => true;
+    expect(await stepIsDone(STEPS.structure, ctxFor({ headingsFirst: true }), store)).toBe(false);
+  });
 });
 
 /* ------------------------------------------------------ the two small rules -- */
@@ -234,7 +256,7 @@ describe("stepIsDone for structure", () => {
 describe("structureSourceDetail", () => {
   it("has its own clause for the stand-in, and not the too-long one", () => {
     const clause = structureSourceDetail({ by: "headings", reason: "before-structure" });
-    expect(clause).toBe(", a first outline from its headings (the full structure follows)");
+    expect(clause).toBe(", a first outline (the full structure follows)");
   });
 
   it("keeps the two fallbacks' clauses", () => {

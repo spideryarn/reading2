@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   STRUCTURE_ARRIVING,
   STRUCTURE_BUILD,
+  STRUCTURE_CHECK_FAILED,
   STRUCTURE_READY_RELOAD,
   STRUCTURE_STALLED,
 } from "../src/messages.js";
@@ -67,6 +68,20 @@ describe("while the structure is being built", () => {
        them from their opening words (src/heading-tree.ts). */
     expect(STRUCTURE_ARRIVING).not.toMatch(/heading/i);
   });
+
+  it("does not claim to know a visitor's job is running, or that an unstarted job failed", () => {
+    expect(STRUCTURE_ARRIVING).not.toMatch(/being built/i);
+    expect(STRUCTURE_STALLED).not.toMatch(/could not be built/i);
+  });
+});
+
+it("offers another check after a failed read", () => {
+  let pressed = 0;
+  draw({ state: "unread", retry: () => void pressed++ });
+  expect(text()).toContain(STRUCTURE_CHECK_FAILED);
+  expect(button()?.textContent).toBe("Try again");
+  act(() => button()?.click());
+  expect(pressed).toBe(1);
 });
 
 describe("when it could not be built", () => {

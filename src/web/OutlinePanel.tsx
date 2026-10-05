@@ -479,16 +479,16 @@ export function OutlinePanel({
    * on a row the reader never chose. An article opened before its structure is
    * built has its stand-in tree replaced live
    * (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
-   * GPT Sol's F1). `root` is the trigger, not a value read here; it is also
-   * rebuilt when the article's own images arrive a moment after it opens, and
-   * letting go of a row held in that second is not worth a second prop.
+   * GPT Sol's F1). The stored `root.node` is the trigger. The derived `root`
+   * also rebuilds when images arrive, while its stored node stays the same;
+   * a row the reader held should survive that redraw.
    *
    * Clears only, like the effect above, and so cannot yank focus either.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `root` is the trigger — a new tree is exactly when a held node id stops meaning the row it was taken from.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the stored root node is the reset trigger.
   useLayoutEffect(() => {
     setFocusedId(null);
-  }, [root]);
+  }, [root?.node]);
 
   const jump = useCallback(
     (row: OutlineRow | undefined) => {

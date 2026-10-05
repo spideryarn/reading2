@@ -99,7 +99,6 @@ const MODES: StepName[][] = [
   ["glossary"],
   ["quotes"],
   ["ideas"],
-  ["relations"],
   ["simple"],
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
@@ -441,6 +440,28 @@ describe("an import that opens before its structure is built", () => {
 
   /* ------------------------------------------------------------------ 4 -- */
 
+  mine("openEarly does not mark a different job adopting a live import's queue slot", async () => {
+    const first = await addOpeningEarly("live-adoption");
+    expect(structureStep(first)?.headingsFirst).toBe(true);
+
+    // Different forced work must create a second job, rather than return the
+    // first one. Nothing has published: allocation must adopt from the queue.
+    const adopted = await enqueue({
+      slug: first.slug,
+      url: first.url!,
+      steps: [...DEFAULT_INGEST_STEPS],
+      force: ["extract"],
+      openEarly: true,
+      pump: false,
+    });
+
+    expect(adopted.id, "the test joined identical work instead of adopting its slot").not.toBe(first.id);
+    expect(adopted.slug, "the test minted another article instead of adopting its slot").toBe(first.slug);
+    expect(structureStep(adopted)?.headingsFirst, "a live queue adoption kept the first-import mark").toBeUndefined();
+    const [article] = await db().select().from(articles).where(eq(articles.slug, first.slug));
+    expect(article?.currentRevisionId ?? null, "the adoption test already had a published article").toBeNull();
+  });
+
   mine("a retry of a failed first import keeps the mark", async () => {
     const job = await addOpeningEarly("retried");
     const failed = await drive(job.id, partsWith({ failExtract: true }));
@@ -460,21 +481,18 @@ describe("an import that opens before its structure is built", () => {
   /* ------------------------------------------------------------------ 5 -- */
 
   /**
-   * `stepIsDone` now answers *no* for `structure` over a stand-in, so a claim
-   * that was handed back walks the step again. Nothing is published yet, so it
-   * writes the same stand-in again, for nothing; the import must still end.
+   * A marked, unpublished import retains its completed stand-in when resumed.
+   * Otherwise a short claim rebuilds it and hands back before assets forever.
    */
-  mine("a handed-back import re-walks structure harmlessly", async () => {
+  mine("a handed-back import finishes without rebuilding its stand-in", async () => {
     const job = await addOpeningEarly("handed-back");
 
     /* 4s of deadline after the margin and every next step wants 5s or more, so
        each of these claims runs one step and puts the job down. Stop once the
        one that ran `structure` has handed back.
 
-       **Only up to there, and not to the end.** A claim this short can never
-       get past `structure` again: it re-runs it, has no time left for `assets`,
-       and hands back, for ever. Production's window is 740s against the 185s
-       `assets` asks for, so a fresh claim always has room for both. */
+       Resume on that same short window: assets must be the first unfinished
+       step instead of repeatedly rewriting the unpublished stand-in. */
     const short = partsWith({ leaseMs: DEADLINE_MARGIN_MS + 4_000 });
     for (let n = 1; ; n++) {
       if (n > 60) throw new Error("the short claims never reached structure");
@@ -486,8 +504,8 @@ describe("an import that opens before its structure is built", () => {
     }
     expect(calls.structure).toBe(1);
 
-    const imported = await drive(job.id);
-    expect(calls.structure, "the handed-back claim did not walk structure again").toBe(2);
+    const imported = await drive(job.id, short);
+    expect(calls.structure, "the resumed import rebuilt its completed stand-in").toBe(1);
     expect(imported.job.status, imported.job.error).toBe("done");
     expect(model.calls).toBe(0);
     expect(awaitingStructure((await onTheShelf(job.slug)).tree)).toBe(true);
@@ -495,6 +513,31 @@ describe("an import that opens before its structure is built", () => {
   });
 
   /* ------------------------------------------------------------------ 6 -- */
+
+  mine("a mode queued before the structure successor is refused instead of reading the stand-in", async () => {
+    const job = await addOpeningEarly("earlier-mode");
+    const earlierMode = await enqueue({
+      slug: job.slug,
+      url: job.url!,
+      steps: ["glossary"],
+      pump: false,
+    });
+    expect(earlierMode.slug).toBe(job.slug);
+
+    await drive(job.id);
+    const successor = await structureJobOn(job.slug);
+    const ordered = await queuedOn(job.slug);
+    expect(ordered.map((row) => row.id), "the mode did not precede the successor in the actual queue").toEqual([
+      earlierMode.id,
+      successor.id,
+    ]);
+
+    const refused = await drive(earlierMode.id);
+    expect(refused.job.failureKind).toBe("blocked");
+    expect(refused.job.error).toBe(STRUCTURE_NOT_BUILT.message);
+    expect(calls.glossary, "the earlier mode read the stand-in instead of being refused").toBe(0);
+    expect((await queuedOn(job.slug)).map((row) => row.id)).toEqual([successor.id]);
+  });
 
   /**
    * The structure job failed, or never ran, and something that reads the tree

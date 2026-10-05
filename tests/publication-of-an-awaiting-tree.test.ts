@@ -82,7 +82,6 @@ const MODES: StepName[][] = [
   ["glossary"],
   ["quotes"],
   ["ideas"],
-  ["relations"],
   ["simple"],
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
@@ -468,6 +467,43 @@ describe("publishing a tree that is awaiting its structure", () => {
   });
 
   /* ------------------------------------------------------------------ 6 -- */
+
+  mine("a structure holder bound to an older draft is reported, and a later publication can replace it once terminal", async () => {
+    const slug = `${SLUG_PREFIX}older-holder`;
+    const { draft, published: first } = await openedEarly(OWNER, slug);
+    const holderId = first.structureSuccessor!.jobId;
+    const heldDraft = await nextDraft(draft, "real");
+    await db()
+      .update(jobsTable)
+      .set({ draftRevisionId: heldDraft.revisionId })
+      .where(eq(jobsTable.id, holderId));
+
+    // A publisher whose earlier timestamp arrived late can go before this
+    // handed-back holder. Its awaiting revision now has a newer base.
+    const carried = await nextDraft(draft, "carried");
+    const assets = await runningJob(OWNER, slug, { reservesName: false, steps: ["assets"] });
+    const published = await publishUnder(carried, assets);
+
+    expect(published.structureSuccessor).toEqual({ kind: "boundToOlderBase", jobId: holderId });
+    expect(published.autoModes).toEqual([]);
+    expect(published.successor).toBeNull();
+    expect(await queuedOn(slug)).toEqual([["structure"]]);
+    await expect(
+      publishRevision({ slug, revisionId: heldDraft.revisionId }),
+      "the old holder's draft could publish over the newer stand-in",
+    ).rejects.toMatchObject({ name: "PublishRefused", status: 409, failureKind: "retry" });
+
+    // The outcome is not automatic recovery. Once that holder leaves the
+    // active set, another awaiting publication must buy a fresh successor.
+    await db().update(jobsTable).set({ status: "error" }).where(eq(jobsTable.id, holderId));
+    const later = await nextDraft(carried, "carried");
+    const anotherAssets = await runningJob(OWNER, slug, { reservesName: false, steps: ["assets"] });
+    const recovered = await publishUnder(later, anotherAssets);
+    expect(recovered.structureSuccessor?.kind).toBe("queued");
+    expect(recovered.structureSuccessor?.jobId).not.toBe(holderId);
+    expect(recovered.autoModes).toEqual([]);
+    expect(await queuedOn(slug)).toEqual([["structure"]]);
+  });
 
   /** A reset has its own `regenerate` list, here empty; it never queues the modes. */
   mine("a reset that replaces the stand-in queues labels and not the modes", async () => {

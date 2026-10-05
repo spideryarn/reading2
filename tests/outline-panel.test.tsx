@@ -458,8 +458,16 @@ describe("what the list says", () => {
     expect(list.getAttribute("aria-activedescendant")).toBe(held);
     expect(nowId()).not.toBe(held);
 
-    /* A new tree with the same ids in it. */
-    draw(buildSummaryTree(tree, blocks, geometry.leafDepth), lastRow);
+    /* Images redraw the blocks, and hence the derived root, without replacing
+       the stored tree. The row the reader held still means the same thing. */
+    const redrawnBlocks = blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(tree, redrawnBlocks, geometry.leafDepth);
+    expect(redrawnRoot).not.toBe(root);
+    draw(redrawnRoot, lastRow);
+    expect(list.getAttribute("aria-activedescendant"), "an image redraw dropped the held row").toBe(held);
+
+    /* A genuinely new stored tree with the same ids in it. */
+    draw(buildSummaryTree(structuredClone(tree), blocks, geometry.leafDepth), lastRow);
     expect(list.getAttribute("aria-activedescendant"), "the old tree's row is still held").toBe(
       nowId(),
     );

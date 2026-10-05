@@ -14,9 +14,9 @@
  *
  * ## A level check, not an edge
  *
- * The question is *the tree I hold is awaiting, and no structure job for this
- * slug is queued or running*, asked of the job list. Not *a structure job just
- * finished*: a job that ended while the article was still loading is never
+ * The opening question is *the tree I hold is awaiting, and no structure job for this
+ * slug is queued or running*, asked of the job list. A completion signal alone
+ * is insufficient: a job that ended while the article was still loading is never
  * announced (`useJobs` § `onFinished` only hears completions after it began
  * observing), and a level check is true in that window too.
  *
@@ -62,7 +62,7 @@
  * plan's known limit — and is told so by the band
  * (modes/structure/StructureArriving.tsx § `visitorArrival`).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   awaitingStructure,
   type Article,
@@ -86,8 +86,9 @@ import { useJobs } from "../useJobs.js";
  * - `stalled` — no job is coming and the server's tree is still the stand-in.
  * - `mismatch` — the real tree exists, but was cut from blocks that are not the
  *   ones on screen, so it was not swapped in.
+ * - `unread` — checking the published tree failed; the reader can try the read again.
  */
-export type LateStructure = "final" | "building" | "stalled" | "mismatch";
+export type LateStructure = "final" | "building" | "stalled" | "mismatch" | "unread";
 
 export interface WithLateStructure {
   /**
@@ -97,6 +98,8 @@ export interface WithLateStructure {
    */
   article: Article;
   structure: LateStructure;
+  /** Retry the read, without buying another structure job. */
+  retry(): void;
 }
 
 /** The two fields a swap replaces, and whose article they belong to. */
@@ -157,35 +160,33 @@ export function useLateStructure(slug: string, article: Article): WithLateStruct
      the slug changes cannot lay one article's tree over another. */
   const swapped = late?.slug === slug ? late : null;
 
-  const [verdict, setVerdict] = useState<{ slug: string; kind: "stalled" | "mismatch" } | null>(
+  const [verdict, setVerdict] = useState<{ slug: string; kind: "stalled" | "mismatch" | "unread" } | null>(
     null,
   );
   /** The slug a list asked for after its awaiting article arrived has landed for. */
   const [freshFor, setFreshFor] = useState<string | null>(null);
   const fresh = freshFor === slug;
+  const [attempt, setAttempt] = useState(0);
+  const [completion, setCompletion] = useState(0);
 
   /* **Before `useJobs`, and the order is one request.** Effects run in the order
      their hooks were called, so this poke starts the list before the
      subscription below arrives and its `wake` finds one in flight. The other
      way round the subscription polls, this poke lands on top of it, and the
      engine makes a second request to honour it. Correct either way. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt rearms reconciliation after an explicit read retry.
   useEffect(() => {
     if (!awaiting) return;
     const stop = jobEngine.afterFreshList(() => setFreshFor(slug));
     /* The barrier asks for nothing. Asleep (signed out) or paused, this is a
-       no-op, the list never comes and the page goes on saying *being built* —
-       which a page that cannot ask is in no position to improve on. */
+       no-op, the list never comes and the page can only say the full structure
+       is unavailable. */
     jobEngine.poke();
     return () => {
       stop();
       setFreshFor(null);
     };
-  }, [slug, awaiting]);
-
-  /* A paying subscriber only until the fresh list has landed — see § What it
-     costs the engine. */
-  const queue = useJobs(awaiting && !swapped && !fresh ? "watches-queue" : "quiet");
-  const coming = useMemo(() => structureJobComing(queue.jobs, slug), [queue.jobs, slug]);
+  }, [slug, awaiting, attempt]);
 
   /* What the answer is checked against when it lands, read at that moment
      rather than captured when the request left. */
@@ -204,14 +205,34 @@ export function useLateStructure(slug: string, article: Article): WithLateStruct
    * first pass's request would be cancelled and the second never sent.
    */
   const asked = useRef<string | null>(null);
+  const retry = useCallback(() => {
+    asked.current = null;
+    requests.current += 1;
+    setVerdict(null);
+    setFreshFor(null);
+    setAttempt((n) => n + 1);
+  }, []);
 
+  /* The level check covers completion before mount; the completion signal
+     covers a new job that finishes between polls without ever looking active. */
+  const queue = useJobs(awaiting && !swapped && !fresh ? "watches-queue" : "quiet", (job) => {
+    if (!awaiting || swapped || job.slug !== slug || !job.steps.some((s) => s.name === "structure")) return;
+    asked.current = null;
+    requests.current += 1;
+    setVerdict(null);
+    setCompletion((n) => n + 1);
+  });
+  const coming = useMemo(() => structureJobComing(queue.jobs, slug), [queue.jobs, slug]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: completion rearms the level check when a job finishes between polls.
   useEffect(() => {
     if (!awaiting || swapped || !fresh) return;
     if (coming) {
       asked.current = null;
-      /* A job is running, so *could not be built* is no longer true of
-         anything, and must not flash back in the gap between the job going
-         and the answer arriving. */
+      /* A read begun before this job belongs to the previous episode. */
+      requests.current += 1;
+      /* Clear the previous verdict through the gap between this job ending
+         and the next read arriving. */
       setVerdict(null);
       return;
     }
@@ -248,14 +269,15 @@ export function useLateStructure(slug: string, article: Article): WithLateStruct
             navLabelStatus: fetched.navLabelStatus,
           });
         },
-        /* **A failed read changes nothing**, and is not retried on a timer: the
-           page goes on saying *being built*, and the next structure job to come
-           and go asks again. A 404 or a 409 lands here too (`readJson` throws):
-           the article was deleted or reset under an open page, which is not
-           this hook's to report. */
-        () => {},
+        () => {
+          if (request !== requests.current) return;
+          if (now.current.slug !== slug || epoch !== jobEngine.epoch()) return;
+          /* A failed read says nothing about whether building succeeded.
+             Offer another read rather than another paid job. */
+          setVerdict({ slug, kind: "unread" });
+        },
       );
-  }, [awaiting, swapped, fresh, coming, slug]);
+  }, [awaiting, swapped, fresh, coming, slug, completion]);
 
   const drawn = useMemo(
     () =>
@@ -265,7 +287,7 @@ export function useLateStructure(slug: string, article: Article): WithLateStruct
     [article, awaiting, swapped],
   );
 
-  if (!awaiting || swapped) return { article: drawn, structure: "final" };
-  if (coming) return { article: drawn, structure: "building" };
-  return { article: drawn, structure: verdict?.slug === slug ? verdict.kind : "building" };
+  if (!awaiting || swapped) return { article: drawn, structure: "final", retry };
+  if (coming) return { article: drawn, structure: "building", retry };
+  return { article: drawn, structure: verdict?.slug === slug ? verdict.kind : "building", retry };
 }

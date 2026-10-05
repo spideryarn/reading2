@@ -222,5 +222,35 @@ Not taken: hiding the outline on a headingless article until the real one arrive
 half). The tree does not record that it is all windows, and the line above the rows already says it
 is temporary. Revisit if the browser check shows it reads badly.
 
+**GPT Sol on the code** (HEAD 8a937ea37, write-capable, exit 0, answer written 20:06 on
+2026-10-05): [code-review-sol](261005j-open-before-structure-code-review-sol.md), against
+[the diff](261005j-open-before-structure-code-review.diff). It fixed six things and wrote a
+postmortem for each of the three that are a class:
+
+- a failed article read left the band saying *being built* for good: there is now a state for it
+  and a retry that is a read, not a paid build;
+- a read in flight could install an older tree after a new structure job began, and a job first
+  seen already finished never triggered a read
+  ([261005o](../postmortems/261005o-a-one-shot-read-guard-must-follow-every-work-episode-boundary.md));
+- Diagram and Outline dropped a real hover when the images' second draw arrived, because the reset
+  was keyed on a derived object and not on the stored tree
+  ([261005n](../postmortems/261005n-derived-tree-identity-mistaken-for-stored-tree-replacement.md));
+- a handed-back import cut its stand-in again
+  ([261005p](../postmortems/261005p-a-successor-completion-rule-must-not-undo-the-producer-on-resume.md));
+- the step detail and the notice said more than is known (*from its headings*; *is being built*).
+
+Its sandbox could not reach Postgres, so the two database files were run afterwards here: both
+green, after removing `relations` from each file's written-out mode list, which dev had dropped
+that afternoon. The three publication clauses were then each switched off in turn and the
+publication file went red each time (4, 6 and 2 of 8).
+
+Left, on purpose: the gate reads the draft's tree once for every step after `structure`, and a
+refusal is logged as an error like any other `blocked` step; dev's *Try again* on a final headings
+tree still ends in *Reload the page* and does not use the live swap; older step details still say
+*from its headings* about a tree that can hold windows.
+
+**Not run: the full suite and `npm run check`**, at the Overseer's request while the box was
+loaded. Targeted files and typecheck only.
+
 Sol's answer to *is there a simpler design*: the add-page route (`read-while-importing`) is the
 credible one, because it needs none of this protocol. Greg picks between them, or keeps both.

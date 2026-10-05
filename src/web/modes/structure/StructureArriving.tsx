@@ -29,6 +29,7 @@
 import {
   STRUCTURE_ARRIVING,
   STRUCTURE_BUILD,
+  STRUCTURE_CHECK_FAILED,
   STRUCTURE_READY_RELOAD,
   STRUCTURE_STALLED,
 } from "../../../messages.js";
@@ -51,15 +52,15 @@ export type StructureArrival =
   | { state: "building" }
   /** `build` is null for a visitor, who can start nothing. */
   | { state: "stalled"; build: StructureBuild | null }
+  | { state: "unread"; retry(): void }
   | { state: "mismatch" };
 
 /**
  * **What a visitor is told**, from the payload alone: the line while the tree
  * is the stand-in, and nothing otherwise.
  *
- * A visitor has no job list to consult, so *being built* is the only state
- * they can be in — it is the kind one to be wrong in, and their next load has
- * the real tree. The plan's known limit, as with paragraph labels.
+ * A visitor has no job list to consult, so the line says only that the full
+ * structure is unavailable. Their next load reads the latest tree.
  */
 export function visitorArrival(tree: Pick<Tree, "provisional">): StructureArrival | null {
   return awaitingStructure(tree) ? STRUCTURE_BUILDING : null;
@@ -77,6 +78,8 @@ function sentence(arrival: StructureArrival): string {
       return STRUCTURE_STALLED;
     case "mismatch":
       return STRUCTURE_READY_RELOAD;
+    case "unread":
+      return STRUCTURE_CHECK_FAILED;
     default: {
       const unreachable: never = arrival;
       throw new Error(`Unknown structure arrival: ${JSON.stringify(unreachable)}`);
@@ -87,8 +90,8 @@ function sentence(arrival: StructureArrival): string {
 export function StructureArriving({ arrival }: { arrival: StructureArrival }) {
   const build = arrival.state === "stalled" ? arrival.build : null;
   return (
-    /* `role="status"`: the sentence changes under a reader who did nothing —
-       *being built* becomes *could not be built* — and that is news. Polite,
+    /* `role="status"`: the sentence changes under a reader who did nothing,
+       and that is news. Polite,
        so it never interrupts the prose being read aloud. */
     <div className="struct-arriving-note" role="status">
       <p className="struct-empty struct-arriving">{sentence(arrival)}</p>
@@ -102,6 +105,11 @@ export function StructureArriving({ arrival }: { arrival: StructureArrival }) {
           onClick={build.press}
         >
           {STRUCTURE_BUILD}
+        </button>
+      ) : null}
+      {arrival.state === "unread" ? (
+        <button type="button" className="struct-view-btn" onClick={arrival.retry}>
+          Try again
         </button>
       ) : null}
       {/* The server's own sentence for a refused press — a quota, usually. It

@@ -463,6 +463,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* A step that reads the structure, on an article still showing the stand-in
      outline it opened with. See `STRUCTURE_NOT_BUILT`. */
   "jb-no-structure": "blocked",
+  "structure-check": "retry",
   /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
      See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
@@ -6062,7 +6063,7 @@ export function paperUnreadableSentence(why: PaperUnreadableReason): string {
  * headed article can gain subdivisions the author never wrote. GPT Sol's plan
  * review, F6. A visitor is shown this one too.
  */
-export const STRUCTURE_ARRIVING = "This is a temporary outline while the structure is being built.";
+export const STRUCTURE_ARRIVING = "This is a temporary outline. The full structure is not available yet.";
 
 /**
  * No job is building it and the tree is still the stand-in: the job failed, or
@@ -6070,10 +6071,14 @@ export const STRUCTURE_ARRIVING = "This is a temporary outline while the structu
  * failure is on its own record with its own code; this is the band saying what
  * it can see, beside the button that starts another.
  */
-export const STRUCTURE_STALLED = "The structure could not be built.";
+export const STRUCTURE_STALLED = "The full structure is not available.";
 
 /** The owner's way out of `STRUCTURE_STALLED`. Never drawn for a visitor. */
 export const STRUCTURE_BUILD = "Build it";
+
+/** The live tree read failed; this offers a read retry, not another paid build. */
+export const STRUCTURE_CHECK_FAILED =
+  "The structure could not be checked. Try again in a few seconds. [structure-check]";
 
 /**
  * The structure was built, and from blocks that are not the ones on screen —

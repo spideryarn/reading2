@@ -992,12 +992,15 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
 }
 
 /**
- * The `structure` step's `isDone`: **a stand-in tree is not the step's work
- * done.** A first import that opened early published a tree cut from the
+ * The `structure` step's `isDone`: **a published stand-in tree still needs
+ * replacing.** A first import that opened early published a tree cut from the
  * headings, with a finished run row and the right blocks hash — both real, and
  * both copied into the draft of the job that is meant to replace it. Without
  * this that job finds its artefacts present and current, skips, and the real
  * tree never arrives, under a green tick (docs/reusable/silent-success.md).
+ * A marked import that has not published yet has finished its structure work:
+ * retaining that stand-in lets a handed-back claim resume at assets instead
+ * of rebuilding the same tree and consuming its next step's window again.
  *
  * It narrows presence and never widens it (`stepIsDone` asks `has` first). The
  * Metadata page does not ask this function and goes on calling the stand-in
@@ -1005,7 +1008,8 @@ async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Pro
  * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
  */
 async function structureIsNotAStandIn(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
-  return !awaitingStructure(await store.read(ctx.slug, "structure", "tree"));
+  if (!awaitingStructure(await store.read(ctx.slug, "structure", "tree"))) return true;
+  return ctx.headingsFirst === true && !(await store.hasEarlierBlocks(ctx.slug));
 }
 
 /**
@@ -1039,7 +1043,7 @@ export function structureSourceDetail(source: StructureSource): string {
     case "labels-could-not-ask":
       return ", from its headings (a section was too long to label)";
     case "before-structure":
-      return ", a first outline from its headings (the full structure follows)";
+      return ", a first outline (the full structure follows)";
     default: {
       const unreachable: never = source;
       throw new Error(`unhandled structure source: ${JSON.stringify(unreachable)}`);

@@ -451,6 +451,7 @@ const NOTHING_TO_REFRESH = () => {};
 function structureArrivalOf(
   structure: LateStructure,
   job: StepJob<"structure">,
+  retry: () => void,
 ): StructureArrival | null {
   switch (structure) {
     case "final":
@@ -468,6 +469,8 @@ function structureArrivalOf(
       };
     case "mismatch":
       return { state: "mismatch" };
+    case "unread":
+      return { state: "unread", retry };
     default: {
       const unreachable: never = structure;
       throw new Error(`Unknown structure state: ${String(unreachable)}`);
@@ -529,10 +532,10 @@ function OwnedReader({
    *
    * Quiet, for the arc's reason below: it is mounted on every owned article
    * and must not hold the engine's idle poll. Nothing to refresh on completion
-   * either — `useLateStructure` sees the job come and go in the list, and asks.
+   * either — `useLateStructure` hears completions and checks the list itself.
    */
   const structureJob = useStepJob(slug, "structure", NOTHING_TO_REFRESH, "quiet");
-  const structureArrival = structureArrivalOf(late.structure, structureJob);
+  const structureArrival = structureArrivalOf(late.structure, structureJob, late.retry);
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
   /**
