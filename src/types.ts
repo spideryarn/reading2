@@ -3995,10 +3995,38 @@ export type ChatAnchor =
  * src/db/schema.ts already lists all four, and the route accepts only the
  * modes that are built (`ORIGIN_MODES`).
  *
+ * **Debate has two shapes since 2026-10-05, and `mode` does not tell them
+ * apart** (plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A):
+ * a claim, and a *lens*, an angle the reader typed to look at the debate from.
+ * Both say `mode: "debate"`, so narrowing on `mode` reaches neither's fields.
+ * Ask `isLensOrigin`; a claim never equals a lens (`sameOrigin`).
+ *
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = { mode: "debate"; blockId: BlockId; quote: string };
+export type ThreadOrigin = ClaimOrigin | LensOrigin;
+
+/** One of Debate's claims: the block it sits in and its words when the chat started. */
+export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
+
+/**
+ * An angle the reader asked to see the debate from: their own words, trimmed
+ * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
+ * may share one lens; they are then two lines in Debate's *Your angles*.
+ */
+export type LensOrigin = { mode: "debate"; lens: string };
+
+/**
+ * The most a lens may be. The cap of *why you're reading this*, because the
+ * command bar will build a lens from that text (the plan's part B). A longer
+ * one is refused, not cut: a cut lens is a different question.
+ */
+export const MAX_LENS_CHARS = MAX_PURPOSE_CHARS;
+
+/** Is this origin a lens, and not a claim? The one place the two shapes are told apart. */
+export function isLensOrigin(origin: ThreadOrigin): origin is LensOrigin {
+  return "lens" in origin;
+}
 
 /** The origin modes that are built. The route refuses any other. */
 export const ORIGIN_MODES = ["debate"] as const satisfies readonly ThreadOrigin["mode"][];
@@ -4006,10 +4034,13 @@ export const ORIGIN_MODES = ["debate"] as const satisfies readonly ThreadOrigin[
 /**
  * Are these the same origin? What the route's 409 and the caller's way back
  * both ask, so there is one answer. Exact: a claim reworded by a new search is
- * a different claim.
+ * a different claim. **A claim and a lens are never the same**, whatever their
+ * words, so the shapes are compared before any field is.
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
-  return a.mode === b.mode && a.blockId === b.blockId && a.quote === b.quote;
+  if (a.mode !== b.mode) return false;
+  if (isLensOrigin(a)) return isLensOrigin(b) && a.lens === b.lens;
+  return !isLensOrigin(b) && a.blockId === b.blockId && a.quote === b.quote;
 }
 
 export interface ChatThread {

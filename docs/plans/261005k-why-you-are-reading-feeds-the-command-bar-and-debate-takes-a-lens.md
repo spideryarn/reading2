@@ -262,5 +262,17 @@ Opus subagent, tests red first.
 - 2026-10-05: plan written. Both sibling sessions' work (261005i quick search from the bar; 261005i
   chat origins) is on `dev` and merged into this tree before planning; A extends the second, B
   reuses the first.
+- 2026-10-05: **stage 1 built** (before its code review). Migration
+  `drizzle/20261005185425_chat_thread_origin_lens.sql`, generated and read: one new column, two
+  CHECKs replaced, and a third added that the plan did not name (`origin_lens` only under mode
+  `debate`). An over-length lens is a 413, to match a claim's quote. The box reuses Glossary's ask
+  classes. *Your angles* shows the newest three, then *Show all*. Chat's prompt is unchanged.
+  **Not done**: the migration is not applied to the shared local database (`db:migrate` refuses
+  there over a ledger row another session left, `1791212777965`), so nothing has been seen in a
+  browser; the paid check that the seed makes Chat search is not run; the test for the inherited
+  displaced-draft limit is not written (debate.md states the limit). Red first was partial: the
+  route and constraint tests were red only for the missing column, and the mapping tests never;
+  three mutations (the both-shapes guard, `sameOrigin`, the handoff's origin) each went red.
+  **Deploy order: this code selects `origin_lens`, so the migration lands with or before it.**
 - 2026-10-05: GPT Sol's plan review, *build with changes*. All ten findings accepted (none
   overruled); the design sections above carry them, marked F1 to F10.

@@ -432,7 +432,15 @@ import {
 } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, MAX_VISIBLE_BLOCKS, ORIGIN_MODES, sameOrigin, THREAD_KINDS } from "./types.js";
+import {
+  isLensOrigin,
+  isThreadKind,
+  MAX_LENS_CHARS,
+  MAX_VISIBLE_BLOCKS,
+  ORIGIN_MODES,
+  sameOrigin,
+  THREAD_KINDS,
+} from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
@@ -3126,10 +3134,15 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
   if (wanted) await checkAnchor(wanted, article.blocks);
-  /* The origin's block is one of this article's. The foreign key would say so
+  /* A claim's block is one of this article's. The foreign key would say so
      too, as a 500 out of a transaction. The quote is not compared with the
-     block: it is a snapshot of the item's words, kept for the list to show. */
-  if (wantedOrigin && !article.blocks.some((b) => b.id === wantedOrigin.blockId)) {
+     block: it is a snapshot of the item's words, kept for the list to show.
+     A lens has no block, so there is nothing of it to check here. */
+  if (
+    wantedOrigin &&
+    !isLensOrigin(wantedOrigin) &&
+    !article.blocks.some((b) => b.id === wantedOrigin.blockId)
+  ) {
     throw httpError(400, "origin.blockId is not a block of this article");
   }
 
@@ -4562,13 +4575,23 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
 function parseOrigin(origin: unknown): ThreadOrigin | undefined {
   if (origin === undefined || origin === null) return undefined;
   if (typeof origin !== "object") throw httpError(400, "origin must be an object");
-  const { mode, blockId, quote } = origin as Record<string, unknown>;
+  const { mode, blockId, quote, lens } = origin as Record<string, unknown>;
   const built = ORIGIN_MODES.find((m) => m === mode);
   if (built === undefined) {
     throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
   }
   switch (built) {
     case "debate": {
+      /* **Two shapes under one mode, told apart by the `lens` key** (plan
+         261005k, A): a lens, or a claim. A body carrying a lens and any part
+         of a claim is neither, and is refused, not read as whichever half
+         this code looked at first. */
+      if (lens !== undefined) {
+        if (blockId !== undefined || quote !== undefined) {
+          throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
+        }
+        return { mode: built, lens: parseLens(lens) };
+      }
       if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
         throw httpError(400, "origin.blockId must be a block id");
       }
@@ -4584,6 +4607,23 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     default:
       return built satisfies never;
   }
+}
+
+/**
+ * A lens origin's words, as they are stored: the reader's own, **trimmed**,
+ * and never empty. One over the cap is **refused, not cut**, since a cut lens
+ * is a different question from the one the reader asked. None of it reaches a
+ * thrown message: messages are logged, and these are the reader's words.
+ */
+function parseLens(lens: unknown): string {
+  if (typeof lens !== "string" || lens.trim() === "") {
+    throw httpError(400, "origin.lens must be a non-empty string");
+  }
+  const words = lens.trim();
+  if (words.length > MAX_LENS_CHARS) {
+    throw httpError(413, `An origin's lens may be at most ${MAX_LENS_CHARS} characters`);
+  }
+  return words;
 }
 
 /**

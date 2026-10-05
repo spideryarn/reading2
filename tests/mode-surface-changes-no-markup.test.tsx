@@ -1608,7 +1608,7 @@ function mountVisitorTweets(): ReactNode {
 }
 
 /** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
@@ -1891,6 +1891,10 @@ const TWEETS_VISITOR: BandShape = {
  * (the order's sentence) and `div.dbt-bar.dbt-name` (the identification
  * threshold) sat here instead; both went with plan 261003o. The relevance bar
  * (`.dbt-rel`) is Claims', so Reception, which this fixture opens on, has none.
+ *
+ * `div.gloss-ask.dbt-lens` is the owner's *Look at the debate from an angle*
+ * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
+ * change to both shapes: it is drawn with or without a stored debate.
  */
 const DEBATE_SHAPE: BandShape = {
   className: "mode-band gloss dbt has-about",
@@ -1899,6 +1903,7 @@ const DEBATE_SHAPE: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
+    "div.gloss-ask.dbt-lens",
     "div.summ-controls.dbt-controls",
     "div.dbt-scroll",
   ],
@@ -1923,6 +1928,7 @@ const DEBATE_LOADING: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
+    "div.gloss-ask.dbt-lens",
     "p.gloss-quiet",
     "div.dbt-scroll",
   ],

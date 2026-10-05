@@ -650,6 +650,11 @@ so the links **in the prose** are what carry the web half. Pinned by
 and the before-and-after numbers are in
 [260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md).
 
+Since 2026-10-05 Debate's *Look at the debate from an angle* leans on this trigger's *"what do others
+say?"*: it starts an ordinary chat whose first question uses those words and also asks for a web
+search outright, with no prompt of its own
+([debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle)).
+
 ## The "?" says so, and the answer teaches
 
 A press of the "?" in the gutter sends `help: true` on the POST body, validated as **absent or

@@ -110,6 +110,7 @@ import { useDictationField } from "./useDictationField.js";
 import { isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import { type ThreadSource, threadSource } from "./thread-source.js";
+import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -995,8 +996,9 @@ const SOURCE_ICON: Readonly<Record<ThreadSource["mode"], LucideIcon>> = {
  * no stored origin. Plan 261005i, D5; the rest of D5 is the next stage.
  *
  * A sibling of the row's button and not inside it, so its card and the
- * button's own `title` are never both on screen. The quote is the article's
- * words, so it takes the author's face.
+ * button's own `title` are never both on screen. The quote takes the face of
+ * whoever wrote it: the author's for a claim, the reader's for an angle they
+ * typed (`ThreadSource.voice`).
  */
 function ThreadSourceMark({ thread }: { thread: ChatThread }) {
   const source = threadSource(thread);
@@ -1008,7 +1010,7 @@ function ThreadSourceMark({ thread }: { thread: ChatThread }) {
       content={
         <TipNote>
           {source.label}
-          <span className="chat-thread-source-quote voice-author">“{source.quote}”</span>
+          <span className={withVoice("chat-thread-source-quote", source.voice)}>“{source.quote}”</span>
         </TipNote>
       }
     >

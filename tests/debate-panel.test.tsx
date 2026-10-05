@@ -210,7 +210,7 @@ const threaded: (string | null)[] = [];
 const retried: string[] = [];
 const NO_DOI: CitersResult = { kind: "no-doi" };
 /** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";

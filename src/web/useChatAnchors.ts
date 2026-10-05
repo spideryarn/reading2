@@ -57,7 +57,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { type ChatAnchor, sameOrigin, type ThreadOrigin, type ThreadSummary } from "../types.js";
+import {
+  type ChatAnchor,
+  isLensOrigin,
+  type LensOrigin,
+  sameOrigin,
+  type ThreadOrigin,
+  type ThreadSummary,
+} from "../types.js";
 import type { AskedQuestion } from "./comment-nav.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -293,7 +300,8 @@ export function threadFor(
  * The match is exact (`sameOrigin`): a claim has no id, so its block and its
  * words are its name, and a new search that words the claim differently no
  * longer matches. The conversation is then still in Chat's list; only the
- * mark goes.
+ * mark goes. A lens never matches a claim, whatever its words; the chats
+ * started from a lens are listed by `lensThreads` below.
  *
  * The newest by `updatedAt`, `threadFor`'s rule. `kind === "chat"` positively,
  * because the mark opens the floating dialog, which is chat's.
@@ -308,6 +316,29 @@ export function threadForOrigin(
     if (!best || s.updatedAt > best.updatedAt) best = s;
   }
   return best;
+}
+
+/** A chat's summary whose origin is a lens: what one line of Debate's *Your angles* is drawn from. */
+export type LensThread = ThreadSummary & { origin: LensOrigin };
+
+/**
+ * **Every chat that was started from an angle typed into Debate's box**,
+ * newest first: Debate's *Your angles*, the way back to them
+ * (plan 261005k, A). Derived from the summaries, as `threadForOrigin` is, so
+ * nothing is stored on Debate's side.
+ *
+ * A list and not a lookup: an angle is the reader's own free words with
+ * nothing in Debate to hang a mark on, and two chats started from the same
+ * words are two conversations, so each gets its line. `kind === "chat"`
+ * positively, for `threadForOrigin`'s reason.
+ */
+export function lensThreads(summaries: readonly ThreadSummary[]): LensThread[] {
+  const out: LensThread[] = [];
+  for (const s of summaries) {
+    if (s.kind !== "chat" || !s.origin || !isLensOrigin(s.origin)) continue;
+    out.push({ ...s, origin: s.origin });
+  }
+  return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /**
