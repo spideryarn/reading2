@@ -108,6 +108,7 @@ import { mintId } from "../src/ids.js";
 import {
   DEADLINE_MARGIN_MS,
   REQUEUE_BUDGET,
+  STEP_BUDGET_MS,
   advanceJobWith,
   claimSession,
   retryJob,
@@ -1286,8 +1287,11 @@ describe("a claim under Postgres", () => {
    * ## The arrangement
    *
    * `extract` finishes at once and `blocks` never finishes at all. The lease
-   * leaves an 8 s deadline: enough for the walk to admit `blocks`, whose
-   * `STEP_BUDGET_MS` is 5 s, and not enough for it to survive.
+   * leaves a deadline 3 s longer than `blocks`'s `STEP_BUDGET_MS`: enough
+   * for the walk to admit it, and not enough for a step that never ends to
+   * survive. Read off the table, so the next change to that row (it went from
+   * 5 s to 25 s when the step gained its rating call) cannot strand this test
+   * on `extract` again.
    */
   it("hands the job back mid-step when it runs out of time, and resumes on the same draft", async () => {
     const slug = SLUGS.pause;
@@ -1312,10 +1316,9 @@ describe("a claim under Postgres", () => {
           inFlightDraft = (await jobRow(job.id))?.draftRevisionId ?? null;
         }),
       } as never,
-      /* 8s of deadline after `DEADLINE_MARGIN_MS`: `extract` runs and commits,
-         `blocks` is admitted with more than its 5s budget left, and the timer
-         fires while it is in flight. */
-      leaseMs: DEADLINE_MARGIN_MS + 8_000,
+      /* `extract` runs and commits, `blocks` is admitted with more than its
+         budget left, and the timer fires while it is in flight. */
+      leaseMs: DEADLINE_MARGIN_MS + STEP_BUDGET_MS.blocks + 3_000,
     });
 
     /* **`done: false`, which is what makes this work with no client change.**

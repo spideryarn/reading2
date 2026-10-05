@@ -159,7 +159,7 @@
  * - **the fence.** `attempt_id` is never wrong in these two cases, because
  *   nothing else claims the job.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * What the runner did to its session, recorded from inside it.
@@ -222,7 +222,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { advanceJob } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
+import { STEPS, readingDifficultyDeps, stepIsDone, type StepContext } from "../src/pipeline.js";
 import {
   readOnlyPgArtifacts,
   readsPgArtifacts,
@@ -308,6 +308,14 @@ describe("a step run for real, through the commit", () => {
        seeded as somebody else is invisible and every claim would refuse. */
     article = await scratchArticleInPg(SLUG, { ownerId: DEV_OWNER_ID });
   }, 120_000);
+
+  /* The real `blocks` step ends by asking a model how hard the piece is to
+     read (src/pipeline.ts § ratedReadingDifficulty). Nothing here is about
+     that, and a test may not reach a provider, so it answers "unrated".
+     Inside braces: vitest calls whatever a hook returns as teardown. */
+  beforeEach(() => {
+    vi.spyOn(readingDifficultyDeps, "rate").mockResolvedValue({ kind: "unrated", why: "too-short" });
+  });
 
   afterEach(async () => {
     seen.commits = 0;

@@ -285,6 +285,9 @@ async function corpusArtefact(kind: ArtifactKind): Promise<unknown> {
 
 /** The corpus artefact, with this clone's slug and address written into it. */
 async function partFor(slug: string, kind: ArtifactKind): Promise<unknown> {
+  /* No corpus file: a rating is columns, not a document, and `blocks` must
+     hand one back, rated or not (src/pipeline.ts § the `blocks` step). */
+  if (kind === "readingDifficulty") return { rated: false };
   const value = await corpusArtefact(kind);
   if (typeof value !== "object" || value === null) return value;
   const copy = { ...(value as Record<string, unknown>) };
