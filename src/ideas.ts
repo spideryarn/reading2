@@ -521,8 +521,8 @@ export function buildIdeas(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent. Absent means "written before this existed"; `null`
-       means "written deliberately without a profile", and the two need
-       different sentences. src/profile.ts § profileIsStale. */
+       means "written with no profile", and only `null` reads as changed once
+       the reader has one. src/profile.ts § profileIsStale. */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
     ideas: inReadingOrder(fresh, opts.blocks),
     generatedAt: new Date().toISOString(),

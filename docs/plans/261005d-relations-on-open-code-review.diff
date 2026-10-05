@@ -1,0 +1,542 @@
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index b797eac9f..f39023ef5 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -617,8 +617,7 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
+ 
+ **Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
+ it.** When an import's first full publication commits, the same transaction queues one job per main
+-mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas, Marginalia's
+-relation words (since 2026-10-05, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)) and the
++mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
+ cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+ mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
+ reader's profile as it stood at publication.
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 8041924a5..45637b1e3 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -112,19 +112,34 @@ options passed over and GPT Sol's review are in
+   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
+   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
+   *why* or *e.g.* later is a row in each table and no new model call.
+-- **An import queues it, since 2026-10-05**, with the other main modes' steps, when the mode left
+-  the experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md); [ingest-queue.md](ingest-queue.md)).
+-- **Otherwise the press that turns the column on asks for it**: on an article imported before
+-  then, or with the add page's box unticked, or where the queued run failed. Marginalia's row in
+-  `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
+-  starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
+-  a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
+-  arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
+-  [`src/web/useRelations.ts`](../../src/web/useRelations.ts). The first-open default that turns the
+-  column on is such an arrival, not a press
+-  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)).
+-- **Nothing in the column says it is running.** The words appear when the job finishes; the job
+-  is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
++- **Made when the column is shown, not on import and not on a press.**
++
++  > generate linking words when Marginalia mode is opened
++  >
++  > — Greg, 2026-10-05
++
++  The owner's column mounting is what asks ([`src/web/useRelations.ts`](../../src/web/useRelations.ts),
++  through `useAutoRunOnArrival` in [`useAutoRun.ts`](../../src/web/useAutoRun.ts), the rule the
++  thread in Summary already used). So it does not matter what showed the column: a press of the
++  toggle, the first-open default that turns it on with nobody pressing anything
++  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)),
++  a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press could
++  not carry it, because the default arrives without one, and a new article would then have had no
++  words until the column was turned off and on.
++  - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
++    last word. Turning the column off and on again buys nothing, and a failed run does not loop.
++  - **A stale or outdated list counts as none**, so the next showing rewrites it.
++  - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the column is not
++    mounted. A visitor's column never reaches the hook.
++  - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
++    `delegated` and answers `null`: the command bar still marks the row as one that may start work,
++    and the import's list, which is derived from that table, does not include it.
++  - **For part of 2026-10-05 an import queued it**, with the other main modes' steps
++    ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
++    for every article, opened or not. **No backfill**: an article from before gets its words the
++    next time its owner has the column open (Greg: *"yes leave that for now"*).
++- **Nothing in the column says it is running.** The notes are drawn without the words, and the
++  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+ - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
+   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
+   rewritten one.
+diff --git a/docs/project/url-state.md b/docs/project/url-state.md
+index c832b8ebf..222db03fa 100644
+--- a/docs/project/url-state.md
++++ b/docs/project/url-state.md
+@@ -750,9 +750,11 @@ it.
+ - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
+ - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
+   open would be a first one. `readLastView` tells *failed* from *no key* for this.
+-- **It starts nothing.** Arriving in Summary or with the notes on spends nothing
+-  ([summaries.md](summaries.md), [marginalia.md](marginalia.md)); with no summary stored the owner
+-  sees the empty state and **Write it**.
++- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in Summary spends
++  nothing ([summaries.md](summaries.md)); with no summary stored the owner sees the empty state and
++  **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
++  none, once, which is what Greg asked for
++  ([marginalia.md § Relation words](marginalia.md#relation-words)).
+ 
+ Deferred, and named in
+ [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):
+diff --git a/src/auto-mode-steps.ts b/src/auto-mode-steps.ts
+index 5889d5ddb..92432d79a 100644
+--- a/src/auto-mode-steps.ts
++++ b/src/auto-mode-steps.ts
+@@ -26,19 +26,21 @@ import type { StepName } from "./types.js";
+  *
+  * `tweets` and `simple` are Summary's two artefacts (its thread and its
+  * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
+- * modes'; `relations` is Marginalia's relation words (so, but, vs), on the
+- * list since the mode left the experimental switch on 2026-10-05
+- * (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md);
+- * `crossrefs` belongs to no mode — the links from a phrase in one
++ * modes'; `crossrefs` belongs to no mode — the links from a phrase in one
+  * passage to the passage that backs it sit in the prose in every mode
+  * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 3).
++ *
++ * **Not `relations`**, Marginalia's relation words (so, but, vs). It was on
++ * the list for part of 2026-10-05, and came off the same day: Greg chose to
++ * make the words the first time the column is shown rather than for every
++ * import (src/web/useRelations.ts;
++ * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md).
+  */
+ export const AUTO_MODE_STEPS: readonly StepName[] = [
+   "tweets",
+   "glossary",
+   "quotes",
+   "ideas",
+-  "relations",
+   "simple",
+   "skim",
+   "crossrefs",
+diff --git a/src/mode-catalog.ts b/src/mode-catalog.ts
+index 2c38fc776..82227ab7f 100644
+--- a/src/mode-catalog.ts
++++ b/src/mode-catalog.ts
+@@ -648,13 +648,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
+        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
+        and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
+        thing it generates is its own relation words — so, but, vs
+-       (src/relations.ts, plan 261003f), queued on import
+-       (src/auto-mode-steps.ts, plan 261005d) or by the owner's press where
+-       there are none; other modes' lists are only read. The
++       (src/relations.ts, plan 261003f), asked for the first time the owner's
++       column is shown (src/web/useRelations.ts, plan 261005d), never on
++       import; other modes' lists are only read. The
+        width is
+        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
+        drawn. */
+-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, when the article is added or the first time its owner turns the column on. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
++    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model pass makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
+        Comments row has it too and this row wins it. **Nothing here may start
+        with `notes`**, which is the Comments row's. */
+diff --git a/src/rerun-steps.ts b/src/rerun-steps.ts
+index d29477dfc..8f769b4d6 100644
+--- a/src/rerun-steps.ts
++++ b/src/rerun-steps.ts
+@@ -104,8 +104,8 @@ export const METADATA_RERUN_STEPS = [
+   "quiz",
+   "faq",
+   /* **Joined on 2026-10-03 with the step**, the way to redo the margin's
+-     relation words by hand (an import normally makes them first; the owner's
+-     press on Marginalia fills a missing or stale result). The three answers: **one**
++     relation words by hand (the column makes them the first time its owner
++     sees it, and again when they are stale). The three answers: **one**
+      metered call a press — a single `streamMessage`, no tools
+      (`generateRelations`), and none at all on an article with fewer than two
+      paragraphs; **no prerequisite** beyond the article itself; and **safe to
+diff --git a/src/web/activation.ts b/src/web/activation.ts
+index 58f5ab15c..648fb208b 100644
+--- a/src/web/activation.ts
++++ b/src/web/activation.ts
+@@ -288,11 +288,21 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
+   plain: { kind: "none", reason: "the article and nothing else — there is nothing to generate" },
+   structure: { kind: "none", reason: "reads the tree the pipeline already built; no model call" },
+   /* Everything else the column shows is read and never made; the relation
+-     words are its own. New imports queue them, and where none was stored the
+-     press that turns the column on asks for them (src/web/useRelations.ts).
+-     The press that turns it off arms nothing: Dock.tsx § `useActivateMode`.
+-     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+-  marginalia: { kind: "fixed", target: "relations" },
++     words are its own, and **the column asks for them when it is shown**, not
++     when it is pressed (src/web/useRelations.ts § `useAutoRunOnArrival`). Greg,
++     2026-10-05: *"generate linking words when Marginalia mode is opened"*. A
++     press could not carry it: the first-open default turns the column on with
++     nobody pressing anything. So the press arms nothing, as a Summary press
++     that lands on the thread arms nothing, and the row is `delegated` rather
++     than `none` so the command bar still says the row may start work. Not
++     `fixed`: that would mint a `relations` token no hook is mounted to claim,
++     and put the step back on the import's list (auto-modes.ts).
++     docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
++  marginalia: {
++    kind: "delegated",
++    target: () => null,
++    why: "the column writes its relation words when it is shown, whatever showed it; a press has nothing left to arm",
++  },
+   /* Nothing exists to fill until the reader has typed. */
+   search: { kind: "none", reason: "stores nothing until the reader types a query" },
+   chat: { kind: "none", reason: "stores nothing until the reader asks something" },
+diff --git a/src/web/auto-modes.ts b/src/web/auto-modes.ts
+index 1ba34cd28..5f296f221 100644
+--- a/src/web/auto-modes.ts
++++ b/src/web/auto-modes.ts
+@@ -57,9 +57,14 @@ import { modeStep } from "./activation.js";
+  * Tweets would have dropped the pair without a word (GPT Sol, F2 of the 261003l
+  * review) — tests/auto-modes.test.tsx asserts the whole list for that reason.
+  *
+- * Diagram, the other delegated mode, is behind the experimental switch and so
++ * Diagram, another delegated mode, is behind the experimental switch and so
+  * is not a main mode; if it leaves the switch, its row here is a decision to
+  * make then, not a default to inherit.
++ *
++ * **Marginalia is a main mode, delegated, and absent on purpose.** Its
++ * relation words are made the first time the column is shown, not on import
++ * (Greg, 2026-10-05; src/web/useRelations.ts). A row here would queue them
++ * for every article again.
+  */
+ const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
+   summary: ["simple", "tweets"],
+diff --git a/src/web/auto-run-targets.ts b/src/web/auto-run-targets.ts
+index 85087a432..b2cb2c1f5 100644
+--- a/src/web/auto-run-targets.ts
++++ b/src/web/auto-run-targets.ts
+@@ -74,9 +74,10 @@ type StepAutoRunTarget = StepTarget<
+   /* Summary's plain-words work, armed by its bar button and by its Brief and
+      Fuller segments and command rows — docs/plans/261002a-summary-generates-on-open.md. */
+   | "simple"
+-  /* Marginalia's relation words (so, but, vs): its own artefact. Imports queue
+-     it; this automatic-run target is the fallback armed by the press that
+-     turns the column on — plans 261003f and 261005d. */
++  /* Marginalia's relation words (so, but, vs): its own artefact, made the
++     first time the owner's column is shown. No press arms this target; it is
++     here for the once-per-page-load attempt (useAutoRun.ts §
++     `useAutoRunOnArrival`) — plans 261003f and 261005d. */
+   | "relations"
+ >;
+ 
+diff --git a/src/web/last-view.ts b/src/web/last-view.ts
+index 075593a8f..22a74c8b1 100644
+--- a/src/web/last-view.ts
++++ b/src/web/last-view.ts
+@@ -84,7 +84,7 @@ export const REMEMBERED = [
+   "at", // the section you were reading
+   "spine", // the bird's-eye rail
+   "mode", // which mode owns the band — bar three; NEEDS_AN_EXPLICIT_PRESS
+-  "margin", // Marginalia's column of notes, right of the prose — draws only what is already there
++  "margin", // Marginalia's column of notes, right of the prose — a restore makes its relation words if there are none (useRelations.ts)
+   "summary", // brief, fuller or thread — dormant without `mode`, and a restore never opens the thread
+   "structure", // fisheye or expanded — nothing to generate either way
+   "diagram", // which of the five pictures
+@@ -494,10 +494,12 @@ export function writeLastView(slug: string, search: string, storage: StorageSour
+  * out for a reader whose switch was off.
+  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
+  *
+- * Neither parameter starts anything on arrival — checked in the hooks, as
+- * `NEEDS_AN_EXPLICIT_PRESS` above says to: Summary's `useSimple` and
+- * Marginalia's `useRelations` both spend through `useAutoRun`, which waits for
+- * a press.
++ * `?mode=summary` starts nothing on arrival — checked in the hook, as
++ * `NEEDS_AN_EXPLICIT_PRESS` above says to: `useSimple` spends through
++ * `useAutoRun`, which waits for a press. **`?margin=1` does, on purpose, since
++ * 2026-10-05**: the column asks for its relation words when it is shown, and
++ * this default is the case Greg's decision was made for (useRelations.ts) —
++ * one call, once per article, for its owner.
+  */
+ export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
+   if (bandCoversProse(windowWidth)) return "";
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 5f1adab27..4f60bd0a1 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -692,7 +692,8 @@ export type MarginFeed = {
+ export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
+ 
+ /**
+- * **The owner's ideas, FAQ, Timeline and Debate, read and never made.** A component of
++ * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
++ * the relation words, which are made here. A component of
+  * its own so the reads happen only while Marginalia is open — the read halves
+  * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full hooks, which
+  * arm the automatic run and could spend (Debate is the dearest step in the
+@@ -702,9 +703,12 @@ export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: nul
+  */
+ export function OwnerMarginFeed({
+   slug,
++  shown,
+   onFeed,
+ }: {
+   slug: string;
++  /** The column is on screen: switched on *and* the window has room for the notes. */
++  shown: boolean;
+   onFeed(feed: MarginFeed): void;
+ }) {
+   const ideasRead = useIdeasRead(slug);
+@@ -712,9 +716,10 @@ export function OwnerMarginFeed({
+   const timelineRead = useTimelineRead(slug);
+   const debateRead = useDebateRead(slug);
+   /* **The one thing here that can spend**: the relation words are Marginalia's
+-     own. New imports queue them; where none was stored, the press that turned
+-     the column on asks for them (useRelations.ts). Never on a mount. */
+-  const relations = useRelations(slug);
++     own, and this mount is what asks for them where none is stored — once per
++     article per page load, whatever opened the column, and only while the
++     notes are on screen (useRelations.ts). */
++  const relations = useRelations(slug, shown);
+   /* **A list made while the margin is open reaches it** — FAQ run in the left
+      band appears here without reopening the margin. The band refreshes its own
+      read when its job finishes; this hears the same completion for the margin's
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index e0ccaa465..57b1c974d 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -3400,7 +3400,7 @@ export function Reader({
+         owner={owner !== null}
+         onPlain={() => void setMargin(null)}
+       >
+-        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
++        {owner && <OwnerMarginFeed slug={slug} shown={marginRoom} onFeed={setOwnerFeed} />}
+         {!bandCovers && (
+           <MarginaliaHead
+             room={fit.margW > 0}
+diff --git a/src/web/useRelations.ts b/src/web/useRelations.ts
+index 445c94439..bc7435e50 100644
+--- a/src/web/useRelations.ts
++++ b/src/web/useRelations.ts
+@@ -4,24 +4,39 @@
+  * and the one job that writes them.
+  *
+  * Marginalia otherwise generates nothing (docs/project/marginalia.md). This is
+- * its one artefact of its own. New imports queue it with the other main modes
+- * (src/auto-mode-steps.ts); where none was stored — an older article, an opted-out
+- * import or a failed queued run — **the press that turns the column on asks for
+- * it**, through the same activation every self-starting mode uses
+- * (src/web/useAutoRun.ts; Marginalia's row in activation.ts § `MODE_TARGET`).
+- * A mount is not a press, so a pasted `?margin=1` link, a Back step, a reload
+- * and the first-open default all spend nothing.
++ * its one artefact of its own, and **it is made the first time the column is
++ * shown**:
++ *
++ * > generate linking words when Marginalia mode is opened
++ * >
++ * > — Greg, 2026-10-05
++ *
++ * Shown, not pressed. The first-open default turns the column on with nobody
++ * pressing anything (last-view.ts § `firstOpenSearch`), and while this hook
++ * waited for a press (`useAutoRun`, until 2026-10-05) a new article arrived
++ * with a margin that had no words until the column was turned off and on. So
++ * it is `useAutoRunOnArrival`, the rule Summary's thread already had: one
++ * unforced attempt per article per page load, whatever put the column there —
++ * a press, the default, a pasted `?margin=1`, a reload, a restored view. That
++ * last one is how an article from before this gets its words; there is no
++ * backfill. Nor is it queued on import, as it was for part of 2026-10-05
++ * (src/auto-mode-steps.ts): that paid for every article, opened or not.
++ *
++ * **`shown` is the column on screen, not the switch**: on a window with no
++ * room for the notes the feed is still mounted for its reads, and words nobody
++ * can see are not worth a call. The attempt waits until the window has room.
+  *
+  * Owner only, and not because of a check here: the one caller is
+  * `OwnerMarginFeed`, mounted under the owner's arm. A visitor's payload does
+  * not carry the words at all in v1 — it has no staleness verdict, and a
+  * relation word has no quote to check against its block.
+- * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
++ * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md;
++ * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
+  */
+ import { useCallback, useEffect, useState } from "react";
+ import type { BlockId, Relation, RelationsResponse } from "../types.js";
+ import { apiFetch, readJson } from "./lib/api.js";
+-import { useAutoRun } from "./useAutoRun.js";
++import { useAutoRunOnArrival } from "./useAutoRun.js";
+ import { useOrderedRead } from "./useOrderedRead.js";
+ import { useStepJob } from "./useStepJob.js";
+ 
+@@ -34,7 +49,7 @@ type RelationsStatus = "loading" | "none" | "ready" | "error";
+  */
+ export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
+ 
+-export function useRelations(slug: string): RelationsByBlock {
++export function useRelations(slug: string, shown: boolean): RelationsByBlock {
+   const [status, setStatus] = useState<RelationsStatus>("loading");
+   const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
+ 
+@@ -76,12 +91,15 @@ export function useRelations(slug: string): RelationsByBlock {
+     await queue.start({});
+   }, [queue]);
+ 
+-  /* **Stale or outdated counts as nothing there**, so the next press rewrites
+-     it. Unforced: the step's own stamp check decides whether to run, and it
+-     will agree, because a stale artefact is exactly what an unforced run
+-     regenerates (as useArc.ts). */
++  /* **Stale or outdated counts as nothing there**, so the next showing
++     rewrites it. Unforced: the step's own stamp check decides whether to run,
++     and it will agree, because a stale artefact is exactly what an unforced
++     run regenerates (as useArc.ts). */
+   const unusable = loaded !== null && (loaded.stale || loaded.outdated);
+-  useAutoRun(slug, "relations", status === "ready" && unusable ? "none" : status, ensure, reload);
++  const answer = status === "ready" && unusable ? "none" : status;
++  /* Not on screen is not an answer yet: `loading` is the status the arrival
++     rule waits on, and it is asked again when the window has room. */
++  useAutoRunOnArrival(slug, "relations", shown ? answer : "loading", ensure, reload);
+ 
+   /* `?.` because a reply that is JSON but not this shape must cost the reader
+      the words, not the column: this runs inside Marginalia's boundary. */
+diff --git a/tests/artefact-read-hooks.test.tsx b/tests/artefact-read-hooks.test.tsx
+index f5f3afdc2..18bbfcfff 100644
+--- a/tests/artefact-read-hooks.test.tsx
++++ b/tests/artefact-read-hooks.test.tsx
+@@ -101,6 +101,11 @@ vi.mock("../src/web/lib/api.js", async () => {
+       throw new ReaderFacingError(`${kind} read failed`);
+     }
+     if (kind && present.has(kind)) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
++    if (url.startsWith("/api/relations/") && present.has("relations")) {
++      return new Response(JSON.stringify({ relations: { relations: {} }, stale: false, outdated: false }), {
++        status: 200,
++      });
++    }
+     return new Response(null, { status: 404 });
+   };
+   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
+@@ -157,9 +162,12 @@ const READS = [
+ ] as const;
+ 
+ describe("the read hooks start no job", () => {
+-  it("the actual owner Marginalia feed performs only its five artefact GETs, and no press means no job", async () => {
++  it("the actual owner Marginalia feed performs only its five artefact GETs, and starts no job for the four lists it only reads", async () => {
++    /* The relation words are stored, so the one thing the feed may make has
++       nothing to make; the other four lists are absent and stay unasked for. */
++    present = new Set(["relations"]);
+     await act(async () => {
+-      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", onFeed: vi.fn() }));
++      root.render(createElement(OwnerMarginFeed, { slug: "read-hooks", shown: true, onFeed: vi.fn() }));
+     });
+     await act(async () => {
+       await new Promise((resolve) => setTimeout(resolve, 60));
+@@ -168,8 +176,9 @@ describe("the read hooks start no job", () => {
+       "/api/debate/read-hooks",
+       "/api/faq/read-hooks",
+       "/api/ideas/read-hooks",
+-      /* Marginalia's own artefact. Its hook can start a job, but only on a
+-         press (useRelations.ts); a mount, as here, asks for nothing. */
++      /* Marginalia's own artefact. Its hook starts a job when the column is
++         shown with none stored (tests/marginalia-relations-on-open.test.tsx);
++         here there is one. */
+       "/api/relations/read-hooks",
+       "/api/timeline/read-hooks",
+     ]);
+diff --git a/tests/auto-modes.test.tsx b/tests/auto-modes.test.tsx
+index 2cfb66269..40446d3a0 100644
+--- a/tests/auto-modes.test.tsx
++++ b/tests/auto-modes.test.tsx
+@@ -152,20 +152,24 @@ describe("which steps are queued", () => {
+        became delegated — and `modeStep` answers `null` for a delegated mode,
+        so the derivation alone lost both (GPT Sol, F2 of the 261003l review;
+        watched red at five steps). auto-modes.ts § `DELEGATED_MODE_STEPS`. */
+-    /* `relations` since 2026-10-05, when Marginalia left the switch: its press
+-       makes the relation words, so the rule above puts them on the list
+-       (docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
++    /* **No `relations`.** Marginalia is a main mode since 2026-10-05, and for
++       part of that day its relation words were queued here. Greg: "generate
++       linking words when Marginalia mode is opened" — so its row is delegated
++       and names no step, and the column asks when it is shown
++       (tests/marginalia-relations-on-open.test.tsx;
++       docs/plans/261005d-marginalia-out-of-the-experimental-switch.md). */
+     expect(derivedAutoModeSteps()).toEqual([
+       "tweets",
+       "glossary",
+       "quotes",
+       "ideas",
+-      "relations",
+       "simple",
+       "skim",
+       "crossrefs",
+     ]);
+     expect(modeStep("summary")).toBeNull();
++    expect(modeStep("marginalia")).toBeNull();
++    expect(AUTO_MODE_STEPS).not.toContain("relations");
+   });
+ 
+   it("the written list the server queues from equals the derived one", () => {
+@@ -198,7 +202,7 @@ describe("which steps are queued", () => {
+   it("names them to the reader", () => {
+     /* Summary once, though two of the steps are its own (its lengths and its
+        thread). It must not vanish with its `fixed` row (F2). */
+-    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas, Marginalia and Skim are prepared");
++    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas and Skim are prepared");
+     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
+   });
+ });
+@@ -216,7 +220,6 @@ describe("what each job asks for", () => {
+       ["glossary"],
+       ["quotes"],
+       ["ideas"],
+-      ["relations"],
+       ["simple"],
+       ["quotes", "ideas", "skim"],
+       ["crossrefs"],
+@@ -227,7 +230,7 @@ describe("what each job asks for", () => {
+     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
+        goes before it. The publication stamps them in this order. */
+     const { together, after } = autoModePosts();
+-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["relations"], ["simple"], ["crossrefs"]]);
++    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["crossrefs"]]);
+     expect(after).toEqual([["quotes", "ideas", "skim"]]);
+   });
+ 
+diff --git a/tests/marginalia-live-refresh.test.tsx b/tests/marginalia-live-refresh.test.tsx
+index 69ec7795f..288063b78 100644
+--- a/tests/marginalia-live-refresh.test.tsx
++++ b/tests/marginalia-live-refresh.test.tsx
+@@ -65,6 +65,16 @@ vi.mock("../src/web/lib/api.js", async () => {
+     const there = kind !== undefined && present.has(kind);
+     if (kind === "faq" && holdFaq) await holdFaq;
+     if (there) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
++    /* **The relation words are already stored.** Since 2026-10-05 the column
++       asks for them when it opens on an article with none
++       (tests/marginalia-relations-on-open.test.tsx), which is a job of its
++       own; every claim below is about the lists the margin reads and never
++       makes, on an article at rest. */
++    if (url.startsWith("/api/relations/")) {
++      return new Response(JSON.stringify({ relations: { relations: {} }, stale: false, outdated: false }), {
++        status: 200,
++      });
++    }
+     return new Response(null, { status: 404 });
+   };
+   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
+@@ -101,7 +111,7 @@ async function settle(): Promise<void> {
+ }
+ 
+ async function openMargin(): Promise<void> {
+-  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, onFeed })));
++  await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+   await settle();
+ }
+ 
+@@ -230,7 +240,7 @@ describe("the open margin, at rest", () => {
+       });
+       expect(trace.filter((l) => l === "GET /api/jobs").length, "the session's first poll").toBe(1);
+ 
+-      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, onFeed })));
++      await act(async () => root.render(createElement(OwnerMarginFeed, { slug: SLUG, shown: true, onFeed })));
+       await act(async () => {
+         await vi.advanceTimersByTimeAsync(60_000);
+       });
+diff --git a/tests/publication-queues-the-main-modes.test.ts b/tests/publication-queues-the-main-modes.test.ts
+index bc3bf4b74..54fe8fa98 100644
+--- a/tests/publication-queues-the-main-modes.test.ts
++++ b/tests/publication-queues-the-main-modes.test.ts
+@@ -128,7 +128,6 @@ const EXPECTED: StepName[][] = [
+   ["glossary"],
+   ["quotes"],
+   ["ideas"],
+-  ["relations"],
+   ["simple"],
+   ["crossrefs"],
+   ["quotes", "ideas", "skim"],

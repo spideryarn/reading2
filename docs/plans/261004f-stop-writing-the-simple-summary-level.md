@@ -525,3 +525,8 @@ the S2 answer pointed at before it existed.
 *profile changed* when they later write one, so no press is offered for it. That is
 `profileIsStale`'s rule for every personalised mode, from when writing without a profile was a
 choice. **[Q-first-profile-offers-a-rewrite]** in the debrief.
+
+**Decided, B** — Greg, 2026-10-05: "B treat a first profile as a change". Built the same day:
+`profileIsStale` now calls output written with no profile stale once the reader has one, in every
+personalised mode, and the badge has words for it. The rule and what it reaches are in
+[reader-profile.md § Provenance](../project/reader-profile.md#provenance-what-was-this-written-with-and-is-it-still-true).

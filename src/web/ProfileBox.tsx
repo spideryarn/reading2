@@ -44,11 +44,12 @@
  * the timer, the warning and the status line without writing any of them.
  * docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
  */
-import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Check, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
+import { Tooltip } from "./Tooltip.js";
 import { warnBeforeUnload } from "./unload-guard.js";
 import type { SaveState } from "./useAutosavedText.js";
 import { useDictationField } from "./useDictationField.js";
@@ -286,6 +287,21 @@ export function ProfileBox({
  * `aria-live`, so what is announced is the change. Exported for the add
  * page's box, which is not a `ProfileBox` (it has no microphone) and says the
  * same things once its article exists.
+ *
+ * **Quiet unless something failed.** Greg, 2026-10-05:
+ *
+ * > can we make it a bit less visually intrusive, e.g. a faint green tick that
+ * > appears when it saves (with a tooltip) and then fades away, with no scary
+ * > "unsaved" indicator.
+ *
+ * So the words do not change while the reader types or a write is out: there
+ * is no *Unsaved changes* and no *Saving…*. A save that landed mounts a tick,
+ * which CSS fades and then hides (profile.css § `.prof-save-tick`); it exists
+ * only in `saved`, so the next save mounts a new one and the fade runs again.
+ * A refusal is the one thing that takes the line over, and it stays until the
+ * next keystroke: losing the reader's words silently is worse than a label.
+ * What still guards words that are not saved yet is the leave warning
+ * (`useUnsavedWarning`), which says nothing until it is needed.
  */
 export function SaveStatus({ save }: { save: SaveState }) {
   return (
@@ -295,25 +311,24 @@ export function SaveStatus({ save }: { save: SaveState }) {
   );
 }
 
+/** The promise, standing in every state where nothing has gone wrong. */
+const QUIET = <span className="prof-save-words">Saves as you type.</span>;
+
 function saveWords(save: SaveState) {
   switch (save.kind) {
     case "loading":
       return "Loading…";
     case "clean":
-      return "Saves as you type.";
     case "dirty":
-      return "Unsaved changes";
     case "saving":
-      return (
-        <>
-          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
-        </>
-      );
+      return QUIET;
     case "saved":
       return (
         <>
-          <Check size={12} aria-hidden="true" />
-          Saved
+          {QUIET}
+          <SavedTick />
+          {/* Polite announcements may wait longer than the visual tick. */}
+          <span className="sr-only">Saved</span>
         </>
       );
     case "error":
@@ -327,4 +342,18 @@ function saveWords(save: SaveState) {
       return never;
     }
   }
+}
+
+function SavedTick() {
+  const [finished, setFinished] = useState(false);
+  if (finished) return null;
+  /* The tooltip is portalled outside the hidden span. Unmount it explicitly
+     when the animation ends, including after the reduced-motion hold. */
+  return (
+    <Tooltip content="Saved" placement="top">
+      <span className="prof-save-tick" aria-hidden="true" onAnimationEnd={() => setFinished(true)}>
+        <Check size={13} aria-hidden="true" />
+      </span>
+    </Tooltip>
+  );
 }

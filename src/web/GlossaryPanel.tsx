@@ -323,9 +323,9 @@ export function GlossaryPanel({
      the server says it does not, so this rewrites. `find` would be unforced
      and could skip. Plan 261002b. */
   const badge =
-    glossary && owner?.profiled ? (
+    glossary && owner ? (
       <WrittenForYou
-        written
+        written={owner.profiled}
         changed={owner.profileChanged}
         slug={owner.slug}
         regenerate={{

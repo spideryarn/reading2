@@ -100,16 +100,27 @@ import { ProfilePanel, type Regenerate } from "./ProfilePanel.js";
 export interface ProfileState {
   /** The artefact on screen was written from a profile. `false` for a plain one. */
   written: boolean;
-  /** …and that profile is not the one the reader has now. */
+  /**
+   * …and that profile is not the one the reader has now. Since 2026-10-05 also
+   * true with `written` false: the text was written without a profile,
+   * and they have one now (src/profile.ts § profileIsStale).
+   */
   changed: boolean;
 }
 
 /**
- * A profile provenance icon: current, or written for a profile since changed.
+ * A profile provenance icon: current, written for a profile since changed, or
+ * written without a profile the reader now has.
  *
- * Renders nothing when the artefact was written without a profile, which is the
- * common case and is not a state worth a line of interface. Absence here means
- * "this is the ordinary thing", exactly as an unbadged glossary entry does.
+ * Renders nothing when the artefact was written without a profile and the
+ * reader still has none, which is the common case and is not a state worth a
+ * line of interface. Absence here means "this is the ordinary thing", exactly
+ * as an unbadged glossary entry does.
+ *
+ * **Written with none, and the reader has one now** draws the changed badge
+ * with its own words — Greg, 2026-10-05: "B treat a first profile as a
+ * change". Without it the server's `profileChanged` had nowhere to show in the
+ * modes whose only rewrite press is this panel's Regenerate.
  */
 export function WrittenForYou({
   written,
@@ -121,7 +132,9 @@ export function WrittenForYou({
   /** The mode's forced run, for the panel's Regenerate. See the header for who passes one. */
   regenerate?: Regenerate | undefined;
 }) {
-  if (!written) return null;
+  if (!written && !changed) return null;
+  /* Changed, and there was no profile to change from. */
+  const first = !written;
   const Icon = changed ? UserRoundPen : UserRound;
   const shows = "Shows your profile, to read or edit here";
   return (
@@ -133,10 +146,16 @@ export function WrittenForYou({
          floor in narrow-window.css); it is every badge now. */
       className={`prof-badge icon-only${changed ? " changed" : ""}`}
       tip={{
-        head: changed ? "Written for an older profile" : "Written for your profile",
-        what: changed
-          ? "The AI used an earlier version of what you had written under About you, Why you're reading this one, or both."
-          : "The AI used what you had written under About you, Why you're reading this one, or both, when it wrote this.",
+        head: first
+          ? "Written without your profile"
+          : changed
+            ? "Written for an older profile"
+            : "Written for your profile",
+        what: first
+          ? "The AI did not use your About you or Why you're reading this one profile when it wrote this."
+          : changed
+            ? "The AI used an earlier version of what you had written under About you, Why you're reading this one, or both."
+            : "The AI used what you had written under About you, Why you're reading this one, or both, when it wrote this.",
         /* The half nobody could guess, as the Help page has it. */
         how: changed
           ? "Nothing is rewritten by itself when your profile changes."
@@ -144,14 +163,18 @@ export function WrittenForYou({
         press: changed && regenerate ? `${shows}, and offers to write this again for it.` : `${shows}.`,
       }}
       label={
-        changed
-          ? "Written for a profile you have changed since — see what it says now"
-          : "Written for your profile — see what it says"
+        first
+          ? "Written without your profile — see what it says now"
+          : changed
+            ? "Written for a profile you have changed since — see what it says now"
+            : "Written for your profile — see what it says"
       }
       note={
-        changed
-          ? "This was written for your profile as it was before you last changed it."
-          : "This was written for your profile."
+        first
+          ? "This was written without your profile."
+          : changed
+            ? "This was written for your profile as it was before you last changed it."
+            : "This was written for your profile."
       }
     >
       <Icon size={13} />

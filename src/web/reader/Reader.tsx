@@ -3458,7 +3458,7 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
+        {owner && <OwnerMarginFeed slug={slug} shown={marginRoom} onFeed={setOwnerFeed} />}
         {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}
