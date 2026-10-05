@@ -102,6 +102,7 @@ export const REMEMBERED = [
   "debateby", // reception's order
   "bears", // claims' relevance threshold
   "debatethread", // which of debate's threads narrows its list
+  "chatfrom", // which source Chat's list of conversations is narrowed to
   "citeby", // citations order
   "citebar", // citations threshold
   "faqby", // FAQ order

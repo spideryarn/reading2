@@ -174,33 +174,16 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AlignLeft,
-  BookA,
-  Brain,
-  ClipboardCheck,
-  Columns2,
   Command,
-  Lightbulb,
   ChevronUp,
-  Clock,
   FlaskConical,
-  Globe,
   LoaderCircle,
-  Network,
   FileCog,
-  Info,
-  Layers,
+  type Info,
   LifeBuoy,
   MessageSquareText,
-  MessagesSquare,
-  Search,
   TriangleAlert,
   X,
-  Quote,
-  BookText,
-  BadgeQuestionMark,
-  Route,
-  PanelRight,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -209,6 +192,7 @@ import {
    written to be readable by both runtimes for the same reason. See `ModeUi`
    below for what a row here still holds, which is layout and nothing else. */
 import { MODE_CATALOG } from "../mode-catalog.js";
+import { MODE_ICON } from "./mode-icons.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
@@ -682,7 +666,9 @@ type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
 interface ModeUi {
   mode: Mode;
-  icon: typeof Info;
+  /* No `icon`: the glyph is `MODE_ICON[mode]` (mode-icons.ts) since 2026-10-05,
+     so Chat's list can wear a mode's icon without importing the bar. The
+     notes on why each glyph was chosen stay beside the rows below. */
   /* **A row holds no per-mode words at all any more, and no policy either.**
      The **name** is `MODE_LABEL[mode]` (src/title-text.ts) — a total,
      compiler-checked record the tab title and the shared-inventory dialog
@@ -766,7 +752,6 @@ const MODES_UI = [
   {
     mode: "plain",
     group: "exit",
-    icon: AlignLeft,
     keepLabel: true,
   },
   /* First of the shape run: what shape is this piece, and where am I in it —
@@ -786,12 +771,10 @@ const MODES_UI = [
   {
     mode: "structure",
     group: "shape",
-    icon: Columns2,
   },
   {
     mode: "summary",
     group: "shape",
-    icon: Layers,
   },
   /* Tweets stood here from 2026-09-29 to 2026-10-03, with `ListOrdered`. The
      thread is Summary's Thread view now, one button fewer on the bar — Greg:
@@ -827,7 +810,6 @@ const MODES_UI = [
   {
     mode: "diagram",
     group: "shape",
-    icon: Network,
   },
   /* **First of the guides run, just before Quotes, since 2026-09-29** —
      Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
@@ -843,7 +825,6 @@ const MODES_UI = [
   {
     mode: "skim",
     group: "guides",
-    icon: Route,
   },
   /* **After Skim, since 2026-09-29**; straight after Summary, with
      Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
@@ -863,7 +844,6 @@ const MODES_UI = [
   {
     mode: "quotes",
     group: "guides",
-    icon: Quote,
   },
   /* **Straight after Quotes, ahead of FAQ, since 2026-10-04** — Greg: *"move
      the glossary one to the left"* (spya-tnqt2t, plan 261004j). It had stood
@@ -871,7 +851,6 @@ const MODES_UI = [
   {
     mode: "glossary",
     group: "guides",
-    icon: BookA,
   },
   /* **In the guides run since 2026-09-29** — Greg: *"Move FAQ
      and Search a little bit further left"* (SPIDERYARN-READING2-4E) — and
@@ -888,7 +867,6 @@ const MODES_UI = [
   {
     mode: "faq",
     group: "guides",
-    icon: BadgeQuestionMark,
   },
   /* After FAQ since Glossary moved left past it on 2026-10-04. It still
      follows Glossary in the run because these two are the same kind of thing
@@ -899,7 +877,6 @@ const MODES_UI = [
   {
     mode: "ideas",
     group: "guides",
-    icon: Lightbulb,
   },
   /* **Last of the guides run, after Glossary and Ideas.** Greg placed it
      after Ideas on 2026-08-31, asked for it *"further right"* on 2026-09-29
@@ -912,7 +889,6 @@ const MODES_UI = [
   {
     mode: "timeline",
     group: "guides",
-    icon: Clock,
   },
   /* **First of the critical run — Citations, Referee, Debate — since
      2026-10-04**: Greg, *"Move the citations mode one to the left in the
@@ -929,7 +905,6 @@ const MODES_UI = [
   {
     mode: "citations",
     group: "critical",
-    icon: BookText,
   },
   /* **In the critical run — Citations, Referee, Debate — since
      2026-09-29**, which is Greg's grouping: *"Move Citations further right,
@@ -955,7 +930,6 @@ const MODES_UI = [
   {
     mode: "referee",
     group: "critical",
-    icon: ClipboardCheck,
   },
   /* **Last of the critical run, before the input run, since 2026-09-29**, when
      Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
@@ -980,7 +954,6 @@ const MODES_UI = [
   {
     mode: "debate",
     group: "critical",
-    icon: Globe,
   },
   /* **First of the input run — Search, Chat, Remember — since 2026-09-29.**
      Greg: *"move Search into section with Chat"* (SPIDERYARN-READING2-57).
@@ -1002,12 +975,10 @@ const MODES_UI = [
   {
     mode: "search",
     group: "input",
-    icon: Search,
   },
   {
     mode: "chat",
     group: "input",
-    icon: MessagesSquare,
   },
   /* Last, straight after Chat — the end of the input run (Search, Chat,
      Remember), and Greg put Chat *"just before Recall"* on 2026-09-29
@@ -1033,7 +1004,6 @@ const MODES_UI = [
        reader talks — and Greg asked for its subject instead: what they kept.
        SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
        exactly one, so there is no second thing it could be confused with. */
-    icon: Brain,
   },
   /* **Marginalia, 2026-10-01** — a run of its own at the right-hand end since
      the same day, when its column became a switch beside whichever band is
@@ -1048,7 +1018,6 @@ const MODES_UI = [
   {
     mode: "marginalia",
     group: "margin",
-    icon: PanelRight,
   },
 ] satisfies readonly ModeUi[];
 
@@ -1077,6 +1046,12 @@ const MODES_UI = [
 export type ModesMissingFromDock<
   T extends never = Exclude<Mode, (typeof MODES_UI)[number]["mode"]>,
 > = T;
+
+/** A mode's glyph at the bar's size, from the one map every drawer of it reads. */
+function ModeIcon({ mode }: { mode: Mode }) {
+  const Icon = MODE_ICON[mode];
+  return <Icon size={15} />;
+}
 
 /**
  * **Which of them the bar actually draws.** Two rules, and the second
@@ -2955,7 +2930,7 @@ function DockModes({
           if (e.detail > 0) e.currentTarget.blur();
         }}
       >
-        <m.icon size={15} />
+        <ModeIcon mode={m.mode} />
         {/* Classed so the stylesheet can drop it on a narrow window.
             Every one of these buttons already carries its label in the
             tooltip above and in its accessible name below, so hiding the
@@ -3044,7 +3019,7 @@ function MarginToggle({
           if (e.detail > 0) e.currentTarget.blur();
         }}
       >
-        <m.icon size={15} />
+        <ModeIcon mode={m.mode} />
         <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
       </button>
     </Tooltip>
@@ -3107,7 +3082,7 @@ function DockModeLinks({
         key={m.mode}
         href={modeLinkHref(slug, search, m.mode)}
         current={false}
-        icon={m.icon}
+        icon={MODE_ICON[m.mode]}
         label={MODE_LABEL[m.mode]}
         className={`${marked?.has(m.mode) ? MARKED : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
         keepLabel={m.keepLabel}

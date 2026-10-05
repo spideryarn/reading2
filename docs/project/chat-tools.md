@@ -440,6 +440,37 @@ Three details that are decisions rather than styling:
   switch, and an unknown tool falls through to a magnifying glass — a slightly wrong icon beside
   correct words is a far smaller failure than a blank row.
 
+## Chat's list shows every conversation about the article
+
+Since 2026-10-05, for report `spya-hyfqkq`
+([261005i](../plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md), D5).
+From 2026-10-01 it showed chats only.
+
+- **What is listed.** Chats, and Remember's Recall, Tutorial and Explore conversations. Referee's
+  Candidates thread is not: it is not a conversation the reader had.
+- **Where a row came from** is one pure function, `threadSource` in
+  [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
+  from a claim in Debate*), a Remember kind (*From Remember › Recall*), an anchor (*About a
+  passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
+  an icon at its head, the source mode's own from the bar
+  ([`mode-icons.ts`](../../src/web/mode-icons.ts), which the Dock reads too), with a card a tap
+  opens. A plain chat has none.
+- **A Remember row leads back to Remember.** A press goes to `mode=remember` on that sub-mode with
+  `thread` set, in one navigation. It is named for its sub-mode and has no rename or delete;
+  *Start over* lives in Remember.
+- **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
+  screen, which the server refuses on any kind but `chat`. So `ConversationBand` hands the panel
+  `listed` (every kind but Candidates) and `threads` (chats only), and the open conversation, the
+  drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
+  cleared by replace once the list has loaded. An article whose only conversations are Remember's
+  shows those rows and does not begin a blank chat; the box under the list and the + start one.
+- **The filter** above the list is All, Chats, then one choice per other source present, with
+  Remember's three sub-modes as one. It is drawn only when there is more than one source. The
+  choice is `?chatfrom=` ([url-state.md](url-state.md)).
+
+Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
+`tests/chat-list-sources.test.tsx` (the panel).
+
 ## Security: a tool result is data, and one of them is a stranger's
 
 `read_web_page` puts arbitrary text from the open web into a prompt that also holds an article and a
