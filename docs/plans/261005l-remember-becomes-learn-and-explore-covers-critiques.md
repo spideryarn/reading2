@@ -310,3 +310,20 @@ titled *Learn.* over a picture headed *Remembering*.
 **The full suite** (through `scripts/tmux-job.ts`, 2026-10-05): 13 files red of 1,682. Two were
 this work's and are fixed (`explore-kind` caught mid-edit; `command-match-mode-aliases`, above).
 The rest are in § The gate, below, with what each was re-run as after merging `origin/dev`.
+
+### The gate
+
+The full run was of the tree before `origin/dev` was merged (`8b7cc1a50` is the merge). Each of its
+13 red files, re-run alone afterwards, all green:
+
+| Red in the full run | Why | After |
+|---|---|---|
+| `explore-kind` | my own red-first test, caught mid-edit | green |
+| `command-match-mode-aliases` | this work: *r*, *re* no longer shared with Referee | fixed, green |
+| `question-press-answer-does-not-loop`, `store-guarded`, `words-that-name-a-key…`, `conflict-markers`, `search-auto-thorough` | red on `dev` at the time; `fada977ff` on `dev` fixed them | green after the merge |
+| `pdf-bundle-trace`, `cold-start-lazy-imports`, `fleet-reports-route`, `fleet-decisions-route`, `fleet-composed-access` | a fresh worktree has no build | green after `npm run build` and `npm run build:fleet` |
+| `store-export-covers-tables` (Postgres) | the busy box | green alone |
+
+The full suite was not run a second time on the merged tree: the 19 files this work touches or
+that were red, the five build-dependent ones and `npm run typecheck` were, and `npm run build`
+compiled the client.
