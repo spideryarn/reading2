@@ -1281,20 +1281,23 @@ function sse(res: ServerResponse): {
    * beside the first. A caller that wants only the frames can ignore this.
    *
    * **And most do. There is no rule here, only ten choices** — what each
-   * stream does when the reader leaves, read off the callers on 2026-10-04:
+   * stream does when the reader leaves, read off the callers on 2026-10-04,
+   * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, and `search` for a quick run
+   *                           `markOneAnswer`, `runMirror`, and `search` for a
+   *                           quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
-   *                           `runRefereeCriterion`, `runRefereeClaims`,
-   *                           `runMirror`, and `search` for a meaning run
+   *                           `runRefereeCriterion`, `runRefereeClaims`, and
+   *                           `search` for a meaning run
    *
-   * "A stream whose answer is stored runs on" is the tempting summary and it is
-   * false both ways: `runMirror` stores nothing and runs on, and
-   * `streamAskedTerm` stores its term and stops. Each caller's own comment says
-   * why. Whether there should be one rule is Greg's to decide
-   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4); when
+   * Every stream that runs on stores its answer, so the reader finds it when
+   * they come back. The converse is still not a rule: `streamAskedTerm` stores
+   * its term and stops. Each caller's own comment says why. Greg was asked
+   * whether there should be one rule and chose the narrow step — stop Mirror,
+   * which stored nothing, and change nothing else
+   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4). When
    * you add a stream, choose on purpose and add it to this list.
    */
   gone: AbortSignal;
@@ -5320,7 +5323,14 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
     text: c.criterion,
   }));
 
-  const { frame } = sse(res);
+  /* **`gone` goes to the model call**, since 2026-10-05. Nothing above is
+     stored, so an answer that finishes after the referee has left has nowhere
+     to go: letting it run was a paid call nobody could ever read. Greg's
+     decision on the one stream of the ten that was pure waste —
+     docs/plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md.
+     The gateway records the stopped call as `aborted`, and `mirrorStream` says
+     `READER_LEFT` rather than blaming the model for half an object. */
+  const { frame, gone } = sse(res);
   let chars = 0;
   try {
     for await (const event of mirrorStream({
@@ -5329,6 +5339,7 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
       criteria,
       slug,
       power: powerOf(article),
+      signal: gone,
     })) {
       if (event.type === "delta") {
         chars += event.text.length;
@@ -5341,8 +5352,10 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
        function owns the response and the outer catch never sees the error —
-       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. */
-    captureFailure(err, { route: "referee-mirror", slug });
+       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. A
+       referee who left is not a failure worth an issue — `streamAskedTerm`'s
+       rule — and `frame` below is a no-op on their closed socket. */
+    if (!gone.aborted) captureFailure(err, { route: "referee-mirror", slug });
     /* No partial text travels with it, unlike the quiz's. Half of a JSON
        object is not half of an answer: nothing in it has been checked, and a
        remark whose pointers have not been verified is exactly the
