@@ -700,6 +700,13 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           out until you have seen exactly what a visitor would get, ticked that you have the right to
           share the text, and pressed <strong>Share it</strong>. The padlock then becomes a globe.
         </p>
+        <p>
+          <strong>While it is still being added.</strong> You need not wait for an import to
+          finish. The page that shows its progress has a <strong>Make it public</strong> box with
+          the same confirmation, and the link button on the import’s card copies the address the
+          article will have. Other people can open that address once the import has finished and
+          the article is shared.
+        </p>
         <p>What sharing means:</p>
         <ul>
           <li>
