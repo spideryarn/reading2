@@ -245,7 +245,7 @@
 
   /* **The labels are not dropped here any more.** Every button losing its text,
      and the 0.45rem that goes with it, is the ladder's bottom rungs — 3 and 4
-     since 2026-10-02 (rung 4 only adds the search box going to the ⚡), rung 3
+     since 2026-10-02 (rung 4 only adds the search box going), rung 3
      alone from 2026-09-06, rung 2 before that —
      measured rather than keyed to this width, because at thirteen modes the row
      stops fitting a long way above 731px and did so silently. This query used to

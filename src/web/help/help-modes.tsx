@@ -266,8 +266,10 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           To start a quick search from anywhere in the article, type in the{" "}
-          <strong>Quick search</strong> box in the bottom bar, tap the <strong>⚡</strong> button when
-          it is shown instead, or press <strong>/</strong>. The box keeps your words after a search,
+          <strong>Quick search</strong> box in the bottom bar, press the <strong>⚡</strong> button
+          that takes its place while Search is open, or press <strong>/</strong>. A phone or a
+          narrow window has no room for the box: open <strong>Search</strong> and choose{" "}
+          <strong>quick</strong>. The box keeps your words after a search,
           so you can add to them; the <strong>×</strong> at its right-hand end empties it.
         </p>
       </>

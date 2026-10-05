@@ -116,6 +116,7 @@ import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
+import { rowTitle } from "./chat-list-row.js";
 
 interface Props {
   threads: ChatThread[];
@@ -921,7 +922,9 @@ function ThreadList({
                   title={describe(t)}
                   onClick={() => onOpen(t.id)}
                 >
-                  <span className="chat-thread-title">{t.title}</span>
+                  {/* The first question in full where the stored title is only its
+                      first sixty characters — chat-list-row.ts. */}
+                  <span className="chat-thread-title">{rowTitle(t)}</span>
                   {/* Usually the model's reply, but the reader's question when
                       that was the last thing said — so the row says whose. */}
                   {last && (
@@ -1015,7 +1018,7 @@ function lastSaid(t: ChatThread): { text: string; role: ChatMessage["role"] } | 
  * keeps the answer they occasionally need instead.
  */
 function describe(t: ChatThread): string {
-  const lines = [t.title, "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
+  const lines = [rowTitle(t), "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
   /* Only worth a line of its own once the two differ. A conversation with one
      question in it would otherwise print the same timestamp twice. */
   if (t.updatedAt !== t.createdAt) lines.push(`Last message ${exactly(t.updatedAt) ?? "unknown"}`);
