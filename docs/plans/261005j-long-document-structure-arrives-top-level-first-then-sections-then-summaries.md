@@ -2,10 +2,19 @@
 
 Up: [plans.md](../project/plans.md)
 
-Status as of 2026-10-05, evening: **stage 0 (the line in Structure) is on `dev`; the eval
-(stage 2) has run and is written up; nothing else is built.** Evidence: `src/web/StructureNotice.tsx`
+Status as of 2026-10-05, late evening: **on `dev`: stage 0 (the line in Structure), the eval
+(stage 2) and its write-up, and the slices half of stage 1a.** Evidence: `src/web/StructureNotice.tsx`
 exists and `StructureBand` mounts it; `evals/results/long-structure-2026-10-05/matrix/` holds the
-cells and judgements. Stages 1a, 1b, 3, 4 and 5 are not started. Not deployed by this work.
+cells and judgements; `runSlices` has `readSlice`, `halvingCut` and a `secondPass` count, pinned
+by `tests/structure-slices-second-pass.test.ts`. **Not started:** the rest of 1a (an unaskable
+section cut into windows, and a retry as a successor job; the open-before-structure work they
+waited on reached `dev` the same evening), 1b, 3, 4 and 5. Not deployed by this work, and the
+full test suite was not run by it: the box was overloaded and sessions were asked not to.
+
+**What the next session needs to know first.** Stage 3 is not "build top level first": read
+§ Result: stage 2. One question is with Greg (through the Overseer): whether the staged shape
+should also take long documents under the one-answer line. The next paid step is a measurement
+of the first call alone, about $17, on top of the $32.4 already spent; ask before spending it.
 
 Another plan shares this name's prefix,
 `261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md`, by the
