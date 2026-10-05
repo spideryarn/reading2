@@ -16,11 +16,24 @@
  *
  * ## One transaction, and what each part of it is for
  *
- * `select … for update`, then the `update`, then the log row, all inside one
- * transaction. Two readers pressing the toggle at once would otherwise both see
- * `private`, both write `public`, and write **two** publish events for one
- * transition — a log that says a thing happened twice is worse than no log,
- * because it is the kind of wrong that gets believed.
+ * The owner's `billing_accounts` lock, `select … for update` on the article,
+ * the `update`, then the log row, all inside one transaction.
+ *
+ * **Two toggles at once are queued by the billing lock.** Only the owner can
+ * change an article, so two calls for one article share one billing row, and
+ * the second waits there until the first has committed. Without that both
+ * would see `private`, both write `public`, and write **two** publish events
+ * for one transition — a log that says a thing happened twice is worse than no
+ * log, because it is the kind of wrong that gets believed.
+ *
+ * **The article's row lock is for a writer that does not hold the billing
+ * lock.** There is one: the publication that lands a tree on a minimal paper
+ * flips `processing` to `full` under the article lock alone
+ * (./pg-revisions.ts § `publishRevisionIn`). This method reads `processing` to
+ * decide whether a share is allowed, and `for update` is what makes that read
+ * wait for a *Read this* that is landing instead of refusing on the old value.
+ * The comments here credited it with the two-toggle case until 2026-10-05; the
+ * suite stayed green with it deleted.
  *
  * ## The lock order, since the discount
  *
@@ -68,23 +81,24 @@ function notFound(slug: string): Error {
  * **The row this switch is about to change, read and locked**, taking its
  * builder so a test can read the SQL rather than a constant beside it.
  *
- * The same reason `publicCurrentRevisionQuery` takes one, and here it is the
- * only way to check the one clause the whole concurrency argument rests on.
- * Deleting `.for("update")` left the entire suite green — GPT Sol's finding 6,
- * 2026-08-28 — and the behavioural race test that now catches it can only catch
- * it while the window is open, which on a fast local socket it very often is
- * not. tests/public-reads.test.ts reads this statement instead, and that
- * assertion fires on the mutation every time.
+ * The same reason `publicCurrentRevisionQuery` takes one. Deleting
+ * `.for("update")` left the entire suite green — GPT Sol's finding 6,
+ * 2026-08-28 — so tests/public-reads.test.ts reads this statement, and that
+ * assertion fires on the mutation every time. The behavioural test is
+ * tests/public-visibility-pg.test.ts, "waits for a Read this that is landing".
  *
  * **Through `ownedSlug`, like everything else.** The owner check and the lookup
  * are one clause, so there is no window between "whose is it" and "change it",
  * and no unfiltered read in this file for anybody to reuse without the question.
  *
- * **`for update`, because the row is read in order to decide what to write.**
- * Without it two concurrent toggles both see the old value, both write, and both
- * append an event — a log saying a thing happened twice, which is worse than no
- * log. A row lock rather than an advisory one, because Supabase's transaction
- * pooler silently does nothing with session advisory locks (src/db/client.ts).
+ * **`for update`, because the row is read in order to decide what to write**,
+ * and one writer of it holds only the article lock: publication, flipping
+ * `processing` from `minimal` to `full`. Without the clause a share started
+ * while that is landing reads `minimal` and is refused. It is **not** what
+ * stops two toggles writing two events — the billing lock `set` takes first
+ * does that; see the header. A row lock rather than an advisory one, because
+ * Supabase's transaction pooler silently does nothing with session advisory
+ * locks (src/db/client.ts).
  */
 export function lockedArticleQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
@@ -160,9 +174,10 @@ const rawPgVisibilityStore: VisibilityStore = {
 
       /* **A paper not yet read through cannot be shared**: there is nothing to
          read but a title and an abstract, and the public reader requires a tree
-         anyway. Under the lock, so a *Read this* landing at the same moment is
-         either before this (and the share goes through) or after it. Making one
-         private is never refused. */
+         anyway. Under the article's row lock — the billing lock above does not
+         cover this, because publication does not take it — so a *Read this*
+         landing at the same moment is either before this (and the share goes
+         through) or after it. Making one private is never refused. */
       if (to === "public" && row.processing === "minimal") {
         throw new NotProcessed(NOT_READ_YET_SHARE.message);
       }
