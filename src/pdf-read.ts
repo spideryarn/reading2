@@ -123,6 +123,7 @@ import {
 } from "./pdf.js";
 import { type Check, check, comparisonWords, report } from "./pdf-score.js";
 import { plainTitle } from "./html.js";
+import { tidiedTitle } from "./title-tidy.js";
 import { mathsAsText, plainMaths } from "./pdf-tex.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import {
@@ -3675,7 +3676,15 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 
   const meta: Meta = {
     slug: opts.slug,
-    title,
+    /* **Tidied for the shelf, and only here** — all capitals made title case,
+       the original kept beside it (src/title-tidy.ts, plan 261005g). The
+       transcription is the body that says which of its words are acronyms; the
+       rendered page below keeps `title` as it came. A PDF declares no
+       language, so it is taken for English. */
+    ...tidiedTitle(title, {
+      /* Paragraphs only: a heading is as likely to be set in capitals as the title is. */
+      body: mended.filter((r) => r.type === "paragraph").map((r) => r.text).join("\n"),
+    }),
     /* **The first byline a PDF has ever had.** Not decoration: Referee mode
        excludes a paper's own authors from the reviewer shortlist by reading
        `meta.byline`, and src/referee-candidates.ts already names "a PDF ingested

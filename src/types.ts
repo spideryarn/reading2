@@ -1147,7 +1147,7 @@ export interface Quote {
  * outline, and the test has not been re-run on fills.)
  *
  * `1` is the light fill, `2` the heavy one. The stylesheet owns their strengths
- * (0.20 and 0.32, styles/annotations.css § quote fills); this is an ordinal so
+ * (`--quote-fill-light` and `--quote-fill-heavy`, per theme, styles/tokens.css); this is an ordinal so
  * that the design values stay in the design layer, exactly as `data-hues` keeps
  * a count here and the colours next door.
  *
@@ -1598,6 +1598,15 @@ export interface Author {
 export interface Meta {
   slug: string;
   title: string;
+  /**
+   * **The title as it arrived, when import tidied it** — all capitals made
+   * title case, a trailing footnote marker taken off (`tidyTitle`,
+   * src/title-tidy.ts). Absent when tidying changed nothing. For the owner
+   * only: the Metadata page shows it and offers it back. No prompt reads it and
+   * a visitor is not sent it.
+   * docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md.
+   */
+  titleOriginal?: string;
   /**
    * Free text, and what every prompt's `BY:` line and Referee mode read. When
    * `authors` is present the byline is derived from it (names joined `"; "`),

@@ -34,6 +34,9 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 ## See also
 
+- [261005b-link-previews-and-seo-for-republished-articles.md](../research/261005b-link-previews-and-seo-for-republished-articles.md)
+  — which tags each platform reads for a link preview, why `og:url` is ours while the canonical is
+  the original's, and why Google asks a republisher for `noindex`
 - [261005a-reading-time-estimates-and-text-difficulty.md](../research/261005a-reading-time-estimates-and-text-difficulty.md)
   — reading rates, the word-length equation, what readability formulas and model ratings can and
   cannot see, for the "~N min" estimate

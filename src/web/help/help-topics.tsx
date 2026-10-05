@@ -383,10 +383,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             If you do not know the name, type or say a whole sentence — <em>what’s changed on this site</em>,{" "}
             <em>is consciousness mentioned anywhere</em> — and, when nothing matches, press{" "}
-            <kbd>Enter</kbd> to ask what you meant. A fast AI model reads your sentence and the list
+            <strong>Ask what you meant</strong> or <kbd>Enter</kbd>. A fast AI model reads your sentence and the list
             of commands, never the article. If it is sure and the command only takes you somewhere,
             you go there; otherwise it shows its best guesses under <strong>Did you mean</strong> and
-            you press <kbd>Enter</kbd> on the one you want. You need to be signed in.
+            you press the one you want, or <kbd>Enter</kbd>. You need to be signed in.
           </li>
           <li>
             <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the
@@ -624,12 +624,15 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           </li>
         </ul>
         <p>
-          <strong>Topics</strong> are the row of short phrases above the list, each with a count.
-          Choose one to see only the articles about it; choose a second to narrow to articles about{" "}
-          <em>both</em>. The phrases come from your articles’ own words: a program picks candidates,
-          then a model scores which make good topics for your shelf, using your profile if you have
-          written one. They appear once there are about eight different articles on the shelf, and
-          shift as it grows.
+          <strong>Topics</strong> are the row of subjects above the list, each with a count. Choose
+          one to see only the articles about it; choose a second to narrow to articles about{" "}
+          <em>both</em>. Usually, a model names them from your articles’ titles and one-sentence
+          summaries, using your profile if you have written one: broad subjects first, with finer
+          ones inside them marked <strong>›</strong>. Until that answer exists, the row can fall
+          back to phrases from the articles themselves. New articles are sorted in by themselves.
+          Each article shows the topics it is in under its title: up to four, or the first three
+          and how many more. Topics appear once there are about eight different articles on the
+          shelf, and shift as it grows.
         </p>
       </>
     ),

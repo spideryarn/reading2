@@ -2185,6 +2185,17 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
       "directory of its own. Re-run witness 2 to confirm.",
   },
+  "tests/title-original-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for `article_revisions.title_original` " +
+      "(docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md): the owner's read, the " +
+      "carry-forward, the export and the visitor's read. It seeds through `scratchArticleInPg`, " +
+      "which loads a corpus article into Postgres and reads no `data/` directory of its own; the " +
+      "export it runs writes to a temporary directory it removes. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -3060,6 +3071,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */
   "tests/nav-label-status-pg.test.ts": "private-postgres",
+  /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
+     one column read back through four reads. */
+  "tests/title-original-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the

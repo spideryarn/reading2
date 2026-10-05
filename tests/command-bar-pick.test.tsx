@@ -29,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   COMMAND_PICK_PATH,
   COULD_NOT_TELL,
+  MAX_SENTENCE,
   type PickAnswer,
   type PickKey,
   type PickRequest,
@@ -76,9 +77,12 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { Dock } = await import("../src/web/Dock.js");
-const { NO_MATCH } = await import("../src/web/CommandBar.js");
+const { ASK_AGAIN_LABEL, ASK_LABEL, ASK_OR_ENTER, ASK_TOO_LONG, NO_MATCH } = await import("../src/web/CommandBar.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { jumpFirstRunner, glossaryRunners } = await import("../src/web/command-runners.js");
+
+/** The empty line when the offer is made: the sentence, the button, and the words a desk also gets. */
+const OFFER = `${NO_MATCH} ${ASK_LABEL} ${ASK_OR_ENTER}`;
 
 const SLUG = "a-piece";
 
@@ -262,7 +266,7 @@ describe("the empty line", () => {
     reading();
     openBar();
     type("zzzz no such thing");
-    expect(empty()).toBe(`${NO_MATCH} Press Enter to ask what you meant.`);
+    expect(empty()).toBe(OFFER);
   });
 
   it("is today's sentence and nothing more when nobody is signed in, and Enter posts nothing", async () => {
@@ -333,7 +337,7 @@ describe("asking", () => {
     reading();
     openBar();
     act(() => mic.say("um show me what is new on the site"));
-    expect(empty()).toBe(`${NO_MATCH} Press Enter to ask what you meant.`);
+    expect(empty()).toBe(OFFER);
     press("Enter");
     await settle();
     expect(asked.map((a) => a.body.sentence)).toEqual(["um show me what is new on the site"]);
@@ -683,11 +687,12 @@ describe("no answer", () => {
     openBar();
     await ask("what's the weather tomorrow");
     await answer({ kind: "none" });
-    /* Found in the browser check: the hint sat straight under the refusal. */
-    expect(empty()).toBe("No command matches.");
+    /* Found in the browser check: the hint sat straight under the refusal.
+       Since 2026-10-05 the same button is there as *Try again*. */
+    expect(empty()).toBe(`No command matches. ${ASK_AGAIN_LABEL}`);
     /* A changed sentence is a new question. */
     type("what's the weather tomorrow in London");
-    expect(empty()).toContain("Press Enter to ask what you meant.");
+    expect(empty()).toBe(OFFER);
   });
 
   it("says the same for a failure, and never the server's sentence", async () => {
@@ -719,5 +724,159 @@ describe("no answer", () => {
     press("Enter");
     await settle();
     expect(asked).toHaveLength(2);
+  });
+});
+
+/**
+ * **The same ask, for a finger** (spya-qem46c, plan 261005f). Greg, on an
+ * iPhone, 2026-10-05: *"there was no way to kick off that action on an iPhone
+ * because I don't have an enter key."* A dictated sentence never raises the
+ * keyboard, so the offer has to be something that can be pressed.
+ */
+describe("the button that asks", () => {
+  const button = (): HTMLButtonElement | null => dialog().querySelector<HTMLButtonElement>("button.cmdbar-ask");
+  const tap = (): void => act(() => button()?.click());
+  /** `aria-disabled`, not `disabled`: CommandBar.tsx says why the button still takes the press. */
+  const refused = (): boolean => button()?.getAttribute("aria-disabled") === "true";
+
+  it("posts a dictated sentence once, with no key pressed, and the answer is handled as Enter's is", async () => {
+    reading();
+    openBar();
+    act(() => mic.say("um show me what is new on the site"));
+    expect(button()?.textContent).toBe(ASK_LABEL);
+    expect(ASK_LABEL).toBe("Ask what you meant");
+    tap();
+    await settle();
+    expect(asked.map((a) => a.body.sentence)).toEqual(["um show me what is new on the site"]);
+    expect(status()).toBe("Working out what you meant…");
+    await answer(row(GLOSSARY, 0.5));
+    expect(heading()).toBe("Did you mean");
+    expect(listed()).toEqual(["Glossary"]);
+  });
+
+  it("is disabled while the sentence is out, and a second press posts nothing more", async () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    act(() => {
+      /* The ref, not the next render's aria-disabled, has to lock this pair. */
+      button()?.click();
+      button()?.click();
+    });
+    await settle();
+    expect(refused()).toBe(true);
+    tap();
+    await settle();
+    expect(asked).toHaveLength(1);
+  });
+
+  it("is ready to press before anything is out", () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    expect(refused()).toBe(false);
+    expect(button()?.disabled).toBe(false);
+    expect(button()?.tabIndex).toBe(0);
+  });
+
+  it.each(["armed", "transcribing"] as const)("says it is refused while the microphone is %s, and posts nothing", async (state) => {
+    mic[state] = true;
+    reading();
+    openBar();
+    type(SENTENCE);
+    expect(refused()).toBe(true);
+    /* `aria-disabled`, deliberately: it stays in the Tab order and its
+       mousedown can still preserve the box's focus. */
+    expect(button()?.disabled).toBe(false);
+    expect(button()?.tabIndex).toBe(0);
+    tap();
+    await settle();
+    expect(asked).toEqual([]);
+  });
+
+  it("says it is refused while another row's run is starting, and posts nothing", async () => {
+    const never = vi.fn(() => new Promise<never>(() => {}));
+    reading({ shelfRow: { archive: archive(null, never as never), tags: { edit: vi.fn(async () => []) } } });
+    openBar();
+    type("archive this article");
+    press("Enter");
+    await settle();
+    expect(never).toHaveBeenCalledTimes(1);
+    expect(status()).toBe("Starting…");
+    type(SENTENCE);
+    expect(refused()).toBe(true);
+    tap();
+    await settle();
+    expect(asked).toEqual([]);
+  });
+
+  it("says so, rather than nothing, for a sentence too long to send", async () => {
+    reading();
+    openBar();
+    type("z".repeat(MAX_SENTENCE + 1));
+    tap();
+    await settle();
+    expect(asked).toEqual([]);
+    expect(status()).toBe(ASK_TOO_LONG);
+    expect(ASK_TOO_LONG).toBe("That sentence is too long. Shorten it and try again.");
+    expect(button(), "trying the unchanged sentence again cannot help").toBeNull();
+  });
+
+  it("carries the finger's size and hides the desk's words from a finger", () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    expect(button()?.className).toContain("tw:pointer-coarse:min-h-11");
+    const words = dialog().querySelector(".cmdbar-or-enter");
+    expect(words?.textContent?.trim()).toBe(ASK_OR_ENTER);
+    expect(words?.className).toContain("tw:pointer-coarse:hidden");
+  });
+
+  it("does not take the focus out of the box", () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    act(() => {
+      button()?.dispatchEvent(down);
+    });
+    expect(down.defaultPrevented).toBe(true);
+  });
+
+  it("returns keyboard activation to the box, ready for the rows that may replace the button", async () => {
+    reading();
+    openBar();
+    type(SENTENCE);
+    button()?.focus();
+    expect(document.activeElement).toBe(button());
+    act(() => {
+      /* Enter and Space activate a focused button with a click whose detail is
+         zero. A pointer's click has a non-zero detail. */
+      button()?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
+    await settle();
+    expect(asked).toHaveLength(1);
+    expect(document.activeElement).toBe(input());
+  });
+
+  it("is not drawn when nobody is signed in", () => {
+    reading({ setting: EXPERIMENTAL_SIGNED_OUT });
+    openBar();
+    type(SENTENCE);
+    expect(button()).toBeNull();
+  });
+
+  it("says Try again under the sentence it could not read, and a press asks again", async () => {
+    reading();
+    openBar();
+    await ask();
+    await answer({ error: "The AI service did not finish within 5 seconds [ai-slow]" }, 504);
+    expect(button()?.textContent).toBe(ASK_AGAIN_LABEL);
+    expect(ASK_AGAIN_LABEL).toBe("Try again");
+    expect(dialog().querySelector(".cmdbar-or-enter")).toBeNull();
+    tap();
+    await settle();
+    expect(asked).toHaveLength(2);
+    expect(status()).toBe("Working out what you meant…");
   });
 });

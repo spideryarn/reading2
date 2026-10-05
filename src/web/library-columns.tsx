@@ -40,6 +40,7 @@ import { exactly, publishedOf, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import type { ComponentType } from "react";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -145,10 +146,21 @@ export const CHIP_ORDER = ["opened", "added", "published", "title", "length", "o
  * `archivedShown` is `?archived=1`: archived articles are rows too, and
  * Archive's card must not promise the row leaves (plan 260929a).
  */
+/**
+ * **What draws an article’s topic pills under its title**, handed in by the
+ * shelf page (ShelfRowTopics.tsx) rather than imported: this file is shared
+ * with the lazy /admin and /design routes, and the pills bring the topic
+ * colours behind them (tests/eager-client-graph.test.ts). A component rather
+ * than the topics themselves, so it can be one stable reference and the
+ * columns are not rebuilt when the topics answer lands. Plan 261005a.
+ */
+export type RowTopicsSlot = ComponentType<{ slug: string; className?: string; plain?: boolean }>;
+
 export function libraryColumns(
   shelf: Shelf,
   now: number,
   archivedShown = false,
+  Topics?: RowTopicsSlot,
 ): SortableColumn<LibraryEntry>[] {
   return [
     {
@@ -169,7 +181,7 @@ export function libraryColumns(
       /* `table` from the cell's context, so the row card can carry back the
          value of every column the reader has hidden. */
       cell: ({ row, table }) => (
-        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} />
+        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} Topics={Topics} />
       ),
     },
     {
@@ -328,13 +340,16 @@ function TitleCell({
   entry,
   shelf,
   hidden,
+  Topics,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  Topics: RowTopicsSlot | undefined;
   /** The ids of the columns the reader has hidden — `rowCardFacts`. */
   hidden: readonly string[];
 }) {
   const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
+  const topics = Topics ? <Topics slug={entry.slug} className="tw:mt-1" plain /> : null;
 
   /* The same in-place rename the card offers, and deliberately the same
      component: the three-outcome contract (`undefined` cancelled, `null` reset
@@ -344,19 +359,22 @@ function TitleCell({
      opened it are two different cells. */
   if (shelf.renaming === entry.slug) {
     return (
-      <TitleEditor
-        title={entry.title}
-        overridden={Boolean(entry.titleOverridden)}
-        /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
-           16px and does not zoom back out. The reading view's fields get that floor
-           from narrow-window.css § a field iOS zooms into; the utilities layer
-           outranks it, so a `tw:`-styled field says so itself. */
-        className="tw:text-sm tw:any-pointer-coarse:text-base"
-        onDone={(title) => {
-          if (title === undefined) shelf.cancelRename();
-          else void shelf.rename(entry.slug, title);
-        }}
-      />
+      <>
+        <TitleEditor
+          title={entry.title}
+          overridden={Boolean(entry.titleOverridden)}
+          /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
+             16px and does not zoom back out. The reading view's fields get that floor
+             from narrow-window.css § a field iOS zooms into; the utilities layer
+             outranks it, so a `tw:`-styled field says so itself. */
+          className="tw:text-sm tw:any-pointer-coarse:text-base"
+          onDone={(title) => {
+            if (title === undefined) shelf.cancelRename();
+            else void shelf.rename(entry.slug, title);
+          }}
+        />
+        {topics}
+      </>
     );
   }
 
@@ -458,6 +476,7 @@ function TitleCell({
           <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
+      {topics}
     </>
   );
 }

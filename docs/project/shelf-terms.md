@@ -412,6 +412,42 @@ strengthen an apparent overlap that the chooser treats as one work.
 so three copies of one piece are named once. Only the naming is deduplicated; every count stays
 physical ([§ The count](#the-count-one-formula)).
 
+## On each card and table row
+
+> On the logged in home page, for each article show its topic-pills. If there's lots, then maybe
+> only show the first three.
+>
+> — Greg, 2026-10-04 (`spya-mtajjy`)
+
+Each article on the signed-in shelf shows the topics it is in, on a line of its own under its meta
+line (cards) or its byline line (table). Plan
+[261005a](../plans/261005a-topic-pills-on-each-shelf-card-and-table-row.md).
+
+- **Up to four are all shown; from five, the first three and `+N`.** A `+1` would take about the
+  room of the pill it hides. The order is the row's: broad first.
+- **Labels, not controls.** A pill wears the row's marks (hue dot, `›`, the model's face) with no
+  count. On a card, pressing it opens the article like the rest of the card; that includes `+N`,
+  because nothing on the line is lifted above the stretched link. In the table the labels do
+  nothing, and the title remains the link. Whether a pill should filter when pressed is an open
+  question for Greg, in the plan.
+- **In the table they are running text, not pills**: the dot and the label with no border
+  (`plain`). The Article column is about 250px wide, where bordered pills stacked one to a line and
+  made a row taller than its card.
+- **Over every topic the server chose**, as the paper card's are, so a card's pills do not change
+  as the view narrows. Nothing is drawn before the first answer, after a failed one, or on a shelf
+  with no topics; nothing is asked of the server that the row did not already ask.
+- **The line follows the answer, so it can move more than once.** The pills appear when the answer
+  lands, and change if a later answer differs (articles still being read, a re-think landing, the
+  archive switched in). No place is held for them.
+- **The `+N` cannot reveal the hidden topics on the card.** The rest are in More detail.
+- **Not on the Include public section's cards**, which are other people's articles and not in this
+  reader's tree, and not on `/read/public`.
+
+The page works out each article's topics once per answer (`articleTopics`) and gives the same value
+to the Topics row and, through a context, to the cards and cells. The card and the table take the
+pills as a slot rather than importing them, because `ShelfEntry.tsx` and `library-columns.tsx` are
+shared with the lazy `/admin` and `/design` routes.
+
 ## Touch
 
 The shared `Tooltip` opens on hover and focus, not on a tap, and a chip cannot both toggle and hold a
@@ -467,6 +503,8 @@ tag edit in flight or an archive still loading cannot eat the reader's filter.
 | the row: the two views, "All N topics", the More-detail toggle and `?topicsView` | [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx) |
 | one topic's chip and its tooltip, shared by both views; `topArticles` (one per title) | [`src/web/ShelfTermChip.tsx`](../../src/web/ShelfTermChip.tsx) |
 | the More-detail rows: swatch, chip, count bar, links with the paper card | [`src/web/ShelfTermsDetail.tsx`](../../src/web/ShelfTermsDetail.tsx) |
+| each topic's hue and each article's topics, once per answer; how many pills a card shows | [`src/web/article-topics.ts`](../../src/web/article-topics.ts) |
+| the pills on a card and a table row, and the context they read | [`src/web/ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx) |
 | a topic's colour from the articles it shares with the others | [`src/web/topic-colour.ts`](../../src/web/topic-colour.ts) |
 | where it is wired into the page | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 

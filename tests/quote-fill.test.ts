@@ -81,6 +81,7 @@ const read = (file: string) => readFileSync(path.join(import.meta.dirname, "..",
 const BASE = read("styles/tokens.css");
 const WEB = read("src/web/styles/tokens.css");
 const SHEET = read("src/web/styles/annotations.css");
+const SCALES = read("styles/colourscales.css");
 
 type Theme = "dark" | "light";
 const THEMES: readonly Theme[] = ["dark", "light"];
@@ -181,12 +182,12 @@ function over(theme: Theme, alpha: number): number[] {
   return q.map((c, i) => alpha * c + (1 - alpha) * (p[i] ?? 0));
 }
 
-/** `--quote-fill` for each tier, read out of the stylesheet. */
-function fillStrength(tier: 1 | 2): number {
-  const rule = tier === 1 ? /mark\.hit\[data-quote\]\s*\{[^}]*--quote-fill:\s*([\d.]+)/ : /mark\.hit\[data-quote="2"\]\s*\{[^}]*--quote-fill:\s*([\d.]+)/;
-  const m = rule.exec(SHEET);
-  if (!m?.[1]) throw new Error(`no --quote-fill for tier ${tier}`);
-  return Number(m[1]);
+/** Each tier's strength in one theme. A token since 2026-10-05, when the dark
+    page's went up and the light page's stayed (`spya-s0gppw`, plan 261005f). */
+function fillStrength(theme: Theme, tier: 1 | 2): number {
+  const value = Number(token(BASE, theme, tier === 1 ? "--quote-fill-light" : "--quote-fill-heavy"));
+  if (!(value > 0 && value < 1)) throw new Error(`tier ${tier}'s strength is not a fraction for ${theme}`);
+  return value;
 }
 
 describe("the tokens this reads are the ones the page uses", () => {
@@ -200,11 +201,21 @@ describe("the tokens this reads are the ones the page uses", () => {
       /mark\.hit\[data-quote\]\s*\{[^}]*background-color:\s*rgb\(var\(--quote-rgb\)\s*\/\s*calc\(var\(--quote-a,\s*0\.95\)\s*\*\s*var\(--quote-fill\)\)\)/,
     );
   });
+
+  it("each tier takes its strength from the theme's token, and from nowhere else", () => {
+    /* Or `fillStrength` below would be reading two numbers the page does not use. */
+    const code = SHEET.replace(/\/\*[\s\S]*?\*\//g, "");
+    const set = [...code.matchAll(/([^{}]*)\{[^}]*--quote-fill:\s*([^;]+);/g)].map((m) => [m[1]?.trim(), m[2]?.trim()]);
+    expect(set).toEqual([
+      ["mark.hit[data-quote]", "var(--quote-fill-light)"],
+      ['mark.hit[data-quote="2"]', "var(--quote-fill-heavy)"],
+    ]);
+  });
 });
 
 describe.each(THEMES)("the fill, on the %s page", (theme) => {
-  const strongest = () => over(theme, 1 * fillStrength(2));
-  const faintest = () => over(theme, QUOTE_ALPHA_FLOOR * fillStrength(1));
+  const strongest = () => over(theme, 1 * fillStrength(theme, 2));
+  const faintest = () => over(theme, QUOTE_ALPHA_FLOOR * fillStrength(theme, 1));
 
   it("leaves the article's words readable on the strongest fill there can be", () => {
     expect(contrast(ink(theme), strongest())).toBeGreaterThan(4.5);
@@ -231,10 +242,41 @@ describe.each(THEMES)("the fill, on the %s page", (theme) => {
     expect(contrast(faintest(), page(theme))).toBeGreaterThan(1.15);
   });
 
+  it.runIf(theme === "dark")("is far enough from the near-black page to be seen there", () => {
+    /* Greg, 2026-10-05 (`spya-s0gppw`): "The quote highlighting color is not
+       very visible against the black background in dark mode." The ratio above
+       passed on the fill he was looking at (1.22), because a luminance ratio
+       does not count chroma. So this one is a distance in OKLab: that fill was
+       0.107 from the page, and the floor is set between it and what replaced
+       it (0.146, plan 261005f). */
+    const [a, b] = [toOklab(faintest()), toOklab(page(theme))];
+    expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThan(0.14);
+  });
+
+  it.runIf(theme === "dark")("leaves every automatic search colour clear of 3:1 on the strongest fill", () => {
+    /* A search hit over a quote draws its outline and its band on the fill.
+       The blue is the one that binds: 3.35 on the old fill, 3.03 on this one,
+       and under 3 at 0.38. GPT Sol's plan review, 2026-10-05, found it. Dark
+       only because the dark strengths are what moved; the light page's pairs
+       have not been summed. */
+    for (let slot = 0; slot < 8; slot++) {
+      const hue = token(SCALES, theme, `--cat-${slot}-rgb`).split(/\s+/).slice(0, 3).map(Number);
+      expect(contrast(hue, strongest()), `--cat-${slot}`).toBeGreaterThan(3);
+    }
+  });
+
+  it.runIf(theme === "light")("is exactly what it was before the dark page's moved", () => {
+    /* `spya-s0gppw` asked for the dark page only. The ranges above would let
+       the light values drift; this does not. */
+    expect(token(BASE, theme, "--quote-rgb")).toBe("127 66 166");
+    expect(fillStrength(theme, 1)).toBe(0.2);
+    expect(fillStrength(theme, 2)).toBe(0.32);
+  });
+
   it("draws the heavy tier stronger than the light one where they meet", () => {
     /* At the tier boundary the fade is continuous, so the step is the tiers'. */
     const at = quoteAlpha(q(0.8));
-    expect(contrast(over(theme, at * fillStrength(2)), over(theme, at * fillStrength(1)))).toBeGreaterThan(1.12);
+    expect(contrast(over(theme, at * fillStrength(theme, 2)), over(theme, at * fillStrength(theme, 1)))).toBeGreaterThan(1.12);
   });
 
   it("keeps the spine strip, a thin line in this colour, clear of 3:1 at the floor", () => {

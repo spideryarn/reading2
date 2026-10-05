@@ -700,6 +700,9 @@ const REVISION_READ_POLICY: Record<
   abstract: { article: "value", library: "value" },
   doi: { article: "value", library: "value" },
   journal: { article: "value", library: "value" },
+  /* A `Meta` field the Metadata page shows, so `article`. No card prints it and
+     no prompt reads it: the title a model is shown is `title` (plan 261005g). */
+  titleOriginal: { article: "value" },
   /* A `Meta` field, so `article`; and the shelf sorts and prints it beside
      `publishedAt`, so `library`. **Not `timeline` or `metadata`**, which
      `publishedAt` is on: no fingerprint reads the year, because a year is too
@@ -1170,6 +1173,8 @@ export const REVISION_PROJECTIONS = {
   article: {
     id: articleRevisions.id,
     ...META_COLUMNS,
+    /* Owner-only import provenance; the shelf does not display or need it. */
+    titleOriginal: articleRevisions.titleOriginal,
     authors: articleRevisions.authors,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
@@ -1832,7 +1837,7 @@ function metaFrom(
      person to satisfy the typechecker would do it by putting them back in the
      query. The narrow type is the thing stopping that. `REVISION_READ_POLICY`
      above says which read takes what. */
-  revision: MetaRow,
+  revision: MetaRow & { titleOriginal?: string | null },
   /**
    * The first depth-1 heading's text, or null — **the input to the fallback,
    * not the fallback itself.**
@@ -1866,6 +1871,7 @@ function metaFrom(
     ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
     ...(revision.doi === null ? {} : { doi: revision.doi }),
     ...(revision.journal === null ? {} : { journal: revision.journal }),
+    ...(typeof revision.titleOriginal === "string" ? { titleOriginal: revision.titleOriginal } : {}),
     ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of

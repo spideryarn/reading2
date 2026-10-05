@@ -70,7 +70,7 @@ import { isSlug } from "../ingest.js";
 import { blobStore } from "./blobs.js";
 import { canonicalKey } from "../source.js";
 import { publicSlug } from "./public-slug.js";
-import { publicArticle } from "../public/dto.js";
+import { publicArticle, publicAuthorNames } from "../public/dto.js";
 
 /**
  * What a public reader can be asked for.
@@ -120,6 +120,13 @@ export interface PublicHead {
    * always has one.
    */
   title: string | null;
+  /**
+   * **The authors' names a visitor is already shown**, for the end of a card's
+   * title, and no others.
+   *
+   * `publicAuthorNames` in src/public/dto.ts decides which, and says why.
+   */
+  authors: string[];
   /** The description, from `root_gist` — already the gist/summary/excerpt fallback. */
   gist: string | null;
   /** The address the fetcher finally landed on. A candidate canonical, unsanitised. */
@@ -460,6 +467,10 @@ const PUBLIC_PROJECTIONS = {
   head: {
     id: articleRevisions.id,
     title: articleRevisions.title,
+    /* For the names on a card, and only those the byline already shows:
+       `PublicHead.authors`. */
+    byline: articleRevisions.byline,
+    authors: articleRevisions.authors,
     headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
     rootGist: articleRevisions.rootGist,
     finalUrl: articleRevisions.finalUrl,
@@ -1002,6 +1013,7 @@ export const pgPublicReader: PublicArticleReader = {
         title: found.revision.title ?? found.revision.headingTitle ?? found.slug,
         gist: found.revision.rootGist,
         canonical: found.revision.finalUrl,
+        authors: publicAuthorNames(found.revision.authors, found.revision.byline),
       };
     });
   },

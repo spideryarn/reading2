@@ -952,7 +952,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * The same fixture, refused above and served here — the positive control that
    * makes the 404 mean something rather than `publicSlug` matching nothing.
    */
-  it("and now the head has the four values a preview is built from", async () => {
+  it("and now the head has the five values a preview is built from", async () => {
     const head = await pgPublicReader.loadHead(SLUG);
     expect(head.slug).toBe(SLUG);
     /* Whatever the fixture's title is, it is a string rather than the absence
@@ -965,6 +965,9 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        two projections really are different, in a database rather than in a
        generated string. */
     expect(head).toHaveProperty("gist");
+    /* Names for the card, filtered by `publicAuthorNames` (tests/public-dto.test.ts).
+       This fixture has no structured authors, so none. */
+    expect(head.authors).toEqual([]);
     /* **The candidate canonical arrives raw, and is refused downstream.** This
        fixture's `final_url` carries a signed query parameter on purpose, which
        is the hazard: publishing it would hand out the signature, and stripping
@@ -977,7 +980,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And nothing that renders came with it. A head read that quietly grew a
        `blocks` or a `tree` key is the failure this whole projection exists to
        make impossible, and it would not show up in any assertion above. */
-    expect(Object.keys(head).sort()).toEqual(["canonical", "gist", "slug", "title"]);
+    expect(Object.keys(head).sort()).toEqual(["authors", "canonical", "gist", "slug", "title"]);
   });
 
   it("wrote exactly one event, saying who and from what to what", async () => {
