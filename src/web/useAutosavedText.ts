@@ -27,7 +27,7 @@
  * normalises (trims, settles line endings) and the box should show what was
  * stored — but the reader is usually typing again by the time it lands, and
  * writing over that takes back words the server never saw. Left alone they
- * differ from `saved`, and the box says "Unsaved changes", which is true.
+ * differ from `saved`, keeping the box dirty and its autosave timer armed.
  *
  * **`setDraft` updates a ref before it updates state.** Dictation calls
  * `onChange` with the transcript and then `onCommit` in the same tick; a commit
@@ -72,7 +72,7 @@ function saveStateOf(f: {
   dirty: boolean;
   savedThisVisit: boolean;
 }): SaveState {
-  if (f.error) return { kind: "error", message: f.error };
+  if (f.error !== null) return { kind: "error", message: f.error };
   if (!f.loaded) return { kind: "loading" };
   if (f.saving) return { kind: "saving" };
   if (f.dirty) return { kind: "dirty" };
@@ -209,6 +209,7 @@ export function useAutosavedText({
     } catch (e) {
       request = Promise.reject(e);
     }
+    let landed = false;
     request
       .then((value) => {
         if (mine !== epoch.current) return;
@@ -219,13 +220,18 @@ export function useAutosavedText({
           setDraftState(value);
         }
         setSavedThisVisit(true);
+        landed = true;
       })
-      .catch((e: Error) => {
+      .catch((e: unknown) => {
         /* Only over the words it is about. A refusal of text no longer in the
            box would be a claim about the new words, and since the idle timer
            arms only on `dirty` (ProfileBox.tsx § `useIdleCommit`) it would
            also stop them being sent until the next keystroke or blur. */
-        if (mine === epoch.current && now.current.draft === text) setError(e.message);
+        if (mine === epoch.current && now.current.draft === text) {
+          /* A rejection need not be an Error or carry a message. Neither can
+             turn a failed save into the quiet, retryable dirty state. */
+          setError(e instanceof Error && e.message.trim() ? e.message : "The request failed.");
+        }
       })
       .finally(() => {
         if (mine !== epoch.current) return;
@@ -253,7 +259,9 @@ export function useAutosavedText({
         }
         if (queued.current) {
           queued.current = false;
-          commit();
+          /* A duplicate blur is not permission to retry a refusal and hide
+             its error. Newer words still go, as in AddPurposeSession. */
+          if (landed || now.current.draft !== text) commit();
         }
       });
   }, [lastChance, endLeaveHold]);

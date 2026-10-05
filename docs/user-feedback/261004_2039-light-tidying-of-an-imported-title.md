@@ -31,3 +31,8 @@ Not built, and waiting on Greg as two questions in the plan: whether a small mod
 recasing (`[Q-title-model]`), and whether articles already on shelves should be tidied
 (`[Q-title-backfill]`). The second includes the article this report was filed from, which keeps its
 capitals until it is renamed or imported again. The Overseer was asked to queue both.
+
+**2026-10-05, both answered.** A small model: yes, built as
+[261005j](../plans/261005j-a-small-model-tidies-an-imported-title.md), with the rule as its
+fallback. A backfill: no, "just articles going forwards". So the article this report was filed from
+keeps its capitals until it is renamed or extracted again.

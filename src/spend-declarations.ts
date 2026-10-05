@@ -160,11 +160,12 @@ export const DECLARATIONS: readonly Declaration[] = [
        status, timing and dispatch spread of every one.
 
        **The seam is wrong for it in the strongest sense available: the seam is
-       the thing under test.** `openRouterJson` retries a 429, turns a status
-       into a `ProviderRefused`, and imposes one `provider` policy per job — so
-       routing this through it would measure our retry logic rather than the
-       upstream's tolerance, and the question was precisely *at what width does
-       the upstream start refusing*. The answer on the day was "not at 400", and
+       the thing under test.** `openRouterJson` asks again after a 5xx or a
+       dropped connection (never a 429), turns a status into a
+       `ProviderRefused`, and imposes one `provider` policy per job — so routing
+       this through it would measure our handling rather than the upstream's
+       tolerance, and the question was precisely *at what width does the
+       upstream start refusing*. The answer on the day was "not at 400", and
        it is a fact about this account's tier at the provider rather than about
        the model, so it can change without anyone telling us. That is why the
        script is kept rather than thrown away, and why this entry exists rather
