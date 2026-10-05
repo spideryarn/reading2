@@ -349,6 +349,15 @@ const LOOKUP_SENTINEL = "sentinel-3f9c1e-citation-finds-lookup quote";
  */
 const HIDDEN_ENTRY_SENTINEL = "spya-cvh234";
 
+/**
+ * `quiz_attempts`' other columns, and its second row: the mark, and an answer
+ * given under a batch that has since been replaced, with the question's words
+ * that keep that row readable. Plan 261005b.
+ */
+const QUIZ_REPLY_SENTINEL = "sentinel-3f9c1e-quiz-attempts-the-mark";
+const REPLACED_ANSWER_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-answer";
+const REPLACED_QUESTION_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-question";
+
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
@@ -579,6 +588,31 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         tag: sentinel("article_tags"),
       });
     },
+    /* Two finished quiz marks, **in two batches**: the read the panel uses is
+       scoped to the current batch, and the exports must not be — a row for a
+       batch *Write them again* has replaced is still the reader's (plan
+       261005b, GPT Sol's plan review finding 6). This article has no quiz at
+       all, so neither batch is "current" and both must still leave. */
+    quiz_attempts: async () => {
+      await db.insert(schema.quizAttempts).values([
+        {
+          articleId: ARTICLE_ID,
+          batchId: "spya-qzbnow",
+          questionId: "spya-qzqone",
+          question: "What does the piece say?",
+          answer: sentinel("quiz_attempts"),
+          reply: QUIZ_REPLY_SENTINEL,
+        },
+        {
+          articleId: ARTICLE_ID,
+          batchId: "spya-qzbold",
+          questionId: "spya-qzqone",
+          question: REPLACED_QUESTION_SENTINEL,
+          answer: REPLACED_ANSWER_SENTINEL,
+          reply: "A mark given under the batch that was replaced.",
+        },
+      ]);
+    },
   };
 }
 
@@ -683,6 +717,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   reading_time: {},
   glossary_hidden_entries: {},
   article_tags: {},
+  quiz_attempts: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -723,6 +758,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   reading_time: (parsed) => listAt(parsed, "blocks"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
+  quiz_attempts: (parsed) => listAt(parsed, "attempts"),
 };
 
 /** Every key any of these rows carries. */
@@ -765,6 +801,7 @@ await pgReady({
     "spideryarn.reading_time",
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
+    "spideryarn.quiz_attempts",
   ],
 });
 
@@ -915,6 +952,26 @@ describe("what the record calls exported, both exports were watched writing", ()
       }
     });
   }
+
+  /* The rollback names `quiz_attempts`' columns by hand too, and the panel's
+     own read drops every batch but the current one — so both outputs are held
+     to the mark as well as the answer, and to the row from a replaced batch
+     with its question's words. Plan 261005b, GPT Sol's plan review finding 6. */
+  it("carries every quiz answer into both outputs, a replaced batch's included", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "quiz-attempts.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.quiz_attempts.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.quiz_attempts.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toContain(sentinel("quiz_attempts"));
+      expect(text).toContain(QUIZ_REPLY_SENTINEL);
+      expect(text).toContain(REPLACED_ANSWER_SENTINEL);
+      expect(text).toContain(REPLACED_QUESTION_SENTINEL);
+      expect(text).toContain("spya-qzbold");
+      /* When each happened: the row's own time, in both. */
+      expect(text).toMatch(/"createdAt": ?"20\d\d-/);
+    }
+  });
 
   /* The rollback enumerates `citation_finds`' fields by hand, so a new column is
      invisible to it until somebody adds it there — the title sentinel above

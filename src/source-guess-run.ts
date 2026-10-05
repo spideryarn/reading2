@@ -76,10 +76,12 @@ export const GUESS_RATE_POLICY: RatePolicy = {
   daily: { fills: 30, globalFills: 300, windowMs: 24 * 60 * 60 * 1000 },
 };
 
-/** The first pages of a PDF: where the title, the byline and any identifier are printed. */
+/**
+ * The first pages of a PDF: where the title, the byline and any identifier are
+ * printed. **It is how many pages are read, not only how many are used** —
+ * see `defaultFirstPages`.
+ */
 const FIRST_PAGES = 2;
-/** The same cap readPaperText uses — a thesis or a book is not what this looks for. */
-const PASS0_MAX_PAGES = 150;
 /** An HTML upload's "first pages": about two printed pages of its text. */
 const HTML_FIRST_CHARS = 12_000;
 /** How much of the opening prose the content branch compares. */
@@ -183,14 +185,21 @@ export function defaultFind(work: WorkToFind, opts: FindOpts): Promise<FoundWork
  * **An HTML upload's `citation_*` meta tags are not read yet**: the parser for
  * them is private to src/paper-text.ts, and an identifier only in a meta tag
  * is therefore missed — a missed link, never a wrong one.
+ *
+ * **No page cap, on purpose.** This used to pass `pass0` the 150-page refusal
+ * `readPaperText` uses, while an upload may run to 250 (src/uploads.ts): every
+ * upload of 151–250 pages threw `TooManyPages`, the route answered 500 twice,
+ * and a false `none / provider-failed` was stored without one search
+ * (docs/plans/261005c-long-document-follow-ups-stale-sentence-run-codex-overwrite-guard-breadcrumb-paragraph-source-guess-page-cap.md
+ * § (h)). The length of the document is not this function's business: it asks
+ * for two pages and `pass0` reads two. No character or item cap either — the
+ * bytes are our own stored upload, which stage 2 has already read whole, and a
+ * cap here would be a new way to answer 500.
  */
 export async function defaultFirstPages(source: RawSource): Promise<string> {
   if (source.kind === "pdf") {
-    const pass = await pass0(source.bytes, { maxPages: PASS0_MAX_PAGES });
-    return pass.pages
-      .slice(0, FIRST_PAGES)
-      .map((p) => p.text)
-      .join("\n\n");
+    const pass = await pass0(source.bytes, { firstPages: FIRST_PAGES, retainItems: false });
+    return pass.pages.map((p) => p.text).join("\n\n");
   }
   const { JSDOM } = jsdom();
   const document = new JSDOM(new TextDecoder().decode(source.bytes)).window.document;

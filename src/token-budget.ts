@@ -133,7 +133,7 @@ export class TooLongForOnePass extends Error {
    * **The reader's half**, since the seam split the two audiences on
    * 2026-09-03. The message below is the developer's: it names two token
    * figures and a doc section, which is what somebody deciding whether to build
-   * sectioned reading needs, and which a reader can do nothing with. Both are
+   * sectioned reading for one more step needs, and which a reader can do nothing with. Both are
    * carried on the same throw and src/jobs.ts persists only this one.
    *
    * A field on the class rather than a `stageFailure` call, because this is a
@@ -149,8 +149,8 @@ export class TooLongForOnePass extends Error {
     super(
       `The ${stage} needs about ${answerTokens.toLocaleString()} tokens for this article, and one ` +
         `model response holds ${MODEL_MAX_TOKENS.toLocaleString()} including the model's own ` +
-        `reasoning. This article has to be processed in sections, which is not built yet — see ` +
-        `docs/project/structure-step.md#long-articles.`,
+        `reasoning. The ${stage} would have to read this article in sections, which only ` +
+        `structure and labels do — see docs/project/structure-step.md#long-articles.`,
     );
     this.name = "TooLongForOnePass";
   }

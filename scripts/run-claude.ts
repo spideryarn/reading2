@@ -54,8 +54,8 @@ import {
   type RegistryReading,
 } from '../tools/overseer/accounts.js';
 import {
-  answerIsUsable, elapsedSeconds, formatAnswer, loadRepoEnv, readAnswerForConsole, runChild,
-  sameWriteTarget, sanitisedEnv, type RunResult,
+  answerIsUsable, answerWriteConflict, elapsedSeconds, formatAnswer, loadRepoEnv, placeAnswer, readAnswerForConsole,
+  runChild, sameWriteTarget, sanitisedEnv, snapshotWriteTarget, type RunResult,
 } from './subagent-cli.js';
 import type { WrapperFailure, WrapperLaunch } from './launch-dir.js';
 
@@ -791,6 +791,8 @@ async function main(): Promise<void> {
     fail(`--output and --activity-log are the same file (${answerPath}); the second write would`
       + ' destroy the first');
   }
+  const pathConflict = answerWriteConflict(answerPath, logPath);
+  if (pathConflict) fail(pathConflict);
   launch?.notePaths({ answer: answerPath, transcript: logPath });
 
   // **One deadline, starting here.** The probe is a second process, and its own 30 seconds used to
@@ -841,6 +843,12 @@ async function main(): Promise<void> {
     fail(`--timeout-minutes ${args.timeoutMinutes} was spent before the run started`
       + ` (${elapsedSeconds(startedAt)} on the auth probe)`);
   }
+  /* What the answer path holds now, so a report the run writes there itself is kept rather than
+     replaced by the result event's text. Taken here — after the `sameWriteTarget` preflight, which
+     has usually just created the file empty — and on the effective path, the `--launch-dir` default
+     included. One attempt, so one snapshot.
+     docs/plans/261005c-long-document-follow-ups-…-page-cap.md § (f). */
+  const targetBeforeRun = snapshotWriteTarget(answerPath);
   const run: RunResult = await runChild({
     bin: 'claude',
     argv: claudeArgs,
@@ -868,7 +876,11 @@ async function main(): Promise<void> {
   mkdirSync(dirname(logPath), { recursive: true });
   writeFileSync(logPath, `${run.stdout}\n=== stderr ===\n${run.stderr}`);
   mkdirSync(dirname(answerPath), { recursive: true });
-  writeFileSync(answerPath, parsed?.result ?? '');
+  const placed = placeAnswer({
+    target: answerPath, lastMessage: { kind: 'text', text: parsed?.result ?? '' },
+    atStart: targetBeforeRun, beforeFinalAttempt: targetBeforeRun,
+  });
+  if (placed.note !== undefined) console.log(placed.note);
   const hint = `; transcript at ${logPath}`;
 
   // Fail closed, most-specific cause first.
@@ -902,7 +914,9 @@ async function main(): Promise<void> {
   }
   // Exit 0 with nothing to show for it. Rare, and worth naming: an empty answer read as agreement
   // is how a review that never happened gets committed as one that found nothing.
-  if (!answerIsUsable(answerPath)) {
+  // Judged on what the model said last, wherever that went: a report the run left at `answerPath`
+  // must not stand in for a result that was empty.
+  if (!answerIsUsable(placed.lastMessagePath)) {
     fail(`claude exited 0 but its answer was empty${hint}${stderrTail(run.stderr)}`, 'empty-answer');
   }
   const cost = parsed.costUsd !== undefined ? `, $${parsed.costUsd.toFixed(4)}` : '';

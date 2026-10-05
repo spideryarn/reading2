@@ -79,6 +79,20 @@
  * half; the `batchId` effect is the batch half, and that one also releases the
  * old request, which is otherwise still holding `useQuiz`'s single live slot
  * and leaves the new batch's Answer button enabled and inert.
+ *
+ * ## A kept answer is put back in one place
+ *
+ * Finished marks are stored since 2026-10-05 (report spya-e8ujxn), and coming
+ * back to a question — by Previous, by reopening Quiz, by a reload — shows the
+ * answer and its mark again. **One effect does it, after every effect that can
+ * move the walk**, and not `move` itself: the batch reset, the filter and an
+ * arrival can all write `at` in one commit, and an arrival at the question
+ * already open goes round `move` altogether, so a restore inside `move` could
+ * leave one question's answer in another's box. It fills an empty box under a
+ * question with no attempt, and nothing else — never a draft, never a live
+ * mark. The restored attempt is marked `restored`, which the verdict effect
+ * skips. docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's
+ * plan review F3 and F4.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -394,10 +408,11 @@ export function QuizPanel({
    * nothing left to record.
    *
    * Deliberately not in the URL: the rule `?at=` and `?thread=` serve is that a
-   * shared link lands you where the link-maker was, and what a link would frame
-   * here is an answer that does not survive a reload anyway. It arrives with
-   * stored attempts. docs/plans/260831al-review-quiz-sub-mode.md § Which
-   * question is open.
+   * shared link lands you where the link-maker was, and a quiz is the owner's
+   * alone. (Until 2026-10-05 the reason given was that the answer did not
+   * survive a reload; it does now, and the walk still opens at the first
+   * question — plan 261005b § Open questions, Q-quiz-resume.)
+   * docs/plans/260831al-review-quiz-sub-mode.md § Which question is open.
    */
   const [at, setAt] = useState(0);
   /**
@@ -688,8 +703,9 @@ export function QuizPanel({
    *
    * **The option passed over was clearing the attempt on any edit**, which is
    * one line and needs no new field. It is wrong for this feature: the mark is
-   * the thing the reader is editing *against*, nothing stores it, and a
-   * keystroke aimed at a typo would take it away for good. Quiz is not a test
+   * the thing the reader is editing *against*, and a keystroke aimed at a typo
+   * would take it off the screen (it is kept since 2026-10-05, but it would
+   * come back only on leaving the question and returning). Quiz is not a test
    * and losing your feedback for touching the box is a punishment. Comparing
    * instead keeps the mark readable, says plainly whose answer it is about, and
    * comes back by itself if the reader puts the old words back.
@@ -795,13 +811,19 @@ export function QuizPanel({
    * Guarded on the question being in this batch, because the attempt can
    * outlive a batch by one render — the reset effect clears it, but the prop
    * arrives before the clear lands.
+   *
+   * **A restored attempt is not a new mark, and is skipped.** It is `done`
+   * with no verdict — verdicts are not stored — which is exactly the shape
+   * "the latest mark could not be judged" has, so recording it would delete a
+   * verdict earned this visit every time the reader pressed Previous. GPT
+   * Sol's plan review of 261005b, F4.
    */
   useEffect(() => {
     if (verdictBatch.current !== quiz?.batchId) {
       verdictBatch.current = quiz?.batchId;
       return;
     }
-    if (attempt?.status !== "done") return;
+    if (attempt?.status !== "done" || attempt.restored) return;
     const { questionId, verdict } = attempt;
     if (!questions.some((q) => q.id === questionId)) return;
     setVerdicts((was) => {
@@ -812,6 +834,47 @@ export function QuizPanel({
       return next;
     });
   }, [attempt, questions, quiz?.batchId]);
+
+  /**
+   * **Put a kept answer back** — the box and the mark together, for the
+   * question actually on screen.
+   *
+   * **Declared after the batch reset, the filter, the arrival and the verdict
+   * effects, on purpose**, so their scheduled moves take precedence. State
+   * writes do not change this effect's captured values: a valid arrival to a
+   * different question must wait for its destination to render before we
+   * restore. It is keyed on the batch, the id of
+   * the question drawn, and that question's kept answer — so it runs when the
+   * walk lands somewhere (however it got there), and again when kept answers
+   * arrive after the question did.
+   *
+   * **It only ever fills a vacancy**: no attempt at all, and an empty box. A
+   * draft, a mark in flight, a failed mark and a finished one are all left
+   * alone. And **`typed` and the attempt are read, not depended on** — keyed
+   * on them, a reader who typed over nothing and then cleared the box would
+   * have their old answer jump back in under the caret.
+   *
+   * `question` is undefined while a batch is changing or the step at `at` is
+   * filtered out, so nothing is restored under a question the panel has not
+   * committed to. Idempotent, so StrictMode's second run changes nothing.
+   */
+  const shownId = question?.id;
+  const keptHere = shownId === undefined ? undefined : owner.kept.get(shownId);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate triggers — landing on a question, or its kept answer arriving; `typed` and the attempt are read as they stand (see above), and `showKept` is read fresh
+  useEffect(() => {
+    if (shownId === undefined || !keptHere) return;
+    /* The arrival effect above schedules state; this closure still sees the
+       question from before that move. Wait for its destination to render. */
+    if (
+      arrival &&
+      arrival.batchId === quiz?.batchId &&
+      arrival.questionId !== shownId &&
+      questions.some((q) => q.id === arrival.questionId)
+    ) return;
+    if (owner.attempt !== null || typed !== "") return;
+    setTyped(keptHere.answer);
+    owner.showKept(shownId);
+  }, [quiz?.batchId, shownId, keptHere]);
 
   /**
    * **Whether the question on screen carries its premise.** The rule is
@@ -1061,6 +1124,21 @@ export function QuizPanel({
             />
           )}
 
+          {/* **"Could not read" is not "none".** The questions are here and the
+              reader's earlier answers to them are not: said once, quietly,
+              with the read again — `retryRead` is a GET and never spends.
+              Only when nothing is held for this batch; a later read that
+              cannot say leaves what an earlier one brought (useQuiz.ts §
+              `fromServer`). GPT Sol's plan review of 261005b, F5. */}
+          {owner.keptUnread && questions.length > 0 && (
+            <p className="gloss-quiet">
+              Your earlier answers could not be loaded.{" "}
+              <Button type="button" size="xs" variant="outline" onClick={() => void owner.retryRead()}>
+                Try again
+              </Button>
+            </p>
+          )}
+
           {waitingForReading && questions.length > 0 && (
             <p className="gloss-quiet">Looking for what you have read…</p>
           )}
@@ -1085,9 +1163,9 @@ export function QuizPanel({
                   {/* Dropped while the box holds something that has not been
                       marked, because this line sits directly above that box and
                       reads as a claim about what is in it. The tick in the list
-                      below keeps its own meaning — *you got a finished mark for
-                      this question at some point this session* — which stays
-                      true whatever the reader is typing now. */}
+                      below keeps its own meaning — *you have a finished mark
+                      for this question* — which stays true whatever the reader
+                      is typing now. */}
                   {answered.has(question.id) && !superseded && " — answered"}
                 </p>
                 {/* **The premise, as a lead-in rather than part of the
@@ -1475,6 +1553,16 @@ function Mark({
       {attempt.status === "failed" && attempt.error && (
         <p className="gloss-error">{attempt.error}</p>
       )}
+      {/* The mark is whole and usable; what failed is keeping it. Quiet, under
+          the mark it is about, and it stays with it across Next and Previous
+          for the rest of the visit — after which it is true. Not an error
+          colour: nothing the reader did went wrong and there is nothing to
+          retry but answering again. GPT Sol's plan review of 261005b, F7. */}
+      {attempt.status === "done" && attempt.notSaved && (
+        <p className="gloss-count">
+          This answer could not be saved, so it will not be here when you come back.
+        </p>
+      )}
     </>
   );
 }
@@ -1576,8 +1664,8 @@ function QuestionList({
             aria-current={q.id === currentId ? "true" : undefined}
             onClick={() => onPick(q.id)}
           >
-            {/* Answered is session state and means one thing: a mark that
-                reached `done`. `useQuiz` is the only place an id gets in. */}
+            {/* Answered means one thing: a mark that reached `done`, this
+                visit or an earlier one — the keys of `useQuiz`'s `kept`. */}
             <span className="quiz-list-tick" aria-hidden="true">
               {answered.has(q.id) ? "\u2713" : ""}
             </span>

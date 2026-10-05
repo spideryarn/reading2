@@ -13,6 +13,8 @@
  * Production precedence is untouched: nothing outside a test sets the pin.
  */
 import { spawnSync } from "node:child_process";
+import { closeSync, mkdtempSync, openSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +36,26 @@ export function pinForWrapper(env: NodeJS.ProcessEnv, names: readonly string[] =
  */
 export function wrapperEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return pinForWrapper(accountNeutralEnv(overrides), ["PATH", ...ACCOUNT_ROUTING_VARIABLES]);
+}
+
+/** Run the real wrapper without tsx's CLI IPC socket. File-backed capture also works in sandboxes
+ * where Node's synchronous pipe capture returns EPERM after a child has already run. */
+export function runWrapper(script: string, args: string[], env: NodeJS.ProcessEnv) {
+  const dir = mkdtempSync(join(tmpdir(), "wrapper-console-"));
+  const stdout = join(dir, "stdout.txt");
+  const stderr = join(dir, "stderr.txt");
+  const out = openSync(stdout, "w");
+  const err = openSync(stderr, "w");
+  try {
+    const result = spawnSync(process.execPath, ["--import", "tsx", script, ...args], {
+      cwd: REPO, env, stdio: ["ignore", out, err],
+    });
+    if (result.error) throw result.error;
+    return { ...result, stdout: readFileSync(stdout, "utf8"), stderr: readFileSync(stderr, "utf8") };
+  } finally {
+    closeSync(out);
+    closeSync(err);
+  }
 }
 
 /**

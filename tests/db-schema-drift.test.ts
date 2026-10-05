@@ -286,6 +286,7 @@ describe("declaredTables", () => {
       "link_previews",
       "link_summaries",
       "queue_state",
+      "quiz_attempts",
       "rate_limit_events",
       "raw_sources",
       "reader_arrivals",
@@ -385,8 +386,9 @@ describe("against a real database", () => {
          the whole of the drift guard. */
       /* Forty-five since `shelf_topic_sets`, 2026-10-03 (plan 261003f); forty-seven
          since `citation_index_lookups` and `citation_index_citers`, 2026-10-04
-         (plan 261004h). */
-      expect(report.declaredTables).toBe(47);
+         (plan 261004h); forty-eight since `quiz_attempts`, 2026-10-05 (plan
+         261005b). */
+      expect(report.declaredTables).toBe(48);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

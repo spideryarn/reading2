@@ -68,6 +68,7 @@ import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
 import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
+import { isCrumbSection } from "../crumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
@@ -634,7 +635,7 @@ export function Reader({
     !bandCovers &&
     mode !== "structure" &&
     !marginRoom &&
-    (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
+    (crumbsRoot?.children.some((c) => isCrumbSection(c) && nodeLabel(c, c.title) !== null) ?? false);
   /**
    * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
    * is in it, and since 2026-10-02 for anybody it holds the breadcrumb for.

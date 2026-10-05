@@ -317,6 +317,12 @@ Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `review
 (default 30) · `--output` · `--activity-log` · `--stream` · `--print` · `--quiet` ·
 `--max-print-chars` (default 20,000) · `--pass-env` · `--dry-run`.
 
+`--output` receives Codex's last message, replacing whatever an earlier invocation left there. The
+one exception, since 2026-10-05: if the run itself wrote something else to that path — a
+write-capable reviewer saving its full report there — the file is kept, the last message goes
+beside it as `<output>.last-message.txt`, and the console says so. A report written by a credential
+attempt that then failed is moved to `<output>.earlier-attempt.txt` rather than kept as the answer.
+
 ### What reaches the caller's context
 
 The split is the whole reason the wrapper exists, so it is worth stating exactly:

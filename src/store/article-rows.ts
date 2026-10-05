@@ -37,6 +37,7 @@ import {
   readingTime,
   glossaryHiddenEntries,
   articleTags,
+  quizAttempts,
   refereeClaims,
   refereeCriteria,
   revisionBlocks,
@@ -213,6 +214,16 @@ export const ARTICLE_TABLE_COVERAGE = {
   article_tags: {
     rollback: { exported: true, into: "tags.json" },
     bundle: { exported: true, into: "augmentations/tags.json" },
+  },
+  /* The reader's finished quiz marks — their own words and what they were
+     told about them, so exported for `reading_time`'s reason. Every row,
+     including those for a batch *Write them again* has since replaced: the
+     `question` column is what lets such a row be read on its own.
+     docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's plan
+     review finding 6. */
+  quiz_attempts: {
+    rollback: { exported: true, into: "quiz-attempts.json" },
+    bundle: { exported: true, into: "augmentations/quiz-attempts.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -591,6 +602,11 @@ export interface ArticleRows {
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
   /** The reader's own tags, by tag. Plan 261003d. */
   readonly articleTags: readonly (typeof articleTags.$inferSelect)[];
+  /**
+   * Every finished quiz mark, oldest first — **all batches**, not only the one
+   * the article has now. Plan 261005b.
+   */
+  readonly quizAttempts: readonly (typeof quizAttempts.$inferSelect)[];
 }
 
 /**
@@ -808,6 +824,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(articleTags)
     .where(eq(articleTags.articleId, article.id))
     .orderBy(asc(articleTags.tag));
+  const quizMarks = await tx
+    .select()
+    .from(quizAttempts)
+    .where(eq(quizAttempts.articleId, article.id))
+    .orderBy(asc(quizAttempts.createdAt), asc(quizAttempts.id));
 
   return {
     article,
@@ -826,6 +847,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     readingTime: secondsRead,
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,
+    quizAttempts: quizMarks,
   };
 }
 

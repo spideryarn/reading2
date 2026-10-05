@@ -60,6 +60,7 @@ import {
   glossaryLookups,
   ingestEvents,
   linkSummaries,
+  quizAttempts,
   realtimeSessions,
   refereeClaims,
   refereeCriteria,
@@ -1011,6 +1012,16 @@ describe("destroying an article", () => {
       glossary_hidden_entries: () =>
         db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
       article_tags: () => db.insert(articleTags).values({ articleId: GONE_ARTICLE, tag: "gone" }),
+      /* A kept quiz answer — plan 261005b. It goes with the article. */
+      quiz_attempts: () =>
+        db.insert(quizAttempts).values({
+          articleId: GONE_ARTICLE,
+          batchId: "spya-qzgone",
+          questionId: "spya-qzgqst",
+          question: "What did it say?",
+          answer: "something nobody will read again",
+          reply: "a mark nobody will read again",
+        }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({
           articleId: GONE_ARTICLE,

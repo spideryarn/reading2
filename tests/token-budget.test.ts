@@ -95,6 +95,22 @@ describe("budgetFor", () => {
     }
   });
 
+  it("does not tell anyone that reading in sections is unbuilt, which stopped being true on 2026-10-05", () => {
+    /* Structure and labels read a long piece in sections since
+       docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md;
+       the twenty-odd other `budgetFor` callers still refuse, so the message
+       stays and only the untrue clause went (261005c § (e)). */
+    try {
+      budgetFor("glossary", 200_000);
+      expect.unreachable("should have refused");
+    } catch (err) {
+      const tooLong = err as TooLongForOnePass;
+      expect(tooLong.message).not.toContain("not built yet");
+      expect(tooLong.readerFailure.message).not.toContain("not built yet");
+      expect(tooLong.readerFailure.message).toContain("[ai-too-long]");
+    }
+  });
+
   it("rejects a nonsense estimate instead of passing NaN to the API", () => {
     // `max_tokens: NaN` is a 400 from the API and a confusing one; a negative
     // estimate would silently shrink the budget below the headroom.

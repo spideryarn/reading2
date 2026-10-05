@@ -912,6 +912,22 @@ export async function exportArticle(
     await put("article_tags", "tags.json", { tags: rows.articleTags.map((row) => row.tag) });
   }
 
+  /* The reader's finished quiz marks, oldest first, every batch — plan 261005b.
+     Each carries its question's words, because the batch a row names may have
+     been replaced since. */
+  if (rows.quizAttempts.length) {
+    await put("quiz_attempts", "quiz-attempts.json", {
+      attempts: rows.quizAttempts.map((row) => ({
+        batchId: row.batchId,
+        questionId: row.questionId,
+        question: row.question,
+        answer: row.answer,
+        reply: row.reply,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }
