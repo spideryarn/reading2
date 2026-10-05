@@ -81,6 +81,70 @@ npm test                        # expect a handful red, about what the primary h
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
 
+### Where a worktree's bytes live
+
+**On the box a new worktree is at `/var/tmp/spideryarn-worktrees/<name>`, not under
+`.claude/worktrees/`.** `EnterWorktree({name})` and `claude --worktree <name>` both put it there, with
+no question asked. Nothing else about a worktree changes — the branch is still `worktree-<name>`, and
+setup, check and remove are the same commands. On Greg's Mac, where that directory does not exist, a
+worktree is in `.claude/worktrees/<name>` as it always was.
+
+Why: `/home` on the box is a separate 49 GB disk and a worktree is about 1.2 GB, most of it
+`node_modules`. It filled to 100% on 2026-10-05, which broke peers' commits, while `/` had 70 GB free.
+A tree made by hand on `/` works, but `EnterWorktree({path})` then stops to ask about a
+"model-supplied worktree outside .claude/worktrees/", and Claude Code's documentation says no
+permission rule silences that. Greg, 2026-10-05:
+
+> Yes, worktrees are allowed to enter outside .claude/worktrees/ - don't ask me, please allow that
+> path for me.
+
+How: two hooks in [`.claude/settings.json`](../../.claude/settings.json).
+
+- **[`worktree-create.sh`](../../.claude/hooks/worktree-create.sh)**, on `WorktreeCreate`. A path
+  that comes from this hook is not model-supplied, so Claude Code enters it without asking. The hook
+  *replaces* Claude Code's own creation, so it does everything the default did: the branch from the
+  primary's `HEAD`, the `.worktreeinclude` copy, and the `claude session <name> (pid … start …)` lock
+  that `worktree-inuse.ts` reads (on the box; with no `/proc`, as on the Mac, there is no lock). A
+  name that already has a tree — in `.claude/worktrees/` first,
+  then on `/` — is resumed, not recreated, exactly as before.
+- **[`worktree-remove.sh`](../../.claude/hooks/worktree-remove.sh)**, on `WorktreeRemove`. With a
+  create hook in place Claude Code leaves removal to this one, and it hands the tree to
+  `npm run worktree:remove`. So `ExitWorktree({action: "remove"})` now passes through every guard in
+  [Removing one](#removing-one), `discard_changes: true` included; when the guards refuse, the tool
+  says "could not remove it — kept at …" and the tree is intact. Claude Code cannot inspect a tree it
+  did not make, so the first call always answers *"Could not verify worktree state … Re-invoke with
+  discard_changes: true"*; the second call is the one that reaches the guards, and here that flag
+  discards nothing they would keep. (On the Mac, where
+  `worktree:remove` refuses every tree that exists for want of `/proc`, the hook falls back to git's
+  own unforced remove.)
+
+Four things worth knowing before you change any of it, each measured on 2026-10-05 against
+Claude Code 2.1.289:
+
+- **A symlink at `.claude/worktrees/<name>` pointing at the real tree does not work.** It was the
+  first design. Claude Code refuses it by name: *"… is a symlink. A repository-committed symlink
+  below the checkout root could redirect the worktree outside the repository. Remove the symlink (or
+  emit a path outside the repository) and retry."* The bracket in that message is the design here.
+- **`.worktreeinclude` is read by the hook now, not by Claude Code**, and the hook understands only
+  plain root-level names — `.env.local`, `.env`. A pattern with a `/` or a glob makes every
+  `EnterWorktree` fail with a message naming the line, rather than making trees with no environment.
+- **`/var/tmp`, not `/tmp`.** `/tmp` is aged out after 30 days on the box and would delete the
+  unread half of a live tree's `node_modules`; `/var/tmp` has no such rule.
+- **It is the disposable disk.** A rebuilt server has an empty `/var/tmp`, and
+  [`provision.sh`](../../infra/hetzner/provision.sh) makes the directory again. Unpushed work in a
+  worktree does not survive a rebuild — which was already the rule for work that matters.
+
+`EnterWorktree({path})` on a tree outside `.claude/worktrees/` still asks; use the name. The six
+trees made by hand under `/var/tmp/spideryarn-worktrees/` that afternoon are reachable that way.
+`SPIDERYARN_WORKTREE_ROOT` moves the directory, and exists for the hook's own tests.
+
+**Not yet followed by the fleet dashboard.** Its "remove worktree" action refuses any directory that
+is not under `<primary>/.claude/worktrees/` (`planRemoveWorktree` in
+[`tools/fleet/actions.ts`](../../tools/fleet/actions.ts), and the same test in `routes-actions.ts`),
+and the Overseer's recovery view will not reconstruct a path for one
+(`tools/overseer/recovery-view.ts`). Both refuse with a reason rather than doing the wrong thing, so
+a tree on `/` is removed with `npm run worktree:remove` until they are taught the second root.
+
 ### Two things about `EnterWorktree` that have each cost an agent an hour
 
 **A named worktree that already exists is *resumed*, not recreated.** `EnterWorktree({name})` and

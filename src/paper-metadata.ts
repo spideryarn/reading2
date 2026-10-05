@@ -27,6 +27,7 @@
  * evals/pdf/minimal-metadata/score.mts.
  */
 import { openRouterJson, type AiRequestBody } from "./ai-call.js";
+import { DOI_ORG, doiOfUrl } from "./doi-url.js";
 import { PAPER_METADATA_MODEL } from "./models.js";
 import { firstPagesText } from "./pdf.js";
 import { htmlDocumentText } from "./paper-text.js";
@@ -127,17 +128,37 @@ function oneLine(s: string): string | null {
   return t ? t : null;
 }
 
+/** A resolver address in any spelling a page prints: either scheme, `dx.` or not, any case. Group 1 is its path. */
+const DOI_ADDRESS = /^https?:\/\/(?:dx\.)?doi\.org\/(.*)$/i;
+
 /**
  * **A DOI, or `null`.** A leading `https://doi.org/`, `http://dx.doi.org/` or
  * `doi:` is taken off, and so is the full stop or bracket a sentence leaves on
  * the end; what remains must fit the same printable, URL-safe shape and length
  * as a DOI key in the bibliographic store.
+ *
+ * **An address is decoded, once, and nothing else is** (plan 261005i stage 2).
+ * A `doi.org` address is a DOI percent-encoded into a path, so the DOI is what
+ * `doiOfUrl` reads back out of it: kept as written, `%28` would be encoded a
+ * second time when `doiUrl` builds the link (`%2528`), which is another work
+ * or none. A bare `10.…` or a `doi:` string is not an address, and a `%` in
+ * one is the DOI's own.
+ *
+ * **The order is the point** (GPT Sol's F5 on that plan):
+ *
+ * 1. the sentence's punctuation comes off the string *as written*;
+ * 2. an address is put in `doiUrl`'s spelling and read by `doiOfUrl`, the one
+ *    reader of a doi.org address (src/doi-url.ts), whose limits are this
+ *    function's too: `a%2Fb` reads as `a/b` whatever an old writer meant, and
+ *    a malformed escape leaves the whole path as written;
+ * 3. the result is checked and never trimmed again, because a bracket the
+ *    address encoded (`a%5B1%5D`) is part of the DOI, not of the sentence.
  */
 export function normaliseDoi(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  let s = raw.trim();
-  s = s.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "");
-  s = s.replace(/[.,;:)\]}>]+$/, "");
+  const written = raw.trim().replace(/[.,;:)\]}>]+$/, "");
+  const path = DOI_ADDRESS.exec(written)?.[1];
+  const s = (path === undefined ? written : (doiOfUrl(`${DOI_ORG}${path}`) ?? path)).replace(/^doi:\s*/i, "");
   return s.length <= MAX_DOI_CHARS && PRINTABLE_ASCII.test(s) && DOI_PATTERN.test(s) ? s : null;
 }
 

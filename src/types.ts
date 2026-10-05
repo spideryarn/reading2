@@ -3978,6 +3978,40 @@ export type ChatAnchor =
   | { blockId: BlockId }
   | { blockId: BlockId; quote: string; start: number };
 
+/**
+ * **Where a conversation was started from, when it was started from an item
+ * in another mode** — Debate's *Check this claim in chat* is the first caller.
+ * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
+ *
+ * Not a `ThreadKind` and not the anchor. Kind chooses the prompt and tools,
+ * and a claim check is an ordinary chat. An anchor says "this is the chat
+ * about this passage" to the prose marks and the gutter chip, which a claim
+ * check is not. One meaning per field.
+ *
+ * **A union on `mode`**, so a claim cannot exist without its block and its
+ * words. A claim has no id: its identity is `(blockId, quote)`, the article's
+ * own words as they were when the chat started. Later callers add arms
+ * (`summary`, `glossary`, `citations`); `chat_threads_origin_mode` in
+ * src/db/schema.ts already lists all four, and the route accepts only the
+ * modes that are built (`ORIGIN_MODES`).
+ *
+ * Set on the turn that creates the thread and never again, like `anchor`.
+ * Written by conditional spread, never `origin: undefined`.
+ */
+export type ThreadOrigin = { mode: "debate"; blockId: BlockId; quote: string };
+
+/** The origin modes that are built. The route refuses any other. */
+export const ORIGIN_MODES = ["debate"] as const satisfies readonly ThreadOrigin["mode"][];
+
+/**
+ * Are these the same origin? What the route's 409 and the caller's way back
+ * both ask, so there is one answer. Exact: a claim reworded by a new search is
+ * a different claim.
+ */
+export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
+  return a.mode === b.mode && a.blockId === b.blockId && a.quote === b.quote;
+}
+
 export interface ChatThread {
   id: string;
   title: string;
@@ -3996,6 +4030,11 @@ export interface ChatThread {
    * thread that already has one.
    */
   anchor?: ChatAnchor;
+  /**
+   * The item in another mode this conversation was started from, if it was.
+   * Set on the turn that creates the thread and never again. See `ThreadOrigin`.
+   */
+  origin?: ThreadOrigin;
   /**
    * A question about the article, or the reader saying what they took from
    * it. See `ThreadKind`.
@@ -4034,6 +4073,12 @@ export interface ThreadSummary {
   createdAt: string;
   updatedAt: string;
   anchor?: ChatAnchor;
+  /**
+   * Where the conversation was started from. A caller mode finds its own
+   * conversation by matching this (`threadForOrigin` in
+   * src/web/useChatAnchors.ts); nothing is stored on the item's side.
+   */
+  origin?: ThreadOrigin;
   /**
    * Chat or Remember — which the reading view needs even though it draws no
    * Remember marks.
@@ -4522,8 +4567,26 @@ export interface RegistryWork {
   venue?: string;
 }
 
-/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
-export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
+/**
+ * **Crossref's count of the works that cite this one, and when it was read**
+ * (plan 261005i): `is-referenced-by-count`, a dated snapshot and never a live
+ * number. Only ever beside a Crossref record. `readAt` is ISO, by the
+ * database's clock.
+ */
+export interface RegistryCitedBy {
+  count: number;
+  readAt: string;
+}
+
+/**
+ * Citations' registry field: a record whose title agrees, or the fact that it
+ * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
+ * a conflict's record is another work, whose count is not this row's, and
+ * Debate's rows do not ask.
+ */
+export type CitationRegistry =
+  | ({ kind: "found"; citedBy?: RegistryCitedBy } & RegistryWork)
+  | { kind: "conflict"; source: RegistrySource };
 
 /**
  * How a cited work was matched to an article here, strongest first. `title` is

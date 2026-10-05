@@ -204,6 +204,10 @@ export class ChatController {
    * compare. Pruned when its operation retires.
    */
   #onThreadId = new Map<OpId, (id: string) => void>();
+  /** Draft bookkeeping, unlike navigation, must finish even after detach. */
+  #onConfirmed = new Map<OpId, (id: string) => void>();
+  /** Article-level completion work survives the composer's detach. */
+  #onSettled: (() => void) | undefined;
   /**
    * What each spoken append has promised its caller.
    *
@@ -223,9 +227,10 @@ export class ChatController {
   #spokenWaiters = new Map<OpId, (landed: SpokenLanded) => void>();
 
   /** No side effects here — the hook builds one during a render. */
-  constructor(slug: string, effects: ChatEffects) {
+  constructor(slug: string, effects: ChatEffects, onSettled?: () => void) {
     this.slug = slug;
     this.#effects = effects;
+    this.#onSettled = onSettled;
     const state = initialState(slug);
     this.#current = { state, threads: project(state), recovering: recoveringIds(state) };
   }
@@ -256,8 +261,13 @@ export class ChatController {
    * belongs to this one send and is a callback, so it cannot ride on the event
    * without putting a function in the state.
    */
-  startTurn(event: Extract<ChatInput, { type: "turn.started" }>, onThreadId?: (id: string) => void): void {
+  startTurn(
+    event: Extract<ChatInput, { type: "turn.started" }>,
+    onThreadId?: (id: string) => void,
+    onConfirmed?: (id: string) => void,
+  ): void {
     if (onThreadId) this.#onThreadId.set(event.op.id, onThreadId);
+    if (onConfirmed) this.#onConfirmed.set(event.op.id, onConfirmed);
     this.dispatch(event);
   }
 
@@ -308,6 +318,13 @@ export class ChatController {
   dispatch = (event: ChatEvent): ChatState => {
     const before = this.#current;
     const { state, commands } = reduce(before.state, event);
+    const operation = "opId" in event ? before.state.operations.get(event.opId) : undefined;
+    /* A lost stream or refused write is still being reconciled. Its recovery
+       or repair will notify when it finishes, including after detach. */
+    const handedOver = event.type === "turn.disconnected" && state.operations.has(event.recovery.id)
+      || event.type === "turn.refused" && state.operations.has(event.repair.id);
+    const finished = operation && (operation.kind === "turn" || operation.kind === "recovery"
+      || operation.kind === "repair") && !state.operations.has(operation.id) && !handedOver;
     if (state !== before.state) {
       /* Rebuilt only when something it is made of moved. `getSnapshot` is
          called on every render, and a fresh array each time is an infinite
@@ -335,6 +352,7 @@ export class ChatController {
       this.#notify();
     }
     for (const command of commands) this.#perform(command);
+    if (finished) this.#onSettled?.();
     return state;
   };
 
@@ -427,8 +445,9 @@ export class ChatController {
    * conversation they have left. Unsubscribing removes the render listener and
    * says nothing about this. GPT Sol, 2026-08-28.
    *
-   * Only the callbacks go. The intent commands are the controller's own work and
-   * carry on, which is the whole distinction: what this object decides for
+   * Only navigation callbacks go. Draft acknowledgements and article completion
+   * callbacks survive, as do the intent commands: the controller's own work
+   * carries on, which is the whole distinction: what this object decides for
    * itself survives the unmount, and what it was doing on somebody else's behalf
    * does not.
    */
@@ -438,9 +457,10 @@ export class ChatController {
 
   /** Forget the callbacks of turns that have finished. */
   #prune(state: ChatState): void {
-    if (this.#onThreadId.size === 0) return;
-    for (const id of [...this.#onThreadId.keys()]) {
-      if (!state.operations.has(id)) this.#onThreadId.delete(id);
+    for (const callbacks of [this.#onThreadId, this.#onConfirmed]) {
+      for (const id of [...callbacks.keys()]) {
+        if (!state.operations.has(id)) callbacks.delete(id);
+      }
     }
   }
 
@@ -539,6 +559,7 @@ export class ChatController {
         );
         return;
       case "named":
+        this.#onConfirmed.get(command.opId)?.(command.threadId);
         if (command.wasThreadId !== command.threadId) {
           // The URL is pointing at an id the server did not accept. Tell the
           // caller so `?thread=` can follow, or a reload lands on a
