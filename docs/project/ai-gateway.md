@@ -778,29 +778,80 @@ real one and against all three broken ones, and says which rows each broken one 
 
 ### A transport blip is retried, and every attempt is a row <a id="transport-retry"></a>
 
-Since 2026-10-03, on the Messages wire only. `streamMessage` gives a call up to three goes when an
-attempt **fails before the response has begun** (no `message_start`): the connection failed or
-timed out, a `200` opened with a transient `error` event (overloaded, timeout, API error, or no
-type at all), or the status was one of 408, 409, 500, 502, 503, 504, 529. It waits about half a
-second, then about a second and a half, and a Stop during the wait ends the call at once. Any other
-status is a verdict on the request and is not sent again. **A 429 is not retried here**: a rate
-limit is a queue, and `src/structure-deepen.ts` already answers one with `Retry-After` and a shared
-width gate. Once the response has begun nothing is retried, because listeners have heard it.
+Both wires give a call up to three goes when an attempt fails **before the provider has answered**.
+The numbers are shared ([`src/transport-retry.ts`](../../src/transport-retry.ts)): three attempts,
+a wait of about half a second and then about a second and a half, and the statuses that mean "not
+now", which are 408, 409, 500, 502, 503, 504 and 529. A Stop or a deadline during the wait ends the
+call at once, as the abort it is. Any other status is a verdict on the request and is not sent
+again. **A 429 is never retried here**: a rate limit is a queue, and the callers that meet one
+(`src/structure-deepen.ts`, `src/pdf-read.ts`, `src/embeddings.ts`) each answer it with
+`Retry-After` and their own policy.
 
-`message_start` is the line because nothing has been shown before it. It is not proof nothing was
-billed: a connection can drop after the provider took the work, so the failed attempt's row is
-*unpriced*, and a retry accepts that it may pay twice for the first moment of a call.
+**Each attempt is its own `SpendRecord`** on both wires, so a call that blipped once is two rows,
+`error` then `ok`, and `aiCalls` on a step's log line reads 2. *One record, one network attempt*
+still holds. The wait between attempts is not a call and writes no row.
+
+What differs between the wires is where "before the provider has answered" ends.
+
+**The Messages wire** (`streamMessage`, since 2026-10-03). The line is `message_start`. Before it,
+a failed connection, a timeout, a `200` that opened with a transient `error` event (overloaded,
+timeout, API error, or no type at all) and a transient status are all retried. Once the response
+has begun nothing is, because listeners have heard it. The SDK's own retry stays off
+(`maxRetries: 0`), because it would put three attempts behind one row.
 `MeteredCall.attempts()` is how a caller that publishes its own request count (Simple, Labels)
 stays in step with the ledger.
 
-**Each attempt is its own `SpendRecord`**, so a call that blipped once is two rows, `error` then
-`ok`, and `aiCalls` on the step's log line reads 2. The SDK's own retry stays off
-(`maxRetries: 0`), because it would put three attempts behind one row.
+**The OpenRouter seams** (`src/ai-call.ts`, all five, since 2026-10-05). The line is the response
+headers, which is tighter. Two failures are retried and nothing else:
+
+- `fetch` itself rejected with a `TypeError`. That is what a dropped connection looks like, and no
+  response existed.
+- the status was a transient one **and the body priced nothing**. A refusal that carries a cost
+  was billed, and is not bought again.
+
+A `200` of any kind is never retried: not one whose body will not read, not one that does not
+parse, and on the stream not one that breaks before its first frame or dies mid-answer. A `200` on
+this wire means OpenRouter accepted the work and may be billing it. On the stream, `end` is cleared
+at the start of every attempt, and `onActivity` is called before the wait and again after it, so a
+caller's stall clock does not count the backoff as provider silence.
+
+**One predicate says which failures may be asked again:** `worthAskingAgain(err)` in
+`src/ai-call.ts`. Two facts feed it that only the gateway has. `ProviderRefused.priced` says
+whether the meter saw a cost in the refusal's body. And an error from `fetch` itself is remembered
+at `send`, because by the time a caller catches a `TypeError` it cannot tell a dead connection from
+a `200` whose body broke.
+
+**A caller can switch the gateway's retry off** with `retryTransport: false`, when it already owns
+the decision. Without that the loops multiply: nine requests for one PDF chunk on a bad minute.
+Five callers pass it:
+
+| Caller | Why |
+| --- | --- |
+| `pdf` (`src/pdf-read.ts`) | Its own loop retries through a width gate the gateway cannot see. That loop asks `worthAskingAgain` about a refusal, so it retries an unpriced 5xx and never a priced one. For any other thrown error it is older and wider than the rule above: it asks again after any non-abort throw, including a `200` whose body broke. |
+| `embeddings` (`embedBatch`) | Its own loop gives five goes and honours `Retry-After`. It asks `worthAskingAgain` about a thrown error, so a dropped connection is retried and a broken `200` is not, and it does not retry a priced 5xx. |
+| `shelf-topics` (every call in `src/shelf-terms/model-topics.ts`) | Naming a level and the filing pass are each already run once more on any failure. |
+| `pdf-figure-locate` | `MAX_LOCATE_CALLS` promises at most eight model calls an article and counts asks. A hidden retry would make that twenty-four requests. |
+| `command-pick`, `command-pick-words` | The two calls share one five-second deadline, and a failure already falls back to the bar's own list. |
+
+Two trade-offs, both taken on purpose:
+
+- **A retried attempt's cost is unknown, not zero.** A connection can drop after the provider took
+  the work. The failed row is *unpriced*, and the retry may pay twice for the first moment of a
+  call. The *priced refusal is not retried* rule covers the case where the provider tells us;
+  nothing covers the case where it does not. It is dearest on an Illustrated plate and on the three
+  calls that run a billed web search (`dig-deeper-search`, `citations-find`, `debate`).
+- **On the OpenRouter seams a caller's own count is not kept in step.** Simple's `checkCalls`,
+  quick search's `tally.requests` and Illustrated's "N call(s)" count asks, so after a retried blip
+  the ledger has one more row than the count. The ledger is the truth. The one count that is a
+  spend cap, the figure locator's, opts out instead.
 
 It exists because of one import: the Arc call's connection failed 595 ms into a cold-started
-function, nothing retried, and the job failed —
-[261003m](../plans/261003m-a-transport-blip-fails-an-import-one-countable-retry-on-the-messages-wire.md).
-The other wires are not covered; `src/pdf-read.ts` has its own loop of the same shape.
+function, nothing retried, and the job failed
+([261003m](../plans/261003m-a-transport-blip-fails-an-import-one-countable-retry-on-the-messages-wire.md)).
+The audit of the other wires, and the retry on them, is
+[261005j](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md).
+A call that dies part-way through its answer still fails on both wires; retrying that means paying
+for it twice, and it is not built.
 
 ### Aborted is a cause, not a coincidence
 

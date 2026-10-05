@@ -6,11 +6,10 @@
  *     DATABASE_URL='<remote>' npx tsx scripts/draft-sweep-inventory.ts  # a remote: read the Target line
  *
  * The on-demand sweep (`sweepAbandonedDrafts`, src/store/pg-revisions.ts) runs
- * per article, on a job's first step, and only counts until Greg approves the
- * first deletion against production — docs/project/cron-scheduler.md and
- * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § O. This
- * is the library-wide picture he approves from: what the sweep would take
- * across every article, which it never does in one go.
+ * per article, on a job's first step, and now deletes —
+ * docs/project/cron-scheduler.md. This is the library-wide picture: what is
+ * waiting across every article, which the sweep never takes in one go. The
+ * script that does take it in one go, once, is scripts/draft-sweep-backlog.ts.
  *
  * **Two joins, and they have to agree.** The candidate block uses
  * `abandonedDraftCondition` — the sweep's own predicate, imported rather than
@@ -45,7 +44,6 @@ import { resolveTargetUrl } from "../src/env.js";
 import {
   ABANDONED_DRAFT_MS,
   DRAFT_SWEEP_BATCH,
-  STEP_START_DRAFT_SWEEP,
   abandonedDraftCondition,
 } from "../src/store/pg-revisions.js";
 
@@ -79,8 +77,7 @@ try {
     if (ro?.ro !== "on") throw new Error(`refusing to go on: the transaction is not read-only (${ro?.ro})`);
     console.log(`Mode:   read-only transaction (transaction_read_only = ${ro.ro})`);
     console.log(
-      `Policy: ${hours}h threshold, ${DRAFT_SWEEP_BATCH} per job start, ` +
-        `step-start mode "${STEP_START_DRAFT_SWEEP}"\n`,
+      `Policy: ${hours}h threshold, ${DRAFT_SWEEP_BATCH} deleted per job start\n`,
     );
 
     /* The independent classification: every draft and failed revision, by what

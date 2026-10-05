@@ -188,7 +188,10 @@ export function useAutoRun(
 
 /**
  * **A page the owner opened, with nothing on it, starts itself — no press.**
- * One caller: the thread's band (useTweets.ts), Summary's Thread view — the
+ * Two callers. Marginalia's relation words since 2026-10-05, asked for when
+ * the owner's column is on screen (useRelations.ts, which has Greg's words for
+ * it). And the first, which the rest of this note is about: the thread's band
+ * (useTweets.ts), Summary's Thread view — the
  * Tweets page until it became a mode on 2026-09-29, when the arrival rule came
  * with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
  *

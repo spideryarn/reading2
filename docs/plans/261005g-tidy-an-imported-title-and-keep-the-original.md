@@ -138,7 +138,8 @@ is a known miss rather than a new path.
   Recommendation: not yet; look at what the rule gets wrong on real imports first.
   **Decided: yes, a small model** — Greg, 2026-10-05: "yes, a small model (e.g. GPT Luna or DeepSeek).
   ideally piggybacking on an existing call we're already doing as part of the import process".
-  Dispatched to session `title-model`.
+  Built as [261005j](261005j-a-small-model-tidies-an-imported-title.md): a small model tidies the
+  title at import, and the rule here is its fallback.
 - **[Q-title-backfill]** Should the articles already on shelves be tidied? It needs a script run
   against production, and it marks those articles' generated modes stale. Recommendation: a
   report-only script first, to count them.

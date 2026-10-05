@@ -49,9 +49,10 @@ import type { SaveState } from "./useAutosavedText.js";
 /**
  * How long the add page's box sits still before it saves. Shorter than the
  * other boxes' two seconds because this one is racing an import: the words
- * have to be in before publication reads them.
+ * have to be in before publication reads them. 700 ms until 2026-10-05, when
+ * Greg asked for a second, so a save (and its tick) comes less often.
  */
-export const ADD_PURPOSE_IDLE_MS = 700;
+export const ADD_PURPOSE_IDLE_MS = 1_000;
 
 /** How long one read of the stored purpose may take before it is given up on. */
 export const PURPOSE_READ_DEADLINE_MS = 10_000;

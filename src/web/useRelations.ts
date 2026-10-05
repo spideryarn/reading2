@@ -4,24 +4,39 @@
  * and the one job that writes them.
  *
  * Marginalia otherwise generates nothing (docs/project/marginalia.md). This is
- * its one artefact of its own. New imports queue it with the other main modes
- * (src/auto-mode-steps.ts); where none was stored — an older article, an opted-out
- * import or a failed queued run — **the press that turns the column on asks for
- * it**, through the same activation every self-starting mode uses
- * (src/web/useAutoRun.ts; Marginalia's row in activation.ts § `MODE_TARGET`).
- * A mount is not a press, so a pasted `?margin=1` link, a Back step, a reload
- * and the first-open default all spend nothing.
+ * its one artefact of its own, and **it is made the first time the column is
+ * shown**:
+ *
+ * > generate linking words when Marginalia mode is opened
+ * >
+ * > — Greg, 2026-10-05
+ *
+ * Shown, not pressed. The first-open default turns the column on with nobody
+ * pressing anything (last-view.ts § `firstOpenSearch`), and while this hook
+ * waited for a press (`useAutoRun`, until 2026-10-05) a new article arrived
+ * with a margin that had no words until the column was turned off and on. So
+ * it is `useAutoRunOnArrival`, the rule Summary's thread already had: one
+ * unforced attempt per article per page load, whatever put the column there —
+ * a press, the default, a pasted `?margin=1`, a reload, a restored view. That
+ * last one is how an article from before this gets its words; there is no
+ * backfill. Nor is it queued on import, as it was for part of 2026-10-05
+ * (src/auto-mode-steps.ts): that paid for every article, opened or not.
+ *
+ * **`shown` is the column on screen, not the switch**: on a window with no
+ * room for the notes the feed is still mounted for its reads, and words nobody
+ * can see are not worth a call. The attempt waits until the window has room.
  *
  * Owner only, and not because of a check here: the one caller is
  * `OwnerMarginFeed`, mounted under the owner's arm. A visitor's payload does
  * not carry the words at all in v1 — it has no staleness verdict, and a
  * relation word has no quote to check against its block.
- * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
+ * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md;
+ * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { BlockId, Relation, RelationsResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { useAutoRun } from "./useAutoRun.js";
+import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 
@@ -34,7 +49,7 @@ type RelationsStatus = "loading" | "none" | "ready" | "error";
  */
 export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
 
-export function useRelations(slug: string): RelationsByBlock {
+export function useRelations(slug: string, shown: boolean): RelationsByBlock {
   const [status, setStatus] = useState<RelationsStatus>("loading");
   const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
 
@@ -76,12 +91,15 @@ export function useRelations(slug: string): RelationsByBlock {
     await queue.start({});
   }, [queue]);
 
-  /* **Stale or outdated counts as nothing there**, so the next press rewrites
-     it. Unforced: the step's own stamp check decides whether to run, and it
-     will agree, because a stale artefact is exactly what an unforced run
-     regenerates (as useArc.ts). */
+  /* **Stale or outdated counts as nothing there**, so the next showing
+     rewrites it. Unforced: the step's own stamp check decides whether to run,
+     and it will agree, because a stale artefact is exactly what an unforced
+     run regenerates (as useArc.ts). */
   const unusable = loaded !== null && (loaded.stale || loaded.outdated);
-  useAutoRun(slug, "relations", status === "ready" && unusable ? "none" : status, ensure, reload);
+  const answer = status === "ready" && unusable ? "none" : status;
+  /* Not on screen is not an answer yet: `loading` is the status the arrival
+     rule waits on, and it is asked again when the window has room. */
+  useAutoRunOnArrival(slug, "relations", shown ? answer : "loading", ensure, reload);
 
   /* `?.` because a reply that is JSON but not this shape must cost the reader
      the words, not the column: this runs inside Marginalia's boundary. */

@@ -263,7 +263,18 @@ function type(value: string): void {
 }
 const focus = () => act(() => box().focus());
 const blur = () => act(() => box().blur());
-const statusLine = (): string => host.querySelector(".prof-save")?.textContent?.trim() ?? "";
+/** Visible words on the status line; `ticked` asks about the decorative tick. */
+const statusLine = (): string => {
+  const line = host.querySelector(".prof-save")?.cloneNode(true) as HTMLElement | undefined;
+  line?.querySelectorAll(".prof-save-tick, .sr-only").forEach((node) => {
+    node.remove();
+  });
+  return line?.textContent?.trim() ?? "";
+};
+/** The faint tick a save that landed leaves for a moment — `SaveStatus`. */
+const ticked = (): boolean => host.querySelector(".prof-save.is-saved .prof-save-tick") !== null;
+/** What the line reads whenever nothing has failed: typing and saving do not change it. */
+const QUIET = "Saves as you type.";
 
 function leaving(): boolean {
   const e = new Event("beforeunload", { cancelable: true });
@@ -534,18 +545,21 @@ describe("saved as it is typed, while the import runs", () => {
     type("the evidence");
     await pause(ADD_PURPOSE_IDLE_MS - 100);
     expect(patches(), "saved inside the pause").toEqual([]);
-    expect(statusLine()).toBe("Unsaved changes");
+    expect(statusLine(), "typing changed the line").toBe(QUIET);
+    expect(ticked()).toBe(false);
     await pause(100);
     expect(patches()).toEqual([patch("the evidence")]);
-    expect(statusLine()).toBe("Saved");
+    expect(statusLine()).toBe(QUIET);
+    expect(ticked()).toBe(true);
     await pause(ADD_PURPOSE_IDLE_MS * 5);
     expect(patches(), "saved again with nothing changed").toHaveLength(1);
     expect(navigations).toEqual([]);
   });
 
-  it("a short pause, not the other boxes' two seconds", () => {
-    expect(ADD_PURPOSE_IDLE_MS).toBeGreaterThanOrEqual(300);
-    expect(ADD_PURPOSE_IDLE_MS).toBeLessThanOrEqual(1_000);
+  /* Greg, 2026-10-05: "perhaps a 1s rather than 0.7s debounce is fine to avoid
+     it appearing too often and distracting the user". */
+  it("a one-second pause, not the other boxes' two seconds", () => {
+    expect(ADD_PURPOSE_IDLE_MS).toBe(1_000);
   });
 
   it("a blur saves at once, and so does ⌘/Ctrl+Enter", async () => {
@@ -601,7 +615,8 @@ describe("saved as it is typed, while the import runs", () => {
     type("B");
     await pause(ADD_PURPOSE_IDLE_MS * 4);
     expect(patches(), "a second write went out beside the first").toEqual([patch("A")]);
-    expect(statusLine(), "said Saving… about words that are not in the request").toBe("Unsaved changes");
+    expect(statusLine()).toBe(QUIET);
+    expect(ticked(), "ticked words that are not in the request").toBe(false);
 
     patchAnswer = async (body, slug) => storePurpose(slug, body);
     first.answer(storePurpose(SLUG, { purpose: "A" }));
@@ -650,13 +665,15 @@ describe("held until the article exists", () => {
     await pause(PURPOSE_READ_RETRY_MS * 3);
     expect(patches(), "wrote to an article that does not exist yet").toEqual([]);
     expect(reads.length).toBeGreaterThan(2);
-    expect(statusLine()).toBe("Not saved yet. It saves once the article exists, if you stay on this page.");
+    /* Nothing scary while the article is on its way: the hint says when it saves,
+       and leaving is still questioned. Greg, 2026-10-05. */
+    expect(statusLine(), "said Not saved over words that are only waiting").toBe("");
     expect(leaving(), "words with nowhere to go yet were safe to leave").toBe(true);
 
     notYet.delete(SLUG);
     await pause(PURPOSE_READ_RETRY_MS);
     expect(patches()).toEqual([patch("the evidence")]);
-    expect(statusLine()).toBe("Saved");
+    expect(ticked()).toBe(true);
     expect(leaving()).toBe(false);
   });
 
@@ -675,7 +692,8 @@ describe("held until the article exists", () => {
     type("the evidence");
     await pause(PURPOSE_READ_RETRY_MS * 3);
     expect(patches()).toEqual([]);
-    expect(statusLine()).toMatch(/^Not saved yet\./);
+    expect(statusLine()).toBe("");
+    expect(ticked(), "ticked a save that never went").toBe(false);
   });
 
   it("a re-add shows the stored purpose, sends nothing for it, and an emptied box then clears", async () => {
@@ -729,7 +747,8 @@ describe("at the end of the import", () => {
     await settle();
     expect(navigations).toEqual([]);
     expect(button("Saving…")?.disabled, "Open was not held while saving").toBe(true);
-    expect(statusLine()).toBe("Saving…");
+    /* The button the reader pressed says it; the line under the box stays quiet. */
+    expect(statusLine()).toBe(QUIET);
     held.answer(storePurpose(SLUG, { purpose: "the evidence" }));
     await settle();
     expect(patches()).toHaveLength(1);
@@ -795,7 +814,7 @@ describe("at the end of the import", () => {
 
     patchAnswer = async (body, slug) => storePurpose(slug, body);
     type("the evidence, again");
-    expect(statusLine()).toBe("Unsaved changes");
+    expect(statusLine()).toBe(QUIET);
     expect(host.textContent).not.toContain("The shelf is unavailable.");
     expect(button(OPEN_UNSAVED), "still offering to drop words that can now be saved").toBeUndefined();
     press(OPEN);
@@ -913,7 +932,8 @@ describe("when the address changes", () => {
     type("for the second");
     await pause(ADD_PURPOSE_IDLE_MS * 2);
     expect(patches()).toEqual([]);
-    expect(statusLine()).toMatch(/^Not saved yet\./);
+    expect(statusLine()).toBe("");
+    expect(ticked()).toBe(false);
   });
 
   it("two addresses for one article: the second waits for the first's last write (F9)", async () => {
@@ -994,7 +1014,7 @@ describe("Retry after a failed import (F3)", () => {
     notYet.add(SLUG);
     await failThenRetry();
     type("the evidence");
-    expect(statusLine()).toBe("Not saved yet. It saves once the article exists, if you stay on this page.");
+    expect(statusLine()).toBe("");
     jobs = [makeJob("job-1", "error")];
     render();
     await settle();
@@ -1371,7 +1391,7 @@ describe("same-slug retirement across page lifetimes (F9)", () => {
     lastNew.answer(storePurpose(SLUG, { purpose: latest }));
     await settle();
     expect(purposes.get(SLUG)).toBe(latest);
-    expect(statusLine()).toBe("Saved");
+    expect(ticked()).toBe(true);
     expect(leaving()).toBe(false);
   });
 });

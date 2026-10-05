@@ -35,11 +35,15 @@ import { READ_COMMITTED } from "../src/store/isolation.js";
 import {
   ABANDONED_DRAFT_MS,
   DRAFT_SWEEP_BATCH,
-  STEP_START_DRAFT_SWEEP,
   openOrBeginJobDraft,
   sweepAbandonedDrafts,
 } from "../src/store/pg-revisions.js";
 import type { JobStep } from "../src/types.js";
+import {
+  deleteDraftBacklog,
+  proveUnprotected,
+  surveyDraftBacklog,
+} from "../scripts/draft-sweep-backlog.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { takeRunLock } from "./helpers/run-lock.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
@@ -214,10 +218,10 @@ describe("the on-demand draft sweep", () => {
     const otherArticles = await revision(b, "failed", OLD);
 
     const job = await claimedJob(SLUG);
-    const opened = await openOrBeginJobDraft({ slug: SLUG, job, sweep: { mode: "delete" } });
+    const opened = await openOrBeginJobDraft({ slug: SLUG, job });
 
     expect(opened.created).toBe(true);
-    expect(opened.sweep).toMatchObject({ kind: "swept", mode: "delete", candidates: 2, deleted: 2 });
+    expect(opened.sweep).toMatchObject({ kind: "swept", candidates: 2, deleted: 2 });
 
     const left = await surviving([
       current, oldPublished, abandonedDraft, abandonedFailed, recentFailed, heldByEndedJob,
@@ -238,14 +242,12 @@ describe("the on-demand draft sweep", () => {
     const first = await openOrBeginJobDraft({
       slug: SLUG,
       job: await claimedJob(SLUG),
-      sweep: { mode: "delete" },
     });
     expect(first.sweep).toMatchObject({ kind: "swept", deleted: 1 });
 
     const second = await openOrBeginJobDraft({
       slug: SLUG,
       job: await claimedJob(SLUG),
-      sweep: { mode: "delete" },
     });
     // The first job's draft is its own business now: minted seconds ago.
     expect(second.sweep).toMatchObject({ kind: "swept", candidates: 0, deleted: 0 });
@@ -254,18 +256,47 @@ describe("the on-demand draft sweep", () => {
   it("does not sweep again when a job reopens its own draft on a later step", async () => {
     await revision(a, "failed", OLD);
     const job = await claimedJob(SLUG);
-    await openOrBeginJobDraft({ slug: SLUG, job, sweep: { mode: "count" } });
-    const reopened = await openOrBeginJobDraft({ slug: SLUG, job, sweep: { mode: "delete" } });
+    await openOrBeginJobDraft({ slug: SLUG, job });
+    const reopened = await openOrBeginJobDraft({ slug: SLUG, job });
     expect(reopened.created).toBe(false);
     expect(reopened.sweep).toBeNull();
   });
 
-  it("only counts, by default, until Greg approves the first deletion in production", async () => {
-    expect(STEP_START_DRAFT_SWEEP).toBe("count");
+  it("deletes with no option given: there is no counting mode to fall back to", async () => {
+    /* Until 2026-10-05 the default only counted, and deleting was a test's
+       option. Greg approved the deletion on 2026-10-04 and the mode went with
+       it, so this is the production call, spelt the way production spells it. */
     const doomed = await revision(a, "failed", OLD);
     const opened = await openOrBeginJobDraft({ slug: SLUG, job: await claimedJob(SLUG) });
-    expect(opened.sweep).toMatchObject({ kind: "swept", mode: "count", candidates: 1, deleted: 0 });
-    expect((await surviving([doomed])).has(doomed)).toBe(true);
+    expect(opened.sweep).toMatchObject({ kind: "swept", candidates: 1, deleted: 1 });
+    expect(opened.sweep).not.toHaveProperty("mode");
+    expect((await surviving([doomed])).has(doomed)).toBe(false);
+  });
+
+  it("spares a draft a live job is holding, however old it is", async () => {
+    /* The ended-job case is above; this is the one that would cost a reader a
+       step in flight. A queued row rather than a second running one, because
+       the running slot on this slug belongs to the job doing the sweeping. */
+    const held = await revision(a, "draft", OLD);
+    const unprotected = await revision(a, "draft", OLD);
+    const liveJob = mintId();
+    await getDb().insert(jobs).values({
+      id: liveJob,
+      ownerId: currentOwnerId(),
+      slug: SLUG,
+      steps: STEPS,
+      status: "queued",
+      workKey: `wk-${liveJob}`,
+      draftRevisionId: held,
+    });
+    madeJobs.push(liveJob);
+    const outcome = await getDb().transaction(
+      (tx) => sweepAbandonedDrafts(tx, a, {}),
+      READ_COMMITTED,
+    );
+    expect(outcome).toMatchObject({ candidates: 1, deleted: 1 });
+    expect([...(await surviving([held, unprotected]))]).toEqual([held]);
+    expect(await pointerOf(liveJob)).toBe(held);
   });
 
   it("takes at most one batch per invocation, oldest first, and says there is more", async () => {
@@ -276,7 +307,6 @@ describe("the on-demand draft sweep", () => {
     const opened = await openOrBeginJobDraft({
       slug: SLUG,
       job: await claimedJob(SLUG),
-      sweep: { mode: "delete" },
     });
     expect(opened.sweep).toMatchObject({
       kind: "swept",
@@ -295,14 +325,13 @@ describe("the on-demand draft sweep", () => {
       slug: SLUG,
       job,
       sweep: {
-        mode: "delete",
         afterEnumerate: async () => {
           throw new Error("injected cleanup failure");
         },
       },
     });
     expect(opened.created).toBe(true);
-    expect(opened.sweep).toMatchObject({ kind: "failed", mode: "delete" });
+    expect(opened.sweep).toMatchObject({ kind: "failed" });
     expect((await surviving([doomed, opened.revisionId])).size).toBe(2);
     expect(await pointerOf(job.id)).toBe(opened.revisionId);
   });
@@ -318,10 +347,10 @@ describe("the on-demand draft sweep", () => {
     const opened = await openOrBeginJobDraft({
       slug: SLUG,
       job,
-      sweep: { mode: "delete", olderThanMs: Number.POSITIVE_INFINITY },
+      sweep: { olderThanMs: Number.POSITIVE_INFINITY },
     });
     expect(opened.created).toBe(true);
-    expect(opened.sweep).toMatchObject({ kind: "failed", mode: "delete" });
+    expect(opened.sweep).toMatchObject({ kind: "failed" });
     expect((await surviving([doomed, opened.revisionId])).size).toBe(2);
     expect(await pointerOf(job.id)).toBe(opened.revisionId);
   });
@@ -337,7 +366,6 @@ describe("the on-demand draft sweep", () => {
     const outcome = await getDb().transaction(
       (tx) =>
         sweepAbandonedDrafts(tx, a, {
-          mode: "delete",
           /* The barrier. Another connection, committing before we go on — the
              sweep's transaction holds no lock on these rows yet. */
           afterEnumerate: async (ids) => {
@@ -399,7 +427,6 @@ describe("the on-demand draft sweep", () => {
       .transaction(
         (tx) =>
           sweepAbandonedDrafts(tx, a, {
-            mode: "delete",
             afterEnumerate: async () => {
               await held;
             },
@@ -438,7 +465,7 @@ describe("the on-demand draft sweep", () => {
   it("refuses to delete under an isolation level whose recheck would read a stale snapshot", async () => {
     await revision(a, "failed", OLD);
     await expect(
-      getDb().transaction((tx) => sweepAbandonedDrafts(tx, a, { mode: "delete" }), {
+      getDb().transaction((tx) => sweepAbandonedDrafts(tx, a, {}), {
         isolationLevel: "repeatable read",
       }),
     ).rejects.toThrow(/read committed/i);
@@ -454,27 +481,196 @@ describe("the on-demand draft sweep", () => {
     await makeCurrent(a, currentButFailed);
     const unprotected = await revision(a, "failed", OLD);
     const outcome = await getDb().transaction(
-      (tx) => sweepAbandonedDrafts(tx, a, { mode: "delete" }),
+      (tx) => sweepAbandonedDrafts(tx, a, {}),
       READ_COMMITTED,
     );
     expect(outcome).toMatchObject({ candidates: 1, deleted: 1 });
     expect([...(await surviving([currentButFailed, unprotected]))]).toEqual([currentButFailed]);
   });
 
+  describe("the one-off backlog script", () => {
+    /* scripts/draft-sweep-backlog.ts: the whole library, once. The private lane
+       gives this file its own database, so "the whole library" is these rows. */
+    const mine = (survey: { articles: readonly { articleId: string; revisions: number }[] }) =>
+      Object.fromEntries(
+        survey.articles
+          .filter((row) => row.articleId === a || row.articleId === b)
+          .map((row) => [row.articleId, row.revisions]),
+      );
+
+    it("surveys without deleting, proves its list, and then deletes exactly that list", async () => {
+      const current = await revision(a, "published", OLD);
+      await makeCurrent(a, current);
+      const oldPublished = await revision(a, "published", OLD);
+      const recent = await revision(a, "failed", HOUR);
+      const held = await revision(a, "failed", OLD);
+      const endedJob = await terminalJobHolding(SLUG, held);
+      const doomed: string[] = [];
+      // More than a batch in one article, so the loop has to go round.
+      for (let i = 0; i < DRAFT_SWEEP_BATCH + 3; i++) doomed.push(await revision(a, "failed", OLD));
+      doomed.push(await revision(b, "draft", OLD));
+
+      const before = await surveyDraftBacklog(getDb());
+      expect(mine(before)).toEqual({ [a]: DRAFT_SWEEP_BATCH + 3, [b]: 1 });
+      expect(before.proven).toBe(true);
+      expect(before.proof.seen).toBe(before.revisions);
+      expect(before.mayDelete).toBe(true);
+      // A survey is a survey.
+      expect((await surviving(doomed)).size).toBe(doomed.length);
+
+      const done = await deleteDraftBacklog(getDb(), before);
+      expect(done).toEqual([
+        { articleId: a, deleted: DRAFT_SWEEP_BATCH + 3 },
+        { articleId: b, deleted: 1 },
+      ]);
+      expect((await surviving(doomed)).size).toBe(0);
+      expect([...(await surviving([current, oldPublished, recent, held]))].sort()).toEqual(
+        [current, oldPublished, recent, held].sort(),
+      );
+      expect(await pointerOf(endedJob)).toBe(held);
+      expect(mine(await surveyDraftBacklog(getDb()))).toEqual({});
+    });
+
+    it("deletes only surveyed revisions, even when another row becomes eligible afterwards", async () => {
+      const surveyed = await revision(a, "failed", OLD);
+      const later = await revision(a, "failed", HOUR);
+      const before = await surveyDraftBacklog(getDb());
+      await getDb().update(articleRevisions)
+        .set({ createdAt: new Date(Date.now() - OLD) })
+        .where(eq(articleRevisions.id, later));
+      const done = await deleteDraftBacklog(getDb(), before);
+      expect(done).toEqual([{ articleId: a, deleted: 1 }]);
+      expect([...(await surviving([surveyed, later]))]).toEqual([later]);
+    });
+
+    it("reproves lineage under the delete locks rather than trusting the earlier survey", async () => {
+      const base = await revision(a, "failed", OLD);
+      const before = await surveyDraftBacklog(getDb());
+      expect(before.proven).toBe(true);
+      const copy = await revision(a, "draft", HOUR);
+      await getDb().update(articleRevisions).set({ basedOnRevisionId: base })
+        .where(eq(articleRevisions.id, copy));
+      await expect(deleteDraftBacklog(getDb(), before)).rejects.toThrow(/batch.*protected/i);
+      expect((await surviving([base, copy])).size).toBe(2);
+      const [row] = await getDb().select({ base: articleRevisions.basedOnRevisionId })
+        .from(articleRevisions).where(eq(articleRevisions.id, copy));
+      expect(row?.base).toBe(base);
+    });
+
+    it("counts each base once and excludes children deleted in the same proven set", async () => {
+      const base = await revision(a, "failed", OLD);
+      const copies = [await revision(a, "failed", OLD), await revision(a, "failed", OLD)];
+      await getDb().update(articleRevisions).set({ basedOnRevisionId: base })
+        .where(inArray(articleRevisions.id, copies));
+      const prove = (ids: string[]) => getDb().transaction(
+        (tx) => proveUnprotected(tx, ids), READ_COMMITTED,
+      );
+      expect((await prove([base])).baseOfASurvivor).toBe(1);
+      expect((await prove([base, ...copies])).baseOfASurvivor).toBe(0);
+      expect((await prove([base, copies[0]!])).baseOfASurvivor).toBe(1);
+    });
+
+    it("refuses to delete a base whose surveyed child belongs to another article's batch", async () => {
+      const base = await revision(a, "failed", OLD);
+      const copy = await revision(b, "failed", OLD);
+      await getDb().update(articleRevisions).set({ basedOnRevisionId: base })
+        .where(eq(articleRevisions.id, copy));
+      const before = await surveyDraftBacklog(getDb());
+      expect(before.proven).toBe(true);
+      expect(before.proof.baseOfASurvivor).toBe(0);
+      // Force the dangerous order: the whole-set proof cannot authorise the
+      // base's deletion while the child's separate transaction is still ahead.
+      const ordered = { ...before, articles: [...before.articles].sort((x, y) =>
+        Number(y.articleId === a) - Number(x.articleId === a)) };
+      await expect(deleteDraftBacklog(getDb(), ordered)).rejects.toThrow(/batch.*protected/i);
+      expect((await surviving([base, copy])).size).toBe(2);
+      const [row] = await getDb().select({ base: articleRevisions.basedOnRevisionId })
+        .from(articleRevisions).where(eq(articleRevisions.id, copy));
+      expect(row?.base).toBe(base);
+    });
+
+    it("refuses its own list when a candidate is the base of a row that would survive", async () => {
+      /* Not a state the app produces — a base is a published revision — which
+         is why only the second query can notice it: the sweep's predicate does
+         not ask. Deleting `base` would blank `copy`'s lineage through `set
+         null`, and its publication would then be refused. */
+      const base = await revision(a, "failed", OLD);
+      const copy = await revision(a, "draft", HOUR);
+      await getDb()
+        .update(articleRevisions)
+        .set({ basedOnRevisionId: base })
+        .where(eq(articleRevisions.id, copy));
+      const survey = await surveyDraftBacklog(getDb());
+      expect(survey.proof.baseOfASurvivor).toBe(1);
+      expect(survey.proven).toBe(false);
+    });
+
+    it("the second query says no to each protection, handed ids the predicate would never name", async () => {
+      /* A zero from a check that could not have said anything else is not
+         evidence. The survey only ever hands this the predicate's own ids, so
+         every count is zero in production; here it is handed one wrong id of
+         each kind and has to name each. GPT Sol, F1 of the plan review. */
+      const published = await revision(a, "published", OLD);
+      const currentButFailed = await revision(a, "failed", OLD);
+      await makeCurrent(a, currentButFailed);
+      const held = await revision(a, "failed", OLD);
+      await terminalJobHolding(SLUG, held);
+      const young = await revision(a, "failed", HOUR);
+      const fine = await revision(a, "failed", OLD);
+      const prove = (ids: string[]) =>
+        getDb().transaction((tx) => proveUnprotected(tx, ids), READ_COMMITTED);
+
+      const clean = { notDraftOrFailed: 0, current: 0, jobNamed: 0, young: 0, baseOfASurvivor: 0 };
+      expect(await prove([fine])).toEqual({ ...clean, seen: 1 });
+      expect(await prove([fine, published])).toEqual({ ...clean, seen: 2, notDraftOrFailed: 1 });
+      expect(await prove([fine, currentButFailed])).toEqual({ ...clean, seen: 2, current: 1 });
+      expect(await prove([fine, held])).toEqual({ ...clean, seen: 2, jobNamed: 1 });
+      expect(await prove([fine, young])).toEqual({ ...clean, seen: 2, young: 1 });
+      // And an id that is not there at all is a shortfall in `seen`, not a pass.
+      expect(await prove([fine, randomUUID()])).toEqual({ ...clean, seen: 1 });
+    });
+
+    it("cannot write while it surveys", async () => {
+      /* Inject a write into the survey's own transaction, preserving the
+         options surveyDraftBacklog actually supplies. */
+      const db = getDb();
+      const instrumented = Object.create(db) as Db;
+      instrumented.transaction = ((body, config) => db.transaction(async (tx) => {
+        await tx.delete(articleRevisions).where(eq(articleRevisions.articleId, a));
+        return await body(tx);
+      }, config)) as Db["transaction"];
+      await expect(
+        surveyDraftBacklog(instrumented),
+      ).rejects.toMatchObject({ cause: { code: "25006" } });
+    });
+  });
+
   it("never names an article it was not given", async () => {
     const mine = await revision(a, "failed", OLD);
     const theirs = await revision(b, "failed", OLD);
     const outcome = await getDb().transaction(
-      (tx) => sweepAbandonedDrafts(tx, b, { mode: "delete" }),
+      (tx) => sweepAbandonedDrafts(tx, b, {}),
       READ_COMMITTED,
     );
     expect(outcome).toMatchObject({ candidates: 1, deleted: 1 });
     expect([...(await surviving([mine, theirs]))]).toEqual([mine]);
     // And a sweep with nothing to do reports that, rather than a count it read earlier.
     const again = await getDb().transaction(
-      (tx) => sweepAbandonedDrafts(tx, b, { mode: "delete" }),
+      (tx) => sweepAbandonedDrafts(tx, b, {}),
       READ_COMMITTED,
     );
     expect(again).toMatchObject({ candidates: 0, deleted: 0 });
+  });
+
+  it("restricts a backlog sweep to its exact ids, with an empty list selecting nothing", async () => {
+    const surveyed = await revision(a, "failed", OLD);
+    const unproven = await revision(a, "failed", OLD);
+    const run = (revisionIds: string[]) => getDb().transaction(
+      (tx) => sweepAbandonedDrafts(tx, a, { revisionIds }), READ_COMMITTED,
+    );
+    expect(await run([])).toMatchObject({ candidates: 0, deleted: 0 });
+    expect((await surviving([surveyed, unproven])).size).toBe(2);
+    expect(await run([surveyed])).toMatchObject({ candidates: 1, deleted: 1 });
+    expect([...(await surviving([surveyed, unproven]))]).toEqual([unproven]);
   });
 });
