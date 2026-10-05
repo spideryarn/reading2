@@ -203,9 +203,9 @@ export const SIMPLE_VERSION = SIMPLE_ARTIFACT_VERSION;
  * every stored summary becomes *outdated* and none is rewritten for it.
  *
  * `simple-prompt/10` (2026-10-05): Fuller is written for someone who has not
- * read the piece: a section of things to check (`NOT_READ`), and the reader's
- * claimed background no longer covers what the piece itself introduces
- * (`AFTER_PROFILE.fuller`; Greg, spya-rntjxu; plan 261005h). Brief is `/9` byte
+ * read the piece: two more bullets for its reader (`NOT_READ`), and the
+ * reader's claimed background no longer covers what the piece itself
+ * introduces (`AFTER_PROFILE.fuller`; Greg, spya-rntjxu; plan 261005h). Brief is `/9` byte
  * for byte. The fingerprint is `/9`'s, so nothing stored is made stale; as
  * before, every stored summary becomes *outdated* and none is rewritten.
  */
@@ -490,51 +490,31 @@ const KNOWN_WORDS: Record<SimpleLevel, string> = {
  * 2026-10-05 (spya-rntjxu): *"they key principle is to write the fuller
  * summary for someone who hasn't read it yet rather than for someone who
  * has."* The writer has just read all of it, so the piece's own names do not
- * feel like jargon to it; being told so is not enough, which is why this is a
- * list of things to check and ends on a check
- * (docs/research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md,
- * finding 4). Brief has none of it: Greg finds Brief good, and its two terms
- * and one phrase of method leave little to point at.
+ * feel like jargon to it. Two more bullets for Fuller's reader, naming the two
+ * faults: a name the piece introduces is a term, and nothing is referred to
+ * before the summary has introduced it. Brief has neither: Greg finds Brief
+ * good, and its two terms and one phrase of method leave little to point at.
+ *
+ * **A whole section was built first and measured against these two bullets**:
+ * a heading, an opening paragraph, eight bullets and a closing check. On five
+ * papers the two split 5 pairs to 5, with the same count of places a reader
+ * could not follow, so by the rule the plan declared beforehand the smaller
+ * one shipped. It also stays inside its length, where the section ran over in
+ * four writes of twenty, and a reader with no profile did not prefer the old
+ * summary to it, as they did to the section's. The section's text is in plan
+ * 261005h; the numbers are in
+ * docs/investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md.
  */
 const NOT_READ: Record<SimpleLevel, string> = {
   brief: "",
   fuller: `
-
-WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE
-
-The reader has not read the piece and does not have it open. All they know of
-it is what your sentences so far have told them. You have just read all of it,
-so its words feel familiar to you. They are not familiar to the reader.
-
 - A name the piece introduces is a term like any other, however plain it
   looks: a term it coins or uses in its own sense, an abbreviation, its label
   for a method, model, measure, group, condition or experiment. The first time
   you use one, say what it is in the same sentence, in everyday words.
-- Explain a name only as far as the piece itself supports. If the piece does
-  not explain it, give only the role the piece gives it ("the data set used
-  for training"), or leave the name out. Never add a definition from outside
-  knowledge.
-- Leave out a name the reader does not need. Keep the author's key terms as
-  handholds, even if they appear only once here; among other names, prefer
-  those you use again.
-- Once you have named something, call it that every time. A second name reads
-  as a second thing.
 - Do not refer to a part, result, model or label before this summary has
   introduced it. "The second experiment" is fine after this summary has said
-  what the experiments were; otherwise say what it is.
-- Words quoted from the piece need the same care. If a quoted phrase would not
-  make sense on its own to this reader, say what it means in plain words.
-- Before a finding, give the reader what it takes to follow it: what was being
-  asked, and what was compared with what. A number comes with what it counts
-  and what it is set against.
-- Stay inside the length below. Keep the main findings. Pay for the context
-  they need by cutting secondary findings, method detail and repetition, not
-  by squeezing out explanations.
-
-Before you finish, read each paragraph as someone who has seen only the
-paragraphs above it. For each name, each abbreviation and each "the …" in it,
-ask whether that person would know what it refers to. If not, say what it is
-or take it out.`,
+  what the experiments were; otherwise say what it is.`,
 };
 
 /**

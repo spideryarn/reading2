@@ -13,13 +13,6 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
-- 2026-10-05 · SPIDERYARN-READING2-DE (spya-rntjxu) · Fuller written for someone who has not read
-  the piece: the prompt change is written and reviewed but not on `dev`, because the box's
-  OpenRouter key has spent its $300 monthly limit and the change cannot be measured until the key
-  has room (the eval is about $7) · qi-b5g9a55h ·
-  [261005h § What is blocking it](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md#what-is-blocking-it) ·
-  [note](261005_0742-fuller-summary-written-for-someone-who-has-not-read-the-piece.md)
-
 - 2026-10-05 · SPIDERYARN-READING2-DB (spya-dxufdw) · the reading-time line "appeared a minute
   late": no matching delay was found. Most likely Experimental features was off when the article
   loaded and the line drew the instant it was switched on; with it off nothing is recorded either.

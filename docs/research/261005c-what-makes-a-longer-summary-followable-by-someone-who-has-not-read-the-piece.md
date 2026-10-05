@@ -132,6 +132,13 @@ as known something only a reader of the piece knows. No source discusses this ca
 
 ## What we take, and what we pass over
 
+**"Taken" here means taken into the prompt that was built and measured, not what shipped.** Of
+the rows marked yes, two shipped: a name the piece introduces is said where it first appears,
+and nothing is referred to before the summary has introduced it. The rest were in a larger
+section that, measured side by side, did no better than those two
+([261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md)). So the
+table is what the sources suggest, and the measurement is what they turned out to be worth here.
+
 | idea | taken? | why |
 |---|---|---|
 | the reader has not read the piece; the summary stands on its own | yes, as Fuller's stated reader | Greg's principle; MOS:LEAD, Cochrane, eLife (all fetched) |

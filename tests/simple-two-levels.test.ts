@@ -301,15 +301,20 @@ describe("Brief's and Fuller's prompts", () => {
     const sha = (text: string) => createHash("sha256").update(text).digest("hex");
     expect(SIMPLE_PROMPT_VERSION).toBe("simple-prompt/10");
     expect(sha(SIMPLE_SYSTEMS.brief)).toBe("d492501b13ddd81832463165032a53d486727e65072299eb6da23b76a5bd9595");
-    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("d38d5742812892c510f7e1d6e70df7ae2b0fb4b3e12e26f57564258605296868");
+    expect(sha(SIMPLE_SYSTEMS.fuller)).toBe("4e926dfd865ec4f38113261df9b2311717cee65fd1cd5a3c767183acaaee06a7");
   });
 
   /* `/10` (plan 261005h): Fuller is written for someone who has not read the
      piece. Brief's bytes did not move, which the hash above holds; these hold
-     the two things about Fuller's that a reader of the prompt could get wrong. */
-  it("tells Fuller alone that the reader has not read the piece", () => {
-    expect(SIMPLE_SYSTEMS.fuller).toContain("WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE");
-    expect(SIMPLE_SYSTEMS.brief).not.toContain("WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE");
+     the two things about Fuller's that a reader of the prompt could get wrong.
+     Fuller's hash above is the prompt the eval's two-bullet arm measured:
+     `npx tsx evals/simple/prompt-hashes.ts` prints the pair's hash, which is
+     the `systemsSha256` in evals/results/simple/high-about-new2a/. */
+  it("tells Fuller alone that a name the piece introduces is a term, and not to point at what it has not introduced", () => {
+    for (const rule of ["A name the piece introduces is a term like any other", "Do not refer to a part, result, model or label before this summary has"]) {
+      expect(SIMPLE_SYSTEMS.fuller).toContain(rule);
+      expect(SIMPLE_SYSTEMS.brief).not.toContain(rule);
+    }
   });
 
   it("gives each level its last word on the reader's background after the shared profile rules", () => {

@@ -1,0 +1,298 @@
+{
+  "arm": "high-about-new1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s41598-023-33209-9-spya-s0qydm",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:35:24.793Z",
+  "bodyWords": 8829,
+  "band": "standard",
+  "bodyBlocks": 181,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "e9995851ee761f5f",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 34075,
+  "costUsd": 0.1095192,
+  "tokens": {
+    "input": 14751,
+    "output": 4249,
+    "reasoning": 1725
+  },
+  "briefReadyMs": 26160,
+  "fullerReadyMs": 34056,
+  "ok": true,
+  "reader": "about",
+  "fullerWords": 473,
+  "briefWords": 105,
+  "fuller": [
+    {
+      "text": "This is a rat experiment asking whether hippocampal activity matters for spatial memory at one particular moment: when a rat rears up onto its hind legs. The authors switched off the dorsal (upper) hippocampus only during rearing, then tested memory later.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-nbwfy3"
+      ],
+      "sentences": [
+        {
+          "text": "This is a rat experiment asking whether hippocampal activity matters for spatial memory at one particular moment: when a rat rears up onto its hind legs.",
+          "id": "spya-k5rtta",
+          "key": "rears up onto its hind legs"
+        },
+        {
+          "text": "The authors switched off the dorsal (upper) hippocampus only during rearing, then tested memory later.",
+          "id": "spya-nbwfy3"
+        }
+      ]
+    },
+    {
+      "text": "Most work on how the hippocampus supports spatial memory looks at two states: moving around, and quiet rest such as grooming or eating. Rearing is neither; the rat stops and actively samples its surroundings, gaining a wider view of distant cues. Rearing comes with strong 7–12 Hz theta rhythm in the hippocampus, a rhythm tied to memory encoding, yet its role in spatial memory was unknown.",
+      "ids": [
+        "spya-j4jhsc",
+        "spya-dmvnt0",
+        "spya-v3e727"
+      ],
+      "sentences": [
+        {
+          "text": "Most work on how the hippocampus supports spatial memory looks at two states: moving around, and quiet rest such as grooming or eating.",
+          "id": "spya-j4jhsc"
+        },
+        {
+          "text": "Rearing is neither; the rat stops and actively samples its surroundings, gaining a wider view of distant cues.",
+          "id": "spya-dmvnt0"
+        },
+        {
+          "text": "Rearing comes with strong 7–12 Hz theta rhythm in the hippocampus, a rhythm tied to memory encoding, yet its role in spatial memory was unknown.",
+          "id": "spya-v3e727"
+        }
+      ]
+    },
+    {
+      "text": "Rats learned a delayed win-shift task on a maze with eight arms radiating from a hub. In the study phase, four random arms opened and each held food; after a 4-minute break, all eight opened, but food sat only in the four new arms. The hippocampus was silenced only during the study phase, so the test measured what had been stored.",
+      "ids": [
+        "spya-r7w9n4",
+        "spya-f4z675"
+      ],
+      "sentences": [
+        {
+          "text": "Rats learned a delayed win-shift task on a maze with eight arms radiating from a hub.",
+          "id": "spya-r7w9n4",
+          "key": "delayed win-shift task"
+        },
+        {
+          "text": "In the study phase, four random arms opened and each held food; after a 4-minute break, all eight opened, but food sat only in the four new arms.",
+          "id": "spya-r7w9n4"
+        },
+        {
+          "text": "The hippocampus was silenced only during the study phase, so the test measured what had been stored.",
+          "id": "spya-f4z675"
+        }
+      ]
+    },
+    {
+      "text": "Silencing used halorhodopsin, a light-driven pump that quiets neurons when lit, triggered by a ceiling-mounted 3D camera that detected rearing, under three conditions. Off: no light at all, giving each rat's baseline. Rear: the laser came on when rearing was detected and stayed on for the whole rear. Delay: the same amount of light, but switched on and off 6 seconds after the rear began and ended.",
+      "ids": [
+        "spya-z5mpge",
+        "spya-r8kwhk",
+        "spya-f4z675"
+      ],
+      "sentences": [
+        {
+          "text": "Silencing used halorhodopsin, a light-driven pump that quiets neurons when lit, triggered by a ceiling-mounted 3D camera that detected rearing, under three conditions.",
+          "id": "spya-z5mpge"
+        },
+        {
+          "text": "Off: no light at all, giving each rat's baseline.",
+          "id": "spya-f4z675"
+        },
+        {
+          "text": "Rear: the laser came on when rearing was detected and stayed on for the whole rear.",
+          "id": "spya-f4z675"
+        },
+        {
+          "text": "Delay: the same amount of light, but switched on and off 6 seconds after the rear began and ended.",
+          "id": "spya-f4z675"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Six rats carried halorhodopsin; seven control rats got only a fluorescent marker, so light could not silence anything. In the halorhodopsin rats, the share of correct first four choices fell from 77.7% (Off) to 65.7% (Rear). They also needed more arm entries to find all the food: 6.5 versus 5.1. Control rats showed no change (81.4% versus 83%; 5.2 entries both ways).",
+      "ids": [
+        "spya-jnzefy",
+        "spya-bjwjv6",
+        "spya-xgzm5w"
+      ],
+      "sentences": [
+        {
+          "text": "Six rats carried halorhodopsin; seven control rats got only a fluorescent marker, so light could not silence anything.",
+          "id": "spya-xgzm5w"
+        },
+        {
+          "text": "In the halorhodopsin rats, the share of correct first four choices fell from 77.7% (Off) to 65.7% (Rear).",
+          "id": "spya-jnzefy",
+          "key": "fell from 77.7% (Off) to 65.7% (Rear)"
+        },
+        {
+          "text": "They also needed more arm entries to find all the food: 6.5 versus 5.1.",
+          "id": "spya-bjwjv6"
+        },
+        {
+          "text": "Control rats showed no change (81.4% versus 83%; 5.2 entries both ways).",
+          "id": "spya-bjwjv6"
+        }
+      ]
+    },
+    {
+      "text": "The Delay condition asks whether timing matters or any silencing would hurt. Accuracy under Delay, 72.0%, was not significantly below Off, and extra arm entries (5.9) were only a borderline trend. The authors note the delay did not fully separate light from rearing: the laser still overlapped about 35.5% of rearing time.",
+      "ids": [
+        "spya-b6gdg3"
+      ],
+      "sentences": [
+        {
+          "text": "The Delay condition asks whether timing matters or any silencing would hurt.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "Accuracy under Delay, 72.0%, was not significantly below Off, and extra arm entries (5.9) were only a borderline trend.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "The authors note the delay did not fully separate light from rearing: the laser still overlapped about 35.5% of rearing time.",
+          "id": "spya-b6gdg3",
+          "key": "overlapped about 35.5% of rearing time"
+        }
+      ]
+    },
+    {
+      "text": "The authors name several limits. The experimenter could not be blinded to condition, and the experimental group was tested before the controls. Narrow arms meant almost every rear involved leaning on a wall, so leaning and free-standing rears were not compared. The study cannot say which part of the hippocampus matters, whether every rear contributes, or whether the same encoding could happen without rearing.",
+      "ids": [
+        "spya-p0b8zk",
+        "spya-jvweez",
+        "spya-vbrevk"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name several limits.",
+          "id": null
+        },
+        {
+          "text": "The experimenter could not be blinded to condition, and the experimental group was tested before the controls.",
+          "id": "spya-vbrevk"
+        },
+        {
+          "text": "Narrow arms meant almost every rear involved leaning on a wall, so leaning and free-standing rears were not compared.",
+          "id": "spya-p0b8zk"
+        },
+        {
+          "text": "The study cannot say which part of the hippocampus matters, whether every rear contributes, or whether the same encoding could happen without rearing.",
+          "id": "spya-jvweez"
+        }
+      ]
+    },
+    {
+      "text": "The conclusion: rearing is a moment when the hippocampus encodes spatial memory, and silencing it then is enough to impair memory in this task. The authors suggest rearing may let the hippocampus update its internal model of the surroundings. Since the room was familiar, they think this updating supports memory for today's specific trial, like remembering where you parked today.",
+      "ids": [
+        "spya-sxyqjf",
+        "spya-ehqntm",
+        "spya-z65dtg"
+      ],
+      "sentences": [
+        {
+          "text": "The conclusion: rearing is a moment when the hippocampus encodes spatial memory, and silencing it then is enough to impair memory in this task.",
+          "id": "spya-sxyqjf"
+        },
+        {
+          "text": "The authors suggest rearing may let the hippocampus update its internal model of the surroundings.",
+          "id": "spya-ehqntm"
+        },
+        {
+          "text": "Since the room was familiar, they think this updating supports memory for today's specific trial, like remembering where you parked today.",
+          "id": "spya-z65dtg"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This study asks whether a rat's brain does important memory work while the rat stands on its hind legs. This standing up to look around is called rearing. The hippocampus, a brain part needed to remember places, is well studied during walking and rest, but not during rearing.",
+      "ids": [
+        "spya-k5rtta",
+        "spya-gwzqgg",
+        "spya-j4jhsc"
+      ],
+      "sentences": [
+        {
+          "text": "This study asks whether a rat's brain does important memory work while the rat stands on its hind legs.",
+          "id": "spya-k5rtta"
+        },
+        {
+          "text": "This standing up to look around is called rearing.",
+          "id": "spya-gwzqgg",
+          "key": "rearing"
+        },
+        {
+          "text": "The hippocampus, a brain part needed to remember places, is well studied during walking and rest, but not during rearing.",
+          "id": "spya-j4jhsc"
+        }
+      ]
+    },
+    {
+      "text": "In an experiment with rats, researchers shut down the hippocampus only while rats reared during a maze memory task. Later, the rats chose correct maze arms less often: about 66% versus 78%. Shutting it down six seconds after each rear did not cause a clear drop. So brain activity during rearing can be important for remembering places.",
+      "ids": [
+        "spya-jnzefy",
+        "spya-b6gdg3",
+        "spya-p02v0g"
+      ],
+      "sentences": [
+        {
+          "text": "In an experiment with rats, researchers shut down the hippocampus only while rats reared during a maze memory task.",
+          "id": "spya-jnzefy"
+        },
+        {
+          "text": "Later, the rats chose correct maze arms less often: about 66% versus 78%.",
+          "id": "spya-jnzefy",
+          "key": "about 66% versus 78%"
+        },
+        {
+          "text": "Shutting it down six seconds after each rear did not cause a clear drop.",
+          "id": "spya-b6gdg3"
+        },
+        {
+          "text": "So brain activity during rearing can be important for remembering places.",
+          "id": "spya-p02v0g"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

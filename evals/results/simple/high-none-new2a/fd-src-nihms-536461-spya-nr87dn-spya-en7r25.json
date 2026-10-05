@@ -1,0 +1,313 @@
+{
+  "arm": "high-none-new2a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/10",
+  "sourceSha256": "8d2804f6152f3db03738a05ef35f3a657d44c21acbe393edebeb8f829bee6d5f",
+  "at": "2026-10-05T16:47:34.595Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "c5fa0839739a1ebefa4883ba8968567f8b3063f38bf9d067ae12529fccab6bd6",
+  "power": "high",
+  "guard": true,
+  "wallMs": 36669,
+  "costUsd": 0.1058276,
+  "tokens": {
+    "input": 14861,
+    "output": 3871,
+    "reasoning": 1184
+  },
+  "briefReadyMs": 17070,
+  "fullerReadyMs": 36660,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 557,
+  "briefWords": 103,
+  "fuller": [
+    {
+      "text": "This review article asks when it helps to have strong \"cognitive control\": the brain's ability to stay on a goal, follow rules and block distractions. This ability is thought to depend heavily on the prefrontal cortex (PFC), the front part of the brain. The authors draw together research on learning and on creative thinking to propose a new idea, the Matched Filter Hypothesis.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This review article asks when it helps to have strong \"cognitive control\": the brain's ability to stay on a goal, follow rules and block distractions.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "This ability is thought to depend heavily on the prefrontal cortex (PFC), the front part of the brain.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "The authors draw together research on learning and on creative thinking to propose a new idea, the Matched Filter Hypothesis.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "It matters because cognitive control is usually seen as always good, yet growing evidence shows not all complex thinking benefits from it. One example is a choice task where one option pays off 75% of the time. Adults pick it 75% of the time and succeed about 62.5% of the time, while children pick it every time and succeed 75% of the time. Some research links the adult pattern to control processes, so control may actually hurt here.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "It matters because cognitive control is usually seen as always good, yet growing evidence shows not all complex thinking benefits from it.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "One example is a choice task where one option pays off 75% of the time.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Adults pick it 75% of the time and succeed about 62.5% of the time, while children pick it every time and succeed 75% of the time.",
+          "id": "spya-egkn3d",
+          "key": "62.5%"
+        },
+        {
+          "text": "Some research links the adult pattern to control processes, so control may actually hurt here.",
+          "id": "spya-egkn3d"
+        }
+      ]
+    },
+    {
+      "text": "The authors picture control as a filter that weakens or throws away incoming information, ideally the useless parts. Their hypothesis says performance is best when the strength of filtering matches what the task needs, not when control is simply high. Strong control should suit explicit, rule-based, abstract tasks that fit within working memory, the small amount we can hold in mind at once. \"Hypofrontality\", meaning reduced PFC activity, should suit implicit, stimulus-driven tasks too complex for working memory. Which state wins depends on competition between the PFC and other brain regions, shaped by age, brain health and individual differences.",
+      "ids": [
+        "spya-tvhpk0",
+        "spya-kyvz4a"
+      ],
+      "sentences": [
+        {
+          "text": "The authors picture control as a filter that weakens or throws away incoming information, ideally the useless parts.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "Their hypothesis says performance is best when the strength of filtering matches what the task needs, not when control is simply high.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "Strong control should suit explicit, rule-based, abstract tasks that fit within working memory, the small amount we can hold in mind at once.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "\"Hypofrontality\", meaning reduced PFC activity, should suit implicit, stimulus-driven tasks too complex for working memory.",
+          "id": "spya-kyvz4a",
+          "key": "Hypofrontality"
+        },
+        {
+          "text": "Which state wins depends on competition between the PFC and other brain regions, shaped by age, brain health and individual differences.",
+          "id": "spya-tvhpk0"
+        }
+      ]
+    },
+    {
+      "text": "In learning, the authors cite several cases where less control seems to help. Doing a second task at the same time helps adults learn rules that are hard to put into words, such as motor sequences. Disrupting part of the PFC with magnetic pulses through the scalp has been linked to better implicit motor learning. Children show less of the attention-based distortions in how cues are learned: 3-year-olds less than 4-year-olds, and 8- and 9-year-olds less than adults. Learning an artificial language from inconsistent input, children produce only the most frequent form, while adults copy the noise.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-wx0kxu",
+        "spya-pttrqz"
+      ],
+      "sentences": [
+        {
+          "text": "In learning, the authors cite several cases where less control seems to help.",
+          "id": null
+        },
+        {
+          "text": "Doing a second task at the same time helps adults learn rules that are hard to put into words, such as motor sequences.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Disrupting part of the PFC with magnetic pulses through the scalp has been linked to better implicit motor learning.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Children show less of the attention-based distortions in how cues are learned: 3-year-olds less than 4-year-olds, and 8- and 9-year-olds less than adults.",
+          "id": "spya-wx0kxu"
+        },
+        {
+          "text": "Learning an artificial language from inconsistent input, children produce only the most frequent form, while adults copy the noise.",
+          "id": "spya-pttrqz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The authors also point to rival learning systems: a PFC-linked system for explicit rules and a deeper system, the striatum, for habits. Fitting this, people with lower working memory learn hard-to-describe category boundaries better than high-capacity people. Their general claim is that control buys quick accuracy now at a cost to complete, accurate learning later.",
+      "ids": [
+        "spya-avc4bv",
+        "spya-xkqxjf"
+      ],
+      "sentences": [
+        {
+          "text": "The authors also point to rival learning systems: a PFC-linked system for explicit rules and a deeper system, the striatum, for habits.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "Fitting this, people with lower working memory learn hard-to-describe category boundaries better than high-capacity people.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "Their general claim is that control buys quick accuracy now at a cost to complete, accurate learning later.",
+          "id": "spya-xkqxjf",
+          "key": "quick accuracy now at a cost"
+        }
+      ]
+    },
+    {
+      "text": "For creativity, people thinking up unusual uses for objects showed lower PFC activity and more activity in visual regions. Weak electrical currents that dampen the left PFC made people faster and more productive at inventing creative uses, but not at control tasks. Children also resist \"functional fixedness\", getting stuck on an object's usual use, better than adults, though no study ties this to PFC development. Still, judging whether an idea works likely needs control again, so creativity may involve rapid switching between states.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq",
+        "spya-xmgzpp"
+      ],
+      "sentences": [
+        {
+          "text": "For creativity, people thinking up unusual uses for objects showed lower PFC activity and more activity in visual regions.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Weak electrical currents that dampen the left PFC made people faster and more productive at inventing creative uses, but not at control tasks.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Children also resist \"functional fixedness\", getting stuck on an object's usual use, better than adults, though no study ties this to PFC development.",
+          "id": "spya-gfuefq"
+        },
+        {
+          "text": "Still, judging whether an idea works likely needs control again, so creativity may involve rapid switching between states.",
+          "id": "spya-xmgzpp"
+        }
+      ]
+    },
+    {
+      "text": "The authors name clear limits. The exact brain mechanisms that set the filter are not yet specified. Some PFC function is essential for some learning, and the PFC link to cue-learning distortions still needs testing in adults. Creativity studies are few, and patient results are inconsistent.",
+      "ids": [
+        "spya-z700pm",
+        "spya-uxhggj",
+        "spya-t9zbas"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name clear limits.",
+          "id": null
+        },
+        {
+          "text": "The exact brain mechanisms that set the filter are not yet specified.",
+          "id": "spya-z700pm"
+        },
+        {
+          "text": "Some PFC function is essential for some learning, and the PFC link to cue-learning distortions still needs testing in adults.",
+          "id": "spya-uxhggj"
+        },
+        {
+          "text": "Creativity studies are few, and patient results are inconsistent.",
+          "id": "spya-t9zbas"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that cognitive control is a tool suited to a subset of common challenges, not an all-purpose system for every problem. Its failures can have real advantages, especially for learning and creative thinking.",
+      "ids": [
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that cognitive control is a tool suited to a subset of common challenges, not an all-purpose system for every problem.",
+          "id": "spya-e5g0a5",
+          "key": "a tool suited to a subset"
+        },
+        {
+          "text": "Its failures can have real advantages, especially for learning and creative thinking.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article reviews research on \"cognitive control,\" the brain's way of focusing on a goal and ignoring distractions. A front part of the brain does this job, like a filter that throws out unneeded information. The authors say more control is not always better.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This article reviews research on \"cognitive control,\" the brain's way of focusing on a goal and ignoring distractions.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "A front part of the brain does this job, like a filter that throws out unneeded information.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "The authors say more control is not always better.",
+          "id": "spya-ez5mym"
+        }
+      ]
+    },
+    {
+      "text": "Less control may help with learning skills you cannot put in words, and with dreaming up new ideas. In one study, adults showed less front-brain activity when thinking up unusual uses for everyday objects. Their \"Matched Filter Hypothesis\" says the best amount of control depends on the task. Control is a tool for some jobs, not for every problem.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-peqnf8",
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "Less control may help with learning skills you cannot put in words, and with dreaming up new ideas.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "In one study, adults showed less front-brain activity when thinking up unusual uses for everyday objects.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Their \"Matched Filter Hypothesis\" says the best amount of control depends on the task.",
+          "id": "spya-e5g0a5",
+          "key": "Matched Filter Hypothesis"
+        },
+        {
+          "text": "Control is a tool for some jobs, not for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

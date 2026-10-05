@@ -1,0 +1,186 @@
+{
+  "blindIds": {
+    "arxiv-2010-spya-tkm7nm": "eb39669bcd2a",
+    "entropy-24-00930-spya-pywwkq": "62b8363f030d",
+    "fd-src-nihms-536461-spya-nr87dn-spya-en7r25": "4e7c8666a5d5",
+    "s41598-023-33209-9-spya-s0qydm": "8b269bb69259",
+    "levin-self-improvising-memory-spya-gj60pu": "0865f6d73ff2"
+  },
+  "items": [
+    {
+      "id": "G01",
+      "arm": "about-new0a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G02",
+      "arm": "about-new2a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G03",
+      "arm": "none-new0a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G04",
+      "arm": "about-new1b",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G05",
+      "arm": "about-new1a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G06",
+      "arm": "about-new0b",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G07",
+      "arm": "none-new1a",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    {
+      "id": "G08",
+      "arm": "none-new0a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G09",
+      "arm": "about-new2a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G10",
+      "arm": "none-new1a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G11",
+      "arm": "about-new0a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G12",
+      "arm": "about-new1b",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G13",
+      "arm": "about-new0b",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G14",
+      "arm": "about-new1a",
+      "slug": "entropy-24-00930-spya-pywwkq"
+    },
+    {
+      "id": "G15",
+      "arm": "none-new1a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G16",
+      "arm": "about-new0b",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G17",
+      "arm": "about-new1a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G18",
+      "arm": "about-new0a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G19",
+      "arm": "about-new1b",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G20",
+      "arm": "about-new2a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G21",
+      "arm": "none-new0a",
+      "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25"
+    },
+    {
+      "id": "G22",
+      "arm": "about-new1b",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G23",
+      "arm": "about-new0a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G24",
+      "arm": "about-new0b",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G25",
+      "arm": "about-new2a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G26",
+      "arm": "about-new1a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G27",
+      "arm": "none-new1a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G28",
+      "arm": "none-new0a",
+      "slug": "s41598-023-33209-9-spya-s0qydm"
+    },
+    {
+      "id": "G29",
+      "arm": "none-new0a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G30",
+      "arm": "about-new1b",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G31",
+      "arm": "about-new0b",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G32",
+      "arm": "about-new1a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G33",
+      "arm": "none-new1a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G34",
+      "arm": "about-new2a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    },
+    {
+      "id": "G35",
+      "arm": "about-new0a",
+      "slug": "levin-self-improvising-memory-spya-gj60pu"
+    }
+  ]
+}

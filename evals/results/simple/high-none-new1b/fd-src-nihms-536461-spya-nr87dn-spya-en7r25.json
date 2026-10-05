@@ -1,0 +1,318 @@
+{
+  "arm": "high-none-new1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:45:17.975Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 51769,
+  "costUsd": 0.1463996,
+  "tokens": {
+    "input": 15637,
+    "output": 5800,
+    "reasoning": 3005
+  },
+  "briefReadyMs": 14885,
+  "fullerReadyMs": 51712,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 600,
+  "briefWords": 114,
+  "fuller": [
+    {
+      "text": "This article is a theory paper that reviews research on cognitive control: the brain's ability to stay on goal, follow rules and ignore distractions. It focuses on the prefrontal cortex, the front part of the brain, which is thought to work like a filter that turns down unhelpful information. The authors propose a Matched Filter Hypothesis: a task goes best when the amount of filtering fits what that task needs, not simply when filtering is strongest.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This article is a theory paper that reviews research on cognitive control: the brain's ability to stay on goal, follow rules and ignore distractions.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "It focuses on the prefrontal cortex, the front part of the brain, which is thought to work like a filter that turns down unhelpful information.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "The authors propose a Matched Filter Hypothesis: a task goes best when the amount of filtering fits what that task needs, not simply when filtering is strongest.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "The prefrontal cortex is usually seen as essential for complex behaviour, yet a growing body of research suggests not all complex thinking benefits from its control. Children, whose prefrontal cortex matures late, sometimes beat adults. In a choice task where one option pays off 75% of the time, adults pick it 75% of the time and so win about 62.5% of the time. Children pick it every time and win 75%, and some research links the weaker adult strategy to cognitive control itself.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The prefrontal cortex is usually seen as essential for complex behaviour, yet a growing body of research suggests not all complex thinking benefits from its control.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "Children, whose prefrontal cortex matures late, sometimes beat adults.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "In a choice task where one option pays off 75% of the time, adults pick it 75% of the time and so win about 62.5% of the time.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Children pick it every time and win 75%, and some research links the weaker adult strategy to cognitive control itself.",
+          "id": "spya-egkn3d",
+          "key": "Children pick it every time and win 75%"
+        }
+      ]
+    },
+    {
+      "text": "The hypothesis predicts which tasks suit which brain state. Strong control helps tasks that are rule-based, explicit, verbal or abstract, and that fit in working memory, the small amount we can hold in mind at once. Hypofrontality, meaning reduced prefrontal activity, helps tasks that are driven by the input, intuitive, and too complex for working memory. How well the filter matches a task may depend on age, genes, brain damage, doing a second task at once, or brain stimulation.",
+      "ids": [
+        "spya-kyvz4a"
+      ],
+      "sentences": [
+        {
+          "text": "The hypothesis predicts which tasks suit which brain state.",
+          "id": null
+        },
+        {
+          "text": "Strong control helps tasks that are rule-based, explicit, verbal or abstract, and that fit in working memory, the small amount we can hold in mind at once.",
+          "id": "spya-kyvz4a"
+        },
+        {
+          "text": "Hypofrontality, meaning reduced prefrontal activity, helps tasks that are driven by the input, intuitive, and too complex for working memory.",
+          "id": "spya-kyvz4a",
+          "key": "Hypofrontality, meaning reduced prefrontal activity"
+        },
+        {
+          "text": "How well the filter matches a task may depend on age, genes, brain damage, doing a second task at once, or brain stimulation.",
+          "id": "spya-kyvz4a"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "In learning, the authors gather several findings where less control helped. Adults doing a distracting second task at the same time better learned rules that are hard to put into words, such as movement sequences. Disrupting part of the prefrontal cortex with magnetic stimulation was linked to better learning of movements without awareness. Learning a made-up language from inconsistent input, adults copied the inconsistency, while children used only the most frequent form. After training to judge pictures by category, adults' memory for the pictures fell to chance, but children's did not.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-pttrqz",
+        "spya-wcexyh"
+      ],
+      "sentences": [
+        {
+          "text": "In learning, the authors gather several findings where less control helped.",
+          "id": null
+        },
+        {
+          "text": "Adults doing a distracting second task at the same time better learned rules that are hard to put into words, such as movement sequences.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Disrupting part of the prefrontal cortex with magnetic stimulation was linked to better learning of movements without awareness.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "Learning a made-up language from inconsistent input, adults copied the inconsistency, while children used only the most frequent form.",
+          "id": "spya-pttrqz"
+        },
+        {
+          "text": "After training to judge pictures by category, adults' memory for the pictures fell to chance, but children's did not.",
+          "id": "spya-wcexyh"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The authors suggest control often buys quick accuracy at a later cost. In blocking, a link learned first stops people learning a newer cue that predicts the same outcome. Adults learn to look away from such cues, which cuts errors fast but distorts what they learn. The authors also cite evidence that a prefrontal rule-learning system competes with a habit-learning system deeper in the brain. For example, people with lower working memory learned category boundaries that cannot be put into words better than high-capacity people.",
+      "ids": [
+        "spya-gf0uae",
+        "spya-xkqxjf",
+        "spya-avc4bv"
+      ],
+      "sentences": [
+        {
+          "text": "The authors suggest control often buys quick accuracy at a later cost.",
+          "id": "spya-xkqxjf",
+          "key": "quick accuracy at a later cost"
+        },
+        {
+          "text": "In blocking, a link learned first stops people learning a newer cue that predicts the same outcome.",
+          "id": "spya-gf0uae"
+        },
+        {
+          "text": "Adults learn to look away from such cues, which cuts errors fast but distorts what they learn.",
+          "id": "spya-gf0uae"
+        },
+        {
+          "text": "The authors also cite evidence that a prefrontal rule-learning system competes with a habit-learning system deeper in the brain.",
+          "id": "spya-avc4bv"
+        },
+        {
+          "text": "For example, people with lower working memory learned category boundaries that cannot be put into words better than high-capacity people.",
+          "id": "spya-avc4bv"
+        }
+      ]
+    },
+    {
+      "text": "For creativity, adults thinking of unusual uses for objects, like a belt as a tourniquet, showed lower prefrontal activity and higher activity in visual areas. A weak electric current that dampened the left prefrontal cortex made people faster and more productive at this, but not at control tasks. Children also resist functional fixedness, the adult habit of seeing an object only by its usual use, such as a box as just a container. Studies of patients with left frontal damage, however, give mixed results.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq",
+        "spya-h9k5zw"
+      ],
+      "sentences": [
+        {
+          "text": "For creativity, adults thinking of unusual uses for objects, like a belt as a tourniquet, showed lower prefrontal activity and higher activity in visual areas.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "A weak electric current that dampened the left prefrontal cortex made people faster and more productive at this, but not at control tasks.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "Children also resist functional fixedness, the adult habit of seeing an object only by its usual use, such as a box as just a container.",
+          "id": "spya-gfuefq",
+          "key": "functional fixedness"
+        },
+        {
+          "text": "Studies of patients with left frontal damage, however, give mixed results.",
+          "id": "spya-h9k5zw"
+        }
+      ]
+    },
+    {
+      "text": "The authors name clear limits. Judging whether a new idea is any good probably still needs control, with the brain switching back and forth many times. Some prefrontal function is essential for relearning when rules flip, so less control does not steadily mean better learning. Some links rest only on child studies and need testing in adults, and the exact brain mechanisms remain unknown.",
+      "ids": [
+        "spya-xmgzpp",
+        "spya-uxhggj"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name clear limits.",
+          "id": null
+        },
+        {
+          "text": "Judging whether a new idea is any good probably still needs control, with the brain switching back and forth many times.",
+          "id": "spya-xmgzpp"
+        },
+        {
+          "text": "Some prefrontal function is essential for relearning when rules flip, so less control does not steadily mean better learning.",
+          "id": "spya-uxhggj"
+        },
+        {
+          "text": "Some links rest only on child studies and need testing in adults, and the exact brain mechanisms remain unknown.",
+          "id": "spya-uxhggj"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that cognitive control is a tool fitted to some common problems, not an all-purpose system suited to every task. The authors suggest the same idea may extend to decision making and to managing emotions.",
+      "ids": [
+        "spya-e5g0a5",
+        "spya-sp9606"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that cognitive control is a tool fitted to some common problems, not an all-purpose system suited to every task.",
+          "id": "spya-e5g0a5",
+          "key": "a tool fitted to some common problems"
+        },
+        {
+          "text": "The authors suggest the same idea may extend to decision making and to managing emotions.",
+          "id": "spya-sp9606"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This article is a review that asks when the front part of the brain helps us, and when it gets in the way. That brain area handles \"cognitive control\": staying on task by filtering out what seems useless. The authors note that much research suggests not every kind of thinking benefits from this filtering.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This article is a review that asks when the front part of the brain helps us, and when it gets in the way.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "That brain area handles \"cognitive control\": staying on task by filtering out what seems useless.",
+          "id": "spya-ez5mym",
+          "key": "cognitive control"
+        },
+        {
+          "text": "The authors note that much research suggests not every kind of thinking benefits from this filtering.",
+          "id": "spya-ez5mym"
+        }
+      ]
+    },
+    {
+      "text": "For example, young children may learn languages well partly because they filter less than adults. Creative ideas may also come more easily when this control is turned down. The authors' Matched Filter Hypothesis says the best amount of control depends on the task. Clear, rule-based tasks need a lot; gut-feeling tasks too big to hold in mind may need little.",
+      "ids": [
+        "spya-d3zgvd",
+        "spya-h9k5zw",
+        "spya-cyt2nw"
+      ],
+      "sentences": [
+        {
+          "text": "For example, young children may learn languages well partly because they filter less than adults.",
+          "id": "spya-d3zgvd"
+        },
+        {
+          "text": "Creative ideas may also come more easily when this control is turned down.",
+          "id": "spya-h9k5zw"
+        },
+        {
+          "text": "The authors' Matched Filter Hypothesis says the best amount of control depends on the task.",
+          "id": "spya-cyt2nw"
+        },
+        {
+          "text": "Clear, rule-based tasks need a lot; gut-feeling tasks too big to hold in mind may need little.",
+          "id": "spya-cyt2nw"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

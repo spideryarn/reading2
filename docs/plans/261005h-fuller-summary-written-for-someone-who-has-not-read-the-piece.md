@@ -3,10 +3,18 @@
 Up: [plans.md](../project/plans.md) · the feature: [summaries.md](../project/summaries.md) · the
 research: [261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md)
 
-**Status, 2026-10-05: awaiting Greg. The prompt is written and its eval is built, but nothing is
-measured and no prompt has changed on `dev`.** The box's model key ran out of its monthly budget
-before the first write, and only Greg can raise it (§ What is blocking it, which also says how to
-pick this up).
+**Status, 2026-10-05: shipped to `dev` as `simple-prompt/10`, measured — and what shipped is the
+smaller option this plan passed over, not the section it proposed.** The section was built and
+measured, and passed its two tests for a reader with a profile. But this plan also said that if
+two bullets did as well as the section, the two bullets would ship; set side by side they tied.
+The measurement is
+[261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md); what is built
+is in [summaries.md](../project/summaries.md#written-for-someone-who-has-not-read-it-since-2026-10-05).
+For a reader with no profile no improvement is claimed, and that is queued as `qi-4meqvjr4`. It
+waited five hours on the box's model key (§ What was blocking it).
+
+**Read § What changes below as the proposal, not as the source.** The two bullets that shipped
+are its first and fifth; the paragraph after the profile rules shipped as written.
 
 ## What Greg asked for
 
@@ -59,10 +67,14 @@ profile it is expected to be worse, for reason 2. **That expectation is not yet 
 
 ## What changes
 
+### The section that was built first and not shipped
+
 One new section in Fuller's prompt, and one new paragraph after the shared profile rules. Brief's
 prompt stays the same bytes, and a test pins that.
 
-**The new section**, after THE READER and before LENGTH (`NOT_READ` in the source):
+**The new section**, after THE READER and before LENGTH. This is the text the eval's `new1` arms
+measured. `NOT_READ` in the source now holds only its first and fifth bullets, with no heading,
+no opening paragraph and no closing check:
 
 ```
 WRITTEN FOR SOMEONE WHO HAS NOT READ THE PIECE
@@ -102,8 +114,8 @@ ask whether that person would know what it refers to. If not, say what it is
 or take it out.
 ```
 
-**The new paragraph**, after `PROFILE_RULES`, where Brief's own exception already sits
-(`AFTER_PROFILE.fuller`). It is last so that it, and not "Assume the background they claim", is
+**The new paragraph**, which did ship, after `PROFILE_RULES`, where Brief's own exception
+already sits (`AFTER_PROFILE.fuller`). It is last so that it, and not "Assume the background they claim", is
 the final word:
 
 ```
@@ -214,7 +226,7 @@ check 3 shows a faithful, followable summary cannot keep the main findings insid
 **What it cannot show.** Five pieces, all academic papers, one synthetic reader. Not the article
 Greg filed from. Judges that are models of the writer's family, with GPT Sol only on what they dispute.
 
-## What is blocking it
+## What was blocking it
 
 Every paid call from this box goes through one OpenRouter key, and on 2026-10-05 at about 11:25
 UTC that key had spent its monthly limit: `GET /api/v1/key` answered `limit: 300`,
@@ -239,7 +251,11 @@ what a reader gets is decided by the tree, which is unchanged. The `/10` edit is
 the last commit of the branch `worktree-fbrntjxu-fuller-summary-for-new-reader`, and that commit
 is not pushed.
 
-**To pick it up once the key has room**, in that worktree:
+**Greg raised the limit to $400 at about 17:30 BST**, and the eval ran that evening as the steps
+below say, with two rounds added after the first was read (the investigation says which, and
+why). The `/10` edit then went to `dev` as its own commit.
+
+**The steps, as they were written while it was blocked**, in that worktree:
 
 1. `git merge origin/dev`, and check `src/simple-summary.ts` still carries `NOT_READ`.
 2. The old arms. For this run use `src/simple-summary.ts` exactly as it was at the pinned commit
@@ -258,11 +274,13 @@ is not pushed.
 
 ## Stages
 
-1. The research doc, this plan, GPT Sol's review of the plan. *No model key needed.*
-2. The prompt, its version, its tests, and `evals/simple/new-reader.ts`. *No model key needed.*
-3. The eval, written up in `docs/investigations/`, and the prompt adjusted from what it shows.
-   **Blocked.**
-4. GPT Sol's review of the code, [summaries.md](../project/summaries.md), the feedback note, push.
+1. The research doc, this plan, GPT Sol's review of the plan. *Done.*
+2. The prompt, its version, its tests, and `evals/simple/new-reader.ts`. *Done.*
+3. The eval, written up in
+   [261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md). *Done.*
+   The prompt was changed from it: the section came out and its two bullets stayed.
+4. GPT Sol's reviews of the code, [summaries.md](../project/summaries.md), the feedback note,
+   push. *Done.*
 
 ## GPT Sol's review of the plan
 
@@ -290,7 +308,7 @@ taken, one answered in prose, one declined.
 
 | | finding | what was done |
 |---|---|---|
-| F1 | the prompt edit is in this branch's history, so pushing the docs pushes it | **answered, not fixed in git**: § What is blocking it now says so plainly. `dev`'s tree is `/9` |
+| F1 | the prompt edit is in this branch's history, so pushing the docs pushes it | **answered, not fixed in git**: § What was blocking it says so plainly. `dev`'s tree stayed `/9` until the measured push |
 | F2 | `score` accepted a repeated or extra section, a repeated answer line, an answer the brief forbids, and a judge file written for an older shuffle | exact section lists, one line a question, each question's own choices, and a `blind-id:` the judge copies and `score` checks |
 | F3 | a partial experiment could print PASSES | a missing run throws when a judge file is built, and `score` wants every piece under every arm |
 | F4 | "Awaiting Greg" is defined as "nothing built", and here things are built | **declined**: the report needs something only Greg can give, and of the three endings that is this one. Leaving it with no ending means the next feedback sweep hands it to a new session |
@@ -306,6 +324,61 @@ PASSES lines were watched printing FAILS.
 tests that want a build this worktree has not run (`has a build to inspect`, and the fleet
 dashboard's server wiring). None touches Summary.
 
+## GPT Sol's review of the conclusion
+
+[The review](261005h-fuller-summary-code-review-2-sol.md), 2026-10-05, read-only, of the eval's
+write-up and result files before the push: ***ship the two-bullet arm instead***. Every figure
+reproduced. Seven findings, all taken.
+
+| | finding | what was done |
+|---|---|---|
+| R1 | the section was shipped on a comparison designed after the direct tie was known; the declared rule was the direct comparison, and that was 5 to 5 | **the two bullets ship.** The source, its pinned hash, the investigation's conclusion, summaries.md and the note all changed |
+| R2 | the check against the piece "passed" over one distortion no old summary made | the ledger and the investigation say so, and say the pass is a judgement |
+| R3 | the note said "no main finding was lost"; five were omitted, each also omitted by an old summary | the comparative claim, in those words |
+| R4 | "25 summaries" was 25 judgments of 20 summaries | corrected |
+| R5 | "no profile can claim a term the paper coins" is false: the rule exempts a term the profile names | reworded in summaries.md and the note; "not shown" became "mixed; no improvement claimed" |
+| R6 | one judge listed nine main findings where its brief said five to eight | recorded under What it cannot show |
+| R7 | the branch needs the merge before the push, and what changes if the Brief session lands first | merged; the Brief session agreed to go second and take `/11` |
+
+**What this review caught is the thing this repo's rules exist for**: the session had built the
+section, the section had passed its own tests, and the write-up found a reason to keep it. The
+reviewer was asked, in so many words, whether that was "a rescue of the version I had already
+built", and said yes.
+
 ## Ledger
 
-Nothing measured yet.
+The whole of it is in
+[261005b](../investigations/261005b-fuller-summary-for-a-new-reader-prompt-eval.md). In short,
+55 writes on five papers, $9.61, none failed.
+
+**The section**, the proposal above, against the four checks:
+
+| check | reader with a profile | reader with no profile |
+|---|---|---|
+| 1. audit: places that could not be followed, a summary | 1.3 old, 0.6 new; the two old draws 0.6 apart. **Passes**, narrowly | 2.7 old, 1.5 new; not a declared test |
+| 2. pairs: which would you rather have | new in **9 of 10**; the bar was 7. **Passes** | old in 7 of 10: a real signal against it |
+| 3. against the piece | every omitted finding was also omitted by an old summary of the same piece. One new ViT summary made a distinct error about where ViT overtook ResNets; it was judged not major enough to fail. Nothing the reader claimed to know was explained. **Passes under that judgement** | the same |
+| 4. screens | about 40 words longer; 4 of 20 past "never more than 600", the longest 633; every guard verdict passed | |
+
+**The option passed over, which shipped.** The plan's rule: *if it does as well as the section,
+the two bullets ship and the section does not.*
+
+| | two bullets | the section |
+|---|---|---|
+| set directly against each other, profiled reader, ten pairs | 5 | 5 |
+| the same, reader with no profile, five pairs | 4 | 1 |
+| audit, profiled reader | 0.6 and 0.8 | 0.6 |
+| Fullers past 600 words | 0 of 15 | 4 of 20 |
+| against the old prompt, profiled reader, ten pairs each (different rounds and judges) | 6 | 9 |
+| against the old prompt, reader with no profile | 3 of 5 | 3 of 10 |
+
+A tie on the declared comparison, so the two bullets shipped. Against the old prompt they were
+easier to follow in 6 pairs and harder in 1, and preferred in 6 of 10: the improvement that
+shipped is a modest one.
+
+**What the plan got wrong.** It expected the fault to be worse with a profile, because the
+profile licenses the field's terms. On these five pieces the old prompt left *fewer* unfollowable
+places for the profiled reader (1.3 a summary) than for the reader with none (2.7): the audit
+judge, told what the profiled reader knows, lets the field's terms pass. And it expected the
+larger change to be needed, on the research's finding that an attitude is not enough: two plain
+rules did as well as eight and a closing check.
