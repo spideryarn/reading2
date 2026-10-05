@@ -332,9 +332,11 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
       {facts.length > 0 && (
         <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
           {facts.map((f, i) => (
-            <span key={f}>
-              {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
+            /* The dot follows its fact, so a wrapped line starts with a fact:
+               ShelfEntry.tsx § `ShelfCard`, where the spacing is worked out. */
+            <span key={f} data-shelf-fact="">
               {f}
+              {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
             </span>
           ))}
         </p>
