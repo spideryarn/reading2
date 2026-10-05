@@ -1292,6 +1292,24 @@ describe("writing artefacts into a draft", () => {
     });
   });
 
+  /* Plan 261005g: the title as it arrived, beside the one import tidied. */
+  it("keeps a tidied title's original through the column, and clears it when the next title needed none", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const tidied = { slug: SLUG, title: "The Order of Time", titleOriginal: "THE ORDER OF TIME" };
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: tidied }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toMatchObject(tidied);
+      const [row] = await tx
+        .select({ original: articleRevisions.titleOriginal })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({ original: "THE ORDER OF TIME" });
+
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "The Order of Time" } }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).not.toHaveProperty("titleOriginal");
+    });
+  });
+
   it("is refused a day beside a year, or a year that is not one, by the table itself", async () => {
     /** The CHECK that refused, read off the driver's error under drizzle's wrapper. */
     const refusedBy = async (set: { publishedAt?: string | null; publishedYear?: number | null }): Promise<string | undefined> => {

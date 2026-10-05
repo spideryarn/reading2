@@ -831,6 +831,37 @@ re-mints an id that is malformed or collides, and a stream has no response body 
 back.
 Without it the client streams an answer into a row the server has never heard of.
 
+### And it stays where it starts <a id="stays-where-it-starts"></a>
+
+> When I ask a question in a chat or a comment, it starts streaming in the output response from the
+> AI. That's great. The problem is that it immediately starts scrolling down so I can't read from the
+> beginning of the response. What I would prefer is if it streams in, but stays in position so that I
+> can start reading without having to scroll back up to the beginning of the response.
+>
+> — Greg, 2026-10-05
+
+**The rule: an answer a person reads is read from its first sentence, so nothing the stream does may
+move it.** Text arrives faster than anyone reads; a view that follows the arriving edge takes the
+start away from the reader who is on it.
+
+Every typed conversation is one component, `Conversation` in
+[`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § A streamed answer stays where it starts:
+Chat in the band, the block chat in all three of its places, Remember and Explore. When an answer
+starts it puts the question at the top of the transcript **once**, with an empty block of *room*
+after the last turn so that is a place the scroller can reach, and from then on streamed words, the
+finishing frame and a tool row arriving above the text move nothing. *Latest* appears when the
+answer outgrows the panel, and one press jumps; it does not start following. The arithmetic is
+[`src/web/chat-hold.ts`](../../src/web/chat-hold.ts).
+
+Two exceptions, both deliberate. **Live's spoken lines still follow the bottom**: they are heard, not
+read from the top. And **the card in the Marginalia column gets room only at its height cap**,
+because below it the card is as tall as its content and room would push every later note down.
+
+The selection comment box needed nothing: `.cmt-body` has never followed, and a browser measurement
+confirmed it stays at the top while its answer grows. A new streamed surface should start from that
+default, not add a follow. The plan, the measurement and the options passed over are
+[261005f](../plans/261005f-a-streamed-answer-stays-where-it-starts.md).
+
 ### And a stream that stops without ending <a id="stall-clock"></a>
 
 The warning above is about a stream that **ends** early. There is a third case, and until

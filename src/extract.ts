@@ -28,6 +28,7 @@
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { escapeHtml, plainTitle } from "./html.js";
+import { tidiedTitle } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
 import { canonicaliseMaths } from "./maths-import.js";
@@ -1239,7 +1240,10 @@ export async function runExtract(opts: {
   const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
   const meta: Meta = {
     slug,
-    title: title ?? slug,
+    /* **Tidied for the shelf, and only here** — all capitals made title case,
+       the original kept beside it (src/title-tidy.ts, plan 261005g). The page's
+       `<h1>` below keeps `title` as the author set it: the prose is theirs. */
+    ...(title ? tidiedTitle(title, { body: article.textContent, lang: article.lang }) : { title: slug }),
     ...(byline ? { byline } : {}),
     /* The same list, structured: names and the affiliations the page declares
        for each, for the masthead and the Metadata page to show one at a time.

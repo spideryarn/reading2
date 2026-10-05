@@ -1224,6 +1224,11 @@ export function ChatDialog({
             draft={draft}
             onDraft={setDraft}
             visible={!collapsed}
+            /* The card's height is its content's; the corner and the dock have
+               the panel's. Said here, not left to a stylesheet, because the
+               transcript's room is sized in JS (ChatPanel.tsx § A streamed
+               answer stays where it starts). */
+            sized={inCard ? "content" : "fixed"}
             /* Always a chat. This dialog is what a selection in the prose opens,
                and a Remember turn cannot be anchored to one. */
           kind="chat"

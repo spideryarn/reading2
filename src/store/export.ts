@@ -370,6 +370,9 @@ export async function exportArticle(
   const meta = compact({
     slug,
     title: revision.title,
+    /* The title as it arrived, when import tidied it: an export that left it
+       out would lose the one copy of the author's own capitals. Plan 261005g. */
+    titleOriginal: revision.titleOriginal,
     byline: revision.byline,
     authors: decodeAuthors(revision.authors),
     siteName: revision.siteName,

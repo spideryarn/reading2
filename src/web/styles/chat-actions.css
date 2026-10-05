@@ -94,6 +94,9 @@
   opacity: 0;
   transition: opacity 0.12s;
 }
+/* The row's place, kept while an answer is arriving and nothing in it may be
+   pressed (ChatPanel.tsx § Turn). Hidden on hover too. */
+.chat-actions.held { visibility: hidden; }
 .chat-turn:hover .chat-actions,
 /* Keyboard reach: without this the buttons are tabbable but invisible, which is
    worse than not having them. `:focus-within` is what makes the hover-reveal
