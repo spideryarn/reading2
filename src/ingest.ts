@@ -11,9 +11,9 @@
  * would report an error, because every half would have done exactly what it was
  * told.
  *
- * No dependencies but src/ids.ts, which is pure and on the same client
- * allowlist: the browser imports this too. See docs/project/library.md and
- * docs/project/ingest-queue.md.
+ * No dependencies but src/ids.ts and src/paper-sources.ts, which are pure and
+ * on the same client allowlist: the browser imports this too. See
+ * docs/project/library.md and docs/project/ingest-queue.md.
  *
  * `pipelineCommands` used to live here, printing the four commands for the add
  * box to show. The queue (src/jobs.ts) runs them now, so the box submits
@@ -23,6 +23,7 @@
  */
 
 import { ID_PREFIX, isSpideryarnId, mintId } from "./ids.js";
+import { resolvePaperSource } from "./paper-sources.js";
 
 /** Long enough to stay readable, short enough for a directory name. */
 const MAX = 60;
@@ -261,6 +262,18 @@ export function normaliseUrl(input: string): string {
  *
  * Junk that is not a URL keys as its own trimmed, lower-cased text, so two
  * spellings of the same nonsense still match and nothing throws.
+ *
+ * **One exception to "the address is the identity", since 2026-10-05: a paper a
+ * source recognises** (src/paper-sources.ts). arXiv serves one paper at `abs/`,
+ * `pdf/`, `html/` and its own DOI, and the fetch step (src/pipeline.ts) reads
+ * the same document whichever was pasted, so all of them answer with the
+ * paper's one key. It stays on the cheap side of the asymmetry above: the merge
+ * is one the source itself guarantees, and a version is part of the key, so
+ * `2608.13566` and `2608.13566v1` are still two articles. The query is not
+ * read for such an address, tracking or not. Every other address keys exactly
+ * as it did.
+ * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
+ * § Caller 1.
  */
 export function urlKey(url: string): string {
   const normalised = normaliseUrl(url);
@@ -268,6 +281,10 @@ export function urlKey(url: string): string {
   // the honest key is the text itself. Tidied only enough that two spellings of
   // one piece of nonsense still match.
   if (normalised === "") return url.trim().toLowerCase();
+  // After the refusal above, never before: an address we will not fetch names
+  // no paper either.
+  const paper = resolvePaperSource(normalised);
+  if (paper !== null) return paper.key;
   let parsed: URL;
   try {
     parsed = new URL(normalised);
@@ -336,11 +353,20 @@ function kebab(text: string): string {
  * segment. Harmless in itself, but it meant the add page needed a scheme check
  * of its own, and two places deciding what counts as a URL is how they come to
  * disagree.
+ *
+ * **A paper a source recognises is named by the source** (src/paper-sources.ts),
+ * for the reason `urlKey` gives: every shape of its link is one article, so
+ * every shape gets one slug. It also mends a wrong one. `arxiv.org/abs/2608.13566`
+ * used to come back as `arxiv-2608`, because the extension rule below read
+ * `.13566` as a file extension, and every paper of one month shared a name.
  */
 export function slugFromUrl(url: string): string {
+  const normalised = normaliseUrl(url);
+  const paper = normalised === "" ? null : resolvePaperSource(normalised);
+  if (paper !== null) return paper.slug;
   let parsed: URL;
   try {
-    parsed = new URL(normaliseUrl(url));
+    parsed = new URL(normalised);
   } catch {
     return "";
   }

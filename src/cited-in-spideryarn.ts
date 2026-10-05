@@ -33,6 +33,7 @@
  */
 
 import { firstAuthor, keyWords, keysOf } from "./citations.js";
+import { ARXIV_ID_PATTERN } from "./paper-sources.js";
 import type { Citations, CitedInSpideryarn, CitedMatchedBy, CitedWork } from "./types.js";
 import { sameTarget } from "./urls.js";
 
@@ -70,7 +71,8 @@ const TIER: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 0, "guessed-id": 0
 const DOI_BODY = "10\\.\\d{4,9}\\/[^\\s\"'<>?#]+";
 /** A DOI resolver path, whole: no prefix/suffix that merely contains a DOI. */
 const DOI_PATH = new RegExp(`^\\/(${DOI_BODY})$`, "i");
-const ARXIV_ID = "(\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7})";
+/** The id pattern itself lives in src/paper-sources.ts — one copy; this is it as a capture group. */
+const ARXIV_ID = `(${ARXIV_ID_PATTERN})`;
 /**
  * The same two shapes as a whole bare string — a DOI, or an arXiv id with an
  * optional version — for src/bibliographic.ts, so there is one parser of each

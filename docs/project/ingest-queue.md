@@ -726,6 +726,19 @@ happily slugged as `x` one function later.
 entirely, a leading `www.`, one trailing slash, and the tracking parameters a share button staples on
 (`utm_*`, `fbclid`, `igshid` and a dozen more).
 
+**And a paper a source recognises has one key whatever shape its link takes**, since 2026-10-05.
+arXiv serves one paper at `abs/`, `pdf/`, `html/` and its own DOI, and the fetch step reads the
+same document whichever was pasted ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)),
+so `urlKey` answers `arxiv.org/abs/<id>` for all of them, and `slugFromUrl` answers the source's
+slug (`arxiv-2608-13566`; it used to be `arxiv-2608`, because `.13566` read as a file extension).
+A version is part of the key: `2608.13566` and `2608.13566v1` are two articles.
+
+A job row stores the key it was queued with, so a job queued before that change carries the old
+one. `enqueue` therefore looks at an adopted active job with `sameWork`, which compares addresses
+by today's `urlKey`, and hands it back before the insert rather than trusting the stored keys to
+agree — otherwise a second job lands on the same article and its slot is charged for a run that
+skips every step. `tests/a-paper-queued-before-the-resolver.test.ts`.
+
 ### The rule it is written to, which is an asymmetry
 
 **Failing to merge two spellings of one article costs a duplicate** — a second card on the shelf,

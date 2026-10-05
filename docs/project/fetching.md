@@ -52,8 +52,7 @@ doc.bytes     // always present, whatever the kind
 
 **`doc.url` is the URL to keep, not the one you asked for.** It is what relative links resolve
 against, and a `doi.org` or `t.co` address is not what anyone means by "where this article lives".
-Stage 2 currently passes the *requested* URL to Readability as its base — see
-[what's still loose](#whats-still-loose).
+Stage 2 resolves against it since 2026-10-05.
 
 A failure carries a `code` you can switch on, a message written for a person, `status` where there
 was one, and `retryable`. The codes are `invalid-url`, `unsupported-scheme`, `blocked-address`,
@@ -415,6 +414,63 @@ them.
 thing comparing what it writes against what `PATHS.fetch.raw` reads. It dies with the filesystem
 store.
 
+## A paper source: one paper, several addresses
+
+> If I include a link like this, the right move is to grab either the html or the pdf, rather than
+> reading in this exact link.
+>
+> — Greg, 2026-10-05, of an `arxiv.org/abs/…` link with tracking parameters on it
+
+Until 2026-10-05 that link imported arXiv's abstract page: 304 words under the paper's title, and
+nothing to say it was not the paper. Now the fetch step asks
+[`src/paper-sources.ts`](../../src/paper-sources.ts) first.
+
+`resolvePaperSource(url)` is pure string work. For an address a source recognises it answers with
+the paper's id, one key and one slug for every shape of its link, and **candidates**: the
+addresses to try, in order, each saying what kind of document it must be. For anything else it
+answers `null`, and the step makes the one request it always made.
+
+```
+ candidates = resolvePaperSource(url)?.candidates ?? [{ url }]
+ for each, in order:   doc = fetchDocument(candidate.url)        ← unchanged
+     the kind it promised (and, for HTML, carrying its marker)   → this is the document
+     a 404 or a 410, or the wrong kind, and another candidate    → try the next
+     anything else                                               → fail, as a pasted address does
+```
+
+Four things about it that are deliberate:
+
+- **`fetchDocument` is called exactly as before, once per candidate.** Every defence below runs on
+  every one, and a candidate's address is a fixed string built from the matched id, never text
+  copied from what was pasted.
+- **Only absence moves on.** A timeout, a rate limit, a blocked address or an oversized body is the
+  step's failure. Falling back past those would hide the cause and could quietly spend money on a
+  costlier rendering.
+- **The last candidate must be what it promised too.** A PDF address that serves an HTML error page
+  stores nothing and fails with `[fetch-incomplete]`, which offers Retry.
+- **It resolves in the step, from the job's own address**, so a retry and a refresh fetch the paper
+  too.
+
+**arXiv is the only source, and today its one candidate is the PDF.** It recognises `abs`, `pdf`
+(with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
+`browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
+arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
+credentials in the address is not arXiv. arXiv's HTML rendering is cheaper and, for most of a
+paper, better, and goes in front once the faults it shows in our extractor are fixed:
+[261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md)
+has the comparison and [the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md)
+the order.
+
+**Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
+read off the pasted address. A source only discovered after a fetch (a `doi.org` link that
+redirects to a publisher) does not fit and is not built.
+
+**The article's address is the one its text came from.** `doc.url` of the candidate that was used
+is what the store keeps (`final_url`), so an arXiv article's source link opens the PDF, not the
+abstract page. What makes that address and a freshly pasted `abs` link one article is `urlKey`,
+which answers with the source's key for every shape
+([ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)).
+
 ## Not everything gets fetched: `RawManifest` has an origin
 
 Since 2026-08-27 an article's raw document can also come off a **reader's own disk**
@@ -529,16 +585,13 @@ prefer long-lived, heavily-documented libraries, then write the decision down.
 
 Honest list, none of it blocking:
 
-1. **Stage 2 still uses the requested URL as Readability's base**, not `doc.url`. After a redirect
-   that resolves every relative link and image against the wrong origin.
-
-   This page first called that a one-line fix in someone else's stage, and that was wrong. The
-   convenience wrapper `fetchHtml` returns a string, so the final URL is **thrown away between step
-   1 and step 2** and there is nowhere for stage 2 to read it from. Fixing it means deciding where
-   the resolved URL is written down — the queue calling `fetchDocument` and passing `doc.url` on to
-   `runExtract` is the obvious answer, and it touches two stages this one doesn't own
-   ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
-   deliberately rather than quietly.
+1. ~~**Stage 2 still uses the requested URL as Readability's base**, not `doc.url`.~~ **Closed,
+   2026-10-05.** The `extract` step hands `runExtract` the manifest's final URL, which the store
+   keeps as `final_url`, and falls back to the job's address only for a manifest with none. It
+   became necessary rather than tidy when a paper source arrived: the job's address is whatever
+   was pasted, and arXiv's HTML names its figures relative to the address it is served from. It
+   changes an existing article only when it is refreshed, and then only one that was redirected
+   and uses relative links, where the old answer was wrong.
 2. ~~**The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.~~
    **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which stores the bytes for
    a PDF and the decoded string for HTML, and returns the manifest recording `kind`, the requested

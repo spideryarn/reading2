@@ -49,6 +49,7 @@ import { FetchFailure, type FetchedDocument, type FetchFailureCode, type FetchOp
 import { jsdom } from "./jsdom-lazy.js";
 import { log, since } from "./log.js";
 import type { PaperUnreadableReason } from "./messages.js";
+import { ARXIV_ID_PATTERN } from "./paper-sources.js";
 import {
   baselineFor,
   pageLines,
@@ -166,6 +167,9 @@ export const PAPER_MAX_CHARS = 400_000;
 /** Empty positioned runs consume memory without advancing the character cap. */
 export const PAPER_MAX_TEXT_ITEMS = 200_000;
 
+/** `/abs/<id>` with its optional version, captured whole. The id pattern is src/paper-sources.ts's. */
+const ARXIV_ABS_PATH = new RegExp(`^/abs/((?:${ARXIV_ID_PATTERN})(?:v\\d+)?)/?$`, "i");
+
 /**
  * arXiv's abstract page → its PDF. `null` for anything else.
  *
@@ -180,7 +184,7 @@ export function arxivPdfUrl(url: string): string | null {
     return null;
   }
   if (!/^(?:www\.|export\.)?arxiv\.org$/i.test(parsed.hostname)) return null;
-  const m = /^\/abs\/(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[a-z]{2})?\/\d{7}(?:v\d+)?)\/?$/i.exec(parsed.pathname);
+  const m = ARXIV_ABS_PATH.exec(parsed.pathname);
   return m?.[1] ? `https://arxiv.org/pdf/${m[1]}` : null;
 }
 
