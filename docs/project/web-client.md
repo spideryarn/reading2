@@ -846,7 +846,7 @@ in place of the content*. A fetch that finishes in 40ms then draws nothing at
 all, and a spinner that flashes and vanishes reads as breakage — which is the
 failure this rule replaces, not a second copy of it. `SLOW_AFTER_MS` is 600 and
 lives in one place. A word in a status line that is on screen anyway — the
-profile textarea's `Saving…` / `Loading…` caption — is not standing in place of
+profile textarea's `Loading…` caption — is not standing in place of
 anything and does not need it.
 
 **Name what is being waited for.** "Fetching your conversations…", not
