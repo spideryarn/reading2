@@ -3727,6 +3727,28 @@ export const chatThreads = spideryarn.table(
      * here.
      */
     kind: text("kind").notNull().default("chat"),
+
+    /**
+     * **Where the conversation was started from, when that was an item in
+     * another mode** — `ThreadOrigin` in src/types.ts, as four columns
+     * (docs/project/sql.md: columns over JSON). All null for every other
+     * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
+     *
+     * - `origin_mode`: which mode. `debate` is the only one written today.
+     * - `origin_item_id`: the item's id where it has a durable one (a glossary
+     *   entry, a cited work). Null for a claim, which has none.
+     * - `origin_block_id`: the block the item sits in. Points at the identity,
+     *   like `anchor_block_id`, so it survives a re-extraction.
+     * - `origin_quote`: the item's own words when the chat started. Article
+     *   prose or a model's: never logged.
+     *
+     * Written **on insert only**, like the anchor and the kind:
+     * `upsertThread`'s conflict clause does not name them.
+     */
+    originMode: text("origin_mode"),
+    originItemId: text("origin_item_id"),
+    originBlockId: text("origin_block_id"),
+    originQuote: text("origin_quote"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -3759,6 +3781,33 @@ export const chatThreads = spideryarn.table(
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
     check("chat_threads_kind", sql`${t.kind} in ('chat','remember','candidates','tutorial','explore')`),
+    /* The origin's shapes, the same ones `ThreadOrigin` allows. The list of
+       modes is wider than the union on purpose: the later callers are named
+       in the plan, and widening a CHECK is a migration each time. Necessary
+       and not sufficient, like the anchor's: the route checks the block is the
+       article's and the quote is not empty. */
+    check(
+      "chat_threads_origin_mode",
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations')`,
+    ),
+    /* No mode, no origin: the other three columns mean nothing without it. */
+    check(
+      "chat_threads_origin_none",
+      sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+    ),
+    /* A claim is a block and its words, and has no id. */
+    check(
+      "chat_threads_origin_debate",
+      sql`${t.originMode} is distinct from 'debate' or (${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originItemId} is null)`,
+    ),
+    /* Only a chat is started from an item; the other kinds are about the
+       whole article. */
+    check("chat_threads_origin_chat_only", sql`${t.originMode} is null or ${t.kind} = 'chat'`),
+    foreignKey({
+      name: "chat_threads_origin_identity_fk",
+      columns: [t.articleId, t.originBlockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }),
     /**
      * **One Remember thread per article.** Remember is its own single
      * conversation, not a list. On `article_id` alone: an article has one owner

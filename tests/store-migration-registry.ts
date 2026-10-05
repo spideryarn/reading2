@@ -521,6 +521,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the stubbed model call records.",
   },
   /**
+   * **Written 2026-10-05 (plan 261005i), after the witness ran**, so
+   * `static-only`. Its harness is `chat-anchor-route.test.ts`'s and it reaches
+   * what that file reaches, by the same two doors.
+   */
+  "tests/chat-origin-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_threads.origin_*` at the route, in the store and in the export: what the wire may " +
+      "carry, that a thread's origin is set once, and that the four columns round-trip. It seeds " +
+      "through `scratchArticleInPg`; what it still reaches is the seeder's copy step and the " +
+      "ledger row the stubbed model call records.",
+  },
+  /**
    * **Written 2026-10-04 (plan 261004h), after the witness ran**, so
    * `static-only` for the ordinary reason the header gives. Born on Postgres;
    * it makes no model call, so the seeder's copy step is the one door.
@@ -2802,6 +2817,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  /* Plan 261005i. The anchor route suite's harness and its lane: it reads
+     conversations back with `chatStore.load` and asserts a refused request
+     left none. */
+  "tests/chat-origin-route.test.ts": "private-postgres",
   "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs

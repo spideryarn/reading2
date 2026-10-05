@@ -22,6 +22,11 @@
  * own** — the same position Summary is in. Nothing here is fetched: the tree
  * arrives in the page's own payload, so a visitor gets the whole of the mode
  * (src/web/visitor.ts § `POLICY`).
+ *
+ * **One exception since 2026-10-05, and it is why the band is told `owner`.**
+ * On a tree built from the author's headings because the model's could not be
+ * made, the head row says so, and the owner is offered another go
+ * (StructureNotice.tsx). The visitor gets the sentence and no press.
  */
 
 import { useQueryState } from "nuqs";
@@ -31,6 +36,7 @@ import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
 import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
+import { StructureNotice } from "../../StructureNotice.js";
 import { StructurePanel } from "../../StructurePanel.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
@@ -135,6 +141,8 @@ export function StructureViewToggle({
 }
 
 export function StructureBand({
+  slug,
+  owner,
   article,
   leafDepth,
   sections,
@@ -145,6 +153,9 @@ export function StructureBand({
   rootFontPx,
   onJump,
 }: {
+  /** The article's slug and whether it is the reader's own — for `StructureNotice` only. */
+  slug: string;
+  owner: boolean;
   article: Article;
   /** `Geometry.leafDepth` — how far down `buildSummaryTree` should walk. */
   leafDepth: number;
@@ -274,7 +285,18 @@ export function StructureBand({
    * it is open, so going back to Fisheye lands on the right one.
    */
   const [view, setView] = useQueryState("structure", structureParam);
-  const head = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
+  /* **The stand-in line rides in the head row**, under the chips, so one place
+     puts it in all three presentations. Both faces measure their room from
+     where their rows actually start (OutlinePanel.tsx § `measure`,
+     StructurePanel.tsx § `roomBelow`), so the columns, which never scroll,
+     give up rows to it rather than overflowing. */
+  const provisional = article.tree.provisional;
+  const head = (
+    <>
+      <StructureViewToggle view={view} onView={(v) => void setView(v)} />
+      {provisional ? <StructureNotice provisional={provisional} slug={slug} owner={owner} /> : null}
+    </>
+  );
 
   if (view === "expanded" || face === "list") {
     return (
