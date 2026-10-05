@@ -303,13 +303,13 @@ describe("Explore's panel", () => {
     expect(hints.join(" ")).toMatch(/where it may be weak/);
   });
 
-  it("sends a starter as the reader's first message, word for word", () => {
+  it("sends the critique starter as the reader's first message, word for word", () => {
     paint(empty(), "explore");
     const button = [...host.querySelectorAll<HTMLButtonElement>(".chat-suggest-btn")].find((b) =>
-      b.textContent?.includes("marked and discussed"),
+      b.textContent?.includes("wrong, or missing something"),
     );
     act(() => button?.click());
-    expect(sent).toEqual([{ question: "Start from what I've marked and discussed" }]);
+    expect(sent).toEqual([{ question: "Where might this piece be wrong, or missing something?" }]);
   });
 
   it("draws no starters once the conversation has begun", () => {

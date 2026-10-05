@@ -846,7 +846,8 @@ start away from the reader who is on it.
 
 Every typed conversation is one component, `Conversation` in
 [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) § A streamed answer stays where it starts:
-Chat in the band, the block chat in all three of its places, Learn and Explore. When an answer
+Chat in the band, the block chat in all three of its places, and Learn's Recall, Tutorial and
+Explore conversations. When an answer
 starts it puts the question at the top of the transcript **once**, with an empty block of *room*
 after the last turn so that is a place the scroller can reach, and from then on streamed words, the
 finishing frame and a tool row arriving above the text move nothing. *Latest* appears when the

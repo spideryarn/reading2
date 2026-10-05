@@ -419,7 +419,7 @@ into account that we have done so"*. Fable's review objected that a checkbox rea
 regenerate-and-wait, a model call hidden behind the lightest control in the interface. So the label
 went on the text, and a row reading *☑ Use your profile 👤* went beside every button that spends —
 the glossary's Find / Find them again / Find more, quotes, ideas, tweets, sketch, and the chat and
-Learn composer. The checkbox was seeded from the artefact on screen, so it needed no storage; it
+Remember composer. The checkbox was seeded from the artefact on screen, so it needed no storage; it
 was absent for a reader with no profile; the 👤 button beside it opened the panel and, alone, read
 *Your profile*, because that reader most needed to know what "your profile" meant (2026-08-30). A run
 that had started itself showed *Using your profile* in the checkbox's place (2026-08-31).

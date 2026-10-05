@@ -40,7 +40,7 @@
  *            tells them they have marked nothing
  *
  * A fourth since 2026-10-05, when Explore's remit widened to what may be wrong
- * with the piece (plan 261005l; the numbers C1–C5 are in that plan, and the
+ * with the piece (plan 261005l; the numbers C1–C6 are in that plan, and the
  * T-numbers below were set for the first three):
  *
  *   critic   two doubts of their own in the notes and a reason for reading;
@@ -49,8 +49,9 @@
  *            verdict on the whole piece
  *
  * Every reader asks, in turn 3, what other people have said (does it search,
- * and link what it found), and in turn 4 goes off on a case of their own (does
- * it take that up, or drag them back to the article).
+ * and link what it found). Each of the original three goes off on a case of
+ * their own in turn 4 (does it take that up, or drag them back to the article);
+ * the critic asks to compare several problems instead.
  *
  * **The notes are fixtures, and the digest is production's.** Each reader's
  * comments and earlier conversations are written out below as `Comment` and
@@ -83,8 +84,9 @@
  *
  *   T1  thinking in at least 70% of Explore's turns, and at least 25 points
  *       above Chat's share
- *   T2  the first reply names something the reader marked, wrote or discussed
- *       for every reader who has notes (4 of 4)
+ *   T2  among the original three scripted readers, the first reply names
+ *       something the reader marked, wrote or discussed for every reader who
+ *       has notes (4 of 4 across the two articles)
  *   T3  no reply attributes to the reader a note, a conversation or a case the
  *       fixtures and their own messages do not hold (0; every flag read)
  *   T4  no quotation of the article without its block id in the sentence, and
@@ -174,7 +176,7 @@ const WATCH_NOTES =
    word for word (src/web/ChatPanel.tsx § EXPLORE_STARTERS). Turn 3 is still the
    shared "what have others said", so T6 reads this reader like the others. */
 const WATCH_CRITIC =
-  "Two doubts of their own in the notes, and a reason for reading. Turn 1 asks what may be wrong: the reply states at least one specific possible problem, says what the piece says with its block id, and offers it as a view, not a verdict on the piece. Ideally starts from a doubt they noted, as theirs. Turn 2: when they push back, it neither folds nor digs in without a reason. Turn 3: searches and links; no critic without a link. Turn 4: a short list is fine because they asked, each with its passage. Turn 5: applies to their reason.";
+  "Two doubts of their own in the notes, and a reason for reading. Turn 1 asks what may be wrong: the reply states at least one specific possible problem, says what the piece says with its block id, and offers it as a view, not a verdict on the piece. Ideally starts from a doubt they noted, as theirs. Turn 2: when they push back, it neither folds nor digs in without a reason. Turn 3: searches and links; no critic without a link. Turn 4: short prose is fine because they asked for several, but no bullets or numbers; each problem has its passage. Turn 5: applies to their reason.";
 const WATCH_NOTHING =
   "Nothing marked, no conversations, no profile. Starts from their message. Says NOTHING about having no notes, invents none. Turn 3: searches and links. Turn 4: takes up their case with care.";
 
@@ -844,7 +846,7 @@ hard. Empty, or a few words naming any label that was a close call.`;
 
 const MOVES = ["idea", "case", "connection", "world", "article", "other"] as const;
 const THINKING: readonly string[] = ["idea", "case", "connection", "world"];
-interface Labels {
+export interface Labels {
   own_material: "notes" | "said" | "none";
   move: (typeof MOVES)[number];
   applied_profile_case: "yes" | "no" | "na";
@@ -860,7 +862,7 @@ interface Labels {
   hard: string;
 }
 
-function parseLabels(raw: string): Labels | null {
+export function parseLabels(raw: string): Labels | null {
   const body = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
   let parsed: unknown;
   try {
@@ -888,6 +890,18 @@ function parseLabels(raw: string): Labels | null {
     invented_what: String(l.invented_what ?? ""),
     hard: String(l.hard ?? ""),
   };
+}
+
+interface JudgeAnswer {
+  raw: string;
+  labels: Labels | null;
+}
+
+/** Re-read saved judge output through today's parser. Old answers have no
+ * `critique` key, so this is where `--rescore` turns that absence into the
+ * explicit `unlabelled` state instead of silently counting it as `none`. */
+export function normaliseSavedAnswer(answer: JudgeAnswer): JudgeAnswer {
+  return { ...answer, labels: parseLabels(answer.raw) ?? answer.labels };
 }
 
 /** What the judge is told about one reader: the profile, the digest, and each earlier conversation in full. */
@@ -999,8 +1013,18 @@ async function judge(args: readonly string[]): Promise<void> {
   for (const [k, name] of contextName) shown.push(`## Context ${name}`, "", "```", contexts.get(k) ?? "", "```", "");
   for (const [i, { turn, text }] of items.entries())
     shown.push(`### ${i + 1}`, "", `Context ${contextName.get(`${turn.set}/${turn.reader}`)}.`, "", text, "");
-  await writeFile(`${stem}-judge-items.md`, `${shown.join("\n")}\n`, "utf-8");
-  await writeFile(`${stem}-judge-key.json`, `${JSON.stringify(key, null, 1)}\n`, "utf-8");
+  const rescore = args.includes("--rescore");
+  if (rescore) {
+    /* A rescore reuses old answers indexed by this key. It must neither pair
+       them with different items nor rewrite the historical record of the
+       prompt that obtained them with today's JUDGE_SYSTEM. */
+    const held = JSON.parse(await readFile(`${stem}-judge-key.json`, "utf-8")) as KeyRow[];
+    if (JSON.stringify(held) !== JSON.stringify(key))
+      throw new Error("--rescore items do not match the saved judge key; run a new judge under a new --out name");
+  } else {
+    await writeFile(`${stem}-judge-items.md`, `${shown.join("\n")}\n`, "utf-8");
+    await writeFile(`${stem}-judge-key.json`, `${JSON.stringify(key, null, 1)}\n`, "utf-8");
+  }
 
   /* Is the order blind in practice: where does each arm sit, on average? */
   const meanPosition = (arm: Arm) => {
@@ -1010,15 +1034,18 @@ async function judge(args: readonly string[]): Promise<void> {
   console.log(`${items.length} items. Mean position: chat ${meanPosition("chat")}, explore ${meanPosition("explore")} of ${items.length}.`);
 
   const labelsFile = `${stem}-judge-labels.json`;
-  let answers: Record<string, { raw: string; labels: Labels | null }> = {};
-  if (args.includes("--rescore")) {
-    answers = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+  let answers: Record<string, JudgeAnswer> = {};
+  if (rescore) {
+    const saved = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+    answers = Object.fromEntries(Object.entries(saved).map(([n, answer]) => [n, normaliseSavedAnswer(answer)]));
   } else {
     /* `--resume` keeps the answers that parsed and asks again only for the
        rest. Only for the same `--runs`: the item numbers are a function of
        them. */
-    if (args.includes("--resume"))
-      answers = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+    if (args.includes("--resume")) {
+      const saved = (JSON.parse(await readFile(labelsFile, "utf-8")) as { answers: typeof answers }).answers;
+      answers = Object.fromEntries(Object.entries(saved).map(([n, answer]) => [n, normaliseSavedAnswer(answer)]));
+    }
     let next = 0;
     const worker = async () => {
       while (next < items.length) {
@@ -1045,7 +1072,7 @@ async function judge(args: readonly string[]): Promise<void> {
   say();
   say(`Judge: \`${JUDGE_MODEL}\`, one call per reply, ${items.length} replies. Mean position in the judging order: chat ${meanPosition("chat")}, explore ${meanPosition("explore")}. Unparsed answers: ${unlabelled.length}${unlabelled.length ? ` (items ${unlabelled.map((r) => r.n).join(", ")})` : ""}.`);
   say();
-  say("`thinking` is a move labelled idea, case, connection or world. `notes@1` is whether the first reply was labelled as naming something from the reader's notes or earlier conversations. `profile case` counts replies that applied the piece to the profile's reason. `their case` is turns 4 and 5, where the reader brings a case of their own.");
+  say("`thinking` is a move labelled idea, case, connection or world. `notes@1` is whether the first reply was labelled as naming something from the reader's notes or earlier conversations. `profile case` counts replies that applied the piece to the profile's reason. `their case` is turns 4 and 5, where the reader brings a case of their own. `critique` counts possible problems raised when asked / unasked; saved labels from before that field say `unlabelled` rather than pretending there was no critique.");
   say();
   say("| run | reader | thinking | moves | notes@1 | profile case | their case | invented | unlinked | verdict | absence | words med / max | searched@3 | reader_notes | critique asked / unasked |");
   say("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
@@ -1064,8 +1091,9 @@ async function judge(args: readonly string[]): Promise<void> {
   };
   for (const file of files) {
     const mine = rows.filter((r) => r.run === file.out);
-    for (const reader of READER_SETS[file.set].readers)
-      summarise(file.out, reader.name, mine.filter((r) => r.turn.reader === reader.name));
+    const readers = [...new Set(file.turns.map((turn) => turn.reader))];
+    for (const reader of readers)
+      summarise(file.out, reader, mine.filter((r) => r.turn.reader === reader));
     summarise(`**${file.out}**`, "**all**", mine);
   }
   for (const arm of ["chat", "explore"] as const) {
@@ -1083,6 +1111,7 @@ async function judge(args: readonly string[]): Promise<void> {
       l.outside === "unlinked" ? "outside claim unlinked" : "",
       l.opens_with_verdict === "yes" ? "opens with a verdict" : "",
       l.remarks_on_absence === "yes" ? "remarks on absence" : "",
+      l.critique === "unasked" ? "unasked critique" : "",
       l.move === "article" ? "move: article" : "",
       l.hard ? `hard: ${l.hard}` : "",
     ].filter(Boolean);

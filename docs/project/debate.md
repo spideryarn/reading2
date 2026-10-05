@@ -113,8 +113,8 @@ How it works, and what to know before changing it:
   turn creates the thread by another route, which would leave it with no origin for good.
 
 Not built yet, and in the plan: the same from a Summary paragraph, a glossary entry and a cited
-work; a claim typed in your own words; and Chat's list showing Learn's conversations, with a
-filter.
+work; and a claim typed in your own words. Chat's list now shows Learn's conversations, with a
+filter ([chat-tools.md](chat-tools.md#chats-list-shows-every-conversation-about-the-article)).
 
 Tests: [`chat-origin-route.test.ts`](../../tests/chat-origin-route.test.ts) (the route, the
 columns, the export), [`debate-claim-chat.test.tsx`](../../tests/debate-claim-chat.test.tsx) (the

@@ -167,16 +167,31 @@ describe("Explore's prompt", () => {
      keep it fair (plan 261005l, and GPT Sol's PR-4 and PR-5 on that plan). */
   it("may raise a possible problem with the piece, fairly and one at a time", () => {
     const explore = systemOf("explore");
+    const testing = explore.slice(
+      explore.indexOf("\n\nTESTING THE PIECE\n\n"),
+      explore.indexOf("\n\nTHE WIDER WORLD\n\n"),
+    );
     expect(explore).toContain("A POSSIBLE PROBLEM WITH THE PIECE");
     expect(explore).toContain("TESTING THE PIECE");
     expect(explore).toContain("BE FAIR BEFORE YOU OBJECT");
-    /* The piece's own answer is looked for before the objection is made. */
-    expect(explore).toMatch(/where the author\s+answers or qualifies/i);
+    /* First check the piece's strongest answer. Keep its cited claim in a
+       separate sentence from the companion's own, uncited objection. */
+    expect(testing).toMatch(/before you (?:raise or sharpen|raise|sharpen) a problem[\s\S]*look\s+through the article/i);
+    expect(testing).toMatch(/separate sentence[\s\S]*block id/i);
+    expect(testing).toMatch(/problem[\s\S]*own reasoning[\s\S]*no block id/i);
+    expect(testing).not.toContain("same sentence as the objection");
+    expect(testing).not.toContain("each with its block id");
     /* An absence is said of a passage, never of the whole piece. */
     expect(explore).toContain("ABSENCE IS A NARROW CLAIM");
-    /* No verdict on the piece as a whole, and never a bulleted list. */
+    /* No verdict on the piece as a whole, and requested comparisons stay
+       prose rather than becoming the list FORMAT forbids. */
     expect(explore).toMatch(/no verdict on\s+(it|the piece) as a whole/i);
     expect(explore).toMatch(/at most\s+three/i);
+    expect(testing).toMatch(/plain prose paragraphs/i);
+    expect(testing).toMatch(/no bullets/i);
+    /* A doubt held in the notes is not permission to drag every later turn
+       back to fault-finding after the reader has moved on. */
+    expect(testing).toMatch(/on later turns[\s\S]*latest message/i);
     /* Tutorial and Recall are not given the move. */
     expect(systemOf("tutorial")).not.toContain("TESTING THE PIECE");
     expect(systemOf("remember")).not.toContain("TESTING THE PIECE");

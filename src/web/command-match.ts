@@ -279,8 +279,10 @@ export interface CommandText {
  * the mode through its alias (`MODE_CATALOG.remember.aliases`). GPT Sol, plan
  * review of 261005l, PR-2.
  *
- * The compounds and not the bare word: the bare old name should select the
- * mode's own row, and four sub-mode rows answering to it would crowd it.
+ * Store compounds and not a bare alias. Prefix matching still lists the four
+ * sub-modes for the bare old name, as it does for the current parent name, but
+ * the mode's own exact alias stays first rather than tying four more exact
+ * aliases.
  */
 const FORMER_PARENT_NAMES: Partial<Record<Mode, readonly string[]>> = {
   /* Learn was Remember until 2026-10-05 (Greg, spya-mvmpks). */

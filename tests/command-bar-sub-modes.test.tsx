@@ -275,10 +275,14 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).toContain("Summary › Thread");
   });
 
-  it("finds a sub-mode by the compound name a reader would say", () => {
+  it("ranks the renamed mode and its sub-modes for current and former names", () => {
     reading();
     openBar();
     for (const [query, name] of [
+      ["learn", "Learn"],
+      ["remember", "Learn"],
+      ["recall", "Learn › Recall"],
+      ["quiz", "Learn › Quiz"],
       ["illustrated diagram", "Diagram › Illustrated"],
       ["quiz mode", "Learn › Quiz"],
       /* The old name still finds the row (command-match.ts § FORMER_PARENT_NAMES). */

@@ -348,9 +348,9 @@ whose rules are there to keep the move fair
 ([261005l](../plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md)):
 
 - **The reader's own doubt first**, named as theirs, and sharpened.
-- **Fair before it objects.** What the piece says, with its block id, in the objection's sentence or
-  the one before; then the article is searched for the author's own answer, which is given, and the
-  objection dropped if nothing is left of it.
+- **Fair before it objects.** Before raising a problem, it searches the article for the author's
+  strongest answer. The piece's claim or qualification gets its own sentence and block id; the
+  objection follows as the model's marked, uncited view, and is dropped if nothing is left of it.
 - **An absence is said of a passage or an argument, never of the whole piece.** The text the model
   is given may lack footnotes and captions (Tutorial's prompt has the same rule).
 - **It says whose view it is**: the model's own, marked as such, or somebody's found by searching
@@ -373,7 +373,7 @@ With the Experimental switch on there are four chips, and the group tightens the
    a question that opens their idea up     what follows, what it rests on, where it stops
    a case to try it on                     their own, when "Why you're reading this" gives one
    a connection they have not made         two of their marks, a note and a passage, another saved piece
-   a possible problem with the piece       one, cited, fair to it, and offered as a view (since 2026-10-05)
+   a possible problem with the piece       one, grounded in a cited claim, fair, and offered as a view (since 2026-10-05)
    the wider world                         who disagrees, what came after: searched for, and linked
 ```
 
@@ -574,7 +574,7 @@ Tests: [`recall-hint.test.ts`](../../tests/recall-hint.test.ts) (the split),
 the options passed over and what is deferred (Tutorial hints; telling the model about the press):
 [261004h](../plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md).
 
-## A Learn conversation IS a chat thread
+## Recall's `remember` conversation IS a chat thread
 
 Greg's own reading — *"this is effectively a Chat"* — taken literally, which is where nearly all of
 the reuse comes from. Same table, same store, same streaming route, same citation contract, same
@@ -594,7 +594,7 @@ tools, same stop / retry / edit / recovery. Untouched: `converse`'s loop, the to
 conversations since 2026-10-05. The rest stands. § On screen, below.)
 
 He chose, of two designs, to keep the shared machinery and separate only the screen; rebuilding
-Learn on its own storage was the option passed over. So the reuse above stands, and three things
+Remember on its own storage was the option passed over. So the reuse above stands, and three things
 make it one thread:
 
 - **The database says so**: a partial unique index, `chat_threads_one_remember`, on `article_id`
@@ -691,10 +691,12 @@ The mode band, the eighth value in `MODES`, last in the dock — the order runs 
 article's own words to the conversation about it, and Learn is one step further out again as the
 only mode whose content comes from the reader.
 
-**Learn has no list; it opens its one conversation.** Until 2026-10-01 the list was shared — both
+**Learn's conversational parts have no list; each opens its one conversation.** Until 2026-10-01
+the list was shared — both
 modes showed every thread, a Remember row carried a `remember` tag, and opening one from chat moved
-`?mode=` with `?thread=`. Since `spya-peszam` (above) Learn shows its single thread directly,
-with no list, no `+`, no rename and the header reading *Learn*. **Chat's side of that rule
+`?mode=` with `?thread=`. Since `spya-peszam` (above) Recall shows its single thread directly,
+with no list, no `+`, no rename and the header reading *Learn*; Tutorial and Explore use the same
+one-thread shape. **Chat's side of that rule
 changed on 2026-10-05** (report `spya-hyfqkq`): Recall's, Tutorial's and Explore's conversations
 are listed in Chat again, each as a row with Learn's icon that leads back here. Chat cannot open,
 rename or delete one —
@@ -732,7 +734,7 @@ differs is an empty state and a box six rows tall instead of one. Likewise one
 second chat state machine.
 
 **Live works in a Recall conversation too, and is saved as one** — including when it is the
-first thing said in the empty conversation Learn opens with. Tutorial and Explore have none
+first thing said in the empty conversation Recall opens with. Tutorial and Explore have none
 (§ How it opens, and what it does not have). Spoken rows carry no stance.
 [live-conversation.md](live-conversation.md) has the rule and the bug that prompted it.
 
@@ -759,7 +761,7 @@ be rescued from.
 - **No model-written title.** A thread is named from the reader's first 60 characters, which for
   speech will regularly be *"Um, so I suppose what I took from this was…"*. Since 2026-10-01 that
   title is shown nowhere — Learn's header just says *Learn* — so there is nothing to rename.
-- **No list of Learn conversations**, and no second one (§ A Learn conversation IS a chat
+- **No list of Recall conversations**, and no second one (§ Recall's `remember` conversation IS a chat
   thread). Learn's own controls are still to come; Greg's report names more Socratic ones.
 
 ## See also

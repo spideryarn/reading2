@@ -176,7 +176,8 @@ readers never are.
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,
   261001k and 261001n above.
 
-The last two band modes — **chat** and **learn**, and the quiz that is Learn's other half — are
+The last two band-mode identifiers — `chat` and `remember` (shown as Chat and Learn), with Quiz as
+one of Learn's parts — are
 under the next heading instead, because what they are about is a passage rather than the whole piece.
 That is every band mode; `plain` and Marginalia open none — Marginalia draws its column on the
 right instead, beside a band or without one.

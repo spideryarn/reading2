@@ -450,7 +450,8 @@ From 2026-10-01 it showed chats only.
   Candidates thread is not: it is not a conversation the reader had.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Debate*), a Learn kind (*From Learn › Recall*), an anchor (*About a
+  from a claim in Debate*), one of Learn's conversation kinds (`remember`, `tutorial` or `explore`,
+  rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
   ([`mode-icons.ts`](../../src/web/mode-icons.ts), which the Dock reads too), with a card a tap
@@ -577,9 +578,10 @@ of the one column a shared transcript would have to publish.
 **Two smaller things its own plan must also handle**, both found in the same review and both
 verified against the schema:
 
-- **`chat_threads.kind` is `'chat' | 'remember' | 'candidates'`**
-  ([`schema.ts:2806`](../../src/db/schema.ts)). A public query that does not filter `kind = 'chat'`
-  **in SQL** publishes Learn transcripts and Referee candidate machinery, whatever the visitor's
+- **`chat_threads.kind` is `'chat' | 'remember' | 'candidates' | 'tutorial' | 'explore'`**
+  ([`schema.ts`](../../src/db/schema.ts) § `chatThreads`; [`types.ts`](../../src/types.ts) §
+  `THREAD_KINDS`). A public query that does not filter `kind = 'chat'`
+  **in SQL** publishes Learn conversation transcripts and Referee candidate machinery, whatever the visitor's
   UI chooses to draw. The client filters `candidates` today; a client-side filter is not a boundary.
 - **`ToolRun.label` and `.detail` can name a private article's title or slug**
   ([`src/types.ts`](../../src/types.ts) § `ToolRun`), so `tools` must not cross wholesale even
@@ -768,7 +770,7 @@ ignore them."* Below the cache breakpoint, like the position line it replaces.
 
 Where it is deliberately not sent, so nobody files these as gaps:
 
-- **Learn.** Its prompt says not to guess how far the reader has got, and a screenful is that
+- **Recall.** Its prompt says not to guess how far the reader has got, and a screenful is that
   guess. The route refuses `visible` on any thread that is not a chat.
 - **A band lying over the prose** (a phone). Reader's `proseOnScreen` is false, nothing is sent,
   and the old `at` line goes as before.
@@ -827,7 +829,7 @@ prompt.
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Learn, Tutorial, Explore and
+- **Who gets them.** Chat and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`

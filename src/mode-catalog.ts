@@ -430,11 +430,11 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        reader expects.
 
        **`quiz` is deliberately absent**, and it is the clearest example of the
-       rule these aliases follow. Quiz is one of Remember's *other* sub-modes, and
+       rule these aliases follow. Quiz is one of Learn's *other* sub-modes, and
        opening the mode lands on Recall (`params.ts`), so `quiz` here would name
        a destination and then not go there. GPT Sol found this, 2026-09-07.
        Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
-       "quiz" }` — the bar's *Remember › Quiz* row (src/web/sub-modes.ts, plan
+       "quiz" }` — the bar's *Learn › Quiz* row (src/web/sub-modes.ts, plan
        261001d) — and that row, not an alias here, is where `quiz` lands.
        `test me` is left out for the same reason, and `flashcards` because the
        description denies it. Both spellings of *practise*. */
