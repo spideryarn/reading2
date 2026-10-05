@@ -11,11 +11,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
 import {
+  RECONCILE_CAVEAT,
   by,
   duplicateJobSteps,
   marginPeriod,
+  ownerReconciliationDetails,
   parseArgs,
   printMargin,
+  reconcileGapLine,
   shortfallNotes,
 } from "../scripts/ai-cost.js";
 import type { LedgerRead } from "../src/store/contracts.js";
@@ -544,5 +547,50 @@ describe("the ordinary report, end to end", () => {
     ]);
     expect(page).toContain("Product spend");
     expect(page).toContain("Dev CLI spend");
+  });
+});
+
+/**
+ * `--reconcile` compares one UTC month with the same month. Its caveat said
+ * the gap "holds everything spent on this key before the ledger existed",
+ * which cannot be in a same-month comparison and taught the reader to ignore
+ * a real gap — the 2026-10-05 audit's defect 4.
+ */
+describe("--reconcile's gap", () => {
+  it("is printed as an amount and as a share of their figure", () => {
+    /* The audit's own local run: theirs $283.715006, ours $206.2060. */
+    const line = reconcileGapLine(283.715006, 206_206_000_000);
+    expect(line).toContain("$77.509006");
+    expect(line).toContain("27.3% of their figure");
+    expect(line).toContain("theirs minus ours");
+  });
+
+  it("has no share when their figure is zero, and can be negative", () => {
+    expect(reconcileGapLine(0, 1_000_000_000)).toContain("$-1.000000");
+    expect(reconcileGapLine(0, 1_000_000_000)).not.toContain("%");
+  });
+
+  it("says what a same-month gap can hold, and nothing about before the ledger", () => {
+    expect(RECONCILE_CAVEAT).toMatch(/this month's/);
+    expect(RECONCILE_CAVEAT).toMatch(/wrote no row in\s+this database/);
+    expect(RECONCILE_CAVEAT).toMatch(/another machine or database/);
+    expect(RECONCILE_CAVEAT).toMatch(/reported no money/);
+    expect(RECONCILE_CAVEAT).not.toMatch(/before the ledger|baseline/);
+  });
+
+  it("uses that same caveat and percentage in the per-owner report", () => {
+    const lines = ownerReconciliationDetails({
+      fingerprint: "abc123",
+      month: "2026-10",
+      ourCreditsNanos: 206_206_000_000,
+      ourCalls: 7968,
+      theirCredits: 283.715006,
+      otherCalls: 7,
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("27.3% of their figure");
+    expect(text).toContain("Both figures are this month's");
+    expect(text).toContain("7 call(s) this month were paid on another key");
+    expect(text).not.toMatch(/before the ledger|stored baseline|Watch whether/);
   });
 });

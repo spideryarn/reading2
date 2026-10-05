@@ -187,7 +187,7 @@ import {
   articleHadNoText,
   documentHadTooLittleText,
   documentHasNoArticle,
-  FETCH_TOO_BIG,
+  fetchFailed,
   ILLUSTRATE_NO_SKETCH,
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
@@ -2149,25 +2149,40 @@ async function withArticleRegistry(ctx: StepContext, step: "extract" | "metadata
 }
 
 /**
- * **A document fetched by address that is over the size limit, as the reader's
- * own sentence**, or `null` for every other failure.
+ * **A fetch by address that failed, as the failure the job card shows.**
+ * Anything that is not a `FetchFailure` is handed back untouched.
  *
- * `FetchFailure` declares no `readerFailure`, so `readerFailureOf` gives each
- * of its codes the generic copy and offers Retry. For this one code that was
- * a button that cannot import the same over-limit document. The
- * upload half has said so since it was written (`UPLOAD_TOO_BIG`); this is the
- * fetched half saying the same thing, with the same number
- * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+ * `FetchFailure` declares no `readerFailure`, so left alone `readerFailureOf`
+ * gives every one of its codes the generic copy and a Retry. Each code has its
+ * own sentence and kind instead (src/messages.ts § `fetchFailed`), so a page
+ * that is not there is no longer offered a button that asks for it again.
+ * `too-large` was the first, on 2026-10-04
+ * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md); the rest
+ * followed the same day
+ * (docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § A).
  *
- * Only `too-large`. The other codes still take the generic sentence, which is
- * wider than that plan and is recorded there rather than changed here.
+ * **The diagnostic is written here and is three things only**: fixed wording,
+ * the code, and the status when it is a whole number. It is `{ authored }`, so
+ * it reaches Sentry, and that claim would be false if it copied `err.url`,
+ * `err.message` or the cause's message: several of the fetcher's messages name
+ * the host, and a log of article addresses is a reading history
+ * (docs/project/logging.md). The original error is not kept as a `cause`
+ * either, for the same reason. What that gives up is the Node error code
+ * behind a `connection` failure, which the log used to carry.
  *
- * The diagnostic is authored here and carries no address: a log of article
- * URLs is a reading history (docs/project/logging.md).
+ * **A Stop or a deadline arrives here too**, as code `timeout` ("Fetch
+ * cancelled."), and is given `timeout`'s sentence like any other. Nobody sees
+ * it: `runStep` in src/jobs.ts asks whether its own signal fired before it asks
+ * what was thrown, and writes `STEP_STOPPED` or `INTERRUPTED` instead.
  */
-function overTheSizeLimit(err: unknown): Error | null {
-  if (!(err instanceof FetchFailure) || err.code !== "too-large") return null;
-  return stageFailure(FETCH_TOO_BIG, { authored: `The fetched document is over ${MAX_UPLOAD_BYTES} bytes.` });
+function fetchStepFailure(err: unknown): unknown {
+  if (!(err instanceof FetchFailure)) return err;
+  const failure = fetchFailed(err.code, err.status);
+  if (err.code === "too-large") {
+    return stageFailure(failure, { authored: `The fetched document is over ${MAX_UPLOAD_BYTES} bytes.` });
+  }
+  const status = Number.isInteger(err.status) ? `, HTTP ${err.status}` : "";
+  return stageFailure(failure, { authored: `The fetch by address failed: ${err.code}${status}.` });
 }
 
 export const STEPS: { [K in StepName]: PipelineStep<K> } = {
@@ -2178,9 +2193,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      The work is src/fetch.ts, which is stage 1's own module and does a great
      deal more than a `fetch().then(r => r.text())`: byte caps that count the
      decompressed size, the page's declared encoding rather than an assumed
-     UTF-8, PDFs told apart by their bytes, and typed failures with a sentence a
-     reader can act on. Those messages are what a failed step shows, which is
-     most of why this step is three lines. */
+     UTF-8, PDFs told apart by their bytes, and typed failures. A failed step
+     shows the sentence `fetchStepFailure` picks for the failure's code, not
+     the fetcher's own message, which can name the host. */
   fetch: {
     name: "fetch",
     label: "Fetching the page",
@@ -2205,7 +2220,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const host = new URL(url).hostname;
       ctx.report(host);
       const doc = await fetchDocument(url, { signal: ctx.signal }).catch((err: unknown) => {
-        throw overTheSizeLimit(err) ?? err;
+        throw fetchStepFailure(err);
       });
       /* **Before `writeRaw`**, so a document we will not read does not end up
          in the content-addressed bucket under its own hash. The branch is on
@@ -4271,7 +4286,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       const stored = await store.stampFor(ctx.slug, "simple");
       return {
-        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta),
+        inputHash: simpleFingerprint(article.blocks, article.tree, article.meta, stored?.promptVersion),
         promptVersion: stored?.promptVersion ?? SIMPLE_PROMPT_VERSION,
         model: stored?.model ?? CAPABLE_MODEL,
       };

@@ -99,7 +99,7 @@ import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import { SharePie } from "./SharePie.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
-import { REMEMBER_VIEWS, type RememberView } from "./params.js";
+import type { RememberView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -115,7 +115,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
-import { REMEMBER_SUB_MODES } from "./sub-modes.js";
+import { REMEMBER_SUB_MODES, visibleRememberViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
 
@@ -246,6 +246,7 @@ export const REMEMBER_VIEW_HOW: Readonly<Record<RememberView, string>> = {
 export function RememberSubModeToggle({
   slug,
   value,
+  experimental,
   onChange,
 }: {
   /**
@@ -257,6 +258,15 @@ export function RememberSubModeToggle({
    */
   slug: string;
   value: RememberView;
+  /**
+   * **Whether the reader's experimental-features switch is on**, which decides
+   * whether the Explore chip is drawn and nothing else (sub-modes.ts §
+   * `visibleRememberViews`). Required, for `DiagramPanel`'s reason: a new mount
+   * site cannot forget it and quietly show a chip the switch is hiding. The
+   * chip for the part the reader is in is always drawn, so the row has one
+   * pressed. docs/project/experimental-features.md.
+   */
+  experimental: boolean;
   onChange(next: RememberView): void;
 }) {
   return (
@@ -270,10 +280,10 @@ export function RememberSubModeToggle({
           reading along the row is one gesture, `keepSide` so a card is not
           thrown onto the chips beside it. The card is for a pointer and for
           keyboard focus; a finger's tap presses the chip, which is why the
-          band's (i) lists the four as well (RememberAbout.tsx §
+          conversation band's (i) lists the visible parts as well (RememberAbout.tsx §
           `RememberSubModesAbout`). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {REMEMBER_VIEWS.map((view) => (
+        {visibleRememberViews(experimental, value).map((view) => (
           <Tooltip
             key={view}
             placement="bottom"
@@ -600,6 +610,10 @@ export function QuizPanel({
     /* One box per question: an answer offered back under a different question
        would be the wrong answer. */
     keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),
+    /* A double press on Stop also answers (dictation.md § A double press). */
+    onDone: () => submit(),
+    /* One box across every question: an answer goes to the one it was said to. */
+    doneKey: question?.id,
   });
 
   /**
@@ -1158,7 +1172,7 @@ export function QuizPanel({
                     </span>
                   )}
                 </div>
-                <DictationStrip dictation={dictate.dictation} />
+                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
                 {mine && (
                   <Mark
@@ -1623,7 +1637,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   if (!dictate.dictation.supported) return null;
   return (
     <span className="quiz-mic">
-      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} />
+      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
       <span className="quiz-mic-label">
         {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
       </span>

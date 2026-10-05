@@ -38,6 +38,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
     };
     return {
       readOnly: false,
+      sendingAfter: false,
       busy: armed,
       toggle,
       dictation: {

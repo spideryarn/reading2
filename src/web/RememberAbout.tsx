@@ -14,16 +14,25 @@
  * BandAbout is also reached from the lazy /admin and /design routes, and
  * importing sub-modes.ts there put that module in both graphs
  * (tests/eager-client-graph.test.ts). Plan 261004f.
+ *
+ * **It lists the parts the chip row draws, not always all four**: Explore is
+ * behind the experimental-features switch since 2026-10-05, and a line about a
+ * part with no chip would describe something the reader cannot find. The hook
+ * is read here rather than handed down because this is a component of its own,
+ * so only a Remember band subscribes. `current` is the part the band is on.
  */
-import { subModesOf, subModeWords } from "./sub-modes.js";
+import type { RememberView } from "./params.js";
+import { REMEMBER_SUB_MODES, visibleRememberViews } from "./sub-modes.js";
+import { useExperimental } from "./useExperimental.js";
 
-export function RememberSubModesAbout() {
+export function RememberSubModesAbout({ current }: { current: RememberView }) {
+  const { on } = useExperimental();
   return (
     <ul className="band-about-list">
-      {subModesOf("remember").map((sub) => {
-        const { label, description } = subModeWords(sub);
+      {visibleRememberViews(on, current).map((view) => {
+        const { label, description } = REMEMBER_SUB_MODES[view];
         return (
-          <li key={sub.view}>
+          <li key={view}>
             <strong>{label}</strong>: {description}
           </li>
         );

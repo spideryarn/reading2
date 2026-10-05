@@ -1,0 +1,52 @@
+[
+  [
+    "1 control: new file, bare fetch at openrouter chat completions",
+    "src/new-mode.ts",
+    "export async function go(){ return fetch(\"https://openrouter.ai/api/v1/chat/completions\",{method:\"POST\",headers:{Authorization:\"Bearer \"+process.env.OPENROUTER_API_KEY}}); }"
+  ],
+  [
+    "2 control: new file, new OpenAI() client",
+    "src/new-mode.ts",
+    "import OpenAI from \"openai\"; export const c = new OpenAI();"
+  ],
+  [
+    "3 same bare fetch, but inside a file on the ALLOWED map (src/pdf-read.ts)",
+    "src/pdf-read.ts",
+    "export async function go(){ return fetch(\"https://openrouter.ai/api/v1/chat/completions\",{method:\"POST\"}); }"
+  ],
+  [
+    "4 same bare fetch inside src/embeddings.ts (ALLOWED: 'presence check')",
+    "src/embeddings.ts",
+    "export async function go(){ return fetch(\"https://openrouter.ai/api/v1/embeddings\",{method:\"POST\"}); }"
+  ],
+  [
+    "5 a provider not on the host list (Google Gemini direct, GOOGLE_API_KEY)",
+    "src/new-mode.ts",
+    "export async function go(){ return fetch(\"https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent?key=\"+process.env.GOOGLE_API_KEY,{method:\"POST\"}); }"
+  ],
+  [
+    "6 an SDK not on the SDK list (@google/genai)",
+    "src/new-mode.ts",
+    "import { GoogleGenAI } from \"@google/genai\"; export const c = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });"
+  ],
+  [
+    "7 base URL from the environment, Messages path, key under a new name",
+    "src/new-mode.ts",
+    "export async function go(){ return fetch(process.env.LLM_BASE_URL + \"/v1/messages\",{method:\"POST\",headers:{\"x-api-key\":process.env.LLM_KEY ?? \"\"}}); }"
+  ],
+  [
+    "8 OpenAI Responses path on a host built at run time",
+    "src/new-mode.ts",
+    "const h=[\"api\",\"openai\",\"com\"].join(\".\"); export async function go(k:string){ return fetch(\"https://\"+h+\"/v1/responses\",{method:\"POST\",headers:{Authorization:\"Bearer \"+k}}); }"
+  ],
+  [
+    "9 a web-search vendor direct (Exa)",
+    "src/new-mode.ts",
+    "export async function go(){ return fetch(\"https://api.exa.ai/search\",{method:\"POST\",headers:{\"x-api-key\":process.env.EXA_API_KEY ?? \"\"}}); }"
+  ],
+  [
+    "10 browser code opening a second realtime vendor",
+    "src/web/new-voice.ts",
+    "export async function go(t:string){ return fetch(\"https://api.elevenlabs.io/v1/convai/conversation\",{headers:{Authorization:\"Bearer \"+t}}); }"
+  ]
+]

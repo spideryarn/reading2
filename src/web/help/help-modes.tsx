@@ -173,7 +173,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
-          the box, to edit before you send; a recording stops after five minutes.{" "}
+          the box, to edit before you send; a recording stops after five minutes. Press Stop twice
+          quickly and it sends by itself once the words arrive; this works here, in Feedback, in a
+          comment follow-up, in a quiz answer and when you annotate a passage.{" "}
           <strong>Live</strong>, beside it, is a spoken conversation you can interrupt. Your audio goes
           directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a
           while, and press <strong>Live</strong> again. A call ends after five minutes of quiet, or
@@ -536,7 +538,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             case (your own, when your reason for reading gives one), makes a connection, or looks
             up what others have said and links it. It says which parts come from the article, the
             web, your notes and its own view. One Explore conversation per article; typed or
-            dictated, with no Live conversation yet.
+            dictated, with no Live conversation yet. Explore is one of the{" "}
+            <HelpRef to="experimental-features">experimental features</HelpRef>, so its chip appears
+            with those on, and stays visible while Explore is open.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered

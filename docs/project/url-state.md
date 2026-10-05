@@ -94,6 +94,17 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 so all three push, and all three land an unrecognised value on the default rather than on an error
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
+**A sub-mode parameter outlives its mode, deliberately.** `remember`, `diagram`, `referee`,
+`summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
+buttons write `mode` alone. So `?mode=chat&remember=quiz` is not a leak: the parameter is read only
+by its own mode and does nothing under any other, and it is what makes pressing Remember again
+return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
+key: back to Remember with `remember=quiz` kept also clears `?thread=`, in the same pushed entry,
+because Quiz and a selected conversation cannot both be shown
+([`sub-modes.ts`](../../src/web/sub-modes.ts) § `returnToSubMode`;
+`tests/sub-mode-param-outlives-its-mode.test.tsx`;
+[261004l](../plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md) § C).
+
 **`dx` and `dhue` replace where `diagram` pushes**, and the split is the one this
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo
 it, where the other two are ways of looking at one picture — a reader flicking

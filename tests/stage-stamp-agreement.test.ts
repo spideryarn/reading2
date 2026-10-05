@@ -99,7 +99,7 @@ import type { Article } from "../src/article-input.js";
 import { readArticle } from "../src/article-input.js";
 import { isBodyEvidence } from "../src/block-policy.js";
 import { SIMPLE_LEVELS, type SimpleSummary } from "../src/types.js";
-import { SIMPLE_PROMPT_VERSION } from "../src/simple-summary.js";
+import { SIMPLE_PROMPT_VERSION, inputFingerprint as simpleFingerprint } from "../src/simple-summary.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { type MemoryArtifactStore, memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
@@ -641,6 +641,7 @@ describe("an unforced simple run, with a summary already stored", () => {
   it("is done when the stored summary was written by an older prompt", async () => {
     const store = await storeWith((simple) => {
       simple.promptVersion = "simple-prompt/3";
+      simple.sourceHash = simpleFingerprint(withMeta.article.blocks, withMeta.article.tree, withMeta.article.meta, simple.promptVersion);
     });
     expect(SIMPLE_PROMPT_VERSION, "the control: the stored version really is an older one").not.toBe("simple-prompt/3");
     expect((await store.stampFor(SLUG, "simple"))?.promptVersion).toBe("simple-prompt/3");

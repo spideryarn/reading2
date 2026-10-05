@@ -308,8 +308,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,
             patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
-            at a time and ask you to put it in your own words. Or Explore, which starts from what
-            you have marked and helps you work out what you think.
+            at a time and ask you to put it in your own words. Or Explore, one of the Experimental
+            Features, which starts from what you have marked and helps you work out what you think.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which

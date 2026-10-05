@@ -81,6 +81,9 @@ hidden by `!bandCovers`, and where it is beside the prose it is showing.
   built here; **queued as `qi-2ymfq3ek`** (a proposal, for Greg to authorise). Sol's suggestion, which
   is what that entry proposes: start the head from the first section rather
   than the first block, so it names the first part at the very top as the breadcrumb does.
+  **Since fixed for the rows above the first part** by
+  [261004l § D](261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md)
+  (`headBlock`); a gap further down the tree still draws no head.
 - **A contained failure.** If Structure's band or Marginalia's boundary has thrown, what is drawn in
   its place is an error line with no location in it, and the breadcrumb is still hidden. The way out
   the error offers (back to Plain) brings it back.

@@ -1,8 +1,10 @@
 # The admin page
 
-**`/admin`, with `/admin/users` and `/admin/feedback` under it.** One person can see them. The
-first shows who has signed up and how much each of them has read — counts and dates. The second
-shows the bug reports readers filed with the Feedback button, in their own words.
+**`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
+and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
+with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
+`/admin/costs`, which has a doc of its own —
+[admin-costs.md](admin-costs.md).
 
 Greg, 2026-08-27:
 
@@ -130,11 +132,11 @@ own address arrives on an id we do not know — which is either Greg on a new ac
 who has taken his address, and both are things to find out immediately. Fixed prose, nothing
 interpolated: a message is the one field redaction cannot reach ([logging.md](logging.md)).
 
-[`src/admin.ts`](../../src/admin.ts) is one constant, one three-line function and one log sentence,
-with no imports at all — so the browser and the server ask the *same* function rather than two
-spellings of one idea. It is on the shared-module allowlist in `tests/client-imports.test.ts`
-because it qualifies, not because it was convenient. The id is not a secret: it travels in every
-JWT that account holds, and it identifies rather than authorises.
+[`src/admin.ts`](../../src/admin.ts) is the import-free boundary shared by the browser and server:
+the administrator's ids and check, the miss explanation, and the administrator-only response shapes
+and money formatters. It is on the shared-module allowlist in `tests/client-imports.test.ts` because
+it qualifies, not because it was convenient. The id is not a secret: it travels in every JWT that
+account holds, and it identifies rather than authorises.
 
 ### One account per Supabase project, which is why it is a list
 
@@ -230,6 +232,12 @@ the server. Everything else on the page is a number or a date.
 still a fact about the account rather than about their reading: what their model calls cost us, over
 a stated month, with no article, model or job named. See
 [The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
+
+**`/admin/costs` goes further, because Greg asked it to (2026-10-04).** For each account with a
+ledger row in the selected period, it shows which article the money went on and the mode or task
+and model behind it. It still does not say what any other reader's article is called — theirs are
+opaque ids, and no other owner's slug leaves the database.
+[admin-costs.md](admin-costs.md#what-the-administrator-sees-of-other-peoples-articles).
 
 **The plan is the same kind of thing**, added 2026-09-03: which tier the account is entitled to, the
 raw Stripe subscription status beside it, and how many ingests of the allowance are gone. A tier id
@@ -569,9 +577,10 @@ only: `GET /api/admin/articles/:slug/cost`, behind the same namespace gate, grou
 **It answers only for an article the administrator owns.** The route asks `ownedArticleIdentity`
 before it reads any spend, so another account's slug is the ordinary 404. Everything else on these
 pages is a fact about an *account*; a per-mode breakdown of somebody else's article is a fact about
-what they did with it, which is the line § *What it deliberately does not show* draws. Widening it
-to other people's articles is a decision for Greg
-([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+what they did with it, which is the line § *What it deliberately does not show* draws. Greg widened
+that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by opaque id
+([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
+administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
 
 ## The plan and ingest columns
 
@@ -813,9 +822,9 @@ a Retry where the server allows one. How they are kept to once each is
   other, since 2026-10-03, is the **Ignore** button on a feedback card: it sets or clears
   `feedback.ignored_at` and changes nothing the reader sent
   ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).
-- **No model spend per user**, though `ai_calls` is right there. It carries no `owner_id` — it hangs
-  off a revision — so per-user spend is a join through revisions and articles, and it is a page of
-  its own the day a spend limit exists ([auth.md § Still open](auth.md#still-open)).
+- **No spend limit.** Spend per user, article, mode and model is `/admin/costs`
+  ([admin-costs.md](admin-costs.md)); nothing acts on it
+  ([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 - **No pagination.** Nine accounts. When there are hundreds this becomes a server-side sort, and the
   URL state already says what to sort by.
 - **Soft-deleted accounts are filtered out**, on `auth.users.deleted_at`. The row survives a

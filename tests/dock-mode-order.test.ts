@@ -69,8 +69,9 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat:
-       the critical run is hidden whole, so no line is left for it. */
+    /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
+       Remember (since 2026-10-05, spya-cnqcjf): the critical run is hidden
+       whole, so no line is left for it. */
     const drawn = visibleModes(false, undefined);
     expect(drawn.map((m) => m.mode)).toEqual([
       "plain",
@@ -82,6 +83,7 @@ describe("the mode bar's order", () => {
       "ideas",
       "search",
       "chat",
+      "remember",
     ]);
     expect([...groupStarts(drawn)].sort()).toEqual(["structure", "skim", "search"].sort());
   });

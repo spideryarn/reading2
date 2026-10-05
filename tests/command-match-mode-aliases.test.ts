@@ -62,7 +62,7 @@ function rows(archived: boolean): readonly Command[] {
   const modes = visibleModes(true, undefined).map((m) => m.mode);
   return [
     ...modes.map(modeCommand),
-    ...subModeRows(modes, true, "sketch"),
+    ...subModeRows(modes, true, { diagram: "sketch", remember: "recall" }),
     ...besideTheModes({
       article: {
         slug: "a-piece",

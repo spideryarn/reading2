@@ -1882,6 +1882,41 @@ export interface SkipCounts {
  */
 export type EmbeddingReason = "config" | "provider" | "busy";
 
+/**
+ * Why a fetch failed, as something to switch on.
+ *
+ * These exist because **every network and TLS failure in Node arrives as the
+ * identical `TypeError: fetch failed`** — DNS, refused connection, expired
+ * certificate, self-signed certificate and a missing intermediate are one
+ * string at the top level, and the difference lives only in `err.cause.code`.
+ * Code that matches on the message learns nothing, which is exactly the trap
+ * the previous version fell into (docs/project/original-version/extraction.md).
+ *
+ * **Declared here, not in [fetch.ts](fetch.ts) where every one of them is
+ * raised**, for `EmbeddingReason`'s reason above: [messages.ts](messages.ts)
+ * holds a total map from these to the sentence a reader gets (`fetchFailed`),
+ * and it may not import `fetch.ts`, type-only or not. `fetch.ts` re-exports the
+ * name, so every other importer is unchanged. Moved 2026-10-04.
+ */
+export type FetchFailureCode =
+  | "invalid-url"
+  | "unsupported-scheme"
+  | "blocked-address"
+  | "dns"
+  | "connection"
+  | "certificate"
+  | "timeout"
+  | "too-many-redirects"
+  | "unauthorized"
+  | "forbidden"
+  | "not-found"
+  | "rate-limited"
+  | "server-error"
+  | "http-error"
+  | "too-large"
+  | "unsupported-type"
+  | "empty";
+
 export interface ProjectionResponse {
   model: string;
   /** How many blocks were embedded. Short ones and non-prose are skipped. */
@@ -5433,10 +5468,19 @@ export interface SimpleLevelLimits {
  * smaller fallback shipped, so a longer Fuller later remains a prompt-only
  * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
  * stored before then still reads.
+ *
+ * Fuller's were raised again on 2026-10-05 (Greg, spya-gttwhn; plan 261005b),
+ * from 8 paragraphs and 850 words: the length Fuller is asked for now follows
+ * the length of the piece, and a book's is asked for about 900 words in eight
+ * to eleven paragraphs. Brief is asked for one length whatever the piece, so
+ * its limits did not move. **One cap for every length of
+ * piece**, because a reader of a stored row has no article to measure; the
+ * prompt's own "never more than" is what holds a shorter piece's summary short.
+ * The minimums did not move, so every stored summary still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
-  fuller: { minParagraphs: 3, maxParagraphs: 8, maxWords: 850 },
+  fuller: { minParagraphs: 3, maxParagraphs: 13, maxWords: 1400 },
 };
 
 /** Passages per paragraph, at every level. */
@@ -5504,8 +5548,8 @@ export interface SimpleSummary {
   generator: string;
   slug: string;
   /**
-   * A hash of the body-only article rendering and the **profile-free** user
-   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * A hash of the body-only article rendering, the length band since `/9`, and
+   * the **profile-free** user message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
    * it, so a changed profile never makes the paragraphs stale.
    */
   sourceHash: string;

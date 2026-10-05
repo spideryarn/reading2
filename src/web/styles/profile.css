@@ -396,8 +396,12 @@
   background: transparent;
   color: var(--ink-faint);
   cursor: pointer;
+  /* A double press on Stop is two presses, not a zoom. */
+  touch-action: manipulation;
 }
-.prof-mic:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+/* `.busy` and not disabled is the moment after Stop on a box that takes a
+   double press (DictationStrip.tsx § `again`): live, and not lit. */
+.prof-mic:hover:not(:disabled):not(.busy) { color: var(--highlight-ink); border-color: var(--highlight); }
 .prof-mic:disabled { opacity: 0.4; cursor: default; }
 /* Armed, but the microphone is not open yet — a measured 1.1 seconds in Chrome
    between start() and audiostart. Outlined rather than filled, because the

@@ -397,6 +397,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/articles/w1/cost"],
   },
+  /* The cost cube, for /admin/costs, 261005a. */
+  {
+    match: { kind: "literal", path: "/api/admin/costs" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/costs"],
+  },
   // -------------------------------------------------------- library / shelf
   {
     match: { kind: "literal", path: "/api/library" },
@@ -917,8 +923,8 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 91;
-const EXPECTED_GUARD_COUNT = 111;
+const EXPECTED_MATCHER_COUNT = 92;
+const EXPECTED_GUARD_COUNT = 112;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2081,6 +2087,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
+        // the cost cube, for /admin/costs, 261005a — beside the article's cost
+        "GET literal /api/admin/costs",
         "GET literal /api/library",
         "GET literal /api/library/search",
         "GET literal /api/library/terms",

@@ -63,8 +63,10 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
  * What the strip says, in one place — because it is also what the live region
  * says, and the two must not be allowed to drift apart.
  */
-function dictationWords(d: UseDictation): string {
-  if (d.transcribing) return "Turning that into text…";
+function dictationWords(d: UseDictation, sendingAfter: boolean): string {
+  if (d.transcribing) {
+    return sendingAfter ? "Turning that into text, then sending…" : "Turning that into text…";
+  }
   if (d.phase === "opening") return "Opening the microphone…";
   if (d.quiet) {
     /* **Not a diagnosis.** `quiet` means nothing crossed −55 dBFS for ten
@@ -160,12 +162,29 @@ export function DictationButton({
   dictation,
   toggle,
   disabled,
+  again,
+  sendingAfter,
 }: {
   dictation: UseDictation;
   toggle(): void;
   disabled?: boolean | undefined;
+  /**
+   * **The second press of a double press on Stop**: `useDictationField().again`,
+   * which is there only for the moment after Stop in which a second press
+   * counts. A double press also sends (Greg, spya-rp8676), and a `disabled`
+   * button is sent no click at all — so while this is given the button stays
+   * live, is named for what a press does, and its only press is this one. It
+   * never starts a dictation there. When the moment has passed, or the press
+   * was taken, this is gone and the button is disabled as it always was.
+   */
+  again?: (() => void) | undefined;
+  /** The second press was taken; the name says what happens next. */
+  sendingAfter?: boolean | undefined;
 }) {
   const busy = dictation.transcribing;
+  /* Live through the gap, for the second press. Not when the box itself has
+     switched the button off. */
+  const pressable = busy && again !== undefined && !disabled;
   /* **Read here rather than passed in**, so that all six boxes get it from one
      place and a seventh cannot forget. `false` only; see `useOnline.ts`. */
   /* **Only while idle**, because this one control is also Stop. Disabling it on
@@ -208,7 +227,11 @@ export function DictationButton({
         offline
           ? DICTATION_OFFLINE
           : busy
-            ? "Turning your words into text"
+            ? sendingAfter
+              ? "Turning your words into text, then sending"
+              : pressable
+                ? "Send when the words arrive"
+                : "Turning your words into text"
             : dictation.armed
               ? "Stop dictating"
               : "Dictate"
@@ -230,8 +253,8 @@ export function DictationButton({
          microphone is already off; a press here can only mean "start again",
          and starting again two hundred milliseconds before the words arrive
          throws away the dictation the reader just gave. */
-      disabled={disabled || busy || offline}
-      onClick={toggle}
+      disabled={disabled || (busy && !pressable) || offline}
+      onClick={pressable ? again : toggle}
     >
       {busy ? (
         <Loader2 size={13} className="spin" />
@@ -259,15 +282,18 @@ export function DictationButton({
 export function DictationStrip({
   dictation,
   id,
+  sendingAfter = false,
 }: {
   dictation: UseDictation;
   /** For `aria-describedby` on the box, if the caller wants it. */
   id?: string | undefined;
+  /** `useDictationField().sendingAfter`: a double press on Stop was taken. */
+  sendingAfter?: boolean | undefined;
 }) {
   const [picking, setPicking] = useState(false);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const busy = dictation.armed || dictation.transcribing;
-  const words = dictationWords(dictation);
+  const words = dictationWords(dictation, sendingAfter);
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until
