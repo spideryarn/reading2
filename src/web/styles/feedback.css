@@ -207,6 +207,17 @@
 .fb-earlier-page {
   overflow-wrap: anywhere;
 }
+/* A link to that page (spya-tqk7au). The row's own quiet colour, underlined so
+   it reads as a link, and darker under the pointer or the keyboard. */
+a.fb-earlier-page {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a.fb-earlier-page:hover,
+a.fb-earlier-page:focus-visible {
+  color: var(--ink);
+}
 /* `pre-wrap` keeps the reader's own line breaks; `anywhere` stops a pasted URL
    from pushing the panel sideways on a phone. */
 .fb-earlier-body {

@@ -1562,8 +1562,11 @@ describe("the Earlier tab", () => {
     expect(items[0]?.querySelector(".fb-earlier-meta")?.textContent).toContain(
       " · Suggestion · on /read/why-trees-spya-k3m9qt · Shipped",
     );
-    /* Text, not a link: the label has lost the query, so it is not where they were. */
-    expect(items[0]?.querySelector(".fb-earlier-meta a")).toBeNull();
+    /* A link since spya-tqk7au ("Make it a link"), to the label itself: the
+       page, without the query it was filed with. */
+    const link = items[0]?.querySelector("a.fb-earlier-page");
+    expect(link?.getAttribute("href")).toBe("/read/why-trees-spya-k3m9qt");
+    expect(items[1]?.querySelector(".fb-earlier-meta a")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-page")).toBeNull();
     expect(items[1]?.querySelector(".fb-earlier-meta")?.textContent).not.toContain(" on ");
   });
@@ -1591,6 +1594,32 @@ describe("the Earlier tab", () => {
     click(tab("Earlier"));
     await act(async () => {});
     expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  /* The label is an href now, so only a path on this origin may be one. The
+     server sends nothing else (src/feedback-page.ts); this is the second line. */
+  it.each([
+    "https://elsewhere.example/read/x",
+    "//elsewhere.example/read/x",
+    "/\\elsewhere.example/read/x",
+    /* A browser drops a tab or a newline before resolving, so these are `//host` too. */
+    "/\t/elsewhere.example/read/x",
+    "/\n/elsewhere.example/read/x",
+    "/read/x\\..\\y",
+    "javascript:alert(1)",
+    "read/x",
+    "",
+  ])("refuses a page that is not a path on this site: %j", async (bad) => {
+    listAnswer = page({
+      reports: [{ ...REPORTS.reports[0], page: bad }],
+      more: false,
+      counts: { all: 1, shipped: 1, unshipped: 0 },
+    });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+    expect(panelOf("Earlier").querySelector("a.fb-earlier-page")).toBeNull();
   });
 
   it("filters on the server, one read per filter per opening, and starts on All", async () => {

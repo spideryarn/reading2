@@ -182,6 +182,13 @@ credentialled URL would be. The store makes it, so the address never leaves `lis
 [the plan](../plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md) has the
 surface-by-surface check.
 
+**And the label is a link to that page**, since 2026-10-05 (Greg, `spya-tqk7au`: *"Make it a
+link."*). It goes to the page, not to the paragraph or mode the report was filed in, because those
+were in the query string. The browser refuses any label that is not a plain path on this site, so
+a wrong value cannot become a link elsewhere:
+[261005l](../plans/261005l-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md),
+which also records the check that one reader cannot see another's reports here.
+
 ### Shipped or not, since 2026-09-30
 
 > It would be nice if we could provide a way to filter to things that have or have not been achieved

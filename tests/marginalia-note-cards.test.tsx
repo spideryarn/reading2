@@ -163,6 +163,19 @@ describe("the cards' words", () => {
     expect(tip.how).toMatch(/AI|you|person who shared/);
   });
 
+  /* spya-xf6m2u: "the tooltip says to 'press it' but I don't see anything to
+     press." The line is the button, so the card names it. */
+  it.each(Object.entries(MARG_TIPS))("%s: a card that says to press says what to press", (_key, tip) => {
+    expect(tip.what).not.toMatch(/press it\b/i);
+    if (/\bpress\b/i.test(tip.what)) expect(tip.what).toMatch(/Press this line/);
+  });
+
+  it("promises of a cited work only what the open line shows", () => {
+    /* The by-line and the article's reference entry, never the model's reason
+       (plan 261003j) — MarginaliaColumn.tsx § CitationNote. */
+    expect(`${MARG_TIPS.citation.what} ${MARG_TIPS.citation.how}`).not.toMatch(/why it is cited|reason it is cited/i);
+  });
+
   it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
     expect(MARG_TIPS.debate.how).toMatch(/AI wrote the headline/i);
   });
