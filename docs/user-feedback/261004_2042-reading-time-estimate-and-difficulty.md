@@ -38,7 +38,8 @@ What we did:
 **Deferred, and Greg's to choose**: making the number itself depend on difficulty. There is a
 published one-line formula from word length, which needs a stored letter count per article and
 cannot see hard ideas in plain words; and there is a model rating at import, which could, and has
-not been checked against reading time. It is in the Overseer's queue under this report's id, waiting
-on Greg.
+not been checked against reading time on our articles. It went to Greg as a question in this
+session's debrief, and the Overseer was asked to queue it under this report's id (the queue takes
+entries only from Greg or the Overseer, so this session could not add it itself).
 
 Plan: [261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
