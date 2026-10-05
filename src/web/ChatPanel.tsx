@@ -81,6 +81,7 @@ import {
 import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
 import { splitHint } from "../recall-hint.js";
+import { MODE_LABEL } from "../title-text.js";
 import type {
   BlockId,
   ChatMessage,
@@ -108,7 +109,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
-import { isSendEnter } from "./key-chord.js";
+import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import {
   CHAT_FROM_LABEL,
@@ -122,6 +123,7 @@ import { MODE_ICON } from "./mode-icons.js";
 import type { ChatFrom } from "./params.js";
 import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 import { usePressToggle } from "./usePressToggle.js";
+import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -573,7 +575,7 @@ export function ChatPanel({
       }
       head={
         <>
-          {/* **Remember's header says Remember**, never the thread's title: there
+          {/* **The header says the mode's name** (Learn; Remember until 2026-10-05), never the thread's title: there
               is one Remember conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
@@ -583,7 +585,7 @@ export function ChatPanel({
               reason Quiz's own row dropped its name on 2026-09-05. */}
           <h2 className={remember && subMode ? "sr-only" : undefined}>
             {remember ? (
-              "Remember"
+              MODE_LABEL.remember
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -681,7 +683,7 @@ export function ChatPanel({
            an empty band begins its conversation, and while Start over's DELETE
            is out — and in none of them is there anywhere for a question to go.
            Plan 261001m, F1 and F6. */
-        <ChatListLoading what="your Remember conversation" />
+        <ChatListLoading what={`your ${MODE_LABEL.remember} conversation`} />
       ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
@@ -1033,7 +1035,7 @@ function ThreadList({
                        where the press goes, since it leaves Chat. */
                     title={
                       view
-                        ? `Open in Remember › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
+                        ? `Open in ${MODE_LABEL.remember} › ${REMEMBER_SUB_MODES[view].label}\n${describe(t)}`
                         : describe(t)
                     }
                     onClick={() => (view ? onOpenRemember?.(view, t.id) : onOpen(t.id))}
@@ -1111,8 +1113,9 @@ function ThreadList({
  * is), so a finger's tap opens it and the keyboard can reach it; hover and
  * focus open it too. A sibling of the row's own button and not inside it, so
  * pressing the icon never opens the row, and the card and the row's `title`
- * are never both on screen. A quote is the article's words, so it takes the
- * author's face.
+ * are never both on screen. The quote takes the face of whoever wrote it:
+ * the author's for the article's words, the reader's for an angle they typed
+ * (`ThreadSource.voice`).
  */
 function ThreadSourceMark({ source }: { source: ThreadSource }) {
   const { open, onOpenChange, trigger } = usePressToggle();
@@ -1127,7 +1130,7 @@ function ThreadSourceMark({ source }: { source: ThreadSource }) {
         <TipNote>
           {source.label}
           {source.quote !== undefined && (
-            <span className="chat-thread-source-quote voice-author">“{source.quote}”</span>
+            <span className={withVoice("chat-thread-source-quote", source.voice ?? "author")}>“{source.quote}”</span>
           )}
         </TipNote>
       }
@@ -1831,6 +1834,11 @@ export const EXPLORE_STARTERS: readonly string[] = [
   "Start from what I've marked and discussed",
   "Help me apply this to my own work",
   "Where does this sit in the wider world?",
+  /* The fourth, 2026-10-05. Greg (spya-mvmpks): Explore is *"also about
+     exploring potential problems and criticisms and concerns"*. A request,
+     like the other three: it puts no view of the piece in the reader's mouth.
+     evals/remember-explore.ts sends these same words as its critic's turn 1. */
+  "Where might this piece be wrong, or missing something?",
 ];
 
 /**
@@ -1855,7 +1863,8 @@ function ExploreInvitation({ onAsk }: { onAsk(question: string): void }) {
         talked about here, and helps you take your own ideas further.
       </p>
       <p className="chat-empty-hint">
-        It can try the piece on cases of your own, and look up what others have said about it.
+        It can try the piece on cases of your own, look at where it may be weak, and look up what
+        others have said about it.
       </p>
       <ul>
         {EXPLORE_STARTERS.map((starter) => (
@@ -2492,6 +2501,7 @@ function EditQuestion({
             e.preventDefault();
             ask();
           }
+          if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
       {held && !canAsk && (
@@ -2871,6 +2881,9 @@ export function Composer({
             e.preventDefault();
             void submit();
           }
+          /* A handoff puts the caret here with the question already written.
+             The Enter that made it, still held, neither sends nor adds lines. */
+          if (isHeldSendEnter(e)) e.preventDefault();
           /* Escape, in three steps, most-urgent first.
 
              It has to be a ladder rather than one action because the composer

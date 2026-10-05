@@ -100,7 +100,7 @@ describe("an article", () => {
       referee: "Referee",
       diagram: "Diagram",
       chat: "Chat",
-      remember: "Remember",
+      remember: "Learn",
       timeline: "Timeline",
       debate: "Debate",
       citations: "Citations",

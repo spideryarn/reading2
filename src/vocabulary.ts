@@ -65,6 +65,8 @@ export const SITE_TERMS: readonly string[] = [
   "block ids of the form spya-k3m9qt",
   "the shelf",
   "reading view",
+  /* The mode was Remember until 2026-10-05, and readers will go on saying so. */
+  "learn mode",
   "remember mode",
   "glossary",
   "table of contents",

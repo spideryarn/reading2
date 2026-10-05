@@ -57,7 +57,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { type ChatAnchor, sameOrigin, type ThreadOrigin, type ThreadSummary } from "../types.js";
+import {
+  type ChatAnchor,
+  isLensOrigin,
+  type LensOrigin,
+  sameOrigin,
+  type ThreadOrigin,
+  type ThreadSummary,
+} from "../types.js";
 import type { AskedQuestion } from "./comment-nav.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -293,7 +300,8 @@ export function threadFor(
  * The match is exact (`sameOrigin`): a claim has no id, so its block and its
  * words are its name, and a new search that words the claim differently no
  * longer matches. The conversation is then still in Chat's list; only the
- * mark goes.
+ * mark goes. A lens never matches a claim, whatever its words; the chats
+ * started from a lens are listed by `lensThreads` below.
  *
  * The newest by `updatedAt`, `threadFor`'s rule. `kind === "chat"` positively,
  * because the mark opens the floating dialog, which is chat's.
@@ -308,6 +316,29 @@ export function threadForOrigin(
     if (!best || s.updatedAt > best.updatedAt) best = s;
   }
   return best;
+}
+
+/** A chat's summary whose origin is a lens: what one line of Debate's *Your angles* is drawn from. */
+export type LensThread = ThreadSummary & { origin: LensOrigin };
+
+/**
+ * **Every chat that was started from an angle typed into Debate's box**,
+ * newest first: Debate's *Your angles*, the way back to them
+ * (plan 261005k, A). Derived from the summaries, as `threadForOrigin` is, so
+ * nothing is stored on Debate's side.
+ *
+ * A list and not a lookup: an angle is the reader's own free words with
+ * nothing in Debate to hang a mark on, and two chats started from the same
+ * words are two conversations, so each gets its line. `kind === "chat"`
+ * positively, for `threadForOrigin`'s reason.
+ */
+export function lensThreads(summaries: readonly ThreadSummary[]): LensThread[] {
+  const out: LensThread[] = [];
+  for (const s of summaries) {
+    if (s.kind !== "chat" || !s.origin || !isLensOrigin(s.origin)) continue;
+    out.push({ ...s, origin: s.origin });
+  }
+  return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /**
@@ -340,13 +371,25 @@ export function threadForOrigin(
  * answer. A row the reader did not touch takes the server's newer copy, and a
  * row the server no longer has goes. For the first fetch nothing changes: the
  * array starts empty, so every row in it was written.
+ *
+ * **"The server no longer has it" needs the server to have had it.** A row
+ * `add` put here that no answer has ever contained (`unseen`) is not one the
+ * server dropped: its first question was refused, or the list was read before
+ * the insert. It stays, whenever it was added, until an answer names it or
+ * `drop` takes it. The first version removed it, and the floating dialog is
+ * drawn from this row, so a refused first question closed the dialog over its
+ * own reason.
+ * docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md
  */
 function foldInLocalWrites(
   fetched: ThreadSummary[],
   local: ThreadSummary[],
   flight: Flight,
+  unseen: ReadonlySet<string>,
 ): ThreadSummary[] {
-  const mine = new Map(local.filter((s) => flight.written.has(s.id)).map((s) => [s.id, s]));
+  const mine = new Map(
+    local.filter((s) => flight.written.has(s.id) || unseen.has(s.id)).map((s) => [s.id, s]),
+  );
   const out = fetched.filter((s) => !flight.dropped.has(s.id)).map((s) => mine.get(s.id) ?? s);
   const seen = new Set(out.map((s) => s.id));
   for (const s of mine.values()) if (!seen.has(s.id)) out.push(s);
@@ -374,6 +417,14 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
    * the new snapshot too, or as good as.
    */
   const flight = useRef<Flight | null>(null);
+  /**
+   * Conversations `add` put here that no answer from the server has contained
+   * yet (`foldInLocalWrites`). Bounded by what this tab started and the server
+   * never took; an answer that names one, or a `drop`, takes it out.
+   */
+  const unseen = useRef(new Set<string>());
+  /** Server-confirmed ids for this article. `add` must not make one unseen again. */
+  const confirmed = useRef(new Set<string>());
   /** The newest request. An older one's answer is not allowed to land. */
   const request = useRef(0);
   /** Whether any answer has landed for this article, so a failed *refresh* stays quiet. */
@@ -393,7 +444,17 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
         if (body.error) {
           if (!landed.current) setError(body.error);
         } else {
-          setSummaries((local) => foldInLocalWrites(body.threads ?? [], local, during));
+          const fetched = body.threads ?? [];
+          /* Only an answer that lands confirms a row. Prune before taking
+             the snapshot: an optimistic row written before this flight must
+             take the server's first copy too. Keep ref mutations outside the
+             updater, which React may run twice. */
+          for (const s of fetched) {
+            confirmed.current.add(s.id);
+            unseen.current.delete(s.id);
+          }
+          const waiting = new Set(unseen.current);
+          setSummaries((local) => foldInLocalWrites(fetched, local, during, waiting));
         }
         landed.current = true;
         setLoaded(true);
@@ -418,6 +479,8 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     activeSlug.current = slug;
     /* Another article: nothing done to the last one's list applies. */
     flight.current = null;
+    unseen.current = new Set();
+    confirmed.current = new Set();
     landed.current = false;
     setSummaries([]);
     setLoaded(false);
@@ -441,6 +504,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   const add = useCallback((summary: ThreadSummary) => {
     flight.current?.written.add(summary.id);
     flight.current?.dropped.delete(summary.id);
+    if (!confirmed.current.has(summary.id)) unseen.current.add(summary.id);
     setSummaries((prev) =>
       prev.some((s) => s.id === summary.id)
         ? prev.map((s) => (s.id === summary.id ? summary : s))
@@ -455,6 +519,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
        back. See `foldInLocalWrites`. */
     flight.current?.dropped.add(threadId);
     flight.current?.written.delete(threadId);
+    unseen.current.delete(threadId);
     setSummaries((prev) => prev.filter((s) => s.id !== threadId));
   }, []);
 

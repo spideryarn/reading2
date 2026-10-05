@@ -160,6 +160,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/structure-whole-document/preflight.ts":
     "Reads GET /api/v1/models immediately before a paid run, to check that each arm's model really has the effort its arm asks for — OpenRouter maps an unsupported level onto the nearest one rather than refusing it, so the alternative is a results file labelled with an effort that never ran. Costs nothing and buys no inference.",
+  "evals/command-suggest/run.ts":
+    "The command-suggest eval. Every paid call in it is production's own `suggestCommands`, which goes through `openRouterJson(\"command-suggest\", …)` inside the eval's ledger scope, so it is on the seam and in the ledger. What the scan sees is the host's name in a wrapper round `fetch` that only reads the reply the seam's request got back, to keep the model's raw answer and its cost for the checks and the budget stop. It makes no request of its own.",
   "evals/long-structure/calls.ts":
     "The long-structure eval's metered call. Every paid call in it is `streamMessage(\"structure\", …)` inside a `collectSpend` scope of kind `eval`, so it is on the seam and in the ledger. What the scan sees is one GET /api/v1/models, read once a run for the model's context window, to refuse a top-level request whose input would not fit before it is paid for. Costs nothing and buys no inference.",
   "evals/long-structure/key-room.ts":

@@ -16,7 +16,7 @@
  *
  * Harness: tests/chat-arrival-race.test.ts's.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ThreadSummary } from "../src/types.js";
@@ -135,6 +135,109 @@ describe("asking for the summaries again", () => {
     await act(async () => api().refresh());
     await answer(1, [summary(B)]);
     expect(ids()).toEqual([B]);
+  });
+
+  /* "No longer has" needs the server to have had it. A conversation added
+     here before the refetch went out, whose first question was refused or
+     whose insert the list was read ahead of, is in no answer, and the floating
+     dialog is drawn from its row.
+     docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md */
+  it("keeps a conversation added here that the server has never listed, until it does", async () => {
+    await mount();
+    await answer(0, [summary(A)]);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(1, [summary(A)]);
+    expect(ids(), "added before the flight, and never the server's to drop").toEqual([A, C]);
+
+    /* Once an answer names it, it is the server's like any other. */
+    await act(async () => api().refresh());
+    await answer(2, [summary(A), summary(C)]);
+    await act(async () => api().refresh());
+    await answer(3, [summary(A)]);
+    expect(ids()).toEqual([A]);
+  });
+
+  it("does not bring back a never-listed conversation the reader dropped", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().drop(C));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("takes the server's first confirmed copy when the optimistic add preceded the fetch", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C, { title: "optimistic", lastLine: "" })));
+    await act(async () => api().refresh());
+    await answer(1, [summary(C, { title: "confirmed", lastLine: "the answer", turns: 2 })]);
+    expect(api().summaries).toEqual([summary(C, { title: "confirmed", lastLine: "the answer", turns: 2 })]);
+  });
+
+  it("does not make an already confirmed id unseen again when add replaces it", async () => {
+    await mount();
+    await answer(0, [summary(C)]);
+    await act(async () => api().add(summary(C, { title: "local replacement" })));
+    await act(async () => api().refresh());
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+  });
+
+  it("does not confirm an unseen id from a superseded response", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await act(async () => api().refresh());
+    await answer(2, []);
+    await answer(1, [summary(C)]);
+    await act(async () => api().refresh());
+    await answer(3, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("keeps an unseen id through a failed refresh and the next empty response", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await act(async () => asked[1]?.reject(new Error("offline")));
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("resets both unseen and confirmed ids for another article", async () => {
+    await mount();
+    await answer(0, [summary(C)]);
+    await act(async () => api().add(summary(A)));
+    await mount("another-piece");
+    await answer(1, []);
+    expect(ids()).toEqual([]);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+  });
+
+  it("keeps the same reconciliation under StrictMode's repeated effects and updaters", async () => {
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness, { slug: "a-piece" }))));
+    expect(asked).toHaveLength(2);
+    await answer(1, []);
+    await act(async () => api().add(summary(C)));
+    await act(async () => api().refresh());
+    await answer(0, [summary(C)]);
+    await answer(2, []);
+    expect(ids()).toEqual([C]);
+    await act(async () => api().refresh());
+    await answer(3, [summary(C, { title: "confirmed" })]);
+    expect(api().summaries[0]?.title).toBe("confirmed");
+    await act(async () => api().refresh());
+    await answer(4, []);
+    expect(ids()).toEqual([]);
   });
 
   it("keeps what the reader did while it was in the air: an add, a touch and a drop", async () => {

@@ -21,6 +21,16 @@ describe("isSendEnter", () => {
     expect(isSendEnter(key({ key: "Enter", shiftKey: true }))).toBe(false);
   });
 
+  /* A held Enter repeats. When the first press moved the caret into a box that
+     already holds a question (a handoff to Chat), the repeat would send it:
+     one press, two actions. docs/postmortems/261005o. */
+  it("refuses a held Enter's repeats, on a DOM event and on a React-shaped one", () => {
+    expect(isSendEnter(key({ key: "Enter", repeat: true }))).toBe(false);
+    expect(isSendEnter({ key: "Enter", shiftKey: false, repeat: true })).toBe(false);
+    const held = key({ key: "Enter", repeat: true });
+    expect(isSendEnter({ key: "Enter", shiftKey: false, nativeEvent: held })).toBe(false);
+  });
+
   it("is only Enter", () => {
     expect(isSendEnter(key({ key: "a" }))).toBe(false);
   });

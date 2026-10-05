@@ -83,7 +83,8 @@ interface KeyPress {
   shiftKey: boolean;
   keyCode?: number;
   isComposing?: boolean;
-  nativeEvent?: { isComposing?: boolean };
+  repeat?: boolean;
+  nativeEvent?: { isComposing?: boolean; repeat?: boolean };
 }
 
 /**
@@ -104,7 +105,29 @@ export function isImeComposing(e: Pick<KeyPress, "keyCode" | "isComposing" | "na
  * that sends, so it sends here too. Paragraph boxes (Feedback, Comment, …) do
  * not use this — Enter is their newline. docs/project/keyboard.md § Enter in a
  * text box.
+ *
+ * **Not a held Enter's repeats.** One press is one action. A press that hands
+ * a question to Chat moves the caret into Chat's box, already full, and the
+ * same key still held would then send it: something paid for that nobody
+ * pressed Send on. No box is protected by its neighbour refusing repeats, since
+ * the repeat arrives wherever the caret now is, so the refusal is here, for
+ * every box that sends. docs/postmortems/261005o-a-held-key-becomes-a-new-action-after-focus-moves.md.
  */
 export function isSendEnter(e: KeyPress): boolean {
+  if (isRepeat(e)) return false;
   return e.key === "Enter" && !e.shiftKey && !isImeComposing(e);
+}
+
+/**
+ * **An Enter that would have sent, but is a held key repeating.** It sends
+ * nothing (above). A box that is the far end of a handoff also cancels it, so
+ * the key the reader is still holding does not fill the question it just
+ * landed in with blank lines.
+ */
+export function isHeldSendEnter(e: KeyPress): boolean {
+  return isRepeat(e) && e.key === "Enter" && !e.shiftKey && !isImeComposing(e);
+}
+
+function isRepeat(e: Pick<KeyPress, "repeat" | "nativeEvent">): boolean {
+  return e.repeat === true || e.nativeEvent?.repeat === true;
 }

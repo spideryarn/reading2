@@ -344,7 +344,7 @@ describe("the sharing card, on the page that owns it", () => {
        to begin with: a single label could be satisfied by a column drawing one
        chip and losing the rest.
        docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
-    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Remember"]));
+    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Learn"]));
     expect(under("Anyone who opens it gets these")).toContain("Search");
   });
 

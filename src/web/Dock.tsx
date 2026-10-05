@@ -981,22 +981,19 @@ const MODES_UI = [
     group: "input",
   },
   /* Last, straight after Chat — the end of the input run (Search, Chat,
-     Remember), and Greg put Chat *"just before Recall"* on 2026-09-29
+     Learn), and Greg put Chat *"just before Recall"* on 2026-09-29
      (SPIDERYARN-READING2-4E). The ordering runs from the article restated,
-     through the ways into it, to the conversation about it. Remember
+     through the ways into it, to the conversation about it. Learn
      is the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
      article's own words run out. docs/plans/260827ah-review-mode.md.
 
      **Its description is doing more work than any other in the catalog**
-     (src/mode-catalog.ts), and it has to keep doing it. "Remember" (renamed from "Review" on 2026-09-01)
-     suggests two things this mode is not: saved memories you can go back to,
-     and spaced repetition. Neither exists — nothing is stored for later and
-     nothing comes back on a schedule; the reader talks, and the model shows
-     them where their account and the piece come apart. That is the named cost
-     of the rename, so if this line is ever shortened, the denial is the part to
-     keep.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+     (src/mode-catalog.ts), and it has to keep doing it. *Learn* can suggest a
+     course, while this is four small ways to take one piece in and think it
+     through; the description names the parts and denies a course or
+     flashcards. It was *Remember* from 2026-09-01 to 2026-10-05; both names'
+     trade-offs are in the two rename plans, 260901d and 261005l. */
   {
     mode: "remember",
     group: "input",

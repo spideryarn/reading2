@@ -417,7 +417,6 @@ bands picked from the words of the body the request sends** (`SIMPLE_BANDS`, `ba
 The plan, the option passed over and Sol's reviews are
 [261005b](../plans/261005b-summary-length-follows-the-length-of-the-piece.md).
 
-<<<<<<< HEAD
 ### Written for someone who has not read it (since 2026-10-05)
 
 > The brief summary is quite good, but the fuller summary often is hard for me to understand. And I
@@ -470,7 +469,7 @@ The plan, the section's text and GPT Sol's reviews are
 [261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md);
 the research is
 [261005c](../research/261005c-what-makes-a-longer-summary-followable-by-someone-who-has-not-read-the-piece.md).
-=======
+
 ### A slightly longer Brief (since 2026-10-05)
 
 > maybe Brief could be ever so slightly longer but not much
@@ -500,7 +499,6 @@ is the same for every piece, and nothing else in its prompt moved.
 
 The measurement is
 [261005a § A slightly longer Brief](../investigations/261005a-summary-length-bands-measured.md#a-slightly-longer-brief-round-three).
->>>>>>> origin/dev
 
 ### Bold and bullets (since 2026-10-04)
 

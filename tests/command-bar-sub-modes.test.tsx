@@ -155,7 +155,7 @@ const dialog = (): HTMLDialogElement => {
 const input = (): HTMLInputElement => dialog().querySelector("input.cmdbar-input") as HTMLInputElement;
 const rows = (): HTMLElement[] => [...dialog().querySelectorAll<HTMLElement>('[role="option"]')];
 const subRows = (): HTMLElement[] => rows().filter((r) => r.dataset.kind === "submode");
-/** A sub-mode row's whole visible name, parent and all: `Remember › Quiz`. */
+/** A sub-mode row's whole visible name, parent and all: `Learn › Quiz`. */
 const fullName = (row: HTMLElement): string =>
   [row.querySelector(".cmdbar-parent")?.textContent, row.querySelector(".cmdbar-name")?.textContent]
     .filter(Boolean)
@@ -193,7 +193,7 @@ describe("which sub-mode rows the bar offers", () => {
     type("quiz");
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
-    expect(fullName(first as HTMLElement)).toBe("Remember › Quiz");
+    expect(fullName(first as HTMLElement)).toBe("Learn › Quiz");
   });
 
   it("offers Tutorial first when the reader types `tutorial`", () => {
@@ -202,7 +202,7 @@ describe("which sub-mode rows the bar offers", () => {
     type("tutorial");
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
-    expect(fullName(first as HTMLElement)).toBe("Remember › Tutorial");
+    expect(fullName(first as HTMLElement)).toBe("Learn › Tutorial");
   });
 
   it("offers Explore first when the reader types `explore`", () => {
@@ -211,7 +211,7 @@ describe("which sub-mode rows the bar offers", () => {
     type("explore");
     const first = rows()[0];
     expect(first?.dataset.kind).toBe("submode");
-    expect(fullName(first as HTMLElement)).toBe("Remember › Explore");
+    expect(fullName(first as HTMLElement)).toBe("Learn › Explore");
   });
 
   it("offers Illustrated when the reader types `illus`", () => {
@@ -262,11 +262,11 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
     /* Remember is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
        three of its four parts; Explore is still behind the switch. */
-    expect(modeRows).toContain("Remember");
-    expect(names.filter((n) => n.startsWith("Remember"))).toEqual([
-      "Remember › Recall",
-      "Remember › Tutorial",
-      "Remember › Quiz",
+    expect(modeRows).toContain("Learn");
+    expect(names.filter((n) => n.startsWith("Learn"))).toEqual([
+      "Learn › Recall",
+      "Learn › Tutorial",
+      "Learn › Quiz",
     ]);
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
@@ -275,13 +275,19 @@ describe("which sub-mode rows the bar offers", () => {
     expect(names).toContain("Summary › Thread");
   });
 
-  it("finds a sub-mode by the compound name a reader would say", () => {
+  it("ranks the renamed mode and its sub-modes for current and former names", () => {
     reading();
     openBar();
     for (const [query, name] of [
+      ["learn", "Learn"],
+      ["remember", "Learn"],
+      ["recall", "Learn › Recall"],
+      ["quiz", "Learn › Quiz"],
       ["illustrated diagram", "Diagram › Illustrated"],
-      ["quiz mode", "Remember › Quiz"],
-      ["remember quiz", "Remember › Quiz"],
+      ["quiz mode", "Learn › Quiz"],
+      /* The old name still finds the row (command-match.ts § FORMER_PARENT_NAMES). */
+      ["remember quiz", "Learn › Quiz"],
+      ["learn quiz", "Learn › Quiz"],
     ] as const) {
       type(query);
       expect(rows().map(fullName)[0], query).toBe(name);
@@ -323,9 +329,9 @@ describe("which sub-mode rows the bar offers", () => {
         }
         openBar();
         const names = subRows().map(fullName);
-        expect(names.includes("Remember › Explore"), search).toBe(offered);
+        expect(names.includes("Learn › Explore"), search).toBe(offered);
         expect(names).toEqual(expect.arrayContaining([
-          "Remember › Recall", "Remember › Tutorial", "Remember › Quiz",
+          "Learn › Recall", "Learn › Tutorial", "Learn › Quiz",
         ]));
         act(() => dialog().close());
       }
@@ -350,14 +356,14 @@ describe("the `generates` marker on a sub-mode row", () => {
   it("is on Quiz and Illustrated and Claims, and off Recall, Criteria and Mirror", () => {
     reading();
     openBar();
-    expect(marked("Remember › Quiz")).toBe(true);
+    expect(marked("Learn › Quiz")).toBe(true);
     expect(marked("Diagram › Illustrated")).toBe(true);
     expect(marked("Referee › Claims")).toBe(true);
     /* Thread arms nothing and still says it: its band writes on arrival. */
     expect(marked("Summary › Thread")).toBe(true);
     expect(subModeTarget(THREAD)).toBeNull();
     expect(marked("Summary › Brief")).toBe(true);
-    expect(marked("Remember › Recall")).toBe(false);
+    expect(marked("Learn › Recall")).toBe(false);
     expect(marked("Referee › Criteria")).toBe(false);
     expect(marked("Referee › Mirror")).toBe(false);
   });
@@ -462,7 +468,7 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     reading({ onMode });
     openBar();
     type("recall");
-    const recall = subRows().find((r) => fullName(r) === "Remember › Recall");
+    const recall = subRows().find((r) => fullName(r) === "Learn › Recall");
     act(() => recall?.click());
     expect(onMode).toHaveBeenCalledWith("remember", { mode: "remember", view: "recall" });
     expect(pendingActivation("a-piece", "quiz")).toBeNull();
@@ -498,7 +504,7 @@ describe("Enter on a sub-mode row, on the reading view", () => {
   it("the Reader harness also clears a Chat thread on a plain return to retained Quiz", async () => {
     readingThroughReader("?mode=chat&remember=quiz&thread=spya-k3m9qt");
     const push = vi.spyOn(history, "pushState");
-    const remember = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Remember"]');
+    const remember = host.querySelector<HTMLButtonElement>('button[role="radio"][aria-label="Learn"]');
     expect(remember).not.toBeNull();
     act(() => remember?.click());
     await until(() => new URLSearchParams(location.search).get("mode") === "remember");
