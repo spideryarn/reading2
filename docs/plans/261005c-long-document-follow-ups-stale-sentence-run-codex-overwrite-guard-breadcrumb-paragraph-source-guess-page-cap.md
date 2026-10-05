@@ -183,6 +183,8 @@ write abandoned mid-flight needs a persistence policy nobody has written.
   first words of a paragraph…" in the breadcrumb, by design. Keep, or show the chapter alone?
   Recommendation: show the chapter alone; the opening words are a navigation aid in Structure, not
   a section name.
+  **Decided: the chapter alone** — Greg, 2026-10-05: "use your judgment"; the Overseer took the
+  recommendation. Queued.
 
 ## Log
 
