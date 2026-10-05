@@ -259,6 +259,65 @@
   .dbt-group-claim > .dbt-claim-chat { min-height: 2.5rem; }
 }
 
+/* **Look at the debate from an angle** (DebatePanel.tsx § Angles, plan
+   261005k): the owner's box at the top of the panel and *Your angles* under
+   it.
+
+   The box, its row and its button are Glossary's *Look up a term*
+   (footnotes.css § `.gloss-ask`), which rules it off below and leaves room for
+   the band's (i) (glossary.css). Set here: the button keeps its words on one
+   line and gives the box the rest, and on a coarse pointer the button and each
+   line of the list are a finger tall (docs/project/touch.md). The field's 1rem
+   floor on a touch screen is narrow-window.css's, for every field.
+
+   A line of the list is the claim's mark again (`.dbt-claim-chat` above): an
+   icon, the words on one line cut with an ellipsis, and a count. The words are
+   the reader's and take their face from voices.css (`.voice-reader`); the
+   quotation marks and the count are ours. */
+.dbt-lens-send { flex: none; white-space: nowrap; }
+.dbt-angles { margin-top: 0.35rem; }
+.dbt-angles-head { padding-top: 0.15rem; }
+.dbt-angles-list { margin: 0; padding: 0; list-style: none; }
+.dbt-angle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.dbt-angle > svg { flex: none; color: var(--ink-faint); }
+.dbt-angle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.dbt-angle:active { color: var(--ink); }
+@media (hover: hover) {
+  .dbt-angle:hover { color: var(--ink); }
+}
+.dbt-angle-quoted {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbt-angle-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+@media (pointer: coarse) {
+  .dbt-lens-send,
+  .dbt-angle,
+  .dbt-angles-more { min-height: 2.5rem; }
+}
+
 /* **The empty sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or

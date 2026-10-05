@@ -43,6 +43,7 @@ import {
   type RegistryReading,
 } from "../tools/overseer/accounts.js";
 import { releaseLock, takeLock } from "../tools/overseer/lock.js";
+import { gitCommonDir } from "./worktree-port.js";
 import {
   readCodexAuth,
   type CodexAuthReading,
@@ -95,10 +96,23 @@ export interface ClaudeAccountsDeps {
   repoRoot: string;
 }
 
-function primaryRepoRoot(checkoutRoot: string): string {
-  const marker = `${path.sep}.claude${path.sep}worktrees${path.sep}`;
-  const markerAt = checkoutRoot.indexOf(marker);
-  return markerAt === -1 ? checkoutRoot : checkoutRoot.slice(0, markerAt);
+/**
+ * The primary checkout this script's own checkout belongs to — what gets seeded
+ * into a pool home's Codex trust list, so it has to be the repository and not
+ * whichever worktree `add` happened to be run from.
+ *
+ * Asked of git. It used to cut the path at `/.claude/worktrees/`, so from a tree
+ * under `/var/tmp/spideryarn-worktrees/` (every new one on the box since
+ * 2026-10-05) it answered with the worktree itself and trusted a directory that
+ * is deleted when the work lands. A git that cannot answer leaves the checkout
+ * as given, which is what the old code did for anything it did not recognise.
+ */
+export function primaryRepoRoot(checkoutRoot: string, commonDir: (cwd: string) => string = gitCommonDir): string {
+  try {
+    return path.dirname(commonDir(checkoutRoot));
+  } catch {
+    return checkoutRoot;
+  }
 }
 
 const realDeps = (): ClaudeAccountsDeps => {

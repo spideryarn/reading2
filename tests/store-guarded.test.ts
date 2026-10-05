@@ -147,6 +147,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-chat.js", "pgChatStore", "chat"],
     ["../src/store/pg-searches.js", "pgSearchStore", "searches"],
     ["../src/store/pg-comments.js", "pgCommentStore", "comments"],
+    ["../src/store/pg-share-link.js", "pgShareLinkStore", "share-link"],
     ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
     ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
     ["../src/store/pg-shelf-terms.js", "pgShelfTermsStore", "shelf-terms"],
@@ -390,6 +391,8 @@ describe("no Postgres store is selected without a guard", () => {
       "pgRefereeClaimsStore",
       "pgRefereeCriteriaStore",
       "pgSearchStore",
+      /* The private link, 2026-10-05: its parameters are the link's key. */
+      "pgShareLinkStore",
       "pgShelfStore",
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */

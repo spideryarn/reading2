@@ -137,6 +137,18 @@ function json(body: unknown, status = 200): Response {
  * in one microtask chain with no macrotask between frames.
  */
 let burst: number | null = null;
+
+/**
+ * **What the server has**, so the list it is asked for says so. Since
+ * 2026-10-05 the reading view asks for the summaries again when an answer
+ * stops arriving (useChatAnchors.ts § `refresh`), and a stub that went on
+ * answering "no conversations" after taking a POST was a server that had lost
+ * the thread: the dialog closed under every case here.
+ * docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md
+ */
+const stored: Record<string, unknown>[] = [];
+/** When set, the chat POST is refused with this message and nothing is stored. */
+let refuse: string | null = null;
 const BURST_WORD = "word ";
 
 function chatStream(threadId: string): Response {
@@ -180,11 +192,24 @@ function reply(url: string, method: string, init?: RequestInit): Response {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     posts.push({ url, body });
     const id = typeof body.threadId === "string" ? body.threadId : "spya-srvthr";
+    if (refuse !== null) return json({ error: refuse }, 503);
+    stored.push({
+      id,
+      title: "About the paragraph",
+      createdAt: "2026-10-05T12:00:00.000Z",
+      updatedAt: "2026-10-05T12:00:00.000Z",
+      kind: "chat",
+      turns: 1,
+      ...(body.anchor ? { anchor: body.anchor } : {}),
+    });
     return chatStream(id);
   }
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
-  if (url.startsWith("/api/chat/")) return json({ threads: [] });
+  /* The summaries are what the reading view asks for again. The full list is
+     asked for once per mount of the dialog, before anything here is stored. */
+  if (url.startsWith("/api/chat/") && url.includes("summary=1")) return json({ threads: stored });
+  if (url.startsWith("/api/chat/")) return json({ threads: stored.map((t) => ({ ...t, messages: [] })) });
   if (url.startsWith("/api/glossary/")) return json(GLOSSARY);
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -205,6 +230,8 @@ beforeEach(() => {
   session.user = { id: "owner-1", email: "greg@example.com" };
   stream = null;
   burst = null;
+  refuse = null;
+  stored.length = 0;
   posts.length = 0;
   errors = [];
   thrown = [];
@@ -374,6 +401,23 @@ describe("a '?' answer streaming into the floating dialog", () => {
       });
       await settle(3);
     }
+    expect(loops()).toEqual([]);
+  });
+
+  /* **The server never had this one.** A refused first question stops
+     arriving too, so the list is asked for again, and the answer has no row
+     for a conversation the server did not make. The dialog is drawn from that
+     row (Reader.tsx § `overlay`), so dropping it took the dialog away along
+     with the only words saying why.
+     docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md */
+  it("keeps the dialog, and its reason, when the first question is refused", async () => {
+    refuse = "The model is not answering just now.";
+    await open("");
+    await press("spya-bbbbbb");
+    expect(posts, "the press must have sent").toHaveLength(1);
+    await settle();
+    expect(host.querySelector(".chat-dialog"), "the dialog must still be open").toBeTruthy();
+    expect(host.querySelector(".chat-dialog")?.textContent).toContain("The model is not answering just now.");
     expect(loops()).toEqual([]);
   });
 

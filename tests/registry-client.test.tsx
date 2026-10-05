@@ -343,7 +343,7 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
 }
 
 /** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 describe("a Debate row on screen", () => {
   it("draws the registry by-line and names the exact fields it supplied", async () => {

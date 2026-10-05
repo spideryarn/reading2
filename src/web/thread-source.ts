@@ -17,7 +17,7 @@
  */
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
-import type { ChatThread, SingleThreadKind, ThreadKind } from "../types.js";
+import { type ChatThread, isLensOrigin, type SingleThreadKind, type ThreadKind } from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type RememberView } from "./params.js";
 import { REMEMBER_SUB_MODES } from "./sub-modes.js";
 
@@ -34,6 +34,12 @@ export interface ThreadSource {
   /** The item's or the passage's words, for the tooltip's second line. */
   quote?: string;
   /**
+   * Whose words `quote` is, for its face (docs/project/fonts.md), when they
+   * are not the article's: an angle typed into Debate's box is the reader's.
+   * Absent means the author's.
+   */
+  voice?: "reader";
+  /**
    * **The part of Remember this conversation lives in**, on a Remember row
    * and on no other. A row with this is not opened in Chat's band: a press
    * goes to Remember, and it has no rename or delete (D5).
@@ -46,6 +52,9 @@ export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, 
 
 /** What the tooltip says for a chat started from one of Debate's claims. */
 export const SOURCE_DEBATE_CLAIM = "Started from a claim in Debate";
+/** And for one started from an angle the reader typed into Debate's box (plan 261005k, A). */
+export const SOURCE_DEBATE_LENS = "Started from an angle in Debate";
+
 /** …and for a chat anchored to a block or to words in one: the "?" and a comment's question. */
 export const SOURCE_PASSAGE = "About a passage";
 
@@ -76,7 +85,10 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
   if (origin) {
     switch (origin.mode) {
       case "debate":
-        return { from: "debate", mode: "debate", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
+        /* Two shapes under one mode, so the mode does not say which. */
+        return isLensOrigin(origin)
+          ? { from: "debate", mode: "debate", label: SOURCE_DEBATE_LENS, quote: origin.lens, voice: "reader" }
+          : { from: "debate", mode: "debate", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
       default:
         return origin.mode satisfies never;
     }

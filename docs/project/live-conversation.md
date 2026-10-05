@@ -68,13 +68,13 @@ microphone opened, a response event is not proof that sound played, and the prev
 not proof that Chat displayed or stored it. The repair and its evidence are in
 [260906f](../plans/260906f-repair-realtime-chat.md).
 
-Keep the existing Live control in an open Remember conversation too; it shares this reading
-companion. Remember-specific spoken reply stances are not implemented. The earlier claim below
+Keep the existing Live control in an open Recall conversation too; it shares this reading
+companion. Recall-specific spoken reply stances are not implemented. The earlier claim below
 that this control was not built was stale: `94ddccd42` deliberately labelled it in that composer,
 and `028676677` preserved it through the Review-to-Remember rename. New list-level spoken
 conversations start in Chat.
 
-**A live conversation started in Remember's empty conversation is stored as Remember.** Remember
+**A live conversation started in Recall's empty conversation is stored as a `remember` thread.** Recall
 opens straight into a conversation that exists only in the tab, so pressing Live there makes the
 first spoken exchange the write that creates it. The spoken append names the kind the tab has for
 it (`SpokenTurn.kind` in [`src/chat.ts`](../../src/chat.ts)), used only when creating the thread.
@@ -571,7 +571,7 @@ one still running.
   in total, so a forgotten tab bills minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
   clock — a session that kept itself alive by answering its own last question would be exactly the
   case the cap is for.
-- **Live conversation in the comment dialog.** Chat and the existing Remember composer share
+- **Live conversation in the comment dialog.** Chat and the existing Recall composer share
   the thread-backed controls; comments do not yet have them.
 - **On GPT-Live:** tap to talk, microphone placement, and anything that finishes tool work with the
   tab closed. Speaker segments are not stored as rows — pairs are a projection of them, and segment

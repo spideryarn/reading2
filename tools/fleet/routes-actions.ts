@@ -137,6 +137,7 @@ import {
   type RateLimiter,
   type RouteErrorCode,
 } from "./routes-steer.js";
+import { externalWorktreeRoot, isWorktreeOfCheckout } from "../../scripts/worktree-roots.js";
 import type { FleetStatus } from "./status.js";
 import type { Delivery, RefusalCode, SteerTarget } from "./steer.js";
 
@@ -1135,7 +1136,7 @@ export function tailOf(text: string, lines = 4, max = 400): string {
  * Did this step pass its gate?
  *
  * The `never` on `pass.kind` is doing the same job as the one in
- * `describeAction`: a fourth kind of gate in actions.ts stops this compiling,
+ * `describeAction`: a new kind of gate in actions.ts stops this compiling,
  * rather than falling through to whichever branch happened to be last.
  *
  * **A timeout or a spawn failure is never a pass**, including for
@@ -1165,6 +1166,16 @@ export function judgeStep(step: Step, r: StepRun): { status: StepStatus; verdict
       return found
         ? { status: "passed", verdict: `its output contains '${wanted}'` }
         : { status: "failed", verdict: `its output does not contain '${wanted}'` };
+    }
+    case "stdout-has-record": {
+      if (!exitedZero) return { status: "failed", verdict: `${howItEnded}, so its output says nothing` };
+      const wanted = step.pass.record;
+      // Git's -z porcelain leaves path bytes alone. Spaces and newlines are
+      // part of a path, so neither trimming nor line splitting is safe here.
+      const found = r.stdout.split("\0").slice(0, -1).includes(wanted);
+      return found
+        ? { status: "passed", verdict: `its output contains the exact record '${wanted}'` }
+        : { status: "failed", verdict: `its output does not contain the exact record '${wanted}'` };
     }
     case "best-effort":
       return exitedZero
@@ -2015,12 +2026,15 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
    *
    * The two plan functions get their `primaryDir` from us and everything else
    * from the row the person tapped. `worktreeDir` gets one bound this file adds
-   * on top of `planRemoveWorktree`'s: it must be under THIS checkout's
-   * `.claude/worktrees/`. `isUnderWorktreesDir` accepts that shape anywhere on
-   * the filesystem, which is right for a general-purpose guard and too loose
-   * for a route — step 2 runs `worktree:sweep` in our own checkout, so a
-   * worktree belonging to some other repo could never have been removed by it
-   * anyway, and refusing here says so instead of failing halfway.
+   * on top of `planRemoveWorktree`'s: an in-repo tree must be under THIS
+   * checkout's `.claude/worktrees/`. `isUnderWorktreesDir` accepts that shape
+   * anywhere on the filesystem, which is right for a general-purpose guard and
+   * too loose for a route. Removal runs in the checked directory, so the
+   * registration gate must prove it belongs to this repository first.
+   *
+   * The external root (`/var/tmp/spideryarn-worktrees/` on the box) gives no
+   * such bound: a path there says which tree, not whose. That is the plan's
+   * first step, which asks git — scripts/worktree-roots.ts has the list.
    */
   function planFor(req: SessionActionRequest, action: EnactedAction): { ok: true; plan: Plan } | { ok: false; code: ActionErrorCode; why: string } {
     const primaryDir = deps.primaryDir();
@@ -2028,12 +2042,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       if (req.worktreeDir === null || req.branch === null) {
         return { ok: false, code: "bad-request", why: "removing a worktree needs worktreeDir and branch, from the row you tapped" };
       }
-      const root = `${primaryDir.replace(/\/+$/, "")}/.claude/worktrees/`;
-      if (!req.worktreeDir.startsWith(root)) {
+      if (!isWorktreeOfCheckout(req.worktreeDir, primaryDir)) {
         return {
           ok: false,
           code: "plan-refused",
-          why: `'${req.worktreeDir}' is not under ${root}, and this server only removes worktrees of the checkout it is running from`,
+          why: `'${req.worktreeDir}' is not a plain path under ${primaryDir.replace(/\/+$/, "")}/.claude/worktrees/ or ${externalWorktreeRoot()}/, and this server only removes worktrees of the checkout it is running from`,
         };
       }
       const p = planRemoveWorktree(action, { dir: req.worktreeDir, branch: req.branch, primaryDir });

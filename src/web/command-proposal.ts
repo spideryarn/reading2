@@ -432,6 +432,17 @@ export interface CommandExecutor {
    * `hasQuickSearch`), because only the owner's band can ask.
    */
   readonly quickSearch?: ((words: string) => ActionOutcome) | undefined;
+  /**
+   * **Put a question about the debate, seen from this angle, in Chat's box** —
+   * since 2026-10-05, plan 261005k: what the bar's suggested lens row presses.
+   * The reading view's own handoff (Reader.tsx § `debateThroughLensInChat`),
+   * the one Debate's box calls, so nothing is sent until the reader presses
+   * Send. The bar's own, like `quickSearch`: chat's chips never see it.
+   *
+   * **Absent means not offered**: handed over for the owner alone, because
+   * Chat is the owner's.
+   */
+  readonly askThroughLens?: ((lens: string) => ActionOutcome) | undefined;
 }
 
 /** One press per band that offers an append now; a band not named offers none. */

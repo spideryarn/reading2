@@ -70,6 +70,7 @@ const SLUG = "a-piece";
 const CLAIM: ThreadOrigin = { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
 const OTHER: ThreadOrigin = { mode: "debate", blockId: "spya-cccccc", quote: "Memories survive metamorphosis" };
 const SEED = "Check this claim";
+const LENS: ThreadOrigin = { mode: "debate", lens: "replication attempts" };
 
 /** The server names the rows, answers, and finishes. */
 function answered(threadId: string, origin?: unknown): Response {
@@ -280,6 +281,24 @@ describe("a conversation handed over with an origin", () => {
     expect(posts[0]?.body.origin).toEqual(CLAIM);
   });
 
+  it("documents the inherited limit: a lens handoff displaces an unsent chat that cannot be reopened after a mode change", async () => {
+    await mount(null);
+    const displaced = open();
+    drafts().setThread(displaced, "My unfinished question");
+    await show({ slug: SLUG, question: "Ask about replication", origin: LENS });
+    expect(open()).not.toBe(displaced);
+    expect(drafts().thread(displaced), "kept while the band is still mounted").toBe("My unfinished question");
+    expect(prop<ChatThread[]>("threads").some((t) => t.id === displaced)).toBe(true);
+
+    await leave();
+    await show(null);
+    expect(drafts().origin(open()), "only the selected lens draft is restored").toEqual(LENS);
+    expect(drafts().thread(open())).toBe("Ask about replication");
+    expect(drafts().thread(displaced), "the words survive but have no row to open").toBe("My unfinished question");
+    expect(prop<ChatThread[]>("threads").some((t) => t.id === displaced)).toBe(false);
+    expect(posts).toHaveLength(0);
+  });
+
   it("forgets the origin with a deleted conversation", async () => {
     await mount({ slug: SLUG, question: SEED, origin: CLAIM });
     const fresh = open();
@@ -381,8 +400,8 @@ describe("Live on a handed-over conversation", () => {
     expect(panel?.live, "the control").toBeDefined();
   });
 
-  it("is not offered, and its start is refused, until the first typed Send has landed", async () => {
-    await mount({ slug: SLUG, question: SEED, origin: CLAIM });
+  it.each([CLAIM, LENS])("is not offered, and its start is refused, until the first typed Send has landed (%j)", async (origin) => {
+    await mount({ slug: SLUG, question: SEED, origin });
     const fresh = open();
     expect(panel?.live, "no Live control while the origin is pending").toBeUndefined();
     let started: string | undefined = "unset";
@@ -395,7 +414,7 @@ describe("Live on a handed-over conversation", () => {
     expect(open(), "the conversation is still the open one").toBe(fresh);
 
     await send(SEED);
-    expect(posts[0]?.body.origin).toEqual(CLAIM);
+    expect(posts[0]?.body.origin).toEqual(origin);
     expect(panel?.live, "offered once the server has the thread and its origin").toBeDefined();
   });
 

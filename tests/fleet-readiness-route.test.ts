@@ -73,6 +73,8 @@ describe("the readiness composition", () => {
   const retention = (over: { liveSessions?: () => { names: Set<string> } | { why: string } } = {}) =>
     makeReadinessRetention({
       primary,
+      // Not the box's own: these are about the store, and a real tree's logs are not theirs to read.
+      externalRoot: null,
       dir,
       liveSessions: over.liveSessions ?? (() => ({ names: new Set<string>() })),
     });
@@ -94,7 +96,7 @@ describe("the readiness composition", () => {
   it("counts a store that would not open as unreadable, not as a quiet day", async () => {
     /* The one state where NOTHING is being recorded must not render like a day
        on which nothing happened. */
-    const broken = makeReadinessRetention({ primary, dir: "relative/nope" });
+    const broken = makeReadinessRetention({ primary, externalRoot: null, dir: "relative/nope" });
     const snapshot = await broken.collect();
     expect(snapshot.diagnostics.storeRefused).not.toBeNull();
     expect(snapshot.verdict.kind).toBe("unknown");

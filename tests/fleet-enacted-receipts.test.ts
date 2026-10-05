@@ -75,7 +75,9 @@ function fakeIo(opts: {
       opts.onRun?.(index);
       if (opts.step !== undefined) return Promise.resolve(opts.step(step, index));
       const pass = step.pass;
-      return Promise.resolve(pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${pass.line}\n` } : OK_STEP);
+      return Promise.resolve(pass.kind === "stdout-has-record"
+        ? { ...OK_STEP, stdout: `${pass.record}\0` }
+        : pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${pass.line}\n` } : OK_STEP);
     },
     listProcesses: () => {
       scans += 1;
@@ -266,11 +268,12 @@ describe("an enacted session run writes its receipt around the plan", () => {
     expect(atFirstStep).toEqual(["accepted", "attempted"]);
 
     const state = first.receipts.get(String(r.json.receiptId));
-    expect(kinds(state)).toEqual(["accepted", "attempted", "progress", "progress", "progress", "outcome"]);
+    expect(kinds(state)).toEqual(["accepted", "attempted", "progress", "progress", "progress", "progress", "outcome"]);
     expect(state?.records.filter((record) => record.kind === "progress")).toMatchObject([
       { step: 0, status: "passed" },
       { step: 1, status: "passed" },
       { step: 2, status: "passed" },
+      { step: 3, status: "passed" },
     ]);
     expect(state?.last).toMatchObject({ kind: "outcome", state: "completed", reason: "plan-passed" });
     if (state === null) return;
@@ -279,30 +282,42 @@ describe("an enacted session run writes its receipt around the plan", () => {
       origin: "enacted",
       state: "completed",
       pending: false,
-      stepsCompleted: 3,
+      stepsCompleted: 4,
       parentReceiptId: null,
       target: { sessionId: SESSION, paneId: PANE, claudeSessionId: CONVERSATION },
     });
-    expect(box.ran).toHaveLength(3);
+    expect(box.ran).toHaveLength(4);
   });
 
   it("a gate that refuses at step k is plan-stopped, and its code names k", async () => {
-    const box = fakeIo({ step: (_step, index) => (index === 1 ? { ...OK_STEP, code: 1, stderr: "unpushed work" } : { ...OK_STEP, stdout: `${BRANCH}\n` }) });
+    // The gate is found by what it runs, not by where it sits: `worktree:check` is k = 2.
+    const box = fakeIo({
+      step: (step) =>
+        step.argv[2] === "worktree:check"
+          ? { ...OK_STEP, code: 1, stderr: "unpushed work" }
+          : step.pass.kind === "stdout-has-record"
+            ? { ...OK_STEP, stdout: `${step.pass.record}\0` }
+          : step.pass.kind === "stdout-has-line"
+            ? { ...OK_STEP, stdout: `${step.pass.line}\n` }
+            : OK_STEP,
+    });
     const first = boot(root(), "e2a2e2a2", { box });
     const r = await post(first.routes, "/api/actions/session", removeBody({ requestId: requestId("enactedstop") }));
     expect(r.json.code).toBe("plan-failed");
     expect(typeof r.json.receiptId).toBe("string");
     const state = first.receipts.get(String(r.json.receiptId));
-    expect(kinds(state)).toEqual(["accepted", "attempted", "progress", "progress", "outcome"]);
-    expect(state?.last).toMatchObject({ kind: "outcome", state: "plan-stopped", reason: "gate-refused", code: "step-1" });
-    expect(box.ran).toHaveLength(2);
+    expect(kinds(state)).toEqual(["accepted", "attempted", "progress", "progress", "progress", "outcome"]);
+    expect(state?.last).toMatchObject({ kind: "outcome", state: "plan-stopped", reason: "gate-refused", code: "step-2" });
+    expect(box.ran).toHaveLength(3);
   });
 
   it("a runPlan that throws is outcome-unknown/threw", async () => {
     const box = fakeIo({
       step: (step, index) => {
         if (index === 1) throw new Error("the step runner exploded");
-        return step.pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${step.pass.line}\n` } : OK_STEP;
+        return step.pass.kind === "stdout-has-record"
+          ? { ...OK_STEP, stdout: `${step.pass.record}\0` }
+          : step.pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${step.pass.line}\n` } : OK_STEP;
       },
     });
     const first = boot(root(), "e3a3e3a3", { box });
@@ -321,8 +336,8 @@ describe("an enacted session run writes its receipt around the plan", () => {
     const again = await post(first.routes, "/api/actions/session", body);
     expect(again.status).toBe(200);
     expect(again.json).toMatchObject({ ok: true, op: "receipt", replay: true });
-    expect(again.json.receipt).toMatchObject({ receiptId: once.json.receiptId, state: "completed", stepsCompleted: 3 });
-    expect(first.box.ran).toHaveLength(3);
+    expect(again.json.receipt).toMatchObject({ receiptId: once.json.receiptId, state: "completed", stepsCompleted: 4 });
+    expect(first.box.ran).toHaveLength(4);
   });
 
   it("a keyed run whose accept cannot land is refused 503 and runs nothing", async () => {

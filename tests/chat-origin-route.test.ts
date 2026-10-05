@@ -154,6 +154,10 @@ async function call(method: "GET" | "POST", url: string, body?: unknown): Promis
 
 const ask = (body: unknown) => call("POST", `/api/chat/${SLUG}`, body);
 const claim = () => ({ mode: "debate", blockId: BLOCK, quote: QUOTE });
+/* The second shape (plan 261005k, A): Debate looked at from an angle the
+   reader typed. Their words, no block and no quote. */
+const LENS = "how it relates to Smith 2019";
+const lens = (words = LENS) => ({ mode: "debate", lens: words });
 
 describe("an origin on the way in", () => {
   it("stores a claim's origin on the thread it creates, and reads it back equal", async () => {
@@ -249,6 +253,131 @@ describe("an origin on the way in", () => {
       expect(await threads()).toHaveLength(0);
     },
   );
+});
+
+/**
+ * **The second shape: a lens** (plan 261005k, A). Both shapes say
+ * `mode: "debate"`, so which one a body is has to be decided by what it
+ * carries, and a body that carries both is neither.
+ */
+describe("a lens origin on the way in", () => {
+  it("stores the lens on the thread it creates, and reads it back equal", async () => {
+    const out = await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(lens());
+    const thread = await stored();
+    expect(thread?.origin).toEqual({ mode: "debate", lens: LENS });
+    expect(thread?.origin && "blockId" in thread.origin, "a lens has no block").toBe(false);
+    expect(thread?.kind, "a lens chat is an ordinary chat").toBe("chat");
+    expect(thread && "anchor" in thread).toBe(false);
+  });
+
+  it("stores the lens trimmed", async () => {
+    await ask({ threadId: THREAD, question: "what do others say?", origin: lens(`  ${LENS}\n`) });
+    expect((await stored())?.origin).toEqual(lens());
+  });
+
+  it("puts a lens origin on the thread's summary", async () => {
+    await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+    const summaries = (await call("GET", `/api/chat/${SLUG}?summary=1`)).body?.threads as ThreadSummary[];
+    expect(summaries.find((t) => t.id === THREAD)?.origin).toEqual(lens());
+  });
+
+  it("accepts a lens at the cap, and refuses one over it without cutting it", async () => {
+    const atCap = await ask({ threadId: THREAD, question: "what?", origin: lens("x".repeat(600)) });
+    expect(atCap.frames[0]?.event).toBe("begin");
+    const over = await ask({ threadId: OTHER_THREAD, question: "what?", origin: lens("x".repeat(601)) });
+    expect(over.status).toBe(413);
+    expect(await stored(OTHER_THREAD), "refused, not stored cut short").toBeUndefined();
+  });
+
+  it.each([
+    ["an empty lens", { mode: "debate", lens: "" }],
+    ["a lens of spaces", { mode: "debate", lens: "  \n " }],
+    ["a lens that is not a string", { mode: "debate", lens: 7 }],
+    ["a lens and a block", { mode: "debate", lens: "an angle", blockId: "spya-aaaaaa" }],
+    ["a lens and a quote", { mode: "debate", lens: "an angle", quote: "some words" }],
+    ["a lens and a whole claim", { mode: "debate", lens: "an angle", blockId: "spya-aaaaaa", quote: "some words" }],
+    ["a lens on a mode nobody has built", { mode: "summary", lens: "an angle" }],
+  ])("refuses %s", async (_name, origin) => {
+    const out = await ask({ threadId: THREAD, question: "what?", origin });
+    expect(out.status).toBe(400);
+    expect(await threads(), "a refused request leaves no thread behind").toHaveLength(0);
+  });
+
+  it("refuses a lens with this article's own block and words too, not only a made-up block", async () => {
+    const out = await ask({ threadId: THREAD, question: "what?", origin: { ...claim(), lens: LENS } });
+    expect(out.status).toBe(400);
+    expect(await threads()).toHaveLength(0);
+  });
+
+  it("never repeats the lens back in an error", async () => {
+    /* The lens is the reader's own words and `httpError` messages are logged. */
+    const secret = "a private angle nobody should log";
+    for (const origin of [
+      { mode: "debate", lens: secret, blockId: BLOCK },
+      { mode: "debate", lens: `${secret}${"x".repeat(601)}` },
+      { mode: "elsewhere", lens: secret },
+    ]) {
+      const out = await ask({ threadId: THREAD, question: "what?", origin });
+      expect([400, 413]).toContain(out.status);
+      expect(JSON.stringify(out.body)).not.toContain("private angle");
+    }
+  });
+
+  it("refuses a lens on a conversation that is not a chat", async () => {
+    const out = await ask({ threadId: THREAD, question: "what?", kind: "explore", origin: lens() });
+    expect(out.status).toBe(400);
+    expect(await threads()).toHaveLength(0);
+  });
+});
+
+describe("a lens and a claim are never the same origin", () => {
+  it("refuses a lens for a thread started from a claim, and a claim for one started from a lens", async () => {
+    await ask({ threadId: THREAD, question: "does it hold up?", origin: claim() });
+    expect((await ask({ threadId: THREAD, question: "and now?", origin: lens() })).status).toBe(409);
+    /* A lens whose words are the claim's is still not the claim. */
+    expect((await ask({ threadId: THREAD, question: "and now?", origin: lens(QUOTE) })).status).toBe(409);
+    expect((await stored())?.origin).toEqual(claim());
+
+    await ask({ threadId: OTHER_THREAD, question: "what do others say?", origin: lens() });
+    expect((await ask({ threadId: OTHER_THREAD, question: "and now?", origin: claim() })).status).toBe(409);
+    expect((await stored(OTHER_THREAD))?.origin).toEqual(lens());
+    expect((await stored(OTHER_THREAD))?.messages, "the refused question was not appended").toHaveLength(2);
+  });
+
+  it("refuses a different lens, and a lens for a thread started without one", async () => {
+    await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+    expect((await ask({ threadId: THREAD, question: "and now?", origin: lens("another angle") })).status).toBe(409);
+    await ask({ threadId: OTHER_THREAD, question: "an ordinary question" });
+    expect((await ask({ threadId: OTHER_THREAD, question: "and now?", origin: lens() })).status).toBe(409);
+    const plain = await stored(OTHER_THREAD);
+    expect(plain && "origin" in plain).toBe(false);
+  });
+
+  it("lets the identical lens through, however it was spaced", async () => {
+    await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+    const out = await ask({ threadId: THREAD, question: "and now?", origin: lens(` ${LENS} `) });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect((await stored())?.origin).toEqual(lens());
+  });
+
+  it("keeps the stored lens through a follow-up, a retry and an edit, none of which may carry one", async () => {
+    const first = await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+    const answerId = first.frames[0]?.data.messageId as string;
+    const questionId = first.frames[0]?.data.questionId as string;
+    expect((await ask({ threadId: THREAD, retry: answerId, origin: lens() })).status).toBe(400);
+    expect((await ask({ threadId: THREAD, edit: questionId, question: "reworded", origin: lens() })).status).toBe(400);
+
+    const retried = await ask({ threadId: THREAD, retry: answerId });
+    expect(retried.frames[0]?.event).toBe("begin");
+    expect(retried.frames[0]?.data.origin, "the begin frame reports the stored origin").toEqual(lens());
+    expect((await stored())?.origin).toEqual(lens());
+
+    const edited = await ask({ threadId: THREAD, edit: questionId, question: "reworded" });
+    expect(edited.frames[0]?.event).toBe("begin");
+    expect((await stored())?.origin).toEqual(lens());
+  });
 });
 
 describe("a thread's origin is set once", () => {
@@ -354,6 +483,54 @@ describe("the origin's columns", () => {
       await refusedBy({ originMode: "debate", originBlockId: "spya-zzzzzz", originQuote: "words" }),
     ).toMatch(/chat_threads_origin_identity_fk/);
   });
+
+  /* Plan 261005k, A, and its review's F7: the lens is a fifth column, and a
+     debate origin is one shape or the other. */
+  it("accepts a plain chat, with no origin column set", async () => {
+    expect(await refusedBy({})).toBeNull();
+  });
+
+  it("accepts a lens: a mode and the lens, and nothing else", async () => {
+    expect(await refusedBy({ originMode: "debate", originLens: "an angle" })).toBeNull();
+  });
+
+  it("refuses a claim and a lens mixed, whole or in part", async () => {
+    expect(
+      await refusedBy({ originMode: "debate", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" }),
+    ).toMatch(/chat_threads_origin_debate/);
+    expect(await refusedBy({ originMode: "debate", originBlockId: BLOCK, originLens: "an angle" })).toMatch(
+      /chat_threads_origin_debate/,
+    );
+    expect(await refusedBy({ originMode: "debate", originQuote: "words", originLens: "an angle" })).toMatch(
+      /chat_threads_origin_debate/,
+    );
+  });
+
+  it("refuses a debate origin that is neither a claim nor a lens", async () => {
+    expect(await refusedBy({ originMode: "debate" })).toMatch(/chat_threads_origin_debate/);
+  });
+
+  it("refuses a lens with no mode", async () => {
+    expect(await refusedBy({ originLens: "an angle" })).toMatch(/chat_threads_origin_none/);
+  });
+
+  it("refuses a lens with an item id", async () => {
+    expect(
+      await refusedBy({ originMode: "debate", originLens: "an angle", originItemId: "spya-aaaaaa" }),
+    ).toMatch(/chat_threads_origin_debate/);
+  });
+
+  it("refuses a lens on any mode but debate", async () => {
+    expect(await refusedBy({ originMode: "summary", originLens: "an angle" })).toMatch(
+      /chat_threads_origin_lens_debate_only/,
+    );
+  });
+
+  it("refuses a lens on a thread that is not a chat", async () => {
+    expect(await refusedBy({ kind: "explore", originMode: "debate", originLens: "an angle" })).toMatch(
+      /chat_threads_origin_chat_only/,
+    );
+  });
 });
 
 describe("db:export and the origin", () => {
@@ -393,6 +570,42 @@ describe("db:export and the origin", () => {
         .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
       expect(restored).toEqual({ mode: "debate", item: null, block: BLOCK, quote: QUOTE });
       expect((await stored())?.origin).toEqual(claim());
+    } finally {
+      globalThis.fetch = stub;
+      await rm(exported, { recursive: true, force: true });
+      await rm(out, { recursive: true, force: true });
+    }
+  });
+
+  it("exports a lens origin, and the restore puts it back in its own column", async () => {
+    await ask({ threadId: THREAD, question: "what do others say?", origin: lens() });
+
+    const out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-lens-"));
+    const exported = path.join(process.cwd(), "data", SLUG);
+    const stub = globalThis.fetch;
+    globalThis.fetch = realFetch;
+    try {
+      await asTestOwner(() =>
+        exportArticle(SLUG, { dataRoot: path.join(process.cwd(), "data"), outputRoot: path.join(out, "output") }),
+      );
+      const file = JSON.parse(await readFile(path.join(exported, "chat.json"), "utf8")) as {
+        threads: ChatThread[];
+      };
+      expect(file.threads.find((t) => t.id === THREAD)?.origin).toEqual(lens());
+
+      await asTestOwner(() => seedChatFromFiles(SLUG));
+      const [restored] = await getDb()
+        .select({
+          mode: chatThreads.originMode,
+          item: chatThreads.originItemId,
+          block: chatThreads.originBlockId,
+          quote: chatThreads.originQuote,
+          lens: chatThreads.originLens,
+        })
+        .from(chatThreads)
+        .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
+      expect(restored).toEqual({ mode: "debate", item: null, block: null, quote: null, lens: LENS });
+      expect((await stored())?.origin).toEqual(lens());
     } finally {
       globalThis.fetch = stub;
       await rm(exported, { recursive: true, force: true });

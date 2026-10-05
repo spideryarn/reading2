@@ -1,4 +1,4 @@
-# Remembering — where Remember mode is going
+# Remembering — where Learn mode is going
 
 Up: [reading-view-overview.md](reading-view-overview.md) · what is built:
 [remember-mode.md](remember-mode.md) (Recall, Tutorial, Explore) and [quiz.md](quiz.md) · the research:
@@ -12,7 +12,7 @@ and the ideas that are not built yet.
 
 Spideryarn augments reading rather than replacing it (vision.md), and remembering is where that
 matters most: **the act of recalling is what makes a piece stay with you**, and a model that hands
-the reader a summary takes that act away from them. So every part of Remember is built so that
+the reader a summary takes that act away from them. So every part of Learn is built so that
 the reader does the remembering and the model makes it likely to succeed.
 
 > the job is to prompt the reader … in such a way that they're continually recalling … a little bit
@@ -43,8 +43,9 @@ the reader does the remembering and the model makes it likely to succeed.
                                  points                                  spacing within a session
    Explore  the reader           starts from what they marked and       none commissioned: built
                                  discussed; one move a turn (a          from Greg's two notes of
-                                 question, a case of theirs, a          2026-10-03
-                                 connection, what the wider world says)
+                                 question, a case of theirs, a          2026-10-03, and his third
+                                 connection, a possible problem with    of 2026-10-05
+                                 the piece, what the wider world says)
    Quiz     the article          asks questions, marks the answers      the testing effect
 ```
 
@@ -57,7 +58,10 @@ is the article asking, with no conversation.
 what the piece says and whether the reader has it; Explore asks what the reader makes of it. Greg,
 2026-10-03: *"helping me to think, explore & spark new ideas of my own and deepen my intuitions and
 apply to interesting cases of my own … and a bit less about remembering specifically what's in the
-article."* It sits under Remember because thinking with a piece is the other half of what
+article."* And on 2026-10-05, widening it: *"it's also about exploring potential problems and
+criticisms and concerns … deepening your thinking around the piece, whereas tutorial submode is more
+about understanding and internalizing what the piece says"* (remember-mode.md § Explore). He renamed the mode
+Learn in the same report. It sits under Learn because thinking with a piece is the other half of what
 vision.md calls internalising it, and because it grew out of Tutorial: when Tutorial was turned
 towards the author, the own-view turns it gave up needed somewhere to go. It is also the first
 sub-mode that knows what the reader did elsewhere on the article, which the last idea in § Not built
@@ -91,7 +95,7 @@ Explore too.
   start a chat on that one topic, already seeded (`spya-cjquu6`). Today it can only say so in words;
   there is no tool that starts a thread ([chat-tools.md](chat-tools.md)).
 - **Spacing across days, not just within a conversation.** The strongest effect in the literature is
-  coming back after a delay. A Remember that knew what you recalled last week, and asked about the
+  coming back after a delay. A Learn that knew what you recalled last week, and asked about the
   part you lost, would use it; nothing schedules that now ([cron-scheduler.md](cron-scheduler.md)).
 - **Specialist interactions, sparingly.** Cloze (fill in the gap) is the one Greg is open to;
   multiple choice he is wary of, and finds both *"kind of artificial and annoying"*. Plain
