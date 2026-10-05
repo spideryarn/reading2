@@ -87,9 +87,9 @@ export interface ChatAnchorsApi {
   /**
    * The server stored a new thread under another id than the one `add` was
    * given: the tab guesses a new conversation's id, and the server overrules a
-   * guess that is already a *message's* id in the article (src/chat.ts,
-   * `taken`; a guess that is a conversation's id is that conversation). About
-   * one send in a million. The row moves to the server's id, in place.
+   * guess used by a *message* in the article, including one minted for this
+   * turn (src/chat.ts, `taken`, `withTurn`; a guess that is a conversation's
+   * id is that conversation). The row moves to the server's id, in place.
    *
    * No answer will ever name the guess, so left alone its row stays beside the
    * real one and the paragraph counts one conversation twice. One operation
@@ -437,6 +437,14 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
    * never took; an answer that names one, or a `drop`, takes it out.
    */
   const unseen = useRef(new Set<string>());
+  /**
+   * Deletions made after each optimistic row was added. A refetch may name
+   * its stored id before the send does, letting the reader delete that id
+   * first. The delayed acknowledgement must not recreate it, even between
+   * list requests. Kept only while the row awaits a name; older deletions
+   * must not prevent a new conversation from using the same id.
+   */
+  const droppedSinceAdd = useRef(new Map<string, Set<string>>());
   /** Server-confirmed ids for this article. `add` must not make one unseen again. */
   const confirmed = useRef(new Set<string>());
   /** The newest request. An older one's answer is not allowed to land. */
@@ -466,6 +474,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
           for (const s of fetched) {
             confirmed.current.add(s.id);
             unseen.current.delete(s.id);
+            droppedSinceAdd.current.delete(s.id);
           }
           const waiting = new Set(unseen.current);
           setSummaries((local) => foldInLocalWrites(fetched, local, during, waiting));
@@ -494,6 +503,7 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     /* Another article: nothing done to the last one's list applies. */
     flight.current = null;
     unseen.current = new Set();
+    droppedSinceAdd.current = new Map();
     confirmed.current = new Set();
     landed.current = false;
     setSummaries([]);
@@ -519,6 +529,13 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
     flight.current?.written.add(summary.id);
     flight.current?.dropped.delete(summary.id);
     if (!confirmed.current.has(summary.id)) unseen.current.add(summary.id);
+    /* An explicit add is newer than a deletion, even when this id appeared
+       in a previous conversation. Historical confirmation is not an
+       acknowledgement of this addition. */
+    for (const dropped of droppedSinceAdd.current.values()) dropped.delete(summary.id);
+    if (!droppedSinceAdd.current.has(summary.id)) {
+      droppedSinceAdd.current.set(summary.id, new Set());
+    }
     setSummaries((prev) =>
       prev.some((s) => s.id === summary.id)
         ? prev.map((s) => (s.id === summary.id ? summary : s))
@@ -527,13 +544,15 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   }, []);
 
   const drop = useCallback((threadId: string) => {
-    /* Remembered as well as removed, and only while a request is in the air:
-       a deletion leaves nothing behind to compare the arriving snapshot
-       against, so without this the GET would quietly bring the conversation
-       back. See `foldInLocalWrites`. */
+    /* A current list request remembers the deletion: without it the GET
+       would quietly bring the conversation back. Pending additions also
+       remember it until their identity is reconciled. See `foldInLocalWrites`
+       and `rename`. */
     flight.current?.dropped.add(threadId);
     flight.current?.written.delete(threadId);
     unseen.current.delete(threadId);
+    for (const dropped of droppedSinceAdd.current.values()) dropped.add(threadId);
+    droppedSinceAdd.current.delete(threadId);
     setSummaries((prev) => prev.filter((s) => s.id !== threadId));
   }, []);
 
@@ -550,19 +569,25 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
        (ChatDialog.tsx § `onConfirmed`), so it can arrive for an article this
        hook has left. `refresh`'s guard, for the same reason. */
     if (activeSlug.current !== slug) return;
-    /* `to` takes `from`'s place in both records, so a request in the air
-       cannot remove the row under its new name: `written` always gets `to`,
+    const discarded = droppedSinceAdd.current.get(from)?.has(to) ?? false;
+    droppedSinceAdd.current.delete(from);
+    /* A later deletion takes precedence over this creation acknowledgement.
+       Otherwise `to` takes `from`'s place in both records: `written` gets `to`
        whether or not `from` was written during this flight. `from` needs no
-       entry in `dropped`: no answer lists it, because on the server it is a
-       message's id and not a conversation's. */
+       entry in `dropped`: on the server it is a message's id, so no answer
+       lists it as a conversation. */
     if (flight.current) {
       flight.current.written.delete(from);
-      flight.current.written.add(to);
-      flight.current.dropped.delete(to);
+      if (discarded) flight.current.dropped.add(to);
+      else {
+        flight.current.written.add(to);
+        flight.current.dropped.delete(to);
+      }
     }
     unseen.current.delete(from);
-    if (!confirmed.current.has(to)) unseen.current.add(to);
+    if (!discarded && !confirmed.current.has(to)) unseen.current.add(to);
     setSummaries((prev) => {
+      if (discarded) return prev.filter((s) => s.id !== from && s.id !== to);
       if (!prev.some((s) => s.id === from)) return prev;
       /* A refetch may have named the real one first; then the guess just goes. */
       if (prev.some((s) => s.id === to)) return prev.filter((s) => s.id !== from);

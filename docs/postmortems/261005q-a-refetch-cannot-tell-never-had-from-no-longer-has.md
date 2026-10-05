@@ -91,14 +91,14 @@ on an article change and discarded with the hook on unmount.
 
 Found by GPT Sol's review of this fix, and done later the same day
 ([261005n](../plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md)): the tab guesses a
-new conversation's id and the server stores another when the guess is already a message's id in
-the article ([`chat.ts`](../../src/chat.ts) § `taken`). The row under the guess is then one no
-answer will ever name, so it stayed beside the real row until a reload, and the paragraph counted
+new conversation's id and the server stores another when a message uses the guess, including
+one minted for this turn ([`chat.ts`](../../src/chat.ts) § `taken`, `withTurn`). The row under
+the guess is then one no answer will ever name, so it stayed beside the real row until a reload, and the paragraph counted
 one conversation as two. It needs two random ids to collide. The red test showed more
 than the count: `?thread=` followed the server's id while the row stayed under the guess, so the
 dialog closed on the answer's first frame, which predates this postmortem's fix. The dialog now
 renames the row when it hears the real id ([`ChatDialog.tsx`](../../src/web/ChatDialog.tsx) §
-`onThreadId`, [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `rename`).
+`onConfirmed`, [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts) § `rename`).
 
 Also not done: the overlay still depends on a summary row to draw a dialog whose
 real state lives in the chat store. Drawing it from the chat store's own thread would remove the

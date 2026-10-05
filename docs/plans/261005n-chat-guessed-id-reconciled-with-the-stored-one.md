@@ -2,8 +2,7 @@
 
 Up: [plans.md](../project/plans.md).
 
-Status: 2026-10-05. Built, after GPT Sol's plan review changed the design (below). Awaiting the
-code review.
+Status: 2026-10-06. Built and code reviewed; the review's fixes are committed.
 
 ## The job
 
@@ -23,13 +22,16 @@ frame, and the chat store follows ([`controller.ts`](../../src/web/chat/controll
 The reading view's summary list ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) was never
 told.
 
-**When the server overrules the guess, and how often.** Only when the guess is already a
-*message's* id in this article ([`chat.ts`](../../src/chat.ts) § `taken`, `withTurn`). A guess that
+**When the server overrules the floating dialog's guess.** A message uses the guessed id in
+this article ([`chat.ts`](../../src/chat.ts) § `taken`, `withTurn`), including either message
+minted for this turn: those ids are reserved before the conversation's id is checked. A guess that
 is an existing *conversation's* id is not overruled: the turn is appended to that conversation
 (`targetOf`). The first draft of this plan, and the postmortem's paragraph, had this wrong and
-reasoned from "another conversation holds the guessed id"; the plan review corrected it. Ids are six
-random characters, so this is about one new conversation in a million. The bug is real and the fix
-is small, but no reader is likely to have met it.
+reasoned from "another conversation holds the guessed id"; the plan review corrected it.
+The collision rate depends on the article's message count, rather than being one in a million
+for every send; see [`ids.ts`](../../src/ids.ts) § `mintId` for the id space. Other callers can
+also receive another id for invalid input or a single-thread-kind redirect; the floating dialog
+sends a minted id and the default chat kind.
 
 ## What the red test showed, which is more than the queue item says
 
@@ -52,13 +54,14 @@ whose stub server stores the conversation under its own id. Seen red on four ass
 - `useChatAnchors` gains `rename(from, to)`: the row under `from` becomes the row under `to`, in
   place. If a row under `to` is already there (a refetch named it first), the `from` row just goes.
   `to` takes `from`'s place in `unseen` (unless an answer has already confirmed `to`), and is always
-  recorded as written for a list request in the air, so that request cannot remove the renamed row.
+  recorded as written for a list request in the air, so that request cannot remove the renamed row,
+  unless the reader deleted the stored id after the guessed row was added (the code-review fix below).
   It does nothing for an article the hook has left.
 - `ChatDialog` calls a new required prop `onRenamed(guess, real)` from the send's **`onConfirmed`**,
   the acknowledgement that survives the dialog closing, and moves any words typed while waiting to
   the real id there too (`drafts.moveThread`). Navigation stays in `onThreadId`, which stops when
-  the dialog goes. The controller calls the two in that order in one tick, so the list and the
-  address change in one commit.
+  the dialog goes. For a typed send the controller calls the two in that order in one tick, so
+  the list and the address change in one commit.
 - `Reader` wires `onRenamed` to `chatAnchors.rename`. The prop is required, so a second caller of
   `ChatDialog` cannot forget it; nine test files that mount the dialog gained a no-op for it.
 
@@ -88,16 +91,17 @@ Six findings, no P0. Read-only (`--sandbox review`).
    True, and it predates this work: `onThread(real)` has always been called there. The repair
    (navigate only if the dialog still shows that guess) also has to separate the comment's
    `noteThread` correction from navigation in `Reader`, which is a second change to a second file.
-   It needs the one-in-a-million collision *and* a paragraph change inside one round trip.
+   It needs an id correction *and* a paragraph change inside one round trip.
 3. **P1, taken.** Words typed while waiting are kept under the guess. `drafts.moveThread` in
    `onConfirmed`. Test: *keeps what the reader typed while waiting*.
 4. **P2, not taken, reported.** `Conversation` is keyed by `thread.id`, so the correction remounts
    it (scroll position, an open editor), and a Marginalia card the reader collapsed reopens. Also
-   older than this work, and the same odds.
+   older than this work, and only on an id correction.
 5. **P2, taken.** The premise about *why* the server overrules a guess was false; see above. The
    hook's comments, this plan and the postmortem now say what `chat.ts` does. A test that modelled
    "another conversation under the guessed id" was removed, because the server cannot produce it.
-6. **P2, taken.** `written.add(to)` must be unconditional. It was; now a test holds it there:
+6. **P2, taken.** A surviving row must get `written.add(to)` even if its id was previously
+   confirmed. It did; now a test holds it there:
    *survives a request in the air even under an id an older answer once listed*.
 
 Sol also confirmed, from nuqs's source, that the rename and the address change batch into one
@@ -108,10 +112,38 @@ commit, and that `chatOpenBlock` and the card host need no migration of their ow
 - The dialog-level cases (three) mount the real `App`. The first was red before any fix. The other
   two were written after the fix and seen red by putting the plan's first version back (rename in
   `onThreadId`, no draft move).
-- The hook-level cases (eight) in
+- The original hook-level cases (eight) in
   [`chat-anchors-refresh.test.tsx`](../../tests/chat-anchors-refresh.test.tsx). All red when
   `rename` did not exist, which proves little, so three were also seen red by mutation: without
   the move in `unseen`, without the unconditional `written.add(to)`, and without the article guard.
+
+## Code review, 2026-10-06
+
+- **P1, fixed by the reviewer.** A refetch can name the stored id before the original
+  stream does. Deleting that stored conversation and then receiving the delayed name restored
+  its row; during a request, `rename` also erased the deletion record. The hook now remembers
+  deletions made after each local addition until it is listed, renamed or dropped. An explicit
+  newer addition supersedes a deletion. The two *keeps a later deletion of the stored id*
+  cases were seen red on the restored row, then green. Controls cover historical ids and a
+  newer addition. Root cause: [a late identity acknowledgement must not undo a newer
+  deletion](../postmortems/261006a-a-late-identity-acknowledgement-must-not-undo-a-newer-deletion.md).
+- **P2, factual corrections.** The server reserves the turn's message ids before checking
+  the guess; the fixed probability was unsupported. The postmortem pointed to `onThreadId`
+  rather than the actual `onConfirmed`. The synchronous callback claim is scoped to typed sends.
+- The original typed-words case was independently seen red by removing only `moveThread`:
+  after `begin`, the composer was empty. The existing case therefore exercises the real draft
+  handover. A new StrictMode case accepts the current article's rename after repeated effects;
+  the real acknowledgement is asynchronous, after those effects have completed.
+- Moving only the row rename back into `onThreadId` made the original closed-dialog case
+  fail with a count of two, independently of the draft move.
+- The three original hook mutations were repeated independently during review: omitting the
+  unseen migration, restricting the flight write to unconfirmed ids, and omitting the article
+  guard each failed its intended assertion.
+- **Wider, reported only.** `spoken.succeeded` retires its operation before producing `named`;
+  the controller prunes its navigation callback before executing the command, and spoken
+  appends install no confirmation callback. Recovery after `begin` already has the stored id,
+  but losing the stream before `begin` has no recovery or identity mapping: the completion
+  refetch can still leave both ids. The earlier wider findings 2 and 4 remain unchanged.
 
 ## Not checked in a browser
 

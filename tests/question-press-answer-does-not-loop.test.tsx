@@ -151,8 +151,8 @@ const stored: Record<string, unknown>[] = [];
 let refuse: string | null = null;
 /**
  * When set, the server stores a new conversation under this id whatever the
- * tab guessed, which is what the route does when the guess is already taken
- * in the article (src/chat.ts, `mintUniqueId`).
+ * tab guessed, which is what the route does when a message uses the guess
+ * (including one minted for this turn; src/chat.ts, `withTurn`).
  */
 let storeAs: string | null = null;
 const BURST_WORD = "word ";
@@ -582,4 +582,3 @@ describe("a '?' answer streaming into the floating dialog", () => {
     expect(loops()).toEqual([]);
   });
 });
-

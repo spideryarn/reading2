@@ -948,9 +948,10 @@ export function ChatDialog({
            beside the guess; it must not have `?thread=` moved under whatever
            the reader is looking at now.
 
-           The controller calls them in this order in one tick, so the summary
-           and the address change in one commit. The dialog is drawn only while
-           the list has a row for `?thread=` (Reader.tsx § `overlay`); a commit
+           For this typed send the controller calls them in this order in one
+           tick, so the summary and the address change in one commit. The
+           dialog is drawn only while the list has a row for `?thread=`
+           (Reader.tsx § `overlay`); a commit
            between the two would close it mid-answer. Words typed while waiting
            are kept under the thread's id, so they move too. */
         onConfirmed: (real) => {

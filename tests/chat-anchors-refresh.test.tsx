@@ -354,6 +354,15 @@ describe("a conversation the server stored under another id", () => {
   const G = "spya-ggg222";
   const R = "spya-rrr222";
 
+  it("accepts the current article's name after StrictMode repeats its effect", async () => {
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness, { slug: "a-piece" }))));
+    expect(asked).toHaveLength(2);
+    await answer(1, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    expect(ids()).toEqual([R]);
+  });
+
   it("is one row, under the server's id, where the guess was", async () => {
     await mount();
     await answer(0, [summary(A)]);
@@ -408,6 +417,62 @@ describe("a conversation the server stored under another id", () => {
     expect(ids(), "the control: this is the double count").toEqual([R, G]);
     await act(async () => api().rename(G, R));
     expect(api().summaries).toEqual([summary(R, { title: "the server's" })]);
+  });
+
+  for (const inFlight of [false, true]) {
+    it(`keeps a later deletion of the stored id when its name arrives${inFlight ? " during a refetch" : " between refetches"}`, async () => {
+      await mount();
+      await answer(0, []);
+      await act(async () => api().add(summary(G)));
+      await act(async () => api().refresh());
+      await answer(1, [summary(R)]);
+      expect(ids(), "the server's row arrived before the original stream's name").toEqual([R, G]);
+      if (inFlight) await act(async () => api().refresh());
+      await act(async () => api().drop(R));
+      expect(ids(), "the reader removed the stored conversation").toEqual([G]);
+      await act(async () => api().rename(G, R));
+      expect(ids(), "the older creation acknowledgement must not undo the deletion").toEqual([]);
+      if (inFlight) {
+        await answer(2, [summary(R)]);
+        expect(ids(), "a stale snapshot must not undo the deletion either").toEqual([]);
+      }
+      await act(async () => api().refresh());
+      await answer(inFlight ? 3 : 2, []);
+      expect(ids()).toEqual([]);
+    });
+  }
+
+  it("can use an id deleted before this conversation was started", async () => {
+    await mount();
+    await answer(0, [summary(R)]);
+    await act(async () => api().drop(R));
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().rename(G, R));
+    expect(ids(), "an older deletion is not a deletion of this new conversation").toEqual([R]);
+  });
+
+  it("keeps the later deletion even when the guess was listed for an older conversation", async () => {
+    await mount();
+    await answer(0, [summary(G)]);
+    await act(async () => api().refresh());
+    await answer(1, []);
+    await act(async () => api().refresh());
+    await act(async () => api().add(summary(G)));
+    await answer(2, [summary(R)]);
+    expect(ids(), "both rows are present before the deletion").toEqual([R, G]);
+    await act(async () => api().drop(R));
+    await act(async () => api().rename(G, R));
+    expect(ids(), "historical confirmation of the guess is not confirmation of this new send").toEqual([]);
+  });
+
+  it("keeps a row explicitly added after the stored id was deleted", async () => {
+    await mount();
+    await answer(0, []);
+    await act(async () => api().add(summary(G)));
+    await act(async () => api().drop(R));
+    await act(async () => api().add(summary(R, { title: "a newer creation" })));
+    await act(async () => api().rename(G, R));
+    expect(api().summaries).toEqual([summary(R, { title: "a newer creation" })]);
   });
 
   /* The row was added before this request went out, so the guess is not in
