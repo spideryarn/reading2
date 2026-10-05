@@ -1,5 +1,5 @@
 {
-  "id": "84e20d4a-db42-4a96-811d-4ba08241024a",
+  "id": "31f7e136-8b3e-4946-b624-67c8b18c20c8",
   "prevId": "59e9e2e5-7be2-4e5a-b369-f0fa79e2d2ce",
   "version": "7",
   "dialect": "postgresql",
@@ -839,36 +839,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "reading_language": {
-          "name": "reading_language",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_ideas": {
-          "name": "reading_ideas",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_reason": {
-          "name": "reading_difficulty_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_model": {
-          "name": "reading_difficulty_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reading_difficulty_rated_at": {
-          "name": "reading_difficulty_rated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -963,18 +933,6 @@
         "article_revisions_status": {
           "name": "article_revisions_status",
           "value": "\"spideryarn\".\"article_revisions\".\"status\" in ('draft','published','failed')"
-        },
-        "article_revisions_reading_language": {
-          "name": "article_revisions_reading_language",
-          "value": "\"spideryarn\".\"article_revisions\".\"reading_language\" between 1 and 5"
-        },
-        "article_revisions_reading_ideas": {
-          "name": "article_revisions_reading_ideas",
-          "value": "\"spideryarn\".\"article_revisions\".\"reading_ideas\" between 1 and 5"
-        },
-        "article_revisions_reading_difficulty_all_or_none": {
-          "name": "article_revisions_reading_difficulty_all_or_none",
-          "value": "num_nonnulls(\"spideryarn\".\"article_revisions\".\"reading_language\", \"spideryarn\".\"article_revisions\".\"reading_ideas\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_reason\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_model\", \"spideryarn\".\"article_revisions\".\"reading_difficulty_rated_at\") in (0, 5)"
         },
         "article_revisions_authors_array": {
           "name": "article_revisions_authors_array",
@@ -1410,6 +1368,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "cited_by_count": {
+          "name": "cited_by_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cited_by_count_read_at": {
+          "name": "cited_by_count_read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "claimed_until": {
           "name": "claimed_until",
           "type": "timestamp with time zone",
@@ -1442,6 +1412,14 @@
         "bibliographic_records_published_day": {
           "name": "bibliographic_records_published_day",
           "value": "\"spideryarn\".\"bibliographic_records\".\"published_day\" is null or (\"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"published_day\" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')"
+        },
+        "bibliographic_records_cited_by_count": {
+          "name": "bibliographic_records_cited_by_count",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"cited_by_count\" is null or (\"spideryarn\".\"bibliographic_records\".\"cited_by_count\" >= 0\n            and \"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"source\" is not distinct from 'crossref'\n            and \"spideryarn\".\"bibliographic_records\".\"cited_by_count_read_at\" is not null)"
+        },
+        "bibliographic_records_cited_by_count_read_at": {
+          "name": "bibliographic_records_cited_by_count_read_at",
+          "value": "\"spideryarn\".\"bibliographic_records\".\"cited_by_count_read_at\" is null\n            or (\"spideryarn\".\"bibliographic_records\".\"state\" is not distinct from 'found' and \"spideryarn\".\"bibliographic_records\".\"source\" is not distinct from 'crossref')"
         },
         "bibliographic_records_authors": {
           "name": "bibliographic_records_authors",

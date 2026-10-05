@@ -17,6 +17,7 @@ import type { UseCitations } from "../src/web/useCitations.js";
 import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
+import { citedByWords } from "../src/registry-work.js";
 import { DELAY } from "../src/web/Tooltip.js";
 
 const {
@@ -29,8 +30,11 @@ const {
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
   CITATION_BAR_DEFAULT,
+  CITED_BY_NOTE,
   CITING_WORDS_MAX,
   CitationsPanel,
+  citedByLine,
+  citedByNote,
   INFLUENCE_NOTE,
   INFLUENCE_WEB_NOTE,
   INFLUENCE_UNKNOWN_NOTE,
@@ -187,6 +191,18 @@ describe("the score orders", () => {
     expect(modes).toMatch(/relevance was scored/i);
     const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
     expect(faq).toMatch(/no usable.*score/i);
+  });
+
+  it("Help says whose count a row's citation count is, what it leaves out, and that it is not influence", () => {
+    /* Plan 261005i. The row's own words, so a reader can match the sentence to what they see. */
+    const modes = renderToStaticMarkup(createElement("div", null, HELP_MODES.citations.reading));
+    expect(modes).toContain("cited 357 times · Crossref");
+    expect(modes).toMatch(/DOI/);
+    expect(modes).toMatch(/lower than Google Scholar/);
+    expect(modes).toMatch(/no citations recorded/);
+    expect(modes).toMatch(/does not change the order/);
+    const faq = renderToStaticMarkup(createElement("div", null, HELP_FAQ["faq-beyond-the-article"].body));
+    expect(faq).toMatch(/Crossref/);
   });
   it("sort descending, with a work missing that score last", () => {
     expect(titles(orderWorks([...WORKS, BARE], "relevance"))).toEqual(["Central", "Unknown", "Famous", "Passing", "Bare"]);
@@ -2279,6 +2295,133 @@ describe("an influence Dig deeper found on the web", () => {
 /* Report `spya-c2qmbg`, plan 261004b: the prose card's *Dig deeper* opens this
    band on the work's row. The row has to be drawn before it can be scrolled to,
    and the prioritised order may be hiding it. */
+describe("Crossref's citation count on a row (plan 261005i)", () => {
+  /* Midday UTC, so the local day `dayOf` prints is the 4th in any time zone a test runs in. */
+  const READ = "2026-10-04T12:00:00.000Z";
+  type Registry = NonNullable<CitedWork["registry"]>;
+  const found = (count: number, over: object = {}): Registry =>
+    ({
+      kind: "found",
+      source: "crossref",
+      title: "Counted",
+      authors: [{ family: "Somebody" }],
+      citedBy: { count, readAt: READ },
+      ...over,
+    }) as Registry;
+  const counted = (count: number, over: Partial<CitedWork> = {}) =>
+    work({ id: "spya-c2t3d4", title: "Counted", relevance: 0.6, registry: found(count), ...over });
+  const said = (id = "spya-c2t3d4") => row(id).querySelector(".cite-cited-by");
+
+  it("says the number, in words, with its source", () => {
+    expect(citedByWords(357)).toBe("cited 357 times");
+    expect(citedByWords(12_480)).toBe("cited 12,480 times");
+    expect(citedByWords(2)).toBe("cited 2 times");
+    expect(citedByWords(1)).toBe("cited once");
+    /* Zero is a statement about Crossref's records, not about the work. */
+    expect(citedByWords(0)).toBe("no citations recorded");
+    expect(citedByLine(357)).toBe("cited 357 times · Crossref");
+    expect(citedByLine(0)).toBe("no citations recorded · Crossref");
+  });
+
+  it("draws it on the quiet line beside the scores, as words and never a bar", async () => {
+    await draw(owner({ citations: artefact([counted(12_480, { influence: 0.9 }), CENTRAL]) }));
+    const line = said();
+    expect(line?.textContent).toBe("cited 12,480 times · Crossref");
+    const meta = row("spya-c2t3d4").querySelector(".cite-meta")!;
+    expect(meta.contains(line)).toBe(true);
+    const bars = meta.querySelector(".score-bars")!;
+    /* The model's influence is still its own bar: the count sits alongside, it does not replace it. */
+    expect(bars.querySelectorAll(".score-bar")).toHaveLength(2);
+    expect(bars.getAttribute("aria-label")).not.toMatch(/cited|Crossref/);
+    expect(bars.compareDocumentPosition(line!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row(CENTRAL.id).querySelector(".cite-cited-by")).toBeNull();
+  });
+
+  it("sits alongside *influence unknown* rather than answering it", async () => {
+    await draw(owner({ citations: artefact([counted(357)]) }));
+    expect(row("spya-c2t3d4").querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
+    expect(said()?.textContent).toBe("cited 357 times · Crossref");
+  });
+
+  it("says once, and says zero as Crossref recording none", async () => {
+    await draw(owner({ citations: artefact([counted(1)]) }));
+    expect(said()?.textContent).toBe("cited once · Crossref");
+    await draw(owner({ citations: artefact([counted(0)]) }));
+    expect(said()?.textContent).toBe("no citations recorded · Crossref");
+    expect(row("spya-c2t3d4").textContent).not.toContain("cited 0 times");
+  });
+
+  it("gives the day it was read and what the number leaves out, in the card", async () => {
+    await draw(owner({ citations: artefact([counted(357)]) }));
+    const card = await cardFor(said()!);
+    const text = `${card.head} ${card.body}`;
+    expect(text).toContain("Crossref’s count on 4 October 2026.");
+    expect(text).toMatch(/reference lists publishers have deposited with Crossref/);
+    expect(text).toMatch(/lower than Google Scholar/);
+    expect(text).toMatch(/not comparable across fields or ages/);
+    expect(text).toBe(` ${citedByNote(READ)}`);
+  });
+
+  it("opens that card for a finger, and closes it on scroll", async () => {
+    await draw(owner({ citations: artefact([counted(357)]) }));
+    await press(said()!, "touch", "mouse");
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("4 October 2026");
+    expect(said()?.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => document.dispatchEvent(new Event("scroll")));
+    for (const _ of [0, 1]) await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  it("is drawn for a visitor too: a public count of a public DOI", async () => {
+    const { key: _key, ...shared } = counted(357);
+    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    expect(said()?.textContent).toBe("cited 357 times · Crossref");
+  });
+
+  it("draws nothing for a record with no count, a conflict, a DataCite record, or a malformed count", async () => {
+    for (const registry of [
+      found(357, { citedBy: undefined }),
+      { kind: "conflict", source: "crossref", citedBy: { count: 357, readAt: READ } },
+      found(357, { source: "datacite" }),
+      found(357, { citedBy: { count: -3, readAt: READ } }),
+      found(357, { citedBy: { count: 357, readAt: "some day" } }),
+      undefined,
+    ] as (Registry | undefined)[]) {
+      const { registry: _none, ...bare } = counted(357);
+      await draw(owner({ citations: artefact([registry === undefined ? bare : { ...bare, registry }]) }));
+      expect(said(), JSON.stringify(registry)).toBeNull();
+      expect(row("spya-c2t3d4").textContent).not.toMatch(/cited \d|no citations recorded/);
+    }
+  });
+
+  it("does not move the bar or the orders: a row is still judged on the model's two scores", () => {
+    const quiet = counted(0, { relevance: 0.2, influence: 0.2 });
+    const loud = counted(99_999, { id: "spya-c2t3d5", relevance: 0.2, influence: 0.2 });
+    expect(priorityOf(loud)).toBe(priorityOf(quiet));
+    expect(titles(orderWorks([quiet, loud], "influence"))).toEqual(titles(orderWorks([quiet, loud], "document")));
+    expect(scoresOf(loud)).toEqual(scoresOf(quiet));
+  });
+
+  it("says in the band's (i) whose count it is, to owner and visitor alike", async () => {
+    expect(CITED_BY_NOTE).toMatch(/Crossref/);
+    expect(CITED_BY_NOTE).toMatch(/DOI/);
+    expect(CITED_BY_NOTE).toMatch(/separate from influence/);
+    for (const visitor of [false, true]) {
+      if (visitor) {
+        const { key: _key, ...shared } = counted(357);
+        await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+      } else {
+        await draw(owner({ citations: artefact([counted(357)]) }));
+      }
+      const about = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
+      expect(about, "no (i) to open").not.toBeNull();
+      await act(async () => about?.click());
+      expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(CITED_BY_NOTE);
+      await act(async () => about?.click());
+    }
+  });
+});
+
 describe("opening the band on one work", () => {
   it("barToReveal lowers the bar to a hidden work's priority, floored to the step", () => {
     /* PASSING is 0.20, under the default bar. */
