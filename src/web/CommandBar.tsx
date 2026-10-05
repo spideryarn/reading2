@@ -176,6 +176,7 @@ import { shownBehindTheSwitch } from "./experimental-visibility.js";
 import type { DiagramKind } from "./diagram.js";
 import { subModesOf, subModeWords, type SubMode } from "./sub-modes.js";
 import { useVisualViewport } from "./useVisualViewport.js";
+import { FIND_MORE_MODES, findMoreCommand } from "./find-more.js";
 
 /**
  * **The article the bar was opened over**, or `undefined` where there is none.
@@ -258,6 +259,10 @@ export interface CommandBarArticle {
    * glossary read (GPT Sol's F1), so there it is absent and those rows are
    * never drawn — not drawn and refused. Tags are not in it; they come with
    * `shelfRow`, on both pages.
+   *
+   * **And, since 2026-10-04, which bands' *Find more* it may press**
+   * (`findMoreRows`, plan 261004k) — for the same reason the reading view's
+   * alone: there is no band on the Metadata page.
    */
   readonly executor?: CommandExecutor | undefined;
 }
@@ -372,6 +377,9 @@ export function besideTheModes({
        a section, Archive, Export — then the fourteen *Run again*: on a tie the
        one-of-a-kind row is the likelier meaning. */
     ...(article === undefined ? [] : metadataRows(article)),
+    /* Before the *Run again* rows: for `glossary`, adding to the list is the
+       likelier and the gentler meaning than writing it again. */
+    ...(article === undefined ? [] : findMoreRows(article)),
     ...(article === undefined ? [] : rerunRows(article, queue)),
     helpRow(article?.help),
     ...(openComments === undefined
@@ -534,6 +542,38 @@ function rerunRows(article: CommandBarArticle, queue: RerunQueue): readonly Comm
       return goToSection(article, RERUN_LANDS_IN);
     }),
   );
+}
+
+/**
+ * **A *Find more* row for each band that offers one right now** — Greg,
+ * 2026-10-04 (spya-rbxrgc): *"There are lots of cases where we have a sort of
+ * find more button, for example in the glossary mode. Let's make that be part
+ * of the command bar as well."* The words are find-more.ts's; which bands, and
+ * the press, are the reading view's (`CommandExecutor.findMore`).
+ *
+ * **Drawn only while the list can be added to** (GPT Sol's F3 on plan
+ * 261004k): the reading view names a band here only when its own read says an
+ * append is on offer, so there is no row on an article with no list, on one
+ * whose run would rewrite, on a full list, for a visitor, or on the Metadata
+ * page, which hands in no executor. No row, never a row that opens a band and
+ * does nothing.
+ *
+ * **Enter posts nothing.** Unlike `rerunRows` below, the press leaves a
+ * hand-off and opens the band, and the band presses its own button — in the
+ * list's own profile setting, which only the band's hook has read
+ * (find-more.ts § Why this is not a word on the *Run again* row).
+ *
+ * **`find more …` is also the `find` verb's**, so for those words the bar
+ * draws these rows and then *Find “more …” in this article* after them
+ * (`matched` below). The one declared exception to the collision matrix.
+ */
+function findMoreRows(article: CommandBarArticle): readonly Command[] {
+  const presses = article.executor?.findMore;
+  if (presses === undefined) return [];
+  return FIND_MORE_MODES.flatMap((mode) => {
+    const press = presses[mode];
+    return press === undefined ? [] : [findMoreCommand(mode, press)];
+  });
 }
 
 /**
@@ -962,8 +1002,8 @@ const APP_PAGES: readonly Extract<Command, { kind: "page" }>[] = [
     description: "Your shelf, and the box you paste a new article into.",
     /* Greg's `Homepage`, and the four other words for the same place. `add` and
        `add an article` because a bare `/add` lands here anyway — see the
-       docblock above. Sparse elsewhere, for the reason the mode aliases are
-       (docs/project/reading-view-overview.md § The command bar): the cost of a
+       docblock above. Sparse elsewhere, for the reason that still limits the
+       mode aliases (docs/project/reading-view-overview.md § The command bar): the cost of a
        loose alias is not a missed match, it is the wrong row ranked first. */
     aliases: ["home", "homepage", "shelf", "my articles", "add", "add an article"],
     generates: false,
@@ -1405,7 +1445,8 @@ export function CommandBar({
    * After, not first: a query that both names a row and parses as an argument
    * should go where it names — and the collision matrix
    * (tests/command-match-arguments.test.ts) holds that no label or alias the
-   * bar offers parses as one at all. Not ranked, because each row's label is
+   * bar offers parses as one at all, bar the two *Find more* rows' `find
+   * more …`, which is where this order shows. Not ranked, because each row's label is
    * made of the query; ranking it against itself would always hit.
    */
   const matched = useMemo(() => {

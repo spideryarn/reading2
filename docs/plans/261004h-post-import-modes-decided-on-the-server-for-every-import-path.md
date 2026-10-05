@@ -1,6 +1,6 @@
 # Post-import modes, decided on the server for every import path
 
-Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 is a question for Greg, not built. The purpose box's question is answered: [261004l](261004l-the-add-page-purpose-box-saves-as-you-type.md). Parent: [plans.md](../project/plans.md). Follows
+Status: Stage 1 built and on `dev` 2026-10-04, not deployed (one additive migration). Stage 2 was answered by Greg, spiked, and stopped with nothing built (§ Stage 2). The purpose box's question is answered and built: [261004l](261004l-the-add-page-purpose-box-saves-as-you-type.md). Parent: [plans.md](../project/plans.md). Follows
 [260930c](260930c-auto-generate-the-main-modes-after-import.md), whose Deferred 2 this is.
 
 > We should automatically run Glossary mode generation as part of every import process
@@ -201,6 +201,24 @@ handling *no tree yet*. `structure` and `assets` are exclusive steps that rewrit
 read, so the modes must still wait for both. That is many surfaces and a publication contract
 (`tree` required) changed, which is why 260930c deferred it. A smaller cut worth pricing first:
 move only `assets` behind the publication, as `labels` was moved on 2026-09-06.
+
+**Greg's answer**, to the question put as A (open after `blocks`), B (move only `assets`) or C
+(leave it):
+
+> see if you can find a way to get to the article loading faster by deferring stuff, as long as the
+> article will update automatically (without requiring a page refresh), and as long as it's not
+> going to introduce too much complexity. use your judgment
+>
+> — Greg, 2026-10-04
+
+**What came of it: nothing built, with the numbers.** The spike is
+[261004e](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md)
+and the plan that was written and then stopped at review is
+[261004l](261004l-figures-arrive-after-a-paper-opens-and-an-open-article-re-reads-itself.md).
+Two things above turned out wrong. `assets` does **not** rewrite what the modes read: it writes one
+artefact that only Illustrated reads, so the modes need not wait for it. And no open reading view
+re-reads its article today, so *"update automatically"* is new work under every option, and it is
+where the difficulty is.
 
 ## Cost
 

@@ -153,6 +153,8 @@ export interface UseQuotes {
   error: string | null;
   /** The job choosing this article's quotes, if one is. */
   job: Job | null;
+  /** The job list has answered once, so `job === null` means no run rather than not known yet. */
+  loaded: boolean;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: StepFailure | null;
   /**
@@ -348,6 +350,7 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     slug,
     error,
     job: queue.job,
+    loaded: queue.loaded,
     failed: queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
