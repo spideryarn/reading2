@@ -54,6 +54,8 @@ let resized: (() => void) | null = null;
 let heights: number[] = [];
 /** The tool strip's height inside the last answer, when it has one. */
 let strip = 0;
+/** Where the streaming cursor sits after a bare text-node answer. */
+let tail = 0;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -112,6 +114,7 @@ function layOut(): void {
           top = heights.slice(0, i).reduce((sum, h) => sum + h, 0) - (box as HTMLElement).scrollTop;
           /* Anything inside the last answer but its tool strip sits under the strip. */
           if (this !== turn && i === turns.length - 1 && !this.classList.contains("chat-tools")) top += strip;
+          if (this.classList.contains("chat-cursor")) top += tail;
         }
       }
       return { top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) };
@@ -185,6 +188,7 @@ beforeEach(() => {
   layOut();
   heights = [100, 800];
   strip = 0;
+  tail = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -247,6 +251,25 @@ describe("a typed answer in a panel of fixed height", () => {
     expect(scroller().scrollTop, "the answer outgrew the panel and the view stayed").toBe(QUESTION_TOP);
     expect(roomOf(scroller())).toBe(0);
     expect(pill(), "so there is more below, and a way to it").not.toBeNull();
+  });
+
+  it("holds an answer whose first CommonMark block is rendered as a bare text node", () => {
+    paint(EARLIER);
+    tail = 20;
+    heights = [100, 800, 60, 30];
+    paint(asked("<div>opening"));
+    const answers = host.querySelectorAll<HTMLElement>('[data-turn="assistant"]');
+    const answer = answers[answers.length - 1];
+    expect(
+      [...(answer?.childNodes ?? [])].some((node) => node.nodeType === Node.TEXT_NODE),
+      "control: unsupported CommonMark is drawn directly as text, not inside an element",
+    ).toBe(true);
+    expect(scroller().scrollTop).toBe(QUESTION_TOP);
+
+    tail = 180;
+    heights = [100, 800, 60, 190];
+    paint(asked("<div>opening and a great deal more raw text"));
+    expect(scroller().scrollTop, "the first raw-text line stayed where it began").toBe(QUESTION_TOP);
   });
 
   it("does not move when the answer finishes and grows its action row and sources", () => {
@@ -466,18 +489,35 @@ describe("a Live conversation", () => {
       stop: async () => {},
     }) as unknown as LiveApi;
 
-  it("retires a typed answer's hold: spoken words are followed, as before", () => {
+  it("retires an overflowed typed answer's hold: spoken words are followed, as before", () => {
     paint(EARLIER);
-    heights = [100, 800, 60, 200];
+    heights = [100, 800, 60, 900];
     paint(asked("A typed answer."));
     paint(asked("A typed answer.", "done"));
-    expect(roomOf(scroller()), "held, with room").toBe(140);
+    expect(roomOf(scroller()), "the typed answer has outgrown its room").toBe(0);
     expect(scroller().scrollTop).toBe(QUESTION_TOP);
+    expect(pill(), "the deliberate hold is away from the typed answer's end").not.toBeNull();
+    /* A real browser reports Conversation's own placement through onScroll.
+       That event is not evidence that the reader opted out of following Live. */
+    act(() => scroller().dispatchEvent(new Event("scroll", { bubbles: true })));
 
     /* The spoken line is not a turn: it only makes the transcript taller. */
-    heights = [100, 800, 60, 500];
+    heights = [100, 800, 60, 1200];
     paint(asked("A typed answer.", "done"), { live: speaking("Spoken words, arriving.") });
     expect(roomOf(scroller()), "the room goes with the hold").toBe(0);
-    expect(scroller().scrollTop, "and the bottom is followed").toBe(1460 - CLIENT);
+    expect(scroller().scrollTop, "and the bottom is followed").toBe(2160 - CLIENT);
+  });
+
+  it("does not follow Live when the reader scrolled away during the typed hold", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 900];
+    paint(asked("A typed answer."));
+    paint(asked("A typed answer.", "done"));
+    readerScrollsTo(200);
+
+    heights = [100, 800, 60, 1200];
+    paint(asked("A typed answer.", "done"), { live: speaking("Spoken words, arriving.") });
+    expect(scroller().scrollTop).toBe(200);
+    expect(pill()).not.toBeNull();
   });
 });

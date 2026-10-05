@@ -1237,6 +1237,9 @@ export function Conversation({
     words: boolean;
     /** Where the anchor was on screen, from the scroller's top edge. */
     seenAt: number;
+    /** The scroll position `settle` or the reader most recently chose. A later
+     * scroll event at this same position came from our own write, not them. */
+    top: number;
   } | null>(null);
   /**
    * What a hold keeps still: the answer's first words once there are any, and
@@ -1248,11 +1251,13 @@ export function Conversation({
     if (!answer) return null;
     const before = turns[turns.length - 2];
     const question = before?.dataset.turn === "user" ? before : null;
-    /* The first thing in the turn that is not the tool strip: the waiting
-       line, then the words. */
-    const first = answer.querySelector<HTMLElement>(":scope > :not(.chat-tools)");
-    const words = first !== null && !first.classList.contains("chat-thinking");
-    return { answer, question, words, node: words ? first : (question ?? answer) };
+    /* Explicit rather than "the first element after the tool strip": an
+       unsupported CommonMark block is deliberately rendered as a bare text
+       node, in which case querySelector would find the cursor at the END of
+       the answer and hold that instead of its first line. */
+    const first = answer.querySelector<HTMLElement>(":scope > .chat-answer-anchor");
+    const words = first !== null;
+    return { answer, question, words, node: first ?? question ?? answer };
   };
   /** Record where a held answer's anchor is now: the view was moved on purpose. */
   const noteAnchor = (el: HTMLElement) => {
@@ -1261,6 +1266,7 @@ export function Conversation({
     if (!h || !at) return;
     h.words = at.words;
     h.seenAt = at.node.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    h.top = el.scrollTop;
   };
   const wasBusy = useRef(false);
   const sizedNow = useRef(sized);
@@ -1316,12 +1322,12 @@ export function Conversation({
     }
     h.words = at.words;
     h.seenAt = seen + was - top;
+    h.top = top;
     if (want !== roomNow) gap.style.height = `${want}px`;
     if (was !== top) el.scrollTop = top;
     /* Nobody scrolled, so no scroll event will say the answer has grown past
        the fold. Guarded, because a same-value set is not free: see `awayNow`. */
     const atBottom = natural + want - top - client < 60;
-    stick.current = atBottom;
     if (awayNow.current !== !atBottom) setAway(!atBottom);
   };
   const settleNow = useRef(settle);
@@ -1338,7 +1344,12 @@ export function Conversation({
       hold.current = null;
       if (room.current) room.current.style.height = "0px";
     } else if (busy && (!wasBusy.current || !h || h.count !== count)) {
-      hold.current = { count, placed: false, target: 0, words: false, seenAt: 0 };
+      hold.current = { count, placed: false, target: 0, words: false, seenAt: 0, top: el.scrollTop };
+      /* A new typed attempt deliberately places the reader at the new latest
+         turn. Its growing away from the bottom must not erase that follow
+         intent: if Live speaks next, it still follows unless the reader has
+         actually scrolled in the meantime. */
+      stick.current = true;
     }
     wasBusy.current = busy;
     if (!visible) {
@@ -1407,11 +1418,10 @@ export function Conversation({
       <div
         className="chat-scroll"
         ref={scroller}
-        /* The one place `stick` is decided — see the note above. Fired by the
-           reader's own scrolling and by the effect's `scrollTop = scrollHeight`
-           alike, and both mean the same thing here: this is where the view is
-           now. `away` is set beside it rather than derived later, so a button
-           and a ref cannot end up disagreeing about where the reader is. */
+        /* The one event that can say the reader changed `stick` — see the note
+           above. The browser fires it for our own scroll writes too, so a hold
+           records its last chosen position and those events are ignored for
+           follow intent. `away` still describes the geometry either way. */
         onScroll={(e) => {
           if (!visible) return;
           const el = e.currentTarget;
@@ -1421,8 +1431,12 @@ export function Conversation({
              halfway down them must still be followed by its answer. */
           const atBottom =
             empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-          stick.current = atBottom;
-          setAway(!atBottom);
+          const h = hold.current;
+          /* `settle` writes scrollTop to place or compensate a hold, and the
+             browser reports that write through this same event. Only a
+             different position is evidence that the reader moved. */
+          if (!h || Math.abs(el.scrollTop - h.top) > 0.5) stick.current = atBottom;
+          if (awayNow.current !== !atBottom) setAway(!atBottom);
           /* The reader moved, so this is where a held answer's anchor now is.
              Our own writes and a browser's clamp fire this too, after `settle`
              has already put things back, and record what it left. */
@@ -1872,6 +1886,10 @@ export function Turn({
   return (
     <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`} data-turn="assistant">
       <ToolStrip tools={message.tools} searches={message.searches} />
+      {/* The stable top of prose, including prose CitedMarkdown renders as a
+          bare text node. Conversation holds this point, not the streaming
+          cursor at the other end of the answer. */}
+      {hasText && <span className="chat-answer-anchor" aria-hidden="true" />}
       {waiting ? (
         <span className="chat-thinking">
           <LoaderCircle className="cmt-spinner" size={16} /> thinking…

@@ -511,6 +511,15 @@
 .chat-turn.model p:last-child { margin-bottom: 0; }
 .chat-turn.model.failed { color: var(--ink-faint); }
 
+/* A geometry marker immediately before the answer's first character. It is an
+   element because unsupported CommonMark roots are deliberately bare text
+   nodes, which DOM selectors cannot address (ChatPanel.tsx § anchorIn). */
+.chat-answer-anchor {
+  display: block;
+  height: 0;
+  pointer-events: none;
+}
+
 /* ---- the shapes a model writes ----
    Lists, headings, quotes, rules and code in an answer. Drawn by Cited.tsx from
    an mdast tree; see docs/plans/chat-markdown.md for what is and is not
@@ -554,6 +563,8 @@
 }
 /* No gap above the first thing in an answer. */
 .chat-turn.model .fmt-h:first-child { margin-top: 0; }
+/* Without a tool strip, the geometry marker above is the first child. */
+.chat-turn.model > .chat-answer-anchor:first-child + .fmt-h { margin-top: 0; }
 
 .chat-turn.model .fmt-quote {
   margin: 0 0 0.6rem;
