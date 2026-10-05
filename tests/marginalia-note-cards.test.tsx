@@ -186,6 +186,14 @@ describe("whose words a shut line is (fonts.md)", () => {
     expect(host.querySelector(".marg-stamp")?.classList.contains("voice-ui")).toBe(true);
   });
 
+  it("a Timeline date with no year is the article's own phrase, quoted, in the author's face", () => {
+    const dating: TimelineEvent["dating"] = { kind: "rejected", reason: "noYearFrame", phrase: "On July 7" };
+    const event = { id: "e", label: "The launch", dating, order: 1, modality: "happened", occurrences: [] } as TimelineEvent;
+    paint([{ kind: "timeline", items: [{ event, quote: "q" }] }]);
+    expect(host.querySelector(".marg-stamp")?.textContent).toBe("“On July 7”");
+    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-author")).toBe(true);
+  });
+
   it("a relation word is a button a keyboard can reach, in the AI's face, and says what it means", () => {
     paint([{ kind: "relation", relation: "contrast" }]);
     const word = host.querySelector<HTMLButtonElement>("button.marg-relation");
