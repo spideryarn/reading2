@@ -3525,6 +3525,27 @@ describe("the same address, as the owner", () => {
   });
 
   /**
+   * **Reading time is recorded and drawn for every owner, switch or no
+   * switch** — Greg, 2026-10-05, answering `Q-reading-time-switch` with "A"
+   * (docs/project/reading-time.md § Who gets it). Until then the opening read
+   * went out only with experimental features on, and a stretch read with the
+   * switch off looked unread for ever. Through the real `App`, because the
+   * gate was one argument in `OwnedReader` and a unit test of the hook cannot
+   * see it. The visitor half is the exactly-equal trace in "a signed-in reader
+   * who does not own it": nobody but the owner asks.
+   */
+  it("reads the owner's reading time with experimental features off", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    expect(experimentalSince, "the switch is off for this case").toBeNull();
+    await open();
+
+    const lines = () => trace.map((r) => `${r.method} ${r.url}`);
+    await vi.waitFor(() => expect(lines()).toContain(`GET /api/reading-time/${SLUG}`));
+    /* The switch was really read as off, rather than never read. */
+    expect(lines()).toContain("GET /api/reader");
+  });
+
+  /**
    * **An owner's upload asks once where it lives on the web, and the answer
    * fills the masthead in without a reload** — src/web/useSourceGuess.ts,
    * mounted in `OwnedArticle`. Through the real `App`, because the class is

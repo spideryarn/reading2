@@ -149,6 +149,10 @@ What would make you pick: **A** if you think the chart is good enough for a stra
 **B** if you do not, but want every record whole for the day it is; **C** if you want the line
 back without collecting anything new; **D** if it should stay unfinished-and-hidden for now.
 
+**Decided: A** — Greg, 2026-10-05. His whole answer to `Q-reading-time-switch` was "A". The
+trade-off was named to him with the question: readers cannot yet switch it off or erase it. Built
+the same day; § What landed, at the end.
+
 ## The simpler thing passed over
 
 Building **A** without asking. It is small and it is what the report's words ask for. Passed over

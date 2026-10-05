@@ -421,7 +421,8 @@ Greg, 2026-09-30 (SPIDERYARN-READING2-61):
 > box that defaults to only show me questions for stuff I've read, and then it would only show quiz
 > questions for the stuff that the user has read.
 
-With [reading time](reading-time.md) on, the band has a tick-box, **Only what I've read**, on by
+For the article's owner, who always has [reading time](reading-time.md) since 2026-10-05 (it was
+behind the experimental switch until then), the band has a tick-box, **Only what I've read**, on by
 default, and beside it a small pie of how much of the piece you have read, with the figure on its
 card ("About 40% of the piece read so far";
 [261003e](../plans/261003e-quiz-read-so-far-as-a-small-pie-chart.md), spya-mafmm6).
