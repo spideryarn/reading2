@@ -431,6 +431,52 @@ async function typeLensAndEnter(words: string): Promise<void> {
 }
 
 describe("looking at the debate from an angle", () => {
+  it("lists no angle until Send and restores the unsent lens on returning to Chat", async () => {
+    who.set(OWNER);
+    await open("?mode=debate");
+    await until(() => lensBox() !== null, "the box in Debate");
+    await typeLensAndEnter(LENS);
+    await until(() => param("mode") === "chat" && composer() !== null, "the unsent lens composer");
+    expect(composer()?.value).toBe(askDebateThroughLens(LENS));
+    await act(async () => history.back());
+    await until(() => param("mode") === "debate" && lensBox() !== null, "Debate again");
+    expect(angles(), "a draft is not a saved thread").toHaveLength(0);
+    expect(server).toHaveLength(1);
+    expect(chatPosts()).toHaveLength(0);
+
+    history.pushState(null, "", `/read/${SLUG}?mode=chat`);
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    await until(() => composer()?.value === askDebateThroughLens(LENS), "the restored lens draft");
+    await typeAndSend(composer() as HTMLTextAreaElement, askDebateThroughLens(LENS));
+    expect(chatPosts()).toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { origin: ThreadOrigin } | undefined;
+    expect(sent?.origin).toEqual({ mode: "debate", lens: LENS });
+  });
+
+  /* One press is one action. Enter in Debate's box moves the caret into Chat's
+     box, already holding the question; the same key, still held, must not then
+     send it. Found by GPT Sol's review; docs/postmortems/261005o. */
+  it("does not send on a held Enter repeating into Chat's box, and a fresh Enter still sends", async () => {
+    who.set(OWNER);
+    await open("?mode=debate");
+    await until(() => lensBox() !== null, "the box in Debate");
+    await typeLensAndEnter(LENS);
+    await until(() => param("mode") === "chat" && document.activeElement === composer(), "the caret in Chat's box");
+    const box = composer() as HTMLTextAreaElement;
+    const held = new KeyboardEvent("keydown", { key: "Enter", repeat: true, bubbles: true, cancelable: true });
+    await act(async () => {
+      box.dispatchEvent(held);
+    });
+    await settle();
+    expect(chatPosts(), "holding the handoff key is not a separate Send").toHaveLength(0);
+    expect(held.defaultPrevented, "and it adds no blank line to the question").toBe(true);
+    await act(async () => {
+      box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(chatPosts(), "a press of its own sends").toHaveLength(1);
+  });
+
   it("starts a fresh chat that records the angle, and Debate lists the way back to it", async () => {
     who.set(OWNER);
     await open(`?mode=debate&thread=${STORED.id}`);
@@ -449,6 +495,7 @@ describe("looking at the debate from an angle", () => {
     const seed = askDebateThroughLens(LENS);
     expect(seed).toContain(`"""\n${LENS}\n"""`);
     expect(composer()?.value).toBe(seed);
+    expect(document.activeElement, "the handoff puts the caret in Chat's box").toBe(composer());
     expect(host.textContent, "the earlier conversation is not what is open").not.toContain("An earlier question");
     expect(chatPosts(), "Enter sends nothing to chat").toHaveLength(0);
     expect(posts().length, "and nothing anywhere else: no search was started").toBe(postsAtLoad);

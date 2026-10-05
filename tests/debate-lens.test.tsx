@@ -236,6 +236,39 @@ describe("the owner's box", () => {
     expect(lensed).toEqual(["replication attempts"]);
   });
 
+  it.each([
+    ["the composition flag", { isComposing: true }],
+    ["the legacy composition key code", { keyCode: 229 }],
+  ])("does not hand off the Enter that accepts an IME word (%s)", (_name, ime) => {
+    paintOwner();
+    type("記憶");
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter", bubbles: true, cancelable: true, ...ime,
+    });
+    act(() => {
+      box()?.dispatchEvent(event);
+      /* jsdom has no implicit form submission: perform the browser's default
+         action only if the key handler did not cancel it. */
+      if (!event.defaultPrevented) box()?.form?.dispatchEvent(new Event("submit", {
+        bubbles: true, cancelable: true,
+      }));
+    });
+    expect(lensed, "accepting a word must not switch to Chat").toEqual([]);
+    expect(box()?.value, "the angle remains in the box").toBe("記憶");
+    /* A later Enter outside composition still hands off normally. */
+    pressEnter();
+    expect(lensed).toEqual(["記憶"]);
+  });
+
+  it("a second press after a handoff finds an empty box", () => {
+    paintOwner();
+    type("replication attempts");
+    pressEnter();
+    pressEnter();
+    expect(lensed).toEqual(["replication attempts"]);
+    expect(box()?.value).toBe("");
+  });
+
   it("hands over nothing while it is empty or only spaces", () => {
     paintOwner();
     expect(send()?.disabled).toBe(true);

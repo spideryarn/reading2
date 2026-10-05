@@ -274,5 +274,24 @@ Opus subagent, tests red first.
   route and constraint tests were red only for the missing column, and the mapping tests never;
   three mutations (the both-shapes guard, `sameOrigin`, the handoff's origin) each went red.
   **Deploy order: this code selects `origin_lens`, so the migration lands with or before it.**
+- 2026-10-05: **GPT Sol's code review of stage 1** ([the review](261005k-stage-1-code-review-sol.md)
+  of `97179213f`): *do not land*, four findings.
+  - **CR1, P1, real, fixed by me after the review**: Enter in the lens box moves the caret into
+    Chat's box, already holding the question, and the same key still held then sent it. A paid
+    call nobody pressed Send for, and true of every Enter-driven handoff, not only this one.
+    `isSendEnter` (`src/web/key-chord.ts`) now refuses a held Enter's repeats in every box that
+    sends, and Chat's composer cancels the repeat so it adds no blank lines. Red first in
+    `tests/key-chord.test.ts`; the whole-app regression is in `tests/debate-lens-in-chat.test.tsx`
+    (Sol saw the same assertion red before the fix). **This fix was not in the review's snapshot,
+    so it gets a narrow check of its own.**
+  - CR2, P1, inherited and accepted by this plan (the displaced unsent draft): Sol added the
+    characterisation test the implementer had skipped.
+  - CR3, P2, fixed by Sol: the lens box did not guard Enter during IME composition.
+  - CR4, P3, fixed by Sol: the help page and debate.md now say an angle is listed once sent.
+  - Sol wrote two postmortems, [261005n](../postmortems/261005n-a-submit-handler-test-cannot-prove-the-key-that-reaches-it.md)
+    and [261005o](../postmortems/261005o-a-held-key-becomes-a-new-action-after-focus-moves.md).
+  - The database suites Sol asked for, run by me: `chat-origin-route`, `store-chat-pg`,
+    `store-roundtrip`, `chat-spoken-route`, 246 tests green with `doc-links` and
+    `migration-journal`. Typecheck green. The full suite runs once, at the end of stage 2.
 - 2026-10-05: GPT Sol's plan review, *build with changes*. All ten findings accepted (none
   overruled); the design sections above carry them, marked F1 to F10.

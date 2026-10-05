@@ -719,8 +719,8 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           <HelpRef to="mode-chat">Chat</HelpRef> with a question that asks for a web search from that
           angle, and sends nothing until you press <strong>Send</strong>. You can do this before
           searching at all. <strong>Your angles</strong>, under the box, lists the conversations you
-          started this way; press one to open it again beside Debate. Only whoever added the article
-          has this.
+          started this way once you send their first question; press one to open it again beside
+          Debate. Only whoever added the article has this.
         </li>
         <li>
           Anything tagged <strong>AI</strong> is the AI’s reading, checked against nothing: the threads

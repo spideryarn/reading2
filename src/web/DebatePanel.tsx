@@ -196,6 +196,7 @@ import {
   readStoredLean,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { isImeComposing } from "./key-chord.js";
 import { receptionSections } from "./debate-levels.js";
 import {
   type ClaimGroup,
@@ -1416,6 +1417,12 @@ function Angles({ chats }: { chats: DebateClaimChats }) {
           placeholder={`${DEBATE_LENS_LABEL}…`}
           aria-label={DEBATE_LENS_LABEL}
           onChange={(e) => setLens(e.target.value)}
+          onKeyDown={(e) => {
+            /* Accepting an IME candidate is not a request to open Chat.
+               Cancel implicit submission, including engines that report 229
+               instead of isComposing; an ordinary Enter still uses the form. */
+            if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
+          }}
         />
         <button type="submit" className="gloss-btn dbt-lens-send" disabled={words === ""} title={DEBATE_LENS_TIP}>
           <MessagesSquare size={12} aria-hidden="true" />

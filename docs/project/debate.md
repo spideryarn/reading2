@@ -149,7 +149,8 @@ What the reader gets:
   Search the web, and say so plainly if you find little.* Nothing is sent, searched or paid for
   until Send, and the reader can edit it first. Back returns to Debate.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
-  all. A line opens its conversation beside Debate, as a claim's mark does.
+  all. A chat appears once its first question is sent; an unsent draft has no saved thread to list.
+  A line opens its conversation beside Debate, as a claim's mark does.
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
 - **In Chat's list** the conversation has Debate's icon, with a card that quotes the angle.
@@ -190,7 +191,8 @@ What to know before changing it:
   does search.
 - **One limit, shared with every handoff to Chat**: the handoff starts a fresh conversation, and if
   the conversation it displaced held words that were never sent, those can become unreachable
-  after a later change of mode (the plan's review, answer 2). Not fixed here, and no test pins it.
+  after a later change of mode (the plan's review, answer 2). Not fixed here; the limit is pinned in
+  [`conversation-band-origin.test.tsx`](../../tests/conversation-band-origin.test.tsx).
 
 Tests: [`debate-lens.test.tsx`](../../tests/debate-lens.test.tsx) (the box, the list, no stored
 debate, a visitor), [`debate-lens-in-chat.test.tsx`](../../tests/debate-lens-in-chat.test.tsx) (the

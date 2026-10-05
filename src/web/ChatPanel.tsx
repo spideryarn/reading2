@@ -107,7 +107,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { sendForTranscription } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
-import { isSendEnter } from "./key-chord.js";
+import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import { type ThreadSource, threadSource } from "./thread-source.js";
 import { withVoice } from "./voice.js";
@@ -2747,6 +2747,9 @@ export function Composer({
             e.preventDefault();
             void submit();
           }
+          /* A handoff puts the caret here with the question already written.
+             The Enter that made it, still held, neither sends nor adds lines. */
+          if (isHeldSendEnter(e)) e.preventDefault();
           /* Escape, in three steps, most-urgent first.
 
              It has to be a ladder rather than one action because the composer
