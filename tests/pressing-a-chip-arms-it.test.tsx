@@ -195,7 +195,7 @@ describe("Referee's sub-mode chips", () => {
 function mountRememberToggle(value: "recall" | "tutorial" | "explore" | "quiz"): void {
   act(() => {
     root.render(
-      createElement(RememberSubModeToggle, { slug: SLUG, value, onChange: () => {} }),
+      createElement(RememberSubModeToggle, { slug: SLUG, value, experimental: true, onChange: () => {} }),
     );
   });
 }

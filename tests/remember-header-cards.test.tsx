@@ -48,11 +48,17 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
+/* The (i) list reads the switch itself (RememberAbout.tsx); each test says
+   which way it is. On unless a test turns it off. */
+const switchIs = { on: true };
+vi.mock("../src/web/useExperimental.js", () => ({ useExperimental: () => ({ on: switchIs.on }) }));
+
 const { RememberSubModeToggle, REMEMBER_VIEW_HOW } = await import("../src/web/QuizPanel.js");
 const { RememberSubModesAbout } = await import("../src/web/RememberAbout.js");
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
 const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
-const { REMEMBER_SUB_MODES } = await import("../src/web/sub-modes.js");
+const { REMEMBER_SUB_MODES, visibleRememberViews } = await import("../src/web/sub-modes.js");
+const { subModeRows } = await import("../src/web/CommandBar.js");
 const { REMEMBER_VIEWS } = await import("../src/web/params.js");
 
 /** Past the grouped chips' 300ms and the lone tooltip's own delay. */
@@ -71,6 +77,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.useRealTimers();
+  switchIs.on = true;
 });
 
 const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
@@ -230,6 +237,7 @@ describe("Remember's chips", () => {
         createElement(RememberSubModeToggle, {
           slug: "a-paper",
           value: "recall",
+          experimental: true,
           onChange: (next) => changed.push(next),
         }),
       );
@@ -258,7 +266,9 @@ describe("Remember's chips", () => {
 
   it("opens the same card from keyboard focus", () => {
     act(() => {
-      root.render(createElement(RememberSubModeToggle, { slug: "a-paper", value: "recall", onChange: () => {} }));
+      root.render(
+        createElement(RememberSubModeToggle, { slug: "a-paper", value: "recall", experimental: true, onChange: () => {} }),
+      );
     });
     const tutorial = host.querySelector<HTMLButtonElement>(".remember-submode-btn:nth-of-type(2)");
     if (!tutorial) throw new Error("no Tutorial chip");
@@ -277,10 +287,81 @@ describe("Remember's chips", () => {
   });
 });
 
+/**
+ * Greg, 2026-10-04 (spya-cnqcjf): Recall, Quiz and Tutorial are mainstream;
+ * Explore stays one of the experimental features. So the gate is on one chip,
+ * by the bar's own rule (experimental-visibility.ts): drawn when the switch is
+ * on, or when it is the view the reader is in.
+ * docs/plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md.
+ */
+describe("Explore is behind the switch, and the other three are not", () => {
+  const WITHOUT_EXPLORE = ["Recall", "Tutorial", "Quiz"];
+  const ALL_FOUR = ["Recall", "Tutorial", "Explore", "Quiz"];
+
+  function chipLabels(value: "recall" | "tutorial" | "explore" | "quiz", experimental: boolean): (string | null)[] {
+    act(() => {
+      root.render(createElement(RememberSubModeToggle, { slug: "a-paper", value, experimental, onChange: () => {} }));
+    });
+    return [...host.querySelectorAll<HTMLElement>(".remember-submode-btn")].map((c) => c.textContent);
+  }
+
+  function aboutLabels(current: "recall" | "tutorial" | "explore" | "quiz"): (string | null | undefined)[] {
+    act(() => {
+      root.render(createElement(RememberSubModesAbout, { current }));
+    });
+    return [...host.querySelectorAll("li strong")].map((s) => s.textContent);
+  }
+
+  function barLabels(experimentalOn: boolean, remember: "recall" | "tutorial" | "explore" | "quiz"): string[] {
+    return subModeRows(["remember"], experimentalOn, { diagram: "sketch", remember }).map((row) =>
+      row.kind === "submode" ? REMEMBER_SUB_MODES[row.sub.view as "recall"].label : "not a sub-mode row",
+    );
+  }
+
+  /* The policy, written out rather than read from the table, so that one edit
+     to a flag cannot move a chip in front of every reader. */
+  it("is the one experimental flag among Remember's sub-modes", () => {
+    const flagged = REMEMBER_VIEWS.filter((v) => REMEMBER_SUB_MODES[v].experimental);
+    expect(flagged).toEqual(["explore"]);
+    expect(MODE_CATALOG.remember.experimental).toBe(false);
+  });
+
+  it("the helper: three views with the switch off, four with it on, and Explore while it is open", () => {
+    expect(visibleRememberViews(false, "recall")).toEqual(["recall", "tutorial", "quiz"]);
+    expect(visibleRememberViews(false, "quiz")).toEqual(["recall", "tutorial", "quiz"]);
+    expect(visibleRememberViews(true, "recall")).toEqual(["recall", "tutorial", "explore", "quiz"]);
+    expect(visibleRememberViews(false, "explore")).toEqual(["recall", "tutorial", "explore", "quiz"]);
+  });
+
+  it("the chips", () => {
+    expect(chipLabels("recall", false)).toEqual(WITHOUT_EXPLORE);
+    expect(chipLabels("tutorial", false)).toEqual(WITHOUT_EXPLORE);
+    expect(chipLabels("recall", true)).toEqual(ALL_FOUR);
+    /* An old link or a last view: the chip row still has exactly one pressed. */
+    expect(chipLabels("explore", false)).toEqual(ALL_FOUR);
+    const pressed = [...host.querySelectorAll<HTMLElement>('.remember-submode-btn[aria-pressed="true"]')];
+    expect(pressed.map((c) => c.textContent)).toEqual(["Explore"]);
+  });
+
+  it("the (i) list", () => {
+    switchIs.on = false;
+    expect(aboutLabels("recall")).toEqual(WITHOUT_EXPLORE);
+    expect(aboutLabels("explore")).toEqual(ALL_FOUR);
+    switchIs.on = true;
+    expect(aboutLabels("recall")).toEqual(ALL_FOUR);
+  });
+
+  it("the command bar's rows", () => {
+    expect(barLabels(false, "recall")).toEqual(WITHOUT_EXPLORE);
+    expect(barLabels(true, "recall")).toEqual(ALL_FOUR);
+    expect(barLabels(false, "explore")).toEqual(ALL_FOUR);
+  });
+});
+
 describe("Remember's (i)", () => {
   it("lists the four sub-modes, one line each", () => {
     act(() => {
-      root.render(createElement(RememberSubModesAbout));
+      root.render(createElement(RememberSubModesAbout, { current: "recall" }));
     });
     const items = [...host.querySelectorAll("li")].map((li) => flat(li.textContent));
     expect(items).toHaveLength(REMEMBER_VIEWS.length);

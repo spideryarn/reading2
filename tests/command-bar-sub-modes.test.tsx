@@ -257,10 +257,17 @@ describe("which sub-mode rows the bar offers", () => {
     const modeRows = rows()
       .filter((r) => r.dataset.kind === "mode")
       .map((r) => r.querySelector(".cmdbar-name")?.textContent);
-    expect(modeRows).not.toContain("Remember");
+    expect(modeRows).not.toContain("Referee");
     const names = subRows().map(fullName);
-    expect(names.some((n) => n.startsWith("Remember"))).toBe(false);
     expect(names.some((n) => n.startsWith("Referee"))).toBe(false);
+    /* Remember is in every reader's bar since 2026-10-05 (spya-cnqcjf), with
+       three of its four parts; Explore is still behind the switch. */
+    expect(modeRows).toContain("Remember");
+    expect(names.filter((n) => n.startsWith("Remember"))).toEqual([
+      "Remember › Recall",
+      "Remember › Tutorial",
+      "Remember › Quiz",
+    ]);
     expect(names).not.toContain("Diagram › Illustrated");
     expect(names).not.toContain("Diagram › Force");
     /* And not nothing: Summary's levels are for everybody. */

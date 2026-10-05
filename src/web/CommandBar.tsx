@@ -153,7 +153,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { type DictationContext, sendForTranscription } from "./dictation-upload.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
 import { useDictationField } from "./useDictationField.js";
-import { type MetadataSection, type Mode, withSection } from "./params.js";
+import { type MetadataSection, type Mode, type RememberView, rememberInSearch, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
 import { downloadExport } from "./export-download.js";
@@ -1155,6 +1155,9 @@ function onlyMovesTheReader(command: Command): boolean {
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
  * open, the bar offers Trail exactly where the chips do. GPT Sol, plan review.
+ * **And the part of Remember `?remember=` names**, since 2026-10-05, when
+ * Explore became the second kind of sub-mode behind the switch: the chips' own
+ * rule again (sub-modes.ts § `visibleRememberViews`).
  *
  * Exported for tests/command-pick-catalogue.test.ts, which writes the list the
  * command-pick eval measures against from the functions the bar itself calls.
@@ -1162,7 +1165,7 @@ function onlyMovesTheReader(command: Command): boolean {
 export function subModeRows(
   modes: readonly Mode[],
   experimentalOn: boolean,
-  diagram: DiagramKind,
+  current: { readonly diagram: DiagramKind; readonly remember: RememberView },
 ): readonly Command[] {
   return modes.flatMap((mode) =>
     subModesOf(mode)
@@ -1170,7 +1173,9 @@ export function subModeRows(
         shownBehindTheSwitch({
           experimental: subModeWords(sub).experimental,
           on: experimentalOn,
-          current: sub.mode === "diagram" && sub.view === diagram,
+          current:
+            (sub.mode === "diagram" && sub.view === current.diagram) ||
+            (sub.mode === "remember" && sub.view === current.remember),
         }),
       )
       .map(subModeCommand),
@@ -1429,7 +1434,7 @@ export function CommandBar({
       ...modes.map(modeCommand),
       /* After every mode and before every page: the mode rows stay exactly the
          Dock's, first, and a sub-mode loses a tie to its own mode. */
-      ...subModeRows(modes, experimental.on, diagram),
+      ...subModeRows(modes, experimental.on, { diagram, remember: rememberInSearch(article?.search ?? "") }),
       ...besideTheModes({ article, openComments, openFeedback, queue }),
       /* Typed-only, so where it sits matters only on a tie — and there the
          page's own rows should win. */

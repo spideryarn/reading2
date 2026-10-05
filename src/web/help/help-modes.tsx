@@ -538,7 +538,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
             case (your own, when your reason for reading gives one), makes a connection, or looks
             up what others have said and links it. It says which parts come from the article, the
             web, your notes and its own view. One Explore conversation per article; typed or
-            dictated, with no Live conversation yet.
+            dictated, with no Live conversation yet. Explore is one of the{" "}
+            <HelpRef to="experimental-features">experimental features</HelpRef>, so its button is
+            there only once you have turned those on.
           </li>
           <li>
             <strong>Quiz</strong>: up to twenty short questions written from the piece, each answered

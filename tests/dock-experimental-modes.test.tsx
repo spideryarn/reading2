@@ -73,7 +73,10 @@ import {
 const BEHIND_THE_SWITCH: readonly Mode[] = [
   "timeline",
   "referee",
-  "remember",
+  /* Remember was here from 2026-09-03 until 2026-10-05, when Greg asked for
+     Recall, Quiz and Tutorial in the mainstream features (spya-cnqcjf). Its
+     Explore chip stays behind the switch, one level down:
+     tests/remember-header-cards.test.tsx § "Explore is behind the switch". */
   "debate",
   /* 2026-09-11: a new mode on an unmeasured prompt —
      docs/project/experimental-features.md. */
@@ -334,8 +337,8 @@ describe("the fit signature", () => {
     fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
-    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "remember").length);
-    expect(sig(false, "timeline")).not.toBe(sig(false, "remember"));
+    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "referee").length);
+    expect(sig(false, "timeline")).not.toBe(sig(false, "referee"));
   });
 
   /* Marginalia's toggle pressed is `.on`, which gets its label back at rung 2,

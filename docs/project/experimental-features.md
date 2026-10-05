@@ -8,7 +8,7 @@ One setting, off by default, with **two controls**: a checkbox on
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes and four Diagram pictures are behind it** —
+**Some reading modes, four Diagram pictures and Remember's Explore are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
@@ -196,7 +196,7 @@ is a column rather than something in the browser's `localStorage`.
 **The modes in the table below**, and **four of Diagram's five pictures** — which since Diagram itself went in on 2026-09-29 only matters to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
 out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
@@ -212,7 +212,6 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 |---|---|
 | [Timeline](timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
 | [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
-| [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
@@ -364,6 +363,23 @@ rather than a reason to hide the mode. Pressing the button starts a paid run, th
 and Ideas, so this is a third default-visible mode that spends on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
 
+**Remember left the table on 2026-10-05, without its Explore part.** Greg:
+
+> I want to include at least part of the remember mode in the mainstream features, i.e. not only in
+> the experimental features. I'm trying to decide which submodes. I think recall submode for sure.
+> I think quiz mode as well. And then let's try tutorial too.
+>
+> — Greg, 2026-10-04 (spya-cnqcjf)
+
+It had been behind the switch since the first four went in on 2026-09-03; its row said the name
+suggests saved notes and spaced repetition, neither of which exists. That is still so. Recall,
+Tutorial and Quiz are now in every reader's bar, and Explore is gated one level down:
+[§ The two things gated below mode level](#the-two-things-gated-below-mode-level). Remember is
+owners-only as before, so a visitor's bar gains a Remember button that opens the sentence saying
+so, as Skim's does. Nothing new is generated when an article is added, because a press on Remember
+generates nothing: the Quiz is still written on the first press of its chip.
+[261005b](../plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md).
+
 **Skim (then called Trajectory) left the table on 2026-09-28, the day it arrived.** Greg:
 
 > And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
@@ -382,7 +398,21 @@ are none or they are stale, as Glossary, Ideas and Quotes already do on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`). Its unmeasured-prompt caveat has
 not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
-## The one thing that is gated below mode level
+## The two things gated below mode level
+
+Four of Diagram's pictures, and one of Remember's four parts.
+
+**Remember's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
+Recall, Quiz and Tutorial; Explore was two days old and stays here. With the switch off the chips
+read Recall · Tutorial · Quiz, the band's (i) lists those three, and the command bar has no
+*Remember › Explore* row. `?remember=explore` still opens it, and while the reader is in it the chip
+is drawn and pressed. That address outlives the mode
+([url-state.md](url-state.md)), so a reader who used Explore and then turned the switch off comes
+back to it when they press Remember: hidden, not unreachable. It is the flag Diagram's pictures
+use, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), read by
+`visibleRememberViews` there for the chips and the (i), and by `subModeRows`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx)) for the bar. The policy is written out a second
+time in `tests/remember-header-cards.test.tsx`, so moving the flag alone fails a test.
 
 **Diagram, since 2026-09-04.** It came out from behind the switch and four of its five pictures went
 behind it instead, on a reader's report:

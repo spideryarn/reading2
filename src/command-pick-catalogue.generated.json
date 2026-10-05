@@ -379,6 +379,7 @@
   "generates": false,
   "contexts": [
    "owner-article",
+   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -734,6 +735,7 @@
   "generates": false,
   "contexts": [
    "owner-article",
+   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -753,6 +755,7 @@
   "generates": false,
   "contexts": [
    "owner-article",
+   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"
@@ -791,6 +794,7 @@
   "generates": true,
   "contexts": [
    "owner-article",
+   "owner-article-experimental-off",
    "owner-article-archived",
    "reader-on-someone-elses-article",
    "owner-metadata"

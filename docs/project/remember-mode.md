@@ -287,6 +287,11 @@ request is started from zero without comment; a short one that names a goal is t
 **What the reader thinks has its own sub-mode since the same day**: § Explore, the fourth
 sub-mode, below, which starts from the reader's comments, highlights and conversations.
 
+**Who sees which chip, since 2026-10-05.** Remember is in every reader's bar, with Recall, Tutorial
+and Quiz. Explore's chip is drawn only with the experimental-features switch on, or while the reader
+is in Explore. The reason and the mechanism are in
+[experimental-features.md](experimental-features.md#the-two-things-gated-below-mode-level).
+
 ## Explore, the fourth sub-mode
 
 **Built 2026-10-03**, stage 2 of
