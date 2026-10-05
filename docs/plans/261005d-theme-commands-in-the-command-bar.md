@@ -116,6 +116,15 @@ The first two runs of this review never reached the model (*Selected model is at
 empty answer file) on the pinned `gpt-5.6-sol`; the third, with the family name `sol`, ran on
 `gpt-6.1-sol`.
 
+## What landed
+
+Commit `d43dbdff5`, as planned above. GPT Sol's code review
+([261005d-theme-commands-code-review-sol.md](261005d-theme-commands-code-review-sol.md)): no
+findings, *ship*, after its own probes of the live mark, another tab, the OS flipping under System,
+a second press after a refused save, and all three ids through the model-picked path. A Sonnet
+browser check at 1440, 820 and 390 wide passed every step; its Metadata-page step landed on an
+address that sent it back to the reading view, so that page is covered by the unit test only.
+
 ## The simpler option passed over
 
 **One row that cycles** (*Switch to light*, then *Switch to system*, …) is fewer rows, but Greg
